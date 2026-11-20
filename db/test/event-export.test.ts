@@ -128,6 +128,10 @@ test('exportRow drops a value its rule refuses', async (t) => {
         ['a string boolean', { name: 'studio.prompt', props: { guest: 'true' } }],
         ['a key of another event', { name: 'studio.prompt', props: { query: 'aid' } }],
         ['a name the site no longer emits', { name: 'search.legacy', props: { kind: 'chat' } }],
+        // Only a `measures` entry admits `|`, so text v1 refused stays refused on reload.
+        ['a `|` in a token', { name: 'studio.card', props: { source: 'OECD|DAC' } }],
+        ['a `|` in a digest', { name: 'share.open', props: { shareId: 'OECD|DAC' } }],
+        ['a `|` in a specIds entry', { name: 'search.query', props: { specIds: ['OECD|DAC'] } }],
     ];
 
     for (const [label, overrides] of cases) {
@@ -135,6 +139,13 @@ test('exportRow drops a value its rule refuses', async (t) => {
             assert.deepEqual(exportRow(sourceEvent(overrides), KEY, RULES).props, {});
         });
     }
+});
+
+test('exportRow keeps a measures entry joined with `|`', () => {
+    const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
+    const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);
+
+    assert.deepEqual(row.props, { measures });
 });
 
 test('exportRow leaves the hashes null for a guest without consent', () => {

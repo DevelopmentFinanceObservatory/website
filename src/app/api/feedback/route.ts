@@ -3,6 +3,7 @@ import { mailerConfigured, sendFeedbackEmail } from '@/lib/feedback/mailer';
 import { slackConfigured, sendFeedbackSlack } from '@/lib/feedback/slack';
 import { storageConfigured, storeFeedback } from '@/lib/feedback/store';
 import { auth } from '@/lib/auth/auth';
+import { boundedLookup } from '@/lib/events/boundedLookup';
 import { anonymousWho } from '@/lib/events/internalEng';
 import { track } from '@/lib/events/track';
 
@@ -101,16 +102,15 @@ export const POST = async (req: NextRequest) => {
     }
 
     // Usage event (src/lib/events): the chat box's report opens with its own heading; the widget's is free text.
-    // internal_eng reads the session's email, and the email typed into the form plays no part. The user id stays off the event.
+    // internal_eng reads the domain of the session's email, and the email typed into the form plays no part. The user id stays off the event.
     // Run after the response, so the reply does not wait on the session read.
     after(async () => {
         // The request's headers are read here because the cached getSession() reads the request scope, which has ended.
-        const session = await auth.api
-            .getSession({ headers: req.headers, query: { disableRefresh: true } })
-            .catch((error) => {
-                console.warn('feedback.submit: session read failed', error);
-                return null;
-            });
+        const session = await boundedLookup(
+            () => auth.api.getSession({ headers: req.headers, query: { disableRefresh: true } }),
+            null,
+            'feedback.submit: session read',
+        );
 
         await track(
             'feedback.submit',

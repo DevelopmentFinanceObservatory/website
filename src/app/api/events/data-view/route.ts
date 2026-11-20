@@ -1,6 +1,10 @@
+import { createHash } from 'node:crypto';
+
+import { getSessionCookie } from 'better-auth/cookies';
 import { after, type NextRequest } from 'next/server';
 
 import { auth } from '@/lib/auth/auth';
+import { boundedLookup } from '@/lib/events/boundedLookup';
 import {
     corsHeaders,
     MAX_DATA_VIEW_BODY,
@@ -9,6 +13,7 @@ import {
     withCaller,
 } from '@/lib/events/dataView';
 import { track, userWho } from '@/lib/events/track';
+import { ttlMemo } from '@/lib/events/ttlMemo';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp } from '@/lib/proxy/forward';
 import { problem, rateLimitedProblem } from '@/lib/proxy/problem';
@@ -17,6 +22,48 @@ import { hit } from '@/lib/proxy/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+type SessionUser = { id: string; email: string; emailVerified: boolean };
+
+// A page posts one data.view per chart render, so each signed-in reader's
+// session is read from the database at most once a minute per process. A
+// session ended within that minute can still name its user on a data.view.
+const sessionUsers = ttlMemo<SessionUser | null>({ ttlMs: 60_000, max: 1_000 });
+
+// The signed-in user of a request, or null. A request with no session cookie
+// (every cross-site POST, since the cookie is SameSite=Lax) reads nothing.
+// The memo is keyed on a SHA-256 of the cookie, so it holds no session
+// token. Read from the request's headers, since the cached getSession()
+// reads the request scope, which has ended inside after().
+const sessionUser = (headers: Headers): Promise<SessionUser | null> => {
+    const token = getSessionCookie(headers);
+
+    if (!token) {
+        return Promise.resolve(null);
+    }
+
+    const key = createHash('sha256').update(token).digest('hex');
+
+    return boundedLookup(
+        () =>
+            sessionUsers(key, async () => {
+                const session = await auth.api.getSession({
+                    headers,
+                    query: { disableRefresh: true },
+                });
+
+                return session
+                    ? {
+                          id: session.user.id,
+                          email: session.user.email,
+                          emailVerified: session.user.emailVerified,
+                      }
+                    : null;
+            }),
+        null,
+        'data.view: session read',
+    );
+};
 
 const allowedOrigins = () => parseCorsOrigins(process.env.DFO_CORS_ORIGINS);
 
@@ -80,17 +127,8 @@ export const POST = async (req: NextRequest) => {
     }
 
     after(async () => {
-        // Read here from the request's headers, since the cached getSession()
-        // reads the request scope, which has ended.
-        const session = await auth.api
-            .getSession({ headers: req.headers, query: { disableRefresh: true } })
-            .catch((error) => {
-                console.warn('data.view: session read failed', error);
-                return null;
-            });
-
         await track('data.view', withCaller(parsed.props, req.headers), {
-            ...userWho(session?.user),
+            ...userWho(await sessionUser(req.headers)),
             page: parsed.page,
             headers: req.headers,
         });

@@ -40,17 +40,23 @@ export const isInternalEng = (
 };
 
 /**
- * The `Who` fields for an event that stays anonymous: the session's email
- * and verification flag, so `internal_eng` reads, and no user id, so
- * neither the event row nor PostHog gets an account.
+ * The `Who` fields for an event that stays anonymous: no user id, so neither
+ * the event row nor PostHog gets an account, and the session's email cut to
+ * `@` and its domain, so only a domain entry of the list can set
+ * `internal_eng`. An address entry would make the flag name one person.
  */
 export const anonymousWho = (
     user: InternalEngUser | null | undefined,
-): { userId: null; email: string | null; emailVerified: boolean | null } => ({
-    userId: null,
-    email: user?.email ?? null,
-    emailVerified: user?.emailVerified ?? null,
-});
+): { userId: null; email: string | null; emailVerified: boolean | null } => {
+    const email = user?.email?.trim().toLowerCase();
+    const at = email?.lastIndexOf('@') ?? -1;
+
+    return {
+        userId: null,
+        email: email && at >= 0 ? email.slice(at) : null,
+        emailVerified: user?.emailVerified ?? null,
+    };
+};
 
 /**
  * An event's props with `internal_eng` set from the user the caller names,

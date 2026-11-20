@@ -31,7 +31,13 @@ import {
     within,
 } from './bounded.ts';
 import { requiredEnv } from './connection.ts';
-import { MAX_LIST_IDS, NO_ID, PAGE_PATH, TOKEN_PATTERN } from '../src/lib/events/limits.ts';
+import {
+    MAX_LIST_IDS,
+    MEASURE_PATTERN,
+    NO_ID,
+    PAGE_PATH,
+    TOKEN_PATTERN,
+} from '../src/lib/events/limits.ts';
 
 /**
  * The event export (db/export-events.ts): copies the `event` table into the
@@ -67,10 +73,14 @@ type PropRule =
     | 'caller'
     // a list of up to MAX_LIST_IDS tokens, each a token or NO_ID
     | 'tokens'
+    // a list of up to MAX_LIST_IDS measure tokens (MEASURE_PATTERN, which
+    // admits `|`), each one or NO_ID
+    | 'measures'
     // one of these strings
     | readonly string[];
 
 const TOKEN = TOKEN_PATTERN;
+const MEASURE = MEASURE_PATTERN;
 const CALLER = /^ip:[0-9a-f]{32}$/;
 
 // Every member of the union T, so tsc fails when the site adds a member
@@ -155,7 +165,7 @@ const ANSWER: Record<string, PropRule> = {
     // Flat copies of the nested `resolved` list, which is not exported, holding
     // each resolved part's spec id and measure token (measureToken).
     specIds: 'tokens',
-    measures: 'tokens',
+    measures: 'measures',
 };
 
 // Set by track() on every event, true when the signed-in user's email is on
@@ -262,6 +272,11 @@ export const PROP_RULES = {
 const digest = (key: string, id: string | null): string | null =>
     id === null ? null : exportDigest(id, key);
 
+const listOf = (pattern: RegExp, value: unknown): boolean =>
+    Array.isArray(value) &&
+    value.length <= MAX_LIST_IDS &&
+    value.every((item) => item === NO_ID || (typeof item === 'string' && pattern.test(item)));
+
 const passes = (rule: PropRule, value: unknown): boolean => {
     switch (rule) {
         case 'boolean':
@@ -274,13 +289,9 @@ const passes = (rule: PropRule, value: unknown): boolean => {
         case 'caller':
             return typeof value === 'string' && CALLER.test(value);
         case 'tokens':
-            return (
-                Array.isArray(value) &&
-                value.length <= MAX_LIST_IDS &&
-                value.every(
-                    (item) => item === NO_ID || (typeof item === 'string' && TOKEN.test(item)),
-                )
-            );
+            return listOf(TOKEN, value);
+        case 'measures':
+            return listOf(MEASURE, value);
         default:
             return typeof value === 'string' && rule.includes(value);
     }
@@ -401,6 +412,7 @@ const READ_DAY_SQL = `SELECT id::float8 AS id,
 export const ROW_SHAPE = {
     PROP_RULES,
     TOKEN: TOKEN.source,
+    MEASURE: MEASURE.source,
     CALLER: CALLER.source,
     PAGE_PATH: PAGE_PATH.source,
     SHARE_PATH: SHARE_PATH.source,

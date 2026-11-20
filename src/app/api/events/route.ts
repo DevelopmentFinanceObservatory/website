@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
+import { boundedLookup } from '@/lib/events/boundedLookup';
 import { fitsProps, MAX_PROPS_BYTES } from '@/lib/events/limits';
 import { isBrowserEventName } from '@/lib/events/browserEvents';
 import { track, userWho } from '@/lib/events/track';
@@ -42,7 +43,8 @@ export const POST = async (request: Request) => {
         });
     }
 
-    const session = await getSession();
+    // A failed or stalled session read records the event as a signed-out one.
+    const session = await boundedLookup(getSession, null, 'events: session read');
 
     // Not awaited on purpose — the answer doesn't wait on the insert.
     void track(name, props, {

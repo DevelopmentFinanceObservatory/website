@@ -17,9 +17,15 @@ export const MAX_LIST_IDS = 10;
 export const NO_ID = '-';
 
 /** What a `token`, a `digest` or one entry of a list prop must match for the
- *  export to keep it (db/event-export.ts). `|` joins the members of a
- *  `measures` token; a Data Commons dcid has `/` but no `|`. */
-export const TOKEN_PATTERN = /^[A-Za-z0-9][\w.:/|-]{0,127}$/;
+ *  export to keep it (db/event-export.ts). */
+export const TOKEN_PATTERN = /^[A-Za-z0-9][\w.:/-]{0,127}$/;
+
+/** What one entry of the `measures` list must match for the export to keep
+ *  it: TOKEN_PATTERN plus `|`, which joins the members of a described
+ *  measure (measureToken in src/lib/search/searchEvents.ts). A Data Commons
+ *  dcid has `/` but no `|`. Only `measures` takes it, so no other prop admits
+ *  a `|`. */
+export const MEASURE_PATTERN = /^[A-Za-z0-9][\w.:/|-]{0,127}$/;
 
 /** A path on the site: a slash, then letters, digits and `_ - . : /`, up to
  *  the 300 characters POST /api/events keeps. The routes under src/app use

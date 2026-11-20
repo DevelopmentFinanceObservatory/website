@@ -61,11 +61,14 @@ test('withInternalEng sets internal_eng from the user and overrides a claim in t
     assert.equal(withInternalEng({}, verified('eng@one.org'), []).internal_eng, false);
 });
 
-test('anonymousWho keeps the email for internal_eng and never an account id', () => {
-    const user = { id: 'u1', email: 'eng@one.org', emailVerified: true };
-    const who = anonymousWho(user);
+test('anonymousWho matches domain entries only and never carries an account id', () => {
+    const verified = (email: string) => anonymousWho({ email, emailVerified: true });
 
-    assert.equal(who.userId, null);
-    assert.equal(isInternalEng(who, LIST), true);
-    assert.equal(anonymousWho(null).userId, null);
+    // eng@one.org is an address entry, so its own anonymous events read false.
+    assert.equal(isInternalEng(verified('eng@one.org'), LIST), false);
+    assert.equal(isInternalEng(verified('Anyone@Example.org'), LIST), true);
+    assert.equal(isInternalEng(verified('anyone@partner.example'), LIST), true);
+    assert.equal(isInternalEng(anonymousWho({ email: 'a@example.org' }), LIST), false);
+    assert.equal(verified('eng@one.org').userId, null);
+    assert.equal(anonymousWho(null).email, null);
 });

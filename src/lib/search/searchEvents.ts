@@ -26,7 +26,7 @@
  * it needs no check.
  */
 
-import { fitsProps, MAX_LIST_IDS, NO_ID, TOKEN_PATTERN } from '../events/limits.ts';
+import { fitsProps, MAX_LIST_IDS, MEASURE_PATTERN, NO_ID } from '../events/limits.ts';
 import {
     type DeclinedReason,
     hasDefiniteSpec,
@@ -164,7 +164,7 @@ type PlaceRole = {
  *  (`schema:FinancialFlow|amount|Nominal|measuredValue|-`). A denominator the graph holds
  *  with no dcid reads `unresolved`. Null when there is no shape or the token
  *  is over MAX_DCID, which is dropped, since a clipped token names another
- *  measure. A token the export's pattern (TOKEN_PATTERN) would reject reads
+ *  measure. A token the export's pattern (MEASURE_PATTERN) would reject reads
  *  `-`, so one odd dcid costs its own entry and not the whole list. */
 export const measureToken = (shape: SpecIdentity['shape'] | undefined): string | null => {
     if (!shape) {
@@ -188,7 +188,7 @@ export const measureToken = (shape: SpecIdentity['shape'] | undefined): string |
         return null;
     }
 
-    return TOKEN_PATTERN.test(token) ? token : NO_ID;
+    return MEASURE_PATTERN.test(token) ? token : NO_ID;
 };
 
 const denominatorOf = (
