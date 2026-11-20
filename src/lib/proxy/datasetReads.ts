@@ -14,6 +14,8 @@ import { clientLabel, NON_PRINTABLE, pick } from './headers';
  *                                          listing), so cached briefly
  *   {spec}/{cv}/files/{digest}   file      the SHA-256-named bytes, cached by tier
  *   {spec}/{cv}/file?format=...  selector  picks the current file, so never cached
+ *   {spec}                       current   the spec's latest stored version, with
+ *                                          its freshness, so cached briefly
  *
  * A spec id starts `spec_` and a content version `cv_`, case-sensitive, as
  * dfo-apis names them and as the edge cache rule matches them (dfo-infra,
@@ -31,9 +33,18 @@ import { clientLabel, NON_PRINTABLE, pick } from './headers';
  * falls back to the 302, and a body that stalls ends in an error. Each
  * failure on the hop logs at error level.
  *
- * A manifest read passes If-None-Match to dfo-apis, and a file read passes it
- * to storage, so a revalidation can answer 304 with the same cache headers as
- * the 200.
+ * A manifest or current read passes If-None-Match to dfo-apis, and a file read
+ * passes it to storage, so a revalidation can answer 304 with the same cache
+ * headers as the 200.
+ *
+ * A current read has no content version in its path, so dfo-apis names the
+ * version it served in `x-dfo-content-version`, an internal header the gateway
+ * reads and does not relay. The answer is kept 60 seconds in the browser and at
+ * the edge (CURRENT_CACHE), which bounds how stale a reader's view of the head
+ * is, and carries `Cache-Tag: <cv>` from that header. Without the header
+ * (dfo-apis has not sent it) the answer is cached untagged and the delivery
+ * line's content_version is null. `x-dfo-freshness` (current, pending or
+ * stale) is relayed and exposed to pages when dfo-apis sends it.
  *
  * dfo-apis names the artifact's tier in `x-dfo-artifact-tier`, an internal
  * header the gateway reads and does not relay. A pinned file is kept a year at
@@ -60,26 +71,33 @@ import { clientLabel, NON_PRINTABLE, pick } from './headers';
  * the same call under the same trace_id, and `served_by: "gateway"` marks this
  * one, so a reader counts one use per trace_id.
  */
-export type DatasetReadKind = 'manifest' | 'file' | 'selector';
+export type DatasetReadKind = 'manifest' | 'file' | 'selector' | 'current';
 
 /** dfo-apis's door name for each read route, as its `datasets.delivery` line gives it. */
 export const DELIVERY_DOORS = {
     manifest: 'snapshot',
     file: 'files',
     selector: 'file_selector',
+    current: 'definition',
 } as const satisfies Record<DatasetReadKind, string>;
 
 export type DeliveryDoor = (typeof DELIVERY_DOORS)[DatasetReadKind];
 
-export type DatasetRead = { kind: DatasetReadKind; contentVersion: string };
+/** `contentVersion` is null for a current read, whose path names no version. */
+export type DatasetRead =
+    | { kind: Exclude<DatasetReadKind, 'current'>; contentVersion: string }
+    | { kind: 'current'; contentVersion: null };
 
 export const STORAGE_ORIGIN = 'https://storage.googleapis.com';
 
 const TIER_HEADER = 'x-dfo-artifact-tier';
 const TRACE_HEADER = 'x-dfo-trace-id';
+const CONTENT_VERSION_HEADER = 'x-dfo-content-version';
+const FRESHNESS_HEADER = 'x-dfo-freshness';
 
 const PINNED_CACHE = 'public, max-age=3600, s-maxage=31536000';
 const SHORT_CACHE = 'public, max-age=60, s-maxage=300';
+const CURRENT_CACHE = 'public, max-age=60, s-maxage=60';
 const NO_STORE = 'no-store';
 
 const SPEC_PREFIX = 'spec_';
@@ -88,6 +106,10 @@ const CONTENT_VERSION_PREFIX = 'cv_';
 /** Which read route a datasets path's decoded segments name, if any. */
 export const datasetRead = (segments: readonly string[]): DatasetRead | undefined => {
     const [spec, contentVersion, ...rest] = segments;
+
+    if (spec?.startsWith(SPEC_PREFIX) && segments.length === 1) {
+        return { kind: 'current', contentVersion: null };
+    }
 
     if (!spec?.startsWith(SPEC_PREFIX) || !contentVersion?.startsWith(CONTENT_VERSION_PREFIX)) {
         return undefined;
@@ -118,6 +140,10 @@ export const readCacheControl = (
         return NO_STORE;
     }
 
+    if (kind === 'current') {
+        return CURRENT_CACHE;
+    }
+
     return kind === 'file' && tier === 'pinned' ? PINNED_CACHE : SHORT_CACHE;
 };
 
@@ -145,7 +171,7 @@ const READ_METHODS = 'GET';
 // publishable key, Accept, If-None-Match on a revalidation, and Content-Type
 // on a body.
 const ALLOWED_HEADERS = 'Accept, Authorization, Content-Type, If-None-Match, X-DFO-Client';
-const EXPOSED_HEADERS = ['Content-Disposition', 'ETag', 'Retry-After'];
+const EXPOSED_HEADERS = ['Content-Disposition', 'ETag', 'Retry-After', 'X-DFO-Freshness'];
 const EXPOSED_PER_REQUEST_HEADERS = [
     'X-DFO-Trace-Id',
     'X-RateLimit-Limit',
@@ -375,7 +401,8 @@ export type GatewayDeliveryEntry = {
     // dfo-apis's x-dfo-trace-id for the call, which its own line carries too.
     trace_id: string | null;
     spec_id: string;
-    content_version: string;
+    // Null on a current read when dfo-apis named no version.
+    content_version: string | null;
     // The file's SHA-256 name, on a `files` line only.
     digest?: string;
     // What forward() sent dfo-apis in x-dfo-caller, vouched by the principal.
@@ -546,7 +573,13 @@ export const forwardDatasets = async (
     const relayed = await forward(req, {
         ...options,
         // A file's If-None-Match goes to storage, in followStorage.
-        pass: { request: read.kind === 'manifest' ? ['if-none-match'] : [], response: ['etag'] },
+        pass: {
+            request: ['manifest', 'current'].includes(read.kind) ? ['if-none-match'] : [],
+            response:
+                read.kind === 'current'
+                    ? ['etag', FRESHNESS_HEADER, CONTENT_VERSION_HEADER]
+                    : ['etag'],
+        },
         rewrite:
             read.kind === 'file'
                 ? followStorage({
@@ -567,6 +600,13 @@ export const forwardDatasets = async (
     }
 
     const headers = new Headers(relayed.headers);
+    const contentVersion =
+        read.kind === 'current'
+            ? (headers.get(CONTENT_VERSION_HEADER) ?? null)
+            : read.contentVersion;
+
+    headers.delete(CONTENT_VERSION_HEADER);
+
     const cacheControl = readCacheControl(read.kind, relayed.status, tier);
 
     headers.set('Cache-Control', cacheControl);
@@ -575,7 +615,10 @@ export const forwardDatasets = async (
     const cacheable = cacheControl !== NO_STORE;
 
     if (cacheable) {
-        headers.set('Cache-Tag', read.contentVersion);
+        if (contentVersion !== null) {
+            headers.set('Cache-Tag', contentVersion);
+        }
+
         dropPerRequestHeaders(headers);
     }
 
@@ -608,7 +651,7 @@ export const forwardDatasets = async (
             door: DELIVERY_DOORS[read.kind],
             trace_id: traceId,
             spec_id: specId,
-            content_version: read.contentVersion,
+            content_version: contentVersion,
             ...(read.kind === 'file' && digest ? { digest } : {}),
             ...identity,
             served_by: 'gateway',

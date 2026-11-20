@@ -27,6 +27,7 @@ const PARQUET = Buffer.concat([Buffer.from('PAR1'), Buffer.alloc(4096, 7), Buffe
 const STORED_ETAG = '"stored-etag"';
 const MANIFEST_ETAG = '"manifest-etag"';
 const MANIFEST_TRACE = 'trace-of-one-request';
+const CURRENT_ETAG = '"current-etag"';
 const FILE_TRACE = 'trace-of-a-file-link';
 const CLIENT_ADDRESS = '203.0.113.7';
 // What dfo-apis sends on a route the gateway does not handle as a read.
@@ -81,6 +82,42 @@ const server = createServer((req, res) => {
     }
 
     apisRequests.push(req.headers);
+
+    if (spec === SPEC && cv === undefined) {
+        // The spec's current read. `mode` picks the answer: `legacy` sends
+        // none of the new headers, `accepted` a 202, `missing` a 404.
+        const mode = url.searchParams.get('mode');
+
+        if (mode === 'accepted') {
+            res.writeHead(202, {
+                'content-type': 'application/json',
+                'cache-control': 'no-store',
+                'retry-after': '2',
+            }).end('{}');
+        } else if (mode === 'missing') {
+            res.writeHead(404, { 'content-type': 'application/problem+json' }).end('{}');
+        } else {
+            const named =
+                mode === 'legacy'
+                    ? {}
+                    : { 'x-dfo-freshness': 'pending', 'x-dfo-content-version': CV };
+
+            if (req.headers['if-none-match'] === CURRENT_ETAG) {
+                res.writeHead(304, { etag: CURRENT_ETAG, ...named }).end();
+            } else {
+                res.writeHead(200, {
+                    'content-type': 'application/json',
+                    'cache-control': 'no-cache',
+                    etag: CURRENT_ETAG,
+                    'x-dfo-trace-id': MANIFEST_TRACE,
+                    ...named,
+                });
+                res.end('{"artifacts": []}');
+            }
+        }
+
+        return;
+    }
 
     if (spec !== SPEC || !cv?.startsWith('cv_') || parts.length > 7) {
         res.writeHead(200, {
@@ -613,4 +650,104 @@ test('log: the selector and the manifest are logged by door', async () => {
         loggedReads().map((entry) => entry.door),
         ['file_selector', 'snapshot'],
     );
+});
+
+const ORIGIN = 'http://localhost:3000';
+
+test('current: a 200 is cached for a minute, varies on Origin, is tagged from dfo-apis', async () => {
+    const res = await call(SPEC, { headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('cache-tag'), CV);
+    assert.equal(res.headers.get('etag'), CURRENT_ETAG);
+    assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
+    assert.equal(res.headers.get('x-dfo-content-version'), null);
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.match(res.headers.get('access-control-expose-headers')!, /\bX-DFO-Freshness\b/);
+    assert.deepEqual(await res.json(), { artifacts: [] });
+});
+
+test('current: a query string still reads as a current read', async () => {
+    const res = await call(`${SPEC}?rendering=csv`);
+
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
+    assert.equal(res.headers.get('cache-tag'), CV);
+    await res.body?.cancel();
+});
+
+test('current: If-None-Match reaches dfo-apis and its 304 keeps the 200 headers', async () => {
+    const res = await call(SPEC, { headers: { 'if-none-match': CURRENT_ETAG } });
+
+    assert.equal(apisRequests.at(-1)?.['if-none-match'], CURRENT_ETAG);
+    assert.equal(res.status, 304);
+    assert.equal(res.headers.get('etag'), CURRENT_ETAG);
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('cache-tag'), CV);
+    assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
+    assert.equal(res.headers.get('x-dfo-content-version'), null);
+});
+
+test('current: a dfo-apis that sends no freshness or version yields an untagged answer', async () => {
+    logged.mock.resetCalls();
+    const res = await call(`${SPEC}?mode=legacy`, { headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
+    assert.equal(res.headers.get('cache-tag'), null);
+    assert.equal(res.headers.get('x-dfo-freshness'), null);
+    await res.arrayBuffer();
+    assert.equal(loggedReads()[0].content_version, null);
+});
+
+for (const [name, mode, status] of [
+    ['a 202', 'accepted', 202],
+    ['a 404', 'missing', 404],
+] as const) {
+    test(`current: ${name} is no-store and untagged`, async () => {
+        const res = await call(`${SPEC}?mode=${mode}`, { headers: { origin: ORIGIN } });
+
+        assert.equal(res.status, status);
+        assert.equal(res.headers.get('cache-control'), 'no-store');
+        assert.equal(res.headers.get('cache-tag'), null);
+        assert.equal(res.headers.get('vary'), 'Origin');
+        assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+        await res.arrayBuffer();
+    });
+}
+
+test('current: the preflight is answered and a foreign origin is logged as refused', async () => {
+    logged.mock.resetCalls();
+    const preflight = await call(SPEC, {
+        method: 'OPTIONS',
+        headers: { origin: ORIGIN, 'access-control-request-method': 'GET' },
+    });
+    const foreign = await call(SPEC, { headers: { origin: 'https://example.org' } });
+
+    assert.equal(preflight.status, 204);
+    assert.equal(foreign.headers.get('access-control-allow-origin'), null);
+    await foreign.arrayBuffer();
+
+    const refused = lines(logged.mock.calls).filter((e) => e.message === 'gateway.cors_refused');
+
+    assert.equal(refused.length, 1);
+    assert.equal(refused[0].door, 'definition');
+});
+
+test('log: a current read is a definition line with the content version dfo-apis named', async () => {
+    logged.mock.resetCalls();
+    await (await call(SPEC, { headers: { 'sec-fetch-site': 'same-origin' } })).arrayBuffer();
+
+    const [entry] = loggedReads();
+
+    assert.equal(entry.door, 'definition');
+    assert.equal(entry.trace_id, MANIFEST_TRACE);
+    assert.equal(entry.spec_id, SPEC);
+    assert.equal(entry.content_version, CV);
+    assert.equal('digest' in entry, false);
+    assert.equal(entry.served_by, 'gateway');
+    assert.equal(entry.status, 200);
 });
