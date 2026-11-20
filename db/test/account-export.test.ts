@@ -248,7 +248,7 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
     const text = loaded.map((load) => load.text).join('');
 
     assert.ok(!text.includes('@'));
-    assert.ok(!text.includes('two.org'));
+    assert.doesNotMatch(text, /two\.org/);
     for (const [email] of users) {
         assert.ok(!text.includes(`"${idOf(email)}"`), idOf(email));
     }
