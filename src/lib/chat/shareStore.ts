@@ -35,11 +35,13 @@ import type { SlotDeps } from '@/lib/studio/slotCards';
 
 export type { ShareKind, ShareRecord };
 
-/** dfo-apis' share routes, naming the caller of `incoming`. */
+/** dfo-apis' share routes, naming the caller of `incoming`. Every call is
+ *  the site's own, made for a page or route it serves, so its surface is
+ *  `website`. */
 export const sharesBackendFor = (incoming: Headers): SharesBackend => ({
     base: searchApiBase(),
     fetch: apisFetch,
-    nameCaller: (outgoing) => setApisCaller(outgoing, incoming),
+    nameCaller: (outgoing) => setApisCaller(outgoing, incoming, 'website'),
 });
 
 /** A share by id, or null. One read per request, however many readers. */

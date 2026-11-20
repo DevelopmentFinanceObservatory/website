@@ -224,28 +224,29 @@ service, and migration Job with its migrator identity.
 
 The app defines the definitive contract once it exists. Known so far:
 
-| Name (provisional)                    | What it is                                                                                                                                                                                              |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STUDIO_API_BASE`                     | The `dfo-ai` harness the `/api/studio/*` proxy forwards to; plain env var set by infra                                                                                                                  |
-| `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                                                       |
-| `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                                                   |
-| `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                                             |
-| `CALLER_HMAC_KEY`                     | HMAC key for the client digest sent as `x-dfo-caller` (`/mcp`, and dfo-apis beside the principal); unset, none is sent; secret set by infra                                                             |
-| `DFO_CALLER_PRINCIPAL`                | Secret shared with dfo-apis (its `DFO_CALLER_PRINCIPAL`), sent as `x-dfo-caller-principal` on every dfo-apis call so dfo-apis trusts `x-dfo-caller`; unset, neither is sent                             |
-| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                                                |
-| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                     |
-| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                         |
-| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                                                    |
-| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                                                       |
-| `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits, the guest Studio allowance and the caller digest; default 0 (Cloud Run's); +1 per load balancer |
-| `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                                                           |
-| `WEBSITE_DB_USER`                     | Runtime IAM database user; set by infra                                                                                                                                                                 |
-| `WEBSITE_DB_NAME`                     | Database name; set by infra                                                                                                                                                                             |
-| `BETTER_AUTH_SECRET`                  | Signs auth sessions; generated and stored in Secret Manager by infra                                                                                                                                    |
-| `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                                                |
-| `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                           |
-| `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                       |
-| `GRAPH_EXPLORER_EMAIL_DOMAINS`        | Comma-separated email domains the Graph Explorer admits (`src/lib/auth/reader.ts`), matched exactly against a signed-in user's verified email; unset or empty admits nobody; plain env var              |
+| Name (provisional)                    | What it is                                                                                                                                                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STUDIO_API_BASE`                     | The `dfo-ai` harness the `/api/studio/*` proxy forwards to; plain env var set by infra                                                                                                                                       |
+| `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                                                                            |
+| `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                                                                        |
+| `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                                                                  |
+| `CALLER_HMAC_KEY`                     | HMAC key for the client digest sent as `x-dfo-caller` (`/mcp`, and dfo-apis beside the principal); unset, none is sent; secret set by infra                                                                                  |
+| `DFO_CALLER_PRINCIPAL`                | Secret shared with dfo-apis (its `DFO_CALLER_PRINCIPAL`), sent as `x-dfo-caller-principal` on every dfo-apis call so dfo-apis trusts `x-dfo-caller`; unset, neither is sent                                                  |
+| `EXPORT_ID_HMAC_KEY`                  | HMAC key for the account digest the Studio proxy sends as `x-dfo-account` on turn and interrupt calls (`src/lib/proxy/account.ts`); the export job's key, so a turn joins the account's exported events; unset, none is sent |
+| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                                                                     |
+| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                                          |
+| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                                              |
+| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                                                                         |
+| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                                                                            |
+| `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits, the guest Studio allowance and the caller digest; default 0 (Cloud Run's); +1 per load balancer                      |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                                                                                |
+| `WEBSITE_DB_USER`                     | Runtime IAM database user; set by infra                                                                                                                                                                                      |
+| `WEBSITE_DB_NAME`                     | Database name; set by infra                                                                                                                                                                                                  |
+| `BETTER_AUTH_SECRET`                  | Signs auth sessions; generated and stored in Secret Manager by infra                                                                                                                                                         |
+| `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                                                                     |
+| `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                                                |
+| `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                                            |
+| `GRAPH_EXPLORER_EMAIL_DOMAINS`        | Comma-separated email domains the Graph Explorer admits (`src/lib/auth/reader.ts`), matched exactly against a signed-in user's verified email; unset or empty admits nobody; plain env var                                   |
 
 The public MCP URL is `/mcp`. Next redirects `/mcp/` to `/mcp` with a 308,
 which keeps the method and body. The proxy forwards either form to the
@@ -257,7 +258,16 @@ request body), and returns `content-type`, `content-disposition`,
 `content-length`, `www-authenticate` and every `mcp-*` response header.
 `x-dfo-caller` is set by the proxy, whatever the client sent. A call to
 dfo-apis carries `x-dfo-caller` beside `x-dfo-caller-principal` when
-`DFO_CALLER_PRINCIPAL` is set, and neither when it is unset. The digest's
+`DFO_CALLER_PRINCIPAL` is set, and neither when it is unset. Beside the
+principal goes `x-dfo-surface`, `website` for a same-origin browser fetch and
+`api` otherwise. It comes from the client's `Sec-Fetch-Site` header, so it
+serves counting only, and the site's own share calls always send `website`.
+The client's `x-dfo-client` passes through. The Studio's
+turn and interrupt calls carry `x-dfo-caller` and, for a signed-in user,
+`x-dfo-account` (the export's `user_hash` under `EXPORT_ID_HMAC_KEY`, none for
+a guest or when the key is unset). Its other routes carry neither. The proxy
+drops a client-sent value of `x-dfo-caller`, `x-dfo-caller-principal`,
+`x-dfo-surface` and `x-dfo-account`. The digest's
 input is the client address folded as the rate limiter folds it (an IPv6
 address as its /64), so dfo-apis, which computes the same digest for a direct
 caller, keys both on one allowance. `authorization`
