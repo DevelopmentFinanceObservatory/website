@@ -6,9 +6,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { scopedListTable, valueListFileName, valueListTable } from '../tables.ts';
-import { readSchema, readUsage } from '../wire.ts';
-import { schemaBody, usageBody } from './fixtures.ts';
+import {
+    patternFileName,
+    patternTable,
+    scopedListTable,
+    valueListFileName,
+    valueListTable,
+} from '../tables.ts';
+import { readSchema, readUsage, type ProvenanceUsage } from '../wire.ts';
+import { baseUsageBody, schemaBody, usageBody } from './fixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 const scope = { kind: 'class', id: 'FinancialObligation' } as const;
@@ -20,7 +26,7 @@ test('a scoped list without a dataset filter has the StatVar total', () => {
     assert.equal(table.length, 1 + model.scopedList(scope, { kind: 'none' }).total);
 });
 
-test('with every dataset on, each dataset has a count column headed by its label', () => {
+test('with every dataset on, each dataset has a count column headed by its label, most StatVars first', () => {
     const table = scopedListTable(model, model.scopedList(scope, { kind: 'all' }));
     assert.deepEqual(table[0], [
         'dcid',
@@ -29,15 +35,50 @@ test('with every dataset on, each dataset has a count column headed by its label
         'value_list',
         'OECD DAC1',
         'OECD DAC2a',
-        'OECD DAC2b',
         'ONE Data Climate Finance',
+        'OECD DAC2b',
     ]);
-    assert.deepEqual(table[1], ['amount', 'amount', 'measured', '', '468', '24', '14', '9']);
+    assert.deepEqual(table[1], ['amount', 'amount', 'measured', '', '468', '24', '9', '14']);
+});
+
+test("columns that share a label carry each dataset's origin", () => {
+    const base = readUsage(baseUsageBody());
+    const [births] = base.provenances;
+    assert.ok(births);
+    const renamed: ProvenanceUsage = { ...births, label: 'OECD DAC1' };
+    const named = { ...base, provenances: [renamed] };
+    const both = buildModel(readSchema(schemaBody()), readUsage(usageBody()), named);
+    const fromBase = new Set<ProvenanceUsage>([renamed]);
+    const table = scopedListTable(both, both.scopedList({ kind: 'dfo' }, { kind: 'all' }), {
+        origin: (dataset) => (fromBase.has(dataset) ? 'base' : null),
+    });
+    const heads = table[0]?.slice(4) ?? [];
+    assert.ok(heads.includes('OECD DAC1 (DFO)'));
+    assert.ok(heads.includes('OECD DAC1 (base Data Commons)'));
+    assert.ok(heads.includes('OECD DAC2a'));
+
+    // Two DFO datasets sharing a label within one origin also carry their dcids.
+    const dfo = readUsage(usageBody());
+    const twins = {
+        ...dfo,
+        provenances: dfo.provenances.map((dataset) =>
+            dataset.ref === 'provenance/OECDDAC2A' ? { ...dataset, label: 'OECD DAC1' } : dataset,
+        ),
+    };
+    const three = buildModel(readSchema(schemaBody()), twins, named);
+    const twinHeads =
+        scopedListTable(three, three.scopedList({ kind: 'dfo' }, { kind: 'all' }), {
+            origin: (dataset) => (fromBase.has(dataset) ? 'base' : null),
+        })[0]?.slice(4) ?? [];
+    assert.ok(twinHeads.includes('OECD DAC1 (DFO, provenance/OECDDAC1)'));
+    assert.ok(twinHeads.includes('OECD DAC1 (DFO, provenance/OECDDAC2A)'));
+    assert.ok(twinHeads.includes('OECD DAC1 (base Data Commons)'));
+    assert.equal(new Set(twinHeads).size, twinHeads.length);
 });
 
 test('only the rows the filter text keeps are written, matched on label or dcid', () => {
     const list = model.scopedList(scope, { kind: 'none' });
-    const table = scopedListTable(model, list, '  DAC ');
+    const table = scopedListTable(model, list, { filter: '  DAC ' });
     assert.deepEqual(
         table.slice(1).map((row) => [row[0], row[2], row[3]]),
         [
@@ -89,3 +130,43 @@ for (const [listId, fileName] of [
         assert.equal(valueListFileName(model, listId), fileName);
     });
 }
+
+test("a dataset's patterns are written group by group, one row per pattern", () => {
+    const [head, ...rows] = patternTable(model, 'provenance/OECDDAC2A');
+    assert.deepEqual(head?.slice(0, 3), ['split_combination', 'split', 'population_type']);
+    assert.equal(rows.length, 6);
+    const column = (name: string) => head?.indexOf(name) ?? -1;
+    assert.deepEqual(
+        rows.map((row) => row[column('split_combination')]),
+        ['1', '2', '2', '2', '2', '3'],
+    );
+    assert.deepEqual(
+        rows
+            .filter((row) => row[column('split_combination')] === '2')
+            .map((row) => row[column('measurement_denominator')])
+            .toSorted(),
+        [
+            '',
+            '',
+            'Count_Person',
+            'PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal',
+        ],
+    );
+    assert.deepEqual(
+        [
+            ...new Set(
+                rows.map((row) => `${row[column('split_combination')]} ${row[column('split')]}`),
+            ),
+        ],
+        [
+            '1 dac2aAidType; dacTypeOfFinance; financialFlowType; nettingBasis',
+            '2 dac2aAidType; financialFlowType; nettingBasis',
+            '3 dac2aAidType; financialFlowType',
+        ],
+    );
+    assert.deepEqual(
+        [...new Set(rows.map((row) => row[column('measurement_denominator_unresolved')]))],
+        ['false'],
+    );
+    assert.equal(patternFileName(model, 'provenance/OECDDAC2A'), 'oecd-dac2a-patterns.csv');
+});

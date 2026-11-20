@@ -1,0 +1,190 @@
+// The country table. It scrolls sideways inside its own box so the page never does.
+.table {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    color: #484842;
+    font-family: var(--font-outfit);
+}
+
+.scroll {
+    overflow-x: auto;
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 2px;
+    }
+
+    table {
+        width: 100%;
+        min-width: 720px;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    th,
+    td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #ececdb;
+        text-align: right;
+        vertical-align: middle;
+    }
+
+    thead th {
+        min-width: 72px;
+        color: #5e5e52;
+        font: 400 11px var(--font-dm-mono);
+        vertical-align: bottom;
+    }
+
+    thead th[aria-sort] {
+        color: #484842;
+    }
+
+    th:first-child,
+    .mixColumn {
+        text-align: left;
+    }
+
+    tbody th {
+        font-weight: 400;
+        white-space: nowrap;
+    }
+
+    td {
+        font-variant-numeric: tabular-nums;
+    }
+
+    tbody tr {
+        transition: background-color 150ms ease-out;
+
+        &:hover {
+            background: rgb(100 103 222 / 7%);
+        }
+
+        &[data-selected="true"] {
+            background: rgb(100 103 222 / 14%);
+        }
+    }
+
+    // Header and row buttons look like their text.
+    th button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: inherit;
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: 2px solid #6467de;
+            outline-offset: 2px;
+        }
+    }
+
+    tbody th button {
+        font-size: 13px;
+    }
+}
+
+// The bar and the printed shares, side by side.
+.mixCell {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    white-space: nowrap;
+}
+
+// Wide enough for the longest mix, "US 49.8% · GF 49.7%", so every bar starts at one edge.
+.mixText {
+    min-width: 19ch;
+    color: #5e5e52;
+    font: 400 11px var(--font-dm-mono);
+    text-align: left;
+}
+
+// The three providers' shares of the row's aid, side by side.
+.mix {
+    display: inline-flex;
+    width: 60px;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #ececdb;
+    vertical-align: middle;
+
+    span {
+        flex-basis: 0;
+        min-width: 0;
+    }
+}
+
+// The hatched mark on a row the Global Fund's multi-disease grants leave understated.
+.flag {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 10px;
+    height: 10px;
+    margin-left: 6px;
+    border-radius: 2px;
+    vertical-align: -1px;
+}
+
+.flagAmount {
+    margin-left: 4px;
+    color: #5e5e52;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.legend {
+    margin: 0;
+    color: #5e5e52;
+    font-size: 12.5px;
+
+    .flag {
+        margin: 0 6px 0 0;
+    }
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    button {
+        padding: 4px 10px;
+        border: 1px solid #cfcfbf;
+        border-radius: 4px;
+        background: #fff;
+        color: #484842;
+        font: 400 12.5px var(--font-outfit);
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: 2px solid #6467de;
+            outline-offset: 2px;
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scroll tbody tr {
+        transition: none;
+    }
+}

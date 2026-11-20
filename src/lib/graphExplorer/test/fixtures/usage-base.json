@@ -1,0 +1,99 @@
+{
+    "provenances": [
+        {
+            "ref": "dc/base/Adolescent_Birth_Rate",
+            "label": "Adolescent Birth Rate",
+            "description": null,
+            "stat_var_count": 5,
+            "patterns": [
+                {
+                    "population_type": "Person",
+                    "measured_property": "fertilityRate",
+                    "stat_type": "measuredValue",
+                    "measurement_qualifier": null,
+                    "measurement_denominator": null,
+                    "constraint_properties": ["age", "gender"],
+                    "observation_properties": [],
+                    "stat_var_count": 3,
+                    "examples": ["sv/a", "sv/b", "sv/c"]
+                },
+                {
+                    "population_type": "Person",
+                    "measured_property": "count",
+                    "stat_type": "measuredValue",
+                    "measurement_qualifier": null,
+                    "measurement_denominator": null,
+                    "constraint_properties": ["gender"],
+                    "observation_properties": [],
+                    "stat_var_count": 2,
+                    "examples": ["Count_Person_Female", "Count_Person_Male"],
+                    "measurement_denominator_unresolved": true
+                }
+            ],
+            "constraint_values": [
+                {
+                    "property": "gender",
+                    "values": [
+                        {
+                            "value": "Female",
+                            "stat_var_count": 4
+                        },
+                        {
+                            "value": "Male",
+                            "stat_var_count": 1
+                        }
+                    ]
+                }
+            ],
+            "facets": {
+                "units": [],
+                "scaling_factors": [],
+                "measurement_methods": [],
+                "observation_periods": [],
+                "currencies": []
+            }
+        }
+    ],
+    "terms": [
+        {
+            "ref": "Female",
+            "label": "Female",
+            "types": ["GenderType"]
+        },
+        {
+            "ref": "Male",
+            "label": "Male",
+            "types": ["GenderType"]
+        },
+        {
+            "ref": "Person",
+            "label": null,
+            "types": ["Class"]
+        },
+        {
+            "ref": "age",
+            "label": "Age",
+            "types": ["Property"]
+        },
+        {
+            "ref": "amount",
+            "label": "Amount on base",
+            "types": ["Property"]
+        },
+        {
+            "ref": "count",
+            "label": "Count",
+            "types": ["Property"]
+        },
+        {
+            "ref": "fertilityRate",
+            "label": "Fertility rate",
+            "types": ["Property"]
+        },
+        {
+            "ref": "gender",
+            "label": "Gender",
+            "types": ["Property"]
+        }
+    ]
+}

@@ -1,13 +1,16 @@
 'use client';
 
 import classNames from 'classnames';
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
-import { count } from '@/lib/graphExplorer/counts';
+import { CeilingNote } from './ListToggle';
 import styles from './ValueTree.module.scss';
+
+import { count } from '@/lib/graphExplorer/counts';
+import { firstMatches } from '@/lib/graphExplorer/lists';
 
 import {
     cellWidth,
@@ -90,6 +93,9 @@ const Head = ({
     );
 };
 
+/** What a reader does to reach the members past the ceiling of an unfiltered list. */
+const FILTER_FOR_REST = 'Filter to find the rest.';
+
 type BranchProps = {
     node: MemberTree;
     lensDataset: string | null;
@@ -98,20 +104,33 @@ type BranchProps = {
     depth: number;
 };
 
-const Branch = ({ node, lensDataset, columns, codes, depth }: BranchProps) => (
-    <li>
-        {node.children.length === 0 ? (
-            <div className={styles.row}>
-                <Head
-                    id={node.id}
-                    lensDataset={lensDataset}
-                    columns={columns}
-                    codes={codes}
-                    depth={depth}
-                />
-            </div>
-        ) : (
-            <details>
+/**
+ * A member and, once its branch is opened, its narrower members up to the
+ * ceiling. A closed branch renders none of them.
+ */
+const Branch = ({ node, lensDataset, columns, codes, depth }: BranchProps) => {
+    const [open, setOpen] = useState(false);
+
+    if (node.children.length === 0) {
+        return (
+            <li>
+                <div className={styles.row}>
+                    <Head
+                        id={node.id}
+                        lensDataset={lensDataset}
+                        columns={columns}
+                        codes={codes}
+                        depth={depth}
+                    />
+                </div>
+            </li>
+        );
+    }
+
+    const children = firstMatches(node.children);
+    return (
+        <li>
+            <details onToggle={(event) => setOpen(event.currentTarget.open)}>
                 <summary className={classNames(styles.row, styles.summary)}>
                     <Head
                         id={node.id}
@@ -122,22 +141,27 @@ const Branch = ({ node, lensDataset, columns, codes, depth }: BranchProps) => (
                         narrower={node.children.length}
                     />
                 </summary>
-                <ul className={styles.children}>
-                    {node.children.map((child) => (
-                        <Branch
-                            key={child.id}
-                            node={child}
-                            lensDataset={lensDataset}
-                            columns={columns}
-                            codes={codes}
-                            depth={depth + 1}
-                        />
-                    ))}
-                </ul>
+                {open && (
+                    <>
+                        <ul className={styles.children}>
+                            {children.hits.map((child) => (
+                                <Branch
+                                    key={child.id}
+                                    node={child}
+                                    lensDataset={lensDataset}
+                                    columns={columns}
+                                    codes={codes}
+                                    depth={depth + 1}
+                                />
+                            ))}
+                        </ul>
+                        <CeilingNote matches={children} then={FILTER_FOR_REST} />
+                    </>
+                )}
             </details>
-        )}
-    </li>
-);
+        </li>
+    );
+};
 
 /** The head row over the list: "Name", then each open property's name over its column. */
 const FieldHeads = ({ columns }: { columns: Columns }) => {
@@ -211,6 +235,11 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
         })),
     };
     const codes = membersHaveCodes(model, members);
+    // The hierarchy serves only the blank filter, so typing in the box does not rebuild it.
+    const roots = useMemo(
+        () => (blank ? firstMatches(model.memberTree(listId)) : null),
+        [blank, model, listId],
+    );
 
     return (
         <div className={styles.tree}>
@@ -222,21 +251,24 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
             />
-            {blank ? (
-                <Table columns={columns}>
-                    <ul className={styles.list}>
-                        {model.memberTree(listId).map((node) => (
-                            <Branch
-                                key={node.id}
-                                node={node}
-                                lensDataset={lensDataset}
-                                columns={columns}
-                                codes={codes}
-                                depth={0}
-                            />
-                        ))}
-                    </ul>
-                </Table>
+            {roots !== null ? (
+                <>
+                    <Table columns={columns}>
+                        <ul className={styles.list}>
+                            {roots.hits.map((node) => (
+                                <Branch
+                                    key={node.id}
+                                    node={node}
+                                    lensDataset={lensDataset}
+                                    columns={columns}
+                                    codes={codes}
+                                    depth={0}
+                                />
+                            ))}
+                        </ul>
+                    </Table>
+                    <CeilingNote matches={roots} then={FILTER_FOR_REST} />
+                </>
             ) : total === 0 ? (
                 <p className={styles.note} role="status">
                     No value matches “{filter.trim()}”.
@@ -258,11 +290,7 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
                             ))}
                         </ul>
                     </Table>
-                    {total > hits.length && (
-                        <p className={styles.note} role="status">
-                            The first {count(hits.length)} of {count(total)}. Type more to narrow.
-                        </p>
-                    )}
+                    <CeilingNote matches={{ hits, total }} then="Type more to narrow." />
                 </>
             )}
         </div>

@@ -123,6 +123,7 @@ test('headers map to definition fields in either case, to properties, or to noth
         'dac_1_aid_type',
         'financialFlowType ',
         'dcid',
+        'includes_imf_credit',
     ]);
     assert.deepEqual(target(mapping, 0), { kind: 'ignored' });
     assert.deepEqual(target(mapping, 1), { kind: 'definition', field: 'measuredProperty' });
@@ -135,9 +136,11 @@ test('headers map to definition fields in either case, to properties, or to noth
     assert.deepEqual(target(mapping, 6), { kind: 'ignored' });
     assert.deepEqual(target(mapping, 7), { kind: 'property', property: 'financialFlowType' });
     assert.deepEqual(target(mapping, 8), { kind: 'definition', field: 'dcid' });
+    // The seed's column name for an acronym property reads back to the property.
+    assert.deepEqual(target(mapping, 9), { kind: 'property', property: 'includesIMFCredit' });
     assert.deepEqual(
         mapping.map((column) => column.index),
-        [0, 1, 2, 3, 4, 5, 6, 7, 8],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     );
 });
 
@@ -351,9 +354,10 @@ test('a repeated property keeps its first column, and the check reads and marks 
 });
 
 test('a repeated definition field keeps its first column', () => {
-    const mapping = mapHeaders(model, ['measured_property', 'measuredProperty']);
+    const mapping = mapHeaders(model, ['measured_property', 'measuredProperty', 'population_type']);
     assert.equal(mapping[1]?.duplicateOf, 0);
-    const [row] = rowsToCheck(mapping, [['', 'amount']]).rows;
+    assert.equal(mapping[1]?.skip, 'duplicate');
+    const [row] = rowsToCheck(mapping, [['', 'amount', 'FinancialFlow']]).rows;
     assert.equal(row?.measured_property, null);
 });
 

@@ -1,0 +1,23 @@
+// Every variant and the shown text share one grid cell, so the cell is as large as the
+// largest of them.
+@use "motion" as *;
+
+.reserved {
+    display: inline-grid;
+
+    > * {
+        grid-area: 1 / 1;
+    }
+}
+
+.block {
+    display: grid;
+}
+
+.variant {
+    visibility: hidden;
+}
+
+.text {
+    @include fade-in;
+}

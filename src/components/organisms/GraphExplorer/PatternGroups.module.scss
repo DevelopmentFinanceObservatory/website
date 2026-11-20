@@ -1,0 +1,138 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.groups {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    min-width: 0;
+}
+
+.count {
+    @include font-size(14px, 1.4);
+
+    overflow-wrap: break-word;
+}
+
+.list {
+    border-top: 1px solid var(--color-net-mid);
+}
+
+.group {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(4);
+    padding-block: rem(10);
+    border-bottom: 1px solid var(--color-net-mid);
+}
+
+.sentence {
+    @include font-size(16px, 1.4);
+}
+
+.facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: rem(6) rem(12);
+    min-width: 0;
+
+    > :first-child {
+        flex: 1 1 auto;
+    }
+}
+
+.meta {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+    overflow-wrap: break-word;
+}
+
+.expand {
+    @include font-size(12px, 1.1);
+
+    padding: rem(6) rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-net-light);
+    border: 0;
+    border-radius: rem(4);
+    cursor: pointer;
+
+    &::after {
+        content: " ▸";
+    }
+
+    &[aria-expanded="true"]::after {
+        content: " ▾";
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-net-mid);
+        }
+    }
+}
+
+.members {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+    padding-left: rem(12);
+    border-left: 2px solid var(--color-net-mid);
+}
+
+.lines {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
+}
+
+.line {
+    @include flex(column, flex-start, stretch);
+    @include font-size(14px, 1.35);
+
+    gap: rem(2);
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.lineHead {
+    display: flex;
+    justify-content: space-between;
+    gap: rem(10);
+    min-width: 0;
+
+    > :first-child {
+        min-width: 0;
+    }
+}
+
+.detail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: rem(2) rem(10);
+}
+
+.mono {
+    font-family: var(--font-dm-mono);
+    letter-spacing: -0.02em;
+    overflow-wrap: break-word;
+}
+
+.note {
+    @include font-size(13px, 1.3);
+
+    color: var(--color-stone);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: rem(8);
+}
