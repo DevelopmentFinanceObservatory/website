@@ -14,6 +14,7 @@ import AccountMenu from '@/components/molecules/AccountMenu/AccountMenu';
 import { useScrollFrame } from '@/hooks/useScrollFrame';
 import { useSiteNavigate } from '@/hooks/useSiteNavigate';
 import { DOCS_MENU } from '@/lib/docs/nav';
+import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 import { IS_SITE, siteHref } from '@/lib/site';
 import Logo from '@/assets/svg/logo.svg';
 
@@ -34,7 +35,7 @@ const navItems: {
         label: 'Insights',
         href: '/insights',
         menu: [
-            { label: 'Gallery', href: '/insights/gallery' },
+            ...(GALLERY_PUBLISHED ? [{ label: 'Gallery', href: '/insights/gallery' }] : []),
             { label: 'Publications', href: '/insights/publications' },
         ],
         action: { label: 'Open Studio', href: '/studio' },

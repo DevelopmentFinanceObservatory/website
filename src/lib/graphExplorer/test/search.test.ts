@@ -37,28 +37,52 @@ test('an open property value or name finds the nodes that carry it', () => {
     assert.ok(ids('wbCode').includes('wbCode'));
 });
 
-test('exact beats prefix beats substring', () => {
+test('exact beats whole words beats prefix beats substring', () => {
     const hits = search(model, 'Source', { limit: 50 }).hits;
     assert.deepEqual(
         hits.map((hit) => [hit.id, hit.match]),
         [
             ['Source', 'exact'],
-            ['sourceIndicatorCode', 'prefix'],
+            ['sourceIndicatorCode', 'word'],
             ['FinancingResourceEnum', 'substring'],
             ['financingResource', 'substring'],
         ],
     );
+
+    // An acronym in brackets is a whole word, so it outranks a longer word that starts with it.
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const buyback = body.nodes.find((node) => node.ref === 'Buyback');
+    assert.ok(buyback);
+    body.nodes.push(
+        { ...buyback, ref: 'Wholesale', label: 'Wholesale store' },
+        { ...buyback, ref: 'WorldHealthOrganization', label: 'World Health Organization (WHO)' },
+        { ...buyback, ref: 'GDPPerCapita', label: 'Output per head' },
+    );
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
+    assert.deepEqual(
+        search(edited, 'who').hits.map((hit) => [hit.id, hit.match]),
+        [
+            ['WorldHealthOrganization', 'word'],
+            ['Wholesale', 'prefix'],
+        ],
+    );
+    // A run of capitals ends a word before the capital that starts the next.
+    assert.deepEqual(
+        search(edited, 'gdp').hits.map((hit) => [hit.id, hit.match]),
+        [['GDPPerCapita', 'word']],
+    );
 });
 
 test('within a rank, DFO terms and datasets come before base terms', () => {
-    // Dataset is a base class with a shorter label than either DFO property.
+    // DataType is a base class with a shorter label than either DFO property.
     assert.deepEqual(ids('data').slice(0, 4), [
+        'provenance/ONEClimateFinance',
         'dataTransformationChangelog',
         'dataTransformationDescription',
-        'Dataset',
         'DataType',
     ]);
-    assert.deepEqual(ids('measure').slice(0, 3), [
+    assert.deepEqual(ids('measure').slice(0, 4), [
+        'UnitOfMeasure',
         'MeasurementEnum',
         'measuredValue',
         'measurementQualifier',
