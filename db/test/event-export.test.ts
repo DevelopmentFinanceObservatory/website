@@ -27,6 +27,8 @@ import {
     type Warehouse,
 } from '../event-export.ts';
 import { EXPORT_READER_ROLE } from '../local-roles.ts';
+import { shareCopyProps } from '../../src/lib/events/shareCopy.ts';
+import type { StudioDownloadProps } from '../../src/lib/events/studioDownload.ts';
 import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
@@ -194,6 +196,7 @@ test('exportRow exports a share id as its digest, so share events still join', (
         ['share.open', { shareId, kind: 'card', mode: 'live' }],
         ['embed.view', { shareId, kind: 'card' }],
         ['search.action', { shareId, action: 'share' }],
+        ['share.copy', { shareId, kind: 'card', copied: 'link' }],
     ];
 
     for (const [name, props] of events) {
@@ -211,6 +214,54 @@ test('exportRow exports a share id as its digest, so share events still join', (
     );
 
     assert.deepEqual(refused.props, {});
+});
+
+test('exportRow keeps the props of a copied share and a share dialog download', async (t) => {
+    const hashed = createHmac('sha256', KEY).update('aB3dE5fG7h').digest('hex');
+    const cases: [string, string, Record<string, unknown>, Record<string, unknown>][] = [
+        [
+            'an embed code copied',
+            'share.copy',
+            shareCopyProps({
+                kind: 'canvas',
+                copied: 'embed_code',
+                share: { id: 'aB3dE5fG7h', mode: 'live' },
+            }),
+            { kind: 'canvas', copied: 'embed_code', shareId: hashed, mode: 'live' },
+        ],
+        [
+            'a search query link copied, with no share behind it',
+            'share.copy',
+            shareCopyProps({ kind: 'search', copied: 'query_link', share: null }),
+            { kind: 'search', copied: 'query_link' },
+        ],
+        [
+            'a file saved from the Share dialog',
+            'studio.download',
+            {
+                format: 'csv',
+                bundle: false,
+                kind: 'table',
+                cardId: 'c-1',
+                shared: false,
+                source: 'share_dialog',
+            } satisfies StudioDownloadProps,
+            {
+                format: 'csv',
+                bundle: false,
+                kind: 'table',
+                cardId: 'c-1',
+                shared: false,
+                source: 'share_dialog',
+            },
+        ],
+    ];
+
+    for (const [label, name, props, kept] of cases) {
+        await t.test(label, () => {
+            assert.deepEqual(exportRow(sourceEvent({ name, props }), KEY, RULES).props, kept);
+        });
+    }
 });
 
 // A fixed sample that reaches every rule and branch of exportRow.

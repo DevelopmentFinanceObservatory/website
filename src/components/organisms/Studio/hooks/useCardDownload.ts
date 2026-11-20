@@ -6,6 +6,7 @@ import type { DownloadSheetState } from '@/components/organisms/DataSearch/Datas
 import type { CardRef, Widget } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
 import { track } from '@/lib/events/client';
+import type { StudioDownloadProps } from '@/lib/events/studioDownload';
 import { DATASET_FORMATS, type DatasetFormat } from '@/lib/search/searchClient';
 import {
     CardDownloadError,
@@ -46,7 +47,8 @@ export const useCardDownload = (
                 kind,
                 cardId: ref.component_id,
                 shared: shared !== null,
-            });
+                source: 'card',
+            } satisfies StudioDownloadProps);
         } catch (caught) {
             setError(
                 caught instanceof CardDownloadError ? caught.message : cardDownloadMessage(null),
