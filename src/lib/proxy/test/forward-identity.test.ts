@@ -42,7 +42,7 @@ process.env.EXPORT_ID_HMAC_KEY = 'export-key';
 
 const { forward } = await import('../forward.ts');
 const { studioIdentity } = await import('../studioIdentity.ts');
-const { accountDigest } = await import('../account.ts');
+const { exportDigest } = await import('../account.ts');
 
 const IDENTITY = ['x-dfo-caller', 'x-dfo-caller-principal', 'x-dfo-surface', 'x-dfo-account'];
 
@@ -125,7 +125,7 @@ test('studioIdentity: turn and interrupt send the caller and the account digest'
         const sent = await studioSent(route, async () => 'user_1');
 
         assert.match(sent['x-dfo-caller'] ?? '', /^ip:[0-9a-f]{32}$/, route);
-        assert.equal(sent['x-dfo-account'], accountDigest('user_1', 'export-key'), route);
+        assert.equal(sent['x-dfo-account'], exportDigest('user_1', 'export-key'), route);
         assert.equal('x-dfo-caller-principal' in sent, false, route);
     }
 });
@@ -144,6 +144,26 @@ test('studioIdentity: a session read that rejects forwards the call without an a
     assert.match(sent['x-dfo-caller'] ?? '', /^ip:/);
     assert.equal('x-dfo-account' in sent, false);
 });
+
+test(
+    'studioIdentity: a session read that never answers forwards the interrupt without an account',
+    { timeout: 5_000 },
+    async (t) => {
+        t.mock.method(console, 'error', () => {});
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+
+        const pending = studioSent('interrupt', () => new Promise<never>(() => {}));
+
+        await new Promise((resolve) => setImmediate(resolve));
+        t.mock.timers.tick(1_000);
+        t.mock.timers.reset();
+
+        const sent = await pending;
+
+        assert.match(sent['x-dfo-caller'] ?? '', /^ip:/);
+        assert.equal('x-dfo-account' in sent, false);
+    },
+);
 
 test('studioIdentity: a call the admit check refuses reads no session', async () => {
     let reads = 0;

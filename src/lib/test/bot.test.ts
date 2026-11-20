@@ -95,6 +95,21 @@ const AGENT_CASES: [
         'Googlebot',
     ],
     [
+        'Googlebot-Image',
+        { 'user-agent': 'Googlebot-Image/1.0' },
+        false,
+        'crawler',
+        'Googlebot-Image',
+    ],
+    ['Googlebot-News', { 'user-agent': 'Googlebot-News' }, false, 'crawler', 'Googlebot-News'],
+    [
+        'Googlebot-Video',
+        { 'user-agent': 'Googlebot-Video/1.0' },
+        false,
+        'crawler',
+        'Googlebot-Video',
+    ],
+    [
         'ChatGPT-User',
         {
             'user-agent':
@@ -140,6 +155,13 @@ const AGENT_CASES: [
         null,
     ],
     [
+        'an X-DFO-Client without a version',
+        { 'user-agent': 'curl/8.7.1', 'x-dfo-client': 'aid-dashboard' },
+        false,
+        'other_bot',
+        null,
+    ],
+    [
         'an X-DFO-Client blank after cleaning',
         { 'user-agent': 'curl/8.7.1', 'x-dfo-client': ' \x01 ' },
         false,
@@ -157,9 +179,19 @@ const AGENT_CASES: [
     [
         'claude-code',
         { 'user-agent': 'claude-code/2.1.321 (claude-desktop, agent-sdk/0.3.321)' },
-        false,
+        true,
         'mcp_client',
         'claude-code',
+    ],
+    [
+        'Antigravity’s Electron pages off /mcp',
+        {
+            'user-agent':
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/1.11.3 Chrome/138.0.7204.235 Electron/37.3.1 Safari/537.36',
+        },
+        false,
+        'browser',
+        null,
     ],
     ['an HTTP library on /mcp', { 'user-agent': 'python-httpx/0.28.1' }, true, 'other_bot', null],
     ['curl', { 'user-agent': 'curl/8.7.1' }, false, 'other_bot', null],

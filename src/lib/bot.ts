@@ -1,6 +1,6 @@
 import { isbot } from 'isbot';
 
-import { clientLabel } from './proxy/headers.ts';
+import { clientToken } from './proxy/headers.ts';
 
 /** A crawler, link-preview fetcher or script, by its user agent. A request
  *  with no user agent comes from a script, so it counts as a bot. */
@@ -34,10 +34,13 @@ export type AgentVerdict = { agent: Agent; agentName: string | null };
  *   MCP connectors send Claude-User on /mcp too.
  * - Perplexity, https://docs.perplexity.ai/guides/bots: PerplexityBot crawls,
  *   and Perplexity-User fetches for a Perplexity user.
- * Googlebot and bingbot are the search crawlers. dfo-python and dfo-ts are the
- * DFO SDKs, which also send X-DFO-Client. The MCP clients are the ones seen on
- * the production /mcp route: codex-mcp-client (Codex), openai-mcp (ChatGPT),
- * claude-code (Claude Code, and Claude Desktop's agent SDK) and Antigravity.
+ * Googlebot (with its Googlebot-Image, Googlebot-News and Googlebot-Video
+ * variants) and bingbot are the search crawlers. dfo-python and dfo-ts are
+ * the DFO SDKs, which also send X-DFO-Client. The MCP clients are the ones
+ * seen on the production /mcp route: codex-mcp-client (Codex), openai-mcp
+ * (ChatGPT), claude-code (Claude Code, and Claude Desktop's agent SDK) and
+ * Antigravity. Antigravity is also an Electron app whose pages send its name
+ * in a browser user agent, so an MCP client name counts only on /mcp.
  */
 const NAMED_AGENTS: readonly (readonly [name: string, agent: Agent])[] = [
     ['GPTBot', 'crawler'],
@@ -46,6 +49,9 @@ const NAMED_AGENTS: readonly (readonly [name: string, agent: Agent])[] = [
     ['Claude-SearchBot', 'crawler'],
     ['PerplexityBot', 'crawler'],
     ['Googlebot', 'crawler'],
+    ['Googlebot-Image', 'crawler'],
+    ['Googlebot-News', 'crawler'],
+    ['Googlebot-Video', 'crawler'],
     ['bingbot', 'crawler'],
     ['ChatGPT-User', 'user_fetcher'],
     ['Claude-User', 'user_fetcher'],
@@ -77,22 +83,23 @@ const named = (userAgent: string): AgentVerdict | undefined => {
 };
 
 /**
- * Classify a request by its headers. A non-empty X-DFO-Client label (cleaned
- * as clientLabel cleans it for the APIs) makes it `sdk` whatever the user
- * agent says, named when the label's product token is a DFO SDK's. Otherwise
- * a missing or blank user agent is `none`, a named one takes its row of
- * NAMED_AGENTS, and the rest is `other_bot` when isbot flags it and `browser`
- * when it does not. On an MCP route (`mcp`), a fetcher is the MCP client it
- * speaks as and keeps its name, since Claude's connectors send Claude-User.
- * An unnamed bot there stays `other_bot`. An MCP SDK sends its HTTP library's
- * user agent, as a scanner or script does, so the user agent cannot tell
- * them apart.
+ * Classify a request by its headers. An X-DFO-Client product token
+ * (clientToken, the `<name>/<version>` shape dfo-apis accepts) makes it `sdk`
+ * whatever the user agent says, named when the token's name is a DFO SDK's.
+ * Otherwise a missing or blank user agent is `none`, a named one takes its
+ * row of NAMED_AGENTS, and the rest is `other_bot` when isbot flags it and
+ * `browser` when it does not. On an MCP route (`mcp`), a fetcher is the MCP
+ * client it speaks as and keeps its name, since Claude's connectors send
+ * Claude-User. Off an MCP route, an MCP client's name is ignored and the
+ * isbot rule decides. An unnamed bot on an MCP route stays `other_bot`. An
+ * MCP SDK sends its HTTP library's user agent, as a scanner or script does,
+ * so the user agent cannot tell them apart.
  */
 export const requestAgent = (headers: Headers, { mcp = false } = {}): AgentVerdict => {
-    const label = clientLabel(headers);
+    const token = clientToken(headers);
 
-    if (label) {
-        const product = label.split(/[/\s]/, 1)[0]!.toLowerCase();
+    if (token) {
+        const product = token.split('/', 1)[0]!.toLowerCase();
 
         return { agent: 'sdk', agentName: SDK_NAMES.has(product) ? product : null };
     }
@@ -103,10 +110,11 @@ export const requestAgent = (headers: Headers, { mcp = false } = {}): AgentVerdi
         return { agent: 'none', agentName: null };
     }
 
-    const verdict: AgentVerdict = named(userAgent) ?? {
-        agent: isbot(userAgent) ? 'other_bot' : 'browser',
-        agentName: null,
-    };
+    const match = named(userAgent);
+    const verdict: AgentVerdict =
+        match && (mcp || match.agent !== 'mcp_client')
+            ? match
+            : { agent: isbot(userAgent) ? 'other_bot' : 'browser', agentName: null };
 
     return mcp && verdict.agent === 'user_fetcher' ? { ...verdict, agent: 'mcp_client' } : verdict;
 };

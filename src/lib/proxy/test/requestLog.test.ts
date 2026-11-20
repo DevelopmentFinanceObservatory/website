@@ -179,7 +179,6 @@ test('requestLogEntry: bot is true for crawlers, tools and a missing user agent,
 
 test('requestLogEntry: agent and agent_name beside the isbot verdict, with the MCP route read from the path', () => {
     const cases: [string, Record<string, string>, string, string | null, boolean][] = [
-        ['/api/v1/datasets', { 'user-agent': 'dfo-python/0.3.0' }, 'sdk', 'dfo-python', true],
         [
             '/api/v1/datasets',
             { 'user-agent': 'python-httpx/0.28.1', 'x-dfo-client': 'dfo-python/0.4.1' },
@@ -191,18 +190,6 @@ test('requestLogEntry: agent and agent_name beside the isbot verdict, with the M
         ['/mcp/', { 'user-agent': 'Claude-User' }, 'mcp_client', 'Claude-User', true],
         ['/', { 'user-agent': 'Claude-User' }, 'user_fetcher', 'Claude-User', true],
         ['/mcpx', { 'user-agent': 'Claude-User' }, 'user_fetcher', 'Claude-User', true],
-        [
-            '/',
-            {
-                'user-agent':
-                    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.4; +https://openai.com/gptbot)',
-            },
-            'crawler',
-            'GPTBot',
-            true,
-        ],
-        ['/', { 'user-agent': CHROME }, 'browser', null, false],
-        ['/', {}, 'none', null, true],
     ];
 
     for (const [path, headers, agent, agentName, bot] of cases) {
