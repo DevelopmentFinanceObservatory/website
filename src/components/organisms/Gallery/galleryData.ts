@@ -9,6 +9,7 @@
  */
 
 import items from '@/content/gallery/index';
+import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 
 export const GALLERY_TYPES = [
     { id: 'stats', label: 'Stats' },
@@ -81,6 +82,11 @@ export type GalleryItem =
       });
 
 export const GALLERY_ITEMS: readonly GalleryItem[] = items;
+
+/** The items the site serves, an empty list while the gallery is unpublished. */
+export const PUBLISHED_GALLERY_ITEMS: readonly GalleryItem[] = GALLERY_PUBLISHED
+    ? GALLERY_ITEMS
+    : [];
 
 /**
  * The tile's picture and the words on its button, by what the item opens as

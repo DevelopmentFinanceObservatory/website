@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-import { GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
+import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { DOCS_PAGES } from '@/lib/docs/corpus';
 import { SITE_ORIGIN } from '@/lib/site';
 import { sitemapPaths } from '@/lib/sitemap';
@@ -25,7 +25,7 @@ const sourceIds = async (): Promise<string[]> => {
 const sitemap = async (): Promise<MetadataRoute.Sitemap> =>
     sitemapPaths({
         docs: DOCS_PAGES,
-        gallery: GALLERY_ITEMS,
+        gallery: PUBLISHED_GALLERY_ITEMS,
         sourceIds: await sourceIds(),
     }).map((path) => ({ url: `${SITE_ORIGIN}${path}` }));
 
