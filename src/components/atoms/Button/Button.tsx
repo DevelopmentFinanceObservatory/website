@@ -18,7 +18,7 @@ const HOVER_INTENT_MS = 150;
 /** A Button with `href` renders Next's Link, an anchor that navigates, with
  *  the same look and hover; without it, a `<button>`. */
 export type ButtonProps = {
-    variant?: 'light' | 'dark' | 'outline' | 'bordered' | 'plain' | 'paper';
+    variant?: 'light' | 'dark' | 'outline' | 'bordered' | 'plain' | 'paper' | 'inline' | 'card';
     wide?: boolean;
     full?: boolean;
     small?: boolean;
@@ -44,8 +44,11 @@ const Button = ({
     ref,
     ...rest
 }: ButtonProps) => {
-    // Plain buttons skip the word-roll machinery — they only dim on hover.
-    const words = variant !== 'plain' && typeof children === 'string' ? children.split(' ') : null;
+    // Plain and inline buttons skip the word-roll machinery, so their words wrap as text.
+    const words =
+        variant !== 'plain' && variant !== 'inline' && typeof children === 'string'
+            ? children.split(' ')
+            : null;
 
     // One-shot swap (arrow + label words): hover starts it, it always plays to
     // the end. Hover is watched on the closest [data-button-zone] ancestor when

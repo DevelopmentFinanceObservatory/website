@@ -2,16 +2,21 @@ import styles from './LoadStatus.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import Spinner from '@/components/atoms/Spinner/Spinner';
+import type { OriginSwitch } from '@/lib/graphExplorer/explore';
 import { BUILDING, waitText, type Loadable } from '@/lib/graphExplorer/load';
 
-/** What is loading: the DFO model, or the base Data Commons terms list. */
-type Subject = 'model' | 'terms';
+/** What is loading: the DFO model, or the terms list behind one origin switch. */
+type Subject = 'model' | OriginSwitch;
 
 const WORDS: Readonly<Record<Subject, { loading: string; failed: string }>> = {
     model: { loading: 'Loading the DFO model.', failed: 'The model could not be loaded' },
-    terms: {
+    base: {
         loading: 'Loading base Data Commons terms.',
         failed: 'Base Data Commons terms could not be loaded',
+    },
+    un: {
+        loading: 'Loading UN System Data Commons terms.',
+        failed: 'UN System Data Commons terms could not be loaded',
     },
 };
 

@@ -34,7 +34,7 @@ $stack-below: 720px;
 // With no left box the left column folds away and the right one takes its
 // width. The boxes above and below then line up with the centre's left edge.
 
-@container picture (min-width: #{$stack-below}) {
+@container picture (width >= #{$stack-below}) {
     .noLeft {
         grid-template-columns: 0 minmax(rem(180), rem(300)) minmax(0, 1fr);
 
@@ -102,8 +102,8 @@ $stack-below: 720px;
     }
 }
 
-// The centre's cell spans the row, and a hairline above and below the card
-// carries the joins of the boxes over and under it to the card's edges.
+// The centre's cell spans the row, and a hairline above or below the card
+// carries the join of a lone box over or under it to the card's edge.
 .centre {
     @include flex(column, center, stretch);
 
@@ -235,101 +235,413 @@ $stack-below: 720px;
     border-radius: rem(4);
 }
 
-// A join is its words over a hairline, across between a side box and the centre.
-.hjoin {
-    @include flex(column, center, center);
+// A join is a line in two halves with its words. Across, the words sit over
+// the line. Down, they sit between the halves, or beside a chain's dot. A
+// chain's dashed line has a dot between the halves. Each half may end in an
+// arrowhead, placed per layout: `headStart` and `headEnd` in the wide layout,
+// `stackStart` and `stackEnd` in the stacked one.
+$head: rem(7);
 
+@mixin join-across {
+    // The empty third row matches the words' row, so the line sits at the
+    // join's middle, level with the middle of its box and the spine's branch.
+    display: grid;
+    grid-template:
+        "phrase phrase phrase" 1fr
+        "start dot end" auto
+        ". . ." 1fr / 1fr auto 1fr;
+    row-gap: rem(4);
+    align-items: center;
     flex: 0 0 auto;
     width: rem(80);
-    padding: rem(6) rem(8);
-    text-align: center;
+    padding: rem(6) 0;
+}
 
-    &::after {
-        content: "";
-        display: block;
-        width: 100%;
+@mixin join-down {
+    display: grid;
+    grid-template:
+        "start"
+        "phrase"
+        "end" / auto;
+    row-gap: 0;
+    justify-content: center;
+    justify-items: center;
+    width: auto;
+    padding: 0;
+}
+
+// A chain drawn down keeps its dot between the halves, so an inward head
+// points at the dot, and its words sit beside the dot.
+
+@mixin chain-down {
+    grid-template:
+        ". start phrase"
+        ". dot phrase"
+        ". end phrase" / 1fr auto 1fr;
+
+    .phrase {
+        justify-self: start;
+        margin-inline-start: rem(6);
+    }
+}
+
+@mixin head {
+    content: "";
+    position: absolute;
+    width: $head;
+    height: $head;
+    background-color: var(--color-charcoal);
+}
+
+@mixin segment-across($start, $end) {
+    // Half a join drawn across, with its head at the start (left) or end (right).
+    width: auto;
+    height: $head;
+
+    &::before {
+        inset: calc(50% - 0.5px) 0 auto;
+        width: auto;
         height: 1px;
-        margin-top: rem(5);
-        background-color: var(--color-charcoal);
+    }
+
+    &.dashed::before {
+        background: repeating-linear-gradient(
+            to right,
+            var(--color-charcoal) 0 rem(4),
+            transparent rem(4) rem(7)
+        );
+    }
+
+    &.#{$start}::after {
+        @include head;
+
+        inset: 0 auto 0 0;
+        clip-path: polygon(100% 0, 0 50%, 100% 100%);
+    }
+
+    &.#{$end}::after {
+        @include head;
+
+        inset: 0 0 0 auto;
+        clip-path: polygon(0 0, 100% 50%, 0 100%);
     }
 }
 
-// A join between a box above or below and the centre is a hairline through its words.
-.vjoin {
-    @include flex(column, flex-start, center);
+@mixin segment-down($start, $end) {
+    // Half a join drawn down, with its head at the start (top) or end (bottom).
+    width: $head;
+    height: rem(16);
 
-    &::before,
-    &::after {
-        content: "";
+    &::before {
+        inset: 0 auto 0 calc(50% - 0.5px);
         width: 1px;
-        height: rem(14);
+        height: auto;
+    }
+
+    &.dashed::before {
+        background: repeating-linear-gradient(
+            to bottom,
+            var(--color-charcoal) 0 rem(4),
+            transparent rem(4) rem(7)
+        );
+    }
+
+    &.#{$start}::after {
+        @include head;
+
+        inset: 0 0 auto;
+        clip-path: polygon(0 100%, 50% 0, 100% 100%);
+    }
+
+    &.#{$end}::after {
+        @include head;
+
+        inset: auto 0 0;
+        clip-path: polygon(0 0, 100% 0, 50% 100%);
+    }
+}
+
+.segment {
+    position: relative;
+    display: block;
+
+    &:first-child {
+        grid-area: start;
+    }
+
+    &:last-child {
+        grid-area: end;
+    }
+
+    &::before {
+        content: "";
+        position: absolute;
         background-color: var(--color-charcoal);
     }
 }
 
-.hjoin span,
-.vjoin span {
-    @include font-size(11px, 1.2);
+@container picture (width >= #{$stack-below}) {
+    .hjoin {
+        @include join-across;
+    }
 
-    padding: rem(2) rem(4);
-    font-family: var(--font-dm-mono);
-    letter-spacing: -0.02em;
-    background-color: var(--color-net-light);
-    border-radius: rem(4);
+    // Each join comes before its box in the document, so focus reaches the
+    // join first as the stacked layout draws it. Above and left of the centre
+    // the box is drawn first.
+    .up > .column > .box,
+    .left > .row > .box {
+        order: -1;
+    }
+
+    .vjoin {
+        @include join-down;
+    }
+
+    .vjoin.chain {
+        @include chain-down;
+    }
+
+    .hjoin .segment {
+        @include segment-across(headStart, headEnd);
+    }
+
+    .vjoin .segment {
+        @include segment-down(headStart, headEnd);
+    }
+
+    // A join above or below the centre that points at it leaves its head to
+    // the line the centre draws, so the head meets the card. The line keeps
+    // the head's height when no side box is taller than the card.
+    .headAbove::before,
+    .headBelow::after {
+        width: $head;
+        min-height: $head;
+    }
+
+    .headAbove::before {
+        clip-path: polygon(
+            calc(50% - 0.5px) 0,
+            calc(50% + 0.5px) 0,
+            calc(50% + 0.5px) calc(100% - #{$head}),
+            100% calc(100% - #{$head}),
+            50% 100%,
+            0 calc(100% - #{$head}),
+            calc(50% - 0.5px) calc(100% - #{$head})
+        );
+    }
+
+    .headBelow::after {
+        clip-path: polygon(
+            50% 0,
+            100% $head,
+            calc(50% + 0.5px) $head,
+            calc(50% + 0.5px) 100%,
+            calc(50% - 0.5px) 100%,
+            calc(50% - 0.5px) $head,
+            0 $head
+        );
+    }
 }
 
-// In a narrow frame it is one column in reading order, and every join is a short vertical line.
+.dot {
+    grid-area: dot;
+    width: $head;
+    height: $head;
+    background-color: var(--color-charcoal);
+    border-radius: 50%;
+}
 
-@container picture (max-width: #{$stack-below - 1px}) {
+.phrase {
+    grid-area: phrase;
+    justify-self: center;
+    max-width: 100%;
+}
+
+// What a solid and a dashed line mean, under the picture.
+.legend {
+    @include flex(row, flex-start, center);
+    @include font-size(12px, 1.3);
+
+    flex-wrap: wrap;
+    gap: rem(6) rem(20);
+    margin-top: rem(8);
+    padding-inline: rem(20);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+
+    li {
+        @include flex(row, flex-start, center);
+
+        gap: rem(8);
+    }
+}
+
+.sample {
+    position: relative;
+    flex: 0 0 auto;
+    width: rem(32);
+    height: $head;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: calc(50% - 0.5px) 0 auto;
+        height: 1px;
+        background-color: var(--color-charcoal);
+    }
+
+    &::after {
+        @include head;
+
+        inset: 0 0 0 auto;
+        clip-path: polygon(0 0, 100% 50%, 0 100%);
+    }
+}
+
+.sampleChain {
+    &::before {
+        background: repeating-linear-gradient(
+            to right,
+            var(--color-charcoal) 0 rem(4),
+            transparent rem(4) rem(7)
+        );
+    }
+
+    &::after {
+        inset: 0 auto 0 calc(50% - #{$head} / 2);
+        clip-path: none;
+        border-radius: 50%;
+    }
+}
+
+// The box's link as a sentence for a screen reader. The drawn line is hidden from it.
+.hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// In a narrow frame it is one column in reading order. A spine runs down the
+// left edge to the centre's card, and each box's join branches from it, so
+// every join meets the centre whatever box sits next to it.
+$stack-gap: rem(12);
+$spine: rem(16);
+$spine-half: rem(8);
+
+// The width a join's bubble leaves free: the farthest its words start from the
+// frame's left edge (the picture's padding, the spine less the join's overlap,
+// and the join's width less the narrowest words, halved: 48 px), and a 12 px
+// margin on the right.
+$bubble-inset: rem(60);
+
+@container picture (width < #{$stack-below}) {
+    // A flex column, since a grid's empty rows would each add a gap and break the spine.
     .picture {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas:
-            "up"
-            "left"
-            "self"
-            "right"
-            "down";
+        @include flex(column, flex-start, stretch);
+
+        gap: $stack-gap;
         padding: rem(16) rem(12);
+    }
+
+    .legend {
+        padding-inline: rem(12);
     }
 
     .up,
     .down {
         @include flex(column, flex-start, stretch);
-    }
 
-    .column {
-        width: auto;
+        gap: $stack-gap;
     }
 
     .left,
     .right {
-        gap: 0;
+        gap: $stack-gap;
     }
 
+    .column,
     .row {
-        @include flex(column, flex-start, stretch);
+        position: relative;
+        flex-direction: row;
+        align-items: center;
+        width: auto;
+        padding-inline-start: $spine;
+
+        > .box {
+            flex: 1 1 auto;
+            align-self: auto;
+        }
+
+        &::before {
+            content: "";
+            position: absolute;
+            left: calc(#{$spine-half} - 0.5px);
+            width: 1px;
+            background-color: var(--color-charcoal);
+        }
+    }
+
+    // Above the centre the spine runs down from each branch to the card.
+    // Below it, the spine runs up from each branch to the card.
+    .up > .column::before,
+    .left > .row::before {
+        top: 0;
+        bottom: -$stack-gap;
+    }
+
+    .up:first-child > .column:first-child::before,
+    .left:first-child > .row:first-child::before {
+        top: 50%;
+    }
+
+    .right > .row::before,
+    .down > .column::before {
+        top: -$stack-gap;
+        bottom: 0;
+    }
+
+    .right:last-child > .row:last-of-type::before,
+    .down > .column:last-child::before {
+        bottom: 50%;
+    }
+
+    // Every join reads from the spine to its box, so it comes first in the row.
+    // Its bubble opens rightwards from the words and stays inside the frame.
+    .hjoin,
+    .vjoin {
+        @include join-across;
+
+        --bubble-left: 0;
+        --bubble-shift: 0;
+        --bubble-room: calc(100cqi - #{$bubble-inset});
+
+        margin-inline-start: -$spine-half;
+    }
+
+    .hjoin .segment,
+    .vjoin .segment {
+        @include segment-across(stackStart, stackEnd);
     }
 
     .unused {
+        position: relative;
         align-self: flex-start;
-        max-width: 100%;
-        margin-top: rem(10);
-        margin-inline-start: 0;
+        max-width: calc(100% - #{$spine});
+        margin-inline-start: $spine;
     }
 
-    .hjoin {
-        @include flex(column, flex-start, center);
-
-        width: auto;
-        padding: 0;
-
-        &::before,
-        &::after {
-            content: "";
-            width: 1px;
-            height: rem(10);
-            margin: 0;
-            background-color: var(--color-charcoal);
-        }
+    // The spine passes the count on its way to the boxes below.
+    .right:not(:last-child) > .unused::before {
+        content: "";
+        position: absolute;
+        top: -$stack-gap;
+        bottom: 0;
+        left: calc(-1 * #{$spine-half} - 0.5px);
+        width: 1px;
+        background-color: var(--color-charcoal);
     }
 }

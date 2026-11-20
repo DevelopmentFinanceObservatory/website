@@ -2,36 +2,78 @@
 
 import classNames from 'classnames';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { downloadCsv } from './downloadCsv';
 import { useCarried, useModel } from './ExploreContext';
-import { BaseTag, TermLink } from './ExploreLink';
+import { OriginTag, TermLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
+import { GapNote } from './GapNote';
+import {
+    CeilingNote,
+    FilterBox,
+    FilterNoteLine,
+    ListToggle,
+    useListOrigins,
+    useTermSources,
+    type ListOrigins,
+} from './ListToggle';
+import { PatternGroups } from './PatternGroups';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
 import { count, ofMembers, plural, valueListLabel } from '@/lib/graphExplorer/counts';
 import {
+    centreHeading,
     declaredDomain,
+    listsUsers,
     openEntries,
-    outsideKind,
     periodText,
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { declarerWords, KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
-import { patternId, sheetHref } from '@/lib/graphExplorer/newSheet';
-import { patternSentence } from '@/lib/graphExplorer/sentence';
+import {
+    datasetHead,
+    firstMatches,
+    LIST_CEILING,
+    listOnShow,
+    termFilter,
+    textFilter,
+} from '@/lib/graphExplorer/lists';
+import { declarerWords, kindWords, type DatasetView } from '@/lib/graphExplorer/model';
+import {
+    leftOutLine,
+    leftOutProperties,
+    openLineCut,
+    type Completeness,
+    type ListGap,
+} from '@/lib/graphExplorer/nodeView';
+import { seedHref } from '@/lib/graphExplorer/seed';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
-import type { SchemaFacets, SchemaTerm } from '@/lib/graphExplorer/wire';
+import type { SchemaFacets } from '@/lib/graphExplorer/wire';
 
 const DATA_COMMONS_BROWSER = 'https://datacommons.org/browser/';
 
 /** The dataset filter as the panel reads it: one chosen dataset, or none. */
 export type PanelLens = { readonly dataset: string | null; readonly label: string | null };
+
+/** The origin tag of a dataset the model holds, from the usage document that lists it. */
+const DatasetTag = ({ id, origins }: { id: string; origins: ListOrigins }) => {
+    const dataset = useModel().dataset(id);
+    return (
+        <OriginTag declaredBy={dataset === undefined ? null : origins.dataset(dataset)} dataset />
+    );
+};
+
+/** A dataset by its label, linking to its view, with the tag of the origin whose usage lists it. */
+const DatasetName = ({ id, origins }: { id: string; origins: ListOrigins }) => (
+    <span>
+        <TermLink id={id} />
+        <DatasetTag id={id} origins={origins} />
+    </span>
+);
 
 const Label = ({ children }: { children: React.ReactNode }) => (
     <p className={styles.label}>{children}</p>
@@ -72,17 +114,38 @@ const IdLine = ({ id, codes = [] }: { id: string; codes?: readonly string[] }) =
     );
 };
 
-/** A link to the sheet page, styled as an action. Prefetch is off for the dynamic page. */
+/** A link to the Seed a dataset page, styled as an action. Prefetch is off for the dynamic page. */
 const SheetLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
     <Link href={href} prefetch={false} className={styles.action}>
         {children}
     </Link>
 );
 
-/** One bar per dataset: how many of its StatVars use the term, against its total. */
+/** A link to the term's page in the base Data Commons browser. */
+const BrowserLink = ({ id }: { id: string }) => (
+    <p className={styles.line}>
+        <a
+            className={styles.external}
+            href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            Open in the Data Commons browser
+        </a>
+    </p>
+);
+
+/**
+ * One bar per dataset: how many of its StatVars use the term, against its
+ * total. The filtered dataset's bar stays on show past the first few.
+ */
 const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
+    const origins = useListOrigins(model);
+    const [open, setOpen] = useState(false);
+    const listId = useId();
     const { byDataset } = model.usage(id);
+    const head = datasetHead(byDataset, { open, dataset: lens.dataset });
 
     return (
         <section className={styles.section}>
@@ -90,8 +153,8 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
             {byDataset.length === 0 ? (
                 <p className={styles.note}>No StatVar in the datasets uses it.</p>
             ) : (
-                <ul className={styles.uses}>
-                    {byDataset.map(({ dataset, count: n }) => {
+                <ul id={listId} className={styles.uses}>
+                    {head.shown.map(({ dataset, count: n }) => {
                         const percent = sharePercent(
                             n,
                             model.dataset(dataset)?.stat_var_count ?? n,
@@ -104,7 +167,7 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                                     lens.dataset !== null && lens.dataset !== dataset && styles.dim,
                                 )}
                             >
-                                <TermLink id={dataset} />
+                                <DatasetName id={dataset} origins={origins} />
                                 <span className={styles.mono}>{count(n)}</span>
                                 <span
                                     className={styles.bar}
@@ -118,6 +181,13 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     })}
                 </ul>
             )}
+            <ListToggle
+                head={head}
+                noun="datasets"
+                controls={listId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
         </section>
     );
 };
@@ -125,11 +195,16 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
 /**
  * One bar per dataset that uses a value list's members: how many of them,
  * against the list's size. A StatVar names the members, so the list's use is
- * read from them, as the dataset filter reads it.
+ * read from them, as the dataset filter reads it. The filtered dataset's bar
+ * stays on show past the first few.
  */
 const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
+    const origins = useListOrigins(model);
+    const [open, setOpen] = useState(false);
+    const listId = useId();
     const uses = model.memberUse(id);
+    const head = datasetHead(uses, { open, dataset: lens.dataset });
 
     return (
         <section className={styles.section}>
@@ -137,8 +212,8 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
             {uses.length === 0 ? (
                 <p className={styles.note}>No dataset uses its values.</p>
             ) : (
-                <ul className={styles.uses}>
-                    {uses.map(({ dataset, values }) => {
+                <ul id={listId} className={styles.uses}>
+                    {head.shown.map(({ dataset, values }) => {
                         const percent = sharePercent(values.used, values.of);
                         return (
                             <li
@@ -148,7 +223,7 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                                     lens.dataset !== null && lens.dataset !== dataset && styles.dim,
                                 )}
                             >
-                                <TermLink id={dataset} />
+                                <DatasetName id={dataset} origins={origins} />
                                 <span className={styles.mono}>{ofMembers(values)}</span>
                                 <span
                                     className={styles.bar}
@@ -162,37 +237,136 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     })}
                 </ul>
             )}
+            <ListToggle
+                head={head}
+                noun="datasets"
+                controls={listId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
         </section>
     );
 };
 
-/** A node's open properties, each a line beside the named fields: links to nodes the model holds, the rest as text. */
-const OpenLines = ({ id }: { id: string }) => {
+/**
+ * `lead`, then `items` separated by commas, then `end`: the first LIST_HEAD,
+ * then all of them up to the ceiling once "All N values" is pressed.
+ */
+const ValueLine = <TItem,>({
+    lead,
+    items,
+    itemKey,
+    itemTexts,
+    renderItem,
+    noun,
+    end = '',
+}: {
+    lead: React.ReactNode;
+    items: readonly TItem[];
+    itemKey: (item: TItem, index: number) => string;
+    /** The texts the filter box matches an item on. */
+    itemTexts: (item: TItem) => readonly string[];
+    renderItem: (item: TItem) => React.ReactNode;
+    /** The items' name in the toggle: "All N <noun>". */
+    noun: string;
+    end?: string;
+}) => {
+    const [open, setOpen] = useState(false);
+    const [filter, setFilter] = useState('');
+    const listId = useId();
+    const filtering = open && items.length > LIST_CEILING;
+    const { head, shown } = listOnShow(items, {
+        open,
+        matches: filtering ? textFilter(filter, itemTexts) : null,
+    });
+
+    return (
+        <>
+            {filtering && (
+                <FilterBox value={filter} onChange={setFilter} label={`Filter these ${noun}`} />
+            )}
+            <p id={listId} className={styles.line}>
+                {lead}
+                {shown.hits.map((item, index) => (
+                    <span key={itemKey(item, index)}>
+                        {index > 0 && ', '}
+                        {renderItem(item)}
+                    </span>
+                ))}
+                {end}
+            </p>
+            {filtering ? (
+                <FilterNoteLine text={filter} matches={shown} />
+            ) : (
+                <CeilingNote matches={shown} />
+            )}
+            <ListToggle
+                head={head}
+                noun={noun}
+                controls={listId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
+        </>
+    );
+};
+
+/**
+ * A node's open properties, each a line beside the named fields: links to
+ * nodes the model holds, the rest as text. A line whose listing stopped at
+ * its cap (openLineCut) says so beneath it.
+ */
+const OpenLines = ({ id, completeness }: { id: string; completeness: Completeness }) => {
     const model = useModel();
 
     return openEntries(model, id).map(({ property, label, values }) => (
-        <p key={property} className={styles.line}>
-            {label}:{' '}
-            {values.map((value, index) => (
-                <span key={value.kind === 'node' ? value.id : `${index}:${value.text}`}>
-                    {index > 0 && ', '}
-                    {value.kind === 'node' ? (
+        <Fragment key={property}>
+            <ValueLine
+                lead={`${label}: `}
+                items={values}
+                itemKey={(value, index) =>
+                    value.kind === 'node' ? value.id : `${index}:${value.text}`
+                }
+                itemTexts={(value) =>
+                    value.kind === 'node' ? [value.id, value.name] : [value.text]
+                }
+                noun="values"
+                renderItem={(value) =>
+                    value.kind === 'node' ? (
                         <TermLink id={value.id} name={value.name} />
                     ) : (
                         <span className={styles.mono}>
                             <BreakableId text={value.text} />
                         </span>
-                    )}
-                </span>
-            ))}
-        </p>
+                    )
+                }
+            />
+            {openLineCut(completeness, id, property) && (
+                <GapNote gaps={['capped']} className={styles.note} />
+            )}
+        </Fragment>
     ));
 };
 
-/** A term the model holds: what it is, its names, its definition, its source and its use. */
-export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
+/**
+ * A term the model holds: what it is, its names, its definition, its source
+ * and its use. A term the base Data Commons declares links to its browser
+ * page. The UN System Data Commons serves no browser page.
+ */
+export const NodePanel = ({
+    id,
+    lens,
+    completeness,
+}: {
+    id: string;
+    lens: PanelLens;
+    /**
+     * How completely the model holds the term's links, for its open lines
+     * (openLineCut) and the properties its view left out (leftOutProperties).
+     */
+    completeness: Completeness;
+}) => {
     const model = useModel();
-    const carried = useCarried();
     const node = model.node(id);
     const kind = model.kind(id);
     if (!node || !kind) return null;
@@ -203,12 +377,15 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const members = hasList ? model.members(id).length : 0;
     const complete = hasList && model.membersComplete(id);
     const used = hasList && lens.dataset !== null ? model.lens(lens.dataset, [id])[0] : undefined;
+    const leftOut = leftOutLine(
+        leftOutProperties(completeness, node).map((property) => model.label(property)),
+    );
 
     return (
         <>
             <div className={styles.section}>
                 <Label>
-                    {KIND_WORDS[kind]}
+                    {kindWords(model, kind, node.types)}
                     {list !== undefined && (
                         <>
                             {' in '}
@@ -233,19 +410,20 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     </span>
                 </p>
             )}
+            {node.declared_by === 'base' && <BrowserLink id={id} />}
             {domain && (
-                <p className={styles.line}>
-                    Declared for{' '}
-                    {domain.map((classId, index) => (
-                        <span key={classId}>
-                            {index > 0 && ', '}
-                            <TermLink id={classId} />
-                        </span>
-                    ))}
-                    .
-                </p>
+                <ValueLine
+                    lead="Declared for "
+                    items={domain}
+                    itemKey={(classId) => classId}
+                    itemTexts={(classId) => [classId, model.label(classId)]}
+                    noun="classes"
+                    renderItem={(classId) => <TermLink id={classId} />}
+                    end="."
+                />
             )}
-            <OpenLines id={id} />
+            <OpenLines id={id} completeness={completeness} />
+            {leftOut !== null && <p className={styles.note}>{leftOut}</p>}
             {hasList && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>
@@ -270,15 +448,8 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     </div>
                 </section>
             )}
-            {kind !== 'valueList' && <UsageBars id={id} lens={lens} />}
+            {listsUsers(model, id) && <UsageBars id={id} lens={lens} />}
             {hasList && <MemberBars id={id} lens={lens} />}
-            {kind === 'class' && (
-                <div>
-                    <SheetLink href={sheetHref({ classId: id }, carried)}>
-                        Start a Sheet for This Class
-                    </SheetLink>
-                </div>
-            )}
         </>
     );
 };
@@ -291,17 +462,22 @@ const FACETS: { key: keyof SchemaFacets; label: string; text?: (code: string) =>
     { key: 'scaling_factors', label: 'Scaling factors' },
 ];
 
-/** A dataset: its description, its StatVar count, its patterns as sentences and its facet facts. */
+/** A dataset: its description, its StatVar count, its patterns by split combination and its facet facts. */
 export const DatasetPanel = ({ view }: { view: DatasetView }) => {
     const model = useModel();
     const carried = useCarried();
+    const origins = useListOrigins(model);
     const facets = model.dataset(view.id)?.facets;
+    const facetLines = facets ? FACETS.filter(({ key }) => facets[key].length > 0) : [];
 
     return (
         <>
             <div className={styles.section}>
                 <Label>Dataset</Label>
-                <h2 className={styles.name}>{view.label}</h2>
+                <h2 className={styles.name}>
+                    {view.label}
+                    <DatasetTag id={view.id} origins={origins} />
+                </h2>
                 <IdLine id={view.id} />
             </div>
             <p className={classNames(!view.description && styles.note)}>
@@ -310,58 +486,23 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
             <p className={styles.line}>{plural(view.statVarCount, 'StatVar')}</p>
             <section className={styles.section}>
                 <Label>How its StatVars are formed</Label>
-                <ol className={styles.patterns}>
-                    {view.patterns.map((pattern) => (
-                        <li key={patternId(pattern)} className={styles.pattern}>
-                            <p className={styles.sentence}>
-                                {patternSentence(model, pattern).map((part, at) =>
-                                    part.kind === 'term' ? (
-                                        <TermLink key={at} id={part.id} />
-                                    ) : (
-                                        <span key={at}>{part.text}</span>
-                                    ),
-                                )}
-                            </p>
-                            <p className={styles.meta}>
-                                {plural(pattern.stat_var_count, 'StatVar')}
-                                {view.statVarCount > 0 &&
-                                    `, ${sharePercent(pattern.stat_var_count, view.statVarCount)}%`}
-                            </p>
-                            {pattern.examples[0] !== undefined && (
-                                <p className={styles.meta}>
-                                    For example{' '}
-                                    <span className={styles.mono}>
-                                        <BreakableId text={pattern.examples[0]} />
-                                    </span>
-                                </p>
-                            )}
-                            <div>
-                                <SheetLink
-                                    href={sheetHref(
-                                        { from: { dataset: view.id, id: patternId(pattern) } },
-                                        carried,
-                                    )}
-                                >
-                                    Start a Sheet Like This
-                                </SheetLink>
-                            </div>
-                        </li>
-                    ))}
-                </ol>
+                <PatternGroups datasetId={view.id}>
+                    <SheetLink href={seedHref({ dataset: view.id }, carried)}>
+                        Seed a Dataset Like This
+                    </SheetLink>
+                </PatternGroups>
             </section>
-            {facets && (
+            {facets && facetLines.length > 0 && (
                 <section className={styles.section}>
                     <Label>Series facts</Label>
-                    {FACETS.filter(({ key }) => facets[key].length > 0).map(
-                        ({ key, label, text = (code) => code }) => (
-                            <p key={key} className={styles.line}>
-                                {label}:{' '}
-                                <span className={styles.mono}>
-                                    <BreakableId text={facets[key].map(text).join(', ')} />
-                                </span>
-                            </p>
-                        ),
-                    )}
+                    {facetLines.map(({ key, label, text = (code) => code }) => (
+                        <p key={key} className={styles.line}>
+                            {label}:{' '}
+                            <span className={styles.mono}>
+                                <BreakableId text={facets[key].map(text).join(', ')} />
+                            </span>
+                        </p>
+                    ))}
                 </section>
             )}
         </>
@@ -369,47 +510,51 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 };
 
 /**
- * A term the DFO model does not hold, such as a base Data Commons term
- * reached from search: its name, the base tag and a link to the graph's browser.
+ * A term the model knows only from the usage documents or a loaded terms
+ * list, whose node view did not load: what its types say it is, its name
+ * (else its dcid), and every dataset that uses it, with a link to the base
+ * Data Commons browser. A term whose origin reads as the UN System Data
+ * Commons (`termOrigin`, as its heading's tag reads it) gets none, since the
+ * base browser does not hold it and the UN System Data Commons serves no
+ * browser page (its /browser/ path answers 404).
  */
-export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | undefined }) => (
-    <>
-        <div className={styles.section}>
-            <Label>{outsideKind(term)}</Label>
-            <h2 className={styles.name}>
-                {term?.label ?? id}
-                {term?.declared_by === 'base' && (
-                    <>
-                        {' '}
-                        <BaseTag />
-                    </>
-                )}
-            </h2>
-            <IdLine id={id} />
-        </div>
-        <p>The DFO model does not use it, so no dataset here draws on it.</p>
-        <p className={styles.line}>
-            <a
-                className={styles.external}
-                href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                Open in the Data Commons browser
-            </a>
-        </p>
-    </>
-);
+export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
+    const model = useModel();
+    const sources = useTermSources();
+    const heading = centreHeading(model, { kind: 'node', id }, sources);
+
+    return (
+        <>
+            <div className={styles.section}>
+                <Label>{heading?.kind}</Label>
+                <h2 className={styles.name}>{heading?.name ?? id}</h2>
+                <IdLine id={id} />
+            </div>
+            <p className={styles.note}>Only its use in the datasets is known here.</p>
+            {heading?.declaredBy !== 'un_system' && <BrowserLink id={id} />}
+            <UsageBars id={id} lens={lens} />
+        </>
+    );
+};
 
 type FullListProps = {
     box: FocusBox;
     lens: PanelLens;
+    /** What the box's listings leave out, as boxGaps reads them. */
+    gaps: readonly ListGap[];
     onClose: () => void;
 };
 
-/** Every entry of one box of the picture, with a way back to the definition. */
-export const FullList = ({ box, lens, onClose }: FullListProps) => {
-    const entries = useLens(lens.dataset, box.ids);
+/**
+ * The entries of one box of the picture that the filter keeps, up to the
+ * ceiling, with what the box may leave out and a way back to the
+ * definition.
+ */
+export const FullList = ({ box, lens, gaps, onClose }: FullListProps) => {
+    const model = useModel();
+    const [filter, setFilter] = useState('');
+    const shown = firstMatches(box.ids, termFilter(model, filter));
+    const entries = useLens(lens.dataset, shown.hits);
     const heading = useRef<HTMLHeadingElement>(null);
 
     useEffect(() => heading.current?.focus({ preventScroll: true }), []);
@@ -419,8 +564,14 @@ export const FullList = ({ box, lens, onClose }: FullListProps) => {
             <h2 className={styles.name} tabIndex={-1} ref={heading}>
                 {box.title} <span className={styles.total}>({count(box.ids.length)})</span>
             </h2>
+            <GapNote gaps={gaps} className={styles.note} />
+            <FilterBox
+                value={filter}
+                onChange={setFilter}
+                label="Filter this list by name or dcid"
+            />
             <ul className={styles.full}>
-                {box.ids.map((id) => (
+                {shown.hits.map((id) => (
                     <FocusEntry
                         key={id}
                         id={id}
@@ -430,6 +581,7 @@ export const FullList = ({ box, lens, onClose }: FullListProps) => {
                     />
                 ))}
             </ul>
+            <FilterNoteLine text={filter} matches={shown} />
             <div>
                 <Button onClick={onClose}>Back to Definition</Button>
             </div>

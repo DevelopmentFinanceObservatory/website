@@ -8,11 +8,18 @@
  * - `?node=<dcid>`: one term at the centre
  * - `?dataset=<provenance dcid>`: one dataset at the centre
  * - `?show=<provenance dcid>` or `?show=all`: the dataset filter, carried while the reader moves
- * - `?base=1`: search reaches base Data Commons terms, carried while the reader moves
+ * - `?base=1`: the base Data Commons switch, carried while the reader moves
+ * - `?un=1`: the UN System Data Commons switch, carried while the reader moves
+ *
+ * A switch adds its origin's terms to search and its datasets to the start
+ * screen, the lists' dataset columns and Show pills, and the datasets Seed
+ * a dataset offers. A centred term or dataset, the dataset filter and the
+ * check's reading of seed headers cover every origin whatever the switches
+ * say.
  *
  * When several view parameters are set, `node` wins, then `dataset`, then `list`.
- * `show` and `base` are the carried parameters: every link in the section,
- * the sheet screens' included, keeps them.
+ * `show`, `base` and `un` are the carried parameters: every link in the
+ * section, the sheet screens' included, keeps them.
  */
 import type { DatasetFilter, ListScope, Model } from './model.ts';
 import { EXPLORE_PATH } from './paths.ts';
@@ -23,11 +30,22 @@ export type ExploreView =
     | { readonly kind: 'node'; readonly id: string }
     | { readonly kind: 'dataset'; readonly id: string };
 
-/** The parameters every Graph Explorer link keeps: the dataset filter and the base switch. */
+/**
+ * The origin switches by their query parameter: `base` for base Data
+ * Commons, `un` for the UN System Data Commons. Each widens search, the
+ * start screen, the lists and the seed picker to its origin.
+ */
+export const ORIGIN_SWITCHES = ['base', 'un'] as const;
+
+export type OriginSwitch = (typeof ORIGIN_SWITCHES)[number];
+
+/** The parameters every Graph Explorer link keeps: the dataset filter and the origin switches. */
 export type Carried = {
     readonly show: DatasetFilter;
-    /** Whether search reaches base Data Commons terms outside the model. */
+    /** Whether search, the start screen, the lists and the seed picker reach base Data Commons. */
     readonly base: boolean;
+    /** Whether search, the start screen, the lists and the seed picker reach the UN System Data Commons. */
+    readonly un: boolean;
 };
 
 export type ExploreState = Carried & { readonly view: ExploreView };
@@ -41,7 +59,7 @@ export const DFO = 'dfo';
 export const START_VIEW: ExploreView = Object.freeze({ kind: 'start' });
 export const NO_FILTER: DatasetFilter = Object.freeze({ kind: 'none' });
 
-export const NO_CARRIED: Carried = Object.freeze({ show: NO_FILTER, base: false });
+export const NO_CARRIED: Carried = Object.freeze({ show: NO_FILTER, base: false, un: false });
 
 /** The query parameters a Graph Explorer screen reads. */
 export type QueryReader = { get(name: string): string | null };
@@ -77,13 +95,17 @@ const readShow = (params: QueryReader): DatasetFilter => {
 export const readCarried = (params: QueryReader): Carried => ({
     show: readShow(params),
     base: queryValue(params, 'base') === '1',
+    un: queryValue(params, 'un') === '1',
 });
 
 /** Adds the carried parameters to `params`, leaving out each one at its default. */
-export const writeCarried = (params: URLSearchParams, { show, base }: Carried): void => {
+export const writeCarried = (params: URLSearchParams, carried: Carried): void => {
+    const { show } = carried;
     if (show.kind === 'all') params.set('show', ALL);
     else if (show.kind === 'dataset') params.set('show', show.id);
-    if (base) params.set('base', '1');
+    for (const name of ORIGIN_SWITCHES) {
+        if (carried[name]) params.set(name, '1');
+    }
 };
 
 /** `?` and the query, or '' when `params` is empty. */
@@ -99,11 +121,14 @@ export const carriedHref = (path: string, carried: Carried): string => {
     return `${path}${queryString(params)}`;
 };
 
-/** A query string, `?` included, with the base switch turned on or off and every other parameter unchanged. */
-export const switchBase = (search: string, base: boolean): string => {
+/**
+ * A query string, `?` included, with one origin switch turned on or off and
+ * every other parameter unchanged.
+ */
+export const switchOrigin = (search: string, name: OriginSwitch, on: boolean): string => {
     const params = new URLSearchParams(search);
-    if (base) params.set('base', '1');
-    else params.delete('base');
+    if (on) params.set(name, '1');
+    else params.delete(name);
     return queryString(params);
 };
 
@@ -159,16 +184,3 @@ export const listScopeExists = (model: Pick<Model, 'kind'>, scope: ListScope): b
     const kind = model.kind(scope.id);
     return kind === 'class' || kind === 'valueList';
 };
-
-/**
- * Whether a view waits on the base terms list before it can say what its
- * centre is. That holds for a term the model lacks, with the base switch on
- * and the list not yet in. Once the list is in, a term it lacks too is "Not
- * in the DFO model".
- */
-export const awaitsTerms = (
-    model: Pick<Model, 'kind'>,
-    view: ExploreView,
-    base: boolean,
-    termsIn: boolean,
-): boolean => view.kind === 'node' && base && !termsIn && model.kind(view.id) === undefined;

@@ -10,7 +10,7 @@
  * wrong, including a response whose shape the guard refuses.
  */
 import { asRecord } from '../asRecord.ts';
-import { WireShapeError } from './wire.ts';
+import { readNodeView, WireShapeError, type SchemaNodeView } from './wire.ts';
 
 /** How long one request keeps asking while the Graph API is building or the proxy refuses. */
 export const RETRY_WAIT_MS = 60_000;
@@ -187,7 +187,7 @@ export type Problem = {
     readonly text: string | null;
     /** The pointer into the request it names. */
     readonly pointer: string | null;
-    /** `cause.code`: why the Graph API is unavailable, on a 503. */
+    /** `cause.code`: why the Graph API is unavailable on a 503, or why it refused on a 404. */
     readonly cause: string | null;
     /** False when asking again cannot help. */
     readonly retryable: boolean | null;
@@ -401,12 +401,148 @@ export async function loadDocument<TDocument>(
     read: (body: unknown) => TDocument,
     options: LoadOptions = {},
 ): Promise<TDocument> {
+    return load(what, { url, read }, options);
+}
+
+/** A document this Graph API does not serve, as its 404 with `cause.code` `origin_not_served` says. */
+export type NotServed = { readonly status: 'notServed' };
+
+/** The `cause.code` of the 404 that says this Graph API does not serve a document. */
+const ORIGIN_NOT_SERVED_CODE = 'origin_not_served';
+
+export const NOT_SERVED: NotServed = Object.freeze({ status: 'notServed' });
+
+/** True for the NOT_SERVED answer of loadServed. */
+export const isNotServed = (value: unknown): value is NotServed => value === NOT_SERVED;
+
+/** A node the graph does not hold, because the node view answered 404 with `node_not_held`. */
+export type NotHeld = { readonly status: 'notHeld' };
+
+export const NOT_HELD: NotHeld = Object.freeze({ status: 'notHeld' });
+
+/**
+ * A node whose origin this deployment does not serve, because the node view
+ * answered 404 with `origin_not_served`. The Graph API sends it for a UN
+ * System node while the UN System Data Commons is switched off there.
+ */
+export type OriginNotServed = { readonly status: 'originNotServed' };
+
+export const ORIGIN_NOT_SERVED: OriginNotServed = Object.freeze({ status: 'originNotServed' });
+
+/**
+ * A node whose view is too large to send, because the node view answered
+ * 500 with `node_view_too_large` (a country's geoJson runs to megabytes).
+ */
+export type TooLarge = { readonly status: 'tooLarge' };
+
+export const TOO_LARGE: TooLarge = Object.freeze({ status: 'tooLarge' });
+
+/**
+ * A node whose view the graph could not finish reading, because the node
+ * view answered 500 with `graph_not_advancing`, which the Graph API marks
+ * not retryable.
+ */
+export type NotAdvancing = { readonly status: 'notAdvancing' };
+
+export const NOT_ADVANCING: NotAdvancing = Object.freeze({ status: 'notAdvancing' });
+
+/** An answer that ends a load for good: asking again gets the same answer. */
+export type Refusal = NotServed | NotHeld | OriginNotServed | TooLarge | NotAdvancing;
+
+/** True for NOT_SERVED, NOT_HELD, ORIGIN_NOT_SERVED, TOO_LARGE and NOT_ADVANCING. */
+export const isRefusal = (value: unknown): value is Refusal =>
+    value === NOT_SERVED ||
+    value === NOT_HELD ||
+    value === ORIGIN_NOT_SERVED ||
+    value === TOO_LARGE ||
+    value === NOT_ADVANCING;
+
+/**
+ * As loadDocument, for a document the Graph API may not serve. A 404 whose
+ * `cause.code` is `origin_not_served` gives NOT_SERVED, which is final. Any
+ * other 404, such as from an API revision without the route, fails like any
+ * other status, so a retry can clear it.
+ */
+export async function loadServed<TDocument>(
+    what: string,
+    url: string,
+    read: (body: unknown) => TDocument,
+    options: LoadOptions = {},
+): Promise<TDocument | NotServed> {
+    return load<TDocument | NotServed>(
+        what,
+        {
+            url,
+            read,
+            refusal: (status, problem) =>
+                status === 404 && problem.cause === ORIGIN_NOT_SERVED_CODE ? NOT_SERVED : null,
+        },
+        options,
+    );
+}
+
+/**
+ * The path of the node view of `dcid`, or null for a dcid with a `.` or
+ * `..` segment. A dcid holds `/`, which the route reads as part of the
+ * dcid, so each segment is encoded and the slashes are kept. A URL resolves
+ * a dot segment against the path before it is sent, encoded as `%2E` or
+ * not, so no path names such a dcid.
+ */
+export const nodeViewUrl = (dcid: string): string | null => {
+    const segments = dcid.split('/');
+    if (segments.some((segment) => segment === '.' || segment === '..')) return null;
+    return `/api/graph/schema/node/${segments.map(encodeURIComponent).join('/')}`;
+};
+
+/** The node view of `dcid` as a load names it in a failure. */
+export const nodeViewName = (dcid: string): string => `The graph's view of ${dcid}`;
+
+/**
+ * The node view of `dcid`, as loadDocument reads a document. A 404 whose
+ * `cause.code` is `node_not_held` gives NOT_HELD, one whose `cause.code` is
+ * `origin_not_served` gives ORIGIN_NOT_SERVED, and any other 404 gives
+ * NOT_SERVED (the API lacks the route). A 500 whose `cause.code` is
+ * `node_view_too_large` gives TOO_LARGE, and one whose `cause.code` is
+ * `graph_not_advancing` gives NOT_ADVANCING. None is waited on or retried. A
+ * 503 is, as every load's is. A dcid no path can name gives NOT_HELD with no
+ * request.
+ */
+export async function loadNodeView(
+    dcid: string,
+    options: LoadOptions = {},
+): Promise<SchemaNodeView | Refusal> {
+    const url = nodeViewUrl(dcid);
+    if (url === null) return NOT_HELD;
+    return load<SchemaNodeView | Refusal>(
+        nodeViewName(dcid),
+        {
+            url,
+            read: readNodeView,
+            refusal: (status, problem) => {
+                if (status === 500 && problem.cause === 'node_view_too_large') return TOO_LARGE;
+                if (status === 500 && problem.cause === 'graph_not_advancing') {
+                    return NOT_ADVANCING;
+                }
+                if (status !== 404) return null;
+                if (problem.cause === 'node_not_held') return NOT_HELD;
+                return problem.cause === ORIGIN_NOT_SERVED_CODE ? ORIGIN_NOT_SERVED : NOT_SERVED;
+            },
+        },
+        options,
+    );
+}
+
+async function load<TAnswer>(
+    what: string,
+    request: Omit<GraphRequest<TAnswer>, 'init'>,
+    options: LoadOptions,
+): Promise<TAnswer> {
     const bounds = bounded(options.signal, {
         limitMs: options.limitMs ?? LOAD_LIMIT_MS,
         requestMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
     });
     return requestGraph(
-        { url, init: { headers: { accept: 'application/json' } }, read },
+        { ...request, init: { headers: { accept: 'application/json' } } },
         {
             ...options,
             bounds,
@@ -438,8 +574,25 @@ export type Loadable<TValue> =
 
 export const LOADING = { status: 'loading', waiting: null } as const;
 
-/** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
-export const loadFailure = (error: unknown): Loadable<never> => {
+/** A Loadable for a document the Graph API may not serve, as loadServed reads it. */
+export type Servable<TValue> = Loadable<TValue> | NotServed;
+
+/** A node view's state: a Loadable, or the refusal that ended it. */
+export type NodeViewState = Loadable<SchemaNodeView> | Refusal;
+
+/**
+ * Whether a document's load has come to rest: loaded, not served here, or
+ * failed. False before it starts and while it loads or waits.
+ */
+export const settled = (state: Servable<unknown> | null): boolean =>
+    state !== null && state.status !== 'loading';
+
+/**
+ * A load failure as the screens show it. `what` names the document, as
+ * loadDocument's `what` does ("The model"). An error that is not a LoadError
+ * is logged with its cause.
+ */
+export const loadFailure = (error: unknown, what: string): Loadable<never> => {
     if (error instanceof LoadError) {
         return {
             status: 'failed',
@@ -448,12 +601,12 @@ export const loadFailure = (error: unknown): Loadable<never> => {
             explanation: error.explanation,
         };
     }
-    console.error('Graph Explorer: loading the model failed', error);
+    console.error(`Graph Explorer: loading ${what} failed`, error);
     return {
         status: 'failed',
         reason: 'unexpected',
-        message: 'Something went wrong reading the model.',
-        explanation: 'Something went wrong reading the model.',
+        message: `${what} could not be loaded: something went wrong reading it.`,
+        explanation: 'Something went wrong reading it.',
     };
 };
 
@@ -470,30 +623,36 @@ export type SharedLoad = {
  * it passes through. `abort` forgets a load still running, publishing null,
  * so a caller that aborts and starts again (as React's StrictMode does with
  * an effect) gets a fresh load. A finished or failed load stays as it is.
+ * A load that answers a refusal (NOT_SERVED, or NOT_HELD where `load` can
+ * give it) publishes it, and `retry` leaves it alone.
  */
-export function sharedLoad<TValue>({
+export function sharedLoad<TValue, TRefusal extends Refusal = NotServed>({
+    what,
     load,
     publish,
 }: {
+    /** Names the document in a failure, as loadDocument's `what` does. */
+    what: string;
     load: (options: {
         signal: AbortSignal;
         onWait: (retryInMs: number, cause: WaitCause) => void;
-    }) => Promise<TValue>;
-    publish: (state: Loadable<TValue> | null) => void;
+    }) => Promise<TValue | TRefusal>;
+    publish: (state: Loadable<TValue> | TRefusal | null) => void;
 }): SharedLoad {
-    let state: Loadable<TValue> | null = null;
+    let state: Loadable<TValue> | TRefusal | null = null;
     let running: AbortController | null = null;
-    const set = (next: Loadable<TValue> | null) => {
+    const set = (next: Loadable<TValue> | TRefusal | null) => {
         state = next;
         publish(next);
     };
+    const isRefused = (value: TValue | TRefusal): value is TRefusal => isRefusal(value);
 
     return {
         start: (retry = false) => {
             if (state !== null && !(retry && state.status === 'failed')) return;
             const controller = new AbortController();
             running = controller;
-            const update = (next: Loadable<TValue>) => {
+            const update = (next: Loadable<TValue> | TRefusal) => {
                 if (controller.signal.aborted) return;
                 if (next.status !== 'loading') running = null;
                 set(next);
@@ -504,8 +663,8 @@ export function sharedLoad<TValue>({
                 onWait: (retryInMs, cause) =>
                     update({ status: 'loading', waiting: { retryInMs, cause } }),
             }).then(
-                (value) => update({ status: 'ready', value }),
-                (error: unknown) => update(loadFailure(error)),
+                (value) => update(isRefused(value) ? value : { status: 'ready', value }),
+                (error: unknown) => update(loadFailure(error, what)),
             );
         },
         abort: () => {
@@ -514,5 +673,68 @@ export function sharedLoad<TValue>({
             running = null;
             set(null);
         },
+    };
+}
+
+/** Shared loads by key, each running while at least one caller holds it. */
+export type KeyedLoads = {
+    /**
+     * Holds the load of `key`, starting it unless it is running or done, and
+     * gives the function that lets go of it. Letting go of the last hold on
+     * a load still running aborts it, so the next hold starts it again.
+     */
+    readonly hold: (key: string) => () => void;
+    /** Starts the load of `key` again when it failed. */
+    readonly retry: (key: string) => void;
+};
+
+/**
+ * One sharedLoad per key, made on first hold and kept for the life of the
+ * registry, so a key that loaded or was refused is never asked for again.
+ */
+export function keyedLoads<TValue, TRefusal extends Refusal = NotServed>({
+    what,
+    load,
+    publish,
+}: {
+    /** Names the document of `key` in a failure, as loadDocument's `what` does. */
+    what: (key: string) => string;
+    load: (
+        key: string,
+        options: { signal: AbortSignal; onWait: (retryInMs: number, cause: WaitCause) => void },
+    ) => Promise<TValue | TRefusal>;
+    publish: (key: string, state: Loadable<TValue> | TRefusal | null) => void;
+}): KeyedLoads {
+    const entries = new Map<string, { shared: SharedLoad; holds: number }>();
+    const entry = (key: string) => {
+        let found = entries.get(key);
+        if (found === undefined) {
+            found = {
+                shared: sharedLoad<TValue, TRefusal>({
+                    what: what(key),
+                    load: (options) => load(key, options),
+                    publish: (state) => publish(key, state),
+                }),
+                holds: 0,
+            };
+            entries.set(key, found);
+        }
+        return found;
+    };
+
+    return {
+        hold: (key) => {
+            const held = entry(key);
+            held.holds += 1;
+            held.shared.start();
+            let released = false;
+            return () => {
+                if (released) return;
+                released = true;
+                held.holds -= 1;
+                if (held.holds === 0) held.shared.abort();
+            };
+        },
+        retry: (key) => entries.get(key)?.shared.start(true),
     };
 }

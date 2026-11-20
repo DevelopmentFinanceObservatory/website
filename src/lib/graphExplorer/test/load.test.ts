@@ -6,18 +6,32 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    keyedLoads,
     LoadError,
+    LOADING,
     loadDocument,
     loadFailure,
+    loadNodeView,
+    loadServed,
+    NOT_HELD,
+    NOT_SERVED,
+    nodeViewUrl,
+    ORIGIN_NOT_SERVED,
+    NOT_ADVANCING,
+    TOO_LARGE,
     RETRY_WAIT_MS,
     retryDelay,
+    settled as isSettled,
     sharedLoad,
     waitText,
-    type Loadable,
+    type NotHeld,
+    type NotServed,
+    type Refusal,
+    type Servable,
     type WaitCause,
 } from '../load.ts';
-import { readSchema } from '../wire.ts';
-import { schemaBody } from './fixtures.ts';
+import { readSchema, readTerms } from '../wire.ts';
+import { schemaBody, termsBody } from './fixtures.ts';
 
 test('a 503 with Retry-After in seconds waits that long', () => {
     assert.equal(retryDelay({ status: 503, retryAfter: '5', waitedMs: 0, nowMs: 0 }), 5000);
@@ -114,6 +128,44 @@ test('the loader waits out a build and a spent allowance, then reads the documen
     assert.equal(urls.length, 3);
 });
 
+test('a 404 naming origin_not_served reads as not served, with no retry; any other 404 fails', async () => {
+    const UN_URL = '/api/graph/schema/terms/un_system';
+    const refusal = () =>
+        json(
+            {
+                code: 'not_found',
+                title: 'Not found',
+                retryable: false,
+                cause: { code: 'origin_not_served' },
+            },
+            404,
+        );
+    const { options, waits, urls } = rig([refusal]);
+    assert.equal(await loadServed('UN terms', UN_URL, readTerms, options), NOT_SERVED);
+    assert.deepEqual(waits, []);
+    assert.equal(urls.length, 1);
+
+    const { options: served } = rig([() => json(termsBody())]);
+    assert.deepEqual(
+        await loadServed('UN terms', UN_URL, readTerms, served),
+        readTerms(termsBody()),
+    );
+
+    // An API without the route, or an old revision, answers a bare 404: a failure a retry can clear.
+    const bare = () => new Response('Not Found', { status: 404 });
+    for (const answer of [bare, () => json({ title: 'Bad gateway' }, 502)]) {
+        await assert.rejects(loadServed('UN terms', UN_URL, readTerms, rig([answer]).options), {
+            name: 'LoadError',
+            reason: 'status',
+        });
+    }
+    await assert.rejects(loadDocument('The model', '/x', readSchema, rig([refusal]).options), {
+        name: 'LoadError',
+        reason: 'status',
+        status: 404,
+    });
+});
+
 test('each wait cause reads as its own line, and an unknown cause as a neutral wait', () => {
     assert.equal(
         waitText(4200, 'schema_building'),
@@ -171,12 +223,29 @@ test('a failure explains what went wrong without naming the document the heading
             '/api/graph/schema',
             readSchema,
             options,
-        ).then(() => assert.fail('the load should fail'), loadFailure);
+        ).then(
+            () => assert.fail('the load should fail'),
+            (error: unknown) => loadFailure(error, 'The model'),
+        );
         assert.equal(state.status, 'failed');
         if (state.status !== 'failed') return;
         assert.ok(state.message.startsWith('The model '));
         assert.ok(!state.explanation.includes('The model'), state.explanation);
         assert.ok(state.message.toLowerCase().endsWith(state.explanation.toLowerCase()));
+    }
+});
+
+test('an unexpected failure names the document that failed', () => {
+    const original = console.error;
+    console.error = () => {};
+    try {
+        const state = loadFailure(new TypeError('boom'), 'UN System Data Commons terms');
+        assert.equal(state.status, 'failed');
+        if (state.status !== 'failed') return;
+        assert.equal(state.reason, 'unexpected');
+        assert.ok(state.message.startsWith('UN System Data Commons terms '), state.message);
+    } finally {
+        console.error = original;
     }
 });
 
@@ -267,11 +336,87 @@ test('a load that outlasts its overall bound fails as a timeout', async () => {
     assert.ok(calls >= 1);
 });
 
+/** A node view whose centre and neighbour are nodes of the schema fixture. */
+const nodeViewBody = () => {
+    const [centre, neighbour] = (schemaBody() as { nodes: unknown[] }).nodes;
+    return { generation: 'g', centre, nodes: [neighbour], capped: [] };
+};
+
+const notFound = (cause: string | null) => () =>
+    json(
+        {
+            code: 'not_found',
+            title: 'Not found',
+            retryable: false,
+            ...(cause === null ? {} : { cause: { code: cause } }),
+        },
+        404,
+    );
+
+test('a node view refused with node_not_held, origin_not_served, a bare 404, node_view_too_large or graph_not_advancing is final, with no retry', async () => {
+    const internal = (code: string) => () =>
+        json(
+            {
+                code: 'internal_error',
+                title: 'Internal error',
+                retryable: false,
+                cause: { code },
+            },
+            500,
+        );
+    const rows: [() => Response, Refusal][] = [
+        [notFound('node_not_held'), NOT_HELD],
+        [notFound('origin_not_served'), ORIGIN_NOT_SERVED],
+        [notFound(null), NOT_SERVED],
+        [() => new Response('Not Found', { status: 404 }), NOT_SERVED],
+        [internal('node_view_too_large'), TOO_LARGE],
+        [internal('graph_not_advancing'), NOT_ADVANCING],
+    ];
+    for (const [refusal, expected] of rows) {
+        // A view scripted after the refusal is what a retry would read.
+        const { options, waits, urls } = rig([refusal, () => json(nodeViewBody())]);
+        assert.equal(await loadNodeView('Person', options), expected);
+        assert.deepEqual(waits, []);
+        assert.deepEqual(urls, ['/api/graph/schema/node/Person']);
+    }
+});
+
+test('a node view waits out a 503 and then reads the view', async () => {
+    const { options, waits, urls } = rig([building, () => json(nodeViewBody())]);
+    const view = await loadNodeView('Person', options);
+    assert.ok(typeof view === 'object' && 'centre' in view);
+    assert.equal(view.generation, 'g');
+    assert.deepEqual(waits, [5000]);
+    assert.equal(urls.length, 2);
+});
+
+test("a node view's path encodes each segment of the dcid and keeps its slashes", () => {
+    assert.equal(
+        nodeViewUrl('undata/eclac/SERIES-INSUF PENSION?#'),
+        '/api/graph/schema/node/undata/eclac/SERIES-INSUF%20PENSION%3F%23',
+    );
+});
+
+test('a dcid with a dot segment, which a URL would resolve away, is not held, with no request', async () => {
+    for (const dcid of ['../usage', 'dc/..', './x', 'dc/./x']) {
+        const { options, urls } = rig([() => json(nodeViewBody())]);
+        assert.equal(nodeViewUrl(dcid), null);
+        assert.equal(await loadNodeView(dcid, options), NOT_HELD);
+        assert.deepEqual(urls, []);
+    }
+    assert.equal(nodeViewUrl('dc/x.y..z'), '/api/graph/schema/node/dc/x.y..z');
+});
+
 /** A shared load over a load the test settles by hand, and every state it published. */
 const sharedRig = () => {
-    const runs: { signal: AbortSignal; settle: (value: string) => void; fail: () => void }[] = [];
-    const states: (Loadable<string> | null)[] = [];
+    const runs: {
+        signal: AbortSignal;
+        settle: (value: string | NotServed) => void;
+        fail: () => void;
+    }[] = [];
+    const states: (Servable<string> | null)[] = [];
     const shared = sharedLoad<string>({
+        what: 'The terms',
         load: ({ signal }) =>
             new Promise((resolve, reject) => {
                 runs.push({
@@ -327,4 +472,91 @@ test('a finished shared load survives an abort, and only a retry restarts a fail
     assert.equal(runs.length, 1);
     shared.start(true);
     assert.equal(runs.length, 2);
+});
+
+test('a shared load answered not served publishes it, and a retry leaves it alone', async () => {
+    const { runs, states, shared } = sharedRig();
+    shared.start();
+    runs[0]?.settle(NOT_SERVED);
+    await settled();
+    assert.deepEqual(states.at(-1), { status: 'notServed' });
+    shared.start(true);
+    assert.equal(runs.length, 1);
+});
+
+test('a document is settled once loaded, not served or failed, and not while absent or loading', () => {
+    const rows: [Servable<unknown> | null, boolean][] = [
+        [null, false],
+        [LOADING, false],
+        [{ status: 'loading', waiting: { retryInMs: 5000, cause: 'schema_building' } }, false],
+        [{ status: 'ready', value: {} }, true],
+        [NOT_SERVED, true],
+        [{ status: 'failed', reason: 'unexpected', message: 'm', explanation: 'e' }, true],
+    ];
+    assert.deepEqual(
+        rows.map(([state]) => isSettled(state)),
+        rows.map(([, expected]) => expected),
+    );
+});
+
+test('a shared load answered not held publishes it, and a retry leaves it alone', async () => {
+    const runs: ((value: string | NotHeld) => void)[] = [];
+    const states: (Servable<string> | NotHeld | null)[] = [];
+    const shared = sharedLoad<string, NotHeld>({
+        what: 'The view',
+        load: () => new Promise((resolve) => runs.push(resolve)),
+        publish: (state) => states.push(state),
+    });
+    shared.start();
+    runs[0]?.(NOT_HELD);
+    await settled();
+    assert.equal(states.at(-1), NOT_HELD);
+    shared.start(true);
+    assert.equal(runs.length, 1);
+});
+
+/** Keyed loads the test settles by hand, with every key's runs and published states. */
+const keyedRig = () => {
+    const runs: { key: string; signal: AbortSignal; settle: (value: string) => void }[] = [];
+    const states: [string, Servable<string> | null][] = [];
+    const loads = keyedLoads<string>({
+        what: (key) => `The view of ${key}`,
+        load: (key, { signal }) =>
+            new Promise((resolve) => runs.push({ key, signal, settle: resolve })),
+        publish: (key, state) => states.push([key, state]),
+    });
+    return { runs, states, loads };
+};
+
+test('keyed loads run once per key however many hold it, and stop when the last lets go', () => {
+    const { runs, states, loads } = keyedRig();
+    const first = loads.hold('Person');
+    const second = loads.hold('Person');
+    loads.hold('Place');
+    assert.deepEqual(
+        runs.map((run) => run.key),
+        ['Person', 'Place'],
+    );
+    first();
+    first();
+    assert.equal(runs[0]?.signal.aborted, false);
+    second();
+    assert.equal(runs[0]?.signal.aborted, true);
+    assert.deepEqual(states.at(-1), ['Person', null]);
+    assert.equal(runs[1]?.signal.aborted, false);
+
+    loads.hold('Person');
+    assert.equal(runs.length, 3);
+});
+
+test('a keyed load that finished survives every release and is never asked for again', async () => {
+    const { runs, states, loads } = keyedRig();
+    const release = loads.hold('Person');
+    runs[0]?.settle('view');
+    await settled();
+    release();
+    loads.hold('Person');
+    loads.retry('Person');
+    assert.equal(runs.length, 1);
+    assert.deepEqual(states.at(-1), ['Person', { status: 'ready', value: 'view' }]);
 });
