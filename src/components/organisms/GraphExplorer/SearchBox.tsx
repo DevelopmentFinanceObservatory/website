@@ -192,7 +192,7 @@ const SearchBox = ({ model, modelStatus, outside, switches }: SearchBoxProps) =>
                         ? describeGraphHit(current, option.hit)
                         : describe(current, option.hit)}
                     <span className={styles.dcid}>
-                        {/* A graph row's dcid stays on one line, so it takes no break points. */}
+                        {/* A graph row's dcid breaks at any character, so it takes no break points. */}
                         {graphRow ? option.hit.ref : <BreakableId text={option.hit.id} />}
                     </span>
                 </span>
