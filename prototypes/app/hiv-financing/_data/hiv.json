@@ -1,6 +1,6 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.4.1",
+  "sdk": "development-finance==0.4.2",
   "query": "OECD CRS gross ODA disbursements under purpose code 13040 (HIV/AIDS) by provider and recipient, and the Global Fund's under 12250 and 12110 by recipient, 2015 to 2024, in constant 2024 US dollars at donor prices",
   "retrieved": "2026-11-19T22:50:06.372Z",
   "citation": "OECD Creditor Reporting System (CRS) (2026), processed by the Development Finance Observatory",

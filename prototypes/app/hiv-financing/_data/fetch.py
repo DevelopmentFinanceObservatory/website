@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12,<3.13"
-# dependencies = ["development-finance[pandas]==0.4.1"]
+# dependencies = ["development-finance[pandas]==0.4.2"]
 # ///
 """The hiv-financing data step, run by hand with `pnpm data hiv-financing`.
 

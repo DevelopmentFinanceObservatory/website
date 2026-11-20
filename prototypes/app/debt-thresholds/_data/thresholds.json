@@ -1,6 +1,6 @@
 {
   "provenance": {
-    "sdk": "development-finance==0.4.1",
+    "sdk": "development-finance==0.4.2",
     "query": "External public debt (PPG, and IMF credit for service): stock, service, principal and disbursements by creditor group, and GDP, for the 58 countries in FDL's March 2026 note, 2015 to 2031",
     "retrieved": "2026-11-19T22:29:24.758Z",
     "citation": "World Bank International Debt Statistics (December 2025 and November 2026 releases; November 2026 read through the Development Finance Observatory) and IMF World Economic Outlook (October 2025 and October 2026)",

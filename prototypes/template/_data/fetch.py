@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["development-finance==0.4.1"]
+# dependencies = ["development-finance==0.4.2"]
 # ///
 """The data step in Python, run by hand with `pnpm data <slug>`.
 

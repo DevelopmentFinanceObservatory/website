@@ -4,7 +4,7 @@ import test from 'node:test';
 import { pinnedVersions, problems } from './check-data-rules.mts';
 
 const provenance = {
-    sdk: 'development-finance==0.4.1',
+    sdk: 'development-finance==0.4.2',
     query: 'demo pinned reads',
     retrieved: '2026-11-19T09:30:00.000Z',
 };

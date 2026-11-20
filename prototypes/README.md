@@ -71,7 +71,7 @@ In Python, the script carries its own dependencies as PEP 723 inline metadata, a
 ```python
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["development-finance==0.4.1"]
+# dependencies = ["development-finance==0.4.2"]
 # ///
 ```
 
@@ -109,12 +109,12 @@ Every JSON file under `app/*/_data/` has this shape:
 
 A data step that wants its numbers to reproduce reads through refs. A ref names the exact dataset versions a read returned, so a later run fetches the same bytes and the output does not drift when DFO revises its data. `data.ref.to_json()` (Python) and `data.ref.toJSON()` (TypeScript) write one, and `DatasetRef.from_json` and `DatasetRef.fromJSON` read it back. Pin a dataset's versions before committing its ref, because an unpinned version expires.
 
-`app/<slug>/_data/refs.json` is an envelope whose `provenance` is `{ "sdk": "development-finance==0.4.1", "query": "<prototype> pinned reads", "retrieved": <time of the refresh run> }`. Its `data` maps each read key to the ref and the dataset's provenance:
+`app/<slug>/_data/refs.json` is an envelope whose `provenance` is `{ "sdk": "development-finance==0.4.2", "query": "<prototype> pinned reads", "retrieved": <time of the refresh run> }`. Its `data` maps each read key to the ref and the dataset's provenance:
 
 ```json
 {
     "provenance": {
-        "sdk": "development-finance==0.4.1",
+        "sdk": "development-finance==0.4.2",
         "query": "oda-counts pinned reads",
         "retrieved": "2026-11-19T09:30:00.000Z"
     },
@@ -217,4 +217,4 @@ The workflow reads two repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scrip
 
 ## SDK versions
 
-Prototypes use `@developmentfinance/client@0.4.1` from npm and `development-finance==0.4.1` from PyPI, pinned exactly in `package.json` and in each step's PEP 723 header. The pin gives a reader the release a prototype used, and 0.4.1 is the first release with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because data steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.4.1 for everything under `prototypes/`. A step moves to a newer release by raising its header and rerunning with `--refresh`.
+Prototypes use `@developmentfinance/client@0.4.1` from npm and `development-finance==0.4.2` from PyPI, pinned exactly in `package.json` and in each step's PEP 723 header. The pin gives a reader the release a prototype used. These are the first releases on each registry with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because data steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.4.1 for everything under `prototypes/`. A step moves to a newer release by raising its header and rerunning with `--refresh`.

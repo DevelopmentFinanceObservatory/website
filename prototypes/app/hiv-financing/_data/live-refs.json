@@ -1,6 +1,6 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.4.1",
+  "sdk": "development-finance==0.4.2",
   "query": "hiv-financing pinned UNAIDS reads, read in the browser",
   "retrieved": "2026-11-19T22:50:06.372Z"
  },

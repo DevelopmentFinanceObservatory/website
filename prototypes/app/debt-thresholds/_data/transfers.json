@@ -1,6 +1,6 @@
 {
   "provenance": {
-    "sdk": "development-finance==0.4.1",
+    "sdk": "development-finance==0.4.2",
     "query": "DT.NTR.DECT.CD for the 75 countries in groups.csv, by series code",
     "retrieved": "2026-11-19T22:29:24.758Z",
     "ids": "November 2026",

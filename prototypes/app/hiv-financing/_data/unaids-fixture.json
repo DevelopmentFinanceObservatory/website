@@ -1,6 +1,6 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.4.1",
+  "sdk": "development-finance==0.4.2",
   "query": "UNAIDS rows from the reads in live-refs.json, and the figures the step derives from them, for the page's parity test",
   "retrieved": "2026-11-19T22:50:06.372Z"
  },
