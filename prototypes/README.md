@@ -93,7 +93,7 @@ Every JSON file under `app/*/_data/` has this shape:
 ```json
 {
     "provenance": {
-        "sdk": "@developmentfinance/client@0.4.1",
+        "sdk": "@developmentfinance/client@0.5.0",
         "query": "ODA from Germany to Nigeria",
         "retrieved": "2026-11-16T09:30:00.000Z",
         "sentence": "Germany's net disbursements (bilateral flows) to Nigeria ...",
@@ -139,38 +139,43 @@ To check that a step reproduces, run it plain with an empty `DFO_CACHE_DIR`, con
 
 ### Reads in the browser
 
-A figure a page derives on the client reads its rows in the browser from a pinned ref, a fixed version, so the rows match what the step committed. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object. A field the browser reads is left out of the committed JSON, and no server-rendered text derives from it, so the page has one source for each number.
+A figure a page derives on the client reads its rows in the browser. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object. A field the browser reads is left out of the committed JSON, and no server-rendered text derives from it, so the page has one source for each number.
 
-`lib/pinnedRef.ts` reads one ref. It builds an anonymous client on the production API, which answers a pinned read with 200 and cache headers. It returns the dataset and its rows:
+`lib/liveRef.ts` reads a page's refs with an anonymous client on the production API and runs the page's derivation on their rows. It reads the version DFO stores as the newest of each member's spec, so the page shows a release DFO took in after the step ran. When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it reads every ref's pinned version instead, the numbers the step committed, and warns in the console. `asCommitted` says whether every dataset is the version its ref pins, so the page knows whether a label the step committed, such as a release name, describes the figures. Each dataset's `freshness` says whether DFO has confirmed a stored version against its sources (`current`), is checking (`pending`) or could not check (`stale`), and is null after the fallback.
 
 ```tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 
-import { readPinnedRef, type PinnedRead } from '#lib/pinnedRef.ts';
+import { readLiveRefs, type LiveRead } from '#lib/liveRef.ts';
 
 import liveRefs from '../_data/live-refs.json';
 
-export function useReading(key: keyof typeof liveRefs.data) {
-    const [read, setRead] = useState<PinnedRead>();
+export function useTotals() {
+    const [read, setRead] = useState<LiveRead<'gross', number>>();
     const [error, setError] = useState<unknown>();
 
     useEffect(() => {
         const abort = new AbortController();
+        const total = (rows: { gross: { value?: unknown }[] }) =>
+            rows.gross.reduce((sum, row) => sum + Number(row.value ?? 0), 0);
 
-        readPinnedRef(liveRefs.data[key], { signal: abort.signal }).then(setRead, (reason) => {
-            if (!abort.signal.aborted) setError(reason);
-        });
+        readLiveRefs({ gross: liveRefs.data.gross }, total, { signal: abort.signal }).then(
+            setRead,
+            (reason) => {
+                if (!abort.signal.aborted) setError(reason);
+            },
+        );
 
         return () => abort.abort();
-    }, [key]);
+    }, []);
 
     return { read, error };
 }
 ```
 
-`readPinnedRef` raises the client's errors and falls back to nothing, so the component shows its loading and error states. The page owns its hook.
+`readLiveRefs` raises before any request for a ref it cannot read, raises the pinned read's error or the derivation's error on the pinned rows when the fallback fails too, and raises on an aborted signal without falling back. The component shows its loading and error states, and the page owns its hook.
 
 ## Write the page
 
@@ -217,4 +222,4 @@ The workflow reads two repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scrip
 
 ## SDK versions
 
-Prototypes use `@developmentfinance/client@0.4.1` from npm and `development-finance==0.4.2` from PyPI, pinned exactly in `package.json` and in each step's PEP 723 header. The pin gives a reader the release a prototype used. These are the first releases on each registry with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because data steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.4.1 for everything under `prototypes/`. A step moves to a newer release by raising its header and rerunning with `--refresh`.
+Prototypes use `@developmentfinance/client@0.5.0` from npm and `development-finance==0.4.2` from PyPI, pinned exactly in `package.json` and in each step's PEP 723 header. The pin gives a reader the release a prototype used. Client 0.5.0 is the first npm release with `latest: "stored"`, which the pages' browser reads use, and 0.4.2 is the first PyPI release with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because data steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.5.0 for everything under `prototypes/`. A step moves to a newer release by raising its header and rerunning with `--refresh`.

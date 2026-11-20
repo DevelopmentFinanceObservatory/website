@@ -15,6 +15,8 @@ export type TransfersMembers = {
 
 /** The members with their net transfers by year, built in the browser from the transfers ref. */
 export type TransfersData = {
+    /** The release label the chart's source line shows: the committed release, or a label
+     *  naming the DFO's newest version when DFO serves another version than the ref's. */
     release: string;
     years: number[];
     /** Every member, in membership order, with its net transfers by year, null where missing. */

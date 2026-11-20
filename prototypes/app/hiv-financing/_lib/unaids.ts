@@ -1,4 +1,4 @@
-// The UNAIDS figures by country, derived in the browser from the rows of the pinned reads in
+// The UNAIDS figures by country, derived in the browser from the rows of the reads in
 // _data/live-refs.json. A port of `unaids_by_country` in _data/fetch.py; unaids.test.mts checks
 // it against the rows and figures the step writes to _data/unaids-fixture.json.
 import type { Country, UnaidsFigures } from '../_data/types.ts';

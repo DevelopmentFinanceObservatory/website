@@ -55,7 +55,7 @@ const scrollBehaviour = (): ScrollBehavior =>
  * per-person strip, and the country table. Choosing the selected country again from a dot
  * or a row returns to all countries; choosing it in the search keeps it.
  *
- * The UNAIDS figures come from the pinned reads in the browser (useUnaids). Until they arrive,
+ * The UNAIDS figures come from the browser reads (useUnaids). Until they arrive,
  * or when they fail, a country's sentence leaves out its per-person, treatment and deaths
  * clauses, the strip gives way to a status line in the strip's room, and the table's UNAIDS
  * columns wait. The sentence reserves room for those clauses from the first paint.
