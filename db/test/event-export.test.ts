@@ -1209,7 +1209,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
     });
 });
 
-test('runExportJob runs the event export after a failed account export, then fails with every failure', async (t) => {
+test('runExportJob runs the account export after the event export, failed or not, then fails with every failure', async (t) => {
     const accountError = new Error('bigquery down');
     const eventError = new Error('event export 2026-10-21: load job failed');
     const cases: [string, () => Promise<void>, RegExp, number][] = [
@@ -1251,7 +1251,7 @@ test('runExportJob runs the event export after a failed account export, then fai
                     return true;
                 },
             );
-            assert.deepEqual(ran, ['accounts', 'events']);
+            assert.deepEqual(ran, ['events', 'accounts']);
         });
     }
 });
