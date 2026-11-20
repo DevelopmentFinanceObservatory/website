@@ -114,6 +114,22 @@
     overflow-wrap: break-word;
 }
 
+// A graph row's StatVar names and dcids run long, so its name keeps two
+// lines and its dcid one, and the full text shows once the node opens.
+.graphRow .name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.graphRow .dcid {
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
 .note {
     @include font-size(12px, 1.3);
 

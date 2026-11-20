@@ -56,9 +56,11 @@ export const describeGraphHit = (model: Model, hit: GraphSearchHit): string => {
         ? kindWords(model, 'class', [])
         : hit.types.includes('Property')
           ? kindWords(model, 'property', [])
-          : hit.types.length === 0
-            ? 'Node'
-            : kindWords(model, 'value', hit.types);
+          : hit.types.includes('StatisticalVariable')
+            ? 'StatVar'
+            : hit.types.length === 0
+              ? 'Node'
+              : kindWords(model, 'value', hit.types);
     return `${kind} ${declarerPlace(hit.declared_by)}`;
 };
 

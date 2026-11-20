@@ -170,7 +170,12 @@ const SearchBox = ({ model, modelStatus, outside, switches }: SearchBoxProps) =>
                 id={`${id}-${index}`}
                 role="option"
                 aria-selected={index === active}
-                className={classNames(styles.option, index === active && styles.optionActive)}
+                className={classNames(
+                    styles.option,
+                    graphRow && styles.graphRow,
+                    index === active && styles.optionActive,
+                )}
+                title={graphRow ? (option.hit.label ?? option.hit.ref) : undefined}
                 // Keeps focus in the box so the blur does not close the list first.
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(option)}
@@ -187,7 +192,8 @@ const SearchBox = ({ model, modelStatus, outside, switches }: SearchBoxProps) =>
                         ? describeGraphHit(current, option.hit)
                         : describe(current, option.hit)}
                     <span className={styles.dcid}>
-                        <BreakableId text={graphRow ? option.hit.ref : option.hit.id} />
+                        {/* A graph row's dcid stays on one line, so it takes no break points. */}
+                        {graphRow ? option.hit.ref : <BreakableId text={option.hit.id} />}
                     </span>
                 </span>
             </li>
