@@ -13,8 +13,10 @@ export const ACCOUNT_HEADER = 'x-dfo-account';
 
 /**
  * HMAC-SHA-256 of `id` under `key`, hex: the event export's digest of every
- * id it writes (db/event-export.ts) and the x-dfo-account digest. A change
- * here changes the exported rows, so it bumps ROW_SHAPE_VERSION there.
+ * id it writes (db/event-export.ts), the x-dfo-account digest, and the
+ * account export's `account_organisation.user_hash` (db/account-export.ts).
+ * A change here changes the exported rows, so it bumps ROW_SHAPE_VERSION
+ * there, and the account export's table must be reloaded to match.
  */
 export const exportDigest = (id: string, key: string): string =>
     createHmac('sha256', key).update(id).digest('hex');
