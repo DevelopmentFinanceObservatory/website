@@ -40,8 +40,8 @@ import { clientLabel, NON_PRINTABLE, pick } from './headers';
  * A current read has no content version in its path, so dfo-apis names the
  * version it served in `x-dfo-content-version`, an internal header the gateway
  * reads and does not relay. The answer is kept 60 seconds in the browser and at
- * the edge (CURRENT_CACHE), which bounds how stale a reader's view of the head
- * is, and carries `Cache-Tag: <cv>` from that header. Without the header
+ * the edge (CURRENT_CACHE), which bounds how old a reader's view of the newest
+ * version can be, and carries `Cache-Tag: <cv>` from that header. Without the header
  * (dfo-apis has not sent it) the answer is cached untagged and the delivery
  * line's content_version is null. `x-dfo-freshness` (current, pending or
  * stale) is relayed and exposed to pages when dfo-apis sends it.
