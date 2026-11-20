@@ -169,6 +169,13 @@
       "when": 1793871780545,
       "tag": "0024_drop_share_card_result",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795183972106,
+      "tag": "0025_account_organisation",
+      "breakpoints": true
     }
   ]
 }

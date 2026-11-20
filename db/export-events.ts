@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { BigQuery } from '@google-cloud/bigquery';
-import { bigQueryAccountTable, readAccountDaily, runAccountExport } from './account-export';
+import { bigQueryAccountTable, readAccounts, runAccountExport } from './account-export';
 import { STATEMENT_TIMEOUT_MS } from './bounded';
 import {
     buildRuntimePool,
@@ -54,8 +54,9 @@ async function main(progress: JobProgress): Promise<void> {
     await runExportJob({
         exportAccounts: () =>
             runAccountExport({
-                read: () => readAccountDaily(pool),
+                read: () => readAccounts(pool),
                 replace: bigQueryAccountTable({ datasetId: settings.datasetId, bigquery }),
+                hmacKey: settings.hmacKey,
                 scratchFile: path.join(os.tmpdir(), `account-export-${process.pid}.ndjson`),
                 log,
             }),
