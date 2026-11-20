@@ -445,7 +445,7 @@ Observations:
 
 **End to end with the Python SDK**
 
-Run against the local stack (the website on the implementation branch, with dfo-apis behind it), with a `dfo_k_` key minted for an existing account and its daily quota set to 5. The key went in through `DFO_API_KEY`, as a pipeline would set it, and the client ran with retries and its cache off so every call reached the proxy.
+Run against the local stack (the website on the implementation branch, with dfo-apis behind it), with a `dfo_k_` key minted for an existing account and its daily quota set to 5. The key went in through `DFO_API_KEY`, as a pipeline would set it, and the client ran with retries and its cache off so every call reached the proxy. `scripts/api-key-sdk-demo.py` repeats the run.
 
 | Step                     | Result                                                                                                                                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
