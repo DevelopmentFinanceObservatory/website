@@ -58,6 +58,12 @@
     }
 }
 
+.rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
 .option {
     @include flex(column, flex-start, flex-start);
 
@@ -65,6 +71,17 @@
     padding: rem(8) rem(10);
     border-radius: rem(4);
     cursor: pointer;
+}
+
+.group {
+    @include font-size(11px, 1.2);
+
+    padding: rem(10) rem(10) rem(4);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-top: 1px solid var(--color-net-light);
 }
 
 .optionActive {
@@ -95,6 +112,22 @@
     font-family: var(--font-dm-mono);
     letter-spacing: -0.02em;
     overflow-wrap: break-word;
+}
+
+// A graph row's StatVar names and dcids run long, so each keeps two lines and
+// the full text shows once the node opens. Sibling StatVars share a name's
+// start and differ at the dcid's end, which two lines at any character break
+// keep in view for a dcid up to about 100 characters.
+.graphRow .name,
+.graphRow .dcid {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.graphRow .dcid {
+    word-break: break-all;
 }
 
 .note {
