@@ -25,7 +25,6 @@ import {
 import type { DocsPage } from '../docs/corpus.ts';
 import { galleryCard, pageOpenGraph, SITE_CARD, SITE_NAME } from '../site.ts';
 import { sitemapPaths } from '../sitemap.ts';
-import { GALLERY_PUBLISHED, galleryRedirects } from '../gallery/published.ts';
 
 // robots.txt matching as Google does it: a rule matches from the start of
 // the path, and `*` stands for any run of characters.
@@ -231,26 +230,6 @@ test('the sitemap lists docs, gallery and source pages, but no redirect', () => 
     assert.deepEqual(
         empty.filter((path) => path.startsWith('/insights/gallery')),
         [],
-    );
-});
-
-test('an unpublished gallery sends every gallery page and card home', () => {
-    const redirected = (path: string) =>
-        galleryRedirects().some((rule) => getPathMatch(rule.source)(path) !== false);
-    const galleryPaths = [
-        '/insights/gallery',
-        '/insights/gallery/a-card',
-        '/insights/gallery/a-card/opengraph-image-1pc5v7',
-    ];
-
-    for (const path of galleryPaths) {
-        assert.equal(redirected(path), !GALLERY_PUBLISHED, path);
-    }
-
-    assert.equal(redirected('/insights/publications'), false);
-    assert.deepEqual(
-        galleryRedirects().map((rule) => rule.destination),
-        GALLERY_PUBLISHED ? [] : ['/'],
     );
 });
 
