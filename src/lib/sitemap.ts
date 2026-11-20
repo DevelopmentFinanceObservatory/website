@@ -2,7 +2,8 @@
  * The pages the sitemap lists: those that answer 200 to anyone and leave
  * indexing on. A dataset gallery item redirects to its saved search, so the
  * sitemap lists the search, `/data?share=<id>`. The noindex routes
- * (lib/crawl.ts) are left out. Paths follow the app directory's routes.
+ * (lib/crawl.ts) are left out, and so is /insights/gallery when there are no
+ * gallery items. Paths follow the app directory's routes.
  */
 import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
 
@@ -17,7 +18,6 @@ const STATIC_PATHS = [
     '/data/roadmap',
     '/data/sources',
     '/insights',
-    '/insights/gallery',
     '/insights/publications',
 ];
 
@@ -32,6 +32,7 @@ export const sitemapPaths = ({
     sourceIds: readonly string[];
 }): string[] => [
     ...STATIC_PATHS,
+    ...(gallery.length > 0 ? ['/insights/gallery'] : []),
     ...docs.map((page) => docsHref(page.path)),
     ...gallery.map((item) =>
         item.kind === 'dataset'

@@ -3,6 +3,7 @@ import path from 'path';
 import type { NextConfig } from 'next';
 
 import { noindexHeaders } from './src/lib/crawl.ts';
+import { galleryRedirects } from './src/lib/gallery/published.ts';
 
 const nextConfig: NextConfig = {
     // Self-contained server bundle for the Cloud Run image (deploy/Dockerfile).
@@ -52,6 +53,7 @@ const nextConfig: NextConfig = {
                 destination: '/graph-explorer/seed',
                 permanent: false,
             },
+            ...galleryRedirects(),
         ];
     },
     // A docs page's raw markdown sits beside it: /docs/<path>.md serves the
