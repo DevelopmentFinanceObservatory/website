@@ -88,14 +88,12 @@ export type AccountOrganisationSource = {
 };
 
 /**
- * What one read of the views returns. `accounts` and `webmailDomains` come
- * from the view `account_daily_source`: whether the user table holds any
- * account, and whether `webmail_domain` holds any domain.
+ * What one read of the views returns. `webmailDomains` comes from the view
+ * `account_daily_source`: whether `webmail_domain` holds any domain.
  */
 export type AccountRead = {
     rows: AccountRow[];
     organisations: AccountOrganisationSource[];
-    accounts: boolean;
     webmailDomains: boolean;
 };
 
@@ -107,10 +105,16 @@ const readInTransaction = async (client: PoolClient): Promise<AccountRead> => {
          FROM account_daily
          ORDER BY day, organisation`,
     );
-    const { rows: source } = await client.query<{
-        accounts: boolean;
-        webmailDomains: boolean;
-    }>(`SELECT accounts, webmail_domains AS "webmailDomains" FROM account_daily_source`);
+    const { rows: source } = await client.query<{ webmailDomains: boolean }>(
+        `SELECT webmail_domains AS "webmailDomains" FROM account_daily_source`,
+    );
+
+    // The view always returns one row, so any other count is a read that did
+    // not see the schema it expects.
+    if (source.length !== 1) {
+        throw new Error(`account export: account_daily_source returned ${source.length} rows`);
+    }
+
     const { rows: organisations } = await client.query<AccountOrganisationSource>(
         `SELECT user_id AS "userId", organisation
          FROM account_organisation
@@ -206,13 +210,14 @@ export const bigQueryAccountTable =
  * failed `account_organisation` load leaves it as it was beside a new
  * `account_daily`. `account_daily` holds a row for every day from the first
  * account's through yesterday's while `webmail_domain` holds any domain,
- * so a read with no rows means one of three things. While `webmail_domain`
- * is empty, or while the user table holds no account (a wrong database, an
- * emptied table), the run rejects with both tables kept. When every account
- * is from today, both tables are replaced with no rows, so an account
- * deleted since the last run, and the organisation it named, leave the
- * export. `account_organisation` holds no rows exactly when `account_daily`
- * holds none, since both views read the same accounts.
+ * so a read with no rows means one of two things. While `webmail_domain`
+ * is empty, the run rejects with both tables kept. Otherwise the read
+ * succeeded and the user table holds no account older than today, or none
+ * at all, so both tables are replaced with no rows and an account deleted
+ * since the last run, and the organisation it named, leave the export. A
+ * failed or partial read throws in `read`, before any table is replaced.
+ * `account_organisation` holds no rows exactly when `account_daily` holds
+ * none, since both views read the same accounts.
  */
 export const runAccountExport = async ({
     read,
@@ -227,16 +232,12 @@ export const runAccountExport = async ({
     scratchFile: string;
     log: (line: string) => void;
 }): Promise<void> => {
-    const { rows, organisations, accounts, webmailDomains } = await read();
+    const { rows, organisations, webmailDomains } = await read();
 
     if (rows.length === 0 && !webmailDomains) {
         throw new Error(
             'account export: account_daily read no rows, webmail_domain is empty, tables kept',
         );
-    }
-
-    if (rows.length === 0 && !accounts) {
-        throw new Error('account export: account_daily read no accounts, tables kept');
     }
 
     const tables: [AccountTable, object[]][] = [

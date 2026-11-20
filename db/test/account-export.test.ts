@@ -179,9 +179,9 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
     });
 
     const read = await readAccounts(readerPool);
-    const { rows, accounts, webmailDomains } = read;
+    const { rows, webmailDomains } = read;
 
-    assert.deepEqual({ accounts, webmailDomains }, { accounts: true, webmailDomains: true });
+    assert.equal(webmailDomains, true);
     assert.deepEqual(
         sorted(rows),
         sorted([
@@ -353,33 +353,17 @@ test('account_daily holds no rows while webmail_domain is empty, and the export 
     assert.equal(replaced, false);
 });
 
-test('account_daily_source tells accounts only from today from an empty user table', async (t) => {
-    const cases: [string, string[], boolean][] = [
-        ['an account today', ['a@one.org'], true],
-        ['no account', [], false],
-    ];
+test('readAccounts reads no rows from an empty user table', async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
 
-    for (const [label, emails, accounts] of cases) {
-        await t.test(label, async (t) => {
-            const database = await createTestDatabase();
-            t.after(() => database.teardown());
+    await migrate(database);
 
-            await migrate(database);
-            await database.runtimePool().query(
-                `insert into "user" (id, name, email, created_at)
-                 select email, 'Name', email, now() at time zone 'UTC'
-                 from unnest($1::text[]) as email`,
-                [emails],
-            );
-
-            assert.deepEqual(await readAccounts(database.adminPool()), {
-                rows: [],
-                organisations: [],
-                accounts,
-                webmailDomains: true,
-            });
-        });
-    }
+    assert.deepEqual(await readAccounts(database.adminPool()), {
+        rows: [],
+        organisations: [],
+        webmailDomains: true,
+    });
 });
 
 test('syncWebmailDomains rewrites webmail_domain to the package list', async (t) => {
@@ -493,7 +477,6 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
         read: async () => ({
             rows: ROWS,
             organisations: ORGANISATIONS,
-            accounts: true,
             webmailDomains: true,
         }),
         replace,
@@ -517,15 +500,10 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
     await assert.rejects(fs.access(file));
 });
 
-test('runAccountExport empties the table when every account is from today, and rejects other empty reads', async (t) => {
+test('runAccountExport empties both tables on an empty read, and rejects one with webmail_domain empty', async (t) => {
     const cases: [string, Omit<AccountRead, 'rows' | 'organisations'>, RegExp | null][] = [
-        ['every account from today', { accounts: true, webmailDomains: true }, null],
-        ['no account', { accounts: false, webmailDomains: true }, /read no accounts/],
-        [
-            'an empty webmail_domain',
-            { accounts: true, webmailDomains: false },
-            /webmail_domain is empty/,
-        ],
+        ['every account from today, or none', { webmailDomains: true }, null],
+        ['an empty webmail_domain', { webmailDomains: false }, /webmail_domain is empty/],
     ];
 
     for (const [label, source, rejects] of cases) {
