@@ -37,8 +37,6 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - share.open        a share link opened at /s/<id> (share id, kind, mode, host site)
  * - gallery.open      a visitor opened a Gallery item (slug, kind)
  * - studio.download   a Studio card's data saved to the device (format, card kind, card id)
- * - data.view         a chart or table built on DFO data rendered on a page, on
- *                     this site or another (spec ids, content versions, via)
  *
  * Every event also carries `internal_eng`, true when the signed-in user's
  * email is verified and on the INTERNAL_ENG_EMAILS list (see ./internalEng).
@@ -63,7 +61,6 @@ export const EVENT_NAMES = [
     'share.open',
     'gallery.open',
     'studio.download',
-    'data.view',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

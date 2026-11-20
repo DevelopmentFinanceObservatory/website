@@ -27,8 +27,6 @@ import type { RateVerdict } from './rateHeaders';
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
- *   RATE_LIMIT_EVENT      calls per window per IP on /api/events/data-view
- *                         (default 300)
  */
 const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
 
@@ -44,9 +42,6 @@ export const LIMITS = {
     // refill of one harness instance's tool-call bucket (5 a second), which
     // stays the ceiling on total spend.
     mcp: Number(process.env.RATE_LIMIT_MCP) || 300,
-    // One call per chart or table a page renders, so a page of many charts,
-    // or an office behind one address, sends many a minute.
-    event: Number(process.env.RATE_LIMIT_EVENT) || 300,
 } as const;
 
 export type Surface = keyof typeof LIMITS;

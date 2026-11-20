@@ -9,7 +9,6 @@ import type { CardTarget } from '../src/components/organisms/Studio/hooks/useCha
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
-import type { DataViewVia } from '../src/lib/events/dataView.ts';
 import type { ShareViewer } from '../src/lib/events/shareView.ts';
 import type { EventName } from '../src/lib/events/track.ts';
 import { exportDigest } from '../src/lib/proxy/account.ts';
@@ -70,8 +69,6 @@ type PropRule =
     | 'token'
     // a token that leaves as its HMAC-SHA256 digest
     | 'digest'
-    // the caller digest `ip:` plus 32 lower-case hex, kept as it is
-    | 'caller'
     // a list of up to MAX_LIST_IDS tokens, each a token or NO_ID
     | 'tokens'
     // a list of up to MAX_LIST_IDS measure tokens (MEASURE_PATTERN, which
@@ -82,7 +79,6 @@ type PropRule =
 
 const TOKEN = TOKEN_PATTERN;
 const MEASURE = MEASURE_PATTERN;
-const CALLER = /^ip:[0-9a-f]{32}$/;
 
 // Every member of the union T, so tsc fails when the site adds a member
 // that the list lacks and the export would drop. Known<> keeps the named
@@ -133,7 +129,6 @@ const PROMPT_INTENTS = every<'new' | CardTarget['intent']>()(['new', 'follow_up'
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
-const DATA_VIEW_VIA = every<DataViewVia>()(['pinned_ref', 'saved_file', 'share', 'baked']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 
 // The fields every search post's events carry (searchPostTracker in
@@ -254,18 +249,6 @@ export const PROP_RULES = {
         viewer: SHARE_VIEWERS,
     },
     'gallery.open': { ...EVERY_EVENT, slug: 'token', kind: GALLERY_KINDS },
-    // POST /api/events/data-view (src/lib/events/dataView.ts).
-    'data.view': {
-        ...EVERY_EVENT,
-        specIds: 'tokens',
-        contentVersions: 'tokens',
-        via: DATA_VIEW_VIA,
-        shareId: 'digest',
-        surface: ['page'],
-        host: 'token',
-        originAllowed: 'boolean',
-        caller: 'caller',
-    },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest (or exportDigest), passes, exportProps, exportPage or
@@ -288,8 +271,6 @@ const passes = (rule: PropRule, value: unknown): boolean => {
         case 'token':
         case 'digest':
             return typeof value === 'string' && TOKEN.test(value);
-        case 'caller':
-            return typeof value === 'string' && CALLER.test(value);
         case 'tokens':
             return listOf(TOKEN, value);
         case 'measures':
@@ -415,7 +396,6 @@ export const ROW_SHAPE = {
     PROP_RULES,
     TOKEN: TOKEN.source,
     MEASURE: MEASURE.source,
-    CALLER: CALLER.source,
     PAGE_PATH: PAGE_PATH.source,
     SHARE_PATH: SHARE_PATH.source,
     EXPORT_SCHEMA,

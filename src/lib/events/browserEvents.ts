@@ -6,9 +6,8 @@ import type { EventName } from './track.ts';
 /**
  * The names the site's own pages send through POST /api/events
  * (src/lib/events/client.ts). The route refuses every other name, so an
- * event the server records itself, or one with its own intake such as
- * data.view (POST /api/events/data-view), cannot arrive through it with
- * unchecked props.
+ * event the server records itself cannot arrive through it with unchecked
+ * props.
  */
 export const BROWSER_EVENT_NAMES = [
     'search.query',

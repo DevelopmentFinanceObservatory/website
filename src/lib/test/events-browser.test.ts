@@ -4,11 +4,10 @@ import test from 'node:test';
 import { isBrowserEventName } from '../events/browserEvents.ts';
 
 // POST /api/events takes a name only when isBrowserEventName passes it.
-test('POST /api/events takes the browser names and refuses data.view and server events', async (t) => {
+test('POST /api/events takes the browser names and refuses server events', async (t) => {
     const cases: [unknown, boolean][] = [
         ['search.query', true],
         ['studio.download', true],
-        ['data.view', false],
         ['share.open', false],
         ['auth.signin', false],
         ['feedback.submit', false],
