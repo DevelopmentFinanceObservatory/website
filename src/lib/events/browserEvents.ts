@@ -22,6 +22,7 @@ export const BROWSER_EVENT_NAMES = [
     'studio.card',
     'studio.session_end',
     'studio.download',
+    'share.copy',
     'guest.wall_hit',
     'gallery.open',
 ] as const satisfies readonly EventName[];

@@ -600,7 +600,7 @@ const Studio = ({
     // The Data tab: every visible card with a revision to export.
     const shareData: ShareDatum[] = visibleWidgets.flatMap((widget) =>
         widget.kind !== 'text' && widget.ref
-            ? [{ id: widget.id, title: cardTitleOf(widget.id), ref: widget.ref }]
+            ? [{ id: widget.id, title: cardTitleOf(widget.id), ref: widget.ref, kind: widget.kind }]
             : [],
     );
     const infoWidget = visibleWidgets.find((widget) => widget.id === infoCardId) ?? null;

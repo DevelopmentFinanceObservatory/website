@@ -41,6 +41,7 @@ import {
 import { localShortDateText } from '@/lib/sources/updateDates';
 import { decodePermalinkState, encodePermalinkState } from '@/lib/search/permalink';
 import { track } from '@/lib/events/client';
+import { shareCopyProps } from '@/lib/events/shareCopy';
 import {
     createSearchShare,
     createSuggestionSlot,
@@ -775,6 +776,7 @@ const DataSearch = ({
                 : `${location.origin}/data?q=${encodeURIComponent(query)}`;
 
         await navigator.clipboard.writeText(url);
+        track('share.copy', shareCopyProps({ kind: 'search', copied: 'query_link', share: null }));
         setLinkCopied(true);
         window.setTimeout(() => setLinkCopied(false), 2000);
     }, [query, edits]);
