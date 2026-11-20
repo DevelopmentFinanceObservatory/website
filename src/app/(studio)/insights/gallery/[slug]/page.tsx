@@ -2,9 +2,13 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
+import Footer from '@/components/organisms/Footer/Footer';
 import { GALLERY_ITEMS, galleryItem } from '@/components/organisms/Gallery/galleryData';
+import GalleryOffline from '@/components/organisms/GalleryOffline/GalleryOffline';
+import Header from '@/components/organisms/Header/Header';
 import Studio from '@/components/organisms/Studio/Studio';
 import { liveSlotsOf } from '@/lib/chat/sharePayload';
+import { GALLERY_OFFLINE_METADATA, GALLERY_PUBLISHED } from '@/lib/gallery/published';
 import { gallerySession } from '@/lib/gallery/sessions';
 import { pageOpenGraph } from '@/lib/site';
 
@@ -16,6 +20,10 @@ export const dynamicParams = false;
 export const generateStaticParams = () => GALLERY_ITEMS.map((item) => ({ slug: item.slug }));
 
 export const generateMetadata = async ({ params }: GalleryItemPageProps): Promise<Metadata> => {
+    if (!GALLERY_PUBLISHED) {
+        return GALLERY_OFFLINE_METADATA;
+    }
+
     const item = galleryItem((await params).slug);
 
     if (!item) {
@@ -53,6 +61,19 @@ const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
 
     if (!item) {
         notFound();
+    }
+
+    // The Studio route group has no site layout, so the chrome comes with it.
+    if (!GALLERY_PUBLISHED) {
+        return (
+            <>
+                <Header />
+                <main>
+                    <GalleryOffline />
+                </main>
+                <Footer />
+            </>
+        );
     }
 
     if (item.kind === 'dataset') {

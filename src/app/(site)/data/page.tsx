@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import DataSearch from '@/components/organisms/DataSearch/DataSearch';
 import GallerySearchLead from '@/components/organisms/DataSearch/GallerySearchLead';
-import { GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
+import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { dataPageMetadata, gallerySearch } from '@/lib/crawl';
 import { loadSearchCatalogue } from '@/lib/search/catalogueLoader';
 
@@ -16,7 +16,7 @@ type DataPageProps = { searchParams: Promise<Record<string, string | string[] | 
 // Version links and search shares are unlisted, except a gallery item's
 // search, which carries the item's title and description (dataPageMetadata).
 export const generateMetadata = async ({ searchParams }: DataPageProps): Promise<Metadata> =>
-    dataPageMetadata(await searchParams, GALLERY_ITEMS);
+    dataPageMetadata(await searchParams, PUBLISHED_GALLERY_ITEMS);
 
 // The catalogue comes from the server, so the idle chips, the stat tiles and
 // the starting point render with no search call. A gallery search's summary
@@ -27,7 +27,7 @@ export const generateMetadata = async ({ searchParams }: DataPageProps): Promise
 const DataPage = async ({ searchParams }: DataPageProps) => {
     const [catalogue, item] = await Promise.all([
         loadSearchCatalogue(),
-        searchParams.then((query) => gallerySearch(query, GALLERY_ITEMS)),
+        searchParams.then((query) => gallerySearch(query, PUBLISHED_GALLERY_ITEMS)),
     ]);
 
     const lead = item && <GallerySearchLead item={item} />;

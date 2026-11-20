@@ -15,13 +15,17 @@ import { useScrollFrame } from '@/hooks/useScrollFrame';
 import { enterProgress } from '@/utils/scroll';
 import { showPrivacySettings } from '@/lib/consent';
 import { DOCS_MENU } from '@/lib/docs/nav';
+import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 import Logo from '@/assets/svg/logo.svg';
 import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
 // The Data column mirrors the header's Data dropdown exactly — same
 // entries, same order (Coverage is left out of both until it's built).
 const columns = [
-    { title: 'Insights', links: ['Chat', 'Gallery', 'Publications'] },
+    {
+        title: 'Insights',
+        links: GALLERY_PUBLISHED ? ['Chat', 'Gallery', 'Publications'] : ['Chat', 'Publications'],
+    },
     { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data'] },
     // Status is hidden for launch — see src/app/(site)/docs/status/page.tsx.
     { title: 'Docs', links: DOCS_MENU.map((entry) => entry.label) },
