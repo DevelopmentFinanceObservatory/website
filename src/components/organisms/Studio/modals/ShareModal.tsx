@@ -12,8 +12,11 @@ import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
-import type { CardRef } from '@/lib/chat/widgets';
+import type { CardRef, Widget } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
+import { track } from '@/lib/events/client';
+import { type ShareCopied, shareCopyProps } from '@/lib/events/shareCopy';
+import type { StudioDownloadProps } from '@/lib/events/studioDownload';
 import { DATASET_FORMATS, type DatasetFormat } from '@/lib/search/searchClient';
 import {
     type CardDataOptions,
@@ -43,12 +46,17 @@ import {
  * share, and a link whose cards cannot show live data is withdrawn. Data
  * offers each card's stored rows as a file from the export route
  * (src/lib/studio/cardDownload).
+ *
+ * The server records `share.create` when it makes a link. Copying a link or
+ * an embed code records `share.copy`, and a Data file saved to the device
+ * records `studio.download` with `source: 'share_dialog'`.
  */
 
 export type ShareScope = { kind: 'whole' } | { kind: 'card'; id: string; title: string };
 
-// A card's downloadable data (Data tab): the revision its file is built from.
-export type ShareDatum = { id: string; title: string; ref: CardRef };
+// A card's downloadable data (Data tab): the revision its file is built from,
+// and the card's kind for `studio.download`.
+export type ShareDatum = { id: string; title: string; ref: CardRef; kind: Widget['kind'] };
 
 type ShareModalProps = {
     open: boolean;
@@ -132,6 +140,14 @@ const DataRow = ({ datum, options }: { datum: ShareDatum; options: CardDataOptio
             const { blob, fileName } = await fetchCardData(datum.ref, options);
 
             downloadBlob(blob, fileName);
+            track('studio.download', {
+                format: options.format,
+                bundle: options.bundle,
+                kind: datum.kind,
+                cardId: datum.ref.component_id,
+                shared: false,
+                source: 'share_dialog',
+            } satisfies StudioDownloadProps);
         } catch (caught) {
             setError(
                 caught instanceof CardDownloadError ? caught.message : cardDownloadMessage(null),
@@ -156,17 +172,20 @@ const DataRow = ({ datum, options }: { datum: ShareDatum; options: CardDataOptio
     );
 };
 
-// A copyable box: the value in mono, one dark Copy button; "Copied" for a beat.
+// A copyable box: the value in mono, one dark Copy button; "Copied" for a
+// beat. `onCopied` runs once the clipboard holds the value.
 const CopyBox = ({
     value,
     code,
     pending,
     pendingText = 'Creating link…',
+    onCopied,
 }: {
     value: string;
     code?: boolean;
     pending?: boolean;
     pendingText?: string;
+    onCopied: () => void;
 }) => {
     const { copied, copy } = useCopied();
 
@@ -178,7 +197,11 @@ const CopyBox = ({
             <button
                 type="button"
                 className={classNames(styles.copy, copied && styles.copied)}
-                onClick={() => copy(value)}
+                onClick={async () => {
+                    if (await copy(value)) {
+                        onCopied();
+                    }
+                }}
                 disabled={pending || !value}
                 aria-label={copied ? 'Copied' : 'Copy'}
             >
@@ -298,6 +321,13 @@ const ShareModal = ({
             : null;
     // A live link waits on the site's check of its cards.
     const pendingText = pending && linkMode === 'live' ? 'Checking cards…' : undefined;
+    // The share as it stands when copied, so a live link made a snapshot
+    // records `snapshot`.
+    const trackCopy = (copied: ShareCopied) => {
+        if (kind && link?.status === 'ready') {
+            track('share.copy', shareCopyProps({ kind, copied, share: link }));
+        }
+    };
 
     return (
         <Modal open={open} onOpenChange={onOpenChange} title="Share" fit>
@@ -409,6 +439,7 @@ const ShareModal = ({
                                 value={id ? shareUrl(id) : ''}
                                 pending={pending && !failed}
                                 pendingText={pendingText}
+                                onCopied={() => trackCopy('link')}
                             />
                         )}
                         {showEmbed && !withdrawal && (
@@ -428,6 +459,7 @@ const ShareModal = ({
                                     code
                                     pending={pending && !failed}
                                     pendingText={pendingText}
+                                    onCopied={() => trackCopy('embed_code')}
                                 />
                             </>
                         )}

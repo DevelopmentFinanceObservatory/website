@@ -34,9 +34,11 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - feedback.submit   a feedback sent (kind)
  * - embed.view        an embed loaded in an iframe (share id, kind, host site)
  * - share.create      a Studio or search share link made (share id, kind, mode)
+ * - share.copy        a share's link, embed code or download link copied (share id, kind,
+ *                     mode, what was copied)
  * - share.open        a share link opened at /s/<id> (share id, kind, mode, host site)
  * - gallery.open      a visitor opened a Gallery item (slug, kind)
- * - studio.download   a Studio card's data saved to the device (format, card kind, card id)
+ * - studio.download   a Studio card's data saved to the device (format, card kind, card id, source)
  *
  * Every event also carries `internal_eng`, true when the signed-in user's
  * email is verified and on the INTERNAL_ENG_EMAILS list (see ./internalEng).
@@ -58,6 +60,7 @@ export const EVENT_NAMES = [
     'feedback.submit',
     'embed.view',
     'share.create',
+    'share.copy',
     'share.open',
     'gallery.open',
     'studio.download',

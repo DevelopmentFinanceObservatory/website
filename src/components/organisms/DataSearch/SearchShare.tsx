@@ -8,6 +8,8 @@ import styles from './DataSearch.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
+import { track } from '@/lib/events/client';
+import { shareCopyProps } from '@/lib/events/shareCopy';
 import type { SearchShareMode } from '@/lib/search/searchClient';
 import { shareDownloadLinks } from '@/lib/search/shareDownload';
 import { shareFailureText } from '@/lib/search/shareMessage';
@@ -40,8 +42,17 @@ const DOWNLOAD_COPY: Record<SearchShareMode, string> = {
     snapshot: 'Downloads this frozen data as a zip, with its citation.',
 };
 
-/** A URL and the button that copies it; the tick shows for a moment after. */
-const CopyRow = ({ url, label }: { url: string | null; label: string }) => {
+/** A URL and the button that copies it; the tick shows for a moment after.
+ *  `onCopied` runs once the clipboard holds the URL. */
+const CopyRow = ({
+    url,
+    label,
+    onCopied,
+}: {
+    url: string | null;
+    label: string;
+    onCopied: () => void;
+}) => {
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
@@ -67,7 +78,10 @@ const CopyRow = ({ url, label }: { url: string | null; label: string }) => {
                 onClick={() =>
                     url &&
                     navigator.clipboard.writeText(url).then(
-                        () => setCopied(true),
+                        () => {
+                            setCopied(true);
+                            onCopied();
+                        },
                         () => {},
                     )
                 }
@@ -82,6 +96,7 @@ const CopyRow = ({ url, label }: { url: string | null; label: string }) => {
  * Share for a search result: live data (the default) or a snapshot, one link
  * each, minted the first time its tab is shown and kept for as long as the
  * box is open. A snapshot takes a moment longer — the data is captured first.
+ * Copying the link or a download link records `share.copy`.
  */
 const SearchShare = ({ createShare }: { createShare: CreateSearchShare }) => {
     const [mode, setMode] = useState<SearchShareMode>('live');
@@ -115,6 +130,12 @@ const SearchShare = ({ createShare }: { createShare: CreateSearchShare }) => {
     const share = minted[mode];
     const origin = window.location.origin;
     const downloads = share ? shareDownloadLinks(share.id, share.datasets) : [];
+    const trackCopy = (copied: 'link' | 'download_link') =>
+        share &&
+        track(
+            'share.copy',
+            shareCopyProps({ kind: 'search', copied, share: { id: share.id, mode } }),
+        );
 
     return (
         <div className={styles.share}>
@@ -141,7 +162,11 @@ const SearchShare = ({ createShare }: { createShare: CreateSearchShare }) => {
             ) : (
                 // Keyed by mode so a tab switch clears the copied ticks.
                 <Fragment key={mode}>
-                    <CopyRow url={share ? `${origin}/s/${share.id}` : null} label="Copy link" />
+                    <CopyRow
+                        url={share ? `${origin}/s/${share.id}` : null}
+                        label="Copy link"
+                        onCopied={() => trackCopy('link')}
+                    />
                     {downloads.length > 0 && (
                         <div className={styles.shareDownloads}>
                             <p className={styles.shareDownloadsTitle}>
@@ -160,6 +185,7 @@ const SearchShare = ({ createShare }: { createShare: CreateSearchShare }) => {
                                                 ? `Copy download link for ${ref.label}`
                                                 : 'Copy download link'
                                         }
+                                        onCopied={() => trackCopy('download_link')}
                                     />
                                 </div>
                             ))}

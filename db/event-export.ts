@@ -9,7 +9,9 @@ import type { CardTarget } from '../src/components/organisms/Studio/hooks/useCha
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
+import type { ShareCopied } from '../src/lib/events/shareCopy.ts';
 import type { ShareViewer } from '../src/lib/events/shareView.ts';
+import type { StudioDownloadSource } from '../src/lib/events/studioDownload.ts';
 import type { EventName } from '../src/lib/events/track.ts';
 import { exportDigest } from '../src/lib/proxy/account.ts';
 import type { DatasetFormat } from '../src/lib/search/searchClient.ts';
@@ -122,7 +124,7 @@ const ANSWER_KINDS = every<ResolveResponse['kind']>()(['resolution', 'catalogue'
 const DECLINED_REASONS = every<Known<DeclinedReason>>()(['out_of_scope', 'requires_analysis']);
 const ABANDON_REASONS = every<AbandonReason>()(['hidden', 'superseded', 'reset', 'left']);
 const SHARE_KINDS = every<ShareKind>()(['conversation', 'canvas', 'card', 'search']);
-// share.create and share.open send Studio's ShareMode, search.action the search's.
+// share.create, share.copy and share.open send Studio's ShareMode, search.action the search's.
 const SHARE_MODES = every<SearchShareMode | ShareMode>()(['live', 'snapshot']);
 // A prompt with no card target is `new` on the first turn.
 const PROMPT_INTENTS = every<'new' | CardTarget['intent']>()(['new', 'follow_up', 'edit']);
@@ -130,6 +132,8 @@ const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'tex
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
+const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
+const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -220,6 +224,7 @@ export const PROP_RULES = {
         kind: CARD_KINDS,
         cardId: 'token',
         shared: 'boolean',
+        source: DOWNLOAD_SOURCES,
     },
     'studio.session_end': {
         ...EVERY_EVENT,
@@ -240,6 +245,13 @@ export const PROP_RULES = {
         viewer: SHARE_VIEWERS,
     },
     'share.create': { ...EVERY_EVENT, shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES },
+    'share.copy': {
+        ...EVERY_EVENT,
+        shareId: 'digest',
+        kind: SHARE_KINDS,
+        mode: SHARE_MODES,
+        copied: SHARE_COPIED,
+    },
     'share.open': {
         ...EVERY_EVENT,
         shareId: 'digest',
