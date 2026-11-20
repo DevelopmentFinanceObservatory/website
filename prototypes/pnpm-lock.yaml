@@ -74,7 +74,7 @@ packages:
     engines: {node: '>=12'}
 
   '@developmentfinance/client@0.4.1':
-    resolution: {integrity: sha512-SsM+I4zoHPQtVtuXpBeP30oVuW2/MDL6vB4MPcTPGnpbwFP2PQeE3Aivj/eB1HIQxCBjYbU5t4+7AmRk0fER6w==}
+    resolution: {integrity: sha512-sQGeBBcmib+7/lxb0cQJkBTcAFMAeIW33MCIbOKutkgxsosHHbkpqZmFoiUintXdvDFlyw7l/kDh98PBeR0kXQ==}
     engines: {node: '>=22.18'}
     peerDependencies:
       apache-arrow: ^21.0.0
