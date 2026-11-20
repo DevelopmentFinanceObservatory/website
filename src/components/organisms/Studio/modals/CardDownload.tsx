@@ -45,14 +45,16 @@ const CardDetails = ({ info }: { info: CardInfo }) => (
 
 const CardRows = ({
     cardRef,
+    kind,
     info,
     shared,
 }: {
     cardRef: CardRef;
+    kind: Widget['kind'];
     info: CardInfo | null;
     shared: SharedCardAddress | null;
 }) => {
-    const state = useCardDownload(cardRef, shared);
+    const state = useCardDownload(cardRef, kind, shared);
 
     return (
         <section className={styles.section}>
@@ -86,7 +88,12 @@ const CardDownload = ({
     const cardRef = cardRefOf(widget);
 
     return cardRef ? (
-        <CardRows cardRef={cardRef} info={details ? (widget.info ?? null) : null} shared={shared} />
+        <CardRows
+            cardRef={cardRef}
+            kind={widget.kind}
+            info={details ? (widget.info ?? null) : null}
+            shared={shared}
+        />
     ) : null;
 };
 

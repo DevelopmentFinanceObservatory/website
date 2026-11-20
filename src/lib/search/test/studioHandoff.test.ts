@@ -205,10 +205,8 @@ test('a Studio click after a place and year edit hands over the edited question 
 
     assert.equal(props.edited, true);
     assert.deepEqual(props.operations, ['explain']);
-    assert.deepEqual(
-        props.resolved.map((entry) => entry.specId),
-        ['spec_explain_kenya_2022'],
-    );
+    assert.deepEqual(props.specIds, ['spec_explain_kenya_2022']);
+    assert.equal(props.resolved.length, 1);
 });
 
 test('a Studio click on an opened share saved after an edit hands over the sentence and its seed', () => {
@@ -373,6 +371,8 @@ test('searchEventProps describes a declined answer with no parts as search.empty
         kind: 'declined',
         reason: 'requires_analysis',
         operations: [],
+        specIds: [],
+        measures: [],
         resolved: [],
         refused: [],
     });

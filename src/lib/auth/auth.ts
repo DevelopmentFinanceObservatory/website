@@ -11,7 +11,7 @@ import { emailSignInConfig } from '@/lib/auth/emailSignIn';
 import { SharesError } from '@/lib/chat/apisShares';
 import { takeDownSharesOf } from '@/lib/chat/shareStore';
 import { CODE_SIGN_IN_PATH, emailSignInOptions } from '@/lib/auth/emailSignInOptions';
-import { track } from '@/lib/events/track';
+import { track, userWho } from '@/lib/events/track';
 import { sendMail } from '@/lib/mail/send';
 
 /** The sign-in providers, in the order the login page lists them. */
@@ -152,7 +152,7 @@ export const auth = betterAuth({
                 return;
             }
 
-            const who = { userId: session.user.id, headers: ctx.headers ?? null };
+            const who = { ...userWho(session.user), headers: ctx.headers ?? null };
 
             if (ctx.path.startsWith('/callback/')) {
                 await track('auth.signin', { provider: ctx.params?.id ?? null }, who);
