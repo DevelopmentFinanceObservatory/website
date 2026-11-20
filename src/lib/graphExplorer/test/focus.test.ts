@@ -12,6 +12,7 @@ import {
     definedNotUsed,
     headsOf,
     linkShape,
+    listsUsers,
     nodeBoxes,
     openEntries,
     periodText,
@@ -650,3 +651,18 @@ for (const [code, shown] of [
         assert.equal(periodText(code), shown);
     });
 }
+
+test('a StatVar lists the StatVars that use it only when one names it', () => {
+    assert.equal(listsUsers(model, 'Count_Person'), true);
+    assert.equal(listsUsers(model, 'financialFlowType'), true);
+    assert.equal(listsUsers(model, 'Buyback'), true);
+    assert.equal(listsUsers(model, 'FinancialFlowTypeEnum'), false);
+
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const person = body.nodes.find((node) => node.ref === 'Count_Person');
+    assert.ok(person);
+    body.nodes.push({ ...person, ref: 'Count_Household', label: 'Households' });
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
+    assert.equal(edited.kind('Count_Household'), 'value');
+    assert.equal(listsUsers(edited, 'Count_Household'), false);
+});

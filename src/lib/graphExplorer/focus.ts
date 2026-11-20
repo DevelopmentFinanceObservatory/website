@@ -586,6 +586,18 @@ export function definedNotUsed(model: Model, id: string): number {
     return model.kind(id) === 'class' ? model.propertiesOf(id).groups.unused.length : 0;
 }
 
+/**
+ * Whether a node's panel lists the StatVars that use it. A value list's
+ * panel lists its members' use instead. A StatVar is used only when another
+ * StatVar names it, as a denominator names `Count_Person`, so its panel
+ * lists them only then.
+ */
+export function listsUsers(model: Model, id: string): boolean {
+    if (model.kind(id) === 'valueList') return false;
+    const statVar = model.node(id)?.types.includes('StatisticalVariable') ?? false;
+    return !statVar || model.usage(id).total > 0;
+}
+
 /** The boxes around a dataset, each in the dataset's own order of use, empty boxes left out. */
 export function datasetBoxes(view: DatasetView): readonly FocusBox[] {
     const values = new Map<string, ValuesUsed>();
