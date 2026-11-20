@@ -11,6 +11,7 @@ import {
     type SharesBackend,
 } from './apisShares';
 import type { ShareKind } from './sharePrune';
+import { ownsShare } from './shareTokens';
 
 import { apisFetch } from '@/lib/apisAuth';
 import { db } from '@/lib/db';
@@ -48,6 +49,13 @@ export const sharesBackendFor = (incoming: Headers): SharesBackend => ({
 export const getShare = cache(async (id: string): Promise<ShareRecord | null> =>
     readShare(sharesBackendFor(await headers()), id),
 );
+
+/** Whether `userId` made the share, for the `viewer` prop of its view
+ *  events. A failed read rejects, so shareViewEvent records `unknown`. */
+export const viewerOwnsShare = (
+    shareId: string,
+    userId: string | null | undefined,
+): Promise<boolean> => ownsShare(db, { shareId, userId });
 
 /** Make a share for `userId` (null for a guest), keeping a signed-in
  *  maker's write token. */

@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
+import { boundedLookup } from '@/lib/events/boundedLookup';
 import { fitsProps, MAX_PROPS_BYTES } from '@/lib/events/limits';
-import { EVENT_NAMES, type EventName, track } from '@/lib/events/track';
+import { isBrowserEventName } from '@/lib/events/browserEvents';
+import { track, userWho } from '@/lib/events/track';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 
 /**
  * Usage-event intake (POST /api/events) for the browser side of
  * src/lib/events. Body: `{ name, props?, visitorId?, page? }`. The name must
- * be one the site emits; props are capped so a stray payload can't bloat
+ * be one the site's pages send (BROWSER_EVENT_NAMES); props are capped so a stray payload can't bloat
  * the table. Answers 204 for an event taken, and a problem document
  * (`request_invalid`, `payload_too_large`) for one refused; the page never
  * waits on either.
@@ -23,8 +25,8 @@ export const POST = async (request: Request) => {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const name = body?.name;
 
-    if (!(EVENT_NAMES as readonly unknown[]).includes(name)) {
-        return requestInvalidProblem('The event name is not one the site records.', '/name');
+    if (!isBrowserEventName(name)) {
+        return requestInvalidProblem('The event name is not one the browser sends.', '/name');
     }
 
     const props =
@@ -41,11 +43,12 @@ export const POST = async (request: Request) => {
         });
     }
 
-    const session = await getSession();
+    // A failed or stalled session read records the event as a signed-out one.
+    const session = await boundedLookup(getSession, null, 'events: session read');
 
     // Not awaited on purpose — the answer doesn't wait on the insert.
-    void track(name as EventName, props, {
-        userId: session?.user.id ?? null,
+    void track(name, props, {
+        ...userWho(session?.user),
         visitorId: clip(body?.visitorId, MAX_ID),
         page: clip(body?.page, MAX_PAGE),
         headers: request.headers,
