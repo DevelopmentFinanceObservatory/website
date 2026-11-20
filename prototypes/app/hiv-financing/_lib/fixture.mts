@@ -1,6 +1,8 @@
 // Fixtures shared by the _lib tests: a small HivData over two years, built so each country
 // exercises one rule. Money is in US dollars.
-import type { Country, HivData, ProviderSeries } from '../_data/types.ts';
+import type { HivData, ProviderSeries } from '../_data/types.ts';
+
+import type { UnaidsCountry } from './unaids.ts';
 
 export const YEARS = [2015, 2024];
 
@@ -10,7 +12,7 @@ const series = (us: number[], globalFund: number[], other: number[]): ProviderSe
     other,
 });
 
-export const country = (overrides: Partial<Country> = {}): Country => ({
+export const country = (overrides: Partial<UnaidsCountry> = {}): UnaidsCountry => ({
     iso3: 'AAA',
     name: 'Alpha',
     aid: series([0, 0], [0, 0], [0, 0]),

@@ -60,18 +60,24 @@ class Ledger:
         return tuple(self._reads)
 
 
-def envelope_provenance(
-    ledger: Ledger, *, sdk_version: str, retrieved: datetime, citation: str
-) -> dict:
+def utc_stamp(moment: datetime) -> str:
+    """Return a timezone-aware time in UTC with millisecond precision, as `...Z`."""
+    return moment.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def base_provenance(*, sdk_version: str, query: str, retrieved: str) -> dict:
+    """Return the three provenance keys every data file carries."""
+    return {"sdk": f"development-finance=={sdk_version}", "query": query, "retrieved": retrieved}
+
+
+def envelope_provenance(ledger: Ledger, *, sdk_version: str, retrieved: str, citation: str) -> dict:
     """Return the provenance block of thresholds.json and inputs.json.
 
-    `retrieved` is a timezone-aware time, written in UTC with millisecond precision.
+    `retrieved` is the UTC stamp of the run that pinned the refs. `dfo` lists each
+    DFO read, whose ref and provenance refs.json holds.
     """
-    stamp = retrieved.astimezone(UTC).isoformat(timespec="milliseconds")
     return {
-        "sdk": f"development-finance=={sdk_version}",
-        "query": QUERY,
-        "retrieved": stamp.replace("+00:00", "Z"),
+        **base_provenance(sdk_version=sdk_version, query=QUERY, retrieved=retrieved),
         "citation": citation,
         "dfo": list(ledger.reads),
         "preloads": list(ledger.preloads),

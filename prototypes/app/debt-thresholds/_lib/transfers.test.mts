@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { Group } from './thresholds.ts';
 import {
     groupTransfers,
+    lastActualYear,
     SET_ASIDE_ISO3,
     swing,
+    transfersByCountry,
     transfersHeading,
+    valuesByCountry,
     type TransferLine,
     type TransfersData,
+    type TransfersMembers,
 } from './transfers.ts';
 
 const YEARS = [2019, 2020, 2021, 2022, 2023];
@@ -16,7 +21,6 @@ const YEARS = [2019, 2020, 2021, 2022, 2023];
 const data: TransfersData = {
     release: 'test',
     years: YEARS,
-    groups: [],
     countries: [
         { iso3: 'AAA', name: 'A', group: 'insolvent', values: [1, 2, null, 4, 5] },
         { iso3: 'BBB', name: 'B', group: 'insolvent', values: [10, null, null, 40, 50] },
@@ -63,4 +67,113 @@ test('transfersHeading states the swing, or asks a question when there is none',
     );
     assert.match(transfersHeading([line([1, 2, 3, 4, 5])], YEARS), /\?$/);
     assert.match(transfersHeading([], YEARS), /\?$/);
+});
+
+// The parity fixture: the Python step's output for seven countries, one without rows.
+const fixture = JSON.parse(
+    readFileSync(new URL('../_data/transfers-fixture.json', import.meta.url), 'utf8'),
+).data as {
+    rows: Parameters<typeof valuesByCountry>[0];
+    members: TransfersMembers['countries'];
+    expected: {
+        valuesByCountry: Record<string, Record<string, number>>;
+        lastActualYear: number;
+        years: number[];
+        countries: TransfersData['countries'];
+    };
+};
+const members: TransfersMembers = { release: 'test', countries: fixture.members };
+
+test('the port matches the Python step on the fixture rows', () => {
+    const values = valuesByCountry(fixture.rows);
+    const asObject = Object.fromEntries(
+        [...values].map(([iso3, byYear]) => [
+            iso3,
+            Object.fromEntries([...byYear].map(([year, value]) => [String(year), value])),
+        ]),
+    );
+
+    assert.deepEqual(asObject, fixture.expected.valuesByCountry);
+    assert.equal(lastActualYear(values), fixture.expected.lastActualYear);
+
+    const built = transfersByCountry(fixture.rows, members);
+
+    assert.deepEqual(built.years, fixture.expected.years);
+    assert.deepEqual(built.countries, fixture.expected.countries);
+});
+
+// The same rows as _data/tests/test_transfers.py: a pre-2010 row, a null value and a
+// year reported by one country of three.
+const row = (iso3: string, year: number | string, value: number | null) => ({
+    financingRecipient: `country/${iso3}`,
+    time_period: year,
+    value,
+});
+const synthetic = [
+    row('AAA', 2009, 99),
+    row('AAA', 2010, 10.04),
+    row('BBB', 2010, 5.04),
+    row('AAA', 2011, 1),
+    row('BBB', 2011, null),
+    row('CCC', 2010, -3),
+    row('CCC', '2011', -4),
+    row('AAA', 2012, 7),
+];
+
+test('the port skips early years and nulls and stops where under half report', () => {
+    const built = transfersByCountry(synthetic, {
+        release: 'test',
+        countries: ['AAA', 'BBB', 'CCC', 'DDD'].map((iso3) => ({ iso3, name: iso3, group: 'x' })),
+    });
+
+    assert.deepEqual(built.years, [2010, 2011]);
+    assert.deepEqual(
+        built.countries.map((country) => country.values),
+        [
+            [10.04, 1],
+            [5.04, null],
+            [-3, -4],
+            [null, null],
+        ],
+    );
+});
+
+test('lastActualYear divides by the countries with values, not by the members', () => {
+    // Three of six members have values and two of the three report 2012: half of three is
+    // 1.5, so 2012 is actual, where half of the six members would be 3.
+    const rows = [
+        ...['AAA', 'BBB'].flatMap((iso3) => [2010, 2011, 2012].map((year) => row(iso3, year, 1))),
+        row('CCC', 2010, 1),
+        row('CCC', 2011, 1),
+    ];
+    const built = transfersByCountry(rows, {
+        release: 'test',
+        countries: ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF'].map((iso3) => ({
+            iso3,
+            name: iso3,
+            group: 'x',
+        })),
+    });
+
+    assert.deepEqual(built.years, [2010, 2011, 2012]);
+});
+
+test('the port throws when no row survives', () => {
+    assert.throws(
+        () => valuesByCountry([row('AAA', 2005, 1), row('AAA', 2012, null)]),
+        /no values/,
+    );
+});
+
+test('the port throws on a time_period that is not a whole year, as int() does', () => {
+    for (const year of ['2011.5', 2011.5, '2011-01', '']) {
+        assert.throws(() => valuesByCountry([row('AAA', year, 1)]));
+    }
+
+    assert.equal(
+        valuesByCountry([row('AAA', ' 2011 ', 1)])
+            .get('AAA')
+            ?.get(2011),
+        1,
+    );
 });

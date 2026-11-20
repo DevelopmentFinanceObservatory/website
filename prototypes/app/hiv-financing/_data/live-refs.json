@@ -1,0 +1,359 @@
+{
+ "provenance": {
+  "sdk": "development-finance==0.4.2",
+  "query": "hiv-financing pinned UNAIDS reads, read in the browser",
+  "retrieved": "2026-11-19T22:50:06.372Z"
+ },
+ "data": {
+  "plhiv": {
+   "format_version": 1,
+   "members": [
+    {
+     "parts": [
+      "people living with HIV"
+     ],
+     "sentence": "People living with HIV across 158 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
+     "spec": {
+      "spec_id": "spec_cb4f3e2e3debe608ca8fc34efb9c0413",
+      "definition": {
+       "schema_version": 1,
+       "spec_id": "spec_cb4f3e2e3debe608ca8fc34efb9c0413",
+       "identity": {
+        "shape": {
+         "kind": "statvar_schema",
+         "stat_type": "measuredValue",
+         "population_type": "undata/unaids/SERIES-PLWH",
+         "measured_property": "value"
+        },
+        "slots": [
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "undataAge"
+         },
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "undataSex"
+         }
+        ],
+        "entities": {},
+        "identity_version": "spec1",
+        "requested_window": {
+         "kind": "range",
+         "end_year": 2024,
+         "start_year": 2015
+        }
+       }
+      }
+     },
+     "content_version": "cv_cf4c527d50ea6ea6f61e9e9874fb9bdc",
+     "artifact": {
+      "digest": "sha256:36743e3c7b333861f477f3e73fd49e0c2f890071b251bb67d0284c6ac7779649",
+      "rendering": {
+       "format": "parquet",
+       "bundle": false,
+       "without_party_totals": true
+      }
+     }
+    }
+   ]
+  },
+  "art": {
+   "format_version": 1,
+   "members": [
+    {
+     "parts": [
+      "coverage of antiretroviral therapy"
+     ],
+     "sentence": "Coverage of antiretroviral therapy among people living with HIV in percent across 156 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
+     "spec": {
+      "spec_id": "spec_617c0f899e411587cb209bb42d9636d5",
+      "definition": {
+       "schema_version": 1,
+       "spec_id": "spec_617c0f899e411587cb209bb42d9636d5",
+       "identity": {
+        "shape": {
+         "kind": "statvar_schema",
+         "stat_type": "measuredValue",
+         "population_type": "undata/unaids/SERIES-ART_COV",
+         "measured_property": "value"
+        },
+        "slots": [
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "undataAge"
+         },
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "undataSex"
+         }
+        ],
+        "entities": {},
+        "identity_version": "spec1",
+        "requested_window": {
+         "kind": "range",
+         "end_year": 2024,
+         "start_year": 2015
+        }
+       }
+      }
+     },
+     "content_version": "cv_60856d30b3bac3738144c92faa318464",
+     "artifact": {
+      "digest": "sha256:bfa407e8dc89efb0c7be8434d1608f6cb5e4d1e6a0682edde3f1c54911b8c36f",
+      "rendering": {
+       "format": "parquet",
+       "bundle": false,
+       "without_party_totals": true
+      }
+     }
+    }
+   ]
+  },
+  "deaths": {
+   "format_version": 1,
+   "members": [
+    {
+     "parts": [
+      "AIDS-related deaths"
+     ],
+     "sentence": "AIDS-related deaths in 179 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
+     "spec": {
+      "spec_id": "spec_c4699b084e536fc5763fe7e1b4f466a7",
+      "definition": {
+       "schema_version": 1,
+       "spec_id": "spec_c4699b084e536fc5763fe7e1b4f466a7",
+       "identity": {
+        "shape": {
+         "kind": "statvar_schema",
+         "stat_type": "measuredValue",
+         "population_type": "undata/unaids/SERIES-AIDS_DTH",
+         "measured_property": "value"
+        },
+        "slots": [
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "undataAge"
+         },
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "undataSex"
+         }
+        ],
+        "entities": {
+         "observationAbout": [
+          "country/AFG",
+          "country/AGO",
+          "country/ALB",
+          "country/ARE",
+          "country/ARG",
+          "country/ARM",
+          "country/ATG",
+          "country/AUS",
+          "country/AZE",
+          "country/BDI",
+          "country/BEL",
+          "country/BEN",
+          "country/BFA",
+          "country/BGD",
+          "country/BGR",
+          "country/BHR",
+          "country/BHS",
+          "country/BIH",
+          "country/BLR",
+          "country/BLZ",
+          "country/BOL",
+          "country/BRA",
+          "country/BRB",
+          "country/BTN",
+          "country/BWA",
+          "country/CAF",
+          "country/CAN",
+          "country/CHE",
+          "country/CHL",
+          "country/CHN",
+          "country/CIV",
+          "country/CMR",
+          "country/COD",
+          "country/COG",
+          "country/COK",
+          "country/COL",
+          "country/COM",
+          "country/CPV",
+          "country/CRI",
+          "country/CUB",
+          "country/DEU",
+          "country/DJI",
+          "country/DMA",
+          "country/DNK",
+          "country/DOM",
+          "country/DZA",
+          "country/ECU",
+          "country/EGY",
+          "country/ERI",
+          "country/ESP",
+          "country/EST",
+          "country/ETH",
+          "country/FJI",
+          "country/FRA",
+          "country/FSM",
+          "country/GAB",
+          "country/GBR",
+          "country/GEO",
+          "country/GHA",
+          "country/GIN",
+          "country/GMB",
+          "country/GNB",
+          "country/GNQ",
+          "country/GRD",
+          "country/GTM",
+          "country/GUY",
+          "country/HND",
+          "country/HRV",
+          "country/HTI",
+          "country/IDN",
+          "country/IND",
+          "country/IRL",
+          "country/IRN",
+          "country/IRQ",
+          "country/ISL",
+          "country/ITA",
+          "country/JAM",
+          "country/JOR",
+          "country/KAZ",
+          "country/KEN",
+          "country/KGZ",
+          "country/KHM",
+          "country/KIR",
+          "country/KNA",
+          "country/KWT",
+          "country/LAO",
+          "country/LBN",
+          "country/LBR",
+          "country/LBY",
+          "country/LCA",
+          "country/LKA",
+          "country/LSO",
+          "country/LTU",
+          "country/LUX",
+          "country/LVA",
+          "country/MAR",
+          "country/MDA",
+          "country/MDG",
+          "country/MDV",
+          "country/MEX",
+          "country/MHL",
+          "country/MKD",
+          "country/MLI",
+          "country/MLT",
+          "country/MMR",
+          "country/MNE",
+          "country/MNG",
+          "country/MOZ",
+          "country/MRT",
+          "country/MUS",
+          "country/MWI",
+          "country/MYS",
+          "country/NAM",
+          "country/NER",
+          "country/NGA",
+          "country/NIC",
+          "country/NIU",
+          "country/NLD",
+          "country/NOR",
+          "country/NPL",
+          "country/NRU",
+          "country/NZL",
+          "country/OMN",
+          "country/PAK",
+          "country/PAN",
+          "country/PER",
+          "country/PHL",
+          "country/PLW",
+          "country/PNG",
+          "country/PRK",
+          "country/PRT",
+          "country/PRY",
+          "country/PSE",
+          "country/QAT",
+          "country/ROU",
+          "country/RWA",
+          "country/SAU",
+          "country/SDN",
+          "country/SEN",
+          "country/SGP",
+          "country/SLB",
+          "country/SLE",
+          "country/SLV",
+          "country/SOM",
+          "country/SRB",
+          "country/SSD",
+          "country/STP",
+          "country/SUR",
+          "country/SVK",
+          "country/SWE",
+          "country/SWZ",
+          "country/SYC",
+          "country/SYR",
+          "country/TCD",
+          "country/TGO",
+          "country/THA",
+          "country/TJK",
+          "country/TKL",
+          "country/TKM",
+          "country/TLS",
+          "country/TON",
+          "country/TUN",
+          "country/TUR",
+          "country/TUV",
+          "country/TZA",
+          "country/UGA",
+          "country/UKR",
+          "country/URY",
+          "country/UZB",
+          "country/VCT",
+          "country/VEN",
+          "country/VNM",
+          "country/VUT",
+          "country/WSM",
+          "country/XKS",
+          "country/YEM",
+          "country/ZAF",
+          "country/ZMB",
+          "country/ZWE"
+         ]
+        },
+        "identity_version": "spec1",
+        "requested_window": {
+         "kind": "range",
+         "end_year": 2024,
+         "start_year": 2015
+        }
+       }
+      }
+     },
+     "content_version": "cv_35568ba50fb03fb168ef64033b5ffae6",
+     "artifact": {
+      "digest": "sha256:252f27636c4ec93d60ebb3c1c15cf2be365cc9aa936a83337be391ea78b0f301",
+      "rendering": {
+       "format": "parquet",
+       "bundle": false,
+       "without_party_totals": true
+      }
+     }
+    }
+   ]
+  }
+ }
+}

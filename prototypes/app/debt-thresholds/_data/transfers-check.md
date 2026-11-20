@@ -1,6 +1,6 @@
-# Net transfers by FDL group: check against FDL's Figure 1
+# Net transfers by FDL group against FDL's Figure 1
 
-`transfers.json` sums IDS net transfers on external debt, total (`DT.NTR.DECT.CD`), over the countries in `groups.csv`. The comparison is with Figure 1 of the FDL short note of March 2026, "Net transfers for LLMICs by Debt Sustainability Status" (p. 5), read off the chart, and with the figures in its text (p. 4). FDL's data is IDS 2025 (December 2025, data to 2024). Ours is the IDS release the DFO refreshed on 12 November 2026, with data to 2025.
+The net-transfers section sums IDS net transfers on external debt, total (`DT.NTR.DECT.CD`), over the countries in `groups.csv`, read from the pinned ref in `live-refs.json`. The comparison is with Figure 1 of the FDL short note of March 2026, "Net transfers for LLMICs by Debt Sustainability Status" (p. 5), read off the chart, and with the figures in its text (p. 4). FDL's data is IDS 2025 (December 2025, data to 2024). Ours is the IDS release the DFO refreshed on 12 November 2026, with data to 2025.
 
 USD billions:
 
@@ -19,7 +19,7 @@ FDL's 2024 figures for lower risk (44), market issuers (5), no market issuance (
 
 FDL defines net transfers as "disbursements minus debt servicing costs" and gives no split between total and public and publicly guaranteed (PPG) debt. Total external debt fits. Lower risk matches within 1.2 billion in every year checked, including the 2016 dip, which India drives. The DFO's Search offers no net-transfers series for PPG debt alone, so a PPG comparison was not run.
 
-## The one gap: insolvent in 2024
+## The one gap, insolvent in 2024
 
 Ours is −6.2 billion against FDL's −1. Senegal accounts for it: −5.2 billion in 2024 in this release. The other seven insolvent countries sum to −1.0, which is FDL's figure. Senegal's net flows on external debt in 2024 are −3.5 billion, of which long-term debt excluding IMF credit is −0.4, so about 3 billion is short-term debt and IMF credit. The likely cause is a revision to Senegal's 2024 data between IDS December 2025 and this release, after Senegal's Court of Auditors reported unrecorded debt in 2025. The DFO holds only the current release, so this is not confirmed. Insolvent matches FDL from 2010 to 2023.
 

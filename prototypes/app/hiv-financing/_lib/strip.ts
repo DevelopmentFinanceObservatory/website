@@ -1,9 +1,8 @@
 // The dot strip of last-year aid per person living with HIV: which countries it holds, its
 // scale and median, and a deterministic dodge so dots that would overlap stack instead.
-import type { Country } from '../_data/types.ts';
-
 import { valueTicks } from './chart.ts';
 import { aidPerPerson } from './summary.ts';
+import type { UnaidsCountry } from './unaids.ts';
 
 /** The strip holds countries with at least this many people living with HIV. */
 export const STRIP_MIN_PLHIV = 50_000;
@@ -16,7 +15,7 @@ export type PerPersonPoint = { iso3: string; name: string; value: number };
  * then name.
  */
 export const perPersonPoints = (
-    countries: readonly Country[],
+    countries: readonly UnaidsCountry[],
     min = STRIP_MIN_PLHIV,
 ): PerPersonPoint[] =>
     countries
@@ -112,7 +111,7 @@ export type StripDot = PerPersonPoint & {
 export type Strip = {
     scale: StripScale;
     dots: StripDot[];
-    /** the median of the dots' values; null when the strip is empty */
+    /** the median of the dots' values, or null when the strip is empty */
     median: number | null;
 };
 
@@ -121,7 +120,7 @@ export type Strip = {
  * units (the dot's radius over the axis's length). Dot positions depend only on the data,
  * so nothing moves when the reader picks a country.
  */
-export const buildStrip = (countries: readonly Country[], radius: number): Strip => {
+export const buildStrip = (countries: readonly UnaidsCountry[], radius: number): Strip => {
     const points = perPersonPoints(countries);
     const values = points.map((point) => point.value);
     const scale = stripScale(values);

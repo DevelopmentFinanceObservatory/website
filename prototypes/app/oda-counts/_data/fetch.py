@@ -1,28 +1,42 @@
 # /// script
 # requires-python = ">=3.12,<3.13"
-# dependencies = ["development-finance[pandas]==0.2.0", "httpx==0.28.1"]
+# dependencies = ["development-finance[pandas]==0.4.2", "httpx==0.28.1"]
 # ///
 """The oda-counts data step, run by hand with `pnpm data oda-counts`.
 
-Fetches every OECD DAC1 count of ODA for every provider, 2015 to 2025, in current and
-constant 2024 US dollars, and the graph definitions the page composes each count's
-definition from. Checks known values, failing loudly when one differs, then writes
-`counts.json` and `definitions.json` beside this file.
+Reads every OECD DAC1 count of ODA for every provider, 2015 to 2025, in current and
+constant 2024 US dollars, checks known values, failing loudly when one differs, and
+writes `counts.json` beside this file. Each of the 19 reads is a pinned DFO dataset
+whose ref and provenance `refs.json` keeps.
 
-Also writes `live.json`: the identity of each monetary series, which the page posts to
-Search with one provider and a unit bound to fetch that provider in any currency and
-price basis, and the conversion offer the series share.
+The step runs in one of three modes:
+
+- plain, the default: fetch each ref in `refs.json` and write `counts.json`, copying
+  the provenance and the retrieval time from `refs.json`, so the file reproduces
+  byte for byte. It fails when a ref is not pinned.
+- `--refresh`: fetch the newest versions of each ref's specs, pin them, and rewrite
+  `refs.json`, `counts.json`, `definitions.json` and `live.json`.
+- `--search`: build each read from the step's own spec, then pin and write as
+  `--refresh` does. A ref keeps its spec and window, so a change to `SERIES` or the
+  years needs this mode once.
+
+`definitions.json` holds the graph definitions the page composes each count's
+definition from. `live.json` holds the identity of each monetary series, which the
+page posts to Search with one provider and a unit bound to fetch that provider in any
+currency and price basis, and the conversion offer the series share. Neither is a
+dataset, so neither has a ref, and a plain run leaves both as they are.
 
 Each series is a DFO spec built here from its StatVar parts with the provider role
-left open, so one fetch returns every provider and the DAC group totals. The server
-recomputes a spec's id from its definition, and its first refusal names that id.
+open, so one fetch returns every provider and the DAC group totals.
 """
 
+import argparse
 import json
 import logging
 import re
 import time
 import warnings
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,17 +50,15 @@ FIRST_YEAR, LAST_YEAR = 2015, 2025
 YEARS = list(range(FIRST_YEAR, LAST_YEAR + 1))
 BASE_YEAR = 2024
 GRANT_EQUIVALENT_FROM = 2018
-CONSTANT = {"currency": "USD", "prices": "constant", "base_year": BASE_YEAR}
 DAC1 = "provenance/OECDDAC1"
 HEADLINE = "provenance/ONEOECDHeadlineODA"
 GNI = "PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal"
-GRAPH_NODES = "https://developmentfinance.org/api/v1/graph/nodes"
 RESOLVE = "https://developmentfinance.org/api/v1/search/resolve"
 # The most entries one resolve request takes.
 RESOLVE_ENTRIES = 6
 
 # The currencies of the 32 DAC members, the only currencies the page converts to. DAC1
-# publishes their exchange rates itself; ONE's tables take every other rate from the IMF.
+# publishes their exchange rates itself. ONE's tables take every other rate from the IMF.
 DAC_CURRENCIES = (
     "USD",  # United States
     "EUR",  # 20 members, among them the EU institutions
@@ -65,10 +77,13 @@ DAC_CURRENCIES = (
     "HUF",  # Hungary
     "PLN",  # Poland
 )
-# A spec id no definition hashes to. The server's refusal names the id it computed.
+# A spec id no definition hashes to. A build refuses it with the id the server computed.
+# A conversion posts the identity alone, and Search names the converted spec.
 PLACEHOLDER_ID = "spec_" + "0" * 32
 RECOMPUTED = re.compile(r"recomputed id '(spec_[0-9a-f]+)'")
 
+REFS = "refs.json"
+REFS_QUERY = "oda-counts pinned reads"
 QUERY = (
     "Every OECD DAC1 count of ODA by provider, 2015 to 2025: gross and net disbursements, "
     "grant equivalents, commitments and the OECD headline, with gross bilateral, "
@@ -156,8 +171,13 @@ class Series:
     denominator: str | None = None
     constant: bool = True
 
-    def definition(self, *, constant: bool) -> dict:
-        """Return the spec definition with the provider open, in the given prices."""
+    @property
+    def reads(self) -> tuple[str, ...]:
+        """The prices this series is read in: current and constant, or one ratio."""
+        return ("current", "constant") if self.constant else ("ratio",)
+
+    def identity(self) -> dict:
+        """Return the Search identity, with no provider and no unit bound."""
         shape = {
             "kind": "statvar_schema",
             "population_type": self.population,
@@ -167,9 +187,6 @@ class Series:
         }
         if self.denominator:
             shape["measurement_denominator"] = {"ref": self.denominator}
-        facets: dict = {"provenance": {"state": "value", "ref": self.provenance}}
-        if constant:
-            facets["unit"] = {"state": "value", "request": CONSTANT}
         slots = [
             {
                 "property": prop,
@@ -178,21 +195,27 @@ class Series:
             for prop, ref in sorted(self.slots.items())
         ]
         return {
-            "schema_version": 1,
-            "spec_id": PLACEHOLDER_ID,
-            "identity": {
-                "identity_version": "spec1",
-                "shape": shape,
-                "slots": slots,
-                "entities": {},
-                "requested_window": {
-                    "kind": "range",
-                    "start_year": FIRST_YEAR,
-                    "end_year": LAST_YEAR,
-                },
-                "facets": facets,
-            },
+            "identity_version": "spec1",
+            "shape": shape,
+            "slots": slots,
+            "entities": {},
+            "requested_window": {"kind": "range", "start_year": FIRST_YEAR, "end_year": LAST_YEAR},
+            "facets": {"provenance": {"state": "value", "ref": self.provenance}},
         }
+
+    def spec(self, spec_id: str = PLACEHOLDER_ID) -> dfo.Spec:
+        """Return the spec with the provider role open, carrying the step's sentence.
+
+        Without the open role, Search reads a conversion of the identity as the DAC
+        countries' total alone. Search writes no sentence for a built spec with the
+        provider open, so the spec carries the step's own.
+        """
+        definition = {
+            "schema_version": 1,
+            "spec_id": spec_id,
+            "identity": {**self.identity(), "open_roles": ["origin"]},
+        }
+        return dfo.Spec(spec_id=spec_id, definition=definition, sentence=self.sentence)
 
 
 def flow(aid: str, netting: str, finance: str | None = None) -> dict[str, str | None]:
@@ -240,100 +263,141 @@ type Values = dict[tuple[str, int], float]
 type Fetched = dict[tuple[str, bool], Values]
 
 
-def fetch_series(client: dfo.Client, series: Series, *, constant: bool):
-    """Fetch one series for every provider.
+@dataclass(frozen=True)
+class Read:
+    """One of the step's reads: a series in one price basis, keyed in `refs.json`."""
 
-    Returns the values by (provider, year), each provider's name and group flag, and
-    the record of the read for the envelope's provenance.
+    series: Series
+    prices: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.series.key}/{self.prices}"
+
+
+READS = [Read(series, prices) for series in SERIES for prices in series.reads]
+
+
+def search_read(client: dfo.Client, read: Read) -> dfo.Dataset:
+    """Fetch a read for every provider from the step's own spec.
+
+    A constant-price read asks Search to convert the spec, and Search names the
+    converted spec. A build takes the spec's own id, which the server recomputes
+    from the definition and names in its first refusal.
     """
-    definition = series.definition(constant=constant)
-    spec_id = PLACEHOLDER_ID
-    for attempt in range(2):
-        definition["spec_id"] = spec_id
-        # Search writes no sentence for a spec with the provider open, so the spec
-        # carries the step's own, and the SDK does not ask Search for one.
-        spec = dfo.Spec(spec_id=spec_id, definition=definition, sentence=series.sentence)
-        try:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                data = client.fetch(spec, party_totals=True, progress=False)
-            break
-        except dfo.errors.InvalidRequestError as error:
-            match = RECOMPUTED.search(str(error))
-            if attempt or not match:
-                raise
-            spec_id = match.group(1)
+    series = read.series
+    if read.prices == "constant":
+        return client.fetch(
+            series.spec(),
+            currency="USD",
+            price_basis="constant",
+            base_year=BASE_YEAR,
+            party_totals=True,
+            progress=False,
+        )
+    try:
+        return client.fetch(series.spec(), party_totals=True, progress=False)
+    except dfo.errors.InvalidRequestError as error:
+        match = RECOMPUTED.search(str(error))
+        if error.code != "spec_id_mismatch" or match is None:
+            raise
+    return client.fetch(series.spec(match.group(1)), party_totals=True, progress=False)
 
-    served = {member.spec.spec_id for member in data.members}
-    if len(served) != 1:
-        raise SystemExit(f"{series.key}: the fetch served {sorted(served)}, not one spec.")
 
+def values_of(read: Read, data: dfo.Dataset) -> tuple[Values, dict[str, dict]]:
+    """Return a read's values by (provider, year), and each provider's name and group flag."""
+    if len(data.members) != 1:
+        raise SystemExit(f"{read.key}: the fetch served {len(data.members)} members, not one.")
     frame = data.to_pandas()
     frame = frame[frame["value"].notna()]
-    prices = "constant" if constant else "current"
-    if series.constant and set(frame["price_basis"]) != {prices}:
-        raise SystemExit(f"{series.key}: price basis {set(frame['price_basis'])}, not {prices}.")
+    if read.prices != "ratio" and set(frame["price_basis"]) != {read.prices}:
+        raise SystemExit(f"{read.key}: price basis {set(frame['price_basis'])}, not {read.prices}.")
 
     values: Values = {}
     providers: dict[str, dict] = {}
     for row in frame.itertuples(index=False):
         key = (str(row.financingProvider), int(row.time_period))
         if key in values:
-            raise SystemExit(f"{series.key}: several rows for {key}.")
+            raise SystemExit(f"{read.key}: several rows for {key}.")
         values[key] = float(row.value)
         providers[key[0]] = {
             "name": GROUP_NAMES.get(key[0], row.financingProvider_label),
             "isGroup": row.financingProvider_kind == "total",
         }
+    return values, providers
 
-    record = {
-        "key": series.key,
-        "prices": prices if series.constant else "ratio",
-        "sentence": series.sentence,
-        "specId": served.pop(),
-        "versions": [member.content_version for member in data.members],
-        "citation": data.citation.text,
-        "rows": len(frame),
-        "warnings": sorted({str(w.message) for w in caught}),
+
+def committed_refs(path: Path) -> dict:
+    """Return `refs.json`, failing unless it holds exactly the step's reads."""
+    if not path.exists():
+        raise SystemExit(f"{path.name} does not exist; run the step with --search.")
+    refs = json.loads(path.read_text())
+    keys = [read.key for read in READS]
+    if sorted(refs["data"]) != sorted(keys):
+        raise SystemExit(f"{path.name} holds {sorted(refs['data'])}, not the reads {keys}.")
+    return refs
+
+
+def read_all(
+    client: dfo.Client, mode: str, refs: dict | None
+) -> Iterator[tuple[Read, dfo.Dataset]]:
+    """Fetch each read as `mode` asks, one at a time.
+
+    An anonymous caller may build one dataset at a time, so the fetches run in turn.
+    """
+    for read in READS:
+        if refs is None:
+            data = search_read(client, read)
+        else:
+            ref = dfo.DatasetRef.from_json(json.dumps(refs["data"][read.key]["ref"]))
+            data = client.fetch(ref, latest=mode == "refresh", progress=False)
+            if mode == "plain" and not data.pinned:
+                raise SystemExit(f"{read.key}: the committed ref is not pinned.")
+        log.info("%s: %d rows, %s", read.key, len(data), data.members[0].spec.spec_id)
+        yield read, data
+
+
+def record(read: Read, provenance: dfo.Provenance, rows: int) -> dict:
+    """Return counts.json's record of one read, from its provenance."""
+    member = provenance.members[0]
+    return {
+        "key": read.series.key,
+        "prices": read.prices,
+        "specId": member.spec.spec_id,
+        "version": member.content_version,
+        "rows": rows,
+        "warnings": sorted({notice.code for notice in provenance.warnings}),
     }
-    return values, providers, record
 
 
-def fetch_definitions() -> list[dict]:
+def fetch_definitions(client: dfo.Client) -> list[dict]:
     """Return each graph node's id, label and description, then the written entries."""
-    response = httpx.post(GRAPH_NODES, json={"dcids": NODE_IDS}, timeout=60)
-    response.raise_for_status()
-    nodes = {node["ref"]: node for node in response.json()["nodes"]}
-    missing = [ref for ref in NODE_IDS if not nodes.get(ref, {}).get("description")]
+    nodes = {ref: client.lookup.node(ref) for ref in NODE_IDS}
+    missing = [ref for ref, node in nodes.items() if not node.raw.get("description")]
     if missing:
         raise SystemExit(f"The graph returned no description for {missing}.")
     unlabelled = [
-        ref for ref in NODE_IDS if not nodes[ref].get("label") and ref not in FALLBACK_LABELS
+        ref for ref, node in nodes.items() if not node.name and ref not in FALLBACK_LABELS
     ]
     if unlabelled:
         raise SystemExit(f"The graph returned no label for {unlabelled}, and none is written.")
     graph = [
         {
             "id": ref,
-            "label": nodes[ref].get("label") or FALLBACK_LABELS[ref],
-            "description": nodes[ref]["description"],
+            "label": node.name or FALLBACK_LABELS[ref],
+            "description": node.raw["description"],
             "source": "graph",
         }
-        for ref in NODE_IDS
+        for ref, node in nodes.items()
     ]
     return graph + [{**entry, "source": "oecd"} for entry in WRITTEN]
-
-
-def live_identity(series: Series) -> dict:
-    """Return the identity the page posts for a series, before it binds a provider and unit."""
-    return series.definition(constant=False)["identity"]
 
 
 def fetch_offer() -> dict:
     """Return the conversion offer every monetary series shares, failing when they differ.
 
     Each series is resolved with every provider open, so the offer covers each currency
-    any provider converts to; the page keeps only the DAC members' currencies. The offer
+    any provider converts to. The page keeps only the DAC members' currencies. The offer
     keeps each currency's code, noun, years and base years, and the base year a
     constant-price request completes to.
     """
@@ -345,7 +409,7 @@ def fetch_offer() -> dict:
             {
                 "entry_kind": "identity",
                 "variable_text": series.sentence,
-                "identity": {**live_identity(series), "open_roles": ["origin"]},
+                "identity": {**series.identity(), "open_roles": ["origin"]},
             }
             for series in batch
         ]
@@ -512,9 +576,8 @@ def write(path: Path, provenance: dict, data: object) -> None:
     path.write_text(text + "\n")
 
 
-def provenance(query: str, **extra: object) -> dict:
-    """Return the envelope's provenance, stamped with the SDK and the time now in UTC."""
-    retrieved = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+def provenance(query: str, retrieved: str, **extra: object) -> dict:
+    """Return the envelope's provenance, stamped with the SDK and the retrieval time."""
     return {
         "sdk": f"development-finance=={dfo.__version__}",
         "query": query,
@@ -523,66 +586,113 @@ def provenance(query: str, **extra: object) -> dict:
     }
 
 
+def parse_mode() -> str:
+    """Return the mode the command line names: plain, refresh or search."""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument(
+        "--refresh", action="store_true", help="fetch the newest versions of each ref and pin them"
+    )
+    modes.add_argument(
+        "--search", action="store_true", help="build each read from the step's specs and pin it"
+    )
+    options = parser.parse_args()
+    return "refresh" if options.refresh else "search" if options.search else "plain"
+
+
 def main() -> int:
+    mode = parse_mode()
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     log.setLevel(logging.INFO)
+    # Each conversion with the provider open says it covers every provider, as asked.
+    warnings.filterwarnings("ignore", message=r".*\[role_scope_defaulted\]")
     here = Path(__file__).parent
     started = time.monotonic()
+    refs = None if mode == "search" else committed_refs(here / REFS)
 
     fetched: Fetched = {}
     providers: dict[str, dict] = {}
-    reads = []
-    # An anonymous caller may build one dataset at a time, so the fetches run in turn.
+    datasets: dict[str, dfo.Dataset] = {}
+    rows: dict[str, int] = {}
     with dfo.Client(timeout=900.0, max_retries=3) as client:
-        for series in SERIES:
-            for constant in (False, True) if series.constant else (False,):
-                values, found, record = fetch_series(client, series, constant=constant)
-                fetched[series.key, constant] = values
-                if series.key == "gross":
-                    providers.update(
-                        (provider, about)
-                        for provider, about in found.items()
-                        if provider not in DUPLICATES
-                    )
-                reads.append(record)
-                log.info("%s %s: %d rows", series.key, record["prices"], record["rows"])
+        for read, data in read_all(client, mode, refs):
+            values, found = values_of(read, data)
+            fetched[read.series.key, read.prices == "constant"] = values
+            if read.key == "gross/current":
+                providers.update(
+                    (provider, about)
+                    for provider, about in found.items()
+                    if provider not in DUPLICATES
+                )
+            datasets[read.key] = data
+            rows[read.key] = len(values)
 
-    problems = check(fetched, providers)
-    if problems:
-        raise SystemExit("Known values differ:\n  " + "\n  ".join(problems))
+        problems = check(fetched, providers)
+        if problems:
+            raise SystemExit("Known values differ:\n  " + "\n  ".join(problems))
+
+        if mode == "plain":
+            assert refs is not None
+            retrieved = refs["provenance"]["retrieved"]
+            records = {
+                key: dfo.Provenance.from_json(entry["provenance"])
+                for key, entry in refs["data"].items()
+            }
+        else:
+            retrieved = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            # Pin only once the checks hold, since each new pin counts against a daily allowance.
+            datasets = {key: client.pin(data) for key, data in datasets.items()}
+            log.info("Pinned %d members.", sum(len(data.members) for data in datasets.values()))
+            records = {key: data.provenance for key, data in datasets.items()}
+            write(
+                here / REFS,
+                provenance(REFS_QUERY, retrieved),
+                {
+                    key: {
+                        "ref": json.loads(data.ref.to_json()),
+                        "provenance": json.loads(data.provenance.to_json()),
+                    }
+                    for key, data in datasets.items()
+                },
+            )
+            write(
+                here / "definitions.json",
+                provenance("client.lookup.node of each graph node", retrieved, nodes=NODE_IDS),
+                fetch_definitions(client),
+            )
 
     data = build(fetched, providers)
-    definitions = fetch_definitions()
-    citation = next(read["citation"] for read in reads if read["prices"] == "current")
     write(
         here / "counts.json",
-        provenance(QUERY, citation=citation, dfo=reads),
+        provenance(
+            QUERY,
+            retrieved,
+            citation=records["gross/current"].citation.text,
+            refs=REFS,
+            dfo=[record(read, records[read.key], rows[read.key]) for read in READS],
+        ),
         data,
     )
-    write(
-        here / "definitions.json",
-        provenance(f"POST {GRAPH_NODES}", nodes=NODE_IDS),
-        definitions,
-    )
 
-    offer = fetch_offer()
-    write(
-        here / "live.json",
-        provenance(
-            f"POST {RESOLVE}",
-            note="Identities with the provider role and the unit left for the page to bind.",
-        ),
-        {
-            "resolve": "/api/v1/search/resolve",
-            "maxEntries": RESOLVE_ENTRIES,
-            "identities": [
-                {"key": series.key, "sentence": series.sentence, "identity": live_identity(series)}
-                for series in SERIES
-                if series.constant
-            ],
-            "offer": offer,
-        },
-    )
+    if mode != "plain":
+        write(
+            here / "live.json",
+            provenance(
+                f"POST {RESOLVE}",
+                retrieved,
+                note="Identities with the provider role and the unit left for the page to bind.",
+            ),
+            {
+                "resolve": "/api/v1/search/resolve",
+                "maxEntries": RESOLVE_ENTRIES,
+                "identities": [
+                    {"key": series.key, "sentence": series.sentence, "identity": series.identity()}
+                    for series in SERIES
+                    if series.constant
+                ],
+                "offer": fetch_offer(),
+            },
+        )
 
     no_constant = [
         donor["name"]
@@ -594,10 +704,11 @@ def main() -> int:
         )
     ]
     log.info(
-        "Wrote %d donors over %d years from %d fetches in %.0fs. Missing constant prices: %s",
+        "Wrote %d donors over %d years from %d reads (%s) in %.0fs. Missing constant prices: %s",
         len(data["donors"]),
         len(YEARS),
-        len(reads) + 3,
+        len(READS),
+        mode,
         time.monotonic() - started,
         ", ".join(no_constant) or "none",
     )

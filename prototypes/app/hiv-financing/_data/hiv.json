@@ -1,206 +1,10 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.3.0",
-  "query": "HIV/AIDS aid by donor and recipient, 2015 to 2024, in constant prices (OECD CRS, purpose code 13040, gross disbursements, constant 2024 US dollars at donor prices); UNAIDS people living with HIV, antiretroviral therapy coverage and AIDS-related deaths for each country, 2015 to 2024",
-  "retrieved": "2026-11-19T16:26:47.256Z",
-  "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory; OECD Creditor Reporting System (CRS) (2026), processed by the Development Finance Observatory; OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-  "dfo": [
-   {
-    "key": "aid",
-    "sentence": "Gross ODA disbursements to 166 recipients from 45 providers for sexually transmitted disease control, 2015 to 2024. Constant 2024 US dollars, donor prices · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_2bb7270517267f44a3c753068b3a9049"
-    ],
-    "versions": [
-     "cv_1974592ea5a5d0b133d2f631783bd91c"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), processed by the Development Finance Observatory",
-    "rows": 8986,
-    "page": "https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem",
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
-   },
-   {
-    "key": "aid-current",
-    "sentence": "Gross ODA disbursements to 166 recipients from 45 providers for sexually transmitted disease control, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_d272f2ed35feeecd2defeac968e8267f"
-    ],
-    "versions": [
-     "cv_ceb7ccd16fd9e88bab39cacf9e0244c4"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 8986,
-    "page": "https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem",
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
-   },
-   {
-    "key": "plhiv",
-    "sentence": "People living with HIV across 158 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_cb4f3e2e3debe608ca8fc34efb9c0413"
-    ],
-    "versions": [
-     "cv_cf4c527d50ea6ea6f61e9e9874fb9bdc"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 1545,
-    "page": null,
-    "warnings": [
-     "Search's reading differs from your question:",
-     "The UN System Data Commons did not answer for part of the request: either the resolve, so the answer holds no UN candidates, or reads for named places, so the answer holds no UN data for the places the warning names. No UN data was read for 2 entities. [un_system_unavailable]"
-    ]
-   },
-   {
-    "key": "art",
-    "sentence": "Coverage of antiretroviral therapy among people living with HIV in percent across 156 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_617c0f899e411587cb209bb42d9636d5"
-    ],
-    "versions": [
-     "cv_60856d30b3bac3738144c92faa318464"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 1508,
-    "page": null,
-    "warnings": [
-     "Search's reading differs from your question:",
-     "The UN System Data Commons did not answer for part of the request: either the resolve, so the answer holds no UN candidates, or reads for named places, so the answer holds no UN data for the places the warning names. No UN data was read for 2 entities. [un_system_unavailable]"
-    ]
-   },
-   {
-    "key": "gf-12250",
-    "sentence": "Global Fund's gross ODA disbursements to 54 recipients for infectious disease control, 2015 to 2019. Current US dollars · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_61c18d2087af58a8ba376445772b1311"
-    ],
-    "versions": [
-     "cv_f48c62e9b2e9a08c246facd9dba95bdf"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 162,
-    "page": "https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem",
-    "warnings": [
-     "Search's reading differs from your question:",
-     "The served coverage falls short of the requested scope. Requested 2015 to 2024; the data covers 2015 to 2019. [coverage_below_scope]"
-    ]
-   },
-   {
-    "key": "gf-12110",
-    "sentence": "Global Fund's gross ODA disbursements to 39 recipients for health policy and administrative management, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_39649f9c723ff28a2130f1a3b176f408"
-    ],
-    "versions": [
-     "cv_c99be9d7485c2ad0af5307eb47a9cbe3"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 175,
-    "page": "https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem",
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
-   },
-   {
-    "key": "deaths-1",
-    "sentence": "AIDS-related deaths in 30 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_290f7d852f3fcff95da1609d521cb9f5"
-    ],
-    "versions": [
-     "cv_b0dc8106a8443c6c0dad29fb29c6f9a3"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 256,
-    "page": null,
-    "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 4 requested entities. [coverage_below_scope]"
-    ]
-   },
-   {
-    "key": "deaths-2",
-    "sentence": "AIDS-related deaths in 30 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_290f7d852f3fcff95da1609d521cb9f5"
-    ],
-    "versions": [
-     "cv_4c97b7d410242b7edde5c51e4c4925b3"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 267,
-    "page": null,
-    "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 3 requested entities. [coverage_below_scope]"
-    ]
-   },
-   {
-    "key": "deaths-3",
-    "sentence": "AIDS-related deaths in 30 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_290f7d852f3fcff95da1609d521cb9f5"
-    ],
-    "versions": [
-     "cv_26b8b25c1918aacb777d60c536af4007"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 212,
-    "page": null,
-    "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 7 requested entities. [coverage_below_scope]"
-    ]
-   },
-   {
-    "key": "deaths-4",
-    "sentence": "AIDS-related deaths in 30 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_290f7d852f3fcff95da1609d521cb9f5"
-    ],
-    "versions": [
-     "cv_d2f36166fe922cb7ac7a3f999e05f2e5"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 259,
-    "page": null,
-    "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 4 requested entities. [coverage_below_scope]"
-    ]
-   },
-   {
-    "key": "deaths-5",
-    "sentence": "AIDS-related deaths in 30 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_290f7d852f3fcff95da1609d521cb9f5"
-    ],
-    "versions": [
-     "cv_d24e858186eb9a4ef4694e82edd2c9e5"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 227,
-    "page": null,
-    "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 7 requested entities. [coverage_below_scope]"
-    ]
-   },
-   {
-    "key": "deaths-6",
-    "sentence": "AIDS-related deaths in 29 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
-    "specIds": [
-     "spec_290f7d852f3fcff95da1609d521cb9f5"
-    ],
-    "versions": [
-     "cv_f4e9148924c53db1539e1c0e35e68bce"
-    ],
-    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 170,
-    "page": null,
-    "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 12 requested entities. [coverage_below_scope]"
-    ]
-   }
-  ]
+  "sdk": "development-finance==0.4.2",
+  "query": "OECD CRS gross ODA disbursements under purpose code 13040 (HIV/AIDS) by provider and recipient, and the Global Fund's under 12250 and 12110 by recipient, 2015 to 2024, in constant 2024 US dollars at donor prices",
+  "retrieved": "2026-11-19T22:50:06.372Z",
+  "citation": "OECD Creditor Reporting System (CRS) (2026), processed by the Development Finance Observatory",
+  "refs": "refs.json"
  },
  "data": {
   "years": [
@@ -480,20 +284,6 @@
       3502110
      ]
     },
-    "plhiv": 7833401,
-    "art": 80.6,
-    "deaths": [
-     78000,
-     77051,
-     71759,
-     66562,
-     61957,
-     58058,
-     56202,
-     55171,
-     54230,
-     53299
-    ],
     "globalFundMulti": [
      86515863,
      67190957,
@@ -548,20 +338,6 @@
       1368520
      ]
     },
-    "plhiv": 2477360,
-    "art": 81.9,
-    "deaths": [
-     55230,
-     50682,
-     48877,
-     46975,
-     48857,
-     50072,
-     49817,
-     48766,
-     46296,
-     44044
-    ],
     "globalFundMulti": [
      79334546,
      8337901,
@@ -616,20 +392,6 @@
       2041056
      ]
     },
-    "plhiv": 1759633,
-    "art": 86.9,
-    "deaths": [
-     36564,
-     37310,
-     37746,
-     36074,
-     35695,
-     33367,
-     30023,
-     28776,
-     27195,
-     25995
-    ],
     "globalFundMulti": [
      90404068,
      12012244,
@@ -684,20 +446,6 @@
       701546
      ]
     },
-    "plhiv": 1389758,
-    "art": 94.4,
-    "deaths": [
-     21893,
-     20470,
-     19905,
-     22090,
-     22708,
-     22405,
-     19738,
-     18493,
-     17376,
-     16373
-    ],
     "globalFundMulti": [
      31360006,
      49410779,
@@ -752,20 +500,6 @@
       1082369
      ]
     },
-    "plhiv": 1956227,
-    "art": 83.3,
-    "deaths": [
-     77422,
-     73691,
-     71096,
-     72518,
-     71726,
-     64099,
-     57006,
-     51024,
-     46036,
-     42176
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -820,20 +554,6 @@
       2078678
      ]
     },
-    "plhiv": 1527238,
-    "art": 84.7,
-    "deaths": [
-     31981,
-     30140,
-     28142,
-     25130,
-     22914,
-     22149,
-     21707,
-     21995,
-     21181,
-     20335
-    ],
     "globalFundMulti": [
      2768915,
      7510170,
@@ -888,20 +608,6 @@
       911153
      ]
     },
-    "plhiv": 1325971,
-    "art": 87.1,
-    "deaths": [
-     36436,
-     31328,
-     28346,
-     24980,
-     23972,
-     24952,
-     25221,
-     23089,
-     21199,
-     20849
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -956,20 +662,6 @@
       2586904
      ]
     },
-    "plhiv": 1295675,
-    "art": 95.1,
-    "deaths": [
-     32619,
-     29941,
-     28091,
-     24566,
-     22971,
-     22090,
-     20129,
-     19502,
-     17934,
-     16723
-    ],
     "globalFundMulti": [
      1244366,
      0,
@@ -1024,20 +716,6 @@
       1454562
      ]
     },
-    "plhiv": 990871,
-    "art": 90.4,
-    "deaths": [
-     22236,
-     21721,
-     20352,
-     18787,
-     17064,
-     16103,
-     15504,
-     14958,
-     14417,
-     13694
-    ],
     "globalFundMulti": [
      0,
      94104595,
@@ -1092,20 +770,6 @@
       320075
      ]
     },
-    "plhiv": 612786,
-    "art": 71.2,
-    "deaths": [
-     35768,
-     32366,
-     27818,
-     25595,
-     27658,
-     22684,
-     18517,
-     16128,
-     14870,
-     13692
-    ],
     "globalFundMulti": [
      7217641,
      660339,
@@ -1160,20 +824,6 @@
       4576606
      ]
     },
-    "plhiv": 601272,
-    "art": 88.3,
-    "deaths": [
-     16429,
-     15665,
-     15190,
-     14644,
-     14151,
-     13019,
-     11878,
-     11127,
-     10301,
-     9599
-    ],
     "globalFundMulti": [
      12440765,
      16554483,
@@ -1228,20 +878,6 @@
       2193360
      ]
     },
-    "plhiv": 509766,
-    "art": 88.1,
-    "deaths": [
-     28722,
-     26432,
-     22928,
-     19637,
-     17586,
-     15683,
-     13647,
-     11875,
-     10393,
-     9438
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -1296,20 +932,6 @@
       1598029
      ]
     },
-    "plhiv": 406961,
-    "art": 78.1,
-    "deaths": [
-     23544,
-     21187,
-     18962,
-     16190,
-     13595,
-     12144,
-     11122,
-     10487,
-     9347,
-     8366
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -1364,20 +986,6 @@
       1705600
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      52887355,
      69595127,
@@ -1432,20 +1040,6 @@
       429916
      ]
     },
-    "plhiv": 146142,
-    "art": 86.8,
-    "deaths": [
-     5001,
-     5187,
-     4184,
-     2935,
-     2384,
-     1754,
-     1416,
-     1321,
-     1313,
-     1344
-    ],
     "globalFundMulti": [
      0,
      17464112,
@@ -1500,20 +1094,6 @@
       290498
      ]
     },
-    "plhiv": 236538,
-    "art": 95.6,
-    "deaths": [
-     4523,
-     4235,
-     3836,
-     3598,
-     3498,
-     3339,
-     3172,
-     3022,
-     2938,
-     2765
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -1568,20 +1148,6 @@
       679886
      ]
     },
-    "plhiv": 334721,
-    "art": 46.9,
-    "deaths": [
-     16257,
-     16369,
-     16389,
-     16002,
-     15975,
-     15477,
-     14465,
-     13380,
-     12604,
-     12614
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -1636,20 +1202,6 @@
       766656
      ]
     },
-    "plhiv": 262243,
-    "art": 93.8,
-    "deaths": [
-     7631,
-     6973,
-     6322,
-     5617,
-     5367,
-     5032,
-     4593,
-     4263,
-     4131,
-     3956
-    ],
     "globalFundMulti": [
      805010,
      11369663,
@@ -1704,20 +1256,6 @@
       72555
      ]
     },
-    "plhiv": 221898,
-    "art": 93.7,
-    "deaths": [
-     4420,
-     3970,
-     3316,
-     3032,
-     3293,
-     3296,
-     2943,
-     2916,
-     2934,
-     2861
-    ],
     "globalFundMulti": [
      5503012,
      0,
@@ -1772,20 +1310,6 @@
       42001
      ]
     },
-    "plhiv": 152125,
-    "art": 49.7,
-    "deaths": [
-     11371,
-     10793,
-     9642,
-     8053,
-     7815,
-     7504,
-     7214,
-     6550,
-     5547,
-     5055
-    ],
     "globalFundMulti": [
      0,
      1809804,
@@ -1840,20 +1364,6 @@
       94032
      ]
     },
-    "plhiv": 221313,
-    "art": 94.5,
-    "deaths": [
-     3807,
-     3887,
-     4153,
-     4054,
-     3939,
-     3657,
-     3475,
-     3317,
-     3317,
-     3208
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -1908,20 +1418,6 @@
       627928
      ]
     },
-    "plhiv": 2561161,
-    "art": 71.6,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     32163
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -1976,20 +1472,6 @@
       46418
      ]
     },
-    "plhiv": 358974,
-    "art": 95.2,
-    "deaths": [
-     4825,
-     4804,
-     4524,
-     4599,
-     4528,
-     4387,
-     4315,
-     4037,
-     3851,
-     3759
-    ],
     "globalFundMulti": [
      0,
      2109180,
@@ -2044,20 +1526,6 @@
       1519373
      ]
     },
-    "plhiv": 292191,
-    "art": 74.7,
-    "deaths": [
-     9425,
-     8694,
-     8098,
-     7679,
-     7263,
-     6828,
-     6288,
-     6358,
-     6503,
-     6151
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -2112,20 +1580,6 @@
       869890
      ]
     },
-    "plhiv": 268915,
-    "art": 74.1,
-    "deaths": [
-     4325,
-     4076,
-     4147,
-     4359,
-     4265,
-     4236,
-     4217,
-     4248,
-     4335,
-     4169
-    ],
     "globalFundMulti": [
      14029619,
      10781169,
@@ -2180,20 +1634,6 @@
       518660
      ]
     },
-    "plhiv": 111127,
-    "art": 68.3,
-    "deaths": [
-     5620,
-     5419,
-     5321,
-     5144,
-     5101,
-     4911,
-     4513,
-     4393,
-     3810,
-     3236
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -2248,20 +1688,6 @@
       239714
      ]
     },
-    "plhiv": 568144,
-    "art": 40.7,
-    "deaths": [
-     25052,
-     25865,
-     26389,
-     26754,
-     26707,
-     26669,
-     26987,
-     27160,
-     26749,
-     23757
-    ],
     "globalFundMulti": [
      39523,
      2956286,
@@ -2316,20 +1742,6 @@
       1663912
      ]
     },
-    "plhiv": 565598,
-    "art": 87.7,
-    "deaths": [
-     20895,
-     18826,
-     17102,
-     15692,
-     14464,
-     13279,
-     11871,
-     10765,
-     9936,
-     9067
-    ],
     "globalFundMulti": [
      22744552,
      6752056,
@@ -2384,20 +1796,6 @@
       833519
      ]
     },
-    "plhiv": 132966,
-    "art": 74.5,
-    "deaths": [
-     5202,
-     5549,
-     5620,
-     5702,
-     5412,
-     4941,
-     4377,
-     3983,
-     3737,
-     3317
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -2452,20 +1850,6 @@
       321294
      ]
     },
-    "plhiv": 93500,
-    "art": 82.0,
-    "deaths": [
-     4024,
-     3688,
-     3454,
-     3170,
-     3068,
-     2753,
-     2657,
-     2512,
-     2331,
-     2149
-    ],
     "globalFundMulti": [
      4607697,
      10479601,
@@ -2520,20 +1904,6 @@
       260148
      ]
     },
-    "plhiv": 79036,
-    "art": 93.3,
-    "deaths": [
-     3283,
-     2637,
-     2097,
-     1745,
-     1549,
-     1362,
-     1261,
-     1211,
-     1167,
-     1113
-    ],
     "globalFundMulti": [
      0,
      3503788,
@@ -2588,20 +1958,6 @@
       128757
      ]
     },
-    "plhiv": 76027,
-    "art": 92.1,
-    "deaths": [
-     1784,
-     1745,
-     1623,
-     1522,
-     1412,
-     1301,
-     1228,
-     1180,
-     1110,
-     1018
-    ],
     "globalFundMulti": [
      4612638,
      3551034,
@@ -2656,20 +2012,6 @@
       838681
      ]
     },
-    "plhiv": 346206,
-    "art": 16.1,
-    "deaths": [
-     6563,
-     7467,
-     8262,
-     9030,
-     9693,
-     10753,
-     12069,
-     12897,
-     13435,
-     14026
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -2724,20 +2066,6 @@
       172321
      ]
     },
-    "plhiv": 35883,
-    "art": 85.8,
-    "deaths": [
-     2924,
-     2764,
-     2410,
-     1957,
-     1729,
-     1585,
-     1343,
-     1164,
-     993,
-     898
-    ],
     "globalFundMulti": [
      0,
      8625977,
@@ -2792,20 +2120,6 @@
       479824
      ]
     },
-    "plhiv": 101552,
-    "art": 91.7,
-    "deaths": [
-     3775,
-     3370,
-     3223,
-     2874,
-     2494,
-     2250,
-     2030,
-     1844,
-     1912,
-     1830
-    ],
     "globalFundMulti": [
      1015011,
      18083616,
@@ -2860,20 +2174,6 @@
       686090
      ]
     },
-    "plhiv": 85272,
-    "art": 66.4,
-    "deaths": [
-     2676,
-     2603,
-     2634,
-     2563,
-     2445,
-     2313,
-     2066,
-     1676,
-     1398,
-     1269
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -2928,20 +2228,6 @@
       236374
      ]
     },
-    "plhiv": 34431,
-    "art": 76.6,
-    "deaths": [
-     2042,
-     1950,
-     1811,
-     1618,
-     1425,
-     1262,
-     1073,
-     875,
-     715,
-     577
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -2996,20 +2282,6 @@
       394795
      ]
     },
-    "plhiv": 120985,
-    "art": 65.5,
-    "deaths": [
-     6165,
-     5871,
-     5615,
-     5308,
-     5068,
-     4727,
-     4275,
-     4024,
-     3706,
-     3476
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3064,20 +2336,6 @@
       15839
      ]
     },
-    "plhiv": 368410,
-    "art": 47.7,
-    "deaths": [
-     14943,
-     15882,
-     17374,
-     17728,
-     17591,
-     17238,
-     16022,
-     15032,
-     14180,
-     13458
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3132,20 +2390,6 @@
       4463
      ]
     },
-    "plhiv": 53702,
-    "art": 20.0,
-    "deaths": [
-     1866,
-     1855,
-     1780,
-     1776,
-     1792,
-     1799,
-     1926,
-     2141,
-     2350,
-     2542
-    ],
     "globalFundMulti": [
      0,
      9137306,
@@ -3200,20 +2444,6 @@
       14192
      ]
     },
-    "plhiv": 21025,
-    "art": 75.9,
-    "deaths": [
-     344,
-     335,
-     342,
-     356,
-     302,
-     245,
-     226,
-     209,
-     204,
-     200
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3268,20 +2498,6 @@
       514364
      ]
     },
-    "plhiv": 118390,
-    "art": 46.2,
-    "deaths": [
-     2680,
-     2823,
-     2991,
-     3154,
-     3290,
-     3439,
-     3578,
-     3612,
-     3489,
-     3435
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3336,20 +2552,6 @@
       2956
      ]
     },
-    "plhiv": 234128,
-    "art": null,
-    "deaths": [
-     4948,
-     4549,
-     4669,
-     4600,
-     3753,
-     3213,
-     3281,
-     3391,
-     3057,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3404,20 +2606,6 @@
       106206
      ]
     },
-    "plhiv": 217670,
-    "art": 40.4,
-    "deaths": [
-     597,
-     647,
-     741,
-     833,
-     938,
-     1072,
-     1324,
-     1625,
-     1903,
-     2304
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3472,20 +2660,6 @@
       261698
      ]
     },
-    "plhiv": 47710,
-    "art": 78.9,
-    "deaths": [
-     1750,
-     1636,
-     1528,
-     1335,
-     1190,
-     1059,
-     996,
-     978,
-     969,
-     966
-    ],
     "globalFundMulti": [
      0,
      2181289,
@@ -3540,20 +2714,6 @@
       269558
      ]
     },
-    "plhiv": 100698,
-    "art": 66.3,
-    "deaths": [
-     6891,
-     6143,
-     5740,
-     5352,
-     4770,
-     4193,
-     3744,
-     3303,
-     2935,
-     2715
-    ],
     "globalFundMulti": [
      5623360,
      18513238,
@@ -3608,20 +2768,6 @@
       164698
      ]
     },
-    "plhiv": 28095,
-    "art": 54.1,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3676,20 +2822,6 @@
       842781
      ]
     },
-    "plhiv": 31915,
-    "art": 66.3,
-    "deaths": [
-     1871,
-     1655,
-     1522,
-     1377,
-     1238,
-     1180,
-     1152,
-     1101,
-     1031,
-     979
-    ],
     "globalFundMulti": [
      2965975,
      0,
@@ -3744,20 +2876,6 @@
       86121
      ]
     },
-    "plhiv": 69881,
-    "art": 87.5,
-    "deaths": [
-     1992,
-     2038,
-     2097,
-     1830,
-     1756,
-     1591,
-     1534,
-     1514,
-     1353,
-     1299
-    ],
     "globalFundMulti": [
      5159875,
      6541457,
@@ -3812,20 +2930,6 @@
       199333
      ]
     },
-    "plhiv": 33986,
-    "art": 79.2,
-    "deaths": [
-     1925,
-     1798,
-     1755,
-     1747,
-     1525,
-     1379,
-     1275,
-     1113,
-     1037,
-     952
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3880,20 +2984,6 @@
       619391
      ]
     },
-    "plhiv": 90233,
-    "art": 29.3,
-    "deaths": [
-     2294,
-     2473,
-     2658,
-     2787,
-     2871,
-     3046,
-     3143,
-     3113,
-     3130,
-     3076
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -3948,20 +3038,6 @@
       206009
      ]
     },
-    "plhiv": 33080,
-    "art": 78.0,
-    "deaths": [
-     477,
-     542,
-     545,
-     474,
-     402,
-     374,
-     364,
-     336,
-     304,
-     299
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4016,20 +3092,6 @@
       8028
      ]
     },
-    "plhiv": 13120,
-    "art": 52.5,
-    "deaths": [
-     184,
-     196,
-     208,
-     223,
-     250,
-     278,
-     278,
-     262,
-     259,
-     264
-    ],
     "globalFundMulti": [
      0,
      9314894,
@@ -4084,20 +3146,6 @@
       22867
      ]
     },
-    "plhiv": 18521,
-    "art": 74.2,
-    "deaths": [
-     784,
-     729,
-     651,
-     563,
-     534,
-     518,
-     481,
-     424,
-     373,
-     340
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4152,20 +3200,6 @@
       24423
      ]
     },
-    "plhiv": 125015,
-    "art": 80.1,
-    "deaths": [
-     1782,
-     1728,
-     1393,
-     1176,
-     975,
-     896,
-     902,
-     890,
-     855,
-     873
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4220,20 +3254,6 @@
       113531
      ]
     },
-    "plhiv": 13879,
-    "art": 81.2,
-    "deaths": [
-     399,
-     335,
-     298,
-     264,
-     250,
-     251,
-     239,
-     223,
-     198,
-     169
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4288,20 +3308,6 @@
       70798
      ]
     },
-    "plhiv": 81155,
-    "art": 85.7,
-    "deaths": [
-     3760,
-     3483,
-     3230,
-     3008,
-     2879,
-     2781,
-     2581,
-     2315,
-     1973,
-     1799
-    ],
     "globalFundMulti": [
      0,
      11752458,
@@ -4356,20 +3362,6 @@
       228833
      ]
     },
-    "plhiv": 130784,
-    "art": 33.7,
-    "deaths": [
-     6559,
-     6556,
-     6595,
-     6664,
-     6740,
-     6785,
-     6750,
-     6540,
-     6273,
-     6017
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4424,20 +3416,6 @@
       228389
      ]
     },
-    "plhiv": 108420,
-    "art": 56.6,
-    "deaths": [
-     2489,
-     2111,
-     3058,
-     4559,
-     4516,
-     2454,
-     1823,
-     1799,
-     1885,
-     1988
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4492,20 +3470,6 @@
       129158
      ]
     },
-    "plhiv": 16917,
-    "art": 53.0,
-    "deaths": [
-     983,
-     926,
-     866,
-     796,
-     728,
-     719,
-     711,
-     643,
-     560,
-     499
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4560,20 +3524,6 @@
       71354
      ]
     },
-    "plhiv": 27868,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4628,20 +3578,6 @@
       12289
      ]
     },
-    "plhiv": 20517,
-    "art": 64.2,
-    "deaths": [
-     343,
-     345,
-     351,
-     350,
-     357,
-     369,
-     377,
-     382,
-     366,
-     337
-    ],
     "globalFundMulti": [
      1037777,
      2256165,
@@ -4696,20 +3632,6 @@
       10494
      ]
     },
-    "plhiv": 16863,
-    "art": 41.4,
-    "deaths": [
-     486,
-     514,
-     517,
-     523,
-     557,
-     580,
-     584,
-     607,
-     588,
-     561
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4764,20 +3686,6 @@
       48142
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4832,20 +3740,6 @@
       3865
      ]
     },
-    "plhiv": 25247,
-    "art": 44.3,
-    "deaths": [
-     1473,
-     1452,
-     1421,
-     1421,
-     1406,
-     1419,
-     1425,
-     1354,
-     1265,
-     1192
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4900,20 +3794,6 @@
       10815
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -4968,20 +3848,6 @@
       161589
      ]
     },
-    "plhiv": 23636,
-    "art": 76.2,
-    "deaths": [
-     750,
-     753,
-     755,
-     745,
-     724,
-     695,
-     610,
-     478,
-     434,
-     412
-    ],
     "globalFundMulti": [
      0,
      1862262,
@@ -5036,20 +3902,6 @@
       0
      ]
     },
-    "plhiv": 681,
-    "art": 40.6,
-    "deaths": [
-     18,
-     20,
-     21,
-     22,
-     24,
-     25,
-     24,
-     24,
-     25,
-     25
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5104,20 +3956,6 @@
       1188
      ]
     },
-    "plhiv": 9540,
-    "art": 71.9,
-    "deaths": [
-     32,
-     35,
-     37,
-     42,
-     45,
-     50,
-     56,
-     66,
-     75,
-     80
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5172,20 +4010,6 @@
       0
      ]
     },
-    "plhiv": 8123,
-    "art": 61.9,
-    "deaths": [
-     613,
-     554,
-     517,
-     484,
-     455,
-     425,
-     397,
-     363,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5240,20 +4064,6 @@
       59856
      ]
     },
-    "plhiv": 1985,
-    "art": 60.8,
-    "deaths": [
-     52,
-     53,
-     54,
-     53,
-     48,
-     44,
-     41,
-     37,
-     31,
-     29
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5308,20 +4118,6 @@
       165734
      ]
     },
-    "plhiv": 31404,
-    "art": 67.0,
-    "deaths": [
-     487,
-     470,
-     424,
-     427,
-     491,
-     581,
-     653,
-     525,
-     370,
-     363
-    ],
     "globalFundMulti": [
      2284608,
      840252,
@@ -5376,20 +4172,6 @@
       126745
      ]
     },
-    "plhiv": 42710,
-    "art": 74.0,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5444,20 +4226,6 @@
       0
      ]
     },
-    "plhiv": 9911,
-    "art": 86.1,
-    "deaths": [
-     320,
-     292,
-     272,
-     239,
-     187,
-     151,
-     135,
-     129,
-     116,
-     88
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5512,20 +4280,6 @@
       604344
      ]
     },
-    "plhiv": 32589,
-    "art": 59.7,
-    "deaths": [
-     1198,
-     1083,
-     998,
-     887,
-     794,
-     742,
-     685,
-     654,
-     605,
-     527
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5580,20 +4334,6 @@
       28046
      ]
     },
-    "plhiv": 40400,
-    "art": 48.9,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     1650
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5648,20 +4388,6 @@
       71490
      ]
     },
-    "plhiv": 42573,
-    "art": 67.8,
-    "deaths": [
-     312,
-     291,
-     277,
-     256,
-     234,
-     236,
-     270,
-     297,
-     321,
-     384
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5716,20 +4442,6 @@
       108155
      ]
     },
-    "plhiv": 52233,
-    "art": 82.1,
-    "deaths": [
-     1208,
-     1018,
-     855,
-     687,
-     525,
-     442,
-     409,
-     413,
-     390,
-     377
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5784,20 +4496,6 @@
       14164
      ]
     },
-    "plhiv": 7348,
-    "art": 52.0,
-    "deaths": [
-     77,
-     81,
-     81,
-     79,
-     83,
-     98,
-     114,
-     108,
-     111,
-     124
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5852,20 +4550,6 @@
       0
      ]
     },
-    "plhiv": 1097,
-    "art": 70.2,
-    "deaths": [
-     15,
-     13,
-     13,
-     12,
-     11,
-     11,
-     12,
-     13,
-     14,
-     14
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5920,20 +4604,6 @@
       6002
      ]
     },
-    "plhiv": 12413,
-    "art": 71.9,
-    "deaths": [
-     469,
-     415,
-     374,
-     357,
-     357,
-     337,
-     311,
-     310,
-     294,
-     279
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -5988,20 +4658,6 @@
       1056
      ]
     },
-    "plhiv": 22819,
-    "art": 58.3,
-    "deaths": [
-     359,
-     373,
-     353,
-     344,
-     351,
-     366,
-     371,
-     350,
-     337,
-     347
-    ],
     "globalFundMulti": [
      578298,
      0,
@@ -6056,20 +4712,6 @@
       241124
      ]
     },
-    "plhiv": 1138299,
-    "art": 72.7,
-    "deaths": [
-     13639,
-     12547,
-     12071,
-     11741,
-     11478,
-     11337,
-     11808,
-     12090,
-     12299,
-     12339
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6124,20 +4766,6 @@
       18359
      ]
     },
-    "plhiv": 56120,
-    "art": 44.7,
-    "deaths": [
-     1618,
-     1632,
-     1589,
-     1528,
-     1503,
-     1508,
-     1508,
-     1478,
-     1419,
-     1357
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6192,20 +4820,6 @@
       48035
      ]
     },
-    "plhiv": 5709,
-    "art": 71.1,
-    "deaths": [
-     249,
-     227,
-     205,
-     186,
-     167,
-     152,
-     138,
-     129,
-     115,
-     102
-    ],
     "globalFundMulti": [
      0,
      205243,
@@ -6260,20 +4874,6 @@
       0
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6328,20 +4928,6 @@
       95555
      ]
     },
-    "plhiv": 169,
-    "art": 84.1,
-    "deaths": [
-     5,
-     5,
-     5,
-     5,
-     5,
-     4,
-     4,
-     4,
-     3,
-     3
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6396,20 +4982,6 @@
       227491
      ]
     },
-    "plhiv": 7732,
-    "art": 28.9,
-    "deaths": [
-     297,
-     309,
-     321,
-     332,
-     332,
-     331,
-     338,
-     335,
-     328,
-     333
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6464,20 +5036,6 @@
       88107
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6532,20 +5090,6 @@
       0
      ]
     },
-    "plhiv": 83937,
-    "art": 60.4,
-    "deaths": [
-     3320,
-     2778,
-     2299,
-     2271,
-     2250,
-     2154,
-     2122,
-     2276,
-     2324,
-     2200
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6600,20 +5144,6 @@
       57850
      ]
     },
-    "plhiv": 4100,
-    "art": 65.5,
-    "deaths": [
-     20,
-     20,
-     20,
-     19,
-     18,
-     18,
-     19,
-     20,
-     21,
-     22
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6668,20 +5198,6 @@
       1083776
      ]
     },
-    "plhiv": 5949,
-    "art": 75.8,
-    "deaths": [
-     528,
-     490,
-     435,
-     381,
-     350,
-     306,
-     275,
-     239,
-     210,
-     184
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6736,20 +5252,6 @@
       0
      ]
     },
-    "plhiv": 3855,
-    "art": 49.6,
-    "deaths": [
-     117,
-     117,
-     125,
-     129,
-     127,
-     131,
-     133,
-     125,
-     117,
-     105
-    ],
     "globalFundMulti": [
      2236718,
      0,
@@ -6804,20 +5306,6 @@
       0
      ]
     },
-    "plhiv": 21395,
-    "art": 61.6,
-    "deaths": [
-     217,
-     197,
-     198,
-     192,
-     182,
-     196,
-     192,
-     165,
-     156,
-     158
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6872,20 +5360,6 @@
       410
      ]
     },
-    "plhiv": 10511,
-    "art": 69.5,
-    "deaths": [
-     92,
-     101,
-     105,
-     107,
-     122,
-     123,
-     126,
-     121,
-     121,
-     117
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -6940,20 +5414,6 @@
       0
      ]
     },
-    "plhiv": 7865,
-    "art": 49.1,
-    "deaths": [
-     187,
-     190,
-     186,
-     196,
-     219,
-     221,
-     223,
-     271,
-     257,
-     223
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7008,20 +5468,6 @@
       0
      ]
     },
-    "plhiv": 1562,
-    "art": 61.3,
-    "deaths": [
-     15,
-     16,
-     17,
-     21,
-     25,
-     26,
-     24,
-     22,
-     22,
-     22
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7076,20 +5522,6 @@
       8093
      ]
     },
-    "plhiv": 499,
-    "art": 61.0,
-    "deaths": [
-     4,
-     4,
-     4,
-     3,
-     3,
-     4,
-     5,
-     5,
-     5,
-     4
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7144,20 +5576,6 @@
       204034
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7212,20 +5630,6 @@
       108054
      ]
     },
-    "plhiv": 683,
-    "art": 63.8,
-    "deaths": [
-     13,
-     14,
-     14,
-     13,
-     12,
-     12,
-     13,
-     17,
-     17,
-     15
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7280,20 +5684,6 @@
       99668
      ]
     },
-    "plhiv": 30007,
-    "art": 68.3,
-    "deaths": [
-     303,
-     280,
-     262,
-     255,
-     252,
-     253,
-     268,
-     261,
-     285,
-     297
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7348,20 +5738,6 @@
       80146
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7416,20 +5792,6 @@
       41079
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7484,20 +5846,6 @@
       27818
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7552,20 +5900,6 @@
       25000
      ]
     },
-    "plhiv": 3867,
-    "art": 80.3,
-    "deaths": [
-     58,
-     64,
-     70,
-     70,
-     63,
-     62,
-     60,
-     57,
-     57,
-     61
-    ],
     "globalFundMulti": [
      1350362,
      261871,
@@ -7620,20 +5954,6 @@
       22438
      ]
     },
-    "plhiv": 52271,
-    "art": 63.9,
-    "deaths": [
-     1955,
-     2116,
-     2256,
-     2358,
-     2387,
-     2354,
-     2336,
-     2116,
-     1877,
-     1690
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7688,20 +6008,6 @@
       1789
      ]
     },
-    "plhiv": 13112,
-    "art": 10.9,
-    "deaths": [
-     312,
-     328,
-     330,
-     352,
-     396,
-     441,
-     493,
-     540,
-     587,
-     623
-    ],
     "globalFundMulti": [
      7940606,
      122566,
@@ -7756,20 +6062,6 @@
       11724
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7824,20 +6116,6 @@
       7447
      ]
     },
-    "plhiv": 139953,
-    "art": 79.3,
-    "deaths": [
-     1316,
-     1272,
-     1269,
-     1280,
-     1264,
-     1262,
-     1236,
-     1255,
-     1300,
-     1253
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -7892,20 +6170,6 @@
       0
      ]
     },
-    "plhiv": 8591,
-    "art": 24.7,
-    "deaths": [
-     1060,
-     968,
-     898,
-     833,
-     807,
-     809,
-     786,
-     758,
-     699,
-     640
-    ],
     "globalFundMulti": [
      0,
      5350917,
@@ -7960,20 +6224,6 @@
       6616
      ]
     },
-    "plhiv": 651,
-    "art": 42.9,
-    "deaths": [
-     12,
-     12,
-     12,
-     12,
-     10,
-     10,
-     13,
-     20,
-     23,
-     25
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -8028,20 +6278,6 @@
       6047
      ]
     },
-    "plhiv": null,
-    "art": null,
-    "deaths": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     null
-    ],
     "globalFundMulti": [
      0,
      0,
@@ -8096,20 +6332,6 @@
       1343
      ]
     },
-    "plhiv": 666,
-    "art": 69.1,
-    "deaths": [
-     24,
-     22,
-     22,
-     21,
-     20,
-     18,
-     18,
-     17,
-     16,
-     14
-    ],
     "globalFundMulti": [
      0,
      0,

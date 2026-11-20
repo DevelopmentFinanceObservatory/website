@@ -1,0 +1,566 @@
+{
+ "provenance": {
+  "sdk": "development-finance==0.4.2",
+  "query": "UNAIDS rows from the reads in live-refs.json, and the figures the step derives from them, for the page's parity test",
+  "retrieved": "2026-11-19T22:50:06.372Z"
+ },
+ "data": {
+  "years": [
+   2015,
+   2016,
+   2017,
+   2018,
+   2019,
+   2020,
+   2021,
+   2022,
+   2023,
+   2024
+  ],
+  "countries": [
+   "KEN",
+   "UKR",
+   "COL",
+   "IND"
+  ],
+  "rows": {
+   "plhiv": [
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2015,
+     "value": 823.54958
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2016,
+     "value": 810.79315
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2017,
+     "value": 790.24377
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2018,
+     "value": 778.36663
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2019,
+     "value": 771.77915
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2020,
+     "value": 811.31608
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2021,
+     "value": 879.90702
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2022,
+     "value": 992.43503
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2023,
+     "value": 1140.08556
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2024,
+     "value": 1314.27379
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2015,
+     "value": 162194.8653
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2016,
+     "value": 167553.4619
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2017,
+     "value": 173846.8045
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2018,
+     "value": 181617.935
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2019,
+     "value": 191211.484
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2020,
+     "value": 200321.1035
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2021,
+     "value": 209016.1213
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2022,
+     "value": 217439.0829
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2023,
+     "value": 227986.6653
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2024,
+     "value": 234128.4263
+    },
+    {
+     "observationAbout": "country/IND",
+     "time_period": 2024,
+     "value": 2561161.3234800003
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2015,
+     "value": 1387104.12743
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2016,
+     "value": 1378616.2808300003
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2017,
+     "value": 1370338.54499
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2018,
+     "value": 1360516.00025
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2019,
+     "value": 1350701.21672
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2020,
+     "value": 1341084.08072
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2021,
+     "value": 1334461.2740999996
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2022,
+     "value": 1331472.5936999999
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2023,
+     "value": 1328344.0752899998
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2024,
+     "value": 1325971.3997200003
+    }
+   ],
+   "art": [
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2015,
+     "value": 24.042268347705306
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2016,
+     "value": 22.69382764272244
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2017,
+     "value": 26.320992065524287
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2018,
+     "value": 28.0073671709179
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2019,
+     "value": 29.54213002515033
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2020,
+     "value": 56.82125762871605
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2021,
+     "value": 80.12210199209457
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2022,
+     "value": 76.1762712063882
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2023,
+     "value": 78.06431650621029
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2024,
+     "value": 76.62026037968846
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2015,
+     "value": 41.23989984287129
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2016,
+     "value": 45.35447918429431
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2017,
+     "value": 44.998238664777986
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2018,
+     "value": 50.457021218746924
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2019,
+     "value": 57.87047811417017
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2020,
+     "value": 60.72051215512598
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2021,
+     "value": 59.927434889205365
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2022,
+     "value": 63.105030691793814
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2023,
+     "value": 65.86788740578153
+    },
+    {
+     "observationAbout": "country/IND",
+     "time_period": 2022,
+     "value": 65.09017482986357
+    },
+    {
+     "observationAbout": "country/IND",
+     "time_period": 2023,
+     "value": 69.23191141637541
+    },
+    {
+     "observationAbout": "country/IND",
+     "time_period": 2024,
+     "value": 71.64907589993636
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2015,
+     "value": 64.71352671000537
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2016,
+     "value": 73.90780264009106
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2017,
+     "value": 81.20256151797294
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2018,
+     "value": 80.27197032591458
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2019,
+     "value": 77.63379608381405
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2020,
+     "value": 78.40951073742158
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2021,
+     "value": 84.0514855117443
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2022,
+     "value": 84.65675155638766
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2023,
+     "value": 85.95433959463647
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2024,
+     "value": 87.11473999317944
+    }
+   ],
+   "deaths": [
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2015,
+     "value": 41.38059
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2016,
+     "value": 47.0724
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2017,
+     "value": 50.1306
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2018,
+     "value": 49.04846
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2019,
+     "value": 44.74984
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2020,
+     "value": 30.02626
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2021,
+     "value": 19.9033
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2022,
+     "value": 14.16971
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2023,
+     "value": 12.25228
+    },
+    {
+     "observationAbout": "country/ARE",
+     "time_period": 2024,
+     "value": 12.75597
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2015,
+     "value": 4947.50006
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2016,
+     "value": 4548.66751
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2017,
+     "value": 4669.28433
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2018,
+     "value": 4599.70462
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2019,
+     "value": 3752.93021
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2020,
+     "value": 3212.61319
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2021,
+     "value": 3281.34393
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2022,
+     "value": 3391.14664
+    },
+    {
+     "observationAbout": "country/COL",
+     "time_period": 2023,
+     "value": 3056.72852
+    },
+    {
+     "observationAbout": "country/IND",
+     "time_period": 2024,
+     "value": 32163.23129
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2015,
+     "value": 36436.347669999996
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2016,
+     "value": 31328.18864
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2017,
+     "value": 28346.196930000002
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2018,
+     "value": 24979.53277
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2019,
+     "value": 23972.1274
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2020,
+     "value": 24952.301910000002
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2021,
+     "value": 25221.2483
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2022,
+     "value": 23088.74721
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2023,
+     "value": 21199.258390000003
+    },
+    {
+     "observationAbout": "country/KEN",
+     "time_period": 2024,
+     "value": 20848.55356
+    }
+   ]
+  },
+  "expected": {
+   "KEN": {
+    "plhiv": 1325971,
+    "art": 87.1,
+    "deaths": [
+     36436,
+     31328,
+     28346,
+     24980,
+     23972,
+     24952,
+     25221,
+     23089,
+     21199,
+     20849
+    ]
+   },
+   "UKR": {
+    "plhiv": null,
+    "art": null,
+    "deaths": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "COL": {
+    "plhiv": 234128,
+    "art": null,
+    "deaths": [
+     4948,
+     4549,
+     4669,
+     4600,
+     3753,
+     3213,
+     3281,
+     3391,
+     3057,
+     null
+    ]
+   },
+   "IND": {
+    "plhiv": 2561161,
+    "art": 71.6,
+    "deaths": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     32163
+    ]
+   }
+  }
+ }
+}

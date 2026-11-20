@@ -1,0 +1,18 @@
+// The line that stands in for UNAIDS figures while they load or after they fail.
+.status {
+    max-width: 900px;
+    margin: 6px 0;
+    color: #5e5e52;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.error {
+    color: #a3262b;
+}
+
+// The failed read's code, for a report of the fault.
+.code {
+    color: #5e5e52;
+    font: 400 11px var(--font-dm-mono);
+}

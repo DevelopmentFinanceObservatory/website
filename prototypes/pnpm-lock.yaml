@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@developmentfinance/client':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.4.1
+        version: 0.4.1
       '@mdx-js/loader':
         specifier: 3.1.1
         version: 3.1.1
@@ -73,8 +73,8 @@ packages:
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
 
-  '@developmentfinance/client@0.2.0':
-    resolution: {integrity: sha512-zAIIsW6H/NskxDK26rn7kFpRvgxT9SOX/mY/p1IeRkXzwKQj0rAgqLOcuA+vXkZzfvh6mUPmnbKURxV3plZd4w==}
+  '@developmentfinance/client@0.4.1':
+    resolution: {integrity: sha512-sQGeBBcmib+7/lxb0cQJkBTcAFMAeIW33MCIbOKutkgxsosHHbkpqZmFoiUintXdvDFlyw7l/kDh98PBeR0kXQ==}
     engines: {node: '>=22.18'}
     peerDependencies:
       apache-arrow: ^21.0.0
@@ -933,7 +933,7 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
 
-  '@developmentfinance/client@0.2.0':
+  '@developmentfinance/client@0.4.1':
     dependencies:
       hyparquet: 1.31.1
       hyparquet-writer: 0.16.10

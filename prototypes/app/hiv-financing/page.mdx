@@ -5,6 +5,7 @@ import prose from '../../components/Prose/Prose.module.scss';
 
 import { HivFinancing } from './_components/HivFinancing';
 import { CitedText, SourceEntry } from './_components/SourceLink';
+import { UnaidsNotes } from './_components/UnaidsNotes';
 import {
     codeChangeSentence,
     DATA_SOURCES,
@@ -13,12 +14,10 @@ import {
     loansSentence,
     otherMeasures,
     PER_PERSON_NOTE,
-    plhivGapNote,
     PROVIDER_NOTE,
     SCOPE_NOTE,
     shareNote,
     SOURCES,
-    unaidsGapNote,
     usSwingSentence,
     usTotalNote,
 } from './_lib/copy';
@@ -92,8 +91,10 @@ People living with HIV, antiretroviral therapy coverage, and AIDS-related deaths
     <li>
         <CitedText parts={usTotalNote(hiv.data)} className={prose.a} />
     </li>
-    <li>{plhivGapNote(hiv.data)}</li>
-    {unaidsGapNote(hiv.data) && <li>{unaidsGapNote(hiv.data)}</li>}
+    <UnaidsNotes
+        countries={hiv.data.countries.map(({ iso3, name }) => ({ iso3, name }))}
+        years={hiv.data.years}
+    />
 </ul>
 
 ## Sources

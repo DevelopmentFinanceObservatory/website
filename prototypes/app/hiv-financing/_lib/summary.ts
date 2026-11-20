@@ -2,8 +2,9 @@
 import type { Country, HivData, ProviderKey, ProviderSeries } from '../_data/types.ts';
 
 import { PROVIDER_KEYS } from './providers.ts';
+import type { NamedFigures, UnaidsCountry } from './unaids.ts';
 
-/** The year the page's last-year figures are for: the last of `HivData.years`. */
+/** The year the page's last-year figures are for, which is the last of `HivData.years`. */
 export const lastYear = (data: { readonly years: readonly number[] }): number => {
     const year = data.years.at(-1);
 
@@ -29,7 +30,7 @@ export const lastTotal = (series: ProviderSeries): number => seriesTotals(series
 /** A country's HIV aid in the last year, all providers. */
 export const lastAid = (country: Country): number => lastTotal(country.aid);
 
-/** Each provider's share of a series' last-year total; all 0 where the total is 0. */
+/** Each provider's share of a series' last-year total, all 0 where the total is 0. */
 export const lastShares = (series: ProviderSeries): Record<ProviderKey, number> => {
     const total = lastTotal(series);
     const share = (key: ProviderKey): number => (total > 0 ? (series[key].at(-1) ?? 0) / total : 0);
@@ -37,9 +38,9 @@ export const lastShares = (series: ProviderSeries): Record<ProviderKey, number> 
     return { us: share('us'), globalFund: share('globalFund'), other: share('other') };
 };
 
-/** The names of the countries with no estimate of people living with HIV, in data order. */
-export const withoutPlhiv = (data: HivData): string[] =>
-    data.countries.filter((country) => country.plhiv === null).map((country) => country.name);
+/** The names of the countries with no estimate of people living with HIV, in the order given. */
+export const withoutPlhiv = (countries: readonly NamedFigures[]): string[] =>
+    countries.filter((country) => country.plhiv === null).map((country) => country.name);
 
 export const findCountry = (data: HivData, iso3: string): Country | undefined =>
     data.countries.find((country) => country.iso3 === iso3);
@@ -66,7 +67,7 @@ export const PER_PERSON_MIN_PLHIV = 5_000;
 
 /** Last-year HIV aid over people living with HIV, in US dollars; null with no estimate of
  *  people living with HIV or fewer than `PER_PERSON_MIN_PLHIV`. */
-export const aidPerPerson = (country: Country): number | null =>
+export const aidPerPerson = (country: UnaidsCountry): number | null =>
     country.plhiv === null || country.plhiv < PER_PERSON_MIN_PLHIV
         ? null
         : lastAid(country) / country.plhiv;

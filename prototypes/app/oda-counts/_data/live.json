@@ -1,8 +1,8 @@
 {
   "provenance": {
-    "sdk": "development-finance==0.2.0",
+    "sdk": "development-finance==0.4.1",
     "query": "POST https://developmentfinance.org/api/v1/search/resolve",
-    "retrieved": "2026-11-17T20:07:40.787Z",
+    "retrieved": "2026-11-19T22:35:23.948Z",
     "note": "Identities with the provider role and the unit left for the page to bind."
   },
   "data": {
