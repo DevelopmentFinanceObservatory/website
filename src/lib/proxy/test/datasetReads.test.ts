@@ -85,8 +85,10 @@ const server = createServer((req, res) => {
 
     if (spec === SPEC && cv === undefined) {
         // The spec's current read. `mode` picks the answer: `legacy` sends
-        // none of the new headers, `accepted` a 202, `missing` a 404.
+        // none of the new headers, `accepted` a 202, `missing` a 404. `etag`
+        // names the entity tag the answer carries and matches.
         const mode = url.searchParams.get('mode');
+        const tag = url.searchParams.get('etag') ?? CURRENT_ETAG;
 
         if (mode === 'accepted') {
             res.writeHead(202, {
@@ -102,13 +104,13 @@ const server = createServer((req, res) => {
                     ? {}
                     : { 'x-dfo-freshness': 'pending', 'x-dfo-content-version': CV };
 
-            if (req.headers['if-none-match'] === CURRENT_ETAG) {
-                res.writeHead(304, { etag: CURRENT_ETAG, ...named }).end();
+            if (req.headers['if-none-match'] === tag) {
+                res.writeHead(304, { etag: tag, ...named }).end();
             } else {
                 res.writeHead(200, {
                     'content-type': 'application/json',
                     'cache-control': 'no-cache',
-                    etag: CURRENT_ETAG,
+                    etag: tag,
                     'x-dfo-trace-id': MANIFEST_TRACE,
                     ...named,
                 });
@@ -654,21 +656,28 @@ test('log: the selector and the manifest are logged by door', async () => {
 
 const ORIGIN = 'http://localhost:3000';
 
-test('current: a 200 is cached for a minute, varies on Origin, is tagged from dfo-apis', async () => {
-    const res = await call(SPEC, { headers: { origin: ORIGIN } });
+// A strong and a weak tag, which the gateway relays and matches as dfo-apis sent it.
+const ETAGS = ['"x"', 'W/"x"'];
 
-    assert.equal(res.status, 200);
-    assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
-    assert.equal(res.headers.get('vary'), 'Origin');
-    assert.equal(res.headers.get('cache-tag'), CV);
-    assert.equal(res.headers.get('etag'), CURRENT_ETAG);
-    assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
-    assert.equal(res.headers.get('x-dfo-content-version'), null);
-    assert.equal(res.headers.get('x-dfo-trace-id'), null);
-    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
-    assert.match(res.headers.get('access-control-expose-headers')!, /\bX-DFO-Freshness\b/);
-    assert.deepEqual(await res.json(), { artifacts: [] });
-});
+for (const etag of ETAGS) {
+    test(`current: a 200 is cached for a minute, varies on Origin, is tagged from dfo-apis (${etag})`, async () => {
+        const res = await call(`${SPEC}?etag=${encodeURIComponent(etag)}`, {
+            headers: { origin: ORIGIN },
+        });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
+        assert.equal(res.headers.get('vary'), 'Origin');
+        assert.equal(res.headers.get('cache-tag'), CV);
+        assert.equal(res.headers.get('etag'), etag);
+        assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
+        assert.equal(res.headers.get('x-dfo-content-version'), null);
+        assert.equal(res.headers.get('x-dfo-trace-id'), null);
+        assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+        assert.match(res.headers.get('access-control-expose-headers')!, /\bX-DFO-Freshness\b/);
+        assert.deepEqual(await res.json(), { artifacts: [] });
+    });
+}
 
 test('current: a query string still reads as a current read', async () => {
     const res = await call(`${SPEC}?rendering=csv`);
@@ -678,18 +687,22 @@ test('current: a query string still reads as a current read', async () => {
     await res.body?.cancel();
 });
 
-test('current: If-None-Match reaches dfo-apis and its 304 keeps the 200 headers', async () => {
-    const res = await call(SPEC, { headers: { 'if-none-match': CURRENT_ETAG } });
+for (const etag of ETAGS) {
+    test(`current: If-None-Match reaches dfo-apis and its 304 keeps the 200 headers (${etag})`, async () => {
+        const res = await call(`${SPEC}?etag=${encodeURIComponent(etag)}`, {
+            headers: { 'if-none-match': etag },
+        });
 
-    assert.equal(apisRequests.at(-1)?.['if-none-match'], CURRENT_ETAG);
-    assert.equal(res.status, 304);
-    assert.equal(res.headers.get('etag'), CURRENT_ETAG);
-    assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
-    assert.equal(res.headers.get('vary'), 'Origin');
-    assert.equal(res.headers.get('cache-tag'), CV);
-    assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
-    assert.equal(res.headers.get('x-dfo-content-version'), null);
-});
+        assert.equal(apisRequests.at(-1)?.['if-none-match'], etag);
+        assert.equal(res.status, 304);
+        assert.equal(res.headers.get('etag'), etag);
+        assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
+        assert.equal(res.headers.get('vary'), 'Origin');
+        assert.equal(res.headers.get('cache-tag'), CV);
+        assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
+        assert.equal(res.headers.get('x-dfo-content-version'), null);
+    });
+}
 
 test('current: a dfo-apis that sends no freshness or version yields an untagged answer', async () => {
     logged.mock.resetCalls();
