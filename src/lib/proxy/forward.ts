@@ -171,7 +171,7 @@ const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
     );
 };
 
-type ForwardOptions = {
+export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
     // Whether an API key on the call counts. Only the 'api' surface honors
@@ -203,7 +203,7 @@ type ForwardOptions = {
 
 // Whether `target` is on dfo-apis, read from SEARCH_API_BASE at call time as
 // src/lib/apisAuth reads it.
-const isApisTarget = (target: string): boolean => {
+export const isApisTarget = (target: string): boolean => {
     const base = process.env.SEARCH_API_BASE?.trim();
 
     return (
