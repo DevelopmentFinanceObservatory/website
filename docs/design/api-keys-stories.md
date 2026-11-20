@@ -53,7 +53,7 @@ _As a DFO user running a pipeline, I want to give my script or the Python or Typ
 - [ ] Without a key, the SDK and plain clients still work, counted per address at the anonymous limit (120 a minute).
 - [ ] Wherever the SDK prints the key, it is masked (`dfo_k_***Qjsd`), and its last four characters match the end of the key's snippet on the panel and the admin page.
 
-Status: partial. The format check is verified against the Python SDK's `check_key_format` and the contract's test vectors, and keyed API calls are covered by the proxy tests. An SDK run with a key against the local stack is not done.
+Status: built. The Python SDK, given a key through `DFO_API_KEY`, passed its format check, was counted against the key and the account, and got a `RateLimitError` with the 00:00 UTC reset once the key's daily quota was used ([design: Local Test Results][design-testing]). The TypeScript SDK is not run by hand, and the snippet match is to verify.
 
 #### U13. Use MCP and the Studio without a key
 

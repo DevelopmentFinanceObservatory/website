@@ -441,7 +441,21 @@ Observations:
 
 - **Refused calls count.** A refused call adds to the window's count, because the limiter counts every attempt. Usage read from the counters therefore includes refusals, and the usage bar shows that count. Reports that separate allowed from refused calls come from the usage log line, which records the outcome of each call.
 - **Backends not exercised.** The local stack sends no caller to the backends, because the caller key and the shared secret are unset there. dfo-apis seeing the account as a `user:` caller has to be tested on dev, after its change is deployed.
-- **Not tested locally.** Cloudflare's edge rules, and a store outage on a live stack, are covered only by unit tests. A run of the Python or TypeScript SDK with a `dfo_k_` key against the local stack, through to a daily-quota refusal, is to do before release.
+- **Not tested locally.** Cloudflare's edge rules, and a store outage on a live stack, are covered only by unit tests.
+
+**End to end with the Python SDK**
+
+Run against the local stack (the website on the implementation branch, with dfo-apis behind it), with a `dfo_k_` key minted for an existing account and its daily quota set to 5. The key went in through `DFO_API_KEY`, as a pipeline would set it, and the client ran with retries and its cache off so every call reached the proxy.
+
+| Step                     | Result                                                                                                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Format check             | `check_key_format` accepted the 52-character key with no warning                                                                                                                        |
+| Calls 1 to 5             | `client.lookup.resolve("Nigeria")` answered with a match each time                                                                                                                      |
+| Calls 6 and 7            | `RateLimitError`: status 429, code `rate_limited`, `retryable` true, `retry_after` 66545, detail "This API key's daily quota of 5 calls is used up. It resets at 00:00 UTC, in 66545s." |
+| Anonymous call after     | A client with `api_key=False` was answered, counted against its address                                                                                                                 |
+| Counters and the key row | `apiday:key:<keyId>` at 7 in the window from 00:00 UTC, `api:acct:<user id>` at 7 in the current minute, refusals included. The key's last use was set                                  |
+
+The `retry_after` of 66545 seconds at 05:31 UTC is the time to 00:00 UTC, so the SDK reports the quota's reset as the proxy states it.
 
 ## Runbook
 
