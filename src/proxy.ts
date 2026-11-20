@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
+import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
 
 /**
@@ -12,7 +12,7 @@ import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
 export const proxy = (request: NextRequest) => {
     const response = NextResponse.next();
 
-    if (dataPageNoindex(request.nextUrl.searchParams, GALLERY_ITEMS)) {
+    if (dataPageNoindex(request.nextUrl.searchParams, PUBLISHED_GALLERY_ITEMS)) {
         response.headers.set(NOINDEX_HEADER.key, NOINDEX_HEADER.value);
     }
 

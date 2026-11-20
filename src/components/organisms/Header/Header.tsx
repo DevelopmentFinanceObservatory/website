@@ -13,6 +13,7 @@ import Icon from '@/components/atoms/Icon/Icon';
 import AccountMenu from '@/components/molecules/AccountMenu/AccountMenu';
 import { useScrollFrame } from '@/hooks/useScrollFrame';
 import { DOCS_MENU } from '@/lib/docs/nav';
+import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 import Logo from '@/assets/svg/logo.svg';
 
 // "Data" in the nav is the Sources page (the search lives behind Get Data /
@@ -32,7 +33,7 @@ const navItems: {
         label: 'Insights',
         href: '/insights',
         menu: [
-            { label: 'Gallery', href: '/insights/gallery' },
+            ...(GALLERY_PUBLISHED ? [{ label: 'Gallery', href: '/insights/gallery' }] : []),
             { label: 'Publications', href: '/insights/publications' },
         ],
         action: { label: 'Open Studio', href: '/studio' },
