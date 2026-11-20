@@ -56,6 +56,7 @@ test('exact beats whole words beats prefix beats substring', () => {
     body.nodes.push(
         { ...buyback, ref: 'Wholesale', label: 'Wholesale store' },
         { ...buyback, ref: 'WorldHealthOrganization', label: 'World Health Organization (WHO)' },
+        { ...buyback, ref: 'GDPPerCapita', label: 'Output per head' },
     );
     const edited = buildModel(readSchema(body), readUsage(usageBody()));
     assert.deepEqual(
@@ -64,6 +65,11 @@ test('exact beats whole words beats prefix beats substring', () => {
             ['WorldHealthOrganization', 'word'],
             ['Wholesale', 'prefix'],
         ],
+    );
+    // A run of capitals ends a word before the capital that starts the next.
+    assert.deepEqual(
+        search(edited, 'gdp').hits.map((hit) => [hit.id, hit.match]),
+        [['GDPPerCapita', 'word']],
     );
 });
 

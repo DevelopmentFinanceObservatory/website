@@ -44,7 +44,7 @@ export const graphSearchUrl = (
 /** The graph's hits the model's own results do not already list, in the graph's order. */
 export const newGraphHits = (
     graph: readonly GraphSearchHit[],
-    local: readonly SearchHit[],
+    local: readonly Pick<SearchHit, 'id'>[],
 ): readonly GraphSearchHit[] => {
     const listed = new Set(local.map((hit) => hit.id));
     return graph.filter((hit) => !listed.has(hit.ref));

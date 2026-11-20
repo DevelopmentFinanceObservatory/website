@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { graphSearchUrl, newGraphHits } from '../graphSearch.ts';
-import type { SearchHit } from '../search.ts';
 import { readGraphSearch, WireShapeError, type GraphSearchHit } from '../wire.ts';
 
 const OFF = { base: false, un: false } as const;
@@ -27,7 +26,7 @@ test('a graph hit the model already lists is left out, and the rest keep the gra
         declared_by: null,
         via: 'name',
     }));
-    const local = [{ id: 'CurrencyKES' } as SearchHit];
+    const local = [{ id: 'CurrencyKES' }];
     assert.deepEqual(
         newGraphHits(graph, local).map((hit) => hit.ref),
         ['country/KEN', 'Count_Person'],

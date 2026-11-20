@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import { useRouter } from 'next/navigation';
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { useCarried, useOptionalExplore } from './ExploreContext';
@@ -55,28 +55,36 @@ type Option =
     | { readonly from: 'model'; readonly hit: SearchHit }
     | { readonly from: 'graph'; readonly hit: GraphSearchHit };
 
-/** The note under the results, or null when none is needed. */
+/**
+ * The note under the results, or null when none is needed: what the model's
+ * results leave out, then where the graph search stands.
+ */
 const resultNote = (
     total: number,
     shown: number,
     graph: GraphSearchState,
     graphShown: number,
 ): string | null => {
-    if (graph.status === 'loading') return 'Searching the graph…';
-    if (graph.status === 'failed') return 'The graph search did not answer.';
-    const missing = graph.status === 'ready' ? unavailableLine(graph.value.unavailable) : null;
-    if (total === 0 && graphShown === 0) {
-        const nothing =
-            graph.status === 'ready'
-                ? 'Nothing matches. Paste a whole dcid, or describe what a StatVar measures.'
-                : 'Nothing matches.';
-        return missing ? `${nothing} ${missing}` : nothing;
+    const lines: string[] = [];
+    if (total === 0 && graphShown === 0 && graph.status !== 'loading') {
+        lines.push(
+            graph.status === 'idle'
+                ? 'Nothing matches.'
+                : 'Nothing matches. Paste a whole dcid, or describe what a StatVar measures.',
+        );
     }
     if (total > shown) {
-        const first = `The first ${shown} of ${total.toLocaleString('en-GB')} in the model. Type more to narrow.`;
-        return missing ? `${first} ${missing}` : first;
+        lines.push(
+            `The first ${shown} of ${total.toLocaleString('en-GB')} in the model. Type more to narrow.`,
+        );
     }
-    return missing;
+    if (graph.status === 'loading') lines.push('Searching the graph…');
+    if (graph.status === 'failed') lines.push('The graph search did not answer.');
+    if (graph.status === 'ready') {
+        const missing = unavailableLine(graph.value.unavailable);
+        if (missing) lines.push(missing);
+    }
+    return lines.length > 0 ? lines.join(' ') : null;
 };
 
 /**
@@ -154,6 +162,38 @@ const SearchBox = ({ model, modelStatus, outside, switches }: SearchBoxProps) =>
 
     const activeOption = shown ? options[active] : undefined;
 
+    const row = (current: Model, option: Option, index: number) => {
+        const graphRow = option.from === 'graph';
+        return (
+            <li
+                key={graphRow ? `graph:${option.hit.ref}` : `${option.hit.kind}:${option.hit.id}`}
+                id={`${id}-${index}`}
+                role="option"
+                aria-selected={index === active}
+                className={classNames(styles.option, index === active && styles.optionActive)}
+                // Keeps focus in the box so the blur does not close the list first.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(option)}
+                onMouseMove={() => setActive(index)}
+            >
+                <span className={styles.name}>
+                    {graphRow ? (option.hit.label ?? option.hit.ref) : option.hit.label}
+                    <OriginTag
+                        declaredBy={graphRow ? option.hit.declared_by : option.hit.declaredBy}
+                    />
+                </span>
+                <span className={styles.meta}>
+                    {graphRow
+                        ? describeGraphHit(current, option.hit)
+                        : describe(current, option.hit)}
+                    <span className={styles.dcid}>
+                        <BreakableId text={graphRow ? option.hit.ref : option.hit.id} />
+                    </span>
+                </span>
+            </li>
+        );
+    };
+
     // The results box scrolls, so a result reached by the arrow keys is scrolled into it.
     useEffect(() => {
         if (!stepped.current) return;
@@ -188,59 +228,28 @@ const SearchBox = ({ model, modelStatus, outside, switches }: SearchBoxProps) =>
                 onKeyDown={onKeyDown}
             />
             <div className={styles.results} hidden={!shown}>
-                <ul id={listId} role="listbox" aria-label="Search results" className={styles.list}>
-                    {model &&
-                        options.map((option, index) => {
-                            const graphRow = option.from === 'graph';
-                            const key = graphRow
-                                ? `graph:${option.hit.ref}`
-                                : `${option.hit.kind}:${option.hit.id}`;
-                            const dcid = graphRow ? option.hit.ref : option.hit.id;
-                            return (
-                                <Fragment key={key}>
-                                    {index === result.hits.length && (
-                                        <li role="presentation" className={styles.group}>
-                                            From the graph
-                                        </li>
-                                    )}
-                                    <li
-                                        id={`${id}-${index}`}
-                                        role="option"
-                                        aria-selected={index === active}
-                                        className={classNames(
-                                            styles.option,
-                                            index === active && styles.optionActive,
-                                        )}
-                                        // Keeps focus in the box so the blur does not close the list first.
-                                        onMouseDown={(event) => event.preventDefault()}
-                                        onClick={() => choose(option)}
-                                        onMouseMove={() => setActive(index)}
-                                    >
-                                        <span className={styles.name}>
-                                            {graphRow
-                                                ? (option.hit.label ?? option.hit.ref)
-                                                : option.hit.label}
-                                            <OriginTag
-                                                declaredBy={
-                                                    graphRow
-                                                        ? option.hit.declared_by
-                                                        : option.hit.declaredBy
-                                                }
-                                            />
-                                        </span>
-                                        <span className={styles.meta}>
-                                            {graphRow
-                                                ? describeGraphHit(model, option.hit)
-                                                : describe(model, option.hit)}
-                                            <span className={styles.dcid}>
-                                                <BreakableId text={dcid} />
-                                            </span>
-                                        </span>
-                                    </li>
-                                </Fragment>
-                            );
-                        })}
-                </ul>
+                {/* The listbox groups its options by source, as the APG grouped listbox does. */}
+                <div id={listId} role="listbox" aria-label="Search results" className={styles.list}>
+                    {model && result.hits.length > 0 && (
+                        <ul role="group" aria-label="In the model" className={styles.rows}>
+                            {options
+                                .slice(0, result.hits.length)
+                                .map((option, index) => row(model, option, index))}
+                        </ul>
+                    )}
+                    {model && graphHits.length > 0 && (
+                        <ul role="group" aria-labelledby={`${id}-graph`} className={styles.rows}>
+                            <li role="presentation" id={`${id}-graph`} className={styles.group}>
+                                From the graph
+                            </li>
+                            {options
+                                .slice(result.hits.length)
+                                .map((option, offset) =>
+                                    row(model, option, result.hits.length + offset),
+                                )}
+                        </ul>
+                    )}
+                </div>
                 <p className={styles.note} aria-live="polite">
                     {resultNote(result.total, result.hits.length, graph, graphHits.length)}
                 </p>

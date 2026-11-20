@@ -45,12 +45,15 @@ const RANKS: readonly MatchRank[] = ['exact', 'word', 'prefix', 'substring'];
 
 /**
  * A text's words, lower-cased: split at every run of characters other than
- * letters and digits, and where a lower-case letter or digit meets an upper-case
- * one, so `undataHouseholdComposition` reads as undata, household, composition.
+ * letters and digits, where a lower-case letter or digit meets an upper-case
+ * one, and before the last capital of a run of capitals that starts a word,
+ * so `undataHouseholdComposition` reads as undata, household, composition and
+ * `ONEClimateFinance` as one, climate, finance.
  */
 const words = (text: string): string[] =>
     text
         .replace(/([\p{Ll}\p{Nd}])(\p{Lu})/gu, '$1 $2')
+        .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2')
         .toLowerCase()
         .split(/[^\p{L}\p{Nd}]+/u)
         .filter((word) => word !== '');
@@ -76,14 +79,21 @@ const rankOf = (
 ): number | undefined => {
     const text = field.toLowerCase();
     if (text === query) return 0;
-    if (holdsWords(words(field), queryWords)) return 1;
+    // Every word of a field is a run of its lower-cased text, so a field that
+    // lacks the query's first word cannot hold its words.
+    const first = queryWords[0];
+    if (first !== undefined && text.includes(first) && holdsWords(words(field), queryWords))
+        return 1;
     if (text.startsWith(query)) return 2;
     return text.includes(query) ? 3 : undefined;
 };
 
-/** The best rank any field reaches for a lower-cased query, or undefined. */
-const bestMatch = (query: string, fields: readonly (string | null)[]): MatchRank | undefined => {
-    const queryWords = words(query);
+/** The best rank any field reaches for a lower-cased query and its words, or undefined. */
+const bestMatch = (
+    query: string,
+    queryWords: readonly string[],
+    fields: readonly (string | null)[],
+): MatchRank | undefined => {
     let best: number | undefined;
     for (const field of fields) {
         if (field === null) continue;
@@ -111,10 +121,11 @@ export function search(model: Model, query: string, options: SearchOptions = {})
     const { outside = [], limit = 12 } = options;
     const needle = query.trim().toLowerCase();
     if (needle === '') return { hits: [], total: 0 };
+    const needleWords = words(needle);
 
     const hits: SearchHit[] = [];
     for (const node of model.nodes) {
-        const match = bestMatch(needle, [
+        const match = bestMatch(needle, needleWords, [
             node.label,
             node.ref,
             ...node.alternate_name,
@@ -132,7 +143,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
         });
     }
     for (const dataset of model.datasets) {
-        const match = bestMatch(needle, [dataset.label, dataset.ref]);
+        const match = bestMatch(needle, needleWords, [dataset.label, dataset.ref]);
         if (match === undefined) continue;
         hits.push({
             id: dataset.ref,
@@ -145,7 +156,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
     }
     for (const term of outside) {
         if (term.declared_by === 'dfo' || model.node(term.ref)) continue;
-        const match = bestMatch(needle, [term.label, term.ref]);
+        const match = bestMatch(needle, needleWords, [term.label, term.ref]);
         if (match === undefined) continue;
         hits.push({
             id: term.ref,

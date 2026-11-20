@@ -22,14 +22,17 @@ export type GraphSearchState =
 
 const IDLE: GraphSearchState = { status: 'idle' };
 
-// Answers kept for the visit, so typing back to an earlier query reads no
-// more. The oldest goes first past the cap.
+// Complete answers kept for the visit, so typing back to an earlier query
+// reads no more. An answer with a part that did not answer is asked again
+// next time. The oldest goes first past the cap.
 const ANSWERS = new Map<string, GraphSearch>();
 const ANSWERS_CAP = 100;
 
 const remember = (url: string, value: GraphSearch) => {
+    if (value.unavailable.length > 0) return;
     ANSWERS.set(url, value);
-    if (ANSWERS.size > ANSWERS_CAP) ANSWERS.delete(ANSWERS.keys().next().value as string);
+    const oldest = ANSWERS.keys().next();
+    if (ANSWERS.size > ANSWERS_CAP && !oldest.done) ANSWERS.delete(oldest.value);
 };
 
 /**
@@ -68,6 +71,9 @@ export const useGraphSearch = (
             clearTimeout(pause);
             clearTimeout(timeout);
             controller.abort();
+            // A settled answer or failure belongs to this request alone, so asking
+            // for the same URL again reads as loading until that request settles.
+            setState(IDLE);
         };
     }, [url]);
 

@@ -58,6 +58,12 @@
     }
 }
 
+.rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
 .option {
     @include flex(column, flex-start, flex-start);
 
