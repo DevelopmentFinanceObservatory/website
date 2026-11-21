@@ -1,9 +1,9 @@
-// `pnpm check:live <base-url>`: loads each live prototype page in Chromium, waits for its island's
+// `pnpm check:live <base-url>` loads each live prototype page in Chromium, waits for its island's
 // `data-read-tier` to leave `loading`, and checks the tier against the island's own
-// `data-read-live`, which each island renders from its read switch: `stored` with the switch on,
-// `committed` with it off. The served page states its switch, so an edge copy of an older build
-// is checked against that build's switch. oda-counts' island and debt-thresholds' transfers
-// section have no switch: their reads are always on.
+// `data-read-live`, which each island renders from its read switch. The tier is `stored` with the
+// switch on and `committed` with it off. The served page states its switch, so an edge copy of an
+// older build is checked against that build's switch. oda-counts' island and debt-thresholds'
+// transfers section have no switch, so their reads are always on.
 //
 // After a deploy the edge can serve the previous build for a while, so a failing run is tried
 // again, ATTEMPTS times in all, RETRY_DELAY_MS apart. Exits 1 when the last attempt finds a page
@@ -43,9 +43,9 @@ export const liveSwitch = (attribute: string | null): boolean | null =>
 /**
  * Why a page gave no settled tier:
  *
- * - `navigation_timeout`: the page did not load within NAVIGATION_TIMEOUT_MS;
- * - `navigation_failed`: the page did not load, for the reason in `errors`;
- * - `no_island`: the loaded page holds no `[data-read-tier]`;
+ * - `navigation_timeout`: the page did not load within NAVIGATION_TIMEOUT_MS.
+ * - `navigation_failed`: the page did not load, for the reason in `errors`.
+ * - `no_island`: the loaded page holds no `[data-read-tier]`.
  * - `not_settled`: the island did not leave `loading` within SETTLE_TIMEOUT_MS.
  */
 export type Failure = 'navigation_timeout' | 'navigation_failed' | 'no_island' | 'not_settled';

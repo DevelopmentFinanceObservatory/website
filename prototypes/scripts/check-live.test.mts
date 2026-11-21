@@ -92,7 +92,7 @@ test('checkPage checks the settled tier against the served switch, and reports a
     );
     assert.deepEqual(problems(await checkPage(fakePage(), 'u', 'p')), []);
 
-    // A served switch that is on, with the island still on committed figures.
+    // A served switch that is on, with the island on committed figures.
     const wrong = await checkPage(fakePage({ tier: 'committed', live: 'true' }), 'u', 'p');
 
     assert.equal(wrong.failure, null);

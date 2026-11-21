@@ -361,8 +361,8 @@ test('fetchBasis sends none of its queued requests after one fails, and aborts t
         fetchBasis({ ...FRANCE_EUR, client, lane: createLane(2), perRequest: 1 }),
         /connection reset/,
     );
-    // Nine requests, two at a time: the first fails, the second is aborted, and the queued
-    // seven never go out.
+    // Nine requests, two at a time. The first fails, the second is aborted, and the queued
+    // seven are not sent.
     assert.equal(sent.length, 2);
     assert.ok(sent.every((signal) => signal.aborted));
 });

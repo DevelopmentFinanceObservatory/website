@@ -13,7 +13,7 @@ import PageHero from '@/components/molecules/PageHero/PageHero';
  * policy pages, holding a link back to the index, the title and a one-sentence lede.
  * The MDX body follows at the site's content width or, given `sections`, in a narrower
  * column with a SectionRail listing them in the right margin. A page whose section titles
- * come from client state passes its own rail as `rail` instead. A page.mdx uses it as its
+ * come from client state passes its own `rail`. A page.mdx uses it as its
  * layout (`export default`), which replaces the plain prose wrapper of mdx-components.tsx.
  */
 export const PrototypePage = ({

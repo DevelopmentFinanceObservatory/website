@@ -21,8 +21,8 @@ export const usePageFigures = (): LiveFigures => {
 
 /**
  * Holds the page's figures (`useFigures`) for the island and the prose around it, so both
- * print the same ones: the committed figures in the static HTML and until a live read
- * settles, then the read's.
+ * print the same ones. These are the committed figures in the static HTML and until a live
+ * read settles, and the read's after.
  */
 export const FiguresProvider = ({
     contexts,

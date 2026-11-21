@@ -6,7 +6,7 @@
 // counter was down carries neither, and leaves the last reading in place.
 //
 // `readLive`'s reads run in the `pacer`'s lane and oda-counts' Search resolve requests in
-// `pickLane`, so a reader's pick never waits behind stored reads. Both go out through
+// `pickLane`, so a reader's pick does not wait behind stored reads. Both go out through
 // `liveClient`, whose every request, retries included, passes the pacer's `fetch`, so the
 // allowance a page sees counts both.
 import { Client } from '@developmentfinance/client';
@@ -19,8 +19,8 @@ import { Client } from '@developmentfinance/client';
 export const READ_CONCURRENCY = 4;
 
 /**
- * How many oda-counts resolve requests run at once: the nine one-entry requests of a pick, which
- * Search answers together in about 2.3 s cold. Behind the stored reads' bound of four, the same
+ * How many oda-counts resolve requests run at once, the nine one-entry requests of a pick.
+ * Search answers them together in about 2.3 s cold. Behind the stored reads' bound of four, the same
  * nine took 3.6 to 3.9 s.
  */
 export const PICK_CONCURRENCY = 9;
@@ -112,8 +112,8 @@ export type Pacer = Lane & {
 
 /**
  * A pacer whose lane runs at most `limit` tasks at once and which reads the gateway's allowance
- * off every response its `fetch` receives. `fetch` and `now` stand in for the platform's, as a test does;
- * the platform's `fetch` is looked up on each request.
+ * off every response its `fetch` receives. `fetch` and `now` stand in for the platform's, as a
+ * test does. The platform's `fetch` is looked up on each request.
  */
 export const createPacer = ({
     limit,

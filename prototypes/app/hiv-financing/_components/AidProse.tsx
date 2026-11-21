@@ -25,8 +25,8 @@ export const useAidFigures = (): Aid => {
 
 /**
  * Holds the page's aid figures (`useAid`) for the island and the prose around it, so both
- * print the same ones: hiv.json's in the static HTML and until a live read settles, then
- * the read's.
+ * print the same ones. These are hiv.json's in the static HTML and until a live read
+ * settles, and the read's after.
  */
 export const AidProvider = ({ data, children }: { data: HivData; children: ReactNode }) => (
     <Context value={useAid(data)}>{children}</Context>

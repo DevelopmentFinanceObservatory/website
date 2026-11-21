@@ -65,7 +65,7 @@ test('an aborted waiting task leaves the queue and rejects at once, and the next
     await Promise.all([held, next]);
     assert.deepEqual(started, ['next']);
 
-    // A task whose signal is aborted already never runs, even with a slot free.
+    // A task whose signal is already aborted does not run, even with a slot free.
     await assert.rejects(
         lane.run(async () => started.push('late'), controller.signal),
         (error) => error === reason,

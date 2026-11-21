@@ -37,7 +37,7 @@ export const OdaCounts = ({ definitions }: { definitions: Definition[] }) => {
         `No disbursement figure of ${possessive(donor.name)} ODA in ${year} is published.`;
 
     return (
-        // The page has no switch: its read is always on.
+        // The page has no switch, so its read is always on.
         <div className={styles.island} data-read-tier={tier} data-read-live="true">
             <Controls
                 donors={data.donors}

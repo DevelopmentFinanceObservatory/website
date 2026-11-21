@@ -101,14 +101,14 @@ export const resolveRequests = (
  * Why the page refused a resolve answer:
  *
  * - `status`: the client returned a response other than 200, such as a redirect it did not
- *   follow;
- * - `part_count`: the answer holds another number of parts than the request had entries;
- * - `not_definite`: a part is neither definite nor no data;
- * - `currency`: a definite part is served in another currency than the one asked for;
- * - `no_observations`: a definite part carries no observations;
- * - `omitted`: Search left a definite part's observations out, and says why in `omitted`;
- * - `empty`: a definite part's observations hold no series;
- * - `truncated`: Search cut a definite part's observations to their latest points;
+ *   follow.
+ * - `part_count`: the answer holds another number of parts than the request had entries.
+ * - `not_definite`: a part is neither definite nor no data.
+ * - `currency`: a definite part is served in another currency than the one asked for.
+ * - `no_observations`: a definite part carries no observations.
+ * - `omitted`: Search left a definite part's observations out, and says why in `omitted`.
+ * - `empty`: a definite part's observations hold no series.
+ * - `truncated`: Search cut a definite part's observations to their latest points.
  * - `two_values`: two series of one part hold a value in the same year.
  */
 export type RefusalCode =
@@ -230,7 +230,7 @@ export const seriesFromResponse = (
         }
 
         // The OECD headline arrives as two series, net flows to 2017 and grant
-        // equivalents from 2018, whose years never overlap.
+        // equivalents from 2018, whose years are disjoint.
         for (const points of series.map((each) => listAt(each, 'points'))) {
             for (const point of points) {
                 const at = years.indexOf(Number(recordAt(point)?.date));
@@ -268,8 +268,8 @@ export type Resolver = {
 };
 
 /**
- * Fetches `donorId`'s series in `unit`: the resolve requests `resolveRequests` gives for
- * `perRequest`, each through `lane` and posted by `client`, together. Each request may take
+ * Fetches `donorId`'s series in `unit` with the resolve requests `resolveRequests` gives for
+ * `perRequest`, sent together, each through `lane` and posted by `client`. Each request may take
  * `timeoutMs` from the moment it leaves the lane's queue. Rejects with the first request's
  * error, as the client raises it (`RateLimitError` when the gateway refused the address), or as
  * `seriesFromResponse` refuses a body. That first failure, or an abort of `signal`, aborts the
