@@ -17,6 +17,10 @@ REGION     := "northamerica-northeast1"
 AR_REPO    := "dfo-website-staging"
 SERVICE    := env_var_or_default("SERVICE", "dfo-dev-website-staging")
 LOG_LIMIT  := "50"         # log lines `logs` reads
+AI_DIR     := "../ai"      # the ai checkout `stack` runs the harness and apis proxy from
+MAIL_DIR   := ".mailpit"   # the local mail catcher's certificate and key (gitignored)
+MAIL_SMTP  := "1025"       # Mailpit's SMTP port, SMTP_PORT in the env file
+MAIL_UI    := "8025"       # Mailpit's inbox, http://localhost:<MAIL_UI>
 GCP_ADC    := env_var("HOME") / ".config/gcloud/application_default_credentials.json"
 
 # Show available commands (default)
@@ -61,11 +65,89 @@ relock-client:
 # ── Development ───────────────────────────────────────
 
 # LAN access (phone/tablet testing) needs DEV_ORIGINS set in {{ENV_FILE}}.
+# Once `mail-cert` has made the mail catcher's certificate, Node trusts it,
+# so mail reaches Mailpit over STARTTLS. Node reads NODE_EXTRA_CA_CERTS only
+# at startup, so it can't go in {{ENV_FILE}}.
 #
 # Run the dev server (Turbopack)
 dev:
-    @echo "http://localhost:{{PORT}}"
-    pnpm dev --port {{PORT}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f "{{MAIL_DIR}}/cert.pem" ]; then
+        export NODE_EXTRA_CA_CERTS="$PWD/{{MAIL_DIR}}/cert.pem"
+    fi
+    echo "http://localhost:{{PORT}}"
+    exec pnpm dev --port {{PORT}}
+
+# The site's SMTP transport requires STARTTLS and checks the certificate
+# (src/lib/mail/smtp.ts), so the mail catcher needs one Node trusts. This
+# makes a self-signed certificate for localhost, which `dev` passes to Node
+# as NODE_EXTRA_CA_CERTS. Run once; it keeps an existing certificate.
+#
+# Make the local mail catcher's TLS certificate
+mail-cert:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f "{{MAIL_DIR}}/cert.pem" ] && [ -f "{{MAIL_DIR}}/key.pem" ]; then
+        exit 0
+    fi
+    mkdir -p "{{MAIL_DIR}}"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost \
+        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
+        -keyout "{{MAIL_DIR}}/key.pem" -out "{{MAIL_DIR}}/cert.pem" 2>/dev/null
+    echo "ok Created {{MAIL_DIR}}/cert.pem for the local mail catcher."
+
+# The site's whole local stack in one terminal: the dev apis proxy (8083)
+# and the Studio harness (8080) from an `ai` checkout beside this one,
+# Mailpit (SMTP on 1025, inbox on 8025) when it is installed, plus this dev
+# server. Each line is prefixed with its service. Ctrl-C stops them all;
+# one that exits on its own (an expired gcloud login stops the proxy)
+# leaves the others running. Postgres runs outside this, as `db-up` or a
+# Postgres you already run. AI_DIR points at another `ai` checkout.
+#
+# Run the apis proxy, the ai harness, Mailpit and the dev server together
+stack: mail-cert
+    #!/usr/bin/env bash
+    set -uo pipefail
+    if [ ! -f "{{AI_DIR}}/justfile" ]; then
+        echo "No ai checkout at {{AI_DIR}}. Clone it there or pass AI_DIR=<path>." >&2
+        exit 1
+    fi
+    if ! gcloud auth print-access-token >/dev/null 2>&1; then
+        echo "warning: gcloud has no valid login, so the apis proxy will exit. Run 'gcloud auth login'." >&2
+    fi
+    # Prefix each output line with the service name, flushed line by line.
+    # On a terminal (and without NO_COLOR) each service's prefix has its own
+    # color, and a line that looks like an error is shown in red.
+    color=0
+    if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then color=1; fi
+    run() {
+        local name="$1" hue="$2"; shift 2
+        "$@" 2>&1 | awk -v name="$(printf '%-5s' "$name")" -v hue="$hue" -v color="$color" '
+            BEGIN {
+                esc = sprintf("%c", 27)
+                prefix = color ? esc "[" hue "m" name " |" esc "[0m " : name " | "
+                red = color ? esc "[31m" : ""
+                reset = color ? esc "[0m" : ""
+            }
+            /(^|[^[:alnum:]_])(ERROR|FATAL|CRITICAL|Traceback|[A-Za-z]*(Error|Exception))([^[:alnum:]_]|$)|^error[:[]|⨯/ {
+                print prefix red $0 reset; fflush(); next
+            }
+            { print prefix $0; fflush() }' &
+    }
+    trap 'trap - INT TERM EXIT; kill 0 2>/dev/null' INT TERM EXIT
+    run apis 36 just --justfile "{{AI_DIR}}/justfile" --working-directory "{{AI_DIR}}" apis-proxy
+    run ai   35 just --justfile "{{AI_DIR}}/justfile" --working-directory "{{AI_DIR}}" dev
+    if ! command -v mailpit >/dev/null 2>&1; then
+        echo "warning: no mailpit on PATH, so email is off. Install it (brew install mailpit)." >&2
+    elif lsof -nP -iTCP:{{MAIL_SMTP}} -sTCP:LISTEN >/dev/null 2>&1; then
+        echo "warning: port {{MAIL_SMTP}} is taken, so Mailpit isn't started. Stop the other mail catcher to use this one." >&2
+    else
+        run mail 33 mailpit --smtp "[::]:{{MAIL_SMTP}}" --listen "[::]:{{MAIL_UI}}" \
+            --smtp-tls-cert "{{MAIL_DIR}}/cert.pem" --smtp-tls-key "{{MAIL_DIR}}/key.pem" --smtp-require-starttls
+    fi
+    run web  32 just dev
+    wait
 
 # Needs 'just build' first -- this serves the production build, it doesn't
 # create one. Next warns that `next start` does not work with
