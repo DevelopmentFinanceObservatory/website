@@ -696,7 +696,6 @@ def main() -> int:
                 note="Identities with the provider role and the unit left for the page to bind.",
             ),
             {
-                "resolve": "/api/v1/search/resolve",
                 "maxEntries": RESOLVE_ENTRIES,
                 "identities": [
                     {"key": series.key, "sentence": series.sentence, "identity": series.identity()}

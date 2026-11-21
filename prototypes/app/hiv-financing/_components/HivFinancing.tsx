@@ -10,6 +10,7 @@ import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
 import { UnaidsStatus } from './UnaidsStatus';
+import { READ_AID_LIVE } from './useAid';
 import { useUnaids } from './useUnaids';
 
 import type { HivData, UnaidsFigures } from '../_data/types.ts';
@@ -139,6 +140,7 @@ export const HivFinancing = () => {
             ref={islandRef}
             className={styles.island}
             data-read-tier={islandTier(aid.tier, tierAttribute(unaids))}
+            data-read-live={String(READ_AID_LIVE)}
         >
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>

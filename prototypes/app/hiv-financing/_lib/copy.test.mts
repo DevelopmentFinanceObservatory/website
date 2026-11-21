@@ -246,11 +246,11 @@ test('a small share is named as the table prints it', () => {
     );
 });
 
-test('the lede throws when the two providers no longer disburse almost all', () => {
-    assert.doesNotThrow(() => ledeSentence(DATA));
-    assert.throws(() =>
-        ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
-    );
+test("the lede gives the two providers' share when they no longer disburse almost all", () => {
+    const lede = ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } });
+
+    assert.match(lede, /the Global Fund disbursed \d+% of HIV aid recorded for countries\./);
+    assert.doesNotMatch(lede, /almost all/);
 });
 
 test('the fall sentence drops its share when the named falls exceed the net fall', () => {

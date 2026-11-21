@@ -1,9 +1,13 @@
 // `pnpm check:live <base-url>`: loads each live prototype page in Chromium, waits for its island's
-// `data-read-tier` to leave `loading`, and checks the tier the page's live-read flag implies:
-// `stored` with the flag on, `committed` with it off. The flags are read from the pages' source
-// (READ_LIVE in fragility-finance's useFigures.ts, READ_AID_LIVE in hiv-financing's useAid.ts), so
-// the check follows a switch with no edit here. oda-counts has no switch: its read is always on.
-// Exits 1 on a mismatch, a page that never settles, or a script error on the page.
+// `data-read-tier` to leave `loading`, and checks the tier against the island's own
+// `data-read-live`, which each island renders from its read switch: `stored` with the switch on,
+// `committed` with it off. The served page states its switch, so an edge copy of an older build
+// is checked against that build's switch. oda-counts' island and debt-thresholds' transfers
+// section have no switch: their reads are always on.
+//
+// After a deploy the edge can serve the previous build for a while, so a failing run is tried
+// again, ATTEMPTS times in all, RETRY_DELAY_MS apart. Exits 1 when the last attempt finds a page
+// that does not load, carries no island, never settles, settles on the wrong tier, or throws.
 //
 //   pnpm check:live https://developmentfinance.org/prototypes/
 //   pnpm check:live http://localhost:8123/prototypes/ --insecure-local
@@ -12,66 +16,77 @@
 // DFO's API across origins. It is refused for any host but localhost.
 //
 // It needs playwright-core (a root dependency) and a Chromium: `pnpm exec playwright-core install
-// chromium` at the repository root.
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
+// chromium-headless-shell` at the repository root.
 
-const APP = path.join(import.meta.dirname, '..');
+/** How long a page may take to load. */
+const NAVIGATION_TIMEOUT_MS = 30_000;
+/** How long an island may take to leave `loading` once its page has loaded. */
 const SETTLE_TIMEOUT_MS = 45_000;
+/** How many times a failing run is tried in all, and how long apart. */
+export const ATTEMPTS = 4;
+export const RETRY_DELAY_MS = 20_000;
+
 const ISLAND = '[data-read-tier]';
 const SETTLED = '[data-read-tier]:not([data-read-tier="loading"])';
 
-export type Check = {
-    slug: string;
-    /** the source file holding the page's switch, or null when the page reads live always */
-    flag: { file: string; name: string } | null;
-};
+/** The live prototype pages, by slug. */
+export const PAGES = ['oda-counts', 'fragility-finance', 'hiv-financing', 'debt-thresholds'];
 
-export const CHECKS: Check[] = [
-    { slug: 'oda-counts', flag: null },
-    {
-        slug: 'fragility-finance',
-        flag: { file: 'app/fragility-finance/_components/useFigures.ts', name: 'READ_LIVE' },
-    },
-    {
-        slug: 'hiv-financing',
-        flag: { file: 'app/hiv-financing/_components/useAid.ts', name: 'READ_AID_LIVE' },
-    },
-];
-
-/** The value of `export const <name> = true|false;` in a source file's text. */
-export const readFlag = (source: string, name: string): boolean => {
-    const match = new RegExp(`export const ${name}\\s*=\\s*(true|false)\\b`).exec(source);
-
-    if (match === null) {
-        throw new Error(`No \`export const ${name} = true|false\` found.`);
-    }
-
-    return match[1] === 'true';
-};
-
-/** The tier a page's flag implies: `stored` when it reads live, else `committed`. */
+/** The tier a page's switch implies: `stored` when it reads live, else `committed`. */
 export const expectedTier = (live: boolean): 'stored' | 'committed' =>
     live ? 'stored' : 'committed';
 
+/** An island's `data-read-live` as a switch, or null when it carries none or another value. */
+export const liveSwitch = (attribute: string | null): boolean | null =>
+    attribute === 'true' ? true : attribute === 'false' ? false : null;
+
+/**
+ * Why a page gave no settled tier:
+ *
+ * - `navigation_timeout`: the page did not load within NAVIGATION_TIMEOUT_MS;
+ * - `navigation_failed`: the page did not load, for the reason in `errors`;
+ * - `no_island`: the loaded page holds no `[data-read-tier]`;
+ * - `not_settled`: the island did not leave `loading` within SETTLE_TIMEOUT_MS.
+ */
+export type Failure = 'navigation_timeout' | 'navigation_failed' | 'no_island' | 'not_settled';
+
 export type Result = {
     slug: string;
-    expected: string;
-    /** the settled `data-read-tier`, or null when the page never settled */
+    /** the island's `data-read-live`, or null when it carries none or the page gave no island */
+    live: boolean | null;
+    /** the settled `data-read-tier`, or null when the page gave none */
     tier: string | null;
     ms: number;
+    failure: Failure | null;
     errors: string[];
 };
 
+const FAILURES: Record<Failure, string> = {
+    navigation_timeout: `did not load within ${NAVIGATION_TIMEOUT_MS / 1000} s`,
+    navigation_failed: 'did not load',
+    no_island: 'holds no [data-read-tier] after load',
+    not_settled: `never left \`loading\` within ${SETTLE_TIMEOUT_MS / 1000} s`,
+};
+
 /** The problems in one result, empty when the page passes. */
-export const problems = (result: Result): string[] => [
-    ...(result.tier === null
-        ? [`never left \`loading\` within ${SETTLE_TIMEOUT_MS / 1000} s`]
-        : result.tier === result.expected
-          ? []
-          : [`tier \`${result.tier}\`, expected \`${result.expected}\``]),
-    ...result.errors.map((error) => `page error: ${error}`),
-];
+export const problems = (result: Result): string[] => {
+    const errors = result.errors.map((error) => `page error: ${error}`);
+
+    if (result.failure !== null) {
+        return [FAILURES[result.failure], ...errors];
+    }
+
+    if (result.live === null) {
+        return ['the island carries no data-read-live="true|false"', ...errors];
+    }
+
+    const expected = expectedTier(result.live);
+
+    return [
+        ...(result.tier === expected ? [] : [`tier \`${result.tier}\`, expected \`${expected}\``]),
+        ...errors,
+    ];
+};
 
 /** The exit code for a run: 1 when any result has a problem or there are none. */
 export const exitCode = (results: Result[]): 0 | 1 =>
@@ -80,41 +95,108 @@ export const exitCode = (results: Result[]): 0 | 1 =>
 /** The part of a Playwright page the check uses. */
 export type PageLike = {
     on(event: 'pageerror', handler: (error: Error) => void): unknown;
-    goto(url: string): Promise<unknown>;
+    goto(url: string, options: { timeout: number }): Promise<unknown>;
+    $(selector: string): Promise<unknown>;
     waitForSelector(selector: string, options: { timeout: number }): Promise<unknown>;
     getAttribute(selector: string, name: string): Promise<string | null>;
 };
+
+const isTimeout = (error: unknown): boolean =>
+    error instanceof Error && error.name === 'TimeoutError';
 
 /** Loads one page and times how long its island takes to settle. */
 export const checkPage = async (
     page: PageLike,
     url: string,
     slug: string,
-    expected: string,
-    timeout = SETTLE_TIMEOUT_MS,
+    { navigation = NAVIGATION_TIMEOUT_MS, settle = SETTLE_TIMEOUT_MS } = {},
 ): Promise<Result> => {
     const errors: string[] = [];
 
     page.on('pageerror', (error) => errors.push(error.message));
 
     const start = performance.now();
-    let tier: string | null = null;
+    const result = (over: Partial<Result>): Result => ({
+        slug,
+        live: null,
+        tier: null,
+        failure: null,
+        ...over,
+        ms: Math.round(performance.now() - start),
+        errors,
+    });
 
     try {
-        await page.goto(url);
-        await page.waitForSelector(SETTLED, { timeout });
-        tier = await page.getAttribute(ISLAND, 'data-read-tier');
+        await page.goto(url, { timeout: navigation });
     } catch (error) {
-        errors.push(error instanceof Error && error.name === 'TimeoutError' ? '' : String(error));
+        if (isTimeout(error)) {
+            return result({ failure: 'navigation_timeout' });
+        }
+
+        errors.push(String(error));
+
+        return result({ failure: 'navigation_failed' });
     }
 
-    return {
-        slug,
-        expected,
-        tier,
-        ms: Math.round(performance.now() - start),
-        errors: errors.filter((message) => message !== ''),
-    };
+    if ((await page.$(ISLAND)) === null) {
+        return result({ failure: 'no_island' });
+    }
+
+    try {
+        await page.waitForSelector(SETTLED, { timeout: settle });
+    } catch (error) {
+        if (!isTimeout(error)) {
+            errors.push(String(error));
+        }
+
+        return result({ failure: 'not_settled' });
+    }
+
+    return result({
+        tier: await page.getAttribute(ISLAND, 'data-read-tier'),
+        live: liveSwitch(await page.getAttribute(ISLAND, 'data-read-live')),
+    });
+};
+
+/**
+ * Runs `attempt` until it passes or `attempts` runs are done, `sleep`ing `delayMs` between them,
+ * and returns the last run's results. `onRetry` hears each failed run before the next.
+ */
+export const withRetries = async (
+    attempt: () => Promise<Result[]>,
+    {
+        attempts = ATTEMPTS,
+        delayMs = RETRY_DELAY_MS,
+        sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+        onRetry = () => {},
+    }: {
+        attempts?: number;
+        delayMs?: number;
+        sleep?: (ms: number) => Promise<void>;
+        onRetry?: (results: Result[], run: number) => void;
+    } = {},
+): Promise<Result[]> => {
+    for (let run = 1; ; run += 1) {
+        const results = await attempt();
+
+        if (exitCode(results) === 0 || run >= attempts) {
+            return results;
+        }
+
+        onRetry(results, run);
+        await sleep(delayMs);
+    }
+};
+
+const report = (result: Result): string[] => {
+    const found = problems(result);
+    const expected = result.live === null ? 'none' : expectedTier(result.live);
+
+    return [
+        `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: tier ${result.tier ?? 'none'} ` +
+            `(data-read-live ${result.live ?? 'none'}, expected ${expected}) in ${result.ms} ms`,
+        ...found.map((problem) => `     ${problem}`),
+    ];
 };
 
 const main = async () => {
@@ -138,43 +220,41 @@ const main = async () => {
     const browser = await chromium.launch({
         args: insecure ? ['--disable-web-security'] : [],
     });
-    const results: Result[] = [];
 
-    try {
-        for (const { slug, flag } of CHECKS) {
-            const live =
-                flag === null
-                    ? true
-                    : readFlag(readFileSync(path.join(APP, flag.file), 'utf8'), flag.name);
+    const attempt = async (): Promise<Result[]> => {
+        const results: Result[] = [];
+
+        for (const slug of PAGES) {
             const page = await browser.newPage();
 
             results.push(
-                await checkPage(
-                    page as unknown as PageLike,
-                    new URL(`${slug}/`, root).href,
-                    slug,
-                    expectedTier(live),
-                ),
+                await checkPage(page as unknown as PageLike, new URL(`${slug}/`, root).href, slug),
             );
             await page.close();
         }
+
+        return results;
+    };
+
+    let results: Result[];
+
+    try {
+        results = await withRetries(attempt, {
+            onRetry: (failed, run) => {
+                console.log(
+                    `Attempt ${run} of ${ATTEMPTS} failed; trying again in ${RETRY_DELAY_MS / 1000} s.`,
+                );
+
+                for (const result of failed.filter((each) => problems(each).length > 0)) {
+                    console.log(report(result).join('\n'));
+                }
+            },
+        });
     } finally {
         await browser.close();
     }
 
-    for (const result of results) {
-        const found = problems(result);
-
-        console.log(
-            `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: tier ${result.tier ?? 'none'} ` +
-                `(expected ${result.expected}) settled in ${result.ms} ms`,
-        );
-
-        for (const problem of found) {
-            console.log(`     ${problem}`);
-        }
-    }
-
+    console.log(results.flatMap(report).join('\n'));
     process.exit(exitCode(results));
 };
 

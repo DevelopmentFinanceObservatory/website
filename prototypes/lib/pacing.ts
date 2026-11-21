@@ -5,9 +5,10 @@
 // `x-ratelimit-reset` the seconds until the count starts again. A response it served while its
 // counter was down carries neither, and leaves the last reading in place.
 //
-// `readLive`'s reads and oda-counts' Search resolve requests run through the one `pacer` of the
-// page and go out through `liveClient`, whose every request, retries included, passes the
-// pacer's `fetch`, so the allowance a page sees counts both.
+// `readLive`'s reads run in the `pacer`'s lane and oda-counts' Search resolve requests in
+// `pickLane`, so a reader's pick never waits behind stored reads. Both go out through
+// `liveClient`, whose every request, retries included, passes the pacer's `fetch`, so the
+// allowance a page sees counts both.
 import { Client } from '@developmentfinance/client';
 
 /**
@@ -17,37 +18,31 @@ import { Client } from '@developmentfinance/client';
  */
 export const READ_CONCURRENCY = 4;
 
+/**
+ * How many oda-counts resolve requests run at once: the nine one-entry requests of a pick, which
+ * Search answers together in about 2.3 s cold. Behind the stored reads' bound of four, the same
+ * nine took 3.6 to 3.9 s.
+ */
+export const PICK_CONCURRENCY = 9;
+
 /** What the gateway last said is left of the address's allowance, and until when, in
  *  milliseconds since the epoch. */
 export type Allowance = { remaining: number; until: number };
 
-export type Pacer = {
-    /** Runs `task` once fewer than the pacer's limit of tasks run, in the order they came. */
-    run: <T>(task: () => Promise<T>) => Promise<T>;
-    /** The platform's `fetch`, reading the allowance off each response, as a client's `fetch`. */
-    fetch: typeof globalThis.fetch;
-    /** The allowance the gateway last reported, or null before any report or once its window
-     *  has passed. */
-    allowance: () => Allowance | null;
+/** A bound on the tasks that run at once. */
+export type Lane = {
+    /**
+     * Runs `task` once fewer than the lane's limit of tasks run, in the order they came. Aborting
+     * `signal` while the task waits takes it out of the queue and rejects with the signal's
+     * reason at once. A task that has started handles `signal` itself.
+     */
+    run: <T>(task: () => Promise<T>, signal?: AbortSignal) => Promise<T>;
 };
 
-/**
- * A pacer that runs at most `limit` tasks at once and reads the gateway's allowance off every
- * response its `fetch` receives. `fetch` and `now` stand in for the platform's, as a test does;
- * the platform's `fetch` is looked up on each request.
- */
-export const createPacer = ({
-    limit,
-    fetch = (input, init) => globalThis.fetch(input, init),
-    now = Date.now,
-}: {
-    limit: number;
-    fetch?: typeof globalThis.fetch;
-    now?: () => number;
-}): Pacer => {
+/** A lane that runs at most `limit` tasks at once. */
+export const createLane = (limit: number): Lane => {
     let running = 0;
     const waiting: (() => void)[] = [];
-    let last: Allowance | null = null;
 
     const release = () => {
         const next = waiting.shift();
@@ -59,29 +54,92 @@ export const createPacer = ({
         }
     };
 
-    const run = async <T>(task: () => Promise<T>): Promise<T> => {
-        if (running < limit) {
-            running += 1;
-        } else {
-            // A released slot passes straight to the next waiting task, so `running` holds.
-            await new Promise<void>((resolve) => waiting.push(resolve));
-        }
+    const slot = (signal: AbortSignal | undefined): Promise<void> =>
+        new Promise<void>((resolve, reject) => {
+            if (signal?.aborted) {
+                reject(signal.reason);
 
-        try {
-            return await task();
-        } finally {
-            release();
-        }
+                return;
+            }
+
+            const onAbort = () => {
+                const at = waiting.indexOf(start);
+
+                if (at !== -1) {
+                    waiting.splice(at, 1);
+                }
+
+                reject(signal?.reason);
+            };
+            const start = () => {
+                signal?.removeEventListener('abort', onAbort);
+                resolve();
+            };
+
+            signal?.addEventListener('abort', onAbort, { once: true });
+            waiting.push(start);
+        });
+
+    return {
+        run: async (task, signal) => {
+            if (signal?.aborted) {
+                throw signal.reason;
+            }
+
+            if (running < limit) {
+                running += 1;
+            } else {
+                // A released slot passes straight to the next waiting task, so `running` holds.
+                await slot(signal);
+            }
+
+            try {
+                return await task();
+            } finally {
+                release();
+            }
+        },
     };
+};
+
+export type Pacer = Lane & {
+    /** The platform's `fetch`, reading the allowance off each response, as a client's `fetch`. */
+    fetch: typeof globalThis.fetch;
+    /** The allowance the gateway last reported, or null before any report or once its window
+     *  has passed. */
+    allowance: () => Allowance | null;
+};
+
+/**
+ * A pacer whose lane runs at most `limit` tasks at once and which reads the gateway's allowance
+ * off every response its `fetch` receives. `fetch` and `now` stand in for the platform's, as a test does;
+ * the platform's `fetch` is looked up on each request.
+ */
+export const createPacer = ({
+    limit,
+    fetch = (input, init) => globalThis.fetch(input, init),
+    now = Date.now,
+}: {
+    limit: number;
+    fetch?: typeof globalThis.fetch;
+    now?: () => number;
+}): Pacer => {
+    let last: Allowance | null = null;
 
     const paced: typeof globalThis.fetch = async (input, init) => {
         const response = await fetch(input, init);
         const remaining = response.headers.get('x-ratelimit-remaining');
         const reset = response.headers.get('x-ratelimit-reset');
 
-        if (remaining !== null && reset !== null) {
-            const next = { remaining: Number(remaining), until: now() + Number(reset) * 1000 };
+        const next = { remaining: Number(remaining), until: now() + Number(reset) * 1000 };
 
+        // A missing or malformed header leaves the last reading in place.
+        if (
+            remaining !== null &&
+            reset !== null &&
+            Number.isFinite(next.remaining) &&
+            Number.isFinite(next.until)
+        ) {
             // Responses to requests sent together arrive in any order, so within one window
             // the lowest count stands.
             if (last === null || last.until <= now() || next.remaining < last.remaining) {
@@ -93,14 +151,17 @@ export const createPacer = ({
     };
 
     return {
-        run,
+        ...createLane(limit),
         fetch: paced,
         allowance: () => (last !== null && last.until > now() ? last : null),
     };
 };
 
-/** The page's one pacer, which `readLive` and oda-counts' resolve requests share. */
+/** The page's one pacer, whose lane `readLive` runs in and whose `fetch` every request takes. */
 export const pacer = createPacer({ limit: READ_CONCURRENCY });
+
+/** oda-counts' lane for its resolve requests, whose allowance `pacer` reads. */
+export const pickLane = createLane(PICK_CONCURRENCY);
 
 let client: Client | undefined;
 

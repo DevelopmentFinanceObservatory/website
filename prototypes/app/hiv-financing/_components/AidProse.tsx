@@ -2,11 +2,13 @@
 
 import { createContext, use, type ReactNode } from 'react';
 
+import { SectionRail, type RailSection } from '../../../components/SectionRail/SectionRail';
+
 import { CitedText } from './SourceLink';
 import { useAid, type Aid } from './useAid';
 
 import type { HivData } from '../_data/types.ts';
-import { AID_CITED, AID_TEXT } from '../_lib/copy.ts';
+import { AID_CITED, AID_TEXT, aidSections } from '../_lib/copy.ts';
 
 const Context = createContext<Aid | null>(null);
 
@@ -43,3 +45,9 @@ export const AidCited = ({
     part: keyof typeof AID_CITED;
     className?: string;
 }) => <CitedText parts={AID_CITED[part](useAidFigures().data)} className={className} />;
+
+/** The page's section rail: the island's two sections, titled from the aid figures as the
+ *  island's headings are, then `after`. */
+export const AidRail = ({ after }: { after: RailSection[] }) => (
+    <SectionRail sections={[...aidSections(useAidFigures().data), ...after]} />
+);

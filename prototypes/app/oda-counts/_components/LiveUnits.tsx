@@ -3,7 +3,7 @@
 import { RateLimitError } from '@developmentfinance/client/errors';
 import { createContext, use, useRef, useState, type ReactNode } from 'react';
 
-import { liveClient, pacer } from '#lib/pacing.ts';
+import { liveClient, pacer, pickLane } from '#lib/pacing.ts';
 
 import { useCounts, type Counts } from './useCounts';
 
@@ -22,27 +22,28 @@ import {
     type Unit,
 } from '../_lib/live.ts';
 
-/** How long one resolve request may take before the page gives up on it. */
+/** How long one resolve request may take, from when it leaves the pick lane's queue, before the
+ *  page gives up on it. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * Entries per request for the basis a reader waits for. Nine one-entry requests sent
  * together answer in about 2.3 s cold, against 3.3 s for one six-entry and one three-entry
- * request. The page's pacer (lib/pacing.ts) runs them READ_CONCURRENCY at a time, a bound the
- * stored reads share, so nine took 3.6 to 3.9 s cold against production. The other basis loads
- * afterwards at the most entries a request takes, so a pick costs 11 requests. The website's gateway allows each address 120 requests a minute on
- * /api/v1, shared with the page's stored reads: 19 GETs of the specs' newest versions, plus
- * one GET of each file the edge cache does not hold, 19 to 38 in all. That leaves room for
- * 7 to 9 picks in the minute after a load, and 10 in each later minute. Once the pacer reports
- * fewer requests left than a one-entry pick costs, picks take the most entries a request holds
- * (two requests for each basis).
+ * request. They run in the page's pick lane (lib/pacing.ts), apart from the stored reads, so
+ * all nine go out together. The other basis loads afterwards at the most entries a request
+ * takes, so a pick costs 11 requests. The website's gateway allows each address 120 requests a
+ * minute on /api/v1, shared with the page's stored reads: 19 GETs of the specs' newest
+ * versions, plus one GET of each file the edge cache does not hold, 19 to 38 in all. That leaves
+ * room for 7 to 9 picks in the minute after a load, and 10 in each later minute. Once the pacer
+ * reports fewer requests left than a one-entry pick costs, picks take the most entries a
+ * request holds (two requests for each basis).
  */
 const PICKED_PER_REQUEST = 1;
 
 let resolver: Resolver | undefined;
 
 /** The page's client with no retries, so a refused or failed resolve request fails its pick at
- *  once and spends one request of the allowance, as before the page used the client. */
+ *  once and spends one request of the allowance. */
 const resolverClient = (): Resolver => (resolver ??= liveClient().withOptions({ maxRetries: 0 }));
 
 /** Why the last pick could not be fetched: the gateway's allowance was spent, or anything else. */
@@ -108,7 +109,7 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * Holds the donor and the unit the page shows, and fetches a donor's figures from Search
  * in any unit counts.json does not hold. A pick shows at once when its figures are at
  * hand. Otherwise the previous figures stay on screen while the picked price basis loads
- * in one-entry requests through the page's pacer (see PICKED_PER_REQUEST), after which the
+ * in one-entry requests through the page's pick lane (see PICKED_PER_REQUEST), after which the
  * other basis of the same currency loads in the background, so switching prices never
  * waits. A pick drawn before its other basis is in becomes the pair's `lead`: the axes
  * hold to it, and move once when the other basis lands only if a figure would fall off
@@ -165,20 +166,18 @@ export const LiveUnitsProvider = ({
             return running.promise;
         }
 
-        // One controller aborts both a newer pick's cancellation and the timeout, so the page
-        // needs no AbortSignal.any, which older browsers lack.
+        // A newer pick that does not need this basis aborts it.
         const controller = new AbortController();
-        const { signal } = controller;
-        const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         const promise: Promise<LiveBasis> = fetchLiveBasis({
             client: resolverClient(),
-            pacer,
+            lane: pickLane,
             live,
             donorId,
             unit,
             perRequest,
             years: data.years,
-            signal,
+            timeoutMs: REQUEST_TIMEOUT_MS,
+            signal: controller.signal,
         })
             .then((basis) => {
                 cached.current.set(key, basis);
@@ -187,8 +186,6 @@ export const LiveUnitsProvider = ({
                 return basis;
             })
             .finally(() => {
-                window.clearTimeout(timer);
-
                 // An aborted request settles after a newer one for the same key may have
                 // taken its place, so it removes only its own entry.
                 if (inflight.current.get(key)?.promise === promise) {

@@ -75,6 +75,8 @@ export const TransfersSection = ({
             className={styles.transfers}
             aria-labelledby="net-transfers"
             data-read-tier={tierAttribute(state)}
+            // The section has no switch: its read is always on.
+            data-read-live="true"
         >
             {state.status === 'ready' ? (
                 <Ready

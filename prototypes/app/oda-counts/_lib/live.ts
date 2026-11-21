@@ -3,7 +3,7 @@
 // Only type imports and web APIs Node also has, so `node --test` loads the module.
 import type { BaseIdentity, IdentityUnitRequest } from '@developmentfinance/client/wire';
 
-import type { Pacer } from '#lib/pacing.ts';
+import type { Lane } from '#lib/pacing.ts';
 
 import type {
     ByYear,
@@ -97,6 +97,42 @@ export const resolveRequests = (
     return requests;
 };
 
+/**
+ * Why the page refused a resolve answer:
+ *
+ * - `status`: the client returned a response other than 200, such as a redirect it did not
+ *   follow;
+ * - `part_count`: the answer holds another number of parts than the request had entries;
+ * - `not_definite`: a part is neither definite nor no data;
+ * - `currency`: a definite part is served in another currency than the one asked for;
+ * - `no_observations`: a definite part carries no observations;
+ * - `omitted`: Search left a definite part's observations out, and says why in `omitted`;
+ * - `empty`: a definite part's observations hold no series;
+ * - `truncated`: Search cut a definite part's observations to their latest points;
+ * - `two_values`: two series of one part hold a value in the same year.
+ */
+export type RefusalCode =
+    | 'status'
+    | 'part_count'
+    | 'not_definite'
+    | 'currency'
+    | 'no_observations'
+    | 'omitted'
+    | 'empty'
+    | 'truncated'
+    | 'two_values';
+
+/** A resolve answer the page will not show as figures, with the reason as `code`. */
+export class SearchRefusalError extends Error {
+    readonly code: RefusalCode;
+
+    constructor(code: RefusalCode, message: string) {
+        super(message);
+        this.name = 'SearchRefusalError';
+        this.code = code;
+    }
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -119,9 +155,10 @@ const listAt = (value: unknown, key: string): unknown[] => {
 /**
  * Reads each series in `keys` by year of `years`, in millions, from one resolve response's
  * JSON body, which holds each definite part's observations in its `spec.resolved`. A part
- * Search answers with no data is null in every year. Throws on a part that is neither definite
- * nor no data, on a part served in another currency than `currency`, and on a definite part
- * with no or truncated observations, so a response the page cannot read never shows as figures.
+ * Search answers with no data is null in every year. Throws a `SearchRefusalError` on a part
+ * that is neither definite nor no data, on a part served in another currency than `currency`,
+ * and on a definite part whose observations are missing, omitted, empty or truncated, so a
+ * response the page cannot read never shows as figures.
  */
 export const seriesFromResponse = (
     body: unknown,
@@ -132,7 +169,10 @@ export const seriesFromResponse = (
     const parts = listAt(body, 'parts');
 
     if (parts.length !== keys.length) {
-        throw new Error(`Search answered ${parts.length} parts for ${keys.length} series.`);
+        throw new SearchRefusalError(
+            'part_count',
+            `Search answered ${parts.length} parts for ${keys.length} series.`,
+        );
     }
 
     const out: Partial<Record<SeriesKey, ByYear>> = {};
@@ -150,25 +190,43 @@ export const seriesFromResponse = (
         const resolved = recordAt(part, 'spec', 'resolved');
 
         if (part?.status !== 'definite' || resolved === null) {
-            throw new Error(`Search answered ${String(part?.status)} for ${key}.`);
+            throw new SearchRefusalError(
+                'not_definite',
+                `Search answered ${String(part?.status)} for ${key}.`,
+            );
         }
 
         const served = recordAt(resolved, 'facets', 'unit')?.currency;
 
         if (served !== currency) {
-            throw new Error(`Search served ${key} in ${String(served)}, not ${currency}.`);
+            throw new SearchRefusalError(
+                'currency',
+                `Search served ${key} in ${String(served)}, not ${currency}.`,
+            );
         }
 
         const observations = recordAt(resolved, 'observations');
 
         if (observations === null) {
-            throw new Error(`Search sent no observations for ${key}.`);
+            throw new SearchRefusalError(
+                'no_observations',
+                `Search sent no observations for ${key}.`,
+            );
+        }
+
+        // Search sets `omitted` with an empty `series` when it left the observations out.
+        if (observations.omitted != null) {
+            throw new SearchRefusalError('omitted', `Search left out the observations for ${key}.`);
         }
 
         const series = listAt(observations, 'series');
 
-        if (series.some((each) => isRecord(each) && each.truncated === true)) {
-            throw new Error(`Search sent a truncated series for ${key}.`);
+        if (series.length === 0) {
+            throw new SearchRefusalError('empty', `Search sent no series for ${key}.`);
+        }
+
+        if (observations.truncated === true) {
+            throw new SearchRefusalError('truncated', `Search truncated the series for ${key}.`);
         }
 
         // The OECD headline arrives as two series, net flows to 2017 and grant
@@ -183,7 +241,10 @@ export const seriesFromResponse = (
                 }
 
                 if (values[at] != null) {
-                    throw new Error(`Search sent two values for ${key} in ${years[at]}.`);
+                    throw new SearchRefusalError(
+                        'two_values',
+                        `Search sent two values for ${key} in ${years[at]}.`,
+                    );
                 }
 
                 values[at] = value / 1e6;
@@ -208,48 +269,90 @@ export type Resolver = {
 
 /**
  * Fetches `donorId`'s series in `unit`: the resolve requests `resolveRequests` gives for
- * `perRequest`, each through `pacer` and posted by `client`, together. Rejects with the first
- * request's error, as the client raises it (`RateLimitError` when the gateway refused the
- * address), or as `seriesFromResponse` refuses a body.
+ * `perRequest`, each through `lane` and posted by `client`, together. Each request may take
+ * `timeoutMs` from the moment it leaves the lane's queue. Rejects with the first request's
+ * error, as the client raises it (`RateLimitError` when the gateway refused the address), or as
+ * `seriesFromResponse` refuses a body. That first failure, or an abort of `signal`, aborts the
+ * other requests and takes those still queued out of the lane, so none goes out after it.
  */
 export const fetchBasis = async ({
     client,
-    pacer,
+    lane,
     live,
     donorId,
     unit,
     perRequest,
     years,
+    timeoutMs,
     signal,
 }: {
     client: Resolver;
-    pacer: Pick<Pacer, 'run'>;
+    lane: Lane;
     live: LiveData;
     donorId: string;
     unit: Unit;
     perRequest: number;
     years: number[];
+    timeoutMs: number;
     signal: AbortSignal;
 }): Promise<LiveBasis> => {
-    const parts = await Promise.all(
-        resolveRequests(live, donorId, unit, perRequest).map(({ keys, body }) =>
-            pacer.run(async () => {
-                const response = await client.request('POST', RESOLVE_PATH, {
-                    json: body,
-                    signal,
-                });
+    // One controller for the pick's requests, so the page needs no AbortSignal.any, which older
+    // browsers lack.
+    const pick = new AbortController();
+    const abortPick = () => pick.abort(signal.reason);
 
-                // The client returns a redirect it did not follow as the response.
-                if (response.status !== 200) {
-                    throw new Error(`Search answered ${response.status}`);
-                }
+    if (signal.aborted) {
+        abortPick();
+    } else {
+        signal.addEventListener('abort', abortPick, { once: true });
+    }
 
-                return seriesFromResponse(response.json(), keys, years, unit.currency);
-            }),
-        ),
-    );
+    const send = async (keys: SeriesKey[], body: unknown) => {
+        const request = new AbortController();
+        const abortRequest = () => request.abort(pick.signal.reason);
+        const timer = setTimeout(
+            () =>
+                request.abort(
+                    new DOMException(`No answer within ${timeoutMs} ms.`, 'TimeoutError'),
+                ),
+            timeoutMs,
+        );
 
-    return Object.assign({}, ...parts) as LiveBasis;
+        pick.signal.addEventListener('abort', abortRequest, { once: true });
+
+        try {
+            const response = await client.request('POST', RESOLVE_PATH, {
+                json: body,
+                signal: request.signal,
+            });
+
+            // The client returns a redirect it did not follow as the response.
+            if (response.status !== 200) {
+                throw new SearchRefusalError('status', `Search answered ${response.status}.`);
+            }
+
+            return seriesFromResponse(response.json(), keys, years, unit.currency);
+        } catch (error) {
+            // Before the lane passes this slot on, so no queued sibling starts.
+            pick.abort(error);
+            throw error;
+        } finally {
+            clearTimeout(timer);
+            pick.signal.removeEventListener('abort', abortRequest);
+        }
+    };
+
+    try {
+        const parts = await Promise.all(
+            resolveRequests(live, donorId, unit, perRequest).map(({ keys, body }) =>
+                lane.run(() => send(keys, body), pick.signal),
+            ),
+        );
+
+        return Object.assign({}, ...parts) as LiveBasis;
+    } finally {
+        signal.removeEventListener('abort', abortPick);
+    }
 };
 
 /** A donor's live series at one price basis, each by year. */

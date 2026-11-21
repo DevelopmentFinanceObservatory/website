@@ -226,10 +226,12 @@ jobs:
             exit 1
           fi
 
-      # Loads each live page in Chromium and checks the tier its read switch
-      # implies (committed off, stored on), so a switch change that breaks the
-      # live read shows here. playwright-core is a root dependency, and the
-      # headless shell is the smallest Chromium it can drive.
+      # Loads each live page in Chromium and checks its settled tier against
+      # the switch the served island states (committed off, stored on), so a
+      # switch change that breaks the live read shows here. A failing run is
+      # tried again for about a minute while the edge takes the new build.
+      # playwright-core is a root dependency, and the headless shell is the
+      # smallest Chromium it can drive.
       - name: Live read check
         run: |
           pnpm install --frozen-lockfile

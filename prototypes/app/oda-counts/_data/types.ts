@@ -63,8 +63,6 @@ export type Offer = {
 };
 
 export type LiveData = {
-    /** the same-origin path the page posts resolve requests to */
-    resolve: string;
     /** the most entries one resolve request takes */
     maxEntries: number;
     identities: LiveIdentity[];

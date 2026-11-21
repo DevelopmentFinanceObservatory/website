@@ -3,12 +3,11 @@ import { prototype, prototypeMetadata } from '../../registry';
 import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
 import prose from '../../components/Prose/Prose.module.scss';
 
-import { AidCited, AidProvider, AidText } from './_components/AidProse';
+import { AidCited, AidProvider, AidRail, AidText } from './_components/AidProse';
 import { HivFinancing } from './_components/HivFinancing';
 import { CitedText, SourceEntry } from './_components/SourceLink';
 import { UnaidsNotes } from './_components/UnaidsNotes';
 import {
-    aidSections,
     DATA_SOURCES,
     FUNDING_2025,
     PER_PERSON_NOTE,
@@ -26,12 +25,15 @@ export default ({ children }) => (
     <AidProvider data={hiv.data}>
         <PrototypePage
             title={entry.title}
-            sections={[
-                ...aidSections(hiv.data),
-                { id: 'how-to-interpret', title: 'How to interpret' },
-                { id: 'notes', title: 'Notes' },
-                { id: 'sources', title: 'Sources' },
-            ]}
+            rail={
+                <AidRail
+                    after={[
+                        { id: 'how-to-interpret', title: 'How to interpret' },
+                        { id: 'notes', title: 'Notes' },
+                        { id: 'sources', title: 'Sources' },
+                    ]}
+                />
+            }
             lede={<AidText part="lede" />}
         >
             {children}

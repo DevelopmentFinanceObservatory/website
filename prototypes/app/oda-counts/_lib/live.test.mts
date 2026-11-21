@@ -4,10 +4,11 @@ import test from 'node:test';
 
 import { Client } from '@developmentfinance/client';
 import { RateLimitError } from '@developmentfinance/client/errors';
+import type { ObservationPoint, SpecObservations } from '@developmentfinance/client/wire';
 
-import { createPacer } from '#lib/pacing.ts';
+import { createLane, createPacer } from '#lib/pacing.ts';
 
-import type { CountsData, Donor, LiveData } from '../_data/types.ts';
+import type { CountsData, Donor, LiveData, SeriesKey } from '../_data/types.ts';
 
 import { findDonor } from './counts.ts';
 import {
@@ -20,6 +21,7 @@ import {
     pickCurrency,
     priceBases,
     resolveRequests,
+    SearchRefusalError,
     seriesFromResponse,
     unitPhrase,
     validBaseYear,
@@ -101,20 +103,31 @@ test('resolveRequests binds the donor and the unit on every series, six entries 
     assert.deepEqual(entry?.identity.entities, { origin: ['DACCountriesTotal'] });
 });
 
-const points = (values: Record<string, number>) =>
+const points = (values: Record<string, number>): ObservationPoint[] =>
     Object.entries(values).map(([date, value]) => ({ date, value }));
+
+/** One of a part's series, as Search's SpecObservations holds it. */
+const series = (values: Record<string, number>): SpecObservations['series'][number] => ({
+    stat_var: { ref: 'dcid:ODA' },
+    entities: [{ role: 'origin', ref: 'dcid:country/FRA' }],
+    points: points(values),
+    total_obs: Object.keys(values).length,
+});
+
+/** Observations as Search's SpecObservations holds them: the gross headline's two series. */
+const observed = (over: Partial<SpecObservations> = {}): SpecObservations => ({
+    series: [
+        series({ 2016: 9_506_000_000, 2017: 10_097_000_000 }),
+        series({ 2018: 11_733_000_000, 1999: 1 }),
+    ],
+    total_obs: 4,
+    truncated: false,
+    ...over,
+});
 
 /** A definite part in `currency`, its observations in its `spec.resolved` as Search's JSON
  *  response holds them, unless `observations` is null. */
-const part = (
-    currency = 'EUR',
-    observations: unknown = {
-        series: [
-            { points: points({ 2016: 9_506_000_000, 2017: 10_097_000_000 }) },
-            { points: points({ 2018: 11_733_000_000, 1999: 1 }) },
-        ],
-    },
-) => ({
+const part = (currency = 'EUR', observations: SpecObservations | null = observed()) => ({
     status: 'definite',
     spec: {
         spec_id: 'spec_a',
@@ -145,35 +158,41 @@ test('seriesFromResponse reads each part by year in millions, joining split seri
     });
 });
 
-test('seriesFromResponse refuses another currency, a missing part, or missing or truncated observations', () => {
-    const years = [2016];
-    const keys = ['gross', 'refugeeCosts'] as const;
+/** A check that a call threw a SearchRefusalError with `code`. */
+const refused = (code: SearchRefusalError['code']) => (error: unknown) =>
+    error instanceof SearchRefusalError && error.code === code;
 
-    assert.throws(
-        () => seriesFromResponse(response(part('USD')), [...keys], years, 'EUR'),
-        /in USD, not EUR/,
-    );
-    assert.throws(
-        () => seriesFromResponse(response(), ['gross'], years, 'EUR'),
-        /2 parts for 1 series/,
-    );
-    assert.throws(
-        () => seriesFromResponse(response({ status: 'choice' }), [...keys], years, 'EUR'),
-        /choice for gross/,
-    );
-    assert.throws(
-        () => seriesFromResponse(response(part('EUR', null)), [...keys], years, 'EUR'),
-        /no observations for gross/,
-    );
-    assert.throws(
-        () =>
-            seriesFromResponse(
-                response(part('EUR', { series: [{ points: [], truncated: true }] })),
-                [...keys],
-                years,
+test('seriesFromResponse refuses another currency, a missing part, and missing, omitted, empty, truncated or doubled observations', () => {
+    const years = [2016, 2017];
+    const keys: SeriesKey[] = ['gross', 'refugeeCosts'];
+    const refuses = (body: unknown, code: SearchRefusalError['code'], asked = keys) =>
+        assert.throws(() => seriesFromResponse(body, asked, years, 'EUR'), refused(code));
+
+    refuses(response(part('USD')), 'currency');
+    refuses(response(), 'part_count', ['gross']);
+    refuses(response({ status: 'choice' }), 'not_definite');
+    refuses(response(part('EUR', null)), 'no_observations');
+    refuses(
+        response(
+            part(
                 'EUR',
+                observed({
+                    series: [],
+                    total_obs: 0,
+                    omitted: {
+                        reason: 'observations_no_points',
+                        message: 'No points in the requested years.',
+                    },
+                }),
             ),
-        /truncated series for gross/,
+        ),
+        'omitted',
+    );
+    refuses(response(part('EUR', observed({ series: [], total_obs: 0 }))), 'empty');
+    refuses(response(part('EUR', observed({ truncated: true }))), 'truncated');
+    refuses(
+        response(part('EUR', observed({ series: [series({ 2016: 1 }), series({ 2016: 2 })] }))),
+        'two_values',
     );
 });
 
@@ -221,6 +240,7 @@ const resolveOver = ({ limit = 4, refusal }: { limit?: number; refusal?: Respons
 
 const FRANCE_EUR = {
     live,
+    timeoutMs: 30_000,
     donorId: 'country/FRA',
     unit: EUR_2023,
     years: [2016, 2017, 2018],
@@ -230,7 +250,7 @@ const FRANCE_EUR = {
 test('fetchBasis posts each one-entry resolve body through the client, within the pacer bound', async () => {
     const { client, pacer, sent, most } = resolveOver({ limit: 3 });
 
-    const basis = await fetchBasis({ ...FRANCE_EUR, client, pacer, perRequest: 1 });
+    const basis = await fetchBasis({ ...FRANCE_EUR, client, lane: pacer, perRequest: 1 });
 
     const requests = resolveRequests(live, 'country/FRA', EUR_2023, 1);
 
@@ -271,7 +291,7 @@ test("fetchBasis rejects a gateway 429 as the client's RateLimitError, with the 
     const { client, pacer, sent } = resolveOver({ refusal });
 
     await assert.rejects(
-        fetchBasis({ ...FRANCE_EUR, client, pacer, perRequest: live.maxEntries }),
+        fetchBasis({ ...FRANCE_EUR, client, lane: pacer, perRequest: live.maxEntries }),
         RateLimitError,
     );
     assert.equal(pacer.allowance()?.remaining, 0);
@@ -288,11 +308,124 @@ test('fetchBasis rejects a redirect the client returns', async () => {
         fetchBasis({
             ...FRANCE_EUR,
             client: redirect,
-            pacer: createPacer({ limit: 4 }),
+            lane: createLane(4),
             perRequest: 1,
         }),
-        /Search answered 302/,
+        refused('status'),
     );
+});
+
+/** A resolver that answers each request after `ms`, or fails the `failAt`th request it sends. */
+const timedResolver = ({ ms = 1, failAt }: { ms?: number; failAt?: number } = {}) => {
+    const sent: AbortSignal[] = [];
+
+    return {
+        sent,
+        client: {
+            request: async (
+                _method: 'POST',
+                _path: string,
+                { json, signal }: { json: unknown; signal: AbortSignal },
+            ) => {
+                sent.push(signal);
+                const index = sent.length;
+
+                await new Promise<void>((resolve, reject) => {
+                    const timer = setTimeout(resolve, ms);
+
+                    signal.addEventListener('abort', () => {
+                        clearTimeout(timer);
+                        reject(signal.reason);
+                    });
+                });
+
+                if (index === failAt) {
+                    throw new Error('connection reset');
+                }
+
+                const { entries } = (json as Body).input;
+
+                return {
+                    status: 200,
+                    json: () => ({ kind: 'resolution', parts: entries.map(() => part()) }),
+                };
+            },
+        },
+    };
+};
+
+test('fetchBasis sends none of its queued requests after one fails, and aborts those in flight', async () => {
+    const { client, sent } = timedResolver({ ms: 5, failAt: 1 });
+
+    await assert.rejects(
+        fetchBasis({ ...FRANCE_EUR, client, lane: createLane(2), perRequest: 1 }),
+        /connection reset/,
+    );
+    // Nine requests, two at a time: the first fails, the second is aborted, and the queued
+    // seven never go out.
+    assert.equal(sent.length, 2);
+    assert.ok(sent.every((signal) => signal.aborted));
+});
+
+test("fetchBasis times each request from when it leaves the lane's queue", async () => {
+    const lane = createLane(1);
+    let release = () => {};
+    const held = lane.run(
+        () =>
+            new Promise<void>((resolve) => {
+                release = resolve;
+            }),
+    );
+    const { client } = timedResolver({ ms: 1 });
+    const fetched = fetchBasis({ ...FRANCE_EUR, client, lane, perRequest: 6, timeoutMs: 20 });
+
+    // Queued for longer than the timeout, each request still has its whole 20 ms.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    release();
+    await held;
+
+    const basis = await fetched;
+
+    assert.deepEqual(
+        Object.keys(basis),
+        live.identities.map(({ key }) => key),
+    );
+
+    // A request that outlasts its own timeout fails the pick.
+    const slow = timedResolver({ ms: 50 });
+
+    await assert.rejects(
+        fetchBasis({ ...FRANCE_EUR, client: slow.client, lane, perRequest: 6, timeoutMs: 10 }),
+        (error) => error instanceof DOMException && error.name === 'TimeoutError',
+    );
+});
+
+test('fetchBasis takes an aborted pick out of the queue at once', async () => {
+    const lane = createLane(1);
+    let release = () => {};
+    const held = lane.run(
+        () =>
+            new Promise<void>((resolve) => {
+                release = resolve;
+            }),
+    );
+    const { client, sent } = timedResolver();
+    const controller = new AbortController();
+    const fetched = fetchBasis({
+        ...FRANCE_EUR,
+        client,
+        lane,
+        perRequest: 1,
+        signal: controller.signal,
+    });
+    const reason = new Error('superseded');
+
+    controller.abort(reason);
+    await assert.rejects(fetched, (error) => error === reason);
+
+    release();
+    await held;
+    assert.equal(sent.length, 0);
 });
 
 test('maskTo and liveDonor keep every null counts.json holds, at each price basis', () => {

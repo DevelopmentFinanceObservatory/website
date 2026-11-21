@@ -14,6 +14,7 @@ import panelStyles from './Panel.module.scss';
 import { PillarChart } from './PillarChart';
 import { Reserved } from './Reserved';
 import { Strip } from './Strip';
+import { READ_LIVE } from './useFigures';
 
 import type { GroupKey } from '../_data/types.ts';
 import { FLOW_COLOURS, PILLAR_COLOURS } from '../_lib/chart.ts';
@@ -95,7 +96,7 @@ export const FragilityFinance = () => {
     );
 
     return (
-        <div className={styles.island} data-read-tier={tier}>
+        <div className={styles.island} data-read-tier={tier} data-read-live={String(READ_LIVE)}>
             <div className={styles.top}>
                 <div className={styles.controls}>
                     <span className={styles.seg} role="group" aria-label="Contexts shown">

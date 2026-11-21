@@ -207,20 +207,20 @@ export const unaidsGapNote = (
     );
 };
 
-/** The lede says "almost all" from this US and Global Fund share up. Below it the lede throws. */
+/** The lede says "almost all" from this US and Global Fund share up, and the share below it. */
 const ALMOST_ALL = 0.95;
 
+/**
+ * The lede: how much of the last year's HIV aid to countries the United States and the Global
+ * Fund disbursed, "almost all" from ALMOST_ALL up and the share itself below it, and how many
+ * countries over $1m each led. It holds for any figures, since it renders with a live read's.
+ */
 export const ledeSentence = (data: HivData): string => {
     const { usGfShare, over1m, gfMajority, usMajority } = ledeFigures(data);
-
-    if (usGfShare < ALMOST_ALL) {
-        throw new Error(
-            `The lede says "almost all", but the US and Global Fund share is ${pct(usGfShare)}`,
-        );
-    }
+    const share = usGfShare >= ALMOST_ALL ? 'almost all' : `${pct(usGfShare)} of`;
 
     return [
-        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed almost all HIV aid recorded for countries.`,
+        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed ${share} HIV aid recorded for countries.`,
         `Of the ${over1m} countries that received more than $1m, the Global Fund disbursed more than half in ${gfMajority} and the United States in ${usMajority}.`,
     ].join(' ');
 };

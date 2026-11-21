@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createPacer } from './pacing.ts';
+import { createLane, createPacer } from './pacing.ts';
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
 
@@ -40,6 +40,63 @@ test('runs at most its limit of tasks at once, in the order they came, past a fa
     const after = await Promise.all([pacer.run(async () => running), pacer.run(async () => 0)]);
 
     assert.deepEqual(after, [0, 0]);
+});
+
+test('an aborted waiting task leaves the queue and rejects at once, and the next takes its slot', async () => {
+    const lane = createLane(1);
+    let release = () => {};
+    const held = lane.run(
+        () =>
+            new Promise<void>((resolve) => {
+                release = resolve;
+            }),
+    );
+    const controller = new AbortController();
+    const started: string[] = [];
+    const dropped = lane.run(async () => started.push('dropped'), controller.signal);
+    const next = lane.run(async () => started.push('next'));
+    const reason = new Error('superseded');
+
+    controller.abort(reason);
+    // It rejects while the first task still holds the slot.
+    await assert.rejects(dropped, (error) => error === reason);
+
+    release();
+    await Promise.all([held, next]);
+    assert.deepEqual(started, ['next']);
+
+    // A task whose signal is aborted already never runs, even with a slot free.
+    await assert.rejects(
+        lane.run(async () => started.push('late'), controller.signal),
+        (error) => error === reason,
+    );
+    assert.deepEqual(started, ['next']);
+});
+
+test('a malformed allowance header leaves the last reading in place', async () => {
+    const now = 1_000_000;
+    const answers = [
+        new Response('{}', {
+            headers: { 'x-ratelimit-remaining': '37', 'x-ratelimit-reset': '20' },
+        }),
+        new Response('{}', {
+            headers: { 'x-ratelimit-remaining': 'many', 'x-ratelimit-reset': '20' },
+        }),
+        new Response('{}', {
+            headers: { 'x-ratelimit-remaining': '30', 'x-ratelimit-reset': 'soon' },
+        }),
+    ];
+    const pacer = createPacer({
+        limit: 4,
+        fetch: async () => answers.shift() ?? new Response('{}'),
+        now: () => now,
+    });
+
+    for (let request = 0; request < 3; request += 1) {
+        await pacer.fetch('https://developmentfinance.org/api/v1/x');
+    }
+
+    assert.deepEqual(pacer.allowance(), { remaining: 37, until: now + 20_000 });
 });
 
 test('reads the allowance off each response, keeps the lowest in a window and past a response without, and drops it once reset', async () => {
