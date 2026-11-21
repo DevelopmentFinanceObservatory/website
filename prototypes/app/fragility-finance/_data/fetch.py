@@ -23,12 +23,11 @@ DFO computes the figures that sum or rank many rows: each pillar's total and the
 OOF per context and year, the six largest providers per context and per tier, the climate
 finance per context and each DAC member's change in 2025. Each pillar is a filter on the
 pillar's purpose labels, then a sum by recipient and year. Development is the total less
-the other two. The CRS reads hold 16 recipients each, and DFO computes on one read at a time, so
-each figure takes one call per read, and the step joins the disjoint results. The step keeps
-the small arithmetic: development, climate "both" as the total less adaptation and
-mitigation, and the change joined to each provider. The page's browser read
-(`_lib/live.ts`) runs the same recipes on DFO's newest stored data, with the labels, providers
-and read groups the step writes to `live.json`.
+the other two. Each CRS flow is one read over all 62 recipients, so each figure takes one
+call. The step keeps the small arithmetic: development, climate "both" as the total less
+adaptation and mitigation, and the change joined to each provider. The page's browser read
+(`_lib/live.ts`) runs the same recipes on DFO's newest stored data, with the labels and
+providers the step writes to `live.json`.
 
 Every read is pinned, and `refs.json` beside this file keeps each read's ref and provenance.
 The step runs in one of three modes:
@@ -103,10 +102,6 @@ LAST_PAID_YEAR = 2025
 # facet the read returns the OECD's full-value weighting.
 CLIMATE_METHOD = {"measurementMethod": "MarkerScoreWeightingHighestMarkerAssignment"}
 TOP_DONORS = 6
-# The CRS returns one row per provider, purpose, finance type and modality, so a build
-# for all 62 recipients over 15 years runs in a few groups.
-CRS_GROUP = 16
-CRS_CHUNKS = 4
 # DFO computes each figure in its own call. Its analysis endpoint answers 503 past a few calls
 # in flight, so two run at once.
 ANALYSIS_CONCURRENCY = 2
@@ -374,21 +369,6 @@ def by_place(rows: Rows, column: str) -> dict[str, Yearly]:
     return dict(places)
 
 
-def joined(parts: Iterable[dict[str, Yearly]]) -> dict[str, Yearly]:
-    """The results of the CRS reads in one map. Each read holds its own recipients."""
-    found: dict[str, Yearly] = {}
-
-    for part in parts:
-        shared = found.keys() & part.keys()
-
-        if shared:
-            raise SystemExit(f"recipients in two CRS reads: {sorted(shared)}")
-
-        found |= part
-
-    return found
-
-
 def money(value: float | None) -> int | None:
     return None if value is None else round(value)
 
@@ -476,68 +456,42 @@ def provider_names(aid: list[dfo.Dataset]) -> dict[str, str]:
     return names
 
 
-def crs_groups(places: list[str]) -> list[list[str]]:
-    return [places[start : start + CRS_GROUP] for start in range(0, len(places), CRS_GROUP)]
-
-
-def crs_reads(reads: Reads, key: str, ask: Callable[[], dfo.Answer], places: list[str]) -> dict:
-    """The CRS reads of `key`, one per group of recipients, with the recipients of each."""
-    groups = crs_groups(places)
-
-    if len(groups) != CRS_CHUNKS:
-        raise SystemExit(f"{key}: {len(groups)} groups of recipients, not {CRS_CHUNKS}")
-
-    return {
-        f"{key}-{index}": (
-            reads.read(f"{key}-{index}", ask, role="destination", places=group, window=FLOW_YEARS),
-            group,
-        )
-        for index, group in enumerate(groups, start=1)
-    }
-
-
 def figures(
-    aid: dict[str, tuple[dfo.Dataset, list[str]]],
-    oof: dict[str, dfo.Dataset],
+    aid: dfo.Dataset,
+    oof: dfo.Dataset,
     donors: dict[str, dfo.Dataset],
     climate: dict[str, dfo.Dataset],
     purposes: dict[str, list[str]],
     tiers: dict[str, str],
 ) -> dict[str, Recipe]:
     """The recipes DFO computes, by a key naming the read and the figure, such as
-    `aid-1/humanitarian`. `_lib/live.ts`'s `recipes` builds the same ones."""
+    `aid/humanitarian`. `_lib/live.ts`'s `recipes` builds the same ones.
+
+    `tiers` gives each recipient's tier, in the order each tier's filter lists them.
+    """
     recipe = dfo.analysis.recipe
-    found: dict[str, Recipe] = {}
+    found: dict[str, Recipe] = {"aid/total": recipe(aid.ref).aggregate(by="destination")}
 
-    for key, (data, group) in aid.items():
-        found[f"{key}/total"] = recipe(data.ref).aggregate(by="destination")
-
-        for name, labels in purposes.items():
-            found[f"{key}/{name}"] = (
-                recipe(data.ref).filter(keep={PURPOSE_FILTER: labels}).aggregate(by="destination")
-            )
-
-        found[f"{key}/donors"] = recipe(data.ref).rank(
-            by="origin",
-            per="destination",
-            window=(DONOR_YEAR, DONOR_YEAR),
-            how="sum",
-            limit=TOP_DONORS,
+    for name, labels in purposes.items():
+        found[f"aid/{name}"] = (
+            recipe(aid.ref).filter(keep={PURPOSE_FILTER: labels}).aggregate(by="destination")
         )
-        held = {tiers[place] for place in group}
 
-        for tier in sorted(held):
-            start = recipe(data.ref)
+    found["aid/donors"] = recipe(aid.ref).rank(
+        by="origin",
+        per="destination",
+        window=(DONOR_YEAR, DONOR_YEAR),
+        how="sum",
+        limit=TOP_DONORS,
+    )
 
-            if len(held) > 1:
-                start = start.filter(
-                    keep={"destination": [place for place in group if tiers[place] == tier]}
-                )
+    for tier in sorted(set(tiers.values())):
+        places = [place for place, held in tiers.items() if held == tier]
+        found[f"aid/{tier}"] = (
+            recipe(aid.ref).filter(keep={"destination": places}).aggregate(by="origin")
+        )
 
-            found[f"{key}/{tier}"] = start.aggregate(by="origin")
-
-    for key, data in oof.items():
-        found[f"{key}/total"] = recipe(data.ref).aggregate(by="destination")
+    found["oof/total"] = recipe(oof.ref).aggregate(by="destination")
 
     for key, data in donors.items():
         found[f"{key}/change"] = recipe(data.ref).growth(
@@ -597,11 +551,10 @@ def context_donors(
     """Each context's six largest providers in 2024, from DFO's ranking per recipient."""
     totals: dict[str, dict[str, float]] = defaultdict(dict)
 
-    for index in range(1, CRS_CHUNKS + 1):
-        for row in results[f"aid-{index}/donors"]:
-            if row["value"] is not None:
-                iso3 = str(row[RECIPIENT]).removeprefix("country/")
-                totals[iso3][str(row[PROVIDER])] = row["value"]
+    for row in results["aid/donors"]:
+        if row["value"] is not None:
+            iso3 = str(row[RECIPIENT]).removeprefix("country/")
+            totals[iso3][str(row[PROVIDER])] = row["value"]
 
     return {iso3: largest(values, names, change) for iso3, values in totals.items()}
 
@@ -610,16 +563,11 @@ def group_donors(
     results: dict[str, Rows], names: dict[str, str], change: dict[str, float]
 ) -> dict[str, dict]:
     """The six largest providers of ODA in 2024 to all 62 contexts and to each tier, from
-    DFO's sum by provider over each read's contexts of a tier."""
+    DFO's sum by provider over the contexts of each tier."""
     by_tier: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
-    for key, rows in results.items():
-        read, _, tier = key.partition("/")
-
-        if not read.startswith("aid-") or tier not in ("extreme", "high"):
-            continue
-
-        for row in rows:
+    for tier in ("extreme", "high"):
+        for row in results[f"aid/{tier}"]:
             if row["value"] is not None and int(row["time_period"]) == DONOR_YEAR:
                 by_tier[tier][str(row[PROVIDER])] += row["value"]
 
@@ -770,13 +718,13 @@ def main() -> int:
                 raise SystemExit(f"{key}: expected {column} {value}, got {sorted(held)}")
         return data
 
-    aid = crs_reads(reads, "aid", asking("aid", f"ODA to {EXAMPLE} by sector"), places)
-    oof = crs_reads(
-        reads,
-        "oof",
-        asking("oof", f"gross other official flows (OOF) disbursements to {EXAMPLE}"),
-        places,
-    )
+    def crs_read(key: str, question: str) -> dfo.Dataset:
+        return reads.read(
+            key, asking(key, question), role="destination", places=places, window=FLOW_YEARS
+        )
+
+    aid = crs_read("aid", f"ODA to {EXAMPLE} by sector")
+    oof = crs_read("oof", f"gross other official flows (OOF) disbursements to {EXAMPLE}")
     # DFO's DAC members group holds the 32 member countries and leaves out EU institutions,
     # also a DAC member. A question naming EU institutions resolves to the EU's members or to
     # the EU as a recipient, so the EU is read from the same answer, named as the origin.
@@ -814,28 +762,13 @@ def main() -> int:
         key: place_reading(key, question, INDICATOR_YEARS) for key, question, _ in INDICATORS
     }
 
-    aid_frames = [data for data, _ in aid.values()]
-    purposes = pillar_purposes(aid_frames)
-    names = provider_names(aid_frames)
-    recipes = figures(
-        aid,
-        {key: data for key, (data, _) in oof.items()},
-        donors,
-        climate_reads,
-        purposes,
-        tiers,
-    )
+    purposes = pillar_purposes([aid])
+    names = provider_names([aid])
+    recipes = figures(aid, oof, donors, climate_reads, purposes, tiers)
     results = compute(recipes)
-
-    def summed(read: str, figure: str) -> dict[str, Yearly]:
-        return joined(
-            by_place(results[f"{read}-{index}/{figure}"], RECIPIENT)
-            for index in range(1, CRS_CHUNKS + 1)
-        )
-
-    totals = summed("aid", "total")
-    pillars = {name: summed("aid", name) for name in purposes}
-    official_flows = summed("oof", "total")
+    totals = by_place(results["aid/total"], RECIPIENT)
+    pillars = {name: by_place(results[f"aid/{name}"], RECIPIENT) for name in purposes}
+    official_flows = by_place(results["oof/total"], RECIPIENT)
     climate = {key: by_place(results[f"{key}/total"], RECIPIENT) for key in climate_reads}
     change = donor_change(results)
     donors_of = context_donors(results, names, change)
@@ -910,7 +843,7 @@ def main() -> int:
         },
         "data": contexts,
     }
-    donor_reads = reads.summary(("aid-", "donors2025"))
+    donor_reads = reads.summary(("aid", "donors2025"))
     group_envelope = {
         "provenance": {
             "sdk": envelope["provenance"]["sdk"],
@@ -933,13 +866,12 @@ def main() -> int:
             "sdk": envelope["provenance"]["sdk"],
             "query": (
                 "What the page's browser read needs beside refs.json to run the step's "
-                "recipes: the recipients of each CRS read, the labels of the humanitarian and "
-                "peace purpose codes the reads hold, and each CRS provider's label"
+                "recipes: the labels of the humanitarian and peace purpose codes the CRS read "
+                "holds, and each CRS provider's label"
             ),
             "retrieved": retrieved,
         },
         "data": {
-            "groups": {key: group for key, (_, group) in aid.items()},
             "purposes": purposes,
             "providers": names,
         },

@@ -1,82 +1,10 @@
 {
  "provenance": {
   "sdk": "development-finance==0.6.0",
-  "query": "What the page's browser read needs beside refs.json to run the step's recipes: the recipients of each CRS read, the labels of the humanitarian and peace purpose codes the reads hold, and each CRS provider's label",
+  "query": "What the page's browser read needs beside refs.json to run the step's recipes: the labels of the humanitarian and peace purpose codes the CRS read holds, and each CRS provider's label",
   "retrieved": "2026-11-19T22:44:40.999Z"
  },
  "data": {
-  "groups": {
-   "aid-1": [
-    "country/TCD",
-    "country/SSD",
-    "country/AFG",
-    "country/SOM",
-    "country/COD",
-    "country/SDN",
-    "country/CAF",
-    "country/YEM",
-    "country/HTI",
-    "country/SYR",
-    "country/BDI",
-    "country/COG",
-    "country/GNQ",
-    "country/MDG",
-    "country/ERI",
-    "country/PNG"
-   ],
-   "aid-2": [
-    "country/AGO",
-    "country/CMR",
-    "country/MOZ",
-    "country/MMR",
-    "country/MLI",
-    "country/LBR",
-    "country/GIN",
-    "country/NER",
-    "country/LBY",
-    "country/IRQ",
-    "country/GNB",
-    "country/MRT",
-    "country/UGA",
-    "country/BFA",
-    "country/TJK",
-    "country/COM"
-   ],
-   "aid-3": [
-    "country/ZWE",
-    "country/PAK",
-    "country/BGD",
-    "country/DJI",
-    "country/NIC",
-    "country/ETH",
-    "country/LBN",
-    "country/SLE",
-    "country/ZMB",
-    "country/SWZ",
-    "country/KHM",
-    "country/NGA",
-    "country/VEN",
-    "country/TKM",
-    "country/RWA",
-    "country/LAO"
-   ],
-   "aid-4": [
-    "country/TZA",
-    "country/PSE",
-    "country/PRK",
-    "country/CIV",
-    "country/KEN",
-    "country/SLB",
-    "country/TLS",
-    "country/GTM",
-    "country/GMB",
-    "country/MWI",
-    "country/GAB",
-    "country/IRN",
-    "country/TGO",
-    "country/HND"
-   ]
-  },
   "purposes": {
    "humanitarian": [
     "emergency food assistance",

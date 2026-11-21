@@ -7,55 +7,16 @@
   "classification": "OECD, States of Fragility 2026 update",
   "dfo": [
    {
-    "key": "aid-1",
-    "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "key": "aid",
+    "sentence": "Gross ODA disbursements to 62 recipients from 105 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "specIds": [
-     "spec_347500caf49a6928898430717a0d778a"
+     "spec_eb646f3051a8ba0698275d7c9d61f3d3"
     ],
     "versions": [
-     "cv_d65586647fb6327d47edb8af345f72ee"
+     "cv_04a4cc6653cd28a55d415eedc6c2bc67"
     ],
     "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 93886,
-    "warnings": []
-   },
-   {
-    "key": "aid-2",
-    "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_196aeb9df012b9b4315ac149c005fa92"
-    ],
-    "versions": [
-     "cv_69c99f8e8c118df4ffea9d841675189d"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 116989,
-    "warnings": []
-   },
-   {
-    "key": "aid-3",
-    "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_6683f2eb9984c5045425adcde75bda82"
-    ],
-    "versions": [
-     "cv_31c1863f3a36253ce4e2b0936eed2b9c"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 121631,
-    "warnings": []
-   },
-   {
-    "key": "aid-4",
-    "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
-    "specIds": [
-     "spec_2c290bb17c5fa188ea5a9ec38c1114a3"
-    ],
-    "versions": [
-     "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2"
-    ],
-    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 91765,
+    "rows": 424271,
     "warnings": []
    },
    {

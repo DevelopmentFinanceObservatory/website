@@ -586,3 +586,33 @@ export const countrySentence = (country: UnaidsCountry, years: readonly number[]
         .filter((clause) => clause !== null)
         .join(' ');
 };
+
+/** A section of the page, by element id, for the rail and the island's heading. */
+export type Section = { id: string; title: string };
+
+/** The island's two sections, the chart's and the table's, whose title counts the countries. */
+export const aidSections = (data: HivData): readonly [Section, Section] => [
+    { id: 'by-provider', title: 'HIV aid by provider' },
+    { id: 'every-country', title: `${data.countries.length} countries, ${lastYear(data)}` },
+];
+
+/**
+ * The prose outside the island that prints an aid figure, each from the figures the island
+ * shows, so the lede and How to interpret follow them (AidProse.tsx). A sentence the figures
+ * give no reason for is empty.
+ */
+export const AID_TEXT = {
+    lede: ledeSentence,
+    share: shareNote,
+    loans: (data) => loansSentence(data) ?? '',
+    codeChange: (data) => codeChangeSentence(data) ?? '',
+    usSwing: (data) => usSwingSentence(data) ?? '',
+    firstYear: (data) => String(data.years[0] ?? ''),
+    lastYear: (data) => String(lastYear(data)),
+} as const satisfies Record<string, (data: HivData) => string>;
+
+/** The cited prose outside the island that prints an aid figure, as AID_TEXT. */
+export const AID_CITED = {
+    otherMeasures: (data) => [otherMeasures(data)],
+    usTotal: usTotalNote,
+} as const satisfies Record<string, (data: HivData) => Cited[]>;

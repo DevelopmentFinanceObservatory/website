@@ -3,72 +3,63 @@ import { prototype, prototypeMetadata } from '../../registry';
 import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
 import prose from '../../components/Prose/Prose.module.scss';
 
+import { AidCited, AidProvider, AidText } from './_components/AidProse';
 import { HivFinancing } from './_components/HivFinancing';
 import { CitedText, SourceEntry } from './_components/SourceLink';
 import { UnaidsNotes } from './_components/UnaidsNotes';
 import {
-    codeChangeSentence,
+    aidSections,
     DATA_SOURCES,
     FUNDING_2025,
-    ledeSentence,
-    loansSentence,
-    otherMeasures,
     PER_PERSON_NOTE,
     PROVIDER_NOTE,
     SCOPE_NOTE,
-    shareNote,
     SOURCES,
-    usSwingSentence,
-    usTotalNote,
 } from './_lib/copy';
-import { lastYear } from './_lib/summary';
 import hiv from './_data/hiv.json';
 
 export const entry = prototype('hiv-financing');
 
-export const LAST_YEAR = lastYear(hiv.data);
-
 export const metadata = prototypeMetadata(entry);
 
-export const SECTIONS = [
-    { id: 'by-provider', title: 'HIV aid by provider' },
-    { id: 'every-country', title: `${hiv.data.countries.length} countries, ${LAST_YEAR}` },
-];
-
 export default ({ children }) => (
-    <PrototypePage
-        title={entry.title}
-        sections={[
-            ...SECTIONS,
-            { id: 'how-to-interpret', title: 'How to interpret' },
-            { id: 'notes', title: 'Notes' },
-            { id: 'sources', title: 'Sources' },
-        ]}
-        lede={ledeSentence(hiv.data)}
-    >
-        {children}
-    </PrototypePage>
+    <AidProvider data={hiv.data}>
+        <PrototypePage
+            title={entry.title}
+            sections={[
+                ...aidSections(hiv.data),
+                { id: 'how-to-interpret', title: 'How to interpret' },
+                { id: 'notes', title: 'Notes' },
+                { id: 'sources', title: 'Sources' },
+            ]}
+            lede={<AidText part="lede" />}
+        >
+            {children}
+        </PrototypePage>
+    </AidProvider>
 );
 
-<HivFinancing data={hiv.data} sections={SECTIONS} />
+<HivFinancing />
 
 ## How to interpret
 
-<p className={prose.p}>{shareNote(hiv.data)}</p>
+<p className={prose.p}>
+    <AidText part="share" />
+</p>
 
 <p className={prose.p}>
     <CitedText parts={[PROVIDER_NOTE]} className={prose.a} />
 </p>
 
 <p className={prose.p}>
-    <CitedText parts={[otherMeasures(hiv.data)]} className={prose.a} />
+    <AidCited part="otherMeasures" className={prose.a} />
 </p>
 
-HIV aid here is gross ODA disbursements under CRS code 13040 (STD control including HIV/AIDS) in constant {hiv.data.priceBase} US dollars. {loansSentence(hiv.data)} Totals exclude HIV work under other codes, such as social mitigation of HIV/AIDS (16064), health systems, or reproductive health.
+HIV aid here is gross ODA disbursements under CRS code 13040 (STD control including HIV/AIDS) in constant {hiv.data.priceBase} US dollars. <AidText part="loans" /> Totals exclude HIV work under other codes, such as social mitigation of HIV/AIDS (16064), health systems, or reproductive health.
 
-The Global Fund also records combined HIV and tuberculosis grants mostly under code 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Because these grants are only partly for HIV, the chart shows them hatched, outside the totals, and the table marks the countries that received them in {LAST_YEAR}. {codeChangeSentence(hiv.data)}
+The Global Fund also records combined HIV and tuberculosis grants mostly under code 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Because these grants are only partly for HIV, the chart shows them hatched, outside the totals, and the table marks the countries that received them in <AidText part="lastYear" />. <AidText part="codeChange" />
 
-Constant {hiv.data.priceBase} US dollars use OECD donor-price deflators, with the Global Fund's deflator for multi-disease grants. Disbursements appear in the year reported, so single-year swings can reflect reporting timing. {usSwingSentence(hiv.data)}
+Constant {hiv.data.priceBase} US dollars use OECD donor-price deflators, with the Global Fund's deflator for multi-disease grants. Disbursements appear in the year reported, so single-year swings can reflect reporting timing. <AidText part="usSwing" />
 
 The data cover official external aid only and exclude private foundations, such as the Gates Foundation.
 
@@ -80,7 +71,7 @@ The data cover official external aid only and exclude private foundations, such 
     <CitedText parts={[PER_PERSON_NOTE]} className={prose.a} />
 </p>
 
-People living with HIV, antiretroviral therapy coverage, and AIDS-related deaths are UNAIDS estimates for {LAST_YEAR}. Country summaries compare deaths with {hiv.data.years[0]}.
+People living with HIV, antiretroviral therapy coverage, and AIDS-related deaths are UNAIDS estimates for <AidText part="lastYear" />. Country summaries compare deaths with <AidText part="firstYear" />.
 
 ## Notes
 
@@ -89,12 +80,9 @@ People living with HIV, antiretroviral therapy coverage, and AIDS-related deaths
         <CitedText parts={[FUNDING_2025]} className={prose.a} />
     </li>
     <li>
-        <CitedText parts={usTotalNote(hiv.data)} className={prose.a} />
+        <AidCited part="usTotal" className={prose.a} />
     </li>
-    <UnaidsNotes
-        countries={hiv.data.countries.map(({ iso3, name }) => ({ iso3, name }))}
-        years={hiv.data.years}
-    />
+    <UnaidsNotes />
 </ul>
 
 ## Sources

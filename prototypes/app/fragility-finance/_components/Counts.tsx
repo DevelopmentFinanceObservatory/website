@@ -1,24 +1,21 @@
+'use client';
+
+import { usePageFigures } from './Figures';
 import { Linked } from './Linked';
 
-import type { Context } from '../_data/types.ts';
-import { ARREARS_NOTE, odaNote, SOURCES } from '../_lib/copy.ts';
-import { listOf } from '../_lib/format.ts';
-import { debtAboveOdaCount, FLOW_YEAR, inIds } from '../_lib/profile.ts';
+import { ARREARS_NOTE, odaNote, PROSE_FIGURES, SOURCES } from '../_lib/copy.ts';
 
 /** How many contexts paid more in debt service than they received in ODA in 2024. */
-export const DebtAboveOda = ({ contexts }: { contexts: Context[] }) => (
-    <>{debtAboveOdaCount(contexts, FLOW_YEAR)}</>
-);
+export const DebtAboveOda = () => <>{PROSE_FIGURES.debtAboveOda(usePageFigures().contexts)}</>;
+
+/** How many fragile contexts the page covers. */
+export const ContextCount = () => <>{PROSE_FIGURES.contextCount(usePageFigures().contexts)}</>;
 
 /** The contexts outside the World Bank's International Debt Statistics, in prose. */
-export const WithoutIds = ({ contexts }: { contexts: Context[] }) => (
-    <>{listOf(contexts.filter((context) => !inIds(context)).map((context) => context.name))}</>
-);
+export const WithoutIds = () => <>{PROSE_FIGURES.withoutIds(usePageFigures().contexts)}</>;
 
 /** That ODA here counts every provider, with the 2024 total from the data. */
-export const OdaNote = ({ contexts }: { contexts: Context[] }) => (
-    <Linked words={odaNote(contexts)} />
-);
+export const OdaNote = () => <Linked words={odaNote(usePageFigures().contexts)} />;
 
 export const ArrearsNote = () => <>{ARREARS_NOTE}</>;
 
