@@ -1,6 +1,6 @@
 // Runs the page's browser read from Node, as the page would with READ_LIVE on, and checks it
 // gives profiles.json's and groups.json's figures. It times each pass and counts its requests,
-// so it says whether the read fits the page. The first pass is cold for this process; DFO may
+// so it says whether the read fits the page. The first pass is cold for this process, though DFO may
 // hold answers from an earlier run. Point it at an API with DFO_BASE_URL:
 //
 //     DFO_BASE_URL=https://.../api/v1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \

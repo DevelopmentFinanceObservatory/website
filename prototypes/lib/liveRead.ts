@@ -27,7 +27,7 @@ export const STORED_TIMEOUT_MS = 10_000;
 /**
  * How many reads run at once. A stored read is two GETs: the spec's newest stored version, then
  * its file. oda-counts' 19 stored reads, run all at once against production, drew 11 retried
- * 503s from dfo-apis (49 requests, 1.7 s); four at a time drew none (38 requests, 1.0 s).
+ * 503s from dfo-apis (49 requests, 1.7 s). Four at a time drew none (38 requests, 1.0 s).
  */
 export const READ_CONCURRENCY = 4;
 
@@ -160,9 +160,8 @@ const read = async <K extends string, T>(
 /**
  * Fetches the newest stored data for each of `sources`, `READ_CONCURRENCY` at a time, and runs
  * `derive` on the rows. When a stored read or `derive` fails, it returns `fallback.value` as the
- * `committed` tier, or with `fallback.tier` `pinned` reads every ref's pinned version and
- * derives from those rows. The
- * stored read's failure goes to `console.warn`. A dataset's `freshness` says how new a stored
+ * `committed` tier or, when `fallback.tier` is `pinned`, reads every ref's pinned version and
+ * derives from those rows. The stored read's failure goes to `console.warn`. A dataset's `freshness` says how new a stored
  * read is. `client` stands in for the anonymous one on the production API, as a test does.
  *
  * @throws A ref the client cannot read, or a recipe with a `pinned` fallback, before any
@@ -179,7 +178,7 @@ export const readLive = async <K extends string, T>(
         timeout = STORED_TIMEOUT_MS,
     }: { fallback: Fallback<T>; client?: Fetcher; signal?: AbortSignal; timeout?: number },
 ): Promise<LiveRead<K, T>> => {
-    // Object.keys widens to string; these are the keys of `sources`.
+    // Object.keys widens to string. These are the keys of `sources`.
     const keys = Object.keys(sources) as K[];
     const parsed = recordOf(keys, (key): Parsed => {
         const source = sources[key];

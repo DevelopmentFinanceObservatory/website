@@ -22,8 +22,8 @@ for each of its 62 contexts, the money that reaches it and the money it pays out
 DFO computes the figures that sum or rank many rows: each pillar's total and the total ODA and
 OOF per context and year, the six largest providers per context and per tier, the climate
 finance per context and each DAC member's change in 2025. Each pillar is a filter on the
-pillar's purpose labels, then a sum by recipient and year; development is the total less
-the other two. The CRS reads hold 16 recipients each, and DFO computes on one at a time, so
+pillar's purpose labels, then a sum by recipient and year. Development is the total less
+the other two. The CRS reads hold 16 recipients each, and DFO computes on one read at a time, so
 each figure takes one call per read, and the step joins the disjoint results. The step keeps
 the small arithmetic: development, climate "both" as the total less adaptation and
 mitigation, and the change joined to each provider. The page's browser read
@@ -48,9 +48,9 @@ allowance.
 Checks known values, failing loudly when one differs, then writes `profiles.json`,
 `groups.json`, with the six largest providers of ODA in 2024 to all 62 contexts and to each
 tier, and `live.json`. All money is in current US dollars. Beside `refs.json`, it writes
-`live-fixture.json`: each recipe's tree and the rows DFO computed for it, against which
-`_lib/live.test.mts` checks that `_lib/live.ts` builds the same trees and derives the
-committed figures from those rows.
+`live-fixture.json`, which holds each recipe's tree and the rows DFO computed for it.
+`_lib/live.test.mts` checks against it that `_lib/live.ts` builds the same trees and derives
+the committed figures from those rows.
 
 `fragility-2026.tsv` is the OECD's data file behind its fragility chart, linked from the
 OECD's multidimensional fragility dashboard
@@ -107,8 +107,8 @@ TOP_DONORS = 6
 # for all 62 recipients over 15 years runs in a few groups.
 CRS_GROUP = 16
 CRS_CHUNKS = 4
-# DFO computes each figure in its own call. Its analysis door answers 503 past a few calls in
-# flight, so two run at once.
+# DFO computes each figure in its own call. Its analysis endpoint answers 503 past a few calls
+# in flight, so two run at once.
 ANALYSIS_CONCURRENCY = 2
 PURPOSE = "crsPurpose"
 PURPOSE_FILTER = "stat_var_crsPurpose"
@@ -428,8 +428,8 @@ def labels_of(frames: Iterable[dfo.Dataset], column: str) -> dict[str, set[str]]
 
 
 def pillar_purposes(aid: list[dfo.Dataset]) -> dict[str, list[str]]:
-    """The labels of the humanitarian and peace purpose codes the CRS reads hold, which the
-    pillars' filters match: DFO's cells hold a purpose's label, not its code.
+    """The labels of the humanitarian and peace purpose codes the CRS reads hold. The pillars'
+    filters match these labels, since DFO's cells hold a purpose's label.
 
     Fails unless each label names one purpose code of the reads, a code of its own pillar,
     since a label that named no code would filter to nothing and draw a zero pillar.
@@ -565,8 +565,8 @@ def compute(recipes: dict[str, Recipe]) -> dict[str, Rows]:
 
 def donor_change(results: dict[str, Rows]) -> dict[str, float]:
     """Each DAC member's change in total ODA from 2024 to 2025, as a fraction. DFO leaves
-    out a provider with no ODA in 2024 or none recorded in 2025; a value that is not finite,
-    which a zero base in 2024 would give, is left out too, since JSON cannot hold it."""
+    out a provider with no ODA in 2024 or none recorded in 2025. A change that is infinite or
+    NaN, which a zero base in 2024 would give, is left out too, since JSON cannot hold it."""
     return {
         str(row[PROVIDER]): row["value"]
         for key in ("donors2025/change", "donors2025-eu/change")
@@ -639,7 +639,7 @@ def group_donors(
 
 def fixture(recipes: dict[str, Recipe], results: dict[str, Rows]) -> dict:
     """Each recipe's tree and the rows DFO computed for it, cut to the columns `_lib/live.ts`
-    reads, for the page's parity test. A value that is not finite is written as null, which
+    reads, for the page's parity test. An infinite or NaN value is written as null, which
     `_lib/live.ts` skips as it skips NaN."""
 
     def cell(value: Any) -> Any:
@@ -955,8 +955,8 @@ def main() -> int:
         target.write_text(json.dumps(content, indent=1, ensure_ascii=False) + "\n")
         log.info("Wrote %s.", target)
 
-    # The parity test builds the recipes from refs.json, so the fixture moves with it: a trial
-    # run, which leaves refs.json alone, leaves the fixture alone too.
+    # The parity test builds the recipes from refs.json, so the fixture moves with it. A trial
+    # run leaves refs.json alone, so it leaves the fixture alone too.
     if reads.pin:
         fixture_envelope = {
             "provenance": {

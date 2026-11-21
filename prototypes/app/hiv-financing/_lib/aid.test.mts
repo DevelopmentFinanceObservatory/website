@@ -203,7 +203,7 @@ test("figures that break the step's checks are refused, each check by its code",
         ['aid_year_without_money'],
     );
     // The United States and the Global Fund keep 1% of their last-year money, and another
-    // provider gives the rest, so the countries still sum to the totals.
+    // provider gives the rest, so the countries sum to the totals.
     assert.deepEqual(
         broken((rows) => {
             let moved = 0;
@@ -244,7 +244,7 @@ test("figures that break the step's checks are refused, each check by its code",
         }),
         ['aid_gf_switch_moved'],
     );
-    // No other provider giving $1m in the first or last year; their money to countries also
+    // No other provider giving $1m in the first or last year. Their money to countries also
     // drops below what the countries sum to.
     assert.deepEqual(
         broken((rows) => {

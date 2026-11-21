@@ -1,7 +1,7 @@
 """The step's checks and its pin and write order, over stubbed reads.
 
 Each read is a `FakeRead` holding a small frame that passes every check in `fetch.check`.
-Kenya and Uganda are the kept countries; the deaths read binds both by default. DFO's analysis
+Kenya and Uganda are the kept countries. The deaths read binds both by default. DFO's analysis
 is stubbed by `analysis_rows`, which sums the aid read's rows as the recipes do.
 """
 

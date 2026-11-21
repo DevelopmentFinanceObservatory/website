@@ -1,6 +1,6 @@
 // The aid figures from DFO's analysis: the recipes the page runs on the aid reads, and the
 // derivation of hiv.json's data from their rows. A port of `aid_recipes` and `aid_from_rows` in
-// _data/fetch.py; aid.test.mts checks both against the trees and rows the step writes to
+// _data/fetch.py. aid.test.mts checks both against the trees and rows the step writes to
 // _data/aid-fixture.json and the figures it writes to _data/hiv.json.
 import { DatasetRef, recipe } from '@developmentfinance/client';
 
@@ -37,13 +37,13 @@ const ALMOST_ALL = 0.95;
 const GF_SWITCH_YEAR = 2020;
 
 /** DFO's analysis frames mark a recipient country as a party and a region or no country as
- *  residual; the step checks that the parties are the `country/` recipients. */
+ *  residual. The step checks that the parties are the `country/` recipients. */
 const ALLOCATED = { financingRecipient_party_kind: 'party' };
 const UNALLOCATED = { financingRecipient_party_kind: 'residual' };
 /** The analysis frame holds the type of finance as its label, so the filter names the label. */
 const LOANS = { crsTypeOfFinance: 'standard loan' };
 
-/** The column each recipe's or read's rows hold their members in; a total holds none. */
+/** The column each recipe's or read's rows hold their members in. A total holds none. */
 const COLUMNS = {
     allocatedByProvider: PROVIDER,
     unallocatedByProvider: PROVIDER,
@@ -64,7 +64,7 @@ export const GF_KEYS = ['gf-12250', 'gf-12110'] as const;
 
 export type RecipeKey = Exclude<AidKey, (typeof GF_KEYS)[number]>;
 
-// Object.keys widens to string; these are the keys of COLUMNS.
+// Object.keys widens to string. These are the keys of COLUMNS.
 export const AID_KEYS = Object.keys(COLUMNS) as AidKey[];
 
 export const RECIPE_KEYS = AID_KEYS.filter(
@@ -195,7 +195,7 @@ const valueOf = (key: AidKey, row: AidRow): number => {
     return value;
 };
 
-/** A recipe's or read's values by member and year; a total's member is "". */
+/** A recipe's or read's values by member and year. A total's member is "". */
 const byCode = (key: AidKey, rows: readonly AidRow[]): Map<string, Map<number, number>> => {
     const column = COLUMNS[key];
     const found = new Map<string, Map<number, number>>();
@@ -372,7 +372,7 @@ const aidProblems = (
 /**
  * hiv.json's data from the rows of the aid recipes and the Global Fund reads, as `aid_from_rows`
  * in fetch.py gives it. Each provider counts as the United States, the Global Fund or other by
- * its code. A country is kept when its last-year aid rounds above zero; countries come in
+ * its code. A country is kept when its last-year aid rounds above zero. Countries come in
  * descending order of last-year aid, a tie in code order. The figures must pass the step's
  * checks (`AidCheck`).
  *
@@ -504,8 +504,8 @@ export const aidSources = (
 /**
  * The aid figures from the newest stored versions of the reads `refs` name, or `committed`
  * with the tier `committed` when a stored read fails or `aidFromRows` refuses its rows. An
- * async function, so a ref the client cannot read rejects the promise and never throws into
- * the caller's effect.
+ * async function, so a ref the client cannot read rejects the promise, which the caller's
+ * effect handles.
  */
 export const readAid = async (
     committed: HivData,

@@ -8,7 +8,7 @@
 // both against the trees and rows the step writes to _data/live-fixture.json.
 //
 // The pillar guard refuses a pillar that comes back empty for a context and year. If one of a
-// pillar's labels stops matching in a newer stored version while the others still match, as a
+// pillar's labels stops matching in a newer stored version while the others match, as a
 // relabelled purpose code would, that code's money moves to development and the guard passes.
 // The step's `pillar_purposes` reads the labels afresh, so its next run catches the relabel.
 import { DatasetRef, recipe } from '@developmentfinance/client';
@@ -309,7 +309,7 @@ export const deriveFigures = (
         for (const row of rowsOf(rows, `${key}/change`)) {
             const value = numberOf(row);
 
-            // A change from a zero base is not finite, and the step leaves it out.
+            // A change from a zero base is infinite or NaN, and the step leaves it out.
             if (value !== null && Number.isFinite(value)) {
                 change.set(String(row[PROVIDER]), value);
             }

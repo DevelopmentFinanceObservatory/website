@@ -26,11 +26,11 @@ rank the ODA lenders over the years, and total the Global Fund's 12250 and 12110
 countries. DFO refuses a by-recipient total of the 12110 read, whose recipients are too sparse
 before 2020 for its coverage floor, and each Global Fund read holds one row per recipient and
 year, so the step reads those rows as they are and fails on a second row for a recipient and
-year. `aid_from_rows` turns those rows into `hiv.json`, counting each
-provider as the United States, the Global Fund or other by its code. The page runs the same
-recipes in the browser (`_lib/aid.ts`) when it reads the aid live, and its parity test checks
-the TypeScript port against `aid-fixture.json`: the rows of every recipe and read, which the
-step writes, with each recipe's tree. `names.json` holds the names the page prints for
+year. `aid_from_rows` turns those rows into `hiv.json`, counting each provider as the United
+States, the Global Fund or other by its code. The page runs the same recipes in the browser
+(`_lib/aid.ts`) when it reads the aid live, and its parity test checks the TypeScript port
+against `aid-fixture.json`, which the step writes with the rows of every recipe and read and
+each recipe's tree. `names.json` holds the names the page prints for
 recipient countries and providers, from the aid read's labels.
 
 The page reads the UNAIDS data in the browser from the refs in `live-refs.json`, at DFO's
@@ -50,7 +50,7 @@ Three modes:
   window and reading, so a change to either takes this mode.
 
 The last two modes pin once every check passes, since each pin counts against a daily
-allowance. `--no-pin` skips the pins, for trial runs: it writes `hiv.json` and the UNAIDS
+allowance. `--no-pin` skips the pins, for trial runs. It writes `hiv.json` and the UNAIDS
 fixture and leaves `refs.json`, `live-refs.json` and `aid-fixture.json` as they are, since
 the aid fixture's trees name the versions `live-refs.json` holds.
 
@@ -109,7 +109,8 @@ AID_KEYS = ("aid", "gf-12250", "gf-12110")
 GF_KEYS = AID_KEYS[1:]
 UNAIDS_KEYS = ("plhiv", "art", "deaths")
 
-# Providers by code: the United States and the Global Fund; every other code counts as other.
+# Providers by code. The United States and the Global Fund have their own keys, and every
+# other code counts as other.
 US = "country/USA"
 GLOBAL_FUND = "GlobalFund"
 PROVIDER = "financingProvider"
@@ -119,9 +120,9 @@ RECIPIENT = "financingRecipient"
 ALLOCATED = {"financingRecipient_party_kind": "party"}
 UNALLOCATED = {"financingRecipient_party_kind": "residual"}
 # The analysis frame holds a CRS breakdown such as the type of finance as its label, so the
-# loan filter names the label; a code matches no row.
+# loan filter names the label. A code matches no row.
 LOANS = {"crsTypeOfFinance": "standard loan"}
-# The column each recipe's or read's rows hold their members in; a total holds none.
+# The column each recipe's or read's rows hold their members in. A total holds none.
 AID_COLUMNS: dict[str, str | None] = {
     "allocatedByProvider": PROVIDER,
     "unallocatedByProvider": PROVIDER,
@@ -359,7 +360,7 @@ def analysis_rows(reads: dict[str, dfo.Dataset]) -> tuple[dict[str, list[dict]],
 
 
 def by_code(key: str, rows: list[dict]) -> dict[str, dict[int, float]]:
-    """A recipe's or read's values by member and year; a total's member is "". Fails on a
+    """A recipe's or read's values by member and year. A total's member is "". Fails on a
     second row for a member and year, or a row whose value is missing."""
     column = AID_COLUMNS[key]
     found: dict[str, dict[int, float]] = {}

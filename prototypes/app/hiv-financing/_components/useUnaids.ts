@@ -48,7 +48,7 @@ const readFigures = (codes: readonly string[], years: readonly number[]): Promis
  * Reads the UNAIDS refs in the browser and derives each country's figures. The server
  * render and the first client render show `loading`; nothing rendered on the server derives
  * from these figures. The read runs again only when the set of countries or the years change,
- * so new arrays holding the same countries, as a live aid read gives, leave it be.
+ * so new arrays holding the same countries, as a live aid read gives, do not rerun it.
  */
 export const useUnaids = (
     countries: readonly Pick<Country, 'iso3'>[],

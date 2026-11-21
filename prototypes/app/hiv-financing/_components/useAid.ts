@@ -12,7 +12,7 @@ import type { ReadTier } from '#lib/liveRead.ts';
 /**
  * Whether the page reads the aid figures live. Off, it shows hiv.json's figures and makes no
  * request for them. Each stored read runs one of DFO's analysis recipes, so this waits on their
- * timing against DFO; the page's prose outside the island also prints hiv.json's figures.
+ * timing against DFO. The page's prose outside the island also prints hiv.json's figures.
  */
 export const READ_AID_LIVE = false;
 
