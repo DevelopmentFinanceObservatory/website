@@ -72,6 +72,9 @@ export const takeManifest = (
  * hid. The first manifest `offer`ed sends one `remove` for each card on it
  * that the page does not show, and `onTake` hears the manifest that answers,
  * then any later one offered meanwhile, as the canvas to take from then on.
+ * Before it, `onLocal` hears the cards the page shows that the answer lacks:
+ * cards the harness never held, such as a fork's inherited ones, which stay
+ * on the page as local cards.
  * Until then the canvas shows `ids()`: the legacy cards, the cards drawn
  * since (`keep`) and less the ones the user took off (`drop`), and
  * `onChange` hears each change. A failed `remove` leaves the canvas legacy,
@@ -81,11 +84,13 @@ export const createLegacyCanvas = ({
     ids,
     mutate,
     onTake,
+    onLocal,
     onChange,
 }: {
     ids: readonly string[];
     mutate: (operations: MutationOperation[]) => Promise<CompositionManifest | null>;
     onTake: (manifest: CompositionManifest) => void;
+    onLocal: (ids: string[]) => void;
     onChange: (ids: string[]) => void;
 }) => {
     const shown = new Set(ids);
@@ -94,7 +99,15 @@ export const createLegacyCanvas = ({
     let later: CompositionManifest | null = null;
 
     const take = (manifest: CompositionManifest) => {
+        const held = new Set(manifest.blocks.map((block) => block.component_id));
+        const local = [...shown].filter((id) => !held.has(id));
+
         state = 'taken';
+
+        if (local.length > 0) {
+            onLocal(local);
+        }
+
         onTake(manifest);
 
         if (later && later.revision > manifest.revision) {

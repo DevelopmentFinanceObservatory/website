@@ -14,11 +14,18 @@ import {
     mergeClosedTurns,
     owedNewQuestion,
     readConversation,
-    stateSince,
     type AttachStep,
 } from '../conversationState.ts';
 import { planFromFrame } from '../plan.ts';
-import { ensureTurn, heldTurns, NEW_QUESTION_NOTE, withHarnessTurn } from '../transcript.ts';
+import {
+    ensureTurn,
+    heldTurns,
+    NEW_QUESTION_NOTE,
+    readSince,
+    withHarnessTurn,
+    withInherited,
+    withInheritedBefore,
+} from '../transcript.ts';
 import type { StreamHandlers, StreamRefusal } from '../studioClient.ts';
 import type {
     ClosedTurn,
@@ -127,8 +134,8 @@ test('heldTurns counts on from the last prompt that names its harness turn', () 
     assert.equal(heldTurns(keyed), 7);
     assert.equal(heldTurns([...keyed, { role: 'user', text: 'd' }]), 8);
     // The last held turn comes back in the read, for a reply it never got.
-    assert.equal(stateSince(2), 1);
-    assert.equal(stateSince(0), 0);
+    assert.equal(readSince(messages), 1);
+    assert.equal(readSince([]), 0);
 });
 
 test('a reload that missed five turns pages the read and appends five keyed pairs in order', async () => {
@@ -138,20 +145,15 @@ test('a reload that missed five turns pages the read and appends five keyed pair
     ];
     const all = [1, 2, 3, 4, 5, 6].map((index) => closed(index));
     const calls: number[] = [];
-    const read = await readConversation(
-        'conv',
-        stateSince(heldTurns(saved)),
-        undefined,
-        async (_, since) => {
-            calls.push(since);
+    const read = await readConversation('conv', readSince(saved), undefined, async (_, since) => {
+        calls.push(since);
 
-            return readOf({
-                turn: turnState({ index: 6, status: 'done' }),
-                closed_since: all.filter((turn) => turn.turn_index > since).slice(0, 3),
-                closed_total: 6,
-            });
-        },
-    );
+        return readOf({
+            turn: turnState({ index: 6, status: 'done' }),
+            closed_since: all.filter((turn) => turn.turn_index > since).slice(0, 3),
+            closed_total: 6,
+        });
+    });
 
     assert.deepEqual(calls, [0, 3]);
 
@@ -361,5 +363,68 @@ test("owedNewQuestion sends a latest turn's new question once, while no turn fol
             { role: 'user', text: 'ODA to Ghana', refunded: true, fromNewQuestion: 3 },
         ]),
         null,
+    );
+});
+
+// A transcript holding harness turns `turns`, each a keyed prompt and reply.
+const keyed = (turns: number[]): ChatMessage[] =>
+    turns.flatMap((index): ChatMessage[] => [
+        { role: 'user', text: `question ${index}`, harnessTurn: index },
+        { role: 'bot', text: `reply ${index}` },
+    ]);
+
+test("a fork's first turn is keyed from 1, whatever the source's prompts held", () => {
+    // Saved before the stream named the fork's first turn.
+    const fork: ChatMessage[] = [
+        ...withInherited(keyed([1, 2, 3, 4, 5])),
+        { role: 'user', text: 'my question' },
+        { role: 'bot', text: '' },
+    ];
+
+    assert.equal(heldTurns(fork), 1);
+    assert.equal(readSince(fork), 0);
+
+    const { messages } = mergeClosedTurns(fork, [closed(1, 'the answer')]);
+
+    assert.deepEqual(messages.at(-1), { role: 'bot', text: 'the answer' });
+
+    // A fork that went on before prompts carried their turn: seven prompts,
+    // of which the session's two turns are the last two.
+    const unkeyed = Array.from({ length: 7 }, (_, at): ChatMessage[] => [
+        { role: 'user', text: `question ${at + 1}` },
+        { role: 'bot', text: `reply ${at + 1}` },
+    ]).flat();
+    const marked = withInheritedBefore(unkeyed, 2);
+
+    assert.equal(heldTurns(marked), 2);
+    assert.equal(marked.filter((message) => message.inherited).length, 10);
+});
+
+test("a fork owes its own turn's new question despite the source's", () => {
+    const fork: ChatMessage[] = [
+        ...withInherited([
+            ...keyed([1, 2]),
+            { role: 'user', text: 'ODA to Ghana', harnessTurn: 3, fromNewQuestion: 2 },
+        ]),
+        ...keyed([1, 2]),
+    ];
+    const asked = { ...closed(2, ''), new_question: 'ODA to Kenya' };
+    const read = readOf({ turn: turnState({ index: 2, status: 'done' }), closed_since: [asked] });
+
+    assert.deepEqual(owedNewQuestion(read, fork), { turnIndex: 2, text: 'ODA to Kenya' });
+});
+
+test('a turn another tab ran fills its gap in order', () => {
+    const held = keyed([1, 2, 3, 5]);
+
+    // The read starts from the turn the transcript lacks.
+    assert.equal(readSince(held), 3);
+
+    const { messages, appended } = mergeClosedTurns(held, [closed(4), closed(5)]);
+
+    assert.deepEqual(messages, keyed([1, 2, 3, 4, 5]));
+    assert.deepEqual(
+        appended.map((turn) => turn.turn_index),
+        [4],
     );
 });

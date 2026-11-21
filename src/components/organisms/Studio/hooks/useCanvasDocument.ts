@@ -97,6 +97,17 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         [],
     );
 
+    // Cards the harness turned out never to hold (useChat's localCards).
+    const addLocalIds = useCallback(
+        (ids: readonly string[]) =>
+            setLocalIds((prev) => {
+                const added = ids.filter((id) => !prev.includes(id));
+
+                return added.length > 0 ? [...prev, ...added] : prev;
+            }),
+        [],
+    );
+
     const unpin = useCallback(
         (id: string) => setPinnedIds((prev) => prev.filter((other) => other !== id)),
         [],
@@ -200,6 +211,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         reset,
         load,
         togglePin,
+        addLocalIds,
         unpin,
         removeWidget,
         addWidget,

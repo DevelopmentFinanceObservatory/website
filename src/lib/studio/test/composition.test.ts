@@ -94,6 +94,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     let held = manifest(5, drawn);
     const sent: MutationOperation[][] = [];
     const taken: CompositionManifest[] = [];
+    const local: string[] = [];
     const legacy = createLegacyCanvas({
         ids: restored.ids,
         mutate: async (operations) => {
@@ -111,6 +112,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
             return held;
         },
         onTake: (answer) => taken.push(answer),
+        onLocal: (ids) => local.push(...ids),
         onChange: () => {},
     });
 
@@ -122,16 +124,51 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
         taken.map((answer) => answer.blocks.map((block) => block.component_id)),
         [['cmp_0', 'cmp_10', 'cmp_11']],
     );
+    assert.deepEqual(local, []);
 
     // A failed remove leaves the canvas legacy and sends nothing more.
     const failing = createLegacyCanvas({
         ids: restored.ids,
         mutate: async () => null,
         onTake: (answer) => taken.push(answer),
+        onLocal: () => assert.fail('a legacy canvas that stays legacy adopts no card'),
         onChange: () => {},
     });
 
     await failing.offer(manifest(5, drawn));
     await failing.offer(manifest(6, drawn));
     assert.equal(taken.length, 1);
+});
+
+test('a legacy canvas keeps the inherited cards its session never held as local cards', async () => {
+    // An origin/dev fork that went on: a pinned inherited card and its own.
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_inherited', title: 'Old', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
+        ],
+        pinnedIds: ['cmp_inherited'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const local: string[] = [];
+    let canvas: CanvasBaseline | null = restored;
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        mutate: async () => assert.fail('the harness holds no card the page hides'),
+        onTake: (answer) => {
+            canvas = takeManifest(canvas, answer);
+        },
+        onLocal: (ids) => local.push(...ids),
+        onChange: () => {},
+    });
+
+    await legacy.offer(manifest(3, ['cmp_own']));
+
+    assert.deepEqual(local, ['cmp_inherited']);
+    assert.deepEqual(
+        canvasWidgetsOf({ ...save, canvas, localIds: local }).map((widget) => widget.id),
+        ['cmp_inherited', 'cmp_own'],
+    );
 });

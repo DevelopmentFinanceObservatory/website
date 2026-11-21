@@ -51,7 +51,6 @@ import {
     mergeClosedTurns,
     owedNewQuestion,
     readConversation,
-    stateSince,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
@@ -79,7 +78,9 @@ import {
 import {
     ensureTurn,
     heldTurns,
+    readSince,
     withAnswer,
+    withInheritedBefore,
     withHarnessTurn,
     withNewQuestion,
     withRefundedPrompt,
@@ -121,6 +122,8 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // and keys the prompt and its reply to the harness's turns.
 // `fromNewQuestion` marks a prompt sent as the new question that harness
 // turn handed back (`done`'s `new_question`), so it is sent once.
+// `inherited` marks a message a fork copied from another conversation,
+// whose turn keys belong to that conversation's session.
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
@@ -134,10 +137,12 @@ export type ChatMessage =
           refunded?: true;
           harnessTurn?: number;
           fromNewQuestion?: number;
+          inherited?: true;
       }
     | {
           role: 'bot';
           text: string;
+          inherited?: true;
           followups?: string[];
           chips?: ApplyChoiceSuggestion[];
           plan?: ApprovedPlan;
@@ -221,6 +226,8 @@ export type ChatSnapshot = {
     graceIds?: string[];
     graceTurn?: number;
 };
+
+const NO_IDS: string[] = [];
 
 const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
 
@@ -388,6 +395,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // manifest goes to it first.
     const canvasEditsRef = useRef<ReturnType<typeof createCanvasEdits> | null>(null);
     const legacyRef = useRef<LegacyCanvas | null>(null);
+    // The cards a legacy canvas showed that its harness session never held
+    // (a fork's inherited cards), for the canvas document to keep as local.
+    const [localCards, setLocalCards] = useState<string[]>(NO_IDS);
     const applyManifest = useCallback((manifest: CompositionManifest) => {
         if (legacyRef.current) {
             void legacyRef.current.offer(manifest);
@@ -428,6 +438,11 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
 
                     applyManifest(manifest);
+                },
+                onLocal: (ids) => {
+                    if (generationRef.current === generation) {
+                        setLocalCards(ids);
+                    }
                 },
                 onChange: (ids) => {
                     if (generationRef.current === generation) {
@@ -1634,8 +1649,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     );
 
     // A reopened conversation against the harness's copy (see
-    // conversationState.ts): its closed turns, read up to `closed_total`,
-    // and its canvas merge in, a pause comes back as its card, and a running
+    // conversationState.ts): its closed turns, read from the lowest one the
+    // transcript lacks (readSince) up to `closed_total`, and its canvas merge
+    // in, a pause comes back as its card, and a running
     // turn is carried on (carryOnTurn). An open turn the snapshot never got
     // joins the transcript as its prompt and an empty reply (ensureTurn),
     // with its own Activity entry. Sends made while the state is read wait
@@ -1653,9 +1669,30 @@ export const useChat = (initial?: ChatSnapshot) => {
         let read: ConversationRead | null = null;
 
         inFlightRef.current += 1;
-        void readConversation(conversation, stateSince(heldTurns(messagesRef.current)))
-            .then((answer) => {
-                read = answer;
+        void readConversation(conversation, readSince(messagesRef.current))
+            .then(async (answer) => {
+                // A save from before prompts carried their turn that holds
+                // more prompts than its session has turns is a fork that went
+                // on from a copied transcript (withInheritedBefore). Marked,
+                // its own turns are read again from where they start.
+                const latest = answer?.turn?.index ?? answer?.closed_total ?? 0;
+                const marked = answer && withInheritedBefore(messagesRef.current, latest);
+
+                if (
+                    answer &&
+                    marked &&
+                    marked !== messagesRef.current &&
+                    generationRef.current === generation
+                ) {
+                    messagesRef.current = marked;
+                    setState((prev) => ({
+                        ...prev,
+                        messages: withInheritedBefore(prev.messages, latest),
+                    }));
+                    read = await readConversation(conversation, readSince(marked));
+                } else {
+                    read = answer;
+                }
             })
             .finally(() => {
                 if (generationRef.current !== generation) {
@@ -1696,7 +1733,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 first: step,
                                 handlers,
                                 signal,
-                                since: () => stateSince(heldTurns(messagesRef.current)),
+                                since: () => readSince(messagesRef.current),
                                 onRead: takeRead,
                             }),
                         );
@@ -1725,6 +1762,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         canvasRef.current = null;
         setCanvas(null);
         legacyRef.current = null;
+        setLocalCards(NO_IDS);
         askedRef.current.clear();
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
@@ -1764,6 +1802,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             canvasRef.current = restoreCanvas(saved);
             setCanvas(canvasRef.current ?? saved.canvas ?? null);
             startLegacy(saved.sessionId, canvasRef.current);
+            setLocalCards(NO_IDS);
             askedRef.current.clear();
             canvasEditsRef.current?.reset();
             recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
@@ -1799,6 +1838,7 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     return {
         ...state,
+        localCards,
         syncCanvas,
         canvas,
         send,

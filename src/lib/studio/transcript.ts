@@ -28,19 +28,26 @@ export const withRefundedPrompt = (messages: ChatMessage[]): ChatMessage[] => {
     return messages.map((message, at) => (at === index ? { ...prompt, refunded: true } : message));
 };
 
+// A prompt that opened a turn of this conversation's harness session: not
+// an answer, not refunded, and not inherited from the conversation a fork
+// copied.
+const isOwnPrompt = (message: ChatMessage): message is Extract<ChatMessage, { role: 'user' }> =>
+    message.role === 'user' && isPrompt(message) && !message.refunded && !message.inherited;
+
 /**
- * The harness turn each accepted prompt opened, keyed by the prompt's
- * position in `messages`: its `harnessTurn`, else one past the prompt
- * before it. A save from before prompts carried their turn, or one saved
- * before its latest prompt's turn arrived, counts on from the last prompt
- * that has one. A refunded prompt opened no turn.
+ * The harness turn each of the conversation's own prompts opened, keyed by
+ * the prompt's position in `messages`: its `harnessTurn`, else one past the
+ * prompt before it. A save from before prompts carried their turn, or one
+ * saved before its latest prompt's turn arrived, counts on from the last
+ * prompt that has one. A refunded prompt opened no turn, and an inherited one
+ * (a fork's copy of another conversation) none of this conversation's.
  */
 export const promptTurns = (messages: readonly ChatMessage[]): Map<number, number> => {
     const turns = new Map<number, number>();
     let turn = 0;
 
     for (const [at, message] of messages.entries()) {
-        if (message.role === 'user' && isPrompt(message) && !isRefundedPrompt(message)) {
+        if (isOwnPrompt(message)) {
             turn = message.harnessTurn ?? turn + 1;
             turns.set(at, turn);
         }
@@ -54,13 +61,67 @@ export const heldTurns = (messages: readonly ChatMessage[]): number =>
     [...promptTurns(messages).values()].at(-1) ?? 0;
 
 /**
+ * The `since` to read the harness's state with: the turn before the lowest
+ * one the transcript lacks, so a turn another tab ran comes back, else the
+ * turn before the latest, so that turn comes back too when it closed after
+ * the page left with its reply still empty.
+ */
+export const readSince = (messages: readonly ChatMessage[]): number => {
+    const held = new Set(promptTurns(messages).values());
+    const latest = heldTurns(messages);
+    let lacking = 1;
+
+    while (held.has(lacking)) {
+        lacking += 1;
+    }
+
+    return Math.max(0, Math.min(lacking, latest) - 1);
+};
+
+/** The transcript as a fork inherits it: every message marked `inherited`,
+ *  so none of its prompts keys a turn of the fork's own session. */
+export const withInherited = (messages: ChatMessage[]): ChatMessage[] =>
+    messages.every((message) => message.inherited)
+        ? messages
+        : messages.map((message) => ({ ...message, inherited: true }));
+
+/**
+ * A save from before prompts carried their turn, against `latest`, the
+ * latest turn its harness session holds: when it has more accepted prompts
+ * than that, it is a fork that went on from a copied transcript, and the
+ * messages before its own `latest` prompts are inherited. The session's
+ * turns are its last ones, so they are counted from the end. Unchanged for
+ * a transcript that keys or marks any message.
+ */
+export const withInheritedBefore = (messages: ChatMessage[], latest: number): ChatMessage[] => {
+    if (
+        messages.some(
+            (message) => message.inherited || (message.role === 'user' && message.harnessTurn),
+        )
+    ) {
+        return messages;
+    }
+
+    const prompts = [...promptTurns(messages).keys()];
+    const inherited = prompts.length - latest;
+
+    if (inherited <= 0) {
+        return messages;
+    }
+
+    const own = prompts[inherited] ?? messages.length;
+
+    return messages.map((message, at) => (at < own ? { ...message, inherited: true } : message));
+};
+
+/**
  * The transcript with the harness turn `index` on the prompt that opened it:
  * the last prompt not refunded, since a new turn waits until the one in
  * flight ends and a refused one opened no turn. A prompt that already
  * carries `index` is left as it is.
  */
 export const withHarnessTurn = (messages: ChatMessage[], index: number): ChatMessage[] => {
-    const at = messages.findLastIndex((message) => isPrompt(message) && !isRefundedPrompt(message));
+    const at = messages.findLastIndex(isOwnPrompt);
     const prompt = messages[at];
 
     if (prompt?.role !== 'user' || prompt.harnessTurn === index) {
@@ -75,20 +136,29 @@ export const withHarnessTurn = (messages: ChatMessage[], index: number): ChatMes
 /**
  * The transcript holding harness turn `index`: unchanged when a prompt
  * already holds it, else with `userMessage` as the turn's prompt and an
- * empty reply after the last message.
+ * empty reply, placed by index: before the first prompt of a later turn
+ * (one another tab's turn went ahead of), else after the last message.
  */
 export const ensureTurn = (
     messages: ChatMessage[],
     index: number,
     userMessage: string,
-): ChatMessage[] =>
-    index <= heldTurns(messages)
-        ? messages
-        : [
-              ...messages,
-              { role: 'user', text: userMessage, harnessTurn: index },
-              { role: 'bot', text: '' },
-          ];
+): ChatMessage[] => {
+    const turns = [...promptTurns(messages)];
+
+    if (turns.some(([, turn]) => turn === index)) {
+        return messages;
+    }
+
+    const at = turns.find(([, turn]) => turn > index)?.[0] ?? messages.length;
+
+    return [
+        ...messages.slice(0, at),
+        { role: 'user', text: userMessage, harnessTurn: index },
+        { role: 'bot', text: '' },
+        ...messages.slice(at),
+    ];
+};
 
 /**
  * The position of harness turn `index`'s reply: the last bot message after

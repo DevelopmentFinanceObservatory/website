@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { effectiveKind, widgetTitle } from './canvas/layout';
 import LiveNote from './canvas/LiveNote';
@@ -33,7 +33,8 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
-import { forkedCanvas, isHarnessCard } from '@/lib/chat/canvas';
+import { isHarnessCard } from '@/lib/chat/canvas';
+import { forkOf, openedSave } from '@/lib/chat/fork';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
@@ -389,7 +390,10 @@ const Studio = ({
 
     // Reopen a saved conversation exactly as it was left — same transcript,
     // widgets, pins and card layout; follow-ups keep saving under its id.
-    const openSaved = (saved: SavedConversation) => {
+    const openSaved = (stored: SavedConversation) => {
+        // A fork's inherited turns and cards are marked as such (openedSave).
+        const saved = openedSave(stored);
+
         window.history.replaceState(null, '', `/studio/${saved.id}`);
         saved.widgets.forEach((widget) => trackedCards.current.add(widget.id));
         logRefusedDescriptions(saved.widgets);
@@ -481,11 +485,11 @@ const Studio = ({
 
         setForking(true);
 
-        // The copy's harness session holds none of the cards, so every one
-        // it inherits is a local card (forkedCanvas).
+        // The copy's harness session holds none of the turns or cards, so
+        // every message and card it inherits is marked so (forkOf).
         const copy: SavedConversation = {
             ...sharedSaved,
-            ...forkedCanvas(sharedSaved),
+            ...forkOf(sharedSaved),
             id: uuid(),
             sessionId: null,
             updatedAt: Date.now(),
@@ -533,6 +537,16 @@ const Studio = ({
             doc.addWidget(id);
         }
     };
+
+    // The cards a legacy canvas showed that its harness session never held
+    // stay on the canvas as local cards, before the frame that takes the
+    // manifest is painted.
+    const { localCards } = conversation;
+    const { addLocalIds } = doc;
+
+    useLayoutEffect(() => {
+        addLocalIds(localCards);
+    }, [localCards, addLocalIds]);
 
     // The card menu's Remove and Pin.
     const removeCard = (id: string) => {
