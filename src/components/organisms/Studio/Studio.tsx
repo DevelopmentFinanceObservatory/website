@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { effectiveKind, LEAVE_MS, widgetTitle } from './canvas/layout';
+import { effectiveKind, widgetTitle } from './canvas/layout';
 import LiveNote from './canvas/LiveNote';
 import Whiteboard from './canvas/Whiteboard';
 import { useCanvasDocument } from './hooks/useCanvasDocument';
@@ -33,11 +33,12 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
-import { latestTurnOf } from '@/lib/chat/canvas';
+import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { pinEdit } from '@/lib/studio/canvasEdits';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -486,10 +487,17 @@ const Studio = ({
 
         setForking(true);
 
+        // The copy's harness session holds none of the cards, so the ones
+        // the canvas shows stay on it as inherited cards.
+        const held = new Set(sharedSaved.widgets.map((widget) => widget.id));
         const copy: SavedConversation = {
             ...sharedSaved,
             id: uuid(),
             sessionId: null,
+            canvas: null,
+            localIds: canvasWidgetsOf(sharedSaved)
+                .filter((widget) => held.has(widget.id))
+                .map((widget) => widget.id),
             updatedAt: Date.now(),
             shareMarks: [],
         };
@@ -504,37 +512,14 @@ const Studio = ({
         router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
     };
 
-    const latestTurn = latestTurnOf(chat.widgets);
-
     // A live share's canvas: its data cards drawn on current data as each
     // refresh answers, and their states. A snapshot's cards its page could
     // not draw are filled the same way. The owner's own widgets pass
     // through untouched.
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
-        doc.visibleWidgets(chat.widgets),
+        doc.visibleWidgets(chat.widgets, chat.canvas),
     );
-    // The harness cards off screen that the user did not remove: a new turn
-    // hid them. Reported once their fade-out has finished.
-    const hiddenKey = chat.widgets
-        .filter(
-            (widget) =>
-                !visibleWidgets.some((other) => other.id === widget.id) &&
-                !doc.removedIds.includes(widget.id),
-        )
-        .map((widget) => widget.id)
-        .join(' ');
-    const { reportHidden, canvasVersion } = conversation;
-
-    useEffect(() => {
-        if (!hiddenKey) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => reportHidden(hiddenKey.split(' ')), LEAVE_MS);
-
-        return () => window.clearTimeout(timer);
-    }, [hiddenKey, canvasVersion, reportHidden]);
 
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
     const cardTitleOf = (id: string): string => {
@@ -544,33 +529,33 @@ const Studio = ({
     };
     const flyToCard = (id: string) => flyToCardRef.current?.(id);
 
-    // Chat chip → Add: back on the canvas (on grace if from an older turn).
+    // A card the harness holds, whose canvas edits go to the harness too. A
+    // text card and a fork's inherited card live only here.
+    const isHarnessCard = (id: string) =>
+        chat.widgets.some((widget) => widget.id === id) && !doc.localIds.includes(id);
+
+    // Chat chip → Add: back on the canvas.
     const addWidget = (id: string) => {
-        const widget = chat.widgets.find((other) => other.id === id);
+        doc.addWidget(id);
 
-        doc.addWidget(id, !!widget && widget.turn !== latestTurn, latestTurn);
-
-        if (widget) {
+        if (isHarnessCard(id)) {
             chat.syncCanvas([{ op: 'add', component_id: id }]);
         }
     };
 
-    // The card menu's Remove and Pin. A harness card's edit goes to the
-    // harness too; a text card lives only here.
+    // The card menu's Remove and Pin.
     const removeCard = (id: string) => {
         doc.removeWidget(id);
 
-        if (chat.widgets.some((widget) => widget.id === id)) {
+        if (isHarnessCard(id)) {
             chat.syncCanvas([{ op: 'remove', component_id: id }]);
         }
     };
     const togglePin = (id: string) => {
-        const pinning = !doc.pinnedIds.includes(id);
+        doc.togglePin(id);
 
-        doc.togglePin(id, latestTurn);
-
-        if (chat.widgets.some((widget) => widget.id === id)) {
-            chat.syncCanvas([{ op: pinning ? 'pin' : 'unpin', component_id: id }]);
+        if (isHarnessCard(id)) {
+            chat.syncCanvas([pinEdit(doc.pinnedIds, id)]);
         }
     };
 

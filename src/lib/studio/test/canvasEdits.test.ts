@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createCanvasEdits } from '../canvasEdits.ts';
+import { createCanvasEdits, pinEdit } from '../canvasEdits.ts';
 import type { CompositionManifest, MutationOperation } from '../wire.ts';
 
 const remove: MutationOperation[] = [{ op: 'remove', component_id: 'cmp_1' }];
@@ -139,4 +139,9 @@ test('reopening the same session preserves ordering behind its old pending edits
     await Promise.all([pending, queued, reopened]);
     assert.deepEqual(calls, ['remove', 'pin', 'add']);
     assert.deepEqual(received, [3]);
+});
+
+test('pinning sends pin, and unpinning a pinned card sends unpin', () => {
+    assert.deepEqual(pinEdit([], 'cmp_1'), { op: 'pin', component_id: 'cmp_1' });
+    assert.deepEqual(pinEdit(['cmp_1'], 'cmp_1'), { op: 'unpin', component_id: 'cmp_1' });
 });

@@ -34,6 +34,17 @@ export const splitSuggestions = (
     return { followups, chips };
 };
 
+/**
+ * What a chip says, and what the transcript shows once it is clicked: the
+ * switch it makes, "Switch to gross disbursements, current USD". The harness
+ * sends the option's bare label, which on its own reads as the basis of the
+ * answer above it rather than the other option it offers.
+ */
+export const chipAction = (chip: ApplyChoiceSuggestion): string => `Switch to ${chip.label}`;
+
+/** The chat line while a clicked chip's turn runs. */
+export const chipLine = (chip: ApplyChoiceSuggestion): string => `Switching to ${chip.label}`;
+
 /** What tells chips apart: the reading, the choice and the option. */
 export const chipKey = (chip: ApplyChoiceSuggestion): string =>
     `${chip.spec_id} ${chip.choice_id} ${chip.option_id}`;
@@ -67,7 +78,7 @@ export const chipRefusalDetail = (refusal: StreamRefusal): string | null =>
 /**
  * The transcript after the harness refused `chip`: the reply the click
  * opened says why, and carries the answer's other chips and follow-ups, so
- * the user can still pick one. `messages` ends with the user's chip label
+ * the user can still pick one. `messages` ends with the clicked chip's action
  * and its empty reply; the answer that offered the chip comes before them.
  */
 export const withRefusedChip = (

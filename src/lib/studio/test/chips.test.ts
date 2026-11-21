@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+    chipAction,
     chipKey,
+    chipLine,
     chipRefusalDetail,
     splitSuggestions,
     withoutChips,
@@ -147,4 +149,13 @@ test('withoutChips: a restored transcript keeps its follow-ups and loses its chi
         { role: 'bot', text: 'USD 4.1bn', followups: ['By donor'] },
         { role: 'bot', text: 'Done' },
     ]);
+});
+
+test('a chip offers its option as a switch, and the clicked turn says the same', () => {
+    assert.equal(chipAction(sector!), 'Switch to health, CRS 120 alone');
+    assert.equal(chipLine(sector!), 'Switching to health, CRS 120 alone');
+
+    const provider = { ...region!, label: 'bilateral plus imputed multilateral' };
+
+    assert.equal(chipAction(provider), 'Switch to bilateral plus imputed multilateral');
 });

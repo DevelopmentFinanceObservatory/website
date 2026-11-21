@@ -98,6 +98,24 @@ export const mergeClosedTurns = (
 };
 
 /**
+ * The question the harness's latest turn was ended by (a change to its plan
+ * that asked something else), when the page holds no turn after it and so
+ * still owes it as the next turn: the turn's index and the text. Null
+ * otherwise, and for a read whose latest turn `closed_since` does not hold.
+ */
+export const owedNewQuestion = (
+    read: ConversationRead,
+    harnessTurns: number,
+): { turnIndex: number; text: string } | null => {
+    const latest = read.turn;
+    const closed = latest && read.closed_since.find((turn) => turn.turn_index === latest.index);
+
+    return closed?.new_question && harnessTurns <= closed.turn_index
+        ? { turnIndex: closed.turn_index, text: closed.new_question }
+        : null;
+};
+
+/**
  * What the page does about the harness's latest turn: show its pause through
  * the stream's own handlers (`pause`), carry on a running turn nobody holds
  * (`resume`), read again after `seconds` while another stream holds it

@@ -82,3 +82,10 @@ test('forks and fresh conversations cannot inherit a legacy baseline', () => {
     assert.deepEqual(restoreCanvas({ ...legacy, canvas: base }), base);
     assert.deepEqual(takeManifest(restoreCanvas(undefined), manifest(1, ['cmp_new']))?.removed, []);
 });
+
+test("a fork's inherited cards are no harness cards of its legacy baseline", () => {
+    assert.deepEqual(restoreCanvas({ ...legacy, localIds: ['cmp_latest'] })?.ids, [
+        'cmp_pinned',
+        'cmp_grace',
+    ]);
+});

@@ -39,6 +39,32 @@ export const withAnswer = (messages: ChatMessage[], text: string): ChatMessage[]
     return last?.role === 'bot' ? [...messages.slice(0, -1), answer, last] : [...messages, answer];
 };
 
+/** The note a turn shows when the user's change to its plan asked a
+ *  different question, which goes on as the next turn. */
+export const NEW_QUESTION_NOTE = '_Taken as a new question._';
+
+/**
+ * The transcript once the harness took the user's change to the plan as a
+ * new question (`done`'s `new_question`): the plan card closes, so the turn's
+ * empty reply says so, and the typed text leaves the turn, since the next
+ * turn opens with it.
+ */
+export const withNewQuestion = (messages: ChatMessage[], question: string): ChatMessage[] => {
+    const reply = messages.at(-1);
+
+    if (reply?.role !== 'bot') {
+        return messages;
+    }
+
+    const typed = messages.at(-2);
+    const kept =
+        typed?.role === 'user' && typed.answer && typed.text === question
+            ? messages.slice(0, -2)
+            : messages.slice(0, -1);
+
+    return [...kept, reply.text ? reply : { ...reply, text: NEW_QUESTION_NOTE }];
+};
+
 /**
  * The index of the message a Chat + Canvas share mark follows: the one
  * before the first user message the share did not hold (an answer can go in

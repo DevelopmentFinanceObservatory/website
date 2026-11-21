@@ -594,7 +594,16 @@ export type StudioFrame =
     | LegacyElicitationRequest
     | { event: 'suggestions'; seq: number; items: (SuggestionItem | ApplyChoiceSuggestion)[] }
     | { event: 'error'; seq: number; error: ToolError }
-    | { event: 'done'; seq: number; trace_id: string; composition?: CompositionManifest | null };
+    | {
+          event: 'done';
+          seq: number;
+          trace_id: string;
+          composition?: CompositionManifest | null;
+          // Set when the user's `amend` text asked a different question: the
+          // turn set its plan aside, and the page sends the text as the next
+          // turn.
+          new_question?: string | null;
+      };
 
 // ---------------------------------------------------------------------------
 // The conversation as stored: GET /api/studio/state
@@ -615,14 +624,16 @@ export type TurnState = {
 };
 
 /** One closed turn: the user's message as the turn recorded it, the reply it
- *  closed on (empty when none), the cards it made or changed, and the code a
- *  turn that did not end cleanly closed on. */
+ *  closed on (empty when none), the cards it made or changed, the code a
+ *  turn that did not end cleanly closed on, and the question a turn ended by
+ *  a new question set its plan aside for (see `done`'s `new_question`). */
 export type ClosedTurn = {
     turn_index: number;
     user_message: string;
     reply: string;
     component_ids: string[];
     error?: string | null;
+    new_question?: string | null;
 };
 
 /** The open pause of a paused turn, and the frames it was sent as, its

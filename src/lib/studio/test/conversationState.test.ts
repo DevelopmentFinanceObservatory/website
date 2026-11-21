@@ -13,6 +13,7 @@ import {
     carryOnTurn,
     heldHarnessTurns,
     mergeClosedTurns,
+    owedNewQuestion,
     stateSince,
     type AttachStep,
 } from '../conversationState.ts';
@@ -262,4 +263,19 @@ test('carryOnTurn ends the turn once the harness has closed it', async () => {
 
 test('carryOnTurn rejects when the state cannot be read, so the turn ends failed', async () => {
     await assert.rejects(run({ kind: 'wait', turnIndex: 2, seconds: 1 }, { reads: [null] }));
+});
+
+test("owedNewQuestion sends a latest turn's new question only when no turn follows it", () => {
+    const asked = { ...closed(3, 'Set aside for a new question.'), new_question: 'ODA to Ghana' };
+    const read = readOf({ turn: turnState({ index: 3, status: 'done' }), closed_since: [asked] });
+
+    assert.deepEqual(owedNewQuestion(read, 2), { turnIndex: 3, text: 'ODA to Ghana' });
+    assert.deepEqual(owedNewQuestion(read, 3), { turnIndex: 3, text: 'ODA to Ghana' });
+    // The page holds a later turn, or the harness opened one.
+    assert.equal(owedNewQuestion(read, 4), null);
+    assert.equal(
+        owedNewQuestion({ ...read, turn: turnState({ index: 4, status: 'running' }) }, 3),
+        null,
+    );
+    assert.equal(owedNewQuestion({ ...read, closed_since: [closed(3)] }, 3), null);
 });

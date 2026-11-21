@@ -54,6 +54,7 @@ export const useConversationSave = ({
             CanvasDocument,
             | 'pinnedIds'
             | 'removedIds'
+            | 'localIds'
             | 'graceIds'
             | 'graceTurn'
             | 'theme'
@@ -88,6 +89,7 @@ export const useConversationSave = ({
             activity: snap.activity,
             pinnedIds: snap.doc.pinnedIds,
             removedIds: snap.doc.removedIds,
+            localIds: snap.doc.localIds,
             graceIds: snap.doc.graceIds,
             graceTurn: snap.doc.graceTurn,
             layout: layoutRef.current,
@@ -142,6 +144,7 @@ export const useConversationSave = ({
             doc: {
                 pinnedIds: doc.pinnedIds,
                 removedIds: doc.removedIds,
+                localIds: doc.localIds,
                 graceIds: doc.graceIds,
                 graceTurn: doc.graceTurn,
                 theme: doc.theme,
@@ -170,8 +173,11 @@ export const useConversationSave = ({
         chat.messages,
         chat.widgets,
         chat.activity,
+        // The harness canvas rides in the chat's snapshot (takeChatSnapshot).
+        chat.canvas,
         doc.pinnedIds,
         doc.removedIds,
+        doc.localIds,
         doc.graceIds,
         doc.graceTurn,
         doc.theme,

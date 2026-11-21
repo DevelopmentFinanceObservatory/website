@@ -1,12 +1,13 @@
 import type { CompositionManifest } from './wire';
 
-import { canvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
+import { legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
 
 /** The harness canvas this page last saw: which composition, at which
  *  revision, holding which cards. */
 export type CanvasBaseline = { compositionId: string | null; revision: number; ids: string[] };
 
-/** Restore legacy saves from their visible harness cards until the first manifest. */
+/** Restore legacy saves from their visible harness cards until the first
+ *  manifest. A fork's inherited cards (`localIds`) are no harness cards. */
 export const restoreCanvas = (
     saved:
         | ({ sessionId: string | null; canvas?: CanvasBaseline | null } & Pick<
@@ -20,19 +21,24 @@ export const restoreCanvas = (
         return null;
     }
 
-    return (
-        saved.canvas ?? {
-            compositionId: null,
-            revision: -1,
-            ids: canvasWidgetsOf({
-                widgets: saved.widgets,
-                pinnedIds: saved.pinnedIds ?? [],
-                removedIds: saved.removedIds ?? [],
-                graceIds: saved.graceIds,
-                graceTurn: saved.graceTurn,
-            }).map((widget) => widget.id),
-        }
-    );
+    if (saved.canvas) {
+        return saved.canvas;
+    }
+
+    const removed = new Set([...(saved.removedIds ?? []), ...(saved.localIds ?? [])]);
+
+    return {
+        compositionId: null,
+        revision: -1,
+        ids: legacyCanvasWidgetsOf({
+            widgets: saved.widgets,
+            pinnedIds: saved.pinnedIds ?? [],
+            graceIds: saved.graceIds,
+            graceTurn: saved.graceTurn,
+        })
+            .filter((widget) => !removed.has(widget.id))
+            .map((widget) => widget.id),
+    };
 };
 
 /**

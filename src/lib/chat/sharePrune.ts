@@ -21,6 +21,7 @@ const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
     turnCount: true,
     harnessTurns: true,
     canvas: true,
+    localIds: true,
     pinnedIds: true,
     removedIds: true,
     graceIds: true,
@@ -74,6 +75,10 @@ export const pruneForShare = (
         ...base,
         widgets: widget ? [{ ...widget, turn: 1 }] : [],
         textCards: textCard ? [textCard] : [],
+        // The one card shows by the legacy rule, as the pinned card of its
+        // only turn: no manifest or inherited set names it.
+        canvas: null,
+        localIds: [],
         pinnedIds: widget ? [widget.id] : [],
         removedIds: [],
         graceIds: [],
