@@ -37,6 +37,13 @@ import {
     type ClarifyReply,
 } from '@/lib/studio/clarify';
 import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
+import {
+    attachStep,
+    carryOnTurn,
+    heldHarnessTurns,
+    mergeClosedTurns,
+    stateSince,
+} from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
     approveReply,
@@ -65,11 +72,13 @@ import {
     cancelTurn,
     fetchComponentRevision,
     mutateComposition,
+    readState,
     runApplyChoice,
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
     SWITCH_STOP_GRACE_MS,
+    whileBusy,
     type StreamHandlers,
     type StreamRefusal,
 } from '@/lib/studio/studioClient';
@@ -77,6 +86,7 @@ import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
 import type {
     ApplyChoiceSuggestion,
     CompositionManifest,
+    ConversationRead,
     InterruptResponse,
     MutationOperation,
     Seed,
@@ -168,6 +178,10 @@ export type ChatSnapshot = {
     widgets: TurnWidget[];
     activity?: SavedActivityEntry[];
     turnCount: number;
+    // The turns the harness has opened on `sessionId`, which number its
+    // turns: a refused prompt opened none. Optional: saves from before this
+    // didn't have it (heldHarnessTurns counts them).
+    harnessTurns?: number;
     // The harness canvas this conversation last saw (see useChat's
     // canvasRef). Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;
@@ -178,6 +192,10 @@ export type ChatSnapshot = {
 };
 
 const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
+
+// The chat line while another stream holds the conversation and a turn waits
+// for it.
+const BUSY_LINE = 'Waiting for the conversation to be free';
 
 // The state with the chat line set; `statusSince` moves only when the label
 // changes.
@@ -296,6 +314,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // Set below: the settle handler reaches send() through it.
     const drainRef = useRef<() => void>(() => {});
     const turnCount = useRef(initial?.turnCount ?? 0);
+    // The turns the harness has opened on this conversation (see
+    // ChatSnapshot), counted at each turn's first harness frame.
+    const harnessTurnsRef = useRef(initial ? heldHarnessTurns(initial) : 0);
     const recapRef = useRef<string | null>(
         initial && !initial.sessionId ? buildRecap(initial.messages) : null,
     );
@@ -519,7 +540,16 @@ export const useChat = (initial?: ChatSnapshot) => {
             let preamble = '';
             const stepLine = createStepLine();
 
+            // A turn request's first frame from the harness (the page's own
+            // transport errors carry no `seq`) says the harness opened it.
+            let opened = !metered;
+
             const handle = (frame: StudioFrame) => {
+                if (!opened && frame.seq >= 0 && generationRef.current === generation) {
+                    opened = true;
+                    harnessTurnsRef.current += 1;
+                }
+
                 // A stream that reset/hydrate walked away from, or that the
                 // user stopped, must not write into the conversation.
                 if (generationRef.current !== generation || muted) {
@@ -962,6 +992,10 @@ export const useChat = (initial?: ChatSnapshot) => {
     // `line`. A new turn on a paused conversation abandons the pause (the
     // contract's rule), so any plan or clarify card goes with it.
     const startTurn = useCallback((user: ChatMessage & { role: 'user' }, line: string) => {
+        if (!sessionRef.current) {
+            harnessTurnsRef.current = 0;
+        }
+
         const conversation = sessionRef.current ?? uuid();
 
         sessionRef.current = conversation;
@@ -985,6 +1019,30 @@ export const useChat = (initial?: ChatSnapshot) => {
 
         return { turn, conversation };
     }, []);
+
+    // A turn request sent while another stream holds the conversation (a
+    // second tab, or a stream the harness has not yet seen end) is answered
+    // 409 `transient_unavailable`. It is sent again after the wait the
+    // answer names, with the chat line saying so, and the refusal never
+    // reaches the transcript.
+    const untilFree = useCallback(
+        (
+            run: (handlers: StreamHandlers) => Promise<void>,
+            handlers: StreamHandlers,
+            signal: AbortSignal,
+        ): Promise<void> => {
+            const generation = generationRef.current;
+
+            return whileBusy(run, handlers, signal, {
+                onWait: () => {
+                    if (generationRef.current === generation) {
+                        setState((prev) => withLine(prev, BUSY_LINE));
+                    }
+                },
+            });
+        },
+        [],
+    );
 
     const send = useCallback(
         (message: string, card?: CardTarget, seeds?: Seed[]) => {
@@ -1024,14 +1082,25 @@ export const useChat = (initial?: ChatSnapshot) => {
             stream(
                 turn,
                 (handlers, signal) =>
-                    runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
-                        ...(componentRef && { component_ref: componentRef }),
-                        ...(seeds && { seed_spec: seeds }),
-                    }),
+                    untilFree(
+                        (busyHandlers) =>
+                            runTurn(
+                                conversation,
+                                recap ? `${recap}${text}` : text,
+                                busyHandlers,
+                                signal,
+                                {
+                                    ...(componentRef && { component_ref: componentRef }),
+                                    ...(seeds && { seed_spec: seeds }),
+                                },
+                            ),
+                        handlers,
+                        signal,
+                    ),
                 { metered: true },
             );
         },
-        [holdTurn, startTurn, stream],
+        [holdTurn, startTurn, stream, untilFree],
     );
 
     const unqueue = useCallback((id: string) => {
@@ -1330,7 +1399,12 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             stream(
                 turn,
-                (handlers, signal) => runApplyChoice(conversation, chip, handlers, signal),
+                (handlers, signal) =>
+                    untilFree(
+                        (busyHandlers) => runApplyChoice(conversation, chip, busyHandlers, signal),
+                        handlers,
+                        signal,
+                    ),
                 {
                     metered: true,
                     onRefusal: (refusal) => {
@@ -1354,7 +1428,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                 },
             );
         },
-        [holdTurn, startTurn, stream],
+        [holdTurn, startTurn, stream, untilFree],
     );
 
     // The queue head goes next, unless a pause (plan or clarify) is waiting
@@ -1401,6 +1475,115 @@ export const useChat = (initial?: ChatSnapshot) => {
         chainRef.current = chainRef.current.then(() => cancelled);
     }, []);
 
+    // Merge a state read into the conversation: the harness's closed turns
+    // the page does not hold join the transcript (mergeClosedTurns), each
+    // with a closed Activity entry, and its manifest says which cards are on
+    // the canvas.
+    const takeRead = useCallback(
+        (read: ConversationRead) => {
+            const held = harnessTurnsRef.current;
+            const appended = read.closed_since
+                .filter((turn) => turn.turn_index > held)
+                .sort((a, b) => a.turn_index - b.turn_index);
+            const firstTurn = turnCount.current + 1;
+            const now = Date.now();
+
+            harnessTurnsRef.current = Math.max(held, ...appended.map((turn) => turn.turn_index));
+            turnCount.current += appended.length;
+            setState((prev) => {
+                const { messages } = mergeClosedTurns(prev.messages, held, read.closed_since);
+
+                return messages === prev.messages
+                    ? prev
+                    : {
+                          ...prev,
+                          messages,
+                          activity: [
+                              ...prev.activity,
+                              ...appended.map((turn, at) => ({
+                                  turn: firstTurn + at,
+                                  prompt: turn.user_message,
+                                  startedAt: now,
+                                  endedAt: now,
+                                  tools: [],
+                              })),
+                          ],
+                      };
+            });
+
+            if (read.manifest) {
+                applyManifest(read.manifest);
+            }
+        },
+        [applyManifest],
+    );
+
+    // A reopened conversation against the harness's copy (see
+    // conversationState.ts): its closed turns and canvas merge in, a pause
+    // comes back as its card, and a running turn is carried on (carryOnTurn).
+    // Sends made while the state is read wait for it, as they wait for a
+    // stream. Called after hydrate(), for a signed-in user's own
+    // conversation: the proxy answers 404 for anyone else, and the page
+    // then keeps its snapshot.
+    const reattach = useCallback(() => {
+        const conversation = sessionRef.current;
+
+        if (!conversation) {
+            return;
+        }
+
+        const generation = generationRef.current;
+        let read: ConversationRead | null = null;
+
+        inFlightRef.current += 1;
+        void readState(conversation, stateSince(harnessTurnsRef.current))
+            .then((answer) => {
+                read = answer;
+            })
+            .finally(() => {
+                if (generationRef.current !== generation) {
+                    return;
+                }
+
+                inFlightRef.current -= 1;
+
+                if (read) {
+                    takeRead(read);
+
+                    const step = attachStep(read);
+
+                    if (step.kind !== 'none') {
+                        // A turn the snapshot never got opens its reply below
+                        // the last one.
+                        if (step.turnIndex > harnessTurnsRef.current) {
+                            harnessTurnsRef.current = step.turnIndex;
+                            setState((prev) => ({
+                                ...prev,
+                                messages: [...prev.messages, { role: 'bot', text: '' }],
+                            }));
+                        }
+
+                        if (step.kind !== 'pause') {
+                            setState((prev) => ({ ...withLine(prev, WORKING), thinking: true }));
+                        }
+
+                        stream(turnCount.current, (handlers, signal) =>
+                            carryOnTurn({
+                                conversationId: conversation,
+                                first: step,
+                                handlers,
+                                signal,
+                                since: () => stateSince(harnessTurnsRef.current),
+                                onRead: takeRead,
+                            }),
+                        );
+                    }
+                }
+
+                drainRef.current();
+            });
+    }, [stream, takeRead]);
+
     const reset = useCallback(() => {
         // Ask the harness to stop (closing the fetch reaches it late, or
         // not at all, through the proxy), then leave the old request and
@@ -1421,6 +1604,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         hiddenSentRef.current.clear();
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
+        harnessTurnsRef.current = 0;
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         recapRef.current = null;
@@ -1458,6 +1642,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         canvasEditsRef.current?.reset();
         recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
         turnCount.current = saved.turnCount;
+        harnessTurnsRef.current = heldHarnessTurns(saved);
         setState({
             messages: restoredMessages(saved),
             widgets: saved.widgets,
@@ -1478,6 +1663,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                 revision,
             })),
             turnCount: turnCount.current,
+            harnessTurns: harnessTurnsRef.current,
             canvas: canvasRef.current,
         }),
         [],
@@ -1500,6 +1686,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         stop,
         reset,
         hydrate,
+        reattach,
         snapshot,
     };
 };

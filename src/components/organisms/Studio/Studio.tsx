@@ -153,6 +153,9 @@ const Studio = ({
     // The landing's opener is a growing textarea; the type covers both.
     const inputRef = useRef<PromptField>(null);
     const [query, setQuery] = useState(sharedSaved?.title ?? '');
+    // The chat's follow-up field, kept here so text typed into the landing's
+    // field while it leaves carries into it (see `leaving` below).
+    const [followDraft, setFollowDraft] = useState('');
     const [chatTab, setChatTab] = useState<ChatTab>('chat');
     const [cardsTab, setCardsTab] = useState('all');
     // A canvas/card share has no chat to show — it opens collapsed.
@@ -399,6 +402,14 @@ const Studio = ({
         doc.load(saved);
         setQuery(saved.title);
         chat.hydrate(saved);
+
+        // The harness's copy of the conversation fills in what the snapshot
+        // missed: a pending card, a turn that ended or paused after the page
+        // left, a turn left running.
+        if (account) {
+            chat.reattach();
+        }
+
         enterWorkspace();
     };
 
@@ -453,6 +464,7 @@ const Studio = ({
         window.history.replaceState(null, '', '/studio');
         window.clearTimeout(leaveTimer.current);
         setQuery('');
+        setFollowDraft('');
         setChatCollapsed(false);
         setChatTab('chat');
         doc.reset();
@@ -631,6 +643,19 @@ const Studio = ({
     // at least two kinds of card on the sheet.
     const showFilters =
         visibleWidgets.length > 0 && (!shared || Object.keys(kindCounts).length >= 2);
+
+    // From the first send until the workspace mounts, the landing's field is
+    // still on screen and keeps focus, so a quick follow-up is typed into it.
+    // It then holds the follow-up draft, so that text carries into the chat's
+    // follow-up field, and Enter sends it as a follow-up rather than starting
+    // the conversation again.
+    const leaving = mode === 'leaving';
+    const sendDraft = (text: string) => {
+        if (text.trim()) {
+            send(text);
+            setFollowDraft('');
+        }
+    };
 
     const title = doc.conversationTitle ?? query;
     const firstPrompt = chat.messages.find((message) => message.role === 'user')?.text ?? query;
@@ -858,15 +883,15 @@ const Studio = ({
 
             {!inWorkspace && (
                 <StudioLanding
-                    query={query}
-                    onQueryChange={setQuery}
-                    onBegin={begin}
+                    query={leaving ? followDraft : query}
+                    onQueryChange={leaving ? setFollowDraft : setQuery}
+                    onBegin={leaving ? sendDraft : begin}
                     examples={examples}
                     inputRef={inputRef}
                     history={account ? landingHistory.history : null}
                     openingId={landingHistory.openingId}
                     onOpenHistory={landingHistory.openHistory}
-                    leaving={mode === 'leaving'}
+                    leaving={leaving}
                     wall={walled ? <GuestWall /> : null}
                 />
             )}
@@ -902,6 +927,8 @@ const Studio = ({
                         note={liveCanvas ? <LiveNote live={liveCanvas} /> : undefined}
                     />
                     <ChatPanel
+                        draft={followDraft}
+                        onDraftChange={setFollowDraft}
                         editTarget={editTarget}
                         onClearEditTarget={() => setEditTarget(null)}
                         chat={chat}

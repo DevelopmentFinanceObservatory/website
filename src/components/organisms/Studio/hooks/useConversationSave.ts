@@ -10,6 +10,7 @@ import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
+import { isPrompt } from '@/lib/studio/transcript';
 
 type UseConversationSaveArgs = {
     chat: ReturnType<typeof useChat>;
@@ -125,6 +126,12 @@ export const useConversationSave = ({
 
     useEffect(() => () => window.clearTimeout(saveTimer.current), []);
 
+    // The prompts the last snapshot held. A turn's stream changes the
+    // transcript faster than the save debounce, so a new prompt is saved at
+    // once: a page that leaves mid-turn then holds the turn it opened, and a
+    // reopened conversation matches the harness's turns to it.
+    const promptsRef = useRef(0);
+
     // Any change worth keeping (a message, a widget, a pin) refreshes the
     // snapshot and queues a save.
     useEffect(() => {
@@ -147,7 +154,18 @@ export const useConversationSave = ({
                 shareMarks: doc.shareMarks,
             },
         };
-        scheduleSave();
+
+        const prompts = chat.messages.filter(isPrompt).length;
+        const opened = prompts > promptsRef.current;
+
+        promptsRef.current = prompts;
+
+        if (opened && !readOnly) {
+            window.clearTimeout(saveTimer.current);
+            persistNow();
+        } else {
+            scheduleSave();
+        }
     }, [
         chat.messages,
         chat.widgets,
@@ -164,6 +182,8 @@ export const useConversationSave = ({
         doc.notes,
         doc.conversationTitle,
         doc.shareMarks,
+        persistNow,
+        readOnly,
         scheduleSave,
     ]);
 

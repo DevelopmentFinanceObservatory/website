@@ -23,7 +23,8 @@ export * from './auth-schema.ts';
  * with their CSV, activity, pins, layout, theme, notes…) as one JSON
  * document, plus the columns the history list needs without unpacking it.
  * `agentSessionId` is the agent's server-side conversation, so a reopened
- * conversation resumes with its context.
+ * conversation resumes with its context, and the account that holds it is
+ * the only one the Studio proxy lets call the harness about it.
  */
 export const conversation = pgTable(
     'conversation',
@@ -40,7 +41,11 @@ export const conversation = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
-    (table) => [index('conversation_user_updated_idx').on(table.userId, table.updatedAt)],
+    (table) => [
+        index('conversation_user_updated_idx').on(table.userId, table.updatedAt),
+        // The Studio proxy finds a harness conversation's owner on every call.
+        index('conversation_agent_session_idx').on(table.agentSessionId),
+    ],
 );
 
 export type ConversationRow = typeof conversation.$inferSelect;

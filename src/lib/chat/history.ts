@@ -28,6 +28,9 @@ export type SavedConversation = {
     // The Activity trace (steps per turn).
     activity?: ActivityEntry[];
     turnCount: number;
+    // The turns the harness had opened on `sessionId` (useChat's
+    // ChatSnapshot). Optional: saves from before this didn't have it.
+    harnessTurns?: number;
     // The harness canvas the conversation last saw (useChat's canvasRef).
     // Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;

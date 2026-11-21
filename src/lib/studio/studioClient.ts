@@ -14,9 +14,11 @@ import type {
     CancelRequest,
     CompositionManifest,
     CompositionMutation,
+    ConversationRead,
     InterruptResponse,
     MutationOperation,
     PlanRevisionStaleError,
+    ResumeRequest,
     StudioFrame,
     ToolError,
     TurnRequest,
@@ -106,8 +108,8 @@ const asProxyProblem = (body: unknown, headers: Headers): ProxyProblem | null =>
 };
 
 const streamStudio = async (
-    endpoint: 'turn' | 'interrupt',
-    body: TurnRequest | InterruptResponse,
+    endpoint: 'turn' | 'interrupt' | 'resume',
+    body: TurnRequest | InterruptResponse | ResumeRequest,
     { onFrame, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
@@ -277,6 +279,121 @@ export const runInterrupt = (
         handlers,
         signal,
     );
+
+/** Carry on the conversation's open turn `turnIndex`, which is running with
+ *  no stream holding it; the response is a NEW stream continuing the turn. */
+export const runResume = (
+    conversationId: string,
+    turnIndex: number,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'resume',
+        {
+            kind: 'turn.resume',
+            schema_version: 1,
+            conversation_id: conversationId,
+            turn_index: turnIndex,
+        },
+        handlers,
+        signal,
+    );
+
+/**
+ * The seconds to wait before asking again when `refusal` says another stream
+ * holds the conversation (409 `transient_unavailable`), or null for any other
+ * refusal. The wait is at least a second, so a lease about to lapse is not
+ * asked about in a tight loop.
+ */
+export const busyRetryAfter = (refusal: StreamRefusal): number | null =>
+    refusal.status === 409 && refusal.error?.error === 'transient_unavailable'
+        ? Math.max(1, refusal.error.retry_after_seconds ?? 1)
+        : null;
+
+/** Resolves after `ms`, or rejects with an AbortError when `signal` aborts. */
+export const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+    new Promise((resolve, reject) => {
+        const aborted = () => {
+            clearTimeout(timer);
+            reject(new DOMException('The wait was aborted.', 'AbortError'));
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener('abort', aborted);
+            resolve();
+        }, ms);
+
+        if (signal?.aborted) {
+            aborted();
+        } else {
+            signal?.addEventListener('abort', aborted, { once: true });
+        }
+    });
+
+/**
+ * Run the stream request `run` and, while the harness answers that another
+ * stream holds the conversation (busyRetryAfter), wait the seconds it names
+ * and send it again. `onWait` hears each wait. Any other refusal goes to
+ * `handlers.onRefusal` as usual, and the busy answer never does.
+ */
+export const whileBusy = async (
+    run: (handlers: StreamHandlers) => Promise<void>,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+    {
+        onWait,
+        sleep = abortableSleep,
+    }: {
+        onWait?: (seconds: number) => void;
+        sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+    } = {},
+): Promise<void> => {
+    for (;;) {
+        // Set by the refusal handler during `run`, which the compiler cannot see.
+        let wait = null as number | null;
+
+        await run({
+            ...handlers,
+            onRefusal: (refusal) => {
+                wait = busyRetryAfter(refusal);
+
+                return wait !== null || (handlers.onRefusal?.(refusal) ?? false);
+            },
+        });
+
+        if (wait === null) {
+            return;
+        }
+
+        onWait?.(wait);
+        await sleep(wait * 1000, signal);
+    }
+};
+
+/**
+ * The conversation as the harness holds it, with the closed turns after
+ * `since`. Null on any failure, a 404 included: the proxy answers 404 for a
+ * conversation that is not the signed-in user's.
+ */
+export const readState = async (
+    conversationId: string,
+    since: number,
+    signal?: AbortSignal,
+): Promise<ConversationRead | null> => {
+    const query = new URLSearchParams({ conversation_id: conversationId, since: String(since) });
+
+    try {
+        const res = await fetch(`/api/studio/state?${query}`, { signal });
+
+        return res.ok ? ((await res.json()) as ConversationRead) : null;
+    } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+            throw error;
+        }
+
+        return null;
+    }
+};
 
 /** Mutate the canvas; resolves with the new (or unchanged) manifest. */
 export const mutateComposition = async (

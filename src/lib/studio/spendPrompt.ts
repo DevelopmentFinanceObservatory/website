@@ -35,7 +35,9 @@ const DAY_S = 86_400;
 const ADMIT_TIMEOUT_MS = 5_000;
 
 // The harness routes the browser calls (src/lib/studio/studioClient.ts).
-const STUDIO_ROUTES = new Set(['turn', 'interrupt', 'cancel', 'composition']);
+// Only `turn` spends a prompt: reading the state and resuming a turn carry on
+// one already paid for.
+const STUDIO_ROUTES = new Set(['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume']);
 
 /**
  * The harness route a proxied path names, or null for any other path. The

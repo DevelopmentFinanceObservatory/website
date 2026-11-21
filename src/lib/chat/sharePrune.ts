@@ -19,6 +19,7 @@ const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
     widgets: true,
     activity: true,
     turnCount: true,
+    harnessTurns: true,
     canvas: true,
     pinnedIds: true,
     removedIds: true,

@@ -1,10 +1,13 @@
 import { NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
+import { conversationOwners } from '@/lib/chat/conversationStore';
 import { counterDb } from '@/lib/db';
+import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
-import { notFoundProblem } from '@/lib/proxy/problem';
+import { missingProblem, notFoundProblem, problem } from '@/lib/proxy/problem';
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
+import { MAX_STUDIO_BODY_BYTES, studioAccessRefusal } from '@/lib/studio/studioAccess';
 import {
     meterTurn,
     refundPrompt,
@@ -33,9 +36,11 @@ const giveBack = (receipt: Parameters<typeof refundPrompt>[1]) =>
         console.error('studio: a prompt was not given back', error),
     );
 
-// Only the routes the browser calls go through (studioRoute). A turn spends
-// one prompt of the caller's daily allowance, and meterTurn
+// Only the routes the browser calls go through (studioRoute), each about a
+// conversation the caller may reach (studioAccessRefusal). A turn spends one
+// prompt of the caller's daily allowance, and meterTurn
 // (src/lib/studio/spendPrompt) gives it back when the turn does not start.
+// Reading the state and resuming a turn spend none.
 const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) => {
     const route = studioRoute((await params).path);
 
@@ -44,6 +49,32 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
     }
 
     const session = sessionOnce();
+
+    // A conversation an account saved answers only to that account
+    // (src/lib/studio/studioAccess). The body is read from a copy, so the
+    // request still streams to the harness.
+    const refusal = await studioAccessRefusal({
+        route,
+        method: req.method,
+        search: req.nextUrl.searchParams,
+        readBody: () => readBoundedText(req.clone().body, MAX_STUDIO_BODY_BYTES),
+        readUserId: async () => (await session())?.id ?? null,
+        ownersOf: conversationOwners,
+    });
+
+    if (refusal === 'too_large') {
+        return problem({
+            status: 413,
+            code: 'payload_too_large',
+            detail: `The request body is over ${MAX_STUDIO_BODY_BYTES} bytes.`,
+            retryable: false,
+        });
+    }
+
+    if (refusal === 'not_found') {
+        return missingProblem('There is no such conversation.');
+    }
+
     const options = {
         surface: 'api',
         target: `${STUDIO_API_BASE}/api/studio/${route}${req.nextUrl.search}`,
