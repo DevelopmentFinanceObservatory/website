@@ -70,12 +70,27 @@ export type StreamRefusal = {
     proxy?: ProxyProblem;
 };
 
-/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal,
- *  and `onUnreachable` a request that got no response at all (the fetch
- *  rejected), before the stream would report either as an `error` frame.
- *  Each returns true when it has dealt with it. */
+/** The response header every Studio stream names its turn's index in, from
+ *  1. A refused request carries none. */
+export const TURN_INDEX_HEADER = 'x-dfo-turn-index';
+
+/** The turn index a stream's response names in TURN_INDEX_HEADER, or null
+ *  when it names none or no positive integer. */
+export const turnIndexOf = (headers: Headers): number | null => {
+    const value = headers.get(TURN_INDEX_HEADER);
+    const index = value !== null && /^\d+$/.test(value) ? Number(value) : 0;
+
+    return index > 0 ? index : null;
+};
+
+/** What a stream reports to its caller. `onTurnIndex` hears the index of the
+ *  turn an accepted stream carries, before its first frame. `onRefusal` sees
+ *  an HTTP refusal, and `onUnreachable` a request that got no response at
+ *  all (the fetch rejected), before the stream would report either as an
+ *  `error` frame. Each returns true when it has dealt with it. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
+    onTurnIndex?: (index: number) => void;
     onKeepAlive?: () => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
     onUnreachable?: () => boolean;
@@ -110,7 +125,7 @@ const asProxyProblem = (body: unknown, headers: Headers): ProxyProblem | null =>
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt' | 'resume',
     body: TurnRequest | InterruptResponse | ResumeRequest,
-    { onFrame, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
+    { onFrame, onTurnIndex, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -162,6 +177,12 @@ const streamStudio = async (
         onFrame(transportError(detail ?? `HTTP ${res.status}`));
 
         return;
+    }
+
+    const turnIndex = turnIndexOf(res.headers);
+
+    if (turnIndex !== null) {
+        onTurnIndex?.(turnIndex);
     }
 
     const reader = res.body.getReader();

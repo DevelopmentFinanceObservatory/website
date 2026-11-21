@@ -11,13 +11,14 @@ import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 import {
     attachStep,
     carryOnTurn,
-    heldHarnessTurns,
     mergeClosedTurns,
     owedNewQuestion,
+    readConversation,
     stateSince,
     type AttachStep,
 } from '../conversationState.ts';
 import { planFromFrame } from '../plan.ts';
+import { ensureTurn, heldTurns, NEW_QUESTION_NOTE, withHarnessTurn } from '../transcript.ts';
 import type { StreamHandlers, StreamRefusal } from '../studioClient.ts';
 import type {
     ClosedTurn,
@@ -62,47 +63,52 @@ const PLAN: PlanProposed = {
 
 test('mergeClosedTurns appends a closed turn newer than the snapshot once', () => {
     const held: ChatMessage[] = [
-        { role: 'user', text: 'question 1' },
+        { role: 'user', text: 'question 1', harnessTurn: 1 },
         { role: 'bot', text: 'reply 1' },
     ];
 
-    const first = mergeClosedTurns(held, 1, [closed(1, 'harness text'), closed(2)]);
+    const first = mergeClosedTurns(held, [closed(1, 'harness text'), closed(2)]);
 
     assert.deepEqual(first.messages, [
         ...held,
-        { role: 'user', text: 'question 2' },
+        { role: 'user', text: 'question 2', harnessTurn: 2 },
         { role: 'bot', text: 'reply 2' },
     ]);
-    assert.equal(first.harnessTurns, 2);
     assert.deepEqual(
         first.appended.map((turn) => turn.turn_index),
         [2],
     );
 
     // A second read of the same turns, from the merged transcript, adds nothing.
-    const again = mergeClosedTurns(first.messages, first.harnessTurns, [closed(1), closed(2)]);
+    const again = mergeClosedTurns(first.messages, [closed(1), closed(2)]);
 
     assert.equal(again.messages, first.messages);
     assert.deepEqual(again.appended, []);
 });
 
-test('mergeClosedTurns fills the last held turn only when its reply is empty', () => {
+test("mergeClosedTurns fills a held turn's reply only when it is empty", () => {
     const left: ChatMessage[] = [
         { role: 'user', text: 'question 1' },
         { role: 'bot', text: '' },
     ];
 
-    assert.deepEqual(mergeClosedTurns(left, 1, [closed(1)]).messages, [
+    assert.deepEqual(mergeClosedTurns(left, [closed(1)]).messages, [
         left[0],
         { role: 'bot', text: 'reply 1' },
     ]);
 
     const answered: ChatMessage[] = [left[0]!, { role: 'bot', text: 'the page kept this' }];
 
-    assert.equal(mergeClosedTurns(answered, 1, [closed(1)]).messages, answered);
+    assert.equal(mergeClosedTurns(answered, [closed(1)]).messages, answered);
 });
 
-test('heldHarnessTurns counts accepted prompts for a save without the count', () => {
+test('a turn set aside for a new question shows a note, not an empty reply', () => {
+    const { messages } = mergeClosedTurns([], [{ ...closed(1, ''), new_question: 'ODA to Ghana' }]);
+
+    assert.deepEqual(messages.at(-1), { role: 'bot', text: NEW_QUESTION_NOTE });
+});
+
+test('heldTurns counts on from the last prompt that names its harness turn', () => {
     const messages: ChatMessage[] = [
         { role: 'user', text: 'a' },
         { role: 'bot', text: 'b' },
@@ -112,12 +118,76 @@ test('heldHarnessTurns counts accepted prompts for a save without the count', ()
         { role: 'user', text: 'c' },
     ];
 
-    assert.equal(heldHarnessTurns({ sessionId: 'conv', messages }), 2);
-    assert.equal(heldHarnessTurns({ sessionId: 'conv', messages, harnessTurns: 5 }), 5);
-    assert.equal(heldHarnessTurns({ sessionId: null, messages, harnessTurns: 5 }), 0);
+    // A save from before prompts named their turn counts accepted prompts.
+    assert.equal(heldTurns(messages), 2);
+    // A named turn anchors the count, and a prompt saved before its stream
+    // named one counts on from it.
+    const keyed = withHarnessTurn(messages, 7);
+
+    assert.equal(heldTurns(keyed), 7);
+    assert.equal(heldTurns([...keyed, { role: 'user', text: 'd' }]), 8);
     // The last held turn comes back in the read, for a reply it never got.
     assert.equal(stateSince(2), 1);
     assert.equal(stateSince(0), 0);
+});
+
+test('a reload that missed five turns pages the read and appends five keyed pairs in order', async () => {
+    const saved: ChatMessage[] = [
+        { role: 'user', text: 'question 1', harnessTurn: 1 },
+        { role: 'bot', text: 'reply 1' },
+    ];
+    const all = [1, 2, 3, 4, 5, 6].map((index) => closed(index));
+    const calls: number[] = [];
+    const read = await readConversation(
+        'conv',
+        stateSince(heldTurns(saved)),
+        undefined,
+        async (_, since) => {
+            calls.push(since);
+
+            return readOf({
+                turn: turnState({ index: 6, status: 'done' }),
+                closed_since: all.filter((turn) => turn.turn_index > since).slice(0, 3),
+                closed_total: 6,
+            });
+        },
+    );
+
+    assert.deepEqual(calls, [0, 3]);
+
+    const { messages } = mergeClosedTurns(saved, read!.closed_since);
+
+    assert.deepEqual(messages.slice(2), [
+        ...[2, 3, 4, 5, 6].flatMap((index): ChatMessage[] => [
+            { role: 'user', text: `question ${index}`, harnessTurn: index },
+            { role: 'bot', text: `reply ${index}` },
+        ]),
+    ]);
+    assert.equal(heldTurns(messages), 6);
+});
+
+test('attaching to an open turn the snapshot never held shows its prompt', () => {
+    const saved: ChatMessage[] = [
+        { role: 'user', text: 'question 1', harnessTurn: 1 },
+        { role: 'bot', text: 'reply 1' },
+    ];
+    const read = readOf({
+        turn: turnState({ index: 2, user_message: 'question 2' }),
+        closed_since: [closed(1)],
+        closed_total: 1,
+    });
+    const step = attachStep(read);
+
+    assert.deepEqual(step, { kind: 'resume', turnIndex: 2 });
+
+    const messages = ensureTurn(saved, step.turnIndex, read.turn!.user_message!);
+
+    assert.deepEqual(messages.slice(2), [
+        { role: 'user', text: 'question 2', harnessTurn: 2 },
+        { role: 'bot', text: '' },
+    ]);
+    // The stream that carries it on writes into that reply, the last message.
+    assert.equal(ensureTurn(messages, 2, 'question 2'), messages);
 });
 
 test('attachStep decides from the turn status and the lease', () => {
@@ -265,17 +335,31 @@ test('carryOnTurn rejects when the state cannot be read, so the turn ends failed
     await assert.rejects(run({ kind: 'wait', turnIndex: 2, seconds: 1 }, { reads: [null] }));
 });
 
-test("owedNewQuestion sends a latest turn's new question only when no turn follows it", () => {
+test("owedNewQuestion sends a latest turn's new question once, while no turn follows it", () => {
     const asked = { ...closed(3, 'Set aside for a new question.'), new_question: 'ODA to Ghana' };
     const read = readOf({ turn: turnState({ index: 3, status: 'done' }), closed_since: [asked] });
+    const upTo = (turns: number): ChatMessage[] =>
+        Array.from({ length: turns }, (_, at): ChatMessage => ({
+            role: 'user',
+            text: `question ${at + 1}`,
+            harnessTurn: at + 1,
+        }));
 
-    assert.deepEqual(owedNewQuestion(read, 2), { turnIndex: 3, text: 'ODA to Ghana' });
-    assert.deepEqual(owedNewQuestion(read, 3), { turnIndex: 3, text: 'ODA to Ghana' });
+    assert.deepEqual(owedNewQuestion(read, upTo(2)), { turnIndex: 3, text: 'ODA to Ghana' });
+    assert.deepEqual(owedNewQuestion(read, upTo(3)), { turnIndex: 3, text: 'ODA to Ghana' });
     // The page holds a later turn, or the harness opened one.
-    assert.equal(owedNewQuestion(read, 4), null);
+    assert.equal(owedNewQuestion(read, upTo(4)), null);
     assert.equal(
-        owedNewQuestion({ ...read, turn: turnState({ index: 4, status: 'running' }) }, 3),
+        owedNewQuestion({ ...read, turn: turnState({ index: 4, status: 'running' }) }, upTo(3)),
         null,
     );
-    assert.equal(owedNewQuestion({ ...read, closed_since: [closed(3)] }, 3), null);
+    assert.equal(owedNewQuestion({ ...read, closed_since: [closed(3)] }, upTo(3)), null);
+    // A send of it the harness refused keeps its prompt, so it is not sent again.
+    assert.equal(
+        owedNewQuestion(read, [
+            ...upTo(3),
+            { role: 'user', text: 'ODA to Ghana', refunded: true, fromNewQuestion: 3 },
+        ]),
+        null,
+    );
 });

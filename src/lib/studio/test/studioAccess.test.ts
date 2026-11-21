@@ -86,3 +86,19 @@ test('studioConversationId reads the query of a GET and the JSON body otherwise'
     assert.equal(studioConversationId('POST', search, 'not json'), null);
     assert.equal(studioConversationId('POST', search, '{"conversation_id":7}'), null);
 });
+
+test('studioAccessRefusal refuses as unavailable when the owners cannot be read', async () => {
+    const refusal = (ownersOf: () => Promise<string[]>) =>
+        studioAccessRefusal({
+            route: 'state',
+            method: 'GET',
+            search: new URLSearchParams({ conversation_id: 'conv-ana' }),
+            readBody: async () => '',
+            readUserId: async () => 'user-ana',
+            ownersOf,
+            timeoutMs: 10,
+        });
+
+    assert.equal(await refusal(() => new Promise<string[]>(() => {})), 'unavailable');
+    assert.equal(await refusal(() => Promise.reject(new Error('db down'))), 'unavailable');
+});

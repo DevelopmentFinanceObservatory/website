@@ -1,13 +1,18 @@
-import type { CompositionManifest } from './wire';
+import type { CompositionManifest, MutationOperation } from './wire';
 
 import { legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
 
 /** The harness canvas this page last saw: which composition, at which
- *  revision, holding which cards. */
+ *  revision, holding which cards. A null `compositionId` marks a legacy
+ *  canvas: the cards a save from before the page kept the manifest showed,
+ *  which the harness's manifest has not yet been brought to
+ *  (createLegacyCanvas). */
 export type CanvasBaseline = { compositionId: string | null; revision: number; ids: string[] };
 
-/** Restore legacy saves from their visible harness cards until the first
- *  manifest. A fork's inherited cards (`localIds`) are no harness cards. */
+/** The canvas a save reopens with: its saved baseline, else, for a save
+ *  from before the page kept the manifest, a legacy canvas of the harness
+ *  cards it showed. A fork's inherited cards (`localIds`) are no harness
+ *  cards. */
 export const restoreCanvas = (
     saved:
         | ({ sessionId: string | null; canvas?: CanvasBaseline | null } & Pick<
@@ -42,29 +47,115 @@ export const restoreCanvas = (
 };
 
 /**
- * Take a canvas manifest: the new baseline, and the cards it took off since
- * the previous one (the agent removing cards, or a replaced card's old id).
- * A manifest no newer than the baseline (a frame or response arriving late)
- * changes nothing: null. A manifest of another composition (a forked
- * conversation's new session) starts a new baseline and takes nothing off.
+ * Take a canvas manifest: the new baseline. A manifest of the same
+ * composition no newer than the baseline (a frame or response arriving
+ * late) changes nothing: null. A manifest of another composition (a forked
+ * conversation's new session, or the first after a legacy canvas) starts a
+ * new baseline.
  */
 export const takeManifest = (
     previous: CanvasBaseline | null,
     manifest: CompositionManifest,
-): { baseline: CanvasBaseline; removed: string[] } | null => {
-    const same =
-        previous !== null &&
-        (previous.compositionId === null || previous.compositionId === manifest.composition_id);
+): CanvasBaseline | null =>
+    previous?.compositionId === manifest.composition_id && manifest.revision <= previous.revision
+        ? null
+        : {
+              compositionId: manifest.composition_id,
+              revision: manifest.revision,
+              ids: manifest.blocks.map((block) => block.component_id),
+          };
 
-    if (same && previous && manifest.revision <= previous.revision) {
-        return null;
-    }
+/**
+ * A legacy canvas (see CanvasBaseline) while the harness's manifest is
+ * brought to it. The harness holds every card such a conversation ever drew,
+ * because the page that saved it never reported the cards its turn rule
+ * hid. The first manifest `offer`ed sends one `remove` for each card on it
+ * that the page does not show, and `onTake` hears the manifest that answers,
+ * then any later one offered meanwhile, as the canvas to take from then on.
+ * Until then the canvas shows `ids()`: the legacy cards, the cards drawn
+ * since (`keep`) and less the ones the user took off (`drop`), and
+ * `onChange` hears each change. A failed `remove` leaves the canvas legacy,
+ * so the save stays legacy and the next open tries again.
+ */
+export const createLegacyCanvas = ({
+    ids,
+    mutate,
+    onTake,
+    onChange,
+}: {
+    ids: readonly string[];
+    mutate: (operations: MutationOperation[]) => Promise<CompositionManifest | null>;
+    onTake: (manifest: CompositionManifest) => void;
+    onChange: (ids: string[]) => void;
+}) => {
+    const shown = new Set(ids);
+    let state: 'waiting' | 'sent' | 'failed' | 'taken' = 'waiting';
+    // The newest manifest offered while the `remove` was in flight.
+    let later: CompositionManifest | null = null;
 
-    const ids = manifest.blocks.map((block) => block.component_id);
-    const kept = new Set(ids);
+    const take = (manifest: CompositionManifest) => {
+        state = 'taken';
+        onTake(manifest);
+
+        if (later && later.revision > manifest.revision) {
+            onTake(later);
+        }
+
+        later = null;
+    };
 
     return {
-        baseline: { compositionId: manifest.composition_id, revision: manifest.revision, ids },
-        removed: same && previous ? previous.ids.filter((id) => !kept.has(id)) : [],
+        ids: (): string[] => [...shown],
+        keep: (id: string) => {
+            if (state !== 'taken' && !shown.has(id)) {
+                shown.add(id);
+                onChange([...shown]);
+            }
+        },
+        drop: (id: string) => {
+            if (state !== 'taken' && shown.delete(id)) {
+                onChange([...shown]);
+            }
+        },
+        offer: async (manifest: CompositionManifest): Promise<void> => {
+            if (state === 'taken' || state === 'failed') {
+                return;
+            }
+
+            if (state === 'sent') {
+                later = later && later.revision >= manifest.revision ? later : manifest;
+
+                return;
+            }
+
+            const hidden = manifest.blocks
+                .map((block) => block.component_id)
+                .filter((id) => !shown.has(id));
+
+            if (hidden.length === 0) {
+                take(manifest);
+
+                return;
+            }
+
+            state = 'sent';
+
+            const answer = await mutate(
+                hidden.map((id) => ({ op: 'remove', component_id: id })),
+            ).catch((error: unknown) => {
+                console.warn('Studio: a legacy canvas was not brought to the harness', error);
+
+                return null;
+            });
+
+            if (answer) {
+                take(answer);
+            } else {
+                state = 'failed';
+                later = null;
+            }
+        },
     };
 };
+
+export type LegacyCanvas = ReturnType<typeof createLegacyCanvas>;

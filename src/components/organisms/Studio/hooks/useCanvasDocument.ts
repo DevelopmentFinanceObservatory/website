@@ -22,8 +22,8 @@ import { uuid } from '@/lib/uuid';
 export const useCanvasDocument = (initial?: SavedConversation) => {
     // Pinned cards: the harness keeps them when the model clears the canvas.
     const [pinnedIds, setPinnedIds] = useState<string[]>(initial?.pinnedIds ?? []);
-    // Cards removed from the canvas (the card menu, or the model), hidden
-    // here before the harness's manifest drops them.
+    // The cards the harness never held (text cards, `localIds`) that the
+    // user took off the canvas. The harness's manifest decides for its own.
     const [removedIds, setRemovedIds] = useState<string[]>(initial?.removedIds ?? []);
     // A fork's inherited cards, which its harness session never held.
     const [localIds, setLocalIds] = useState<string[]>(initial?.localIds ?? []);
@@ -97,13 +97,21 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         [],
     );
 
-    const removeWidget = useCallback((id: string) => {
-        setRemovedIds((prev) => [...prev, id]);
-        setPinnedIds((prev) => prev.filter((other) => other !== id));
-    }, []);
+    const unpin = useCallback(
+        (id: string) => setPinnedIds((prev) => prev.filter((other) => other !== id)),
+        [],
+    );
 
-    // Chat chip → Add: a removed card is un-removed. A harness card shows
-    // once the harness's manifest holds it again.
+    // A local card off the canvas (card menu → Remove).
+    const removeWidget = useCallback(
+        (id: string) => {
+            setRemovedIds((prev) => [...prev, id]);
+            unpin(id);
+        },
+        [unpin],
+    );
+
+    // Chat chip → Add: a removed local card is un-removed.
     const addWidget = useCallback((id: string) => {
         setRemovedIds((prev) => prev.filter((other) => other !== id));
     }, []);
@@ -192,6 +200,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         reset,
         load,
         togglePin,
+        unpin,
         removeWidget,
         addWidget,
         upsertTextCard,

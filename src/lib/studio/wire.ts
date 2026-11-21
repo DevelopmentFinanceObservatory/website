@@ -612,13 +612,15 @@ export type StudioFrame =
 /** Where a turn stands. `running` and `paused` are open; the rest are closed. */
 export type TurnStatus = 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'abandoned';
 
-/** The conversation's latest turn. `lease_live` says a stream holds the turn
- *  now, on some instance, and `retry_after_seconds` is then the most its
- *  lease has left. */
+/** The conversation's latest turn. `user_message` is its prompt as a closed
+ *  turn's record words it, so a page can show a turn it never held.
+ *  `lease_live` says a stream holds the turn now, on some instance, and
+ *  `retry_after_seconds` is then the most its lease has left. */
 export type TurnState = {
     index: number;
     status: TurnStatus;
     trace_id: string;
+    user_message?: string;
     lease_live: boolean;
     retry_after_seconds?: number | null;
 };
@@ -646,12 +648,14 @@ export type PendingPause = {
 
 /** GET /api/studio/state: `turn` is absent before the first turn,
  *  `closed_since` holds the closed turns after the request's `since` (oldest
- *  first, at most 3), `pause` the open pause of a paused turn, and `manifest`
- *  the canvas. */
+ *  first, at most 3), `closed_total` how many closed turns the conversation
+ *  holds (the index of the last), `pause` the open pause of a paused turn,
+ *  and `manifest` the canvas. */
 export type ConversationRead = {
     conversation_id: string;
     turn?: TurnState | null;
     closed_since: ClosedTurn[];
+    closed_total?: number;
     pause?: PendingPause | null;
     manifest?: CompositionManifest | null;
 };

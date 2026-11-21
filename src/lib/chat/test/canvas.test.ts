@@ -8,7 +8,7 @@ import test from 'node:test';
 
 import { takeManifest, type CanvasBaseline } from '../../studio/composition.ts';
 import type { CompositionManifest } from '../../studio/wire.ts';
-import { canvasWidgetsOf, type CanvasState } from '../canvas.ts';
+import { canvasWidgetsOf, forkedCanvas, isHarnessCard, type CanvasState } from '../canvas.ts';
 import type { TextWidget } from '../widgets.ts';
 
 const card = (id: string, turn: number) => ({
@@ -56,8 +56,7 @@ test('cards of earlier turns stay on the canvas while the manifest holds them', 
 test('a card the model took off leaves the canvas with the manifest that dropped it', () => {
     const taken = takeManifest(baseline(['cmp_first', 'cmp_second']), manifest(3, ['cmp_first']));
 
-    assert.deepEqual(taken?.removed, ['cmp_second']);
-    assert.deepEqual(ids(state({ canvas: taken!.baseline })), ['cmp_first', 'text_local']);
+    assert.deepEqual(ids(state({ canvas: taken })), ['cmp_first', 'text_local']);
 });
 
 test('a save without a manifest keeps the latest turn, its pins and its grace', () => {
@@ -86,4 +85,37 @@ test("a fork's inherited cards show beside the manifest of its own session", () 
         'cmp_second',
         'text_local',
     ]);
+});
+
+test('a card the model takes off and draws again shows again', () => {
+    const drawn = baseline(['cmp_first', 'cmp_second']);
+    const off = takeManifest(drawn, manifest(3, ['cmp_first']));
+    const back = takeManifest(off, manifest(4, ['cmp_first', 'cmp_second']));
+
+    // A save that listed the model's removal among the user's still shows it.
+    assert.deepEqual(ids(state({ canvas: back, removedIds: ['cmp_second'] })), [
+        'cmp_first',
+        'cmp_second',
+        'text_local',
+    ]);
+});
+
+test("Add on a fork's removed inherited card shows it with no harness edit", () => {
+    const shared = state({
+        widgets: [card('cmp_first', 1), card('cmp_second', 2)],
+        canvas: baseline(['cmp_second']),
+    });
+    const fork: CanvasState = { ...shared, ...forkedCanvas(shared) };
+
+    // The fork shows what the share showed.
+    assert.deepEqual(ids(fork), ids(shared));
+    // Its session never held the hidden card, so Add stays on the page.
+    assert.equal(isHarnessCard(fork, 'cmp_first'), false);
+
+    const added = {
+        ...fork,
+        removedIds: fork.removedIds.filter((id) => id !== 'cmp_first'),
+    };
+
+    assert.deepEqual(ids(added), ['cmp_first', 'cmp_second', 'text_local']);
 });

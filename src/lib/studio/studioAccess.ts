@@ -63,7 +63,13 @@ export const admitsStudioCall = (
     return !OWNER_ROUTES.has(route) || (userId !== null && owners.includes(userId));
 };
 
-export type StudioAccessRefusal = 'not_found' | 'too_large';
+// How long the ownership check waits on the session and the saved
+// conversations before it refuses the call as unavailable, and the
+// Retry-After its refusal names.
+export const OWNERSHIP_TIMEOUT_MS = 5_000;
+export const OWNERSHIP_RETRY_SECONDS = 5;
+
+export type StudioAccessRefusal = 'not_found' | 'too_large' | 'unavailable';
 
 /**
  * The proxy's ownership check for one Studio call: null to forward it, or why
@@ -71,7 +77,9 @@ export type StudioAccessRefusal = 'not_found' | 'too_large';
  * MAX_STUDIO_BODY_BYTES), `readUserId` the signed-in user, and `ownersOf` the
  * accounts holding a harness conversation id. A call that names no
  * conversation goes on to the harness, which refuses it, except on a route
- * that needs the caller's own copy.
+ * that needs the caller's own copy. A check whose reads fail, or have not
+ * answered within `timeoutMs`, refuses the call as `unavailable`, since
+ * forwarding it unchecked would open a saved conversation to anyone.
  */
 export const studioAccessRefusal = async ({
     route,
@@ -80,6 +88,7 @@ export const studioAccessRefusal = async ({
     readBody,
     readUserId,
     ownersOf,
+    timeoutMs = OWNERSHIP_TIMEOUT_MS,
 }: {
     route: string;
     method: string;
@@ -87,6 +96,7 @@ export const studioAccessRefusal = async ({
     readBody: () => Promise<string | null>;
     readUserId: () => Promise<string | null>;
     ownersOf: (conversationId: string) => Promise<string[]>;
+    timeoutMs?: number;
 }): Promise<StudioAccessRefusal | null> => {
     if (method === 'OPTIONS') {
         return null;
@@ -108,7 +118,25 @@ export const studioAccessRefusal = async ({
         return OWNER_ROUTES.has(route) ? 'not_found' : null;
     }
 
-    const [userId, owners] = await Promise.all([readUserId(), ownersOf(conversationId)]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    return admitsStudioCall(route, userId, owners) ? null : 'not_found';
+    try {
+        const [userId, owners] = await Promise.race([
+            Promise.all([readUserId(), ownersOf(conversationId)]),
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                    () => reject(new Error(`no answer within ${timeoutMs} ms`)),
+                    timeoutMs,
+                );
+            }),
+        ]);
+
+        return admitsStudioCall(route, userId, owners) ? null : 'not_found';
+    } catch (error) {
+        console.error('studio: the conversation owner was not read', error);
+
+        return 'unavailable';
+    } finally {
+        clearTimeout(timer);
+    }
 };

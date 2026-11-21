@@ -5,9 +5,14 @@ import { conversationOwners } from '@/lib/chat/conversationStore';
 import { counterDb } from '@/lib/db';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
+import { STUDIO_HEADERS } from '@/lib/proxy/headers';
 import { missingProblem, notFoundProblem, problem } from '@/lib/proxy/problem';
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
-import { MAX_STUDIO_BODY_BYTES, studioAccessRefusal } from '@/lib/studio/studioAccess';
+import {
+    MAX_STUDIO_BODY_BYTES,
+    OWNERSHIP_RETRY_SECONDS,
+    studioAccessRefusal,
+} from '@/lib/studio/studioAccess';
 import {
     meterTurn,
     refundPrompt,
@@ -75,10 +80,21 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
         return missingProblem('There is no such conversation.');
     }
 
+    if (refusal === 'unavailable') {
+        return problem({
+            status: 503,
+            code: 'transient_unavailable',
+            detail: 'The conversation could not be checked. Try again shortly.',
+            retryable: true,
+            headers: { 'Retry-After': String(OWNERSHIP_RETRY_SECONDS) },
+        });
+    }
+
     const options = {
         surface: 'api',
         target: `${STUDIO_API_BASE}/api/studio/${route}${req.nextUrl.search}`,
         bearer: STUDIO_TOKEN,
+        pass: STUDIO_HEADERS,
         unreachable: 'The studio agent is unreachable. Is it running? (just dev in dfo-ai)',
         ...studioIdentity(route, req.headers, async () => (await session())?.id ?? null),
     } as const;

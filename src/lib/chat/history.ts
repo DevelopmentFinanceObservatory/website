@@ -28,9 +28,6 @@ export type SavedConversation = {
     // The Activity trace (steps per turn).
     activity?: ActivityEntry[];
     turnCount: number;
-    // The turns the harness had opened on `sessionId` (useChat's
-    // ChatSnapshot). Optional: saves from before this didn't have it.
-    harnessTurns?: number;
     // The harness canvas the conversation last saw (useChat's canvasRef):
     // its ids are the harness cards the canvas shows (canvasWidgetsOf).
     // Optional: saves from before this didn't have it.
@@ -40,6 +37,9 @@ export type SavedConversation = {
     // fork has them.
     localIds?: string[];
     pinnedIds: string[];
+    // The cards the harness never held (`localIds`, text cards) that the
+    // user took off the canvas; a save from before `canvas` also lists
+    // harness cards here.
     removedIds: string[];
     // A save from before `canvas`: the unpinned cards of older turns its
     // canvas still showed, and the turn that set belongs to (a later turn

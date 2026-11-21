@@ -128,10 +128,11 @@ export const useConversationSave = ({
 
     useEffect(() => () => window.clearTimeout(saveTimer.current), []);
 
-    // The prompts the last snapshot held. A turn's stream changes the
-    // transcript faster than the save debounce, so a new prompt is saved at
-    // once: a page that leaves mid-turn then holds the turn it opened, and a
-    // reopened conversation matches the harness's turns to it.
+    // The prompts the last snapshot held, and how many carry their harness
+    // turn. A turn's stream changes the transcript faster than the save
+    // debounce, so a new prompt, and the turn index its stream names, are
+    // saved at once: a page that leaves mid-turn then holds the turn it
+    // opened, keyed on the harness's index.
     const promptsRef = useRef(0);
 
     // Any change worth keeping (a message, a widget, a pin) refreshes the
@@ -158,7 +159,10 @@ export const useConversationSave = ({
             },
         };
 
-        const prompts = chat.messages.filter(isPrompt).length;
+        const prompts =
+            chat.messages.filter(isPrompt).length +
+            chat.messages.filter((message) => message.role === 'user' && message.harnessTurn)
+                .length;
         const opened = prompts > promptsRef.current;
 
         promptsRef.current = prompts;

@@ -275,8 +275,6 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         thinking: false,
         clarify: null,
         plan: spec.plan ?? null,
-        agentRemovals: 0,
-        takeAgentRemoved: () => [],
         syncCanvas: noop,
         canvas: null,
         send: noop,
@@ -294,7 +292,6 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
             sessionId: null,
             componentRefs: [],
             turnCount: turn,
-            harnessTurns: 0,
             canvas: null,
         }),
     };

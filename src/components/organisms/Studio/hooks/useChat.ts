@@ -38,13 +38,19 @@ import {
     type ClarifyAnswers,
     type ClarifyReply,
 } from '@/lib/studio/clarify';
-import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
+import {
+    createLegacyCanvas,
+    restoreCanvas,
+    takeManifest,
+    type CanvasBaseline,
+    type LegacyCanvas,
+} from '@/lib/studio/composition';
 import {
     attachStep,
     carryOnTurn,
-    heldHarnessTurns,
     mergeClosedTurns,
     owedNewQuestion,
+    readConversation,
     stateSince,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
@@ -70,12 +76,18 @@ import {
     type Pause,
     type PlanState,
 } from '@/lib/studio/plan';
-import { withAnswer, withNewQuestion, withRefundedPrompt } from '@/lib/studio/transcript';
+import {
+    ensureTurn,
+    heldTurns,
+    withAnswer,
+    withHarnessTurn,
+    withNewQuestion,
+    withRefundedPrompt,
+} from '@/lib/studio/transcript';
 import {
     cancelTurn,
     fetchComponentRevision,
     mutateComposition,
-    readState,
     runApplyChoice,
     runInterrupt,
     runTurn,
@@ -104,13 +116,25 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
 // `refunded` marks a prompt whose turn was refused, which the site's prompt
-// meter gave back.
+// meter gave back. `harnessTurn` is the harness's index of the turn a prompt
+// opened, as its stream's x-dfo-turn-index header or a state read named it,
+// and keys the prompt and its reply to the harness's turns.
+// `fromNewQuestion` marks a prompt sent as the new question that harness
+// turn handed back (`done`'s `new_question`), so it is sent once.
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
 // a reopened conversation can show it.
 export type ChatMessage =
-    | { role: 'user'; text: string; card?: { title: string }; answer?: true; refunded?: true }
+    | {
+          role: 'user';
+          text: string;
+          card?: { title: string };
+          answer?: true;
+          refunded?: true;
+          harnessTurn?: number;
+          fromNewQuestion?: number;
+      }
     | {
           role: 'bot';
           text: string;
@@ -139,13 +163,16 @@ export type CardTarget = {
 
 // A message sent while a request was in flight: it waits for the
 // conversation to be free and enters the transcript when it is sent. A
-// clicked `apply_choice` chip waits the same way, under its label.
+// clicked `apply_choice` chip waits the same way, under its label. A new
+// question a harness turn handed back carries that turn's index
+// (`fromNewQuestion`), which its prompt keeps.
 export type QueuedMessage = {
     id: string;
     text: string;
     card?: CardTarget;
     seeds?: Seed[];
     chip?: ApplyChoiceSuggestion;
+    fromNewQuestion?: number;
 };
 
 export type ChatState = {
@@ -181,11 +208,10 @@ export type ChatSnapshot = {
     messages: ChatMessage[];
     widgets: TurnWidget[];
     activity?: SavedActivityEntry[];
+    // The display ordinal of the latest turn, which numbers the widgets and
+    // the Activity entries. The harness's own turn index rides on each
+    // prompt (`harnessTurn`).
     turnCount: number;
-    // The turns the harness has opened on `sessionId`, which number its
-    // turns: a refused prompt opened none. Optional: saves from before this
-    // didn't have it (heldHarnessTurns counts them).
-    harnessTurns?: number;
     // The harness canvas this conversation last saw (see useChat's
     // canvasRef). Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;
@@ -319,9 +345,13 @@ export const useChat = (initial?: ChatSnapshot) => {
     // Set below: the settle handler reaches send() through it.
     const drainRef = useRef<() => void>(() => {});
     const turnCount = useRef(initial?.turnCount ?? 0);
-    // The turns the harness has opened on this conversation (see
-    // ChatSnapshot), counted at each turn's first harness frame.
-    const harnessTurnsRef = useRef(initial ? heldHarnessTurns(initial) : 0);
+    // The transcript as last rendered, for the callbacks that read which
+    // harness turns it holds (heldTurns) outside a state update.
+    const messagesRef = useRef<ChatMessage[]>([]);
+
+    useEffect(() => {
+        messagesRef.current = state.messages;
+    }, [state.messages]);
     const recapRef = useRef<string | null>(
         initial && !initial.sessionId ? buildRecap(initial.messages) : null,
     );
@@ -344,42 +374,73 @@ export const useChat = (initial?: ChatSnapshot) => {
     // has to address both (the contract rejects a stale revision). Frames
     // keep it current; a reopened conversation starts from its saved cards.
     const revisionsRef = useRef(restoreCardRevisions(initial));
-    // The harness's latest canvas manifest as this page saw it, to tell
-    // which cards a newer one took off (the agent removing cards). Saved
-    // with the conversation, so a reopened one keeps it.
+    // The harness's latest canvas manifest as this page saw it: its ids are
+    // the harness cards the canvas shows (canvasWidgetsOf). Saved with the
+    // conversation, so a reopened one keeps it. A share's copy has no
+    // session, so it shows the canvas it was saved with.
     const canvasRef = useRef<CanvasBaseline | null>(restoreCanvas(initial));
-    // The same canvas for rendering: its ids are the harness cards the
-    // canvas shows (canvasWidgetsOf). A share's copy has no session to diff
-    // against, so it shows the canvas it was saved with.
     const [canvas, setCanvas] = useState<CanvasBaseline | null>(
         () => restoreCanvas(initial) ?? initial?.canvas ?? null,
     );
-    // Cards the agent took off, queued until the canvas takes them, so two
-    // manifests in one batch both count.
-    const agentRemovedRef = useRef<string[]>([]);
-    const [agentRemovals, setAgentRemovals] = useState(0);
     // Every manifest goes through here: stream frames, `done`, state reads,
     // and the responses to the user's own edits. A late, older one is
-    // ignored.
+    // ignored. While the canvas is legacy (see createLegacyCanvas) the
+    // manifest goes to it first.
     const canvasEditsRef = useRef<ReturnType<typeof createCanvasEdits> | null>(null);
+    const legacyRef = useRef<LegacyCanvas | null>(null);
     const applyManifest = useCallback((manifest: CompositionManifest) => {
-        const taken = takeManifest(canvasRef.current, manifest);
+        if (legacyRef.current) {
+            void legacyRef.current.offer(manifest);
 
-        if (!taken) {
             return;
         }
 
-        canvasRef.current = taken.baseline;
-        setCanvas(taken.baseline);
+        const taken = takeManifest(canvasRef.current, manifest);
 
-        const removed = taken.removed.filter((id) => !canvasEditsRef.current?.isOwnRemoval(id));
-
-        if (removed.length > 0) {
-            agentRemovedRef.current.push(...removed);
-            setAgentRemovals((count) => count + 1);
+        if (taken) {
+            canvasRef.current = taken;
+            setCanvas(taken);
         }
     }, []);
-    const takeAgentRemoved = useCallback(() => agentRemovedRef.current.splice(0), []);
+    // A legacy canvas a reopened conversation (hydrate) restored for
+    // `session` is brought to the harness's manifest once one arrives; until
+    // then it shows the legacy cards and the cards drawn since. A share's
+    // copy (`initial`) runs no turn and edits nothing, so it starts none.
+    const startLegacy = useCallback(
+        (session: string | null, baseline: CanvasBaseline | null) => {
+            if (!session || baseline?.compositionId !== null) {
+                legacyRef.current = null;
+
+                return;
+            }
+
+            const generation = generationRef.current;
+            const legacy = createLegacyCanvas({
+                ids: baseline.ids,
+                mutate: (operations) => mutateComposition(session, operations),
+                onTake: (manifest) => {
+                    if (generationRef.current !== generation) {
+                        return;
+                    }
+
+                    if (legacyRef.current === legacy) {
+                        legacyRef.current = null;
+                    }
+
+                    applyManifest(manifest);
+                },
+                onChange: (ids) => {
+                    if (generationRef.current === generation) {
+                        canvasRef.current = { compositionId: null, revision: -1, ids };
+                        setCanvas(canvasRef.current);
+                    }
+                },
+            });
+
+            legacyRef.current = legacy;
+        },
+        [applyManifest],
+    );
     // The harness turns whose new question (see askNewQuestion) has been
     // queued, so a stream's `done` and a later state read send it once.
     const askedRef = useRef(new Set<number>());
@@ -391,15 +452,17 @@ export const useChat = (initial?: ChatSnapshot) => {
             return;
         }
 
-        const queued: QueuedMessage = { id: uuid(), text };
+        const queued: QueuedMessage = { id: uuid(), text, fromNewQuestion: turnIndex };
 
         askedRef.current.add(turnIndex);
         queueRef.current.unshift(queued);
         setState((prev) => ({ ...prev, queued: [queued, ...prev.queued] }));
     }, []);
-    // A canvas edit the user made (Remove, Pin, Add), sent to the harness so
-    // the canvas the agent reads matches this one. Nothing to send before
-    // the conversation has a session.
+    // A canvas edit the user made to a card the harness holds (Remove, Pin,
+    // Add), sent to the harness, whose manifest then decides whether the
+    // card shows, so the canvas the agent reads matches this one. Nothing to
+    // send before the conversation has a session. A legacy canvas shows the
+    // edit at once.
     // Edits go one after another, so a Remove then an Add land in order; a
     // response for a conversation since left is dropped.
     const syncCanvas = useCallback(
@@ -408,6 +471,14 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             if (!session) {
                 return;
+            }
+
+            for (const operation of operations) {
+                if (operation.op === 'add') {
+                    legacyRef.current?.keep(operation.component_id);
+                } else if (operation.op === 'remove') {
+                    legacyRef.current?.drop(operation.component_id);
+                }
             }
 
             canvasEditsRef.current ??= createCanvasEdits({
@@ -538,16 +609,25 @@ export const useChat = (initial?: ChatSnapshot) => {
             let preamble = '';
             const stepLine = createStepLine();
 
-            // A turn request's first frame from the harness (the page's own
-            // transport errors carry no `seq`) says the harness opened it.
-            let opened = !metered;
+            // The harness's index of the turn this stream carries, from its
+            // x-dfo-turn-index header. The turn's prompt takes it, so the
+            // prompt and its reply are keyed on the harness's turn.
+            let turnIndex: number | null = null;
 
-            const handle = (frame: StudioFrame) => {
-                if (!opened && frame.seq >= 0 && generationRef.current === generation) {
-                    opened = true;
-                    harnessTurnsRef.current += 1;
+            const keyTurn = (index: number) => {
+                if (generationRef.current !== generation) {
+                    return;
                 }
 
+                turnIndex = index;
+                setState((prev) => {
+                    const messages = withHarnessTurn(prev.messages, index);
+
+                    return messages === prev.messages ? prev : { ...prev, messages };
+                });
+            };
+
+            const handle = (frame: StudioFrame) => {
                 // A stream that reset/hydrate walked away from, or that the
                 // user stopped, must not write into the conversation.
                 if (generationRef.current !== generation || muted) {
@@ -623,6 +703,14 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 : null;
 
                         editingRef.current = null;
+
+                        // A legacy canvas shows the card at once, and drops
+                        // the card it replaced.
+                        legacyRef.current?.keep(widget.id);
+
+                        if (replacing) {
+                            legacyRef.current?.drop(replacing);
+                        }
 
                         // A re-used component id (a replacement card) UPDATES
                         // the card in place and pulls it into this turn,
@@ -775,7 +863,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 ...prev,
                                 messages: withNewQuestion(prev.messages, question),
                             }));
-                            askNewQuestion(harnessTurnsRef.current, question);
+                            askNewQuestion(turnIndex ?? heldTurns(messagesRef.current), question);
                         }
 
                         finish();
@@ -933,6 +1021,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                     return start(
                         {
                             onFrame: handle,
+                            onTurnIndex: keyTurn,
                             onKeepAlive: stall.beat,
                             onRefusal: refuse,
                             onUnreachable: unreachable,
@@ -1000,10 +1089,6 @@ export const useChat = (initial?: ChatSnapshot) => {
     // `line`. A new turn on a paused conversation abandons the pause (the
     // contract's rule), so any plan or clarify card goes with it.
     const startTurn = useCallback((user: ChatMessage & { role: 'user' }, line: string) => {
-        if (!sessionRef.current) {
-            harnessTurnsRef.current = 0;
-        }
-
         const conversation = sessionRef.current ?? uuid();
 
         sessionRef.current = conversation;
@@ -1052,16 +1137,23 @@ export const useChat = (initial?: ChatSnapshot) => {
         [],
     );
 
+    // `fromNewQuestion` is the harness turn whose new question this sends
+    // (askNewQuestion).
     const send = useCallback(
-        (message: string, card?: CardTarget, seeds?: Seed[]) => {
+        (message: string, card?: CardTarget, seeds?: Seed[], fromNewQuestion?: number) => {
             const text = message.trim();
 
-            if (!text || holdTurn({ text, card, seeds })) {
+            if (!text || holdTurn({ text, card, seeds, fromNewQuestion })) {
                 return;
             }
 
             const { turn, conversation } = startTurn(
-                { role: 'user', text, ...(card?.title && { card: { title: card.title } }) },
+                {
+                    role: 'user',
+                    text,
+                    ...(card?.title && { card: { title: card.title } }),
+                    ...(fromNewQuestion !== undefined && { fromNewQuestion }),
+                },
                 'Resolving the question',
             );
             const recap = recapRef.current;
@@ -1461,7 +1553,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             if (next.chip) {
                 applyChoice(next.chip);
             } else {
-                send(next.text, next.card, next.seeds);
+                send(next.text, next.card, next.seeds, next.fromNewQuestion);
             }
         };
     }, [applyChoice, send]);
@@ -1488,20 +1580,18 @@ export const useChat = (initial?: ChatSnapshot) => {
     // with a closed Activity entry, and its manifest says which cards are on
     // the canvas. A latest turn ended by a new question the page has not
     // sent yet queues it (owedNewQuestion), as that turn's `done` would have.
+    // Returns the latest harness turn the transcript then holds.
     const takeRead = useCallback(
-        (read: ConversationRead) => {
-            const held = harnessTurnsRef.current;
-            const owed = owedNewQuestion(read, held);
-            const appended = read.closed_since
-                .filter((turn) => turn.turn_index > held)
-                .sort((a, b) => a.turn_index - b.turn_index);
+        (read: ConversationRead): number => {
+            const before = messagesRef.current;
+            const owed = owedNewQuestion(read, before);
+            const { messages: merged, appended } = mergeClosedTurns(before, read.closed_since);
             const firstTurn = turnCount.current + 1;
             const now = Date.now();
 
-            harnessTurnsRef.current = Math.max(held, ...appended.map((turn) => turn.turn_index));
             turnCount.current += appended.length;
             setState((prev) => {
-                const { messages } = mergeClosedTurns(prev.messages, held, read.closed_since);
+                const { messages } = mergeClosedTurns(prev.messages, read.closed_since);
 
                 return messages === prev.messages
                     ? prev
@@ -1524,7 +1614,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             if (owed) {
                 // A turn the page held keeps the typed text as its answer
                 // until the next turn opens with it.
-                if (owed.turnIndex <= held) {
+                if (owed.turnIndex <= heldTurns(before)) {
                     setState((prev) => ({
                         ...prev,
                         messages: withNewQuestion(prev.messages, owed.text),
@@ -1537,17 +1627,21 @@ export const useChat = (initial?: ChatSnapshot) => {
             if (read.manifest) {
                 applyManifest(read.manifest);
             }
+
+            return heldTurns(merged);
         },
         [applyManifest, askNewQuestion],
     );
 
     // A reopened conversation against the harness's copy (see
-    // conversationState.ts): its closed turns and canvas merge in, a pause
-    // comes back as its card, and a running turn is carried on (carryOnTurn).
-    // Sends made while the state is read wait for it, as they wait for a
-    // stream. Called after hydrate(), for a signed-in user's own
-    // conversation: the proxy answers 404 for anyone else, and the page
-    // then keeps its snapshot.
+    // conversationState.ts): its closed turns, read up to `closed_total`,
+    // and its canvas merge in, a pause comes back as its card, and a running
+    // turn is carried on (carryOnTurn). An open turn the snapshot never got
+    // joins the transcript as its prompt and an empty reply (ensureTurn),
+    // with its own Activity entry. Sends made while the state is read wait
+    // for it, as they wait for a stream. Called after hydrate(), for a
+    // signed-in user's own conversation: the proxy answers 404 for anyone
+    // else, and the page then keeps its snapshot.
     const reattach = useCallback(() => {
         const conversation = sessionRef.current;
 
@@ -1559,7 +1653,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         let read: ConversationRead | null = null;
 
         inFlightRef.current += 1;
-        void readState(conversation, stateSince(harnessTurnsRef.current))
+        void readConversation(conversation, stateSince(heldTurns(messagesRef.current)))
             .then((answer) => {
                 read = answer;
             })
@@ -1571,18 +1665,24 @@ export const useChat = (initial?: ChatSnapshot) => {
                 inFlightRef.current -= 1;
 
                 if (read) {
-                    takeRead(read);
-
+                    const held = takeRead(read);
                     const step = attachStep(read);
 
                     if (step.kind !== 'none') {
-                        // A turn the snapshot never got opens its reply below
-                        // the last one.
-                        if (step.turnIndex > harnessTurnsRef.current) {
-                            harnessTurnsRef.current = step.turnIndex;
+                        if (step.turnIndex > held) {
+                            const prompt = read.turn?.user_message ?? '';
+
+                            turnCount.current += 1;
+
+                            const turn = turnCount.current;
+
                             setState((prev) => ({
                                 ...prev,
-                                messages: [...prev.messages, { role: 'bot', text: '' }],
+                                messages: ensureTurn(prev.messages, step.turnIndex, prompt),
+                                activity: [
+                                    ...prev.activity,
+                                    { turn, prompt, startedAt: Date.now(), tools: [] },
+                                ],
                             }));
                         }
 
@@ -1596,7 +1696,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 first: step,
                                 handlers,
                                 signal,
-                                since: () => stateSince(harnessTurnsRef.current),
+                                since: () => stateSince(heldTurns(messagesRef.current)),
                                 onRead: takeRead,
                             }),
                         );
@@ -1624,11 +1724,11 @@ export const useChat = (initial?: ChatSnapshot) => {
         revisionsRef.current.clear();
         canvasRef.current = null;
         setCanvas(null);
-        agentRemovedRef.current = [];
+        legacyRef.current = null;
         askedRef.current.clear();
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
-        harnessTurnsRef.current = 0;
+        messagesRef.current = [];
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         recapRef.current = null;
@@ -1644,41 +1744,45 @@ export const useChat = (initial?: ChatSnapshot) => {
         });
     }, []);
 
-    const hydrate = useCallback((saved: ChatSnapshot) => {
-        // As in reset(): ask the harness to stop, abandon the old chain and
-        // queue.
-        if (inFlightRef.current > 0 && sessionRef.current) {
-            void cancelTurn(sessionRef.current);
-        }
+    const hydrate = useCallback(
+        (saved: ChatSnapshot) => {
+            // As in reset(): ask the harness to stop, abandon the old chain and
+            // queue.
+            if (inFlightRef.current > 0 && sessionRef.current) {
+                void cancelTurn(sessionRef.current);
+            }
 
-        abortRef.current?.abort();
-        generationRef.current += 1;
-        chainRef.current = Promise.resolve();
-        inFlightRef.current = 0;
-        queueRef.current = [];
-        pendingInterruptRef.current = null;
-        turnPlanRef.current = null;
-        sessionRef.current = saved.sessionId;
-        revisionsRef.current = restoreCardRevisions(saved);
-        canvasRef.current = restoreCanvas(saved);
-        setCanvas(canvasRef.current ?? saved.canvas ?? null);
-        agentRemovedRef.current = [];
-        askedRef.current.clear();
-        canvasEditsRef.current?.reset();
-        recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
-        turnCount.current = saved.turnCount;
-        harnessTurnsRef.current = heldHarnessTurns(saved);
-        setState({
-            messages: restoredMessages(saved),
-            widgets: saved.widgets,
-            queued: [],
-            activity: restoreActivity(saved.activity),
-            ...NO_LINE,
-            thinking: false,
-            clarify: null,
-            plan: null,
-        });
-    }, []);
+            abortRef.current?.abort();
+            generationRef.current += 1;
+            chainRef.current = Promise.resolve();
+            inFlightRef.current = 0;
+            queueRef.current = [];
+            pendingInterruptRef.current = null;
+            turnPlanRef.current = null;
+            sessionRef.current = saved.sessionId;
+            revisionsRef.current = restoreCardRevisions(saved);
+            canvasRef.current = restoreCanvas(saved);
+            setCanvas(canvasRef.current ?? saved.canvas ?? null);
+            startLegacy(saved.sessionId, canvasRef.current);
+            askedRef.current.clear();
+            canvasEditsRef.current?.reset();
+            recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
+            turnCount.current = saved.turnCount;
+            // Set at once, since reattach() reads it before the next render.
+            messagesRef.current = restoredMessages(saved);
+            setState({
+                messages: messagesRef.current,
+                widgets: saved.widgets,
+                queued: [],
+                activity: restoreActivity(saved.activity),
+                ...NO_LINE,
+                thinking: false,
+                clarify: null,
+                plan: null,
+            });
+        },
+        [startLegacy],
+    );
 
     const snapshot = useCallback(
         () => ({
@@ -1688,7 +1792,6 @@ export const useChat = (initial?: ChatSnapshot) => {
                 revision,
             })),
             turnCount: turnCount.current,
-            harnessTurns: harnessTurnsRef.current,
             canvas: canvasRef.current,
         }),
         [],
@@ -1696,8 +1799,6 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     return {
         ...state,
-        agentRemovals,
-        takeAgentRemoved,
         syncCanvas,
         canvas,
         send,

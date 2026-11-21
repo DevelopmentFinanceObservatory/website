@@ -29,6 +29,88 @@ export const withRefundedPrompt = (messages: ChatMessage[]): ChatMessage[] => {
 };
 
 /**
+ * The harness turn each accepted prompt opened, keyed by the prompt's
+ * position in `messages`: its `harnessTurn`, else one past the prompt
+ * before it. A save from before prompts carried their turn, or one saved
+ * before its latest prompt's turn arrived, counts on from the last prompt
+ * that has one. A refunded prompt opened no turn.
+ */
+export const promptTurns = (messages: readonly ChatMessage[]): Map<number, number> => {
+    const turns = new Map<number, number>();
+    let turn = 0;
+
+    for (const [at, message] of messages.entries()) {
+        if (message.role === 'user' && isPrompt(message) && !isRefundedPrompt(message)) {
+            turn = message.harnessTurn ?? turn + 1;
+            turns.set(at, turn);
+        }
+    }
+
+    return turns;
+};
+
+/** The latest harness turn the transcript holds, 0 for none. */
+export const heldTurns = (messages: readonly ChatMessage[]): number =>
+    [...promptTurns(messages).values()].at(-1) ?? 0;
+
+/**
+ * The transcript with the harness turn `index` on the prompt that opened it:
+ * the last prompt not refunded, since a new turn waits until the one in
+ * flight ends and a refused one opened no turn. A prompt that already
+ * carries `index` is left as it is.
+ */
+export const withHarnessTurn = (messages: ChatMessage[], index: number): ChatMessage[] => {
+    const at = messages.findLastIndex((message) => isPrompt(message) && !isRefundedPrompt(message));
+    const prompt = messages[at];
+
+    if (prompt?.role !== 'user' || prompt.harnessTurn === index) {
+        return messages;
+    }
+
+    return messages.map((message, other) =>
+        other === at ? { ...prompt, harnessTurn: index } : message,
+    );
+};
+
+/**
+ * The transcript holding harness turn `index`: unchanged when a prompt
+ * already holds it, else with `userMessage` as the turn's prompt and an
+ * empty reply after the last message.
+ */
+export const ensureTurn = (
+    messages: ChatMessage[],
+    index: number,
+    userMessage: string,
+): ChatMessage[] =>
+    index <= heldTurns(messages)
+        ? messages
+        : [
+              ...messages,
+              { role: 'user', text: userMessage, harnessTurn: index },
+              { role: 'bot', text: '' },
+          ];
+
+/**
+ * The position of harness turn `index`'s reply: the last bot message after
+ * the latest prompt that opened that turn and before the next prompt. -1
+ * when no prompt holds the turn or it has no reply yet.
+ */
+export const turnReplyAt = (messages: readonly ChatMessage[], index: number): number => {
+    const prompt = [...promptTurns(messages)].findLast(([, turn]) => turn === index)?.[0];
+
+    if (prompt === undefined) {
+        return -1;
+    }
+
+    const next = messages.findIndex((message, at) => at > prompt && isPrompt(message));
+    const reply = messages
+        .slice(prompt + 1, next === -1 ? messages.length : next)
+        .findLastIndex((message) => message.role === 'bot');
+
+    return reply === -1 ? -1 : prompt + 1 + reply;
+};
+
+/**
  * The transcript with the user's answer to a paused turn. It goes before the
  * turn's reply, which the resumed stream goes on writing into.
  */

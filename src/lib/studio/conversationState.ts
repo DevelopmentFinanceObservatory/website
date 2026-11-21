@@ -9,7 +9,7 @@ import {
     type StreamHandlers,
     type StreamRefusal,
 } from './studioClient.ts';
-import { isPrompt, isRefundedPrompt } from './transcript.ts';
+import { ensureTurn, heldTurns, NEW_QUESTION_NOTE, turnReplyAt } from './transcript.ts';
 import type { ClosedTurn, ConversationRead, StudioFrame } from './wire.ts';
 
 /**
@@ -17,102 +17,152 @@ import type { ClosedTurn, ConversationRead, StudioFrame } from './wire.ts';
  * /api/studio/state). The page's saved snapshot owns the layout, the text
  * cards, the titles and the transcript of the turns it holds; the harness
  * owns each turn's status, the open pause, the turns the snapshot never got,
- * and the canvas manifest. Turns are matched on the harness's turn index:
- * `harnessTurns` is how many turns the harness had opened on the page's
- * conversation when the snapshot was saved.
+ * and the canvas manifest. Turns are matched on the harness's turn index,
+ * which each prompt carries (`harnessTurn`, see transcript.ts promptTurns).
  */
-
-/**
- * The harness turns a snapshot holds. A save made before the page counted
- * them holds one per prompt the harness accepted (a refused prompt opened
- * none); a conversation with no harness session holds none.
- */
-export const heldHarnessTurns = (saved: {
-    sessionId: string | null;
-    messages: readonly ChatMessage[];
-    harnessTurns?: number;
-}): number =>
-    !saved.sessionId
-        ? 0
-        : (saved.harnessTurns ??
-          saved.messages.filter((message) => isPrompt(message) && !isRefundedPrompt(message))
-              .length);
 
 /**
  * The `since` to read the state with: the turn before the last one the page
  * holds, so that last turn comes back too when it closed after the page left
  * with its reply still empty.
  */
-export const stateSince = (harnessTurns: number): number => Math.max(0, harnessTurns - 1);
+export const stateSince = (held: number): number => Math.max(0, held - 1);
+
+/**
+ * The state read after `since` with every closed turn up to `closed_total`:
+ * each read returns at most 3, so it reads again from the last one it got
+ * until it holds them all. The turn, pause and manifest are the last read's.
+ * Null when a read fails.
+ */
+export const readConversation = async (
+    conversationId: string,
+    since: number,
+    signal?: AbortSignal,
+    read: typeof readState = readState,
+): Promise<ConversationRead | null> => {
+    let answer = await read(conversationId, since, signal);
+
+    if (!answer) {
+        return null;
+    }
+
+    const closed = [...answer.closed_since];
+
+    for (;;) {
+        const last = closed.at(-1)?.turn_index ?? since;
+
+        if (answer.closed_total === undefined || last >= answer.closed_total) {
+            break;
+        }
+
+        const next = await read(conversationId, last, signal);
+
+        if (!next) {
+            return null;
+        }
+
+        const fresh = next.closed_since.filter((turn) => turn.turn_index > last);
+
+        answer = next;
+
+        // A read that returns nothing new ends the paging, so a read that
+        // disagrees with its own total cannot loop.
+        if (fresh.length === 0) {
+            break;
+        }
+
+        closed.push(...fresh);
+    }
+
+    return { ...answer, closed_since: closed };
+};
 
 const CLOSED_NOTES: Record<string, string> = {
     cancelled: STOPPED_NOTE,
 };
 
 /** The text a closed turn shows: its reply, else a note on how it ended. */
-export const closedReply = (turn: ClosedTurn): string =>
-    turn.reply ||
-    (turn.error ? (CLOSED_NOTES[turn.error] ?? '_This turn ended without an answer._') : '');
+export const closedReply = (turn: ClosedTurn): string => {
+    if (turn.reply) {
+        return turn.reply;
+    }
+
+    if (turn.error) {
+        return CLOSED_NOTES[turn.error] ?? '_This turn ended without an answer._';
+    }
+
+    return turn.new_question ? NEW_QUESTION_NOTE : '';
+};
 
 export type ClosedMerge = {
     messages: ChatMessage[];
-    harnessTurns: number;
     // The turns appended, oldest first.
     appended: ClosedTurn[];
 };
 
 /**
- * The transcript with the harness's closed turns merged in. A turn the page
- * holds keeps the page's text, except that the last held turn's empty reply
- * takes the harness's. A turn after the last held one is appended as its
- * user message and reply. Merging the same turns again changes nothing.
+ * The transcript with the harness's closed turns merged in, each keyed on
+ * its turn index (ensureTurn). A turn the page holds keeps the page's text,
+ * except that an empty reply takes the harness's. A turn the page lacks is
+ * appended as its user message and reply. Merging the same turns again
+ * changes nothing.
  */
 export const mergeClosedTurns = (
     messages: ChatMessage[],
-    harnessTurns: number,
     closed: readonly ClosedTurn[],
 ): ClosedMerge => {
     let merged = messages;
-    let held = harnessTurns;
     const appended: ClosedTurn[] = [];
 
     for (const turn of [...closed].sort((a, b) => a.turn_index - b.turn_index)) {
-        if (turn.turn_index > held) {
-            merged = [
-                ...merged,
-                { role: 'user', text: turn.user_message },
-                { role: 'bot', text: closedReply(turn) },
-            ];
-            held = turn.turn_index;
-            appended.push(turn);
-        } else if (turn.turn_index === held) {
-            const last = merged.at(-1);
+        const before = merged;
 
-            if (last?.role === 'bot' && !last.text) {
-                merged = [...merged.slice(0, -1), { ...last, text: closedReply(turn) }];
+        merged = ensureTurn(merged, turn.turn_index, turn.user_message);
+
+        if (merged !== before) {
+            appended.push(turn);
+        }
+
+        const at = turnReplyAt(merged, turn.turn_index);
+        const reply = merged[at];
+
+        if (reply?.role === 'bot' && !reply.text) {
+            const text = closedReply(turn);
+
+            if (text) {
+                merged = merged.map((message, other) =>
+                    other === at ? { ...reply, text } : message,
+                );
             }
         }
     }
 
-    return { messages: merged, harnessTurns: held, appended };
+    return { messages: merged, appended };
 };
 
 /**
  * The question the harness's latest turn was ended by (a change to its plan
- * that asked something else), when the page holds no turn after it and so
- * still owes it as the next turn: the turn's index and the text. Null
- * otherwise, and for a read whose latest turn `closed_since` does not hold.
+ * that asked something else), while the page still owes it as the next
+ * turn: no prompt was sent from it (`fromNewQuestion`) and the page holds no
+ * turn after it. The turn's index and the text, or null, also for a read
+ * whose latest turn `closed_since` does not hold.
  */
 export const owedNewQuestion = (
     read: ConversationRead,
-    harnessTurns: number,
+    messages: readonly ChatMessage[],
 ): { turnIndex: number; text: string } | null => {
     const latest = read.turn;
     const closed = latest && read.closed_since.find((turn) => turn.turn_index === latest.index);
 
-    return closed?.new_question && harnessTurns <= closed.turn_index
-        ? { turnIndex: closed.turn_index, text: closed.new_question }
-        : null;
+    if (!closed?.new_question || heldTurns(messages) > closed.turn_index) {
+        return null;
+    }
+
+    const sent = messages.some(
+        (message) => message.role === 'user' && message.fromNewQuestion === closed.turn_index,
+    );
+
+    return sent ? null : { turnIndex: closed.turn_index, text: closed.new_question };
 };
 
 /**
@@ -179,7 +229,7 @@ export const carryOnTurn = async ({
     since,
     onRead,
     resume = runResume,
-    read = readState,
+    read = readConversation,
     sleep = abortableSleep,
 }: {
     conversationId: string;
@@ -189,7 +239,11 @@ export const carryOnTurn = async ({
     since: () => number;
     onRead: (read: ConversationRead) => void;
     resume?: typeof runResume;
-    read?: typeof readState;
+    read?: (
+        conversationId: string,
+        since: number,
+        signal?: AbortSignal,
+    ) => Promise<ConversationRead | null>;
     sleep?: typeof abortableSleep;
 }): Promise<void> => {
     for (let step = first; ;) {

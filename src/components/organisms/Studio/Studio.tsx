@@ -33,7 +33,7 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
-import { canvasWidgetsOf } from '@/lib/chat/canvas';
+import { forkedCanvas, isHarnessCard } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
@@ -303,12 +303,6 @@ const Studio = ({
         logRefusedDescriptions(sharedSaved?.widgets ?? []);
     }, [sharedSaved]);
 
-    // Cards the agent took off the canvas leave it as a card-menu Remove does.
-    const { agentRemovals, takeAgentRemoved } = conversation;
-
-    useEffect(() => {
-        takeAgentRemoved().forEach(doc.removeWidget);
-    }, [agentRemovals, takeAgentRemoved, doc.removeWidget]);
     const pinCount = doc.pinnedIds.length;
     const cardCount = conversation.widgets.length;
 
@@ -487,17 +481,13 @@ const Studio = ({
 
         setForking(true);
 
-        // The copy's harness session holds none of the cards, so the ones
-        // the canvas shows stay on it as inherited cards.
-        const held = new Set(sharedSaved.widgets.map((widget) => widget.id));
+        // The copy's harness session holds none of the cards, so every one
+        // it inherits is a local card (forkedCanvas).
         const copy: SavedConversation = {
             ...sharedSaved,
+            ...forkedCanvas(sharedSaved),
             id: uuid(),
             sessionId: null,
-            canvas: null,
-            localIds: canvasWidgetsOf(sharedSaved)
-                .filter((widget) => held.has(widget.id))
-                .map((widget) => widget.id),
             updatedAt: Date.now(),
             shareMarks: [],
         };
@@ -529,32 +519,34 @@ const Studio = ({
     };
     const flyToCard = (id: string) => flyToCardRef.current?.(id);
 
-    // A card the harness holds, whose canvas edits go to the harness too. A
-    // text card and a fork's inherited card live only here.
-    const isHarnessCard = (id: string) =>
-        chat.widgets.some((widget) => widget.id === id) && !doc.localIds.includes(id);
+    // A card the harness holds goes on and off the canvas by the harness's
+    // manifest, so Add and Remove are edits sent to the harness. A text card
+    // and a fork's inherited card live only here (isHarnessCard).
+    const harnessCard = (id: string) =>
+        isHarnessCard({ widgets: chat.widgets, localIds: doc.localIds }, id);
 
     // Chat chip → Add: back on the canvas.
     const addWidget = (id: string) => {
-        doc.addWidget(id);
-
-        if (isHarnessCard(id)) {
+        if (harnessCard(id)) {
             chat.syncCanvas([{ op: 'add', component_id: id }]);
+        } else {
+            doc.addWidget(id);
         }
     };
 
     // The card menu's Remove and Pin.
     const removeCard = (id: string) => {
-        doc.removeWidget(id);
-
-        if (isHarnessCard(id)) {
+        if (harnessCard(id)) {
+            doc.unpin(id);
             chat.syncCanvas([{ op: 'remove', component_id: id }]);
+        } else {
+            doc.removeWidget(id);
         }
     };
     const togglePin = (id: string) => {
         doc.togglePin(id);
 
-        if (isHarnessCard(id)) {
+        if (harnessCard(id)) {
             chat.syncCanvas([pinEdit(doc.pinnedIds, id)]);
         }
     };
