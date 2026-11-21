@@ -11,25 +11,21 @@
 //
 // DFO refreshes each spec on its own, so stored reads of two specs can come from releases a
 // refresh apart. The client is anonymous, since DFO serves these reads to DFO pages with no key.
-// Each request that reaches the website's gateway counts against one allowance per address,
-// 120 a minute on /api/v1 (src/lib/proxy/rateLimit.ts at the repository root), which the page's
-// Search resolve calls share. A file the edge cache serves does not reach the gateway.
+// The reads run through the page's pacer (./pacing.ts), which bounds the reads in flight and
+// reads the gateway's allowance, shared with the page's Search resolve calls. A file the edge
+// cache serves does not reach the gateway.
 // Pages own the React hook that calls this, and put the tier on their root as `data-read-tier`.
-import { Client, DatasetRef, type Dataset, type recipe } from '@developmentfinance/client';
+import { DatasetRef, type Client, type Dataset, type recipe } from '@developmentfinance/client';
 import type { Row } from '@developmentfinance/client/types';
 
+import { liveClient, pacer, READ_CONCURRENCY } from './pacing.ts';
 import { recordOf } from './record.ts';
+
+export { READ_CONCURRENCY };
 
 /** How long each stored read may take before the page falls back. One waits on a build when
  *  DFO stores no version it can serve. */
 export const STORED_TIMEOUT_MS = 10_000;
-
-/**
- * How many reads run at once. A stored read is two GETs: the spec's newest stored version, then
- * its file. oda-counts' 19 stored reads, run all at once against production, drew 11 retried
- * 503s from dfo-apis (49 requests, 1.7 s). Four at a time drew none (38 requests, 1.0 s).
- */
-export const READ_CONCURRENCY = 4;
 
 /** Where a page's figures came from: DFO's newest stored data, the refs' pinned versions, or
  *  the page's committed JSON. */
@@ -85,31 +81,28 @@ const fetchStoredRecipe = (
 ): Promise<Dataset> => client.fetch(source, { ...options, latest: 'stored' });
 
 /**
- * `fn` of each item, at most `limit` at once, in the items' order. After the first rejection no
+ * `fn` of each item, through the page's pacer, in the items' order. After the first rejection no
  * other item starts, and the result rejects with it.
  */
-const mapBounded = async <I, O>(
-    items: readonly I[],
-    limit: number,
-    fn: (item: I) => Promise<O>,
-): Promise<O[]> => {
-    const results: O[] = [];
-    let next = 0;
+const mapPaced = async <I, O>(items: readonly I[], fn: (item: I) => Promise<O>): Promise<O[]> => {
     let failed = false;
-    const worker = async () => {
-        for (let index = next++; index < items.length && !failed; index = next++) {
-            try {
-                results[index] = await fn(items[index]!);
-            } catch (error) {
-                failed = true;
-                throw error;
-            }
-        }
-    };
 
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return Promise.all(
+        items.map((item) =>
+            pacer.run(async () => {
+                if (failed) {
+                    throw new Error('An earlier read failed.');
+                }
 
-    return results;
+                try {
+                    return await fn(item);
+                } catch (error) {
+                    failed = true;
+                    throw error;
+                }
+            }),
+        ),
+    );
 };
 
 const read = async <K extends string, T>(
@@ -135,10 +128,7 @@ const read = async <K extends string, T>(
     // Recipes go first, so a recipe that cannot be read stops the page before any ref is read.
     const recipes = keys.filter((key) => 'recipe' in sources[key]);
     const refs = keys.filter((key) => !('recipe' in sources[key]));
-    const done = [
-        ...(await mapBounded(recipes, READ_CONCURRENCY, readOne)),
-        ...(await mapBounded(refs, READ_CONCURRENCY, readOne)),
-    ];
+    const done = [...(await mapPaced(recipes, readOne)), ...(await mapPaced(refs, readOne))];
     const byKey = new Map([...recipes, ...refs].map((key, index) => [key, done[index]!]));
     const datasets = recordOf(keys, (key) => byKey.get(key)!.data);
 
@@ -158,7 +148,7 @@ const read = async <K extends string, T>(
 };
 
 /**
- * Fetches the newest stored data for each of `sources`, `READ_CONCURRENCY` at a time, and runs
+ * Fetches the newest stored data for each of `sources`, through the page's pacer, and runs
  * `derive` on the rows. When a stored read or `derive` fails, it returns `fallback.value` as the
  * `committed` tier or, when `fallback.tier` is `pinned`, reads every ref's pinned version and
  * derives from those rows. The stored read's failure goes to `console.warn`. A dataset's `freshness` says how new a stored
@@ -173,7 +163,7 @@ export const readLive = async <K extends string, T>(
     derive: Derive<K, T>,
     {
         fallback,
-        client = new Client({ apiKey: false }),
+        client = liveClient(),
         signal,
         timeout = STORED_TIMEOUT_MS,
     }: { fallback: Fallback<T>; client?: Fetcher; signal?: AbortSignal; timeout?: number },
