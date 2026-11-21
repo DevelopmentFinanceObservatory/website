@@ -1,10 +1,13 @@
 // counts.json's `data` from the rows of the step's 19 reads, as _data/fetch.py's `build` writes
 // it, so the page derives the same figures in the browser from DFO's newest stored versions.
+// It refuses rows that fail a test of fetch.py's `check` or `values_of`, so the page keeps
+// counts.json.
 // _lib/derive.test.mts checks that the pinned reads' rows give counts.json exactly.
-// Only type imports, which keeps the module loadable by `node --test`.
 import type { Row } from '@developmentfinance/client/types';
 
 import type { ByYear, CountsData, Donor, Prices, SeriesKey } from '../_data/types.ts';
+
+import { recordOf } from '#lib/record.ts';
 
 /** The monetary series, in the order fetch.py's `SERIES` lists them. */
 export const MONETARY: readonly SeriesKey[] = [
@@ -47,6 +50,15 @@ const KNOWN_KINDS: Readonly<Record<string, boolean>> = {
     DACCountriesTotal: true,
     'country/FRA': false,
 };
+
+/** Values in current US dollars the rows must reproduce within `KNOWN_TOLERANCE`. */
+const KNOWN: readonly { provider: string; key: SeriesKey; year: number; value: number }[] = [
+    { provider: 'country/FRA', key: 'gross', year: 2025, value: 17.508e9 },
+    { provider: 'country/FRA', key: 'net', year: 2025, value: 13.906e9 },
+    { provider: 'country/FRA', key: 'grantEquivalent', year: 2024, value: 15.448e9 },
+];
+
+const KNOWN_TOLERANCE = 0.005;
 
 /** A read's values by provider, then year. */
 type Values = Map<string, Map<number, number>>;
@@ -179,52 +191,106 @@ const byYear = (
         return value === undefined ? null : roundHalfEven(value / scale, digits);
     });
 
-/** Every rule the rows break that the page's figures rest on; empty when all hold. */
-const problems = (
-    gross: Values,
-    providers: ReadonlyMap<string, About>,
-    years: readonly number[],
-) => [
-    ...Object.entries(KNOWN_KINDS)
-        .filter(([provider, isGroup]) => providers.get(provider)?.isGroup !== isGroup)
-        .map(([provider]) => `${provider}: the group flag differs from the known one`),
-    ...Object.keys(GROUP_NAMES)
-        .filter((group) => !providers.has(group))
-        .map((group) => `${group}: no figures, so its name is unused`),
-    ...Object.entries(DUPLICATES).flatMap(([group, provider]) =>
-        years
-            .filter((year) => {
-                const repeated = gross.get(group)?.get(year);
+/** Whether `a` and `b` differ by more than `relative` of `b` and more than `absolute`. */
+const differ = (a: number, b: number, relative: number, absolute: number): boolean =>
+    Math.abs(a - b) > Math.max(relative * Math.abs(b), absolute);
 
-                return repeated === undefined || repeated !== gross.get(provider)?.get(year);
-            })
-            .map((year) => `gross ${year}: ${group} differs from ${provider}`),
-    ),
-];
+/**
+ * Every rule the reads break that the page's figures rest on, as fetch.py's `check` and
+ * `values_of` test them; empty when all hold. Each read serves one member; the known values,
+ * group flags, renamed groups and duplicate groups hold; the OECD headline equals net
+ * disbursements before 2018 and grant equivalents from 2018, within 0.1% or $10,000; and
+ * constant prices equal current prices in the base year, within 0.01% or $10,000.
+ */
+const problems = (
+    read: (key: ReadKey) => Values,
+    members: Readonly<Record<ReadKey, number>>,
+    providers: ReadonlyMap<string, About>,
+    { years, baseYear }: Pick<CountsData, 'years' | 'baseYear'>,
+): string[] => {
+    const gross = read('gross/current');
+    const net = read('net/current');
+    const grantEquivalent = read('grantEquivalent/current');
+
+    return [
+        ...READ_KEYS.filter((key) => members[key] !== 1).map(
+            (key) => `${key}: ${members[key]} members, not one`,
+        ),
+        ...KNOWN.filter(({ provider, key, year, value }) => {
+            const found = read(`${key}/current`).get(provider)?.get(year);
+
+            return found === undefined || Math.abs(found / value - 1) > KNOWN_TOLERANCE;
+        }).map(({ provider, key, year, value }) => `${provider} ${key} ${year}: not ${value}`),
+        ...Object.entries(KNOWN_KINDS)
+            .filter(([provider, isGroup]) => providers.get(provider)?.isGroup !== isGroup)
+            .map(([provider]) => `${provider}: the group flag differs from the known one`),
+        ...Object.keys(GROUP_NAMES)
+            .filter((group) => !providers.has(group))
+            .map((group) => `${group}: no figures, so its name is unused`),
+        ...Object.entries(DUPLICATES).flatMap(([group, provider]) =>
+            years
+                .filter((year) => {
+                    const repeated = gross.get(group)?.get(year);
+
+                    return repeated === undefined || repeated !== gross.get(provider)?.get(year);
+                })
+                .map((year) => `gross ${year}: ${group} differs from ${provider}`),
+        ),
+        ...[...read('headline/current')].flatMap(([provider, byYear]) =>
+            [...byYear]
+                .filter(([year, headline]) => {
+                    const basis = year < GRANT_EQUIVALENT_FROM ? net : grantEquivalent;
+                    const value = basis.get(provider)?.get(year);
+
+                    return value === undefined || differ(headline, value, 1e-3, 1e4);
+                })
+                .map(([year]) => `headline ${provider} ${year}: differs from its basis`),
+        ),
+        ...MONETARY.flatMap((key) => {
+            const current = read(`${key}/current`);
+
+            return [...read(`${key}/constant`)]
+                .filter(([provider, byYear]) => {
+                    const constant = byYear.get(baseYear);
+                    const base = current.get(provider)?.get(baseYear);
+
+                    return (
+                        constant !== undefined &&
+                        base !== undefined &&
+                        differ(constant, base, 1e-4, 1e4)
+                    );
+                })
+                .map(
+                    ([provider]) => `${key} ${provider} ${baseYear}: constant differs from current`,
+                );
+        }),
+    ];
+};
 
 /**
  * counts.json's `data` from each read's rows: per provider, every monetary series in millions
  * of US dollars at both price bases and ODA/GNI as a percentage, by year of `years`. Providers
  * and their names come from gross disbursements at current prices, less the duplicate group;
  * countries come first by name, then group totals by name, which are null in a year they sum
- * only some members (`partialYears`).
+ * only some members (`partialYears`). `members` is each read's count of members.
  *
  * @throws Rows that break a rule the figures rest on: a second row for a provider and year, a
- *   price basis other than the read's, a group flag or renamed group that differs from the
- *   step's, or a duplicate group that no longer repeats its provider.
+ *   price basis other than the read's, or any rule `problems` tests.
  */
 export const countsFromRows = (
     rows: Readonly<Record<ReadKey, readonly Row[]>>,
-    { years, baseYear }: Pick<CountsData, 'years' | 'baseYear'>,
+    {
+        years,
+        baseYear,
+        members,
+    }: Pick<CountsData, 'years' | 'baseYear'> & { members: Readonly<Record<ReadKey, number>> },
 ): CountsData => {
-    const read = Object.fromEntries(
-        READ_KEYS.map((key) => [key, valuesOf(key, rows[key])]),
-    ) as Record<ReadKey, ReturnType<typeof valuesOf>>;
-    const gross = read['gross/current'];
+    const reads = recordOf(READ_KEYS, (key) => valuesOf(key, rows[key]));
+    const read = (key: ReadKey): Values => reads[key].values;
     const providers = new Map(
-        [...gross.providers].filter(([provider]) => !(provider in DUPLICATES)),
+        [...reads['gross/current'].providers].filter(([provider]) => !(provider in DUPLICATES)),
     );
-    const broken = problems(gross.values, providers, years);
+    const broken = problems(read, members, providers, { years, baseYear });
 
     if (broken.length > 0) {
         throw new Error(`The rows break the page's rules:\n  ${broken.join('\n  ')}`);
@@ -233,11 +299,8 @@ export const countsFromRows = (
     const countries = new Set(
         [...providers].filter(([, about]) => !about.isGroup).map(([provider]) => provider),
     );
-    const partial = new Map(
-        MONETARY.map((key) => [
-            key,
-            partialYears(read[`${key}/current`].values, countries, years, key),
-        ]),
+    const partial = recordOf(MONETARY, (key) =>
+        partialYears(read(`${key}/current`), countries, years, key),
     );
     // Array.prototype.sort is stable, as Python's sorted is, so equal names keep the rows' order.
     const order = [...providers].sort(([, a], [, b]) =>
@@ -252,38 +315,22 @@ export const countsFromRows = (
                 : 0,
     );
     const donors = order.map(([provider, about]): Donor => {
-        const series = Object.fromEntries(
-            MONETARY.map((key) => {
-                const bases = Object.fromEntries(
-                    (['current', 'constant'] as const).map((prices) => {
-                        const values = byYear(
-                            read[`${key}/${prices}`].values,
-                            provider,
-                            years,
-                            1e6,
-                            2,
-                        );
+        const basis = (key: SeriesKey, prices: Prices): ByYear => {
+            const values = byYear(read(`${key}/${prices}`), provider, years, 1e6, 2);
 
-                        return [
-                            prices,
-                            about.isGroup
-                                ? values.map((value, index) =>
-                                      partial.get(key)?.has(years[index]!) ? null : value,
-                                  )
-                                : values,
-                        ];
-                    }),
-                ) as Record<Prices, ByYear>;
-
-                return [key, bases];
-            }),
-        ) as Donor['series'];
+            return about.isGroup
+                ? values.map((value, index) => (partial[key].has(years[index]!) ? null : value))
+                : values;
+        };
 
         return {
             ...about,
             id: provider,
-            series,
-            odaGni: byYear(read['odaGni/ratio'].values, provider, years, 1, 3),
+            series: recordOf(MONETARY, (key) => ({
+                current: basis(key, 'current'),
+                constant: basis(key, 'constant'),
+            })),
+            odaGni: byYear(read('odaGni/ratio'), provider, years, 1, 3),
         };
     });
 

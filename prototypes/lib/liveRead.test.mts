@@ -6,7 +6,7 @@ import { DfoTimeoutError } from '@developmentfinance/client/errors';
 
 import { recipe } from '@developmentfinance/client';
 
-import { readLive, STORED_TIMEOUT_MS } from './liveRead.ts';
+import { READ_CONCURRENCY, readLive, STORED_TIMEOUT_MS } from './liveRead.ts';
 
 const SPEC_ID = `spec_${'a'.repeat(32)}`;
 const VERSION = `cv_${'b'.repeat(32)}`;
@@ -190,7 +190,47 @@ test('a recipe reads no stored version on client 0.5.0, so the page shows its co
         );
 
         assert.equal(read.tier, 'committed');
-        assert.ok(calls.every(({ target }) => target instanceof DatasetRef));
+        assert.equal(calls.length, 0);
+    });
+});
+
+test('reads at most READ_CONCURRENCY at once, and starts none after one fails', async () => {
+    await quietly(async () => {
+        const sources = Object.fromEntries(
+            Array.from({ length: READ_CONCURRENCY * 3 }, (_, index) => [`r${index}`, { ref }]),
+        );
+        let running = 0;
+        let most = 0;
+        let started = 0;
+        const client = {
+            fetch: async () => {
+                started += 1;
+                const call = started;
+                running += 1;
+                most = Math.max(most, running);
+                await new Promise((resolve) => setTimeout(resolve, 1));
+                running -= 1;
+
+                if (call === 1) {
+                    throw new Error('stored read failed');
+                }
+
+                return dataset(2);
+            },
+        };
+
+        const read = await readLive(sources, valueOf, {
+            fallback: { tier: 'committed', value: [] },
+            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+            client,
+        });
+
+        // Reads that would start after the failure have time to.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        assert.equal(read.tier, 'committed');
+        assert.equal(most, READ_CONCURRENCY);
+        assert.ok(started < READ_CONCURRENCY * 2, `${started} reads started`);
     });
 });
 

@@ -22,9 +22,9 @@ The step runs in one of three modes:
 
 The page reads the same 19 refs in the browser from `live-refs.json`, at DFO's newest
 stored versions, and derives counts.json's figures from their rows with `_lib/derive.ts`,
-which ports `build`. counts.json is the first paint and the fallback. After a refresh,
-rerun `_data/fixture.mts` so `_lib/derive.test.mts` checks the port against the new
-counts.json.
+which ports `build` and `check`. counts.json is the first paint and the fallback. After a
+refresh, rerun `_data/fixture.mts` so `_lib/derive.test.mts` checks the port against the
+new counts.json.
 
 `definitions.json` holds the graph definitions the page composes each count's
 definition from. `live.json` holds the identity of each monetary series, which the

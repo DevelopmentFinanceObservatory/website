@@ -141,9 +141,9 @@ To check that a step reproduces, run it plain with an empty `DFO_CACHE_DIR`, con
 
 A figure a page derives on the client reads its rows in the browser. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object.
 
-`lib/liveRead.ts` reads a page's sources with an anonymous client on the production API and runs the page's derivation on their rows. A source is `{ ref }`, a ref from `live-refs.json`, or `{ recipe }`, an analysis recipe. It reads the version DFO stores as the newest of each dataset's spec, so the page shows a release DFO took in after the step ran. When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
+`lib/liveRead.ts` reads a page's sources with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`), and runs the page's derivation on their rows and datasets. A source is `{ ref }`, a ref from `live-refs.json`, or `{ recipe }`, an analysis recipe. It reads the version DFO stores as the newest of each dataset's spec, so the page shows a release DFO took in after the step ran. When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
 
-- `committed`: the figures the step wrote to the page's JSON, with no request. The page renders them first and swaps in the stored figures when they arrive, as `oda-counts` does with `counts.json`. A page with a recipe falls back here, because a pinned analysis posts to the same server and fails the same way. Client 0.5.0 has no stored read for a recipe, so such a page shows its committed figures until client 0.6.0.
+- `committed`: the figures the step wrote to the page's JSON, with no request. The page renders them first and swaps in the stored figures when they arrive, as `oda-counts` does with `counts.json`. A page with a recipe falls back here, because a pinned analysis posts to the same server and fails the same way. Client 0.5.0 has no stored read for a recipe, so such a page shows its committed figures, and makes no request for its refs.
 - `pinned`: every ref's pinned version, the rows the step read. A page whose committed JSON leaves the figures out falls back here, shows a loading state until they arrive, and renders no server text from them, as `hiv-financing` and `debt-thresholds` do.
 
 `tier` on the result says which tier the figures came from: `stored`, `pinned` or `committed`. Each page puts it on the root of the part it derives as `data-read-tier`, with `loading` before a page without committed figures has any and `failed` when every tier failed (`tierAttribute`), so a browser check can assert that a page reads `stored`. `asCommitted` says whether every dataset is the version its ref pins, so the page knows whether a label the step committed, such as a release name, describes the figures. Each dataset's `freshness` says whether DFO has confirmed a stored version against its sources (`current`), is checking (`pending`) or could not check (`stale`), and is null after a pinned fallback.
@@ -179,6 +179,8 @@ export function useTotal() {
     return { total: read?.value ?? totals.data.gross, tier: read?.tier ?? 'committed' };
 }
 ```
+
+Each stored read is two GETs: the spec's newest stored version, then its file. Every request that reaches the website's gateway counts against one allowance per address, 120 a minute on `/api/v1` (`src/lib/proxy/rateLimit.ts`), which a page's Search resolve calls share. A file the edge cache serves does not reach the gateway. `oda-counts` spends 19 to 38 of the 120 on its stored reads.
 
 `readLive` raises before any request for a ref it cannot read or a recipe with a `pinned` fallback, raises the pinned read's error or the derivation's error on the pinned rows when that fallback fails too, and raises on an aborted signal without falling back. The page owns its hook and its loading and error states.
 
