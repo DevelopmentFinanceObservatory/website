@@ -8,8 +8,8 @@ import { readLive, type ReadTier } from '#lib/liveRead.ts';
 
 /**
  * Whether the page reads its DFO figures in the browser. Off, it shows the committed figures
- * and makes no request. The read is 12 analysis recipes. The two pillar filters, over all 62
- * places, take 70 to 90 seconds each on dev, past readLive's limit for one read.
+ * and makes no request. The read is 30 analysis recipes, two of them filtered per CRS read,
+ * which take 15 to 25 seconds each on dev, past readLive's limit for one read.
  */
 export const READ_LIVE = false;
 

@@ -19,9 +19,10 @@ import type { ClimateSplit, Context, DonorShare, Groups, PillarYear } from '../_
 import type { Recipe } from '#lib/liveRead.ts';
 import { pythonRound } from '#lib/round.ts';
 
-/** What _data/live.json holds: the labels of each pillar's purpose codes, and each CRS
- *  provider's label by code. */
+/** What _data/live.json holds: the recipients of each CRS read, the labels of each pillar's
+ *  purpose codes, and each CRS provider's label by code. */
 export type LiveInputs = {
+    groups: Record<string, string[]>;
     purposes: { humanitarian: string[]; peace: string[] };
     providers: Record<string, string>;
 };
@@ -48,10 +49,9 @@ const MIN_CONTEXTS_WITH_OOF = 50;
 type Yearly = Map<number, number>;
 
 /**
- * The step's recipes, keyed as fetch.py's `figures` keys them, such as `aid/humanitarian`, in
- * the same order: the CRS aid read's total, pillars, ranking per recipient and sums by provider
- * per tier, the OOF read's total, the DAC1 change and the climate totals. `tiers` gives each
- * recipient's tier, in the order each tier's filter lists them.
+ * The step's recipes, keyed as fetch.py's `figures` keys them, such as `aid-1/humanitarian`,
+ * in the same order: each CRS aid read's total, pillars, ranking per recipient and sums by
+ * provider per tier, each OOF read's total, the DAC1 change and the climate totals.
  */
 export const recipes = (
     refs: Record<string, { ref: unknown }>,
@@ -67,33 +67,40 @@ export const recipes = (
 
         return recipe(DatasetRef.fromJSON(source.ref));
     };
-    const found: Record<string, Recipe> = {
-        'aid/total': start('aid').aggregate({ by: 'destination' }),
-    };
+    const found: Record<string, Recipe> = {};
 
-    for (const pillar of PILLARS) {
-        found[`aid/${pillar}`] = start('aid')
-            .filter({ keep: { [PURPOSE_FILTER]: live.purposes[pillar] } })
-            .aggregate({ by: 'destination' });
+    for (const [key, places] of Object.entries(live.groups)) {
+        found[`${key}/total`] = start(key).aggregate({ by: 'destination' });
+
+        for (const pillar of PILLARS) {
+            found[`${key}/${pillar}`] = start(key)
+                .filter({ keep: { [PURPOSE_FILTER]: live.purposes[pillar] } })
+                .aggregate({ by: 'destination' });
+        }
+
+        found[`${key}/donors`] = start(key).rank({
+            by: 'origin',
+            per: 'destination',
+            window: [DONOR_YEAR, DONOR_YEAR],
+            how: 'sum',
+            limit: TOP_DONORS,
+        });
+        const held = [...new Set(places.map((place) => tierOf(tiers, place)))].toSorted();
+
+        for (const tier of held) {
+            const of = places.filter((place) => tierOf(tiers, place) === tier);
+            const chain =
+                held.length > 1 ? start(key).filter({ keep: { destination: of } }) : start(key);
+
+            found[`${key}/${tier}`] = chain.aggregate({ by: 'origin' });
+        }
     }
 
-    found['aid/donors'] = start('aid').rank({
-        by: 'origin',
-        per: 'destination',
-        window: [DONOR_YEAR, DONOR_YEAR],
-        how: 'sum',
-        limit: TOP_DONORS,
-    });
+    for (const key of Object.keys(live.groups)) {
+        const oof = key.replace(/^aid-/, 'oof-');
 
-    for (const tier of [...new Set(tiers.values())].toSorted()) {
-        const places = [...tiers].filter(([, held]) => held === tier).map(([place]) => place);
-
-        found[`aid/${tier}`] = start('aid')
-            .filter({ keep: { destination: places } })
-            .aggregate({ by: 'origin' });
+        found[`${oof}/total`] = start(oof).aggregate({ by: 'destination' });
     }
-
-    found['oof/total'] = start('oof').aggregate({ by: 'destination' });
 
     for (const key of CHANGE_READS) {
         found[`${key}/change`] = start(key).growth({
@@ -107,6 +114,16 @@ export const recipes = (
     }
 
     return found;
+};
+
+const tierOf = (tiers: ReadonlyMap<string, string>, place: string) => {
+    const tier = tiers.get(place);
+
+    if (tier === undefined) {
+        throw new Error(`${place} has no tier`);
+    }
+
+    return tier;
 };
 
 /** Python's `round` to the dollar, which takes a half to the even neighbour and gives no
@@ -139,6 +156,23 @@ const byPlace = (rows: readonly Row[], column: string): Map<string, Yearly> => {
     }
 
     return places;
+};
+
+/** The results of the CRS reads in one map, refusing a recipient two reads hold. */
+const joined = (parts: readonly Map<string, Yearly>[]): Map<string, Yearly> => {
+    const found = new Map<string, Yearly>();
+
+    for (const part of parts) {
+        for (const [iso3, values] of part) {
+            if (found.has(iso3)) {
+                throw new Error(`${iso3} is in two CRS reads`);
+            }
+
+            found.set(iso3, values);
+        }
+    }
+
+    return found;
 };
 
 const rowsOf = (rows: Record<string, Row[]>, key: string): Row[] => {
@@ -259,13 +293,15 @@ export const deriveFigures = (
     committed: Figures,
     live: LiveInputs,
 ): Figures => {
-    const summed = (key: string) => byPlace(rowsOf(rows, key), RECIPIENT);
-    const totals = summed('aid/total');
+    const reads = Object.keys(live.groups);
+    const summed = (figure: string, read = (key: string) => key) =>
+        joined(reads.map((key) => byPlace(rowsOf(rows, `${read(key)}/${figure}`), RECIPIENT)));
+    const totals = summed('total');
     const pillars = {
-        humanitarian: summed('aid/humanitarian'),
-        peace: summed('aid/peace'),
+        humanitarian: summed('humanitarian'),
+        peace: summed('peace'),
     };
-    const official = summed('oof/total');
+    const official = summed('total', (key) => key.replace(/^aid-/, 'oof-'));
     const climate = CLIMATE_READS.map((key) => byPlace(rowsOf(rows, `${key}/total`), RECIPIENT));
     const change = new Map<string, number>();
 
@@ -282,15 +318,17 @@ export const deriveFigures = (
 
     const ranked = new Map<string, Map<string, number>>();
 
-    for (const row of rowsOf(rows, 'aid/donors')) {
-        const value = numberOf(row);
+    for (const key of reads) {
+        for (const row of rowsOf(rows, `${key}/donors`)) {
+            const value = numberOf(row);
 
-        if (value !== null) {
-            const iso3 = String(row[RECIPIENT]).replace(/^country\//, '');
-            const values = ranked.get(iso3) ?? new Map<string, number>();
+            if (value !== null) {
+                const iso3 = String(row[RECIPIENT]).replace(/^country\//, '');
+                const values = ranked.get(iso3) ?? new Map<string, number>();
 
-            values.set(String(row[PROVIDER]), value);
-            ranked.set(iso3, values);
+                values.set(String(row[PROVIDER]), value);
+                ranked.set(iso3, values);
+            }
         }
     }
 
@@ -344,7 +382,7 @@ export const deriveFigures = (
         };
     });
 
-    return { contexts, groups: groupDonors(rows, live.providers, change) };
+    return { contexts, groups: groupDonors(rows, reads, live.providers, change) };
 };
 
 /** Climate finance in 2024 split into adaptation only, mitigation only and both, as
@@ -376,24 +414,27 @@ const climateSplit = (
     return { year: CLIMATE_YEAR, ...split };
 };
 
-/** Each group's six largest providers in 2024, from the sums by provider for each tier, added
- *  in fetch.py's order so the sums match to the dollar. */
+/** Each group's six largest providers in 2024, summed over each read's sums by provider for
+ *  a tier, in fetch.py's order so the sums match to the dollar. */
 const groupDonors = (
     rows: Record<string, Row[]>,
+    reads: readonly string[],
     providers: Record<string, string>,
     change: ReadonlyMap<string, number>,
 ): Groups => {
     const byTier = new Map<string, Map<string, number>>(TIERS.map((tier) => [tier, new Map()]));
 
-    for (const tier of TIERS) {
-        for (const row of rows[`aid/${tier}`] ?? []) {
-            const value = numberOf(row);
+    for (const key of reads) {
+        for (const tier of TIERS) {
+            for (const row of rows[`${key}/${tier}`] ?? []) {
+                const value = numberOf(row);
 
-            if (value !== null && Number(row.time_period) === DONOR_YEAR) {
-                const totals = byTier.get(tier)!;
-                const provider = String(row[PROVIDER]);
+                if (value !== null && Number(row.time_period) === DONOR_YEAR) {
+                    const totals = byTier.get(tier)!;
+                    const provider = String(row[PROVIDER]);
 
-                totals.set(provider, (totals.get(provider) ?? 0) + value);
+                    totals.set(provider, (totals.get(provider) ?? 0) + value);
+                }
             }
         }
     }

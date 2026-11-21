@@ -1,4 +1,4 @@
-"""The step's guard on the pillars' purpose labels and its reading of DFO's results.
+"""The step's guard on the pillars' purpose labels and its joins of DFO's results.
 
 Run from `_data/` with `uv run --with development-finance==0.6.0 --with pytest pytest tests`.
 """
@@ -61,6 +61,11 @@ def test_by_place_sums_each_year_and_skips_missing_values():
     ]
 
     assert fetch.by_place(rows, fetch.RECIPIENT) == {"KEN": {2024: 5.0}}
+
+
+def test_joined_refuses_a_recipient_in_two_reads():
+    with pytest.raises(SystemExit, match="KEN"):
+        fetch.joined([{"KEN": {2024: 1.0}}, {"KEN": {2024: 2.0}}])
 
 
 def test_donor_change_leaves_out_a_change_that_is_not_finite():

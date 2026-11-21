@@ -5,7 +5,7 @@
   "retrieved": "2026-11-19T22:44:40.999Z"
  },
  "data": {
-  "aid": {
+  "aid-1": {
    "ref": {
     "format_version": 1,
     "members": [
@@ -13,12 +13,12 @@
       "parts": [
        "ODA by sector"
       ],
-      "sentence": "Gross ODA disbursements to 62 recipients from 105 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
       "spec": {
-       "spec_id": "spec_eb646f3051a8ba0698275d7c9d61f3d3",
+       "spec_id": "spec_347500caf49a6928898430717a0d778a",
        "definition": {
         "schema_version": 1,
-        "spec_id": "spec_eb646f3051a8ba0698275d7c9d61f3d3",
+        "spec_id": "spec_347500caf49a6928898430717a0d778a",
         "identity": {
          "shape": {
           "kind": "statvar_schema",
@@ -71,67 +71,21 @@
          "entities": {
           "destination": [
            "country/AFG",
-           "country/AGO",
            "country/BDI",
-           "country/BFA",
-           "country/BGD",
            "country/CAF",
-           "country/CIV",
-           "country/CMR",
            "country/COD",
            "country/COG",
-           "country/COM",
-           "country/DJI",
            "country/ERI",
-           "country/ETH",
-           "country/GAB",
-           "country/GIN",
-           "country/GMB",
-           "country/GNB",
            "country/GNQ",
-           "country/GTM",
-           "country/HND",
            "country/HTI",
-           "country/IRN",
-           "country/IRQ",
-           "country/KEN",
-           "country/KHM",
-           "country/LAO",
-           "country/LBN",
-           "country/LBR",
-           "country/LBY",
            "country/MDG",
-           "country/MLI",
-           "country/MMR",
-           "country/MOZ",
-           "country/MRT",
-           "country/MWI",
-           "country/NER",
-           "country/NGA",
-           "country/NIC",
-           "country/PAK",
            "country/PNG",
-           "country/PRK",
-           "country/PSE",
-           "country/RWA",
            "country/SDN",
-           "country/SLB",
-           "country/SLE",
            "country/SOM",
            "country/SSD",
-           "country/SWZ",
            "country/SYR",
            "country/TCD",
-           "country/TGO",
-           "country/TJK",
-           "country/TKM",
-           "country/TLS",
-           "country/TZA",
-           "country/UGA",
-           "country/VEN",
-           "country/YEM",
-           "country/ZMB",
-           "country/ZWE"
+           "country/YEM"
           ]
          },
          "identity_version": "spec1",
@@ -143,9 +97,9 @@
         }
        }
       },
-      "content_version": "cv_04a4cc6653cd28a55d415eedc6c2bc67",
+      "content_version": "cv_d65586647fb6327d47edb8af345f72ee",
       "artifact": {
-       "digest": "sha256:2114603d90cd5d398e54859a72e534d0224a6a0df859cfe136d0b1ab7f086716",
+       "digest": "sha256:bcd76de3cd5c363a6f11953c993684666e816e40ef5b20b3fa59b59737112bdc",
        "rendering": {
         "format": "parquet",
         "bundle": false,
@@ -157,7 +111,7 @@
    },
    "provenance": {
     "format_version": 1,
-    "sentence": "Gross ODA disbursements to 62 recipients from 105 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "citation": {
      "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
      "sources": [
@@ -170,7 +124,7 @@
       }
      ]
     },
-    "fetched_at": "2026-11-21T23:08:29Z",
+    "fetched_at": "2026-11-19T22:19:28Z",
     "question": "ODA to Mozambique by sector",
     "ref": {
      "format_version": 1,
@@ -179,12 +133,12 @@
        "parts": [
         "ODA by sector"
        ],
-       "sentence": "Gross ODA disbursements to 62 recipients from 105 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
        "spec": {
-        "spec_id": "spec_eb646f3051a8ba0698275d7c9d61f3d3",
+        "spec_id": "spec_347500caf49a6928898430717a0d778a",
         "definition": {
          "schema_version": 1,
-         "spec_id": "spec_eb646f3051a8ba0698275d7c9d61f3d3",
+         "spec_id": "spec_347500caf49a6928898430717a0d778a",
          "identity": {
           "shape": {
            "kind": "statvar_schema",
@@ -237,67 +191,21 @@
           "entities": {
            "destination": [
             "country/AFG",
-            "country/AGO",
             "country/BDI",
-            "country/BFA",
-            "country/BGD",
             "country/CAF",
-            "country/CIV",
-            "country/CMR",
             "country/COD",
             "country/COG",
-            "country/COM",
-            "country/DJI",
             "country/ERI",
-            "country/ETH",
-            "country/GAB",
-            "country/GIN",
-            "country/GMB",
-            "country/GNB",
             "country/GNQ",
-            "country/GTM",
-            "country/HND",
             "country/HTI",
-            "country/IRN",
-            "country/IRQ",
-            "country/KEN",
-            "country/KHM",
-            "country/LAO",
-            "country/LBN",
-            "country/LBR",
-            "country/LBY",
             "country/MDG",
-            "country/MLI",
-            "country/MMR",
-            "country/MOZ",
-            "country/MRT",
-            "country/MWI",
-            "country/NER",
-            "country/NGA",
-            "country/NIC",
-            "country/PAK",
             "country/PNG",
-            "country/PRK",
-            "country/PSE",
-            "country/RWA",
             "country/SDN",
-            "country/SLB",
-            "country/SLE",
             "country/SOM",
             "country/SSD",
-            "country/SWZ",
             "country/SYR",
             "country/TCD",
-            "country/TGO",
-            "country/TJK",
-            "country/TKM",
-            "country/TLS",
-            "country/TZA",
-            "country/UGA",
-            "country/VEN",
-            "country/YEM",
-            "country/ZMB",
-            "country/ZWE"
+            "country/YEM"
            ]
           },
           "identity_version": "spec1",
@@ -309,9 +217,9 @@
          }
         }
        },
-       "content_version": "cv_04a4cc6653cd28a55d415eedc6c2bc67",
+       "content_version": "cv_d65586647fb6327d47edb8af345f72ee",
        "artifact": {
-        "digest": "sha256:2114603d90cd5d398e54859a72e534d0224a6a0df859cfe136d0b1ab7f086716",
+        "digest": "sha256:bcd76de3cd5c363a6f11953c993684666e816e40ef5b20b3fa59b59737112bdc",
         "rendering": {
          "format": "parquet",
          "bundle": false,
@@ -328,13 +236,13 @@
     "missing": [],
     "members": [
      {
-      "spec_id": "spec_eb646f3051a8ba0698275d7c9d61f3d3",
-      "content_version": "cv_04a4cc6653cd28a55d415eedc6c2bc67",
-      "digest": "sha256:2114603d90cd5d398e54859a72e534d0224a6a0df859cfe136d0b1ab7f086716",
+      "spec_id": "spec_347500caf49a6928898430717a0d778a",
+      "content_version": "cv_d65586647fb6327d47edb8af345f72ee",
+      "digest": "sha256:bcd76de3cd5c363a6f11953c993684666e816e40ef5b20b3fa59b59737112bdc",
       "parts": [
        "ODA by sector"
       ],
-      "sentence": "Gross ODA disbursements to 62 recipients from 105 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
       "citation": {
        "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
        "sources": [
@@ -353,7 +261,771 @@
     ]
    }
   },
-  "oof": {
+  "aid-2": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AGO",
+           "country/BFA",
+           "country/CMR",
+           "country/COM",
+           "country/GIN",
+           "country/GNB",
+           "country/IRQ",
+           "country/LBR",
+           "country/LBY",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/NER",
+           "country/TJK",
+           "country/UGA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_69c99f8e8c118df4ffea9d841675189d",
+      "artifact": {
+       "digest": "sha256:2fb358f7515a5de0009feabeaddfb999b889ae624d0cb9451c250a3313ed3156",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:20:12Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AGO",
+            "country/BFA",
+            "country/CMR",
+            "country/COM",
+            "country/GIN",
+            "country/GNB",
+            "country/IRQ",
+            "country/LBR",
+            "country/LBY",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/NER",
+            "country/TJK",
+            "country/UGA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_69c99f8e8c118df4ffea9d841675189d",
+       "artifact": {
+        "digest": "sha256:2fb358f7515a5de0009feabeaddfb999b889ae624d0cb9451c250a3313ed3156",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+      "content_version": "cv_69c99f8e8c118df4ffea9d841675189d",
+      "digest": "sha256:2fb358f7515a5de0009feabeaddfb999b889ae624d0cb9451c250a3313ed3156",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "aid-3": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/BGD",
+           "country/DJI",
+           "country/ETH",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/RWA",
+           "country/SLE",
+           "country/SWZ",
+           "country/TKM",
+           "country/VEN",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_31c1863f3a36253ce4e2b0936eed2b9c",
+      "artifact": {
+       "digest": "sha256:36da2190f2f506831b1095fa01a009090338cea36f9e2ea84eeb5521fdcc8103",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:20:56Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/BGD",
+            "country/DJI",
+            "country/ETH",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/RWA",
+            "country/SLE",
+            "country/SWZ",
+            "country/TKM",
+            "country/VEN",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_31c1863f3a36253ce4e2b0936eed2b9c",
+       "artifact": {
+        "digest": "sha256:36da2190f2f506831b1095fa01a009090338cea36f9e2ea84eeb5521fdcc8103",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+      "content_version": "cv_31c1863f3a36253ce4e2b0936eed2b9c",
+      "digest": "sha256:36da2190f2f506831b1095fa01a009090338cea36f9e2ea84eeb5521fdcc8103",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "aid-4": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/CIV",
+           "country/GAB",
+           "country/GMB",
+           "country/GTM",
+           "country/HND",
+           "country/IRN",
+           "country/KEN",
+           "country/MWI",
+           "country/PRK",
+           "country/PSE",
+           "country/SLB",
+           "country/TGO",
+           "country/TLS",
+           "country/TZA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2",
+      "artifact": {
+       "digest": "sha256:6587a0e6d2e80f9ee0237ccac124e9bef07aad511c2ccfefdb839320e0dbd523",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:37Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/CIV",
+            "country/GAB",
+            "country/GMB",
+            "country/GTM",
+            "country/HND",
+            "country/IRN",
+            "country/KEN",
+            "country/MWI",
+            "country/PRK",
+            "country/PSE",
+            "country/SLB",
+            "country/TGO",
+            "country/TLS",
+            "country/TZA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2",
+       "artifact": {
+        "digest": "sha256:6587a0e6d2e80f9ee0237ccac124e9bef07aad511c2ccfefdb839320e0dbd523",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+      "content_version": "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2",
+      "digest": "sha256:6587a0e6d2e80f9ee0237ccac124e9bef07aad511c2ccfefdb839320e0dbd523",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-1": {
    "ref": {
     "format_version": 1,
     "members": [
@@ -361,12 +1033,12 @@
       "parts": [
        "gross other official flows (OOF) disbursements"
       ],
-      "sentence": "Gross OOF disbursements to 62 recipients from 37 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
       "spec": {
-       "spec_id": "spec_a59b8ec1c77295415da70e43b0efd0e4",
+       "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
        "definition": {
         "schema_version": 1,
-        "spec_id": "spec_a59b8ec1c77295415da70e43b0efd0e4",
+        "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
         "identity": {
          "shape": {
           "kind": "statvar_schema",
@@ -419,67 +1091,21 @@
          "entities": {
           "destination": [
            "country/AFG",
-           "country/AGO",
            "country/BDI",
-           "country/BFA",
-           "country/BGD",
            "country/CAF",
-           "country/CIV",
-           "country/CMR",
            "country/COD",
            "country/COG",
-           "country/COM",
-           "country/DJI",
            "country/ERI",
-           "country/ETH",
-           "country/GAB",
-           "country/GIN",
-           "country/GMB",
-           "country/GNB",
            "country/GNQ",
-           "country/GTM",
-           "country/HND",
            "country/HTI",
-           "country/IRN",
-           "country/IRQ",
-           "country/KEN",
-           "country/KHM",
-           "country/LAO",
-           "country/LBN",
-           "country/LBR",
-           "country/LBY",
            "country/MDG",
-           "country/MLI",
-           "country/MMR",
-           "country/MOZ",
-           "country/MRT",
-           "country/MWI",
-           "country/NER",
-           "country/NGA",
-           "country/NIC",
-           "country/PAK",
            "country/PNG",
-           "country/PRK",
-           "country/PSE",
-           "country/RWA",
            "country/SDN",
-           "country/SLB",
-           "country/SLE",
            "country/SOM",
            "country/SSD",
-           "country/SWZ",
            "country/SYR",
            "country/TCD",
-           "country/TGO",
-           "country/TJK",
-           "country/TKM",
-           "country/TLS",
-           "country/TZA",
-           "country/UGA",
-           "country/VEN",
-           "country/YEM",
-           "country/ZMB",
-           "country/ZWE"
+           "country/YEM"
           ]
          },
          "identity_version": "spec1",
@@ -491,9 +1117,9 @@
         }
        }
       },
-      "content_version": "cv_a041b9e262ed8ac8ee339a8f27a62779",
+      "content_version": "cv_89ec96a64e39f5e26865df08718a7a57",
       "artifact": {
-       "digest": "sha256:bcf443ebc567b0c03cf480ae855aa88bea0ad09312608e2e9f15217ea840566f",
+       "digest": "sha256:583f78461a22339d22abfe1c18e078b21bf6fa09ccfea33727f65fdb530bd1da",
        "rendering": {
         "format": "parquet",
         "bundle": false,
@@ -505,7 +1131,7 @@
    },
    "provenance": {
     "format_version": 1,
-    "sentence": "Gross OOF disbursements to 62 recipients from 37 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "citation": {
      "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
      "sources": [
@@ -518,7 +1144,7 @@
       }
      ]
     },
-    "fetched_at": "2026-11-21T23:07:06Z",
+    "fetched_at": "2026-11-19T22:21:45Z",
     "question": "gross other official flows (OOF) disbursements to Mozambique",
     "ref": {
      "format_version": 1,
@@ -527,12 +1153,12 @@
        "parts": [
         "gross other official flows (OOF) disbursements"
        ],
-       "sentence": "Gross OOF disbursements to 62 recipients from 37 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
        "spec": {
-        "spec_id": "spec_a59b8ec1c77295415da70e43b0efd0e4",
+        "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
         "definition": {
          "schema_version": 1,
-         "spec_id": "spec_a59b8ec1c77295415da70e43b0efd0e4",
+         "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
          "identity": {
           "shape": {
            "kind": "statvar_schema",
@@ -585,65 +1211,531 @@
           "entities": {
            "destination": [
             "country/AFG",
-            "country/AGO",
             "country/BDI",
-            "country/BFA",
-            "country/BGD",
             "country/CAF",
-            "country/CIV",
-            "country/CMR",
             "country/COD",
             "country/COG",
-            "country/COM",
-            "country/DJI",
             "country/ERI",
-            "country/ETH",
-            "country/GAB",
-            "country/GIN",
-            "country/GMB",
-            "country/GNB",
             "country/GNQ",
-            "country/GTM",
-            "country/HND",
             "country/HTI",
-            "country/IRN",
+            "country/MDG",
+            "country/PNG",
+            "country/SDN",
+            "country/SOM",
+            "country/SSD",
+            "country/SYR",
+            "country/TCD",
+            "country/YEM"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_89ec96a64e39f5e26865df08718a7a57",
+       "artifact": {
+        "digest": "sha256:583f78461a22339d22abfe1c18e078b21bf6fa09ccfea33727f65fdb530bd1da",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
+      "content_version": "cv_89ec96a64e39f5e26865df08718a7a57",
+      "digest": "sha256:583f78461a22339d22abfe1c18e078b21bf6fa09ccfea33727f65fdb530bd1da",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-2": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AGO",
+           "country/BFA",
+           "country/CMR",
+           "country/COM",
+           "country/GIN",
+           "country/GNB",
+           "country/IRQ",
+           "country/LBR",
+           "country/LBY",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/NER",
+           "country/TJK",
+           "country/UGA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_bfc7553508009fb7fd7aed26d2a749fd",
+      "artifact": {
+       "digest": "sha256:c6dd2a3e5ba3c78022fa60593d21fd5b3b19b86c6af101c1ac6b8f379a828a50",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:48Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AGO",
+            "country/BFA",
+            "country/CMR",
+            "country/COM",
+            "country/GIN",
+            "country/GNB",
             "country/IRQ",
-            "country/KEN",
-            "country/KHM",
-            "country/LAO",
-            "country/LBN",
             "country/LBR",
             "country/LBY",
-            "country/MDG",
             "country/MLI",
             "country/MMR",
             "country/MOZ",
             "country/MRT",
-            "country/MWI",
             "country/NER",
+            "country/TJK",
+            "country/UGA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_bfc7553508009fb7fd7aed26d2a749fd",
+       "artifact": {
+        "digest": "sha256:c6dd2a3e5ba3c78022fa60593d21fd5b3b19b86c6af101c1ac6b8f379a828a50",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+      "content_version": "cv_bfc7553508009fb7fd7aed26d2a749fd",
+      "digest": "sha256:c6dd2a3e5ba3c78022fa60593d21fd5b3b19b86c6af101c1ac6b8f379a828a50",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-3": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/BGD",
+           "country/DJI",
+           "country/ETH",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/RWA",
+           "country/SLE",
+           "country/SWZ",
+           "country/TKM",
+           "country/VEN",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_ba6e9e88b79dd836e406b8e59fb4bf92",
+      "artifact": {
+       "digest": "sha256:e1fe836f606d0728718eedf0de4b257fe6632efe112e10fe8fc7e86951f188cb",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:52Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/BGD",
+            "country/DJI",
+            "country/ETH",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
             "country/NGA",
             "country/NIC",
             "country/PAK",
-            "country/PNG",
-            "country/PRK",
-            "country/PSE",
             "country/RWA",
-            "country/SDN",
-            "country/SLB",
             "country/SLE",
-            "country/SOM",
-            "country/SSD",
             "country/SWZ",
-            "country/SYR",
-            "country/TCD",
-            "country/TGO",
-            "country/TJK",
             "country/TKM",
-            "country/TLS",
-            "country/TZA",
-            "country/UGA",
             "country/VEN",
-            "country/YEM",
             "country/ZMB",
             "country/ZWE"
            ]
@@ -657,9 +1749,261 @@
          }
         }
        },
-       "content_version": "cv_a041b9e262ed8ac8ee339a8f27a62779",
+       "content_version": "cv_ba6e9e88b79dd836e406b8e59fb4bf92",
        "artifact": {
-        "digest": "sha256:bcf443ebc567b0c03cf480ae855aa88bea0ad09312608e2e9f15217ea840566f",
+        "digest": "sha256:e1fe836f606d0728718eedf0de4b257fe6632efe112e10fe8fc7e86951f188cb",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+      "content_version": "cv_ba6e9e88b79dd836e406b8e59fb4bf92",
+      "digest": "sha256:e1fe836f606d0728718eedf0de4b257fe6632efe112e10fe8fc7e86951f188cb",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-4": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/CIV",
+           "country/GAB",
+           "country/GMB",
+           "country/GTM",
+           "country/HND",
+           "country/IRN",
+           "country/KEN",
+           "country/MWI",
+           "country/PRK",
+           "country/PSE",
+           "country/SLB",
+           "country/TGO",
+           "country/TLS",
+           "country/TZA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_5e31fa611e43335300457d44c07cd93d",
+      "artifact": {
+       "digest": "sha256:567e083f038f6398a79bb42f470fff3c4682420541df33151d1db9267286805e",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:55Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/CIV",
+            "country/GAB",
+            "country/GMB",
+            "country/GTM",
+            "country/HND",
+            "country/IRN",
+            "country/KEN",
+            "country/MWI",
+            "country/PRK",
+            "country/PSE",
+            "country/SLB",
+            "country/TGO",
+            "country/TLS",
+            "country/TZA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_5e31fa611e43335300457d44c07cd93d",
+       "artifact": {
+        "digest": "sha256:567e083f038f6398a79bb42f470fff3c4682420541df33151d1db9267286805e",
         "rendering": {
          "format": "parquet",
          "bundle": false,
@@ -683,13 +2027,13 @@
     "missing": [],
     "members": [
      {
-      "spec_id": "spec_a59b8ec1c77295415da70e43b0efd0e4",
-      "content_version": "cv_a041b9e262ed8ac8ee339a8f27a62779",
-      "digest": "sha256:bcf443ebc567b0c03cf480ae855aa88bea0ad09312608e2e9f15217ea840566f",
+      "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+      "content_version": "cv_5e31fa611e43335300457d44c07cd93d",
+      "digest": "sha256:567e083f038f6398a79bb42f470fff3c4682420541df33151d1db9267286805e",
       "parts": [
        "gross other official flows (OOF) disbursements"
       ],
-      "sentence": "Gross OOF disbursements to 62 recipients from 37 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
       "citation": {
        "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
        "sources": [

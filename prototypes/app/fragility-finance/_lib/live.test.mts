@@ -38,8 +38,8 @@ const ref = {
 };
 const REFS = Object.fromEntries(
     [
-        'aid',
-        'oof',
+        'aid-1',
+        'oof-1',
         'donors2025',
         'donors2025-eu',
         'climate-total',
@@ -48,6 +48,7 @@ const REFS = Object.fromEntries(
     ].map((key) => [key, { ref }]),
 );
 const LIVE: LiveInputs = {
+    groups: { 'aid-1': ['country/AAA', 'country/BBB'] },
     purposes: {
         humanitarian: ['emergency food assistance'],
         peace: ['legal and judicial development'],
@@ -73,17 +74,17 @@ const byProvider = (provider: string, value: number, place?: string): Row => ({
 
 /** The rows of every recipe: AAA's 2024 aid of 1,000.5 is 300 humanitarian and 100 peace. */
 const ROWS: Record<string, Row[]> = {
-    'aid/total': [byPlace('AAA', 2024, 1000.5), byPlace('BBB', 2024, 50)],
-    'aid/humanitarian': [byPlace('AAA', 2024, 300)],
-    'aid/peace': [byPlace('AAA', 2024, 100)],
-    'aid/donors': [
+    'aid-1/total': [byPlace('AAA', 2024, 1000.5), byPlace('BBB', 2024, 50)],
+    'aid-1/humanitarian': [byPlace('AAA', 2024, 300)],
+    'aid-1/peace': [byPlace('AAA', 2024, 100)],
+    'aid-1/donors': [
         byProvider('IDA', 400, 'AAA'),
         byProvider('country/DEU', 600, 'AAA'),
         byProvider('IDA', 50, 'BBB'),
     ],
-    'aid/extreme': [byProvider('IDA', 400), byProvider('country/DEU', 600)],
-    'aid/high': [byProvider('IDA', 50), { ...byProvider('IDA', 9), time_period: '2023' }],
-    'oof/total': [byPlace('AAA', 2024, 20)],
+    'aid-1/extreme': [byProvider('IDA', 400), byProvider('country/DEU', 600)],
+    'aid-1/high': [byProvider('IDA', 50), { ...byProvider('IDA', 9), time_period: '2023' }],
+    'oof-1/total': [byPlace('AAA', 2024, 20)],
     'donors2025/change': [
         { financingProvider: 'country/DEU', time_period: '2024/2025', value: -0.11414 },
     ],
@@ -109,17 +110,17 @@ const COMMITTED = {
     },
 };
 
-test("recipes are the step's, in its order, each tier's sum filtered to that tier's recipients", () => {
+test("recipes are the step's, in its order, with a tier filter only where a read mixes tiers", () => {
     const chains = recipes(REFS, LIVE, TIERS);
 
     assert.deepEqual(Object.keys(chains), [
-        'aid/total',
-        'aid/humanitarian',
-        'aid/peace',
-        'aid/donors',
-        'aid/extreme',
-        'aid/high',
-        'oof/total',
+        'aid-1/total',
+        'aid-1/humanitarian',
+        'aid-1/peace',
+        'aid-1/donors',
+        'aid-1/extreme',
+        'aid-1/high',
+        'oof-1/total',
         'donors2025/change',
         'donors2025-eu/change',
         'climate-total/total',
@@ -127,18 +128,11 @@ test("recipes are the step's, in its order, each tier's sum filtered to that tie
         'climate-mitigation/total',
     ]);
 
-    const tree = JSON.stringify(chains['aid/donors']!.tree());
+    const tree = JSON.stringify(chains['aid-1/donors']!.tree());
 
     assert.match(tree, /"partition_by":\["destination"\]/);
-    assert.match(JSON.stringify(chains['aid/humanitarian']!.tree()), /emergency food assistance/);
-    assert.match(
-        JSON.stringify(chains['aid/extreme']!.tree()),
-        /"destination","values":\["country\/AAA"\]/,
-    );
-    assert.match(
-        JSON.stringify(chains['aid/high']!.tree()),
-        /"destination","values":\["country\/BBB"\]/,
-    );
+    assert.match(JSON.stringify(chains['aid-1/humanitarian']!.tree()), /emergency food assistance/);
+    assert.match(JSON.stringify(chains['aid-1/extreme']!.tree()), /country\/AAA/);
     assert.equal(
         Object.keys(
             recipes(REFS, LIVE, new Map([...TIERS].map(([place]) => [place, 'high']))),
@@ -184,7 +178,7 @@ test('figures from the rows replace the DFO figures and keep the rest', () => {
 
 test('a pillar that comes back empty where the committed figure is above zero is refused', () => {
     assert.throws(
-        () => deriveFigures({ ...ROWS, 'aid/humanitarian': [] }, COMMITTED, LIVE),
+        () => deriveFigures({ ...ROWS, 'aid-1/humanitarian': [] }, COMMITTED, LIVE),
         /AAA 2024: no humanitarian aid/,
     );
 });
@@ -193,7 +187,7 @@ test('a provider live.json does not name is refused', () => {
     assert.throws(
         () =>
             deriveFigures(
-                { ...ROWS, 'aid/donors': [byProvider('country/FRA', 1, 'AAA')] },
+                { ...ROWS, 'aid-1/donors': [byProvider('country/FRA', 1, 'AAA')] },
                 COMMITTED,
                 LIVE,
             ),
@@ -294,7 +288,7 @@ test("figures that break the step's checks are refused, each check by its code",
         broken((rows) => {
             const gone = new Set(PROFILES.slice(-3).map(({ iso3 }) => `country/${iso3}`));
 
-            for (const key of eachRead('/total').filter((each) => each.startsWith('aid/'))) {
+            for (const key of eachRead('/total').filter((each) => each.startsWith('aid-'))) {
                 rows[key] = rows[key]!.filter((row) => !gone.has(String(row.financingRecipient)));
             }
         }),
@@ -321,7 +315,7 @@ test("figures that break the step's checks are refused, each check by its code",
     // No OOF recorded.
     assert.deepEqual(
         broken((rows) => {
-            for (const key of eachRead('/total').filter((each) => each.startsWith('oof/'))) {
+            for (const key of eachRead('/total').filter((each) => each.startsWith('oof-'))) {
                 rows[key] = [];
             }
         }),
