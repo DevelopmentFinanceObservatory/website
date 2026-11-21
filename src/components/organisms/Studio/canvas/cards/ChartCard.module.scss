@@ -3,21 +3,19 @@
 @use "shared" as *;
 
 .legend {
-    @include flex(row, flex-start, center);
-
+    display: grid;
     flex-shrink: 0;
-    flex-wrap: wrap;
+    grid-template-columns: repeat(auto-fill, minmax(rem(120), 1fr));
     gap: rem(10);
     list-style: none;
 
-    // Two entries to a row at most, and never narrower than this: a name
-    // runs out in an ellipsis rather than over three lines, so the legend's
-    // height follows the number of series and not the length of their names
-    // (QA-57). The full name is in each entry's `title`.
+    // Equal columns, so the entries line up row under row whatever their
+    // names; a name too long for its column runs out in an ellipsis, so the
+    // legend's height follows the number of series and not the length of
+    // their names (QA-57). The full name is in each entry's `title`.
     li {
         display: flex;
-        min-width: rem(120);
-        max-width: 50%;
+        min-width: 0;
     }
 }
 
