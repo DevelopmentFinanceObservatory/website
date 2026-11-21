@@ -11,6 +11,9 @@ import {
     aidFromRows,
     aidRecipes,
     AidRowsError,
+    islandTier,
+    readAid,
+    type AidCheck,
     type AidKey,
     type AidNames,
     type AidRow,
@@ -142,4 +145,165 @@ test('a provider without a name is fine where the page prints none', () => {
         value: 10,
     });
     assert.deepStrictEqual(aidFromRows(rows, scope).otherProviders, hiv.otherProviders);
+});
+
+const LAST = String(hiv.years.at(-1));
+const US = 'country/USA';
+const GLOBAL_FUND = 'GlobalFund';
+
+const inYear = (row: AidRow, year: string) => String(row.time_period) === year;
+
+/** The checks `aidFromRows` names for rows that `change` mutates, after the control passes. */
+const broken = (
+    change: (rows: Record<AidKey, AidRow[]>) => void,
+    names: AidNames = scope.names,
+): readonly AidCheck[] => {
+    const rows = pinnedRows();
+
+    change(rows);
+
+    try {
+        aidFromRows(rows, { ...scope, names });
+    } catch (error) {
+        if (error instanceof AidRowsError && error.code === 'aid_checks_failed') {
+            return error.checks;
+        }
+
+        throw error;
+    }
+
+    return [];
+};
+
+test("figures that break the step's checks are refused, each check by its code", () => {
+    assert.deepEqual(
+        broken(() => {}),
+        [],
+    );
+    // A provider key's allocated total that its countries do not sum to.
+    assert.deepEqual(
+        broken((rows) => {
+            rows.allocatedByProvider = rows.allocatedByProvider.map((row) =>
+                row.financingProvider === US && inYear(row, LAST)
+                    ? { ...row, value: Number(row.value) + 1e9 }
+                    : row,
+            );
+        }),
+        ['aid_countries_off_allocated'],
+    );
+    // No Global Fund money to countries in an earlier year.
+    assert.deepEqual(
+        broken((rows) => {
+            rows.allocatedByProvider = rows.allocatedByProvider.map((row) =>
+                row.financingProvider === GLOBAL_FUND && inYear(row, '2016')
+                    ? { ...row, value: 0 }
+                    : row,
+            );
+        }),
+        ['aid_year_without_money'],
+    );
+    // The United States and the Global Fund keep 1% of their last-year money, and another
+    // provider gives the rest, so the countries still sum to the totals.
+    assert.deepEqual(
+        broken((rows) => {
+            let moved = 0;
+            const shrink = (row: AidRow) => {
+                moved += Number(row.value) * 0.99;
+
+                return { ...row, value: Number(row.value) * 0.01 };
+            };
+
+            for (const key of ['usByRecipient', 'globalFundByRecipient'] as const) {
+                rows[key] = rows[key].map((row) => (inYear(row, LAST) ? shrink(row) : row));
+            }
+
+            moved = 0;
+            rows.allocatedByProvider = rows.allocatedByProvider.map((row) =>
+                [US, GLOBAL_FUND].includes(String(row.financingProvider)) && inYear(row, LAST)
+                    ? shrink(row)
+                    : row,
+            );
+            const other = rows.allocatedByProvider.findIndex(
+                (row) =>
+                    ![US, GLOBAL_FUND].includes(String(row.financingProvider)) && inYear(row, LAST),
+            );
+
+            rows.allocatedByProvider[other] = {
+                ...rows.allocatedByProvider[other]!,
+                value: Number(rows.allocatedByProvider[other]!.value) + moved,
+            };
+        }),
+        ['aid_share_below_lede'],
+    );
+    // 12110 leading before 2020, which How to interpret says it did not.
+    assert.deepEqual(
+        broken((rows) => {
+            rows.gf12110Total = rows.gf12110Total.map((row) =>
+                inYear(row, '2016') ? { ...row, value: 1e10 } : row,
+            );
+        }),
+        ['aid_gf_switch_moved'],
+    );
+    // No other provider giving $1m in the first or last year; their money to countries also
+    // drops below what the countries sum to.
+    assert.deepEqual(
+        broken((rows) => {
+            rows.allocatedByProvider = rows.allocatedByProvider.map((row) =>
+                ![US, GLOBAL_FUND].includes(String(row.financingProvider))
+                    ? { ...row, value: 1 }
+                    : row,
+            );
+        }),
+        ['aid_countries_off_allocated', 'aid_no_other_providers'],
+    );
+    // A recipient whose last-year total rounds to zero, kept for its rounded US dollar.
+    assert.deepEqual(
+        broken(
+            (rows) => {
+                rows.allocatedByRecipient.push({
+                    ...rows.allocatedByRecipient[0]!,
+                    financingRecipient: 'country/ZZZ',
+                    time_period: LAST,
+                    value: 0.4,
+                });
+                rows.usByRecipient.push({
+                    ...rows.usByRecipient[0]!,
+                    financingRecipient: 'country/ZZZ',
+                    time_period: LAST,
+                    value: 0.6,
+                });
+            },
+            { ...names, recipients: { ...names.recipients, 'country/ZZZ': 'Zedland' } },
+        ),
+        ['aid_countries_not_recipients'],
+    );
+    // A country recipient of the aid read that DFO marks residual, so it is no party.
+    assert.deepEqual(
+        broken(() => {}, {
+            ...names,
+            recipients: { ...names.recipients, 'country/ZZZ': 'Zedland' },
+        }),
+        ['aid_parties_not_countries'],
+    );
+});
+
+test('a ref the client cannot read rejects the read, and does not throw', async () => {
+    let read: Promise<unknown> | undefined;
+
+    assert.doesNotThrow(() => {
+        read = readAid(hiv, {
+            refs: { aid: {}, 'gf-12250': {}, 'gf-12110': {} },
+            names,
+        });
+    });
+    await assert.rejects(read!);
+});
+
+test("the island's tier is the older of the aid's and the UNAIDS read's", () => {
+    // Aid read from hiv.json, as while the page does not read it live.
+    assert.equal(islandTier('committed', 'stored'), 'committed');
+    assert.equal(islandTier('stored', 'pinned'), 'pinned');
+    assert.equal(islandTier('stored', 'stored'), 'stored');
+    assert.equal(islandTier('loading', 'stored'), 'loading');
+    assert.equal(islandTier('committed', 'failed'), 'failed');
 });

@@ -12,10 +12,15 @@ import type {
     ProviderSeries,
 } from '../_data/types.ts';
 
-import { pythonRound } from './unaids.ts';
-
-import type { Recipe } from '#lib/liveRead.ts';
+import {
+    type LiveRead,
+    readLive,
+    type ReadTier,
+    type ReadTierAttribute,
+    type Recipe,
+} from '#lib/liveRead.ts';
 import { recordOf } from '#lib/record.ts';
+import { pythonRound } from '#lib/round.ts';
 
 const COUNTRY = 'country/';
 const US = 'country/USA';
@@ -24,6 +29,12 @@ const PROVIDER = 'financingProvider';
 const RECIPIENT = 'financingRecipient';
 const PROVIDER_KEYS: readonly ProviderKey[] = ['us', 'globalFund', 'other'];
 const MIN_AID = 1_000_000;
+/** The lede says the United States and the Global Fund disbursed almost all HIV aid recorded
+ *  for countries in the last year. */
+const ALMOST_ALL = 0.95;
+/** How to interpret says the Global Fund recorded its multi-disease grants mostly under 12250
+ *  to 2019 and mostly under 12110 from this year. */
+const GF_SWITCH_YEAR = 2020;
 
 /** DFO's analysis frames mark a recipient country as a party and a region or no country as
  *  residual; the step checks that the parties are the `country/` recipients. */
@@ -78,16 +89,45 @@ export type AidRowsErrorCode =
     | 'aid_repeated_row'
     | 'aid_wrong_unit'
     | 'aid_not_a_country'
-    | 'aid_unnamed';
+    | 'aid_unnamed'
+    | 'aid_checks_failed';
 
-/** The rows break what `aidFromRows` assumes, so the page keeps its committed figures. */
+/**
+ * A rule of fetch.py's `check` and `check_allocation` that the figures break:
+ *
+ * - `aid_countries_off_allocated`: in the last year, the countries of a provider key sum to
+ *   more than a dollar per country away from its allocated total;
+ * - `aid_year_without_money`: a provider key gives countries nothing in some year;
+ * - `aid_share_below_lede`: the United States and the Global Fund give less than
+ *   `ALMOST_ALL` of the last year's money to countries, which the lede says they give;
+ * - `aid_gf_switch_moved`: 12110 leads before `GF_SWITCH_YEAR`, or 12250 from it, against
+ *   How to interpret;
+ * - `aid_no_other_providers`: no other provider gives $1m in the first or last year;
+ * - `aid_countries_not_recipients`: the countries kept differ in number from the recipients;
+ * - `aid_parties_not_countries`: DFO's recipient parties are not names.json's recipient
+ *   countries, as when a country recipient is marked residual and its money counted as
+ *   unallocated.
+ */
+export type AidCheck =
+    | 'aid_countries_off_allocated'
+    | 'aid_year_without_money'
+    | 'aid_share_below_lede'
+    | 'aid_gf_switch_moved'
+    | 'aid_no_other_providers'
+    | 'aid_countries_not_recipients'
+    | 'aid_parties_not_countries';
+
+/** The rows break what `aidFromRows` assumes, so the page keeps its committed figures. With
+ *  the code `aid_checks_failed`, `checks` names each rule the figures break. */
 export class AidRowsError extends Error {
     readonly code: AidRowsErrorCode;
+    readonly checks: readonly AidCheck[];
 
-    constructor(code: AidRowsErrorCode, message: string) {
+    constructor(code: AidRowsErrorCode, message: string, checks: readonly AidCheck[] = []) {
         super(message);
         this.name = 'AidRowsError';
         this.code = code;
+        this.checks = checks;
     }
 }
 
@@ -273,14 +313,72 @@ const loans = (
     };
 };
 
+const same = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
+    a.size === b.size && [...a].every((code) => b.has(code));
+
+/** Each rule of `AidCheck` that `data` breaks, as fetch.py's `check` and `check_allocation`
+ *  test them; empty when all hold. */
+const aidProblems = (
+    data: HivData,
+    {
+        parties,
+        countries,
+        early,
+        late,
+    }: {
+        parties: ReadonlySet<string>;
+        countries: ReadonlySet<string>;
+        early: Map<number, number>;
+        late: Map<number, number>;
+    },
+): AidCheck[] => {
+    const { allocated } = data;
+    const last = (key: ProviderKey) => allocated[key].at(-1)!;
+    const total = PROVIDER_KEYS.reduce((sum, key) => sum + last(key), 0);
+    const share = (last('us') + last('globalFund')) / total;
+    const problems: [AidCheck, boolean][] = [
+        [
+            'aid_countries_off_allocated',
+            PROVIDER_KEYS.some(
+                (key) =>
+                    Math.abs(
+                        data.countries.reduce((sum, country) => sum + country.aid[key].at(-1)!, 0) -
+                            last(key),
+                    ) > data.countries.length,
+            ),
+        ],
+        [
+            'aid_year_without_money',
+            PROVIDER_KEYS.some((key) => allocated[key].some((value) => value <= 0)),
+        ],
+        // A total of zero gives no share, which fails too.
+        ['aid_share_below_lede', !(share >= ALMOST_ALL)],
+        [
+            'aid_gf_switch_moved',
+            data.years.some((year) => {
+                const [twelve250, twelve110] = [early.get(year) ?? 0, late.get(year) ?? 0];
+
+                return year < GF_SWITCH_YEAR ? twelve250 < twelve110 : twelve110 < twelve250;
+            }),
+        ],
+        ['aid_no_other_providers', data.otherProviders.length === 0],
+        ['aid_countries_not_recipients', data.countries.length !== data.recipients],
+        ['aid_parties_not_countries', !same(parties, countries)],
+    ];
+
+    return problems.filter(([, broken]) => broken).map(([check]) => check);
+};
+
 /**
  * hiv.json's data from the rows of the aid recipes and the Global Fund reads, as `aid_from_rows`
  * in fetch.py gives it. Each provider counts as the United States, the Global Fund or other by
  * its code. A country is kept when its last-year aid rounds above zero; countries come in
- * descending order of last-year aid, a tie in code order.
+ * descending order of last-year aid, a tie in code order. The figures must pass the step's
+ * checks (`AidCheck`).
  *
  * @throws {AidRowsError} A row in another unit, a second row for a member and year, a row it
- *   cannot read, a recipient that is not a country, or a printed name `names` lacks.
+ *   cannot read, a recipient that is not a country, a printed name `names` lacks, or figures
+ *   that break a check (`aid_checks_failed`, naming each in `checks`).
  */
 export const aidFromRows = (
     rows: Record<AidKey, readonly AidRow[]>,
@@ -352,7 +450,7 @@ export const aidFromRows = (
         byCode('gf12110Total', rows.gf12110Total),
     ];
 
-    return {
+    const data: HivData = {
         years: [...years],
         priceBase,
         allocated: keyed(allocated, years),
@@ -364,6 +462,22 @@ export const aidFromRows = (
             .length,
         countries: countries.sort((a, b) => lastAid(b) - lastAid(a)),
     };
+    const broken = aidProblems(data, {
+        parties: new Set(totals.keys()),
+        countries: new Set(Object.keys(names.recipients)),
+        early: early.get('') ?? new Map(),
+        late: late.get('') ?? new Map(),
+    });
+
+    if (broken.length > 0) {
+        throw new AidRowsError(
+            'aid_checks_failed',
+            `The figures break the step's checks: ${broken.join(', ')}`,
+            broken,
+        );
+    }
+
+    return data;
 };
 
 /** The recipes and the Global Fund refs the page reads, from live-refs.json's parsed refs. */
@@ -385,4 +499,52 @@ export const aidSources = (
         'gf-12250': { ref: refs['gf-12250'] },
         'gf-12110': { ref: refs['gf-12110'] },
     };
+};
+
+/**
+ * The aid figures from the newest stored versions of the reads `refs` name, or `committed`
+ * with the tier `committed` when a stored read fails or `aidFromRows` refuses its rows. An
+ * async function, so a ref the client cannot read rejects the promise and never throws into
+ * the caller's effect.
+ */
+export const readAid = async (
+    committed: HivData,
+    {
+        refs,
+        names,
+        signal,
+    }: {
+        refs: Record<'aid' | (typeof GF_KEYS)[number], unknown>;
+        names: AidNames;
+        signal?: AbortSignal;
+    },
+): Promise<LiveRead<AidKey, HivData>> =>
+    readLive(
+        aidSources(refs, [committed.years[0]!, committed.years.at(-1)!]),
+        (rows) =>
+            aidFromRows(rows, { years: committed.years, priceBase: committed.priceBase, names }),
+        { fallback: { tier: 'committed', value: committed }, signal },
+    );
+
+const RANK: Record<ReadTier, number> = { committed: 0, pinned: 1, stored: 2 };
+
+/**
+ * The island's `data-read-tier`, the oldest tier of the two reads its figures come from: the
+ * aid's (`committed` while the page does not read it live) and the UNAIDS read's. It is
+ * `failed` when the UNAIDS read failed and `loading` while either read loads, so `stored`
+ * means every figure in the island came from DFO's newest stored data.
+ */
+export const islandTier = (
+    aid: ReadTier | 'loading',
+    unaids: ReadTierAttribute,
+): ReadTierAttribute => {
+    if (unaids === 'failed' || unaids === 'loading') {
+        return unaids;
+    }
+
+    if (aid === 'loading') {
+        return 'loading';
+    }
+
+    return RANK[aid] < RANK[unaids] ? aid : unaids;
 };

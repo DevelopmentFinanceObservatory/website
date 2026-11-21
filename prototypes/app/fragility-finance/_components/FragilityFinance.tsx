@@ -46,7 +46,9 @@ const LIVING_COLOUR = '#5e5e52';
 /**
  * The interactive part of the page: the scope row, the one headline sentence, and every
  * section that follows the scope, from the money in and out to living conditions. Its root's
- * `data-read-tier` says where the DFO figures came from (`useFigures`).
+ * `data-read-tier` says where the figures `figuresFromRows` replaces came from (`useFigures`):
+ * each context's pillars, ODA, OOF, donors and climate split, and each group's donors. The
+ * page's other figures stay at profiles.json's pinned versions.
  */
 export const FragilityFinance = (committed: { contexts: Context[]; groups: Groups }) => {
     const { contexts, groups, tier } = useFigures(committed);

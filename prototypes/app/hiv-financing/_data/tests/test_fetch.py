@@ -251,15 +251,18 @@ def test_a_refresh_with_every_figure_kept_pins_each_read_and_writes_the_refs(ste
         *fetch.UNAIDS_KEYS,
         *fetch.AID_KEYS,
     }
+    assert fetch.AID_FIXTURE.exists()
 
 
-def test_no_pin_pins_nothing_and_leaves_both_refs_files(step):
+def test_no_pin_pins_nothing_and_leaves_the_refs_files_and_the_aid_fixture(step):
     refs, live = fetch.REFS.read_text(), fetch.LIVE_REFS.read_text()
 
     step.run(Unaids(), "--no-pin")
 
     assert step.pins == []
     assert (fetch.REFS.read_text(), fetch.LIVE_REFS.read_text()) == (refs, live)
+    # The aid fixture's trees name the versions live-refs.json holds, so it moves with it.
+    assert not fetch.AID_FIXTURE.exists()
     assert fetch.TARGET.exists()
 
 

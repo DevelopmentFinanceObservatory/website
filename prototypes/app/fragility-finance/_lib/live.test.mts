@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { Row } from '@developmentfinance/client/types';
 
-import { context, flow } from './fixture.mts';
-import { figuresFromRows, money, recipes, type LiveInputs } from './live.ts';
+import type { Groups } from '../_data/types.ts';
+
+import { context, flow, PROFILES } from './fixture.mts';
+import {
+    deriveFigures,
+    figuresFromRows,
+    FiguresCheckError,
+    money,
+    recipes,
+    type FiguresCheck,
+    type LiveInputs,
+} from './live.ts';
 
 const SPEC_ID = `spec_${'a'.repeat(32)}`;
 const ref = {
@@ -131,7 +142,7 @@ test("recipes are the step's, in its order, with a tier filter only where a read
 });
 
 test('figures from the rows replace the DFO figures and keep the rest', () => {
-    const { contexts, groups } = figuresFromRows(ROWS, COMMITTED, LIVE);
+    const { contexts, groups } = deriveFigures(ROWS, COMMITTED, LIVE);
     const [alpha, beta] = contexts;
 
     // 1,000.5 - 300 - 100 rounds half to even, as the step's Python does.
@@ -167,7 +178,7 @@ test('figures from the rows replace the DFO figures and keep the rest', () => {
 
 test('a pillar that comes back empty where the committed figure is above zero is refused', () => {
     assert.throws(
-        () => figuresFromRows({ ...ROWS, 'aid-1/humanitarian': [] }, COMMITTED, LIVE),
+        () => deriveFigures({ ...ROWS, 'aid-1/humanitarian': [] }, COMMITTED, LIVE),
         /AAA 2024: no humanitarian aid/,
     );
 });
@@ -175,7 +186,7 @@ test('a pillar that comes back empty where the committed figure is above zero is
 test('a provider live.json does not name is refused', () => {
     assert.throws(
         () =>
-            figuresFromRows(
+            deriveFigures(
                 { ...ROWS, 'aid-1/donors': [byProvider('country/FRA', 1, 'AAA')] },
                 COMMITTED,
                 LIVE,
@@ -184,6 +195,130 @@ test('a provider live.json does not name is refused', () => {
     );
 });
 
-test('money takes a half to the even neighbour', () => {
+test('money takes a half to the even neighbour and gives no negative zero', () => {
     assert.deepEqual([0.5, 1.5, 2.5, -2.5, 2.4, 2.6].map(money), [0, 2, 2, -2, 2, 3]);
+    assert.ok(Object.is(money(-0.3), 0));
+});
+
+test("a donor's change rounds a tie to even and leaves out a change that is not finite", () => {
+    const changes = (value: number) =>
+        deriveFigures(
+            {
+                ...ROWS,
+                'donors2025/change': [
+                    { financingProvider: 'country/DEU', time_period: '2024/2025', value },
+                ],
+            },
+            COMMITTED,
+            LIVE,
+        ).contexts[0]!.donors.map((donor) => donor.change2025);
+
+    // Python: round(0.03125, 4) is 0.0312, where toFixed gives 0.0313.
+    assert.deepEqual(changes(0.03125), [0.0312, null]);
+    assert.deepEqual(changes(Infinity), [null, null]);
+});
+
+const data = <T,>(name: string): T =>
+    (JSON.parse(readFileSync(new URL(`../_data/${name}`, import.meta.url), 'utf8')) as { data: T })
+        .data;
+
+// The trees of the step's recipes and the rows DFO computed for them, as fetch.py wrote them,
+// and the figures it derived.
+const FIXTURE = data<{
+    recipes: Record<string, unknown>;
+    rows: Record<string, { columns: string[]; rows: Row[string][][] }>;
+}>('live-fixture.json');
+const PINNED = {
+    contexts: PROFILES,
+    groups: data<Groups>('groups.json'),
+};
+const PINNED_LIVE = data<LiveInputs>('live.json');
+
+/** Each recipe's rows, as `Dataset.toRows()` gives them. */
+const pinnedRows = (): Record<string, Row[]> =>
+    Object.fromEntries(
+        Object.entries(FIXTURE.rows).map(([key, { columns, rows }]) => [
+            key,
+            rows.map((row) => Object.fromEntries(columns.map((column, at) => [column, row[at]]))),
+        ]),
+    );
+
+test("the recipes build the trees fetch.py sent, from refs.json's and live.json's inputs", () => {
+    const chains = recipes(
+        data<Record<string, { ref: unknown }>>('refs.json'),
+        PINNED_LIVE,
+        new Map(PROFILES.map((each) => [`country/${each.iso3}`, each.tier])),
+    );
+
+    assert.deepStrictEqual(
+        Object.fromEntries(Object.entries(chains).map(([key, chain]) => [key, chain.tree()])),
+        FIXTURE.recipes,
+    );
+});
+
+test('the pinned rows give profiles.json and groups.json exactly', () => {
+    assert.deepStrictEqual(figuresFromRows(pinnedRows(), PINNED, PINNED_LIVE), PINNED);
+});
+
+/** The checks `figuresFromRows` names for the pinned rows that `change` mutates. */
+const broken = (change: (rows: Record<string, Row[]>) => void): readonly FiguresCheck[] => {
+    const rows = pinnedRows();
+
+    change(rows);
+
+    try {
+        figuresFromRows(rows, PINNED, PINNED_LIVE);
+    } catch (error) {
+        if (error instanceof FiguresCheckError) {
+            return error.checks;
+        }
+
+        throw error;
+    }
+
+    return [];
+};
+
+const eachRead = (figure: string) =>
+    Object.keys(FIXTURE.rows).filter((key) => key.endsWith(figure));
+
+test("figures that break the step's checks are refused, each check by its code", () => {
+    // Three contexts with no aid recorded, which leaves 59.
+    assert.deepEqual(
+        broken((rows) => {
+            const gone = new Set(PROFILES.slice(-3).map(({ iso3 }) => `country/${iso3}`));
+
+            for (const key of eachRead('/total').filter((each) => each.startsWith('aid-'))) {
+                rows[key] = rows[key]!.filter((row) => !gone.has(String(row.financingRecipient)));
+            }
+        }),
+        ['contexts_without_aid'],
+    );
+    // No provider to the high-fragility contexts, so that group has no donors.
+    assert.deepEqual(
+        broken((rows) => {
+            for (const key of eachRead('/high')) {
+                rows[key] = [];
+            }
+        }),
+        ['group_short_of_donors'],
+    );
+    // Sums by provider ten times the ODA they are drawn from.
+    assert.deepEqual(
+        broken((rows) => {
+            for (const key of [...eachRead('/extreme'), ...eachRead('/high')]) {
+                rows[key] = rows[key]!.map((row) => ({ ...row, value: Number(row.value) * 10 }));
+            }
+        }),
+        ['donors_above_oda'],
+    );
+    // No OOF recorded.
+    assert.deepEqual(
+        broken((rows) => {
+            for (const key of eachRead('/total').filter((each) => each.startsWith('oof-'))) {
+                rows[key] = [];
+            }
+        }),
+        ['oof_out_of_range'],
+    );
 });

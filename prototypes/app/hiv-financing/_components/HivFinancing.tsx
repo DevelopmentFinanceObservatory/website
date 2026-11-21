@@ -8,7 +8,7 @@ import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
-import { islandTier, useAid } from './useAid';
+import { useAid } from './useAid';
 import { UnaidsStatus } from './UnaidsStatus';
 import { useUnaids } from './useUnaids';
 
@@ -21,6 +21,7 @@ import {
     tableRule,
     unallocatedCaption,
 } from '../_lib/copy.ts';
+import { islandTier } from '../_lib/aid.ts';
 import { lastYear, PER_PERSON_MIN_PLHIV, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 

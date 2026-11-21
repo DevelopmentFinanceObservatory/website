@@ -2,14 +2,22 @@
 // data: each pillar's total and the total ODA and OOF per context and year, the six largest
 // providers per context and per tier, climate finance per context, and each DAC member's
 // change in 2025. `recipes` builds the step's recipes from refs.json and live.json, and
-// `figuresFromRows` repeats the step's small arithmetic on their rows. Every other figure on
-// the page stays as profiles.json holds it.
+// `figuresFromRows` repeats the step's small arithmetic on their rows and refuses figures that
+// fail the step's `check`. Every other figure on the page, such as remittances, FDI, debt
+// service, population and the indicators, stays as profiles.json holds it. live.test.mts checks
+// both against the trees and rows the step writes to _data/live-fixture.json.
+//
+// The pillar guard refuses a pillar that comes back empty for a context and year. If one of a
+// pillar's labels stops matching in a newer stored version while the others still match, as a
+// relabelled purpose code would, that code's money moves to development and the guard passes.
+// The step's `pillar_purposes` reads the labels afresh, so its next run catches the relabel.
 import { DatasetRef, recipe } from '@developmentfinance/client';
 import type { Row } from '@developmentfinance/client/types';
 
 import type { ClimateSplit, Context, DonorShare, Groups, PillarYear } from '../_data/types.ts';
 
 import type { Recipe } from '#lib/liveRead.ts';
+import { pythonRound } from '#lib/round.ts';
 
 /** What _data/live.json holds: the recipients of each CRS read, the labels of each pillar's
  *  purpose codes, and each CRS provider's label by code. */
@@ -31,6 +39,11 @@ const TIERS = ['extreme', 'high'] as const;
 const PILLARS = ['humanitarian', 'peace'] as const;
 const CLIMATE_READS = ['climate-total', 'climate-adaptation', 'climate-mitigation'] as const;
 const CHANGE_READS = ['donors2025', 'donors2025-eu'] as const;
+/** The step's `check`: how many of the 62 contexts must have aid, and the range of OOF in
+ *  `DONOR_YEAR` and how many contexts must receive some. */
+const MIN_CONTEXTS_WITH_AID = 60;
+const OOF_RANGE = [15e9, 20e9] as const;
+const MIN_CONTEXTS_WITH_OOF = 50;
 
 /** A value by year. */
 type Yearly = Map<number, number>;
@@ -113,18 +126,9 @@ const tierOf = (tiers: ReadonlyMap<string, string>, place: string) => {
     return tier;
 };
 
-/** Python's `round`, which takes a half to the even neighbour, so the page's dollars match the
- *  step's. */
-export const money = (value: number): number => {
-    const floor = Math.floor(value);
-    const fraction = value - floor;
-
-    if (fraction === 0.5) {
-        return floor % 2 === 0 ? floor : floor + 1;
-    }
-
-    return Math.round(value);
-};
+/** Python's `round` to the dollar, which takes a half to the even neighbour and gives no
+ *  negative zero, so the page's dollars match the step's. */
+export const money = (value: number): number => pythonRound(value) + 0;
 
 const numberOf = (row: Row): number | null => {
     const value = row.value;
@@ -203,20 +207,88 @@ const largest = (
             return {
                 name,
                 value: money(value),
-                change2025: moved === undefined ? null : Number(moved.toFixed(4)),
+                change2025: moved === undefined ? null : pythonRound(moved, 4),
             };
         });
 
 /**
+ * A rule of fetch.py's `check` that the figures break: fewer than `MIN_CONTEXTS_WITH_AID`
+ * contexts with aid, a group without `TOP_DONORS` donors, the six largest donors to all
+ * contexts giving more than all ODA in `DONOR_YEAR`, or OOF in `DONOR_YEAR` outside
+ * `OOF_RANGE` or above zero in fewer than `MIN_CONTEXTS_WITH_OOF` contexts.
+ */
+export type FiguresCheck =
+    'contexts_without_aid' | 'group_short_of_donors' | 'donors_above_oda' | 'oof_out_of_range';
+
+/** The figures break the step's `check`, so the page keeps its committed figures. */
+export class FiguresCheckError extends Error {
+    readonly checks: readonly FiguresCheck[];
+
+    constructor(checks: readonly FiguresCheck[]) {
+        super(`The figures break the step's checks: ${checks.join(', ')}`);
+        this.name = 'FiguresCheckError';
+        this.checks = checks;
+    }
+}
+
+/** Each rule of `FiguresCheck` that `figures` break; empty when all hold. */
+const figureProblems = ({ contexts, groups }: Figures): FiguresCheck[] => {
+    const inDonorYear = contexts.flatMap(({ flows }) =>
+        flows.filter(({ year }) => year === DONOR_YEAR),
+    );
+    const oda = inDonorYear.reduce((sum, { oda: value }) => sum + (value ?? 0), 0);
+    const oof = inDonorYear.map(({ oof: value }) => value ?? 0);
+    const oofTotal = oof.reduce((sum, value) => sum + value, 0);
+    const donated = groups.all.donors.reduce((sum, { value }) => sum + value, 0);
+    const problems: [FiguresCheck, boolean][] = [
+        [
+            'contexts_without_aid',
+            contexts.filter(({ pillars }) => pillars.length > 0).length < MIN_CONTEXTS_WITH_AID,
+        ],
+        [
+            'group_short_of_donors',
+            Object.values(groups).some(({ donors }) => donors.length !== TOP_DONORS),
+        ],
+        ['donors_above_oda', donated > oda],
+        [
+            'oof_out_of_range',
+            !(OOF_RANGE[0] < oofTotal && oofTotal < OOF_RANGE[1]) ||
+                oof.filter((value) => value > 0).length < MIN_CONTEXTS_WITH_OOF,
+        ],
+    ];
+
+    return problems.filter(([, broken]) => broken).map(([check]) => check);
+};
+
+/**
  * The page's figures from the rows of `recipes`: `committed` with each context's pillars,
- * ODA, OOF, donors and climate split, and each group's donors, replaced by what the rows give.
+ * ODA, OOF, donors and climate split, and each group's donors, replaced by what the rows give,
+ * once they pass the step's `check` (`FiguresCheck`).
  *
+ * @throws {FiguresCheckError} When the figures break a rule of the step's `check`.
  * @throws When a humanitarian or peace pillar comes back empty for a context and year that
- *   profiles.json holds above zero, which a purpose label that no longer names a code would
- *   cause, or when a provider has no label in live.json, so the page keeps its committed
- *   figures.
+ *   profiles.json holds above zero, as a purpose label that names no code in a newer version
+ *   would cause, or when a provider has no label in live.json, so the page keeps its
+ *   committed figures.
  */
 export const figuresFromRows = (
+    rows: Record<string, Row[]>,
+    committed: Figures,
+    live: LiveInputs,
+): Figures => {
+    const figures = deriveFigures(rows, committed, live);
+    const broken = figureProblems(figures);
+
+    if (broken.length > 0) {
+        throw new FiguresCheckError(broken);
+    }
+
+    return figures;
+};
+
+/** `figuresFromRows` without the step's `check`, whose thresholds hold only for all 62
+ *  contexts, so a test can derive figures from a few. */
+export const deriveFigures = (
     rows: Record<string, Row[]>,
     committed: Figures,
     live: LiveInputs,
@@ -237,7 +309,8 @@ export const figuresFromRows = (
         for (const row of rowsOf(rows, `${key}/change`)) {
             const value = numberOf(row);
 
-            if (value !== null) {
+            // A change from a zero base is not finite, and the step leaves it out.
+            if (value !== null && Number.isFinite(value)) {
                 change.set(String(row[PROVIDER]), value);
             }
         }

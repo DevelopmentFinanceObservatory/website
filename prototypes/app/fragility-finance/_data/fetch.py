@@ -42,11 +42,15 @@ The step runs in one of three modes:
   change to either takes this mode.
 
 `--no-pin`, with `--refresh` or `--search`, writes the outputs, pins nothing and leaves
-`refs.json` as it is, for a trial run. Pins come out of a daily allowance.
+`refs.json` and `live-fixture.json` as they are, for a trial run. Pins come out of a daily
+allowance.
 
 Checks known values, failing loudly when one differs, then writes `profiles.json`,
 `groups.json`, with the six largest providers of ODA in 2024 to all 62 contexts and to each
-tier, and `live.json`. All money is in current US dollars.
+tier, and `live.json`. All money is in current US dollars. Beside `refs.json`, it writes
+`live-fixture.json`: each recipe's tree and the rows DFO computed for it, against which
+`_lib/live.test.mts` checks that `_lib/live.ts` builds the same trees and derives the
+committed figures from those rows.
 
 `fragility-2026.tsv` is the OECD's data file behind its fragility chart, linked from the
 OECD's multidimensional fragility dashboard
@@ -60,6 +64,7 @@ import csv
 import json
 import logging
 import math
+import re
 import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -80,6 +85,7 @@ TARGET = HERE / "profiles.json"
 GROUPS_TARGET = HERE / "groups.json"
 REFS = HERE / "refs.json"
 LIVE_TARGET = HERE / "live.json"
+FIXTURE = HERE / "live-fixture.json"
 
 EXAMPLE = "Mozambique"
 FLOW_YEARS = (2015, 2024)
@@ -110,6 +116,8 @@ PROVIDER = "financingProvider"
 PLACE = "observationAbout"
 EU_INSTITUTIONS = "EuropeanUnionInstitutions"
 RECIPIENT = "financingRecipient"
+# The columns of a computed row that `_lib/live.ts` reads, which the parity fixture keeps.
+FIXTURE_COLUMNS = (RECIPIENT, PROVIDER, "time_period", "value")
 
 DIMENSION_SCORES = {
     "eco": "Economic.PC1",
@@ -557,12 +565,13 @@ def compute(recipes: dict[str, Recipe]) -> dict[str, Rows]:
 
 def donor_change(results: dict[str, Rows]) -> dict[str, float]:
     """Each DAC member's change in total ODA from 2024 to 2025, as a fraction. DFO leaves
-    out a provider with no ODA in 2024 or none recorded in 2025."""
+    out a provider with no ODA in 2024 or none recorded in 2025; a value that is not finite,
+    which a zero base in 2024 would give, is left out too, since JSON cannot hold it."""
     return {
         str(row[PROVIDER]): row["value"]
         for key in ("donors2025/change", "donors2025-eu/change")
         for row in results[key]
-        if row["value"] is not None
+        if row["value"] is not None and math.isfinite(row["value"])
     }
 
 
@@ -626,6 +635,35 @@ def group_donors(
         groups[key] = {"donors": largest(totals, names, change)}
 
     return groups
+
+
+def fixture(recipes: dict[str, Recipe], results: dict[str, Rows]) -> dict:
+    """Each recipe's tree and the rows DFO computed for it, cut to the columns `_lib/live.ts`
+    reads, for the page's parity test. A value that is not finite is written as null, which
+    `_lib/live.ts` skips as it skips NaN."""
+
+    def cell(value: Any) -> Any:
+        return None if isinstance(value, float) and not math.isfinite(value) else value
+
+    rows = {}
+
+    for key, found in results.items():
+        columns = [column for column in FIXTURE_COLUMNS if found and column in found[0]]
+        rows[key] = {
+            "columns": columns,
+            "rows": [[cell(row[column]) for column in columns] for row in found],
+        }
+
+    return {"recipes": {key: chain.tree() for key, chain in recipes.items()}, "rows": rows}
+
+
+def flat_lists(text: str) -> str:
+    """`text` with each list of plain values on one line."""
+    return re.sub(
+        r"\[\s+([^\[\]{}]*?)\s+\]",
+        lambda match: "[" + re.sub(r",\s+", ", ", match.group(1)) + "]",
+        text,
+    )
 
 
 def climate_split(iso3: str, total: dict, adaptation: dict, mitigation: dict) -> dict | None:
@@ -779,16 +817,15 @@ def main() -> int:
     aid_frames = [data for data, _ in aid.values()]
     purposes = pillar_purposes(aid_frames)
     names = provider_names(aid_frames)
-    results = compute(
-        figures(
-            aid,
-            {key: data for key, (data, _) in oof.items()},
-            donors,
-            climate_reads,
-            purposes,
-            tiers,
-        )
+    recipes = figures(
+        aid,
+        {key: data for key, (data, _) in oof.items()},
+        donors,
+        climate_reads,
+        purposes,
+        tiers,
     )
+    results = compute(recipes)
 
     def summed(read: str, figure: str) -> dict[str, Yearly]:
         return joined(
@@ -917,6 +954,27 @@ def main() -> int:
     ):
         target.write_text(json.dumps(content, indent=1, ensure_ascii=False) + "\n")
         log.info("Wrote %s.", target)
+
+    # The parity test builds the recipes from refs.json, so the fixture moves with it: a trial
+    # run, which leaves refs.json alone, leaves the fixture alone too.
+    if reads.pin:
+        fixture_envelope = {
+            "provenance": {
+                "sdk": envelope["provenance"]["sdk"],
+                "query": (
+                    "The tree of each recipe DFO computed for the step and the rows it "
+                    "returned, for the page's parity test"
+                ),
+                "retrieved": retrieved,
+            },
+            "data": fixture(recipes, results),
+        }
+        FIXTURE.write_text(
+            flat_lists(json.dumps(fixture_envelope, indent=1, ensure_ascii=False)) + "\n"
+        )
+        log.info("Wrote %s.", FIXTURE)
+    else:
+        log.info("Trial run (--no-pin): left %s and %s alone.", REFS.name, FIXTURE.name)
 
     return 0
 

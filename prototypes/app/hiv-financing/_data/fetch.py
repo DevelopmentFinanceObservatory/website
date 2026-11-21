@@ -50,8 +50,9 @@ Three modes:
   window and reading, so a change to either takes this mode.
 
 The last two modes pin once every check passes, since each pin counts against a daily
-allowance. `--no-pin` skips the pins, for trial runs: it writes `hiv.json` and the fixture
-and leaves `refs.json` and `live-refs.json` as they are.
+allowance. `--no-pin` skips the pins, for trial runs: it writes `hiv.json` and the UNAIDS
+fixture and leaves `refs.json`, `live-refs.json` and `aid-fixture.json` as they are, since
+the aid fixture's trees name the versions `live-refs.json` holds.
 
 The step checks that the data are what the page assumes (the right datasets and units,
 every provider present, countries summing to the totals, and the claims fixed in the
@@ -1076,8 +1077,14 @@ def main(argv: list[str] | None = None) -> int:
         refs=REFS.name,
     )
 
+    # The parity test builds the recipes from live-refs.json, so aid-fixture.json moves with it.
     if args.no_pin:
-        log.info("Trial run (--no-pin): left %s and %s alone.", REFS.name, LIVE_REFS.name)
+        log.info(
+            "Trial run (--no-pin): left %s, %s and %s alone.",
+            REFS.name,
+            LIVE_REFS.name,
+            AID_FIXTURE.name,
+        )
     else:
         write(REFS, "hiv-financing pinned reads", retrieved, records)
         write(
@@ -1087,20 +1094,20 @@ def main(argv: list[str] | None = None) -> int:
             retrieved,
             live_refs(reads),
         )
+        write(
+            AID_FIXTURE,
+            "The rows of each aid recipe DFO computed and of the Global Fund reads, with each "
+            "recipe's tree, for the page's parity test",
+            retrieved,
+            {"recipes": trees, "rows": compact_rows(rows)},
+            flat_lists=True,
+        )
 
     write(
         NAMES_FILE,
         "The names the page prints for each recipient country and provider of the aid read",
         retrieved,
         names,
-    )
-    write(
-        AID_FIXTURE,
-        "The rows of each aid recipe DFO computed and of the Global Fund reads, with each "
-        "recipe's tree, for the page's parity test",
-        retrieved,
-        {"recipes": trees, "rows": compact_rows(rows)},
-        flat_lists=True,
     )
     write(
         FIXTURE,

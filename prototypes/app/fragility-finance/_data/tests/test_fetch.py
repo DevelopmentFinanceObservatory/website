@@ -66,3 +66,19 @@ def test_by_place_sums_each_year_and_skips_missing_values():
 def test_joined_refuses_a_recipient_in_two_reads():
     with pytest.raises(SystemExit, match="KEN"):
         fetch.joined([{"KEN": {2024: 1.0}}, {"KEN": {2024: 2.0}}])
+
+
+def test_donor_change_leaves_out_a_change_that_is_not_finite():
+    results = {
+        "donors2025/change": [
+            {"financingProvider": "country/DEU", "value": -0.11},
+            {"financingProvider": "country/FRA", "value": float("inf")},
+            {"financingProvider": "country/ITA", "value": float("nan")},
+            {"financingProvider": "country/ESP", "value": None},
+        ],
+        "donors2025-eu/change": [
+            {"financingProvider": fetch.EU_INSTITUTIONS, "value": float("-inf")}
+        ],
+    }
+
+    assert fetch.donor_change(results) == {"country/DEU": -0.11}
