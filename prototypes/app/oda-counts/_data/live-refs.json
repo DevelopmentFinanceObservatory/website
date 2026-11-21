@@ -1,0 +1,1522 @@
+{
+  "provenance": {
+    "sdk": "development-finance==0.4.1",
+    "query": "oda-counts pinned reads, read in the browser at the newest stored versions",
+    "retrieved": "2026-11-19T22:35:23.948Z"
+  },
+  "data": {
+    "gross/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross ODA disbursements by provider",
+          "spec": {
+            "spec_id": "spec_b72e0995342bd9098128a40a73ab2f47",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_b72e0995342bd9098128a40a73ab2f47",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_5891efa08d98e932a3fd450fe480d53e",
+          "artifact": {
+            "digest": "sha256:d480f91f998ba3bebf40c91eec35f3ac3ed1ba2bc09821cc2995bdf698fa6c8c",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "gross/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross disbursements from 52 providers for official development assistance, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_e11f6ab465ae6a35761352d0e062c127",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_e11f6ab465ae6a35761352d0e062c127",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_9a5f40701554107446afce02d51c030d",
+          "artifact": {
+            "digest": "sha256:b5dac0dcd51a0fc885f8fc490c8e672eece1e8ab4b88ee64bbc740c0e2ff8c70",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "net/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Net ODA disbursements by provider",
+          "spec": {
+            "spec_id": "spec_8d8e8db15e3215dd9406c95b577a5299",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_8d8e8db15e3215dd9406c95b577a5299",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_a544716471dab6ba61f985ee870cb088",
+          "artifact": {
+            "digest": "sha256:33162c300d567a95ac0725b5f2285155f77844a1decd7af27868012e6444baec",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "net/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Net disbursements from 52 providers for official development assistance, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_67d0900dcde1867dbbb3a726acb6c7d1",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_67d0900dcde1867dbbb3a726acb6c7d1",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_ab793c4bd497a28c27825f46acb9f86a",
+          "artifact": {
+            "digest": "sha256:9e40ae490e8494244a5a3b606ff4843d6cdf8ef73997fd5514b6999845c7df90",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "grantEquivalent/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "ODA grant equivalents by provider",
+          "spec": {
+            "spec_id": "spec_b29006424ec60d7ca1f75eff15d46da0",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_b29006424ec60d7ca1f75eff15d46da0",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "grantEquivalent",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_5f832c287b0cd6e2c7a1b73a68799361",
+          "artifact": {
+            "digest": "sha256:0a0716f1a47a3845a92b934b3840a17c294267360f4cb21db65a90d850088198",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "grantEquivalent/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Grant equivalents from 51 providers for official development assistance, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_88c152c964b7b35d9e84857e36463b14",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_88c152c964b7b35d9e84857e36463b14",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "grantEquivalent",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_8136e22a83fec57e68fd4ef09802b6ba",
+          "artifact": {
+            "digest": "sha256:1ae8f00fd024c4dd52301d7dda01b200a2c7d3cd130b48aca3bbb25c0c3d387b",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "commitments/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "ODA commitments by provider",
+          "spec": {
+            "spec_id": "spec_49eac7017112b95c2b675b32663003a3",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_49eac7017112b95c2b675b32663003a3",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialObligation",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Commitment",
+                      "state": "value"
+                    },
+                    "property": "financialObligationType"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_8056c3263441d5b343c7a24dee9a2536",
+          "artifact": {
+            "digest": "sha256:783d6d5d402bb7b9509f914fa51251347eb443d2457b9ef74f437d9eef3a64a1",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "commitments/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Commitments from 51 providers for official development assistance, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_c1ac8de724166dc01d8b6b2f3d2690bf",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_c1ac8de724166dc01d8b6b2f3d2690bf",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialObligation",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Commitment",
+                      "state": "value"
+                    },
+                    "property": "financialObligationType"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_69ca2239ecdd4adccbd45891ddf65748",
+          "artifact": {
+            "digest": "sha256:2cd2dc40bd955d827b9632e815797939d09071d5e9afe715ff8eb3dfdcc1ee4c",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "headline/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "OECD headline ODA by provider",
+          "spec": {
+            "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/ONEOECDHeadlineODA",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_b5c9be1f98e485284c206b7344ac45c2",
+          "artifact": {
+            "digest": "sha256:af257d9a02a20d63d807d07e1549840bbf020186d5e5cb62586fcc3fbc5829e8",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "headline/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "OECD headline ODA from 52 providers for official development assistance, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_48d8d23f5b311ff1d3268ffeb8cd0088",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_48d8d23f5b311ff1d3268ffeb8cd0088",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/ONEOECDHeadlineODA",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_ad4bc110dfb23c0ef57afd7989fc1460",
+          "artifact": {
+            "digest": "sha256:97afb6f8fbb2d4eaaac11db311782224e602264b36f90daa51ab7f7e96340698",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "bilateral/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross bilateral ODA disbursements by provider",
+          "spec": {
+            "spec_id": "spec_c10cf577341365b12d83728c2cabf3b4",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_c10cf577341365b12d83728c2cabf3b4",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1015",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_1f5dd060a3aa6317d1065133ffe6d496",
+          "artifact": {
+            "digest": "sha256:437f11066e9f9ba99125de8d6dd5b6478ddf2c608f3d0ef83e8028a988050d21",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "bilateral/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross disbursements from 52 providers for bilateral ODA, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_1781b471be98e910064a3ace21c6085e",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_1781b471be98e910064a3ace21c6085e",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1015",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_31f43392401adf4503709de79c316679",
+          "artifact": {
+            "digest": "sha256:79ae871918965c134449bec649849ecf85f8dc97c9eebe0594141ac541afd3e4",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "multilateral/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross multilateral ODA disbursements by provider",
+          "spec": {
+            "spec_id": "spec_1c1eb783c03bc1056864ffb51dff3145",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_1c1eb783c03bc1056864ffb51dff3145",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType2000",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_28843d5da505fb45888daa24ce395ad3",
+          "artifact": {
+            "digest": "sha256:7a8dd08025762759f33afef192b3c1129f3daf247bbf0bd58b412eea124f3bce",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "multilateral/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross disbursements from 51 providers for multilateral ODA, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_243de67c38e813f9acd3e0815b6c1967",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_243de67c38e813f9acd3e0815b6c1967",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType2000",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_d8fde6e71724263fcb8268f9bf405dd8",
+          "artifact": {
+            "digest": "sha256:a3b89d435300c007ed5a026fae80068df2eef43cf032455b8315b7d1a8cfc3ef",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "refugeeCosts/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "In-donor refugee costs, net ODA disbursements by provider",
+          "spec": {
+            "spec_id": "spec_cf5577e39d404c1e58891334ed081bb0",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_cf5577e39d404c1e58891334ed081bb0",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1820",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_6871d575e1818c4cc3b48dccbd33f237",
+          "artifact": {
+            "digest": "sha256:96cbbf5848aefaf64b3e8453afd283ef2f98840e48ba7732f3d574e804fb172a",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "refugeeCosts/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Net disbursements from 44 providers for in-donor refugee cost, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_20e07304dd2f0300336b7ab9e88bd91d",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_20e07304dd2f0300336b7ab9e88bd91d",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1820",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "state": "unbound"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_63572af7a6fcadf2ac62957472a2e52a",
+          "artifact": {
+            "digest": "sha256:0838cb72ebbd91bb81ae5a0cb31ab69e8d59af0d2b8af333e7857c7cac1616e1",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "grossNonGrants/current": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross ODA non-grant disbursements by provider",
+          "spec": {
+            "spec_id": "spec_ffbb1f8f00e012896c853570f746acca",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_ffbb1f8f00e012896c853570f746acca",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "DACTypeOfFinanceNonGrants",
+                      "state": "value"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_532cb2f8f47028f721a53101e7d51caa",
+          "artifact": {
+            "digest": "sha256:c48219f5bef235545ce0abceb899c613f369297ecffae284a3268f3282f06d6b",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "grossNonGrants/constant": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "Gross disbursements from 28 providers for official development assistance for non-grant, 2015 to 2025. Constant 2024 US dollars, donor prices · OECD DAC1.",
+          "spec": {
+            "spec_id": "spec_6e6da48debf065977d4b21552048eebe",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_6e6da48debf065977d4b21552048eebe",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal"
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "DACTypeOfFinanceNonGrants",
+                      "state": "value"
+                    },
+                    "property": "dacTypeOfFinance"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Gross",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "unit": {
+                    "state": "value",
+                    "request": {
+                      "prices": "constant",
+                      "currency": "USD",
+                      "base_year": 2024
+                    }
+                  },
+                  "provenance": {
+                    "ref": "provenance/OECDDAC1",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_cf6cca6212839b8302def68ba32383dd",
+          "artifact": {
+            "digest": "sha256:c9455b59ea70476820139ecf541a8a3b8831a01bf6e0f322d4b8c99373f0ac71",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    },
+    "odaGni/ratio": {
+      "format_version": 1,
+      "members": [
+        {
+          "parts": [],
+          "sentence": "OECD headline ODA as a share of GNI by provider",
+          "spec": {
+            "spec_id": "spec_53b3cbb33442b824ea535a27e67ffecb",
+            "definition": {
+              "schema_version": 1,
+              "spec_id": "spec_53b3cbb33442b824ea535a27e67ffecb",
+              "identity": {
+                "shape": {
+                  "kind": "statvar_schema",
+                  "stat_type": "measuredValue",
+                  "population_type": "FinancialFlow",
+                  "measured_property": "amount",
+                  "measurement_qualifier": "Nominal",
+                  "measurement_denominator": {
+                    "ref": "PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal"
+                  }
+                },
+                "slots": [
+                  {
+                    "binding": {
+                      "ref": "DAC1AidType1010",
+                      "state": "value"
+                    },
+                    "property": "dac1AidType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Disbursement",
+                      "state": "value"
+                    },
+                    "property": "financialFlowType"
+                  },
+                  {
+                    "binding": {
+                      "ref": "Net",
+                      "state": "value"
+                    },
+                    "property": "nettingBasis"
+                  }
+                ],
+                "facets": {
+                  "provenance": {
+                    "ref": "provenance/ONEOECDHeadlineODA",
+                    "state": "value"
+                  }
+                },
+                "entities": {},
+                "open_roles": [
+                  "origin"
+                ],
+                "identity_version": "spec1",
+                "requested_window": {
+                  "kind": "range",
+                  "end_year": 2025,
+                  "start_year": 2015
+                }
+              }
+            }
+          },
+          "content_version": "cv_91fe20b6a137bf1d62eb7be30d246979",
+          "artifact": {
+            "digest": "sha256:6ae70604b9e1977c9f27a4d17d09a78327090022f90840478d79f819cb55220d",
+            "rendering": {
+              "format": "parquet",
+              "bundle": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

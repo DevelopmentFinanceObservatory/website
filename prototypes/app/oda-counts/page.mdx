@@ -5,6 +5,7 @@ import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
 import { LiveUnitsProvider } from './_components/LiveUnits';
 import { OdaCounts } from './_components/OdaCounts';
 import { PricesNote } from './_components/PricesNote';
+import { SourceCitation, SourceRead } from './_components/Sources';
 import counts from './_data/counts.json';
 import definitions from './_data/definitions.json';
 import live from './_data/live.json';
@@ -40,7 +41,7 @@ export default ({ children }) => (
     </PrototypePage>
 );
 
-<OdaCounts data={counts.data} definitions={definitions.data} />
+<OdaCounts definitions={definitions.data} />
 
 ## Notes
 
@@ -50,4 +51,7 @@ export default ({ children }) => (
 
 ## Sources
 
-{counts.provenance.citation}. Definitions come from the DFO graph. The definitions of the OECD headline and constant dollars quote the OECD. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)}. Figures in any other currency or base year are fetched from it when picked.
+<SourceCitation citation={counts.provenance.citation} /> Definitions come from the DFO graph. The
+definitions of the OECD headline and constant dollars quote the OECD.
+<SourceRead retrieved={counts.provenance.retrieved} /> Figures in any other currency or base year
+are fetched from it when picked.

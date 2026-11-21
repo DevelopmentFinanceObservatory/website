@@ -15,10 +15,16 @@ The step runs in one of three modes:
   the provenance and the retrieval time from `refs.json`, so the file reproduces
   byte for byte. It fails when a ref is not pinned.
 - `--refresh`: fetch the newest versions of each ref's specs, pin them, and rewrite
-  `refs.json`, `counts.json`, `definitions.json` and `live.json`.
+  `refs.json`, `live-refs.json`, `counts.json`, `definitions.json` and `live.json`.
 - `--search`: build each read from the step's own spec, then pin and write as
   `--refresh` does. A ref keeps its spec and window, so a change to `SERIES` or the
   years needs this mode once.
+
+The page reads the same 19 refs in the browser from `live-refs.json`, at DFO's newest
+stored versions, and derives counts.json's figures from their rows with `_lib/derive.ts`,
+which ports `build` and `check`. counts.json is the first paint and the fallback. After a
+refresh, rerun `_data/fixture.mts` so `_lib/derive.test.mts` checks the port against the
+new counts.json.
 
 `definitions.json` holds the graph definitions the page composes each count's
 definition from. `live.json` holds the identity of each monetary series, which the
@@ -84,6 +90,8 @@ RECOMPUTED = re.compile(r"recomputed id '(spec_[0-9a-f]+)'")
 
 REFS = "refs.json"
 REFS_QUERY = "oda-counts pinned reads"
+LIVE_REFS = "live-refs.json"
+LIVE_REFS_QUERY = "oda-counts pinned reads, read in the browser at the newest stored versions"
 QUERY = (
     "Every OECD DAC1 count of ODA by provider, 2015 to 2025: gross and net disbursements, "
     "grant equivalents, commitments and the OECD headline, with gross bilateral, "
@@ -654,6 +662,11 @@ def main() -> int:
                     }
                     for key, data in datasets.items()
                 },
+            )
+            write(
+                here / LIVE_REFS,
+                provenance(LIVE_REFS_QUERY, retrieved),
+                {key: json.loads(data.ref.to_json()) for key, data in datasets.items()},
             )
             write(
                 here / "definitions.json",

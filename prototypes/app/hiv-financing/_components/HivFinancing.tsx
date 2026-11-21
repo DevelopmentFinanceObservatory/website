@@ -23,6 +23,8 @@ import {
 import { lastYear, PER_PERSON_MIN_PLHIV, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
+import { tierAttribute } from '#lib/liveRead.ts';
+
 export type Section = { id: string; title: string };
 
 const ALL_COUNTRIES = 'All countries';
@@ -136,7 +138,7 @@ export const HivFinancing = ({
     };
 
     return (
-        <div ref={islandRef} className={styles.island}>
+        <div ref={islandRef} className={styles.island} data-read-tier={tierAttribute(unaids)}>
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>
                     <button

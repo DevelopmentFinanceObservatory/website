@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { readLiveRefs } from '#lib/liveRef.ts';
+import { readLive, type ReadTier } from '#lib/liveRead.ts';
 
 import liveRefs from '../_data/live-refs.json';
 import {
@@ -14,7 +14,7 @@ import {
 export type TransfersState =
     | { status: 'loading' }
     | { status: 'error'; error: Error }
-    | { status: 'ready'; data: TransfersData };
+    | { status: 'ready'; data: TransfersData; tier: ReadTier };
 
 /**
  * Reads the transfers ref in the browser and joins its rows to `members`. The server
@@ -29,12 +29,12 @@ export const useTransfers = (members: TransfersMembers): TransfersState => {
     useEffect(() => {
         const controller = new AbortController();
 
-        readLiveRefs(
-            { transfers: liveRefs.data.transfers },
+        readLive(
+            { transfers: { ref: liveRefs.data.transfers } },
             (rows) => transfersByCountry(rows.transfers, members),
-            { signal: controller.signal },
+            { fallback: { tier: 'pinned' }, signal: controller.signal },
         )
-            .then(({ value, asCommitted }) => {
+            .then(({ value, asCommitted, tier }) => {
                 const data = asCommitted
                     ? value
                     : {
@@ -42,7 +42,7 @@ export const useTransfers = (members: TransfersMembers): TransfersState => {
                           release: `the DFO's newest version, which can differ from the ${value.release} release this page was checked on`,
                       };
 
-                setState({ status: 'ready', data });
+                setState({ status: 'ready', data, tier });
             })
             .catch((error: unknown) => {
                 if (!controller.signal.aborted) {

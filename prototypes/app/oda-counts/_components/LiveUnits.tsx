@@ -2,6 +2,8 @@
 
 import { createContext, use, useRef, useState, type ReactNode } from 'react';
 
+import { useCounts, type Counts } from './useCounts';
+
 import type { CountsData, Donor, LiveData, Offer, Prices, SeriesKey } from '../_data/types.ts';
 import { DEFAULT_DONOR, findDonor } from '../_lib/counts.ts';
 import {
@@ -22,15 +24,38 @@ const REQUEST_TIMEOUT_MS = 30_000;
 /**
  * Entries per request for the basis a reader waits for. Nine one-entry requests sent
  * together answer in about 2.3 s cold, against 3.3 s for one six-entry and one three-entry
- * request. The other basis loads afterwards at the most entries a request takes, so a
- * pick costs 11 requests of the 120 a minute the API allows each reader.
+ * request. The other basis loads afterwards at the most entries a request takes, so a pick
+ * costs 11 requests. The website's gateway allows each address 120 requests a minute on
+ * /api/v1, shared with the page's stored reads: 19 GETs of the specs' newest versions, plus
+ * one GET of each file the edge cache does not hold, 19 to 38 in all. That leaves room for
+ * 7 to 9 picks in the minute after a load, and 10 in each later minute. Once the gateway reports
+ * fewer requests left than a one-entry pick costs, picks take the most entries a request
+ * holds (two requests for each basis).
  */
 const PICKED_PER_REQUEST = 1;
+
+/** The status the gateway answers when an address has spent its allowance. */
+const RATE_LIMITED = 429;
+
+/** Why the last pick could not be fetched: the gateway's allowance was spent, or anything else. */
+export type Failure = 'rate_limited' | 'error';
+
+/** A resolve request the gateway refused because the address spent its allowance. */
+class RateLimitedError extends Error {}
+
+/** What the gateway last said is left of the address's allowance, and until when. */
+type Allowance = { remaining: number; until: number };
 
 /** What the page shows: one donor in one unit. */
 type Shown = { donorId: string; unit: Unit };
 
 type LiveUnits = {
+    /** the figures in US dollars, from counts.json until the live read replaces them */
+    data: CountsData;
+    /** where `data` came from, which the page root shows as `data-read-tier` */
+    tier: Counts['tier'];
+    /** counts.json's provenance describes `data` */
+    asCommitted: boolean;
     offer: Offer;
     /** the donor and unit the controls show, which lead `shown` while a fetch runs */
     picked: Shown;
@@ -42,8 +67,8 @@ type LiveUnits = {
     lead: Prices | null;
     /** true while the picked figures are being fetched */
     pending: boolean;
-    /** true when the last pick could not be fetched */
-    failed: boolean;
+    /** why the last pick could not be fetched, or null when it was */
+    failed: Failure | null;
     pickDonor: (donorId: string) => void;
     pickUnit: (unit: Unit) => void;
 };
@@ -87,10 +112,11 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * hold to it, and move once when the other basis lands only if a figure would fall off
  * them. Figures are cached per donor and unit for the session. A newer pick aborts every
  * request it does not need. A failed pick returns to the figures on screen, or to the new
- * donor in US dollars, and sets `failed`.
+ * donor in US dollars, and sets `failed`, which says whether the gateway refused it for
+ * the address's allowance (see PICKED_PER_REQUEST).
  */
 export const LiveUnitsProvider = ({
-    data,
+    data: committed,
     live,
     children,
 }: {
@@ -98,13 +124,16 @@ export const LiveUnitsProvider = ({
     live: LiveData;
     children: ReactNode;
 }) => {
+    const { data, tier, asCommitted } = useCounts(committed);
     const start: Shown = { donorId: DEFAULT_DONOR, unit: committedUnit(data) };
     const [picked, setPicked] = useState<Shown>(start);
     const [shown, setShown] = useState<Shown>(start);
     const [cache, setCache] = useState<ReadonlyMap<string, LiveBasis>>(new Map());
     // The lead basis of each pair drawn before its other basis was in, by `pairKey`.
     const [leads, setLeads] = useState<ReadonlyMap<string, Prices>>(new Map());
-    const [failed, setFailed] = useState(false);
+    const [failed, setFailed] = useState<Failure | null>(null);
+    // The gateway's last word on the address's allowance, for the async code.
+    const allowance = useRef<Allowance | null>(null);
     // Requests in flight, by the cache key they fill.
     const inflight = useRef(
         new Map<string, { promise: Promise<LiveBasis>; controller: AbortController }>(),
@@ -149,6 +178,19 @@ export const LiveUnitsProvider = ({
                     body: JSON.stringify(body),
                     signal,
                 });
+                const remaining = response.headers.get('x-ratelimit-remaining');
+                const reset = response.headers.get('x-ratelimit-reset');
+
+                if (remaining !== null && reset !== null) {
+                    allowance.current = {
+                        remaining: Number(remaining),
+                        until: Date.now() + Number(reset) * 1000,
+                    };
+                }
+
+                if (response.status === RATE_LIMITED) {
+                    throw new RateLimitedError(`Search answered ${response.status}`);
+                }
 
                 if (
                     !response.ok ||
@@ -184,6 +226,19 @@ export const LiveUnitsProvider = ({
         return promise;
     };
 
+    /** Entries per request for `target`'s basis: one, unless the allowance the gateway last
+     *  reported cannot pay for a one-entry pick and its sibling. */
+    const pickedPerRequest = (target: Shown): number => {
+        const left = allowance.current;
+        const cost =
+            resolveRequests(live, target.donorId, target.unit, PICKED_PER_REQUEST).length +
+            resolveRequests(live, target.donorId, target.unit).length;
+
+        return left !== null && left.until > Date.now() && left.remaining < cost
+            ? live.maxEntries
+            : PICKED_PER_REQUEST;
+    };
+
     /** The other price basis of `target`'s currency. */
     const siblingOf = (target: Shown): Unit =>
         withPrices(target.unit, target.unit.prices === 'current' ? 'constant' : 'current');
@@ -215,7 +270,7 @@ export const LiveUnitsProvider = ({
     const choose = (target: Shown) => {
         latest.current = target;
         setPicked(target);
-        setFailed(false);
+        setFailed(null);
 
         // Keep only the requests the target needs: its basis and the other basis of its pair.
         const keep = new Set(
@@ -238,7 +293,7 @@ export const LiveUnitsProvider = ({
             return;
         }
 
-        fetchBasis(target.donorId, target.unit, PICKED_PER_REQUEST).then(
+        fetchBasis(target.donorId, target.unit, pickedPerRequest(target)).then(
             () => {
                 if (sameShown(latest.current, target)) {
                     show(target);
@@ -267,7 +322,7 @@ export const LiveUnitsProvider = ({
                 latest.current = fallback;
                 setPicked(fallback);
                 show(fallback);
-                setFailed(true);
+                setFailed(error instanceof RateLimitedError ? 'rate_limited' : 'error');
             },
         );
     };
@@ -287,6 +342,9 @@ export const LiveUnitsProvider = ({
     return (
         <Context
             value={{
+                data,
+                tier,
+                asCommitted,
                 offer: live.offer,
                 picked,
                 shown,

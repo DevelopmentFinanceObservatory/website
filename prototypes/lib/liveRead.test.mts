@@ -4,7 +4,9 @@ import test, { mock } from 'node:test';
 import { DatasetRef } from '@developmentfinance/client';
 import { DfoTimeoutError } from '@developmentfinance/client/errors';
 
-import { readLiveRefs, STORED_TIMEOUT_MS } from './liveRef.ts';
+import { recipe } from '@developmentfinance/client';
+
+import { READ_CONCURRENCY, readLive, STORED_TIMEOUT_MS } from './liveRead.ts';
 
 const SPEC_ID = `spec_${'a'.repeat(32)}`;
 const VERSION = `cv_${'b'.repeat(32)}`;
@@ -30,6 +32,7 @@ const refAt = (version: string) => ({
     ],
 });
 const ref = refAt(VERSION);
+const PINNED = { tier: 'pinned' } as const;
 
 type Options = { latest?: unknown; signal?: AbortSignal; timeout?: number };
 type Call = { target: unknown; options: Options };
@@ -76,9 +79,10 @@ test('reads the newest stored versions within the time limit and derives the val
     const { calls, client } = stubClient(dataset(2));
 
     // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
-    const read = await readLiveRefs({ a: ref }, valueOf, { client });
+    const read = await readLive({ a: { ref } }, valueOf, { fallback: PINNED, client });
 
     assert.deepEqual(read.value, [2]);
+    assert.equal(read.tier, 'stored');
     assert.equal(read.asCommitted, true);
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.options.latest, 'stored');
@@ -90,7 +94,7 @@ test('a stored version newer than the ref is not as committed', async () => {
     const { client } = stubClient(dataset(2, NEWER));
 
     // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
-    const read = await readLiveRefs({ a: ref }, valueOf, { client });
+    const read = await readLive({ a: { ref } }, valueOf, { fallback: PINNED, client });
 
     assert.equal(read.asCommitted, false);
 });
@@ -103,10 +107,14 @@ for (const [label, failure] of [
         await quietly(async (warn) => {
             const { calls, client } = stubClient(dataset(2), failure, dataset(1), dataset(1));
 
-            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
-            const read = await readLiveRefs({ a: ref, b: ref }, valueOf, { client });
+            const read = await readLive({ a: { ref }, b: { ref } }, valueOf, {
+                fallback: PINNED,
+                // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+                client,
+            });
 
             assert.deepEqual(read.value, [1, 1]);
+            assert.equal(read.tier, 'pinned');
             assert.equal(read.asCommitted, true);
             assert.deepEqual(
                 calls.map(({ options }) => [options.latest, options.timeout]),
@@ -139,11 +147,104 @@ test('stored rows the derivation refuses send the read to the pinned version', a
         };
 
         // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
-        const read = await readLiveRefs({ a: ref }, derive, { client });
+        const read = await readLive({ a: { ref } }, derive, { fallback: PINNED, client });
 
         assert.equal(read.value, 1);
         assert.equal(read.asCommitted, true);
     });
+});
+
+test('a page with committed figures shows them when a stored read fails, with no other request', async () => {
+    await quietly(async (warn) => {
+        const { calls, client } = stubClient(dataset(2), new Error('stored read failed'));
+
+        const read = await readLive({ a: { ref }, b: { ref } }, valueOf, {
+            fallback: { tier: 'committed', value: [7, 7] },
+            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+            client,
+        });
+
+        assert.deepEqual(read, {
+            tier: 'committed',
+            value: [7, 7],
+            datasets: null,
+            asCommitted: true,
+        });
+        assert.equal(calls.length, 2);
+        assert.equal(warn.mock.callCount(), 1);
+    });
+});
+
+test('a recipe reads no stored version on client 0.5.0, so the page shows its committed figures', async () => {
+    await quietly(async () => {
+        const { calls, client } = stubClient(dataset(2));
+
+        const read = await readLive(
+            { a: { ref }, b: { recipe: recipe(DatasetRef.fromJSON(ref)) } },
+            valueOf,
+            {
+                fallback: { tier: 'committed', value: [7, 7] },
+                // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+                client,
+            },
+        );
+
+        assert.equal(read.tier, 'committed');
+        assert.equal(calls.length, 0);
+    });
+});
+
+test('reads at most READ_CONCURRENCY at once, and starts none after one fails', async () => {
+    await quietly(async () => {
+        const sources = Object.fromEntries(
+            Array.from({ length: READ_CONCURRENCY * 3 }, (_, index) => [`r${index}`, { ref }]),
+        );
+        let running = 0;
+        let most = 0;
+        let started = 0;
+        const client = {
+            fetch: async () => {
+                started += 1;
+                const call = started;
+                running += 1;
+                most = Math.max(most, running);
+                await new Promise((resolve) => setTimeout(resolve, 1));
+                running -= 1;
+
+                if (call === 1) {
+                    throw new Error('stored read failed');
+                }
+
+                return dataset(2);
+            },
+        };
+
+        const read = await readLive(sources, valueOf, {
+            fallback: { tier: 'committed', value: [] },
+            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+            client,
+        });
+
+        // Reads that would start after the failure have time to.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        assert.equal(read.tier, 'committed');
+        assert.equal(most, READ_CONCURRENCY);
+        assert.ok(started < READ_CONCURRENCY * 2, `${started} reads started`);
+    });
+});
+
+test('a recipe with a pinned fallback rejects before any request', async () => {
+    const { calls, client } = stubClient(dataset(2));
+
+    await assert.rejects(
+        readLive({ a: { recipe: recipe(DatasetRef.fromJSON(ref)) } }, valueOf, {
+            fallback: PINNED,
+            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+            client,
+        }),
+    );
+    assert.equal(calls.length, 0);
 });
 
 test('an aborted read rejects without reading the pinned versions', async () => {
@@ -152,8 +253,12 @@ test('an aborted read rejects without reading the pinned versions', async () => 
     const { calls, client } = stubClient(new DOMException('aborted', 'AbortError'), dataset(1));
 
     await assert.rejects(
-        // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
-        readLiveRefs({ a: ref }, valueOf, { client, signal: controller.signal }),
+        readLive({ a: { ref } }, valueOf, {
+            fallback: PINNED,
+            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+            client,
+            signal: controller.signal,
+        }),
         { name: 'AbortError' },
     );
     assert.equal(calls.length, 1);
@@ -169,9 +274,12 @@ test('rejects a ref the client cannot read, before any request', async () => {
     }) as typeof fetch;
 
     try {
-        await assert.rejects(readLiveRefs({ a: { format_version: 1 } }, valueOf), {
-            code: 'format_invalid',
-        });
+        await assert.rejects(
+            readLive({ a: { ref: { format_version: 1 } } }, valueOf, { fallback: PINNED }),
+            {
+                code: 'format_invalid',
+            },
+        );
         assert.equal(requests, 0);
     } finally {
         globalThis.fetch = real;
@@ -193,7 +301,7 @@ test('the default client reads the spec, then the pinned version, from the produ
 
     try {
         await quietly(async () => {
-            await assert.rejects(readLiveRefs({ a: ref }, valueOf));
+            await assert.rejects(readLive({ a: { ref } }, valueOf, { fallback: PINNED }));
         });
         assert.equal(
             `${seen[0]?.url.origin}${seen[0]?.url.pathname}`,
