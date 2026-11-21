@@ -2,6 +2,8 @@
 
 import { createContext, use, useRef, useState, type ReactNode } from 'react';
 
+import { useCounts } from './useCounts';
+
 import type { CountsData, Donor, LiveData, Offer, Prices, SeriesKey } from '../_data/types.ts';
 import { DEFAULT_DONOR, findDonor } from '../_lib/counts.ts';
 import {
@@ -15,6 +17,8 @@ import {
     type LiveBasis,
     type Unit,
 } from '../_lib/live.ts';
+
+import type { ReadTier } from '#lib/liveRead.ts';
 
 /** How long one resolve request may take before the page gives up on it. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -31,6 +35,10 @@ const PICKED_PER_REQUEST = 1;
 type Shown = { donorId: string; unit: Unit };
 
 type LiveUnits = {
+    /** the figures in US dollars, from counts.json until the live read replaces them */
+    data: CountsData;
+    /** where `data` came from, which the page root shows as `data-read-tier` */
+    tier: ReadTier;
     offer: Offer;
     /** the donor and unit the controls show, which lead `shown` while a fetch runs */
     picked: Shown;
@@ -90,7 +98,7 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * donor in US dollars, and sets `failed`.
  */
 export const LiveUnitsProvider = ({
-    data,
+    data: committed,
     live,
     children,
 }: {
@@ -98,6 +106,7 @@ export const LiveUnitsProvider = ({
     live: LiveData;
     children: ReactNode;
 }) => {
+    const { data, tier } = useCounts(committed);
     const start: Shown = { donorId: DEFAULT_DONOR, unit: committedUnit(data) };
     const [picked, setPicked] = useState<Shown>(start);
     const [shown, setShown] = useState<Shown>(start);
@@ -287,6 +296,8 @@ export const LiveUnitsProvider = ({
     return (
         <Context
             value={{
+                data,
+                tier,
                 offer: live.offer,
                 picked,
                 shown,

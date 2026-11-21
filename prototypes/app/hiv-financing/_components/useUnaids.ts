@@ -6,33 +6,34 @@ import liveRefs from '../_data/live-refs.json';
 import type { Country, UnaidsFigures } from '../_data/types.ts';
 import { unaidsByCountry } from '../_lib/unaids.ts';
 
-import { readLiveRefs } from '#lib/liveRef.ts';
+import { readLive, type ReadTier } from '#lib/liveRead.ts';
 
 export type UnaidsState =
     | { status: 'loading' }
     | { status: 'error'; error: Error }
-    | { status: 'ready'; figures: Record<string, UnaidsFigures> };
+    | { status: 'ready'; figures: Record<string, UnaidsFigures>; tier: ReadTier };
 
-const readings = new Map<string, Promise<Record<string, UnaidsFigures>>>();
+type Reading = { figures: Record<string, UnaidsFigures>; tier: ReadTier };
+
+const readings = new Map<string, Promise<Reading>>();
 
 /** The figures for `iso3s` over `years`, read once per page load for each pair and shared by
  *  every caller. The three reads are all stored versions or all pinned ones. DFO refreshes each
  *  series on its own, so for a while after a UNAIDS release a row can join a new release of one
  *  series with the old release of another. A failed read is forgotten, so the next caller tries
  *  again. */
-const readFigures = (
-    iso3s: readonly string[],
-    years: readonly number[],
-): Promise<Record<string, UnaidsFigures>> => {
+const readFigures = (iso3s: readonly string[], years: readonly number[]): Promise<Reading> => {
     const key = `${iso3s.join(',')}|${years.join(',')}`;
     let reading = readings.get(key);
 
     if (reading === undefined) {
         const { plhiv, art, deaths } = liveRefs.data;
 
-        reading = readLiveRefs({ plhiv, art, deaths }, (rows) =>
-            unaidsByCountry(iso3s, rows, years),
-        ).then(({ value }) => value);
+        reading = readLive(
+            { plhiv: { ref: plhiv }, art: { ref: art }, deaths: { ref: deaths } },
+            (rows) => unaidsByCountry(iso3s, rows, years),
+            { fallback: { tier: 'pinned' } },
+        ).then(({ value, tier }) => ({ figures: value, tier }));
         readings.set(key, reading);
         reading.catch((error: unknown) => {
             console.error('The UNAIDS reads failed', error);
@@ -61,9 +62,9 @@ export const useUnaids = (
             countries.map(({ iso3 }) => iso3),
             years,
         )
-            .then((figures) => {
+            .then(({ figures, tier }) => {
                 if (current) {
-                    setState({ status: 'ready', figures });
+                    setState({ status: 'ready', figures, tier });
                 }
             })
             .catch((error: unknown) => {
