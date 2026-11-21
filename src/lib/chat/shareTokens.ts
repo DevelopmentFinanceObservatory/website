@@ -91,6 +91,16 @@ export const readShareToken = async (
 };
 
 /**
+ * Whether the viewer made the share: a signed-in `userId` that stored a
+ * write token for it. False for a signed-out viewer, a guest's share (which
+ * keeps no token) and another user's share.
+ */
+export const ownsShare = async (
+    db: ShareTokenDb,
+    { shareId, userId }: { shareId: string; userId: string | null | undefined },
+): Promise<boolean> => (userId ? (await readShareToken(db, { shareId, userId })) !== null : false);
+
+/**
  * `userId`'s write token for `shareId`, read with their user row `FOR
  * SHARE` as `putShareToken` reads it, so inside a transaction a fence being
  * set waits for the transaction to end. Null when that user stored none,

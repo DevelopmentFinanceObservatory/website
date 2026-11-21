@@ -17,6 +17,7 @@ import {
     type ExportRow,
     exportRules,
     pgEventSource,
+    PROP_RULES,
     runExport,
     ROW_SHAPE,
     ROW_SHAPE_VERSION,
@@ -26,6 +27,8 @@ import {
     type Warehouse,
 } from '../event-export.ts';
 import { EXPORT_READER_ROLE } from '../local-roles.ts';
+import { shareCopyProps } from '../../src/lib/events/shareCopy.ts';
+import type { StudioDownloadProps } from '../../src/lib/events/studioDownload.ts';
 import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
@@ -127,6 +130,10 @@ test('exportRow drops a value its rule refuses', async (t) => {
         ['a string boolean', { name: 'studio.prompt', props: { guest: 'true' } }],
         ['a key of another event', { name: 'studio.prompt', props: { query: 'aid' } }],
         ['a name the site no longer emits', { name: 'search.legacy', props: { kind: 'chat' } }],
+        // Only a `measures` entry admits `|`, so text v1 refused stays refused on reload.
+        ['a `|` in a token', { name: 'studio.card', props: { source: 'OECD|DAC' } }],
+        ['a `|` in a digest', { name: 'share.open', props: { shareId: 'OECD|DAC' } }],
+        ['a `|` in a specIds entry', { name: 'search.query', props: { specIds: ['OECD|DAC'] } }],
     ];
 
     for (const [label, overrides] of cases) {
@@ -134,6 +141,13 @@ test('exportRow drops a value its rule refuses', async (t) => {
             assert.deepEqual(exportRow(sourceEvent(overrides), KEY, RULES).props, {});
         });
     }
+});
+
+test('exportRow keeps a measures entry joined with `|`', () => {
+    const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
+    const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);
+
+    assert.deepEqual(row.props, { measures });
 });
 
 test('exportRow leaves the hashes null for a guest without consent', () => {
@@ -182,6 +196,7 @@ test('exportRow exports a share id as its digest, so share events still join', (
         ['share.open', { shareId, kind: 'card', mode: 'live' }],
         ['embed.view', { shareId, kind: 'card' }],
         ['search.action', { shareId, action: 'share' }],
+        ['share.copy', { shareId, kind: 'card', copied: 'link' }],
     ];
 
     for (const [name, props] of events) {
@@ -199,6 +214,54 @@ test('exportRow exports a share id as its digest, so share events still join', (
     );
 
     assert.deepEqual(refused.props, {});
+});
+
+test('exportRow keeps the props of a copied share and a share dialog download', async (t) => {
+    const hashed = createHmac('sha256', KEY).update('aB3dE5fG7h').digest('hex');
+    const cases: [string, string, Record<string, unknown>, Record<string, unknown>][] = [
+        [
+            'an embed code copied',
+            'share.copy',
+            shareCopyProps({
+                kind: 'canvas',
+                copied: 'embed_code',
+                share: { id: 'aB3dE5fG7h', mode: 'live' },
+            }),
+            { kind: 'canvas', copied: 'embed_code', shareId: hashed, mode: 'live' },
+        ],
+        [
+            'a search query link copied, with no share behind it',
+            'share.copy',
+            shareCopyProps({ kind: 'search', copied: 'query_link', share: null }),
+            { kind: 'search', copied: 'query_link' },
+        ],
+        [
+            'a file saved from the Share dialog',
+            'studio.download',
+            {
+                format: 'csv',
+                bundle: false,
+                kind: 'table',
+                cardId: 'c-1',
+                shared: false,
+                source: 'share_dialog',
+            } satisfies StudioDownloadProps,
+            {
+                format: 'csv',
+                bundle: false,
+                kind: 'table',
+                cardId: 'c-1',
+                shared: false,
+                source: 'share_dialog',
+            },
+        ],
+    ];
+
+    for (const [label, name, props, kept] of cases) {
+        await t.test(label, () => {
+            assert.deepEqual(exportRow(sourceEvent({ name, props }), KEY, RULES).props, kept);
+        });
+    }
 });
 
 // A fixed sample that reaches every rule and branch of exportRow.
@@ -232,67 +295,165 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
     }),
     sourceEvent({ id: 3, name: 'feedback.submit', page: '/a page', props: { kind: 'widget' } }),
     sourceEvent({ id: 4, name: 'retired.event', page: '/embed/x1', props: { kind: 'card' } }),
+    sourceEvent({
+        id: 5,
+        name: 'search.query',
+        props: {
+            specIds: ['spec_a1', 'spec_b2'],
+            measures: ['FinancialFlow/amount/Nominal', 'has space'],
+            internal_eng: true,
+        },
+    }),
+    sourceEvent({
+        id: 6,
+        name: 'embed.view',
+        props: { shareId: 'aB3dE5fG7h', kind: 'card', viewer: 'other', internal_eng: false },
+    }),
+    sourceEvent({
+        id: 7,
+        name: 'studio.download',
+        props: { format: 'xlsx', bundle: true, kind: 'chart', cardId: 'c-1', shared: false },
+    }),
+    sourceEvent({
+        id: 8,
+        name: 'search.query',
+        props: { measures: ['sv:Count_Person', '-'] },
+    }),
+    sourceEvent({
+        id: 9,
+        name: 'search.query',
+        props: { measures: Array.from({ length: 11 }, (_, at) => `sv:Ind_${at}`) },
+    }),
+];
+
+// Version 1 pinned the first four sample rows, which version 2 leaves as they were.
+const VERSION_1_ROWS: ExportRow[] = [
+    {
+        id: 1,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: '/data',
+        signed_in: true,
+        visitor_hash: '77a3c0b044582bfb514a3a3ad8521316635e2256261861c83b7498ee2e420f65',
+        user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
+        props: {
+            searchId: '0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
+            post: 0,
+            source: 'typed',
+            edited: false,
+            ms: 812,
+            outcome: 'definite',
+            kind: 'resolution',
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 2,
+        created_at: '2026-10-21T00:00:00.000001Z',
+        name: 'share.open',
+        page: '/s/:id/download/preparing',
+        signed_in: false,
+        visitor_hash: '656d62821b3df7e629e0d8af562ac6a21302f71aeed8fa018b46c7fa00d54f88',
+        user_hash: null,
+        props: {
+            shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+            kind: 'card',
+            mode: 'snapshot',
+            host: 'example.org',
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 3,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'feedback.submit',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { kind: 'widget' },
+        export_rules: 'r',
+    },
+    {
+        id: 4,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'retired.event',
+        page: '/embed/:id',
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: {},
+        export_rules: 'r',
+    },
 ];
 
 // Each ROW_SHAPE_VERSION's rows for GOLDEN_SAMPLE under KEY, with rules
 // `r`. A change to the rows adds the next version with its rows, and an
 // entry never changes.
 const GOLDEN_ROWS: Record<number, ExportRow[]> = {
-    1: [
+    1: VERSION_1_ROWS,
+    2: [
+        ...VERSION_1_ROWS,
         {
-            id: 1,
+            id: 5,
             created_at: '2026-10-20T13:04:05.123456Z',
             name: 'search.query',
-            page: '/data',
-            signed_in: true,
-            visitor_hash: '77a3c0b044582bfb514a3a3ad8521316635e2256261861c83b7498ee2e420f65',
-            user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
-            props: {
-                searchId: '0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
-                post: 0,
-                source: 'typed',
-                edited: false,
-                ms: 812,
-                outcome: 'definite',
-                kind: 'resolution',
-            },
-            export_rules: 'r',
-        },
-        {
-            id: 2,
-            created_at: '2026-10-21T00:00:00.000001Z',
-            name: 'share.open',
-            page: '/s/:id/download/preparing',
-            signed_in: false,
-            visitor_hash: '656d62821b3df7e629e0d8af562ac6a21302f71aeed8fa018b46c7fa00d54f88',
-            user_hash: null,
-            props: {
-                shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
-                kind: 'card',
-                mode: 'snapshot',
-                host: 'example.org',
-            },
-            export_rules: 'r',
-        },
-        {
-            id: 3,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'feedback.submit',
             page: null,
             signed_in: false,
             visitor_hash: null,
             user_hash: null,
-            props: { kind: 'widget' },
+            // `measures` holds a token with a space, so the whole list is dropped.
+            props: { specIds: ['spec_a1', 'spec_b2'], internal_eng: true },
             export_rules: 'r',
         },
         {
-            id: 4,
+            id: 6,
             created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'retired.event',
-            page: '/embed/:id',
+            name: 'embed.view',
+            page: null,
             signed_in: false,
             visitor_hash: null,
             user_hash: null,
+            props: {
+                shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+                kind: 'card',
+                viewer: 'other',
+                internal_eng: false,
+            },
+            export_rules: 'r',
+        },
+        {
+            id: 7,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'studio.download',
+            page: null,
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            props: { format: 'xlsx', bundle: true, kind: 'chart', cardId: 'c-1', shared: false },
+            export_rules: 'r',
+        },
+        {
+            id: 8,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'search.query',
+            page: null,
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            // `-` stands for a part with no measure and passes.
+            props: { measures: ['sv:Count_Person', '-'] },
+            export_rules: 'r',
+        },
+        {
+            id: 9,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'search.query',
+            page: null,
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            // Eleven measures is over the list cap, so the list is dropped.
             props: {},
             export_rules: 'r',
         },
@@ -304,6 +465,27 @@ test('exportRow writes the rows pinned to the current ROW_SHAPE_VERSION', () => 
         GOLDEN_SAMPLE.map((row) => exportRow(row, KEY, 'r')),
         GOLDEN_ROWS[ROW_SHAPE_VERSION],
     );
+});
+
+test('exportRow lets no email address out, whatever field the source holds it in', () => {
+    const email = 'ana@example.org';
+    const rows = Object.entries(PROP_RULES).flatMap(([name, rules]) => {
+        const props = Object.fromEntries(Object.keys(rules).map((key) => [key, email]));
+        const listProps = Object.fromEntries(Object.keys(rules).map((key) => [key, [email]]));
+
+        return [props, listProps].flatMap((eventProps) =>
+            [`/${email}`, `/data?email=${email}`, `/s/${email}`].map((page) =>
+                exportRow(
+                    sourceEvent({ name, userId: email, visitorId: email, page, props: eventProps }),
+                    KEY,
+                    RULES,
+                ),
+            ),
+        );
+    });
+
+    assert.ok(rows.length > 0);
+    assert.ok(rows.every((row) => !JSON.stringify(row).includes('@')));
 });
 
 const counts = (days: Record<string, number>) => new Map(Object.entries(days));
@@ -1078,7 +1260,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
     });
 });
 
-test('runExportJob runs the event export after a failed account export, then fails with every failure', async (t) => {
+test('runExportJob runs the account export after the event export, failed or not, then fails with every failure', async (t) => {
     const accountError = new Error('bigquery down');
     const eventError = new Error('event export 2026-10-21: load job failed');
     const cases: [string, () => Promise<void>, RegExp, number][] = [
@@ -1120,7 +1302,7 @@ test('runExportJob runs the event export after a failed account export, then fai
                     return true;
                 },
             );
-            assert.deepEqual(ran, ['accounts', 'events']);
+            assert.deepEqual(ran, ['events', 'accounts']);
         });
     }
 });

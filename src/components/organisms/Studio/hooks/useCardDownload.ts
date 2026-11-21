@@ -3,8 +3,10 @@
 import { useState } from 'react';
 
 import type { DownloadSheetState } from '@/components/organisms/DataSearch/DatasetDownload';
-import type { CardRef } from '@/lib/chat/widgets';
+import type { CardRef, Widget } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
+import { track } from '@/lib/events/client';
+import type { StudioDownloadProps } from '@/lib/events/studioDownload';
 import { DATASET_FORMATS, type DatasetFormat } from '@/lib/search/searchClient';
 import {
     CardDownloadError,
@@ -18,9 +20,11 @@ import {
  * route, or over the share's data route when `shared` names the card on a
  * share. Either route takes a format and the bundle flag only, so the
  * sheet offers no extra columns, and keeps its choices for this card only.
+ * A saved file records `studio.download` with the card's `kind`.
  */
 export const useCardDownload = (
     ref: CardRef,
+    kind: Widget['kind'],
     shared: SharedCardAddress | null = null,
 ): DownloadSheetState => {
     const [format, setFormat] = useState<DatasetFormat>('csv');
@@ -37,6 +41,14 @@ export const useCardDownload = (
             const { blob, fileName } = await fetchCardData(ref, { format, bundle }, { shared });
 
             downloadBlob(blob, fileName);
+            track('studio.download', {
+                format,
+                bundle,
+                kind,
+                cardId: ref.component_id,
+                shared: shared !== null,
+                source: 'card',
+            } satisfies StudioDownloadProps);
         } catch (caught) {
             setError(
                 caught instanceof CardDownloadError ? caught.message : cardDownloadMessage(null),

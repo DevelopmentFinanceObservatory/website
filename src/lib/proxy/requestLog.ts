@@ -1,7 +1,7 @@
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { IncomingMessage, ServerResponse } from 'node:http';
 
-import { isBotAgent } from '../bot.ts';
+import { isBotAgent, requestAgent, type Agent } from '../bot.ts';
 import { requestCaller } from './caller.ts';
 
 /**
@@ -21,7 +21,8 @@ import { requestCaller } from './caller.ts';
  * parses. `caller` is the
  * same `ip:<digest>` the /mcp proxy sends as x-dfo-caller (see caller.ts).
  * `bot` is true when the User-Agent header is missing, empty or one isbot
- * flags. `prerender` is true for a document request with `Sec-Purpose:
+ * flags. `agent` and `agent_name` say what sent the request (requestAgent in
+ * src/lib/bot.ts). `prerender` is true for a document request with `Sec-Purpose:
  * prefetch;prerender`, so its kind is `page` whether or not the visitor opens
  * the page, since the server cannot see activation. The line holds no raw
  * address, query string, cookie, auth header or user agent.
@@ -39,6 +40,8 @@ export type RequestLogEntry = {
     status: number;
     finished: boolean;
     bot: boolean;
+    agent: Agent;
+    agent_name: string | null;
     prerender: boolean;
 };
 
@@ -54,6 +57,8 @@ const API_PATHS = ['/api', '/mcp', '/openapi.json', '/codes'];
 
 const isApiPath = (path: string): boolean =>
     API_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+
+const isMcpPath = (path: string): boolean => path === '/mcp' || path.startsWith('/mcp/');
 
 /** True for a static asset, which is not logged. */
 export const isStaticAsset = (path: string): boolean => STATIC_ASSET.test(path);
@@ -101,6 +106,7 @@ export const requestLogEntry = (
     { status, finished }: { status: number; finished: boolean },
 ): RequestLogEntry => {
     const { kind, prerender } = classifyRequest(path, headers);
+    const { agent, agentName } = requestAgent(headers, { mcp: isMcpPath(path) });
 
     return {
         severity: 'INFO',
@@ -113,6 +119,8 @@ export const requestLogEntry = (
         status,
         finished,
         bot: isBotAgent(headers.get('user-agent')),
+        agent,
+        agent_name: agentName,
         prerender,
     };
 };
