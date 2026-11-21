@@ -75,16 +75,14 @@ export type Derive<K extends string, T> = (
 ) => T;
 
 /**
- * Reads a recipe on the newest versions DFO stores of the datasets it starts from. Client 0.5.0
- * refuses `latest: "stored"` on a recipe, so this rejects before any request and the page
- * falls back.
+ * Runs a recipe on the newest versions DFO stores of the datasets it starts from: one manifest
+ * GET per dataset, no file, then the analysis POST and the result's manifest and file.
  */
-const fetchStoredRecipe = async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a stored recipe read takes the read's client, recipe and options
-    ...[client, source, options]: [Fetcher, Recipe, CallOptions]
-): Promise<Dataset> => {
-    throw new Error('Client 0.5.0 has no stored read for a recipe.');
-};
+const fetchStoredRecipe = (
+    client: Fetcher,
+    source: Recipe,
+    options: CallOptions,
+): Promise<Dataset> => client.fetch(source, { ...options, latest: 'stored' });
 
 /**
  * `fn` of each item, at most `limit` at once, in the items' order. After the first rejection no
