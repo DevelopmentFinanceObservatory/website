@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { readPinnedRef } from '#lib/pinnedRef.ts';
+import { readLiveRefs } from '#lib/liveRef.ts';
 
 import liveRefs from '../_data/live-refs.json';
 import {
@@ -19,7 +19,9 @@ export type TransfersState =
 /**
  * Reads the transfers ref in the browser and joins its rows to `members`. The server
  * renders and the first client render show `loading`. Nothing on the page derives from
- * the rows before this resolves. A failure goes to `console.error` in full.
+ * the rows before this resolves. A failure goes to `console.error` in full. When DFO
+ * serves another version than the ref's, the release label says so, since the step
+ * named only the release it read.
  */
 export const useTransfers = (members: TransfersMembers): TransfersState => {
     const [state, setState] = useState<TransfersState>({ status: 'loading' });
@@ -27,9 +29,20 @@ export const useTransfers = (members: TransfersMembers): TransfersState => {
     useEffect(() => {
         const controller = new AbortController();
 
-        readPinnedRef(liveRefs.data.transfers, { signal: controller.signal })
-            .then(({ rows }) => {
-                setState({ status: 'ready', data: transfersByCountry(rows, members) });
+        readLiveRefs(
+            { transfers: liveRefs.data.transfers },
+            (rows) => transfersByCountry(rows.transfers, members),
+            { signal: controller.signal },
+        )
+            .then(({ value, asCommitted }) => {
+                const data = asCommitted
+                    ? value
+                    : {
+                          ...value,
+                          release: `the DFO's newest version, which can differ from the ${value.release} release this page was checked on`,
+                      };
+
+                setState({ status: 'ready', data });
             })
             .catch((error: unknown) => {
                 if (!controller.signal.aborted) {

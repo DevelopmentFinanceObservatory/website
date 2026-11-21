@@ -20,10 +20,10 @@ Reads, for 2015 to 2024:
   country and every CRS recipient, because a search for the phrase without a place matches
   OECD regional data.
 
-The page reads the UNAIDS data in the browser from the pinned refs in `live-refs.json`, so
-`hiv.json` holds the aid figures only. The step checks the UNAIDS reads and writes
-`unaids-fixture.json`: real rows for a few countries with the values `unaids_by_country`
-gives for them, for the page's parity test.
+The page reads the UNAIDS data in the browser from the refs in `live-refs.json`, at DFO's
+newest stored versions or else the pinned ones, so `hiv.json` holds the aid figures only. The
+step checks the UNAIDS reads and writes `unaids-fixture.json`: real rows for a few countries
+with the values `unaids_by_country` gives for them, for the page's parity test.
 
 Three modes:
 

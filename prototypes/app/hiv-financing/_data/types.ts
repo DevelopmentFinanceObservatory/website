@@ -23,7 +23,7 @@ export type Country = {
 };
 
 /** A country's UNAIDS figures. They are not in hiv.json: the page derives them in the browser
- *  from the pinned refs in _data/live-refs.json, as `unaids_by_country` in fetch.py does, and
+ *  from the refs in _data/live-refs.json, as `unaids_by_country` in fetch.py does, and
  *  _data/unaids-fixture.json holds real rows with the figures fetch.py gives for them. */
 export type UnaidsFigures = {
     /** UNAIDS estimate of people living with HIV in the last year; null where none is held */

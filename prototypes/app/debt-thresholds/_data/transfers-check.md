@@ -1,6 +1,6 @@
 # Net transfers by FDL group against FDL's Figure 1
 
-The net-transfers section sums IDS net transfers on external debt, total (`DT.NTR.DECT.CD`), over the countries in `groups.csv`, read from the pinned ref in `live-refs.json`. The comparison is with Figure 1 of the FDL short note of March 2026, "Net transfers for LLMICs by Debt Sustainability Status" (p. 5), read off the chart, and with the figures in its text (p. 4). FDL's data is IDS 2025 (December 2025, data to 2024). Ours is the IDS release the DFO refreshed on 12 November 2026, with data to 2025.
+The net-transfers section sums IDS net transfers on external debt, total (`DT.NTR.DECT.CD`), over the countries in `groups.csv`, read from the pinned ref in `live-refs.json`. The page reads the newest version DFO stores and falls back to this one, so once DFO takes in a later IDS release the chart shows figures this check has not covered, and its source line says so. The comparison is with Figure 1 of the FDL short note of March 2026, "Net transfers for LLMICs by Debt Sustainability Status" (p. 5), read off the chart, and with the figures in its text (p. 4). FDL's data is IDS 2025 (December 2025, data to 2024). Ours is the IDS release the DFO refreshed on 12 November 2026, with data to 2025.
 
 USD billions:
 

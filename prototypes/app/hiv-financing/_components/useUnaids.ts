@@ -4,35 +4,39 @@ import { useEffect, useState } from 'react';
 
 import liveRefs from '../_data/live-refs.json';
 import type { Country, UnaidsFigures } from '../_data/types.ts';
-import { unaidsByCountry, type UnaidsRows } from '../_lib/unaids.ts';
+import { unaidsByCountry } from '../_lib/unaids.ts';
 
-import { readPinnedRef } from '#lib/pinnedRef.ts';
+import { readLiveRefs } from '#lib/liveRef.ts';
 
 export type UnaidsState =
     | { status: 'loading' }
     | { status: 'error'; error: Error }
     | { status: 'ready'; figures: Record<string, UnaidsFigures> };
 
-let reading: Promise<UnaidsRows> | null = null;
+const readings = new Map<string, Promise<Record<string, UnaidsFigures>>>();
 
-/** The rows of the three UNAIDS reads, fetched once per page load and shared by every caller.
- *  A failed read is forgotten, so the next caller tries again. */
-const readUnaidsRows = (): Promise<UnaidsRows> => {
-    if (reading === null) {
+/** The figures for `iso3s` over `years`, read once per page load for each pair and shared by
+ *  every caller. The three reads are all stored versions or all pinned ones. DFO refreshes each
+ *  series on its own, so for a while after a UNAIDS release a row can join a new release of one
+ *  series with the old release of another. A failed read is forgotten, so the next caller tries
+ *  again. */
+const readFigures = (
+    iso3s: readonly string[],
+    years: readonly number[],
+): Promise<Record<string, UnaidsFigures>> => {
+    const key = `${iso3s.join(',')}|${years.join(',')}`;
+    let reading = readings.get(key);
+
+    if (reading === undefined) {
         const { plhiv, art, deaths } = liveRefs.data;
 
-        reading = Promise.all([
-            readPinnedRef(plhiv),
-            readPinnedRef(art),
-            readPinnedRef(deaths),
-        ]).then(([people, coverage, died]) => ({
-            plhiv: people.rows,
-            art: coverage.rows,
-            deaths: died.rows,
-        }));
+        reading = readLiveRefs({ plhiv, art, deaths }, (rows) =>
+            unaidsByCountry(iso3s, rows, years),
+        ).then(({ value }) => value);
+        readings.set(key, reading);
         reading.catch((error: unknown) => {
             console.error('The UNAIDS reads failed', error);
-            reading = null;
+            readings.delete(key);
         });
     }
 
@@ -40,7 +44,7 @@ const readUnaidsRows = (): Promise<UnaidsRows> => {
 };
 
 /**
- * Reads the pinned UNAIDS refs in the browser and derives each country's figures. The server
+ * Reads the UNAIDS refs in the browser and derives each country's figures. The server
  * render and the first client render show `loading`; nothing rendered on the server derives
  * from these figures. `countries` and `years` should keep their identity between renders.
  */
@@ -53,21 +57,11 @@ export const useUnaids = (
     useEffect(() => {
         let current = true;
 
-        readUnaidsRows()
-            .then((rows) => {
-                let figures: Record<string, UnaidsFigures>;
-
-                try {
-                    figures = unaidsByCountry(
-                        countries.map(({ iso3 }) => iso3),
-                        rows,
-                        years,
-                    );
-                } catch (error) {
-                    console.error('The UNAIDS rows did not give figures', error);
-                    throw error;
-                }
-
+        readFigures(
+            countries.map(({ iso3 }) => iso3),
+            years,
+        )
+            .then((figures) => {
                 if (current) {
                     setState({ status: 'ready', figures });
                 }
