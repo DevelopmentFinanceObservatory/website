@@ -10,6 +10,7 @@ import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
+import { isPrompt } from '@/lib/studio/transcript';
 
 type UseConversationSaveArgs = {
     chat: ReturnType<typeof useChat>;
@@ -53,6 +54,7 @@ export const useConversationSave = ({
             CanvasDocument,
             | 'pinnedIds'
             | 'removedIds'
+            | 'localIds'
             | 'graceIds'
             | 'graceTurn'
             | 'theme'
@@ -87,6 +89,7 @@ export const useConversationSave = ({
             activity: snap.activity,
             pinnedIds: snap.doc.pinnedIds,
             removedIds: snap.doc.removedIds,
+            localIds: snap.doc.localIds,
             graceIds: snap.doc.graceIds,
             graceTurn: snap.doc.graceTurn,
             layout: layoutRef.current,
@@ -125,6 +128,13 @@ export const useConversationSave = ({
 
     useEffect(() => () => window.clearTimeout(saveTimer.current), []);
 
+    // The prompts the last snapshot held, and how many carry their harness
+    // turn. A turn's stream changes the transcript faster than the save
+    // debounce, so a new prompt, and the turn index its stream names, are
+    // saved at once. A page that leaves mid-turn then holds the turn it
+    // opened, keyed on the harness's index.
+    const promptsRef = useRef(0);
+
     // Any change worth keeping (a message, a widget, a pin) refreshes the
     // snapshot and queues a save.
     useEffect(() => {
@@ -135,6 +145,7 @@ export const useConversationSave = ({
             doc: {
                 pinnedIds: doc.pinnedIds,
                 removedIds: doc.removedIds,
+                localIds: doc.localIds,
                 graceIds: doc.graceIds,
                 graceTurn: doc.graceTurn,
                 theme: doc.theme,
@@ -147,13 +158,30 @@ export const useConversationSave = ({
                 shareMarks: doc.shareMarks,
             },
         };
-        scheduleSave();
+
+        const prompts =
+            chat.messages.filter(isPrompt).length +
+            chat.messages.filter((message) => message.role === 'user' && message.harnessTurn)
+                .length;
+        const opened = prompts > promptsRef.current;
+
+        promptsRef.current = prompts;
+
+        if (opened && !readOnly) {
+            window.clearTimeout(saveTimer.current);
+            persistNow();
+        } else {
+            scheduleSave();
+        }
     }, [
         chat.messages,
         chat.widgets,
         chat.activity,
+        // The harness canvas rides in the chat's snapshot (takeChatSnapshot).
+        chat.canvas,
         doc.pinnedIds,
         doc.removedIds,
+        doc.localIds,
         doc.graceIds,
         doc.graceTurn,
         doc.theme,
@@ -164,6 +192,8 @@ export const useConversationSave = ({
         doc.notes,
         doc.conversationTitle,
         doc.shareMarks,
+        persistNow,
+        readOnly,
         scheduleSave,
     ]);
 

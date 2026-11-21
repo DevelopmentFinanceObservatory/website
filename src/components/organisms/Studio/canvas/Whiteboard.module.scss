@@ -108,7 +108,7 @@
     transition: none;
 }
 
-// Replaced by a newer turn: fades away in place, inert, then its slot is
+// Taken off the canvas: fades away in place, inert, then its slot is
 // pruned (LEAVE_MS in the component).
 .slotLeaving {
     pointer-events: none;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createCanvasEdits } from '../canvasEdits.ts';
+import { createCanvasEdits, pinEdit } from '../canvasEdits.ts';
 import type { CompositionManifest, MutationOperation } from '../wire.ts';
 
 const remove: MutationOperation[] = [{ op: 'remove', component_id: 'cmp_1' }];
@@ -23,7 +23,7 @@ const deferred = <T>() => {
     return { promise, resolve };
 };
 
-test('a refused or failed removal clears its marker and releases the next edit', async () => {
+test('a refused or failed edit is reported and releases the next edit', async () => {
     for (const rejection of [false, true]) {
         const failures: unknown[] = [];
         let calls = 0;
@@ -38,52 +38,15 @@ test('a refused or failed removal clears its marker and releases the next edit',
             },
             onManifest: () => {},
             onFailure: (_operations, error) => {
-                assert.equal(edits.isOwnRemoval('cmp_1'), false);
                 failures.push(error);
             },
         });
 
         await edits.enqueue('session', remove);
-        assert.equal(edits.isOwnRemoval('cmp_1'), false);
         await edits.enqueue('session', add);
         assert.equal(calls, 2);
         assert.equal(failures.length, 1);
     }
-});
-
-test('repeated removals retain a marker until every queued removal settles', async () => {
-    const first = deferred<CompositionManifest | null>();
-    const second = deferred<CompositionManifest | null>();
-    let calls = 0;
-    const markers: boolean[] = [];
-    const edits = createCanvasEdits({
-        mutate: () => (++calls === 1 ? first.promise : second.promise),
-        onManifest: () => markers.push(edits.isOwnRemoval('cmp_1')),
-        onFailure: () => {},
-    });
-    const one = edits.enqueue('session', remove);
-    const two = edits.enqueue('session', remove);
-
-    first.resolve(manifest);
-    await one;
-    assert.equal(edits.isOwnRemoval('cmp_1'), true);
-    second.resolve(manifest);
-    await two;
-    assert.deepEqual(markers, [true, true]);
-    assert.equal(edits.isOwnRemoval('cmp_1'), false);
-});
-
-test('an acknowledged stale response cannot suppress a future agent removal', async () => {
-    const edits = createCanvasEdits({
-        mutate: async () => manifest,
-        // The hook can ignore this response when a newer manifest already arrived.
-        onManifest: () => {},
-        onFailure: () => {},
-    });
-
-    await edits.enqueue('session', remove);
-    await edits.enqueue('session', add);
-    assert.equal(edits.isOwnRemoval('cmp_1'), false);
 });
 
 test('switching conversations bypasses a hung edit and ignores its late completion', async () => {
@@ -105,7 +68,6 @@ test('switching conversations bypasses a hung edit and ignores its late completi
     edits.reset();
     await edits.enqueue('new', add);
     assert.deepEqual(calls, ['old', 'new']);
-    assert.equal(edits.isOwnRemoval('cmp_1'), false);
     assert.equal(received.length, 1);
     old.resolve(null);
     await Promise.all([oldPending, oldQueued]);
@@ -139,4 +101,9 @@ test('reopening the same session preserves ordering behind its old pending edits
     await Promise.all([pending, queued, reopened]);
     assert.deepEqual(calls, ['remove', 'pin', 'add']);
     assert.deepEqual(received, [3]);
+});
+
+test('pinning sends pin, and unpinning a pinned card sends unpin', () => {
+    assert.deepEqual(pinEdit([], 'cmp_1'), { op: 'pin', component_id: 'cmp_1' });
+    assert.deepEqual(pinEdit(['cmp_1'], 'cmp_1'), { op: 'unpin', component_id: 'cmp_1' });
 });

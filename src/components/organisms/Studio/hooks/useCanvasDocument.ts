@@ -8,28 +8,27 @@ import type { TurnWidget } from './useChat';
 import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation, ShareMark } from '@/lib/chat/history';
 import type { TextWidget, Widget } from '@/lib/chat/widgets';
+import type { CanvasBaseline } from '@/lib/studio/composition';
 import { DEFAULT_THEME, type StudioTheme } from '@/lib/studio/theme';
 import { uuid } from '@/lib/uuid';
 
 /**
- * Everything on the canvas that ISN'T the chat: which cards are pinned,
- * removed or on grace, per-card views / titles / notes, the user's text
- * cards, the theme, the conversation's title and its share points. Saved
- * with the conversation; reset for a new one; loaded from a saved one.
+ * Everything on the canvas that ISN'T the chat: which cards are pinned or
+ * removed, per-card views / titles / notes, the user's text cards, the
+ * theme, the conversation's title and its share points. Saved with the
+ * conversation; reset for a new one; loaded from a saved one. Which harness
+ * cards the canvas shows is the harness manifest's (canvasWidgetsOf).
  */
 export const useCanvasDocument = (initial?: SavedConversation) => {
-    // Pinned cards survive turn changes; everything else on the canvas is
-    // transient — the next turn's widgets replace it (the demo's semantics).
+    // Pinned cards: the harness keeps them when the model clears the canvas.
     const [pinnedIds, setPinnedIds] = useState<string[]>(initial?.pinnedIds ?? []);
-    // Cards the user explicitly removed from the canvas (via the card menu).
+    // The cards the harness never held (text cards, `localIds`) that the
+    // user took off the canvas. The harness's manifest decides for its own.
     const [removedIds, setRemovedIds] = useState<string[]>(initial?.removedIds ?? []);
-    // Unpinning an older-turn card does NOT drop it on the spot — it stays
-    // until the bot's next answer replaces the canvas (a mis-click must not
-    // wipe a card). `grace` holds those ids and the turn they belong to: the
-    // next turn makes the set stale, which is what ends the grace. Stamping
-    // the turn (rather than clearing on a turn change) is what lets a
-    // reopened conversation — and a share link, the same snapshot — come
-    // back with those cards still on the canvas.
+    // A fork's inherited cards, which its harness session never held.
+    const [localIds, setLocalIds] = useState<string[]>(initial?.localIds ?? []);
+    // A save from before the manifest decided the canvas keeps the grace set
+    // its canvas was drawn with, as loaded (legacyCanvasWidgetsOf).
     const [grace, setGrace] = useState<{ ids: string[]; turn: number }>({
         ids: initial?.graceIds ?? [],
         turn: initial?.graceTurn ?? 0,
@@ -61,6 +60,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     const reset = useCallback(() => {
         setPinnedIds([]);
         setRemovedIds([]);
+        setLocalIds([]);
         setGrace({ ids: [], turn: 0 });
         setViews({});
         setRatios({});
@@ -76,6 +76,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     const load = useCallback((saved: SavedConversation) => {
         setPinnedIds(saved.pinnedIds);
         setRemovedIds(saved.removedIds);
+        setLocalIds(saved.localIds ?? []);
         setGrace({ ids: saved.graceIds ?? [], turn: saved.graceTurn ?? 0 });
         setViews(saved.views ?? {});
         setRatios(saved.ratios ?? {});
@@ -88,50 +89,42 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         setShareMarks(saved.shareMarks ?? []);
     }, []);
 
-    // Unpinning puts the card on grace for the turn on screen (see above);
-    // pinning takes it off.
     const togglePin = useCallback(
-        (id: string, latestTurn: number) => {
-            const pinning = !pinnedIds.includes(id);
-
+        (id: string) =>
             setPinnedIds((prev) =>
-                pinning ? [...prev, id] : prev.filter((other) => other !== id),
-            );
-            setGrace((prev) => {
-                const ids = prev.turn === latestTurn ? prev.ids : [];
-
-                return {
-                    turn: latestTurn,
-                    ids: pinning
-                        ? ids.filter((other) => other !== id)
-                        : ids.includes(id)
-                          ? ids
-                          : [...ids, id],
-                };
-            });
-        },
-        [pinnedIds],
+                prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
+            ),
+        [],
     );
 
-    const removeWidget = useCallback((id: string) => {
-        setRemovedIds((prev) => [...prev, id]);
-        setPinnedIds((prev) => prev.filter((other) => other !== id));
-    }, []);
+    // Cards the harness turned out never to hold (useChat's localCards).
+    const addLocalIds = useCallback(
+        (ids: readonly string[]) =>
+            setLocalIds((prev) => {
+                const added = ids.filter((id) => !prev.includes(id));
 
-    // Chat chip → Add: put a card back on the canvas, unpinned. A removed
-    // card is un-removed; a card from an older turn comes back on grace (it
-    // stays until the bot's next answer, exactly like an unpinned card) —
-    // pin it yourself if it should outlive the turn.
-    const addWidget = useCallback((id: string, isOlderTurn: boolean, latestTurn: number) => {
+                return added.length > 0 ? [...prev, ...added] : prev;
+            }),
+        [],
+    );
+
+    const unpin = useCallback(
+        (id: string) => setPinnedIds((prev) => prev.filter((other) => other !== id)),
+        [],
+    );
+
+    // A local card off the canvas (card menu → Remove).
+    const removeWidget = useCallback(
+        (id: string) => {
+            setRemovedIds((prev) => [...prev, id]);
+            unpin(id);
+        },
+        [unpin],
+    );
+
+    // Chat chip → Add: a removed local card is un-removed.
+    const addWidget = useCallback((id: string) => {
         setRemovedIds((prev) => prev.filter((other) => other !== id));
-
-        if (isOlderTurn) {
-            setGrace((prev) => {
-                const ids = prev.turn === latestTurn ? prev.ids : [];
-
-                return { turn: latestTurn, ids: ids.includes(id) ? ids : [...ids, id] };
-            });
-        }
     }, []);
 
     // Add or edit a text card (an empty title falls back to "Text Card").
@@ -182,23 +175,27 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         [],
     );
 
-    // What the canvas shows, through the same rule a share's live checks use.
+    // What the canvas shows, through the same rule a share's live checks
+    // use, from the harness canvas the chat last saw.
     const visibleWidgets = useCallback(
-        (chatWidgets: TurnWidget[]): Widget[] =>
+        (chatWidgets: TurnWidget[], canvas: CanvasBaseline | null): Widget[] =>
             canvasWidgetsOf({
                 widgets: chatWidgets,
+                canvas,
+                localIds,
                 pinnedIds,
                 removedIds,
                 graceIds: grace.ids,
                 graceTurn: grace.turn,
                 textCards,
             }),
-        [pinnedIds, removedIds, grace, textCards],
+        [localIds, pinnedIds, removedIds, grace, textCards],
     );
 
     return {
         pinnedIds,
         removedIds,
+        localIds,
         graceIds: grace.ids,
         graceTurn: grace.turn,
         views,
@@ -214,6 +211,8 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         reset,
         load,
         togglePin,
+        addLocalIds,
+        unpin,
         removeWidget,
         addWidget,
         upsertTextCard,

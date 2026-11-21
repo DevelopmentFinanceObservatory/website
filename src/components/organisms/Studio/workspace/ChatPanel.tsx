@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 
 import ActivityLog from './ActivityLog';
 import ChatMessage from './ChatMessage';
@@ -51,6 +51,10 @@ type ChatPanelProps = {
     // component_ref, so the agent answers about (or reworks) that card.
     editTarget: { id: string; title: string } | null;
     onClearEditTarget: () => void;
+    // The follow-up field's text, held by the Studio so text typed into the
+    // landing as it leaves carries into it.
+    draft: string;
+    onDraftChange: (draft: string) => void;
 };
 
 /**
@@ -77,16 +81,22 @@ const ChatPanel = ({
     onRemove,
     editTarget,
     onClearEditTarget,
+    draft: follow,
+    onDraftChange: setFollow,
 }: ChatPanelProps) => {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const [follow, setFollow] = useState('');
     // The follow-up field, focused on mount when asked (autoFocus).
     const followRef = useRef<PromptField>(null);
 
     useEffect(() => {
-        if (autoFocus) {
+        const field = followRef.current;
+
+        if (autoFocus && field) {
             // The page is already placed, so focusing must not scroll it.
-            followRef.current?.focus({ preventScroll: true });
+            // Text typed while the landing left is already in the field, and
+            // what follows goes after it.
+            field.focus({ preventScroll: true });
+            field.setSelectionRange(field.value.length, field.value.length);
         }
         // Mount only. A later flip of `autoFocus` (a resize across the phone
         // breakpoint) must not pull focus from wherever the user has moved.

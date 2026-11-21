@@ -28,17 +28,22 @@ export type SavedConversation = {
     // The Activity trace (steps per turn).
     activity?: ActivityEntry[];
     turnCount: number;
-    // The harness canvas the conversation last saw (useChat's canvasRef).
+    // The harness canvas the conversation last saw (useChat's canvasRef):
+    // its ids are the harness cards the canvas shows (canvasWidgetsOf).
     // Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;
+    // A fork's inherited cards, which the harness session never held and no
+    // manifest of the fork names. Optional: only a fork has them.
+    localIds?: string[];
     pinnedIds: string[];
+    // The cards the harness never held (`localIds`, text cards) that the
+    // user took off the canvas. A save from before `canvas` also lists
+    // harness cards here.
     removedIds: string[];
-    // Unpinned cards from older turns that are still on the canvas (see
-    // useCanvasDocument's grace): without them a reopened conversation — and
-    // a share link, which is the same snapshot — drops cards the canvas was
-    // showing. Optional: saves from before this didn't have it.
+    // In a save from before `canvas`, the unpinned cards of older turns its
+    // canvas still showed, and the turn that set belongs to (a later turn
+    // made it stale). Only the legacy rule reads them (legacyCanvasWidgetsOf).
     graceIds?: string[];
-    // The turn that grace set belongs to — a later turn makes it stale.
     graceTurn?: number;
     layout: CardLayout;
     // Canvas theme (Customize).

@@ -2,9 +2,9 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { effectiveKind, LEAVE_MS, widgetTitle } from './canvas/layout';
+import { effectiveKind, widgetTitle } from './canvas/layout';
 import LiveNote from './canvas/LiveNote';
 import Whiteboard from './canvas/Whiteboard';
 import { useCanvasDocument } from './hooks/useCanvasDocument';
@@ -33,11 +33,13 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
-import { latestTurnOf } from '@/lib/chat/canvas';
+import { isHarnessCard } from '@/lib/chat/canvas';
+import { forkOf, openedSave } from '@/lib/chat/fork';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { pinEdit } from '@/lib/studio/canvasEdits';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -153,6 +155,9 @@ const Studio = ({
     // The landing's opener is a growing textarea; the type covers both.
     const inputRef = useRef<PromptField>(null);
     const [query, setQuery] = useState(sharedSaved?.title ?? '');
+    // The chat's follow-up field, kept here so text typed into the landing's
+    // field while it leaves carries into it (see `leaving` below).
+    const [followDraft, setFollowDraft] = useState('');
     const [chatTab, setChatTab] = useState<ChatTab>('chat');
     const [cardsTab, setCardsTab] = useState('all');
     // A canvas/card share has no chat to show — it opens collapsed.
@@ -299,12 +304,6 @@ const Studio = ({
         logRefusedDescriptions(sharedSaved?.widgets ?? []);
     }, [sharedSaved]);
 
-    // Cards the agent took off the canvas leave it as a card-menu Remove does.
-    const { agentRemovals, takeAgentRemoved } = conversation;
-
-    useEffect(() => {
-        takeAgentRemoved().forEach(doc.removeWidget);
-    }, [agentRemovals, takeAgentRemoved, doc.removeWidget]);
     const pinCount = doc.pinnedIds.length;
     const cardCount = conversation.widgets.length;
 
@@ -391,7 +390,10 @@ const Studio = ({
 
     // Reopen a saved conversation exactly as it was left — same transcript,
     // widgets, pins and card layout; follow-ups keep saving under its id.
-    const openSaved = (saved: SavedConversation) => {
+    const openSaved = (stored: SavedConversation) => {
+        // A fork's inherited turns and cards are marked as such (openedSave).
+        const saved = openedSave(stored);
+
         window.history.replaceState(null, '', `/studio/${saved.id}`);
         saved.widgets.forEach((widget) => trackedCards.current.add(widget.id));
         logRefusedDescriptions(saved.widgets);
@@ -399,6 +401,14 @@ const Studio = ({
         doc.load(saved);
         setQuery(saved.title);
         chat.hydrate(saved);
+
+        // The harness's copy of the conversation fills in what the snapshot
+        // missed: a pending card, a turn that ended or paused after the page
+        // left, a turn left running.
+        if (account) {
+            chat.reattach();
+        }
+
         enterWorkspace();
     };
 
@@ -453,6 +463,7 @@ const Studio = ({
         window.history.replaceState(null, '', '/studio');
         window.clearTimeout(leaveTimer.current);
         setQuery('');
+        setFollowDraft('');
         setChatCollapsed(false);
         setChatTab('chat');
         doc.reset();
@@ -474,8 +485,11 @@ const Studio = ({
 
         setForking(true);
 
+        // The copy's harness session holds none of the turns or cards, so
+        // every message and card it inherits is marked so (forkOf).
         const copy: SavedConversation = {
             ...sharedSaved,
+            ...forkOf(sharedSaved),
             id: uuid(),
             sessionId: null,
             updatedAt: Date.now(),
@@ -492,37 +506,14 @@ const Studio = ({
         router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
     };
 
-    const latestTurn = latestTurnOf(chat.widgets);
-
     // A live share's canvas: its data cards drawn on current data as each
     // refresh answers, and their states. A snapshot's cards its page could
     // not draw are filled the same way. The owner's own widgets pass
     // through untouched.
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
-        doc.visibleWidgets(chat.widgets),
+        doc.visibleWidgets(chat.widgets, chat.canvas),
     );
-    // The harness cards off screen that the user did not remove: a new turn
-    // hid them. Reported once their fade-out has finished.
-    const hiddenKey = chat.widgets
-        .filter(
-            (widget) =>
-                !visibleWidgets.some((other) => other.id === widget.id) &&
-                !doc.removedIds.includes(widget.id),
-        )
-        .map((widget) => widget.id)
-        .join(' ');
-    const { reportHidden, canvasVersion } = conversation;
-
-    useEffect(() => {
-        if (!hiddenKey) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => reportHidden(hiddenKey.split(' ')), LEAVE_MS);
-
-        return () => window.clearTimeout(timer);
-    }, [hiddenKey, canvasVersion, reportHidden]);
 
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
     const cardTitleOf = (id: string): string => {
@@ -532,33 +523,45 @@ const Studio = ({
     };
     const flyToCard = (id: string) => flyToCardRef.current?.(id);
 
-    // Chat chip → Add: back on the canvas (on grace if from an older turn).
+    // A card the harness holds goes on and off the canvas by the harness's
+    // manifest, so Add and Remove are edits sent to the harness. A text card
+    // and a fork's inherited card live only here (isHarnessCard).
+    const harnessCard = (id: string) =>
+        isHarnessCard({ widgets: chat.widgets, localIds: doc.localIds }, id);
+
+    // Chat chip → Add: back on the canvas.
     const addWidget = (id: string) => {
-        const widget = chat.widgets.find((other) => other.id === id);
-
-        doc.addWidget(id, !!widget && widget.turn !== latestTurn, latestTurn);
-
-        if (widget) {
+        if (harnessCard(id)) {
             chat.syncCanvas([{ op: 'add', component_id: id }]);
+        } else {
+            doc.addWidget(id);
         }
     };
 
-    // The card menu's Remove and Pin. A harness card's edit goes to the
-    // harness too; a text card lives only here.
-    const removeCard = (id: string) => {
-        doc.removeWidget(id);
+    // The cards a legacy canvas showed that its harness session never held
+    // stay on the canvas as local cards, before the frame that takes the
+    // manifest is painted.
+    const { localCards } = conversation;
+    const { addLocalIds } = doc;
 
-        if (chat.widgets.some((widget) => widget.id === id)) {
+    useLayoutEffect(() => {
+        addLocalIds(localCards);
+    }, [localCards, addLocalIds]);
+
+    // The card menu's Remove and Pin.
+    const removeCard = (id: string) => {
+        if (harnessCard(id)) {
+            doc.unpin(id);
             chat.syncCanvas([{ op: 'remove', component_id: id }]);
+        } else {
+            doc.removeWidget(id);
         }
     };
     const togglePin = (id: string) => {
-        const pinning = !doc.pinnedIds.includes(id);
+        doc.togglePin(id);
 
-        doc.togglePin(id, latestTurn);
-
-        if (chat.widgets.some((widget) => widget.id === id)) {
-            chat.syncCanvas([{ op: pinning ? 'pin' : 'unpin', component_id: id }]);
+        if (harnessCard(id)) {
+            chat.syncCanvas([pinEdit(doc.pinnedIds, id)]);
         }
     };
 
@@ -631,6 +634,18 @@ const Studio = ({
     // at least two kinds of card on the sheet.
     const showFilters =
         visibleWidgets.length > 0 && (!shared || Object.keys(kindCounts).length >= 2);
+
+    // From the first send until the workspace mounts, the landing's field is
+    // still on screen and keeps focus, so a quick follow-up is typed into it.
+    // It then holds the follow-up draft, so that text carries into the chat's
+    // follow-up field, and Enter sends it as a follow-up.
+    const leaving = mode === 'leaving';
+    const sendDraft = (text: string) => {
+        if (text.trim()) {
+            send(text);
+            setFollowDraft('');
+        }
+    };
 
     const title = doc.conversationTitle ?? query;
     const firstPrompt = chat.messages.find((message) => message.role === 'user')?.text ?? query;
@@ -858,15 +873,15 @@ const Studio = ({
 
             {!inWorkspace && (
                 <StudioLanding
-                    query={query}
-                    onQueryChange={setQuery}
-                    onBegin={begin}
+                    query={leaving ? followDraft : query}
+                    onQueryChange={leaving ? setFollowDraft : setQuery}
+                    onBegin={leaving ? sendDraft : begin}
                     examples={examples}
                     inputRef={inputRef}
                     history={account ? landingHistory.history : null}
                     openingId={landingHistory.openingId}
                     onOpenHistory={landingHistory.openHistory}
-                    leaving={mode === 'leaving'}
+                    leaving={leaving}
                     wall={walled ? <GuestWall /> : null}
                 />
             )}
@@ -902,6 +917,8 @@ const Studio = ({
                         note={liveCanvas ? <LiveNote live={liveCanvas} /> : undefined}
                     />
                     <ChatPanel
+                        draft={followDraft}
+                        onDraftChange={setFollowDraft}
                         editTarget={editTarget}
                         onClearEditTarget={() => setEditTarget(null)}
                         chat={chat}

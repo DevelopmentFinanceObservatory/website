@@ -298,6 +298,16 @@ export type CancelRequest = {
     conversation_id: string;
 };
 
+/** POST /api/studio/resume: carry on the conversation's open turn
+ *  `turn_index` when it is running and no stream holds it. The response is a
+ *  new SSE stream continuing the turn. */
+export type ResumeRequest = {
+    kind: 'turn.resume';
+    schema_version: 1;
+    conversation_id: string;
+    turn_index: number;
+};
+
 // ---------------------------------------------------------------------------
 // Frames — discriminated on `event`
 // ---------------------------------------------------------------------------
@@ -584,4 +594,68 @@ export type StudioFrame =
     | LegacyElicitationRequest
     | { event: 'suggestions'; seq: number; items: (SuggestionItem | ApplyChoiceSuggestion)[] }
     | { event: 'error'; seq: number; error: ToolError }
-    | { event: 'done'; seq: number; trace_id: string; composition?: CompositionManifest | null };
+    | {
+          event: 'done';
+          seq: number;
+          trace_id: string;
+          composition?: CompositionManifest | null;
+          // Set when the user's `amend` text asked a different question. The
+          // turn set its plan aside, and the page sends the text as the next
+          // turn.
+          new_question?: string | null;
+      };
+
+// ---------------------------------------------------------------------------
+// The conversation as stored: GET /api/studio/state
+// ---------------------------------------------------------------------------
+
+/** Where a turn stands. `running` and `paused` are open; the rest are closed. */
+export type TurnStatus = 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'abandoned';
+
+/** The conversation's latest turn. `user_message` is its prompt as a closed
+ *  turn's record words it, so a page can show a turn it never held.
+ *  `lease_live` says a stream holds the turn now, on some instance, and
+ *  `retry_after_seconds` is then the most its lease has left. */
+export type TurnState = {
+    index: number;
+    status: TurnStatus;
+    trace_id: string;
+    user_message?: string;
+    lease_live: boolean;
+    retry_after_seconds?: number | null;
+};
+
+/** One closed turn: the user's message as the turn recorded it, the reply it
+ *  closed on (empty when none), the cards it made or changed, the code a
+ *  turn that did not end cleanly closed on, and the question a turn ended by
+ *  a new question set its plan aside for (see `done`'s `new_question`). */
+export type ClosedTurn = {
+    turn_index: number;
+    user_message: string;
+    reply: string;
+    component_ids: string[];
+    error?: string | null;
+    new_question?: string | null;
+};
+
+/** The open pause of a paused turn, and the frames it was sent as, its
+ *  `plan.proposed` or `elicitation.request` last. */
+export type PendingPause = {
+    interrupt_id: string;
+    kind: 'plan' | 'elicitation';
+    frames: StudioFrame[];
+};
+
+/** GET /api/studio/state: `turn` is absent before the first turn,
+ *  `closed_since` holds the closed turns after the request's `since` (oldest
+ *  first, at most 3), `closed_total` how many closed turns the conversation
+ *  holds (the index of the last), `pause` the open pause of a paused turn,
+ *  and `manifest` the canvas. */
+export type ConversationRead = {
+    conversation_id: string;
+    turn?: TurnState | null;
+    closed_since: ClosedTurn[];
+    closed_total?: number;
+    pause?: PendingPause | null;
+    manifest?: CompositionManifest | null;
+};

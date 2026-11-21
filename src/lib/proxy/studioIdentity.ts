@@ -7,7 +7,7 @@ import type { ForwardOptions } from './forward';
 // on the turn: the visitor's x-dfo-caller (src/lib/proxy/caller) and, for a
 // signed-in user, the account digest the event export also writes
 // (src/lib/proxy/account).
-const IDENTIFIED_ROUTES = new Set(['turn', 'interrupt']);
+const IDENTIFIED_ROUTES = new Set(['turn', 'interrupt', 'resume']);
 
 // How long forward() waits on the session read before it sends the call
 // without an account. An interrupt reads the session only for the account,

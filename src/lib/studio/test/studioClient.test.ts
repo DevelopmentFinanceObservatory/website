@@ -12,6 +12,7 @@ import {
     runApplyChoice,
     runInterrupt,
     runTurn,
+    whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
 import type { ApplyChoiceSuggestion, StudioFrame } from '../wire.ts';
@@ -356,4 +357,70 @@ test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame',
 
     assert.deepEqual(refusals, [{ status: 422, detail: body.detail, error: body }]);
     assert.deepEqual(frames, []);
+});
+
+test('whileBusy: a turn refused 409 while another stream holds the conversation is sent again after the wait', async (t) => {
+    const answers = [
+        Response.json(
+            {
+                error: 'transient_unavailable',
+                retry: 'retry_after_delay',
+                detail: 'another request is streaming on this conversation',
+                retry_after_seconds: 4,
+            },
+            { status: 409 },
+        ),
+        new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n'),
+    ];
+    const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+    const frames: StudioFrame[] = [];
+    const refusals: StreamRefusal[] = [];
+    const waits: number[] = [];
+
+    await whileBusy(
+        (handlers) => runTurn('conv', 'and in 2021?', handlers),
+        {
+            onFrame: (frame) => frames.push(frame),
+            onRefusal: (refusal) => {
+                refusals.push(refusal);
+
+                return false;
+            },
+        },
+        undefined,
+        { sleep: async (ms) => void waits.push(ms) },
+    );
+
+    assert.equal(fetch.mock.callCount(), 2);
+    assert.deepEqual(waits, [4000]);
+    assert.deepEqual(refusals, []);
+    // The refusal's detail becomes no frame, so it cannot become the reply.
+    assert.deepEqual(frames, [{ event: 'message.complete', seq: 3, text: 'The answer.' }]);
+});
+
+test('whileBusy: any other refusal reaches onRefusal once and is not retried', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () =>
+        Response.json(
+            { error: 'edit_conflict', retry: 'refresh_then_retry', detail: 'stale' },
+            { status: 409 },
+        ),
+    );
+    const statuses: number[] = [];
+
+    await whileBusy(
+        (handlers) => runTurn('conv', 'hi', handlers),
+        {
+            onFrame: () => {},
+            onRefusal: (refusal) => {
+                statuses.push(refusal.status);
+
+                return true;
+            },
+        },
+        undefined,
+        { sleep: async () => assert.fail('no wait') },
+    );
+
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.deepEqual(statuses, [409]);
 });

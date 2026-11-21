@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { restoreCanvas, takeManifest, type CanvasBaseline } from '../composition.ts';
-import type { CompositionManifest } from '../wire.ts';
+import { canvasWidgetsOf } from '../../chat/canvas.ts';
+import {
+    createLegacyCanvas,
+    restoreCanvas,
+    takeManifest,
+    type CanvasBaseline,
+} from '../composition.ts';
+import type { CompositionManifest, MutationOperation } from '../wire.ts';
 
 const manifest = (revision: number, ids: string[], id = 'cps_1'): CompositionManifest => ({
     composition_id: id,
@@ -14,19 +20,12 @@ const manifest = (revision: number, ids: string[], id = 'cps_1'): CompositionMan
 
 const base: CanvasBaseline = { compositionId: 'cps_1', revision: 3, ids: ['cmp_1', 'cmp_2'] };
 
-test('a card on the baseline and not on a newer manifest was taken off', () => {
-    assert.deepEqual(takeManifest(base, manifest(4, ['cmp_2']))?.removed, ['cmp_1']);
-});
-
-test('clearing the canvas takes off every card and leaves an empty baseline', () => {
-    const taken = takeManifest(base, manifest(4, []));
-
-    assert.deepEqual(taken?.removed, ['cmp_1', 'cmp_2']);
-    assert.deepEqual(taken?.baseline, { compositionId: 'cps_1', revision: 4, ids: [] });
-});
-
-test('a manifest that only adds takes nothing off', () => {
-    assert.deepEqual(takeManifest(base, manifest(4, ['cmp_1', 'cmp_2', 'cmp_3']))?.removed, []);
+test('a newer manifest of the same composition becomes the baseline', () => {
+    assert.deepEqual(takeManifest(base, manifest(4, [])), {
+        compositionId: 'cps_1',
+        revision: 4,
+        ids: [],
+    });
 });
 
 test('a manifest no newer than the baseline arrived late and changes nothing', () => {
@@ -34,9 +33,13 @@ test('a manifest no newer than the baseline arrived late and changes nothing', (
     assert.equal(takeManifest(base, manifest(2, [])), null);
 });
 
-test('another composition or no baseline starts afresh and takes nothing off', () => {
-    assert.deepEqual(takeManifest(base, manifest(1, [], 'cps_fork'))?.removed, []);
-    assert.deepEqual(takeManifest(null, manifest(1, []))?.removed, []);
+test('another composition, a legacy canvas or no baseline starts afresh', () => {
+    assert.deepEqual(takeManifest(base, manifest(1, ['cmp_9'], 'cps_fork'))?.ids, ['cmp_9']);
+    assert.deepEqual(takeManifest(null, manifest(1, []))?.ids, []);
+    assert.deepEqual(
+        takeManifest({ compositionId: null, revision: -1, ids: ['cmp_1'] }, manifest(0, []))?.ids,
+        [],
+    );
 });
 
 const legacy = {
@@ -55,30 +58,118 @@ const legacy = {
     textCards: [{ kind: 'text' as const, id: 'text_local', title: 'Local', body: '' }],
 };
 
-test('the first clear removes visible harness cards from a legacy save', () => {
-    const taken = takeManifest(restoreCanvas(legacy), manifest(4, []));
-
-    assert.deepEqual(taken?.removed, ['cmp_pinned', 'cmp_grace', 'cmp_latest']);
-    assert.deepEqual(taken?.baseline, { compositionId: 'cps_1', revision: 4, ids: [] });
-});
-
-test('the first partial removal preserves the legacy cards still on canvas', () => {
-    assert.deepEqual(
-        takeManifest(restoreCanvas(legacy), manifest(4, ['cmp_pinned', 'cmp_latest']))?.removed,
-        ['cmp_grace'],
-    );
-});
-
-test('a migrated baseline rejects late manifests after its first update', () => {
-    const migrated = takeManifest(restoreCanvas(legacy), manifest(4, ['cmp_latest']))!.baseline;
-
-    assert.equal(takeManifest(migrated, manifest(3, [])), null);
-    assert.deepEqual(takeManifest(migrated, manifest(1, [], 'cps_fork'))?.removed, []);
-});
-
 test('forks and fresh conversations cannot inherit a legacy baseline', () => {
     assert.equal(restoreCanvas({ ...legacy, sessionId: null, canvas: base }), null);
     assert.equal(restoreCanvas(undefined), null);
     assert.deepEqual(restoreCanvas({ ...legacy, canvas: base }), base);
-    assert.deepEqual(takeManifest(restoreCanvas(undefined), manifest(1, ['cmp_new']))?.removed, []);
+});
+
+test("a fork's inherited cards are no harness cards of its legacy baseline", () => {
+    assert.deepEqual(restoreCanvas({ ...legacy, localIds: ['cmp_latest'] })?.ids, [
+        'cmp_pinned',
+        'cmp_grace',
+    ]);
+});
+
+test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block manifest', async () => {
+    const drawn = Array.from({ length: 12 }, (_, at) => `cmp_${at}`);
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: drawn.map((id, at) => ({
+            kind: 'text' as const,
+            id,
+            title: id,
+            body: '',
+            turn: at < 10 ? 1 : 2,
+        })),
+        pinnedIds: ['cmp_0'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const opened = canvasWidgetsOf({ ...save, canvas: restored }).map((widget) => widget.id);
+
+    assert.deepEqual(opened, ['cmp_0', 'cmp_10', 'cmp_11']);
+
+    // The harness holds every card the conversation drew.
+    let held = manifest(5, drawn);
+    const sent: MutationOperation[][] = [];
+    const taken: CompositionManifest[] = [];
+    const local: string[] = [];
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        mutate: async (operations) => {
+            sent.push(operations);
+
+            const removed = new Set(
+                operations.flatMap((op) => (op.op === 'remove' ? [op.component_id] : [])),
+            );
+
+            held = manifest(
+                held.revision + 1,
+                held.blocks.map((block) => block.component_id).filter((id) => !removed.has(id)),
+            );
+
+            return held;
+        },
+        onTake: (answer) => taken.push(answer),
+        onLocal: (ids) => local.push(...ids),
+        onChange: () => {},
+    });
+
+    await legacy.offer(held);
+
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]!.length, 9);
+    assert.deepEqual(
+        taken.map((answer) => answer.blocks.map((block) => block.component_id)),
+        [['cmp_0', 'cmp_10', 'cmp_11']],
+    );
+    assert.deepEqual(local, []);
+
+    // A failed remove leaves the canvas legacy and sends nothing more.
+    const failing = createLegacyCanvas({
+        ids: restored.ids,
+        mutate: async () => null,
+        onTake: (answer) => taken.push(answer),
+        onLocal: () => assert.fail('a legacy canvas that stays legacy adopts no card'),
+        onChange: () => {},
+    });
+
+    await failing.offer(manifest(5, drawn));
+    await failing.offer(manifest(6, drawn));
+    assert.equal(taken.length, 1);
+});
+
+test('a legacy canvas keeps the inherited cards its session never held as local cards', async () => {
+    // A fork saved before forks named their local cards, after it went on: a
+    // pinned inherited card and its own.
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_inherited', title: 'Old', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
+        ],
+        pinnedIds: ['cmp_inherited'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const local: string[] = [];
+    let canvas: CanvasBaseline | null = restored;
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        mutate: async () => assert.fail('the harness holds no card the page hides'),
+        onTake: (answer) => {
+            canvas = takeManifest(canvas, answer);
+        },
+        onLocal: (ids) => local.push(...ids),
+        onChange: () => {},
+    });
+
+    await legacy.offer(manifest(3, ['cmp_own']));
+
+    assert.deepEqual(local, ['cmp_inherited']);
+    assert.deepEqual(
+        canvasWidgetsOf({ ...save, canvas, localIds: local }).map((widget) => widget.id),
+        ['cmp_inherited', 'cmp_own'],
+    );
 });

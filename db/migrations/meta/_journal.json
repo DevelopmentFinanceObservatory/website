@@ -176,6 +176,13 @@
       "when": 1795183972106,
       "tag": "0025_account_organisation",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795264478543,
+      "tag": "0026_conversation_agent_session_idx",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,9 @@ import {
     isPrompt,
     isRefundedPrompt,
     shareMarkAfter,
+    NEW_QUESTION_NOTE,
     withAnswer,
+    withNewQuestion,
     withRefundedPrompt,
 } from '../transcript.ts';
 
@@ -112,4 +114,20 @@ test('a mark saved before userMessages keeps its message count', () => {
     const mark: ShareMark = { messageIndex: 2, shareId: 'share', at: 0 };
 
     assert.equal(shareMarkAfter(withAnswer(paused, 'Since 2018.'), mark), 1);
+});
+
+test('a change taken as a new question leaves the turn, whose empty reply says so', () => {
+    const amended = withAnswer(paused, 'What about Uganda?');
+
+    assert.deepEqual(withNewQuestion(amended, 'What about Uganda?'), [
+        { role: 'user', text: 'Show me aid to Kenya' },
+        { role: 'bot', text: NEW_QUESTION_NOTE },
+    ]);
+
+    const said: ChatMessage[] = [...amended.slice(0, -1), { role: 'bot', text: 'Set aside.' }];
+
+    assert.deepEqual(withNewQuestion(said, 'What about Uganda?'), [
+        { role: 'user', text: 'Show me aid to Kenya' },
+        { role: 'bot', text: 'Set aside.' },
+    ]);
 });

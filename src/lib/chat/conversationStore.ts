@@ -50,6 +50,17 @@ export const getConversation = async (
     return row ? (row.data as SavedConversation) : null;
 };
 
+/** The accounts whose saved conversations hold the harness conversation
+ *  `agentSessionId` (src/lib/studio/studioAccess). */
+export const conversationOwners = async (agentSessionId: string): Promise<string[]> => {
+    const rows = await db
+        .selectDistinct({ userId: conversation.userId })
+        .from(conversation)
+        .where(eq(conversation.agentSessionId, agentSessionId));
+
+    return rows.map((row) => row.userId);
+};
+
 /** Insert or replace — the client owns the id and sends the full document. */
 export const upsertConversation = async (
     userId: string,

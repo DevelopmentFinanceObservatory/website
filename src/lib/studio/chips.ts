@@ -1,7 +1,8 @@
 /**
  * The chips a `suggestions` frame offers after an answer: prompt follow-ups,
  * sent as the user's next message, and `apply_choice` chips, which switch a
- * scope choice of the answer's readings in one turn. Also what the
+ * scope choice of the answer's readings, or how its flow is counted, in one
+ * turn. Also what the
  * transcript shows when the harness refuses a chip that no longer applies.
  */
 
@@ -33,6 +34,25 @@ export const splitSuggestions = (
 
     return { followups, chips };
 };
+
+/** A count chip or count row switches how a source's flow is counted
+ *  ("net disbursements"), and its `choice_id` ends in `:count`. Any other
+ *  choice with options is a scope choice. */
+export const isCountChoice = (choiceId: string): boolean => choiceId.endsWith(':count');
+
+/**
+ * What a chip says, and what the transcript shows once it is clicked: the
+ * switch it makes, "Switch to gross disbursements, current USD", or for a
+ * count chip "Count as net disbursements". The harness sends the option's
+ * bare label, which on its own reads as the basis of the answer above it
+ * rather than the other option it offers.
+ */
+export const chipAction = (chip: ApplyChoiceSuggestion): string =>
+    isCountChoice(chip.choice_id) ? `Count as ${chip.label}` : `Switch to ${chip.label}`;
+
+/** The chat line while a clicked chip's turn runs. */
+export const chipLine = (chip: ApplyChoiceSuggestion): string =>
+    isCountChoice(chip.choice_id) ? `Counting as ${chip.label}` : `Switching to ${chip.label}`;
 
 /** What tells chips apart: the reading, the choice and the option. */
 export const chipKey = (chip: ApplyChoiceSuggestion): string =>
@@ -67,7 +87,7 @@ export const chipRefusalDetail = (refusal: StreamRefusal): string | null =>
 /**
  * The transcript after the harness refused `chip`: the reply the click
  * opened says why, and carries the answer's other chips and follow-ups, so
- * the user can still pick one. `messages` ends with the user's chip label
+ * the user can still pick one. `messages` ends with the clicked chip's action
  * and its empty reply; the answer that offered the chip comes before them.
  */
 export const withRefusedChip = (
