@@ -159,3 +159,15 @@ test('a chip offers its option as a switch, and the clicked turn says the same',
 
     assert.equal(chipAction(provider), 'Switch to bilateral plus imputed multilateral');
 });
+
+test('a count chip offers its count as an action, and the clicked turn says the same', () => {
+    const count = {
+        ...sector!,
+        label: 'net disbursements',
+        choice_id: `${sector!.spec_id}:count`,
+        option_id: 'spec_net',
+    };
+
+    assert.equal(chipAction(count), 'Count as net disbursements');
+    assert.equal(chipLine(count), 'Counting as net disbursements');
+});

@@ -5,6 +5,7 @@
  * the approved plan the answer keeps.
  */
 
+import { isCountChoice } from './chips.ts';
 import type { Clarify } from './clarify';
 import type { StreamRefusal } from './studioClient';
 import type {
@@ -177,10 +178,16 @@ export const PLANNER_CHOICE_PREFIX = 'decision/';
 export const isPlannerChoice = (choiceId: string): boolean =>
     choiceId.startsWith(PLANNER_CHOICE_PREFIX);
 
-/** The chat line while a switch to `label` runs: "Switching to net
- *  disbursements", or "Replanning with top 10" on a planner decision. */
+/** The chat line while a switch to `label` runs: "Switching to health,
+ *  CRS 120 alone", "Counting as net disbursements" on a count row, as its
+ *  chip words it (chipLine), or "Replanning with top 10" on a planner
+ *  decision. */
 export const switchLine = (choiceId: string, label: string | null): string => {
-    const [verb, link] = isPlannerChoice(choiceId) ? ['Replanning', 'with'] : ['Switching', 'to'];
+    const [verb, link] = isPlannerChoice(choiceId)
+        ? ['Replanning', 'with']
+        : isCountChoice(choiceId)
+          ? ['Counting', 'as']
+          : ['Switching', 'to'];
 
     return label ? `${verb} ${link} ${label}` : verb;
 };
