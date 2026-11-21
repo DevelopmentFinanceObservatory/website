@@ -19,6 +19,7 @@
     "check:deps": "node scripts/check-deps.mts",
     "check:data": "node scripts/check-data.mts",
     "check:dist": "node scripts/check-dist.mts",
+    "check:live": "node scripts/check-live.mts",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/*.test.mts lib/*.test.mts app/*/_lib/*.test.mts"
   },
   "devDependencies": {

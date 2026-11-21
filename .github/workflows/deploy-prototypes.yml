@@ -225,3 +225,13 @@ jobs:
             echo "::error::The site root now serves the prototypes app."
             exit 1
           fi
+
+      # Loads each live page in Chromium and checks the tier its read switch
+      # implies (committed off, stored on), so a switch change that breaks the
+      # live read shows here. playwright-core is a root dependency, and the
+      # headless shell is the smallest Chromium it can drive.
+      - name: Live read check
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright-core install --with-deps chromium-headless-shell
+          pnpm --dir prototypes check:live https://developmentfinance.org/prototypes/
