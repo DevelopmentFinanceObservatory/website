@@ -1,5 +1,5 @@
 /** A record of `keys`, each mapped to `valueOf(key)`. The one cast is the record's type, which
- *  `Object.fromEntries` widens to string keys; every key of `keys` is present. */
+ *  `Object.fromEntries` widens to string keys. Every key of `keys` is present. */
 export const recordOf = <K extends string, V>(
     keys: readonly K[],
     valueOf: (key: K, index: number) => V,

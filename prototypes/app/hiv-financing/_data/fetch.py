@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12,<3.13"
-# dependencies = ["development-finance[pandas]==0.4.2"]
+# dependencies = ["development-finance[pandas]==0.6.0"]
 # ///
 """The hiv-financing data step, run by hand with `pnpm data hiv-financing`.
 
@@ -20,6 +20,19 @@ Reads, for 2015 to 2024:
   country and every CRS recipient, because a search for the phrase without a place matches
   OECD regional data.
 
+DFO sums the aid. Eight analysis recipes on the pinned reads (`aid_recipes`) total the 13040
+money by provider and by recipient country, for countries and for regions or no country apart,
+rank the ODA lenders over the years, and total the Global Fund's 12250 and 12110 money to
+countries. DFO refuses a by-recipient total of the 12110 read, whose recipients are too sparse
+before 2020 for its coverage floor, and each Global Fund read holds one row per recipient and
+year, so the step reads those rows as they are and fails on a second row for a recipient and
+year. `aid_from_rows` turns those rows into `hiv.json`, counting each provider as the United
+States, the Global Fund or other by its code. The page runs the same recipes in the browser
+(`_lib/aid.ts`) when it reads the aid live, and its parity test checks the TypeScript port
+against `aid-fixture.json`, which the step writes with the rows of every recipe and read and
+each recipe's tree. `names.json` holds the names the page prints for
+recipient countries and providers, from the aid read's labels.
+
 The page reads the UNAIDS data in the browser from the refs in `live-refs.json`, at DFO's
 newest stored versions or else the pinned ones, so `hiv.json` holds the aid figures only. The
 step checks the UNAIDS reads and writes `unaids-fixture.json`: real rows for a few countries
@@ -37,8 +50,9 @@ Three modes:
   window and reading, so a change to either takes this mode.
 
 The last two modes pin once every check passes, since each pin counts against a daily
-allowance. `--no-pin` skips the pins, for trial runs: it writes `hiv.json` and the fixture
-and leaves `refs.json` and `live-refs.json` as they are.
+allowance. `--no-pin` skips the pins, for trial runs. It writes `hiv.json` and the UNAIDS
+fixture and leaves `refs.json`, `live-refs.json` and `aid-fixture.json` as they are, since
+the aid fixture's trees name the versions `live-refs.json` holds.
 
 The step checks that the data are what the page assumes (the right datasets and units,
 every provider present, countries summing to the totals, and the claims fixed in the
@@ -51,6 +65,7 @@ UNAIDS estimates and receive no HIV aid.
 import argparse
 import json
 import logging
+import math
 import re
 import warnings
 from datetime import UTC, datetime
@@ -66,6 +81,8 @@ TARGET = HERE / "hiv.json"
 REFS = HERE / "refs.json"
 LIVE_REFS = HERE / "live-refs.json"
 FIXTURE = HERE / "unaids-fixture.json"
+AID_FIXTURE = HERE / "aid-fixture.json"
+NAMES_FILE = HERE / "names.json"
 SDK = f"development-finance=={dfo.__version__}"
 
 YEARS = list(range(2015, 2025))
@@ -89,7 +106,36 @@ GF_QUESTIONS = {
     "CRSPurposeCode12110": "Global Fund aid for health policy and administrative management",
 }
 AID_KEYS = ("aid", "gf-12250", "gf-12110")
+GF_KEYS = AID_KEYS[1:]
 UNAIDS_KEYS = ("plhiv", "art", "deaths")
+
+# Providers by code. The United States and the Global Fund have their own keys, and every
+# other code counts as other.
+US = "country/USA"
+GLOBAL_FUND = "GlobalFund"
+PROVIDER = "financingProvider"
+RECIPIENT = "financingRecipient"
+# DFO's analysis frames mark a recipient country as a party and a region or no country as
+# residual. `check_allocation` checks that the parties are the `country/` recipients.
+ALLOCATED = {"financingRecipient_party_kind": "party"}
+UNALLOCATED = {"financingRecipient_party_kind": "residual"}
+# The analysis frame holds a CRS breakdown such as the type of finance as its label, so the
+# loan filter names the label. A code matches no row.
+LOANS = {"crsTypeOfFinance": "standard loan"}
+# The column each recipe's or read's rows hold their members in. A total holds none.
+AID_COLUMNS: dict[str, str | None] = {
+    "allocatedByProvider": PROVIDER,
+    "unallocatedByProvider": PROVIDER,
+    "allocatedByRecipient": RECIPIENT,
+    "usByRecipient": RECIPIENT,
+    "globalFundByRecipient": RECIPIENT,
+    "loans": PROVIDER,
+    "gf12250Total": None,
+    "gf12110Total": None,
+    "gf-12250": RECIPIENT,
+    "gf-12110": RECIPIENT,
+}
+RECIPE_KEYS = tuple(key for key in AID_COLUMNS if key not in GF_KEYS)
 
 # The names the page prints, where the DFO's label is dated or clumsy.
 NAMES = {
@@ -254,59 +300,263 @@ def notices(records: dict[str, dict]) -> dict[str, list[dfo.types.Notice]]:
     }
 
 
-def provider_key(label: str) -> str:
+def provider_key(code: str) -> str:
     """The Global Fund counts as a provider, so donors' contributions to it count there."""
-    if label.startswith("United States"):
+    if code == US:
         return "us"
 
-    return "globalFund" if label == "Global Fund" else "other"
+    return "globalFund" if code == GLOBAL_FUND else "other"
 
 
-def provider_series(rows: pd.DataFrame) -> dict[str, list[int]]:
-    """Money by provider key and year, one value per year, 0 where none is recorded."""
-    totals = rows.groupby(["provider", rows["time_period"].astype(int)])["value"].sum()
+def aid_recipes(reads: dict[str, dfo.Dataset]) -> dict[str, dfo.types.Recipe]:
+    """The analysis recipes behind the aid figures, on the reads' versions. `_lib/aid.ts`
+    builds the same trees, which its test checks against `aid-fixture.json`."""
+    recipe = dfo.analysis.recipe
+    aid = reads["aid"]
     return {
-        key: [round(float(totals.get((key, year), 0.0))) for year in YEARS] for key in PROVIDERS
+        "allocatedByProvider": recipe(aid).filter(keep=ALLOCATED).aggregate(by="origin"),
+        "unallocatedByProvider": recipe(aid).filter(keep=UNALLOCATED).aggregate(by="origin"),
+        "allocatedByRecipient": recipe(aid).filter(keep=ALLOCATED).aggregate(by="destination"),
+        "usByRecipient": recipe(aid)
+        .filter(keep={"origin": US, **ALLOCATED})
+        .aggregate(by="destination"),
+        "globalFundByRecipient": recipe(aid)
+        .filter(keep={"origin": GLOBAL_FUND, **ALLOCATED})
+        .aggregate(by="destination"),
+        "loans": recipe(aid)
+        .filter(keep={**LOANS, **ALLOCATED})
+        .rank(by="origin", window=WINDOW, how="sum", limit=1000),
+        "gf12250Total": recipe(reads["gf-12250"]).filter(keep=ALLOCATED).aggregate(),
+        "gf12110Total": recipe(reads["gf-12110"]).filter(keep=ALLOCATED).aggregate(),
     }
 
 
-def check_constant(key: str, frame: pd.DataFrame) -> None:
-    units = {
-        (str(currency), str(basis), int(base))
-        for currency, basis, base in frame[["currency", "price_basis", "base_year"]].itertuples(
-            index=False
+def rows_of(key: str, frame: pd.DataFrame) -> list[dict]:
+    """The rows of one recipe or read, cut to the columns `aid_from_rows` reads."""
+    column = AID_COLUMNS[key]
+    units = ["unit"] if key in RECIPE_KEYS else ["currency", "price_basis", "base_year"]
+    columns = [*([column] if column else []), "time_period", "value", *units]
+    return [
+        {name: (None if pd.isna(value) else value) for name, value in row.items()}
+        for row in frame[columns].to_dict("records")
+    ]
+
+
+def analysis_rows(reads: dict[str, dfo.Dataset]) -> tuple[dict[str, list[dict]], dict]:
+    """The rows of each aid recipe, computed by DFO, and of the Global Fund reads, with each
+    recipe's tree."""
+    recipes = aid_recipes(reads)
+    rows = {}
+
+    for key, chain in recipes.items():
+        result = dfo.fetch(chain)
+        log.info("%s: %d rows", key, len(result))
+        rows[key] = rows_of(key, result.to_pandas())
+
+    for key in GF_KEYS:
+        rows[key] = rows_of(key, reads[key].to_pandas())
+
+    return rows, {key: chain.tree() for key, chain in recipes.items()}
+
+
+def by_code(key: str, rows: list[dict]) -> dict[str, dict[int, float]]:
+    """A recipe's or read's values by member and year. A total's member is "". Fails on a
+    second row for a member and year, or a row whose value is missing."""
+    column = AID_COLUMNS[key]
+    found: dict[str, dict[int, float]] = {}
+
+    for row in rows:
+        code, year, value = (
+            str(row[column]) if column else "",
+            int(row["time_period"]),
+            row["value"],
         )
+
+        if not isinstance(value, int | float) or math.isnan(value):
+            raise SystemExit(f"{key}: {code} {year} has no value")
+
+        if year in found.setdefault(code, {}):
+            raise SystemExit(f"{key}: more than one row for {code} {year}")
+
+        found[code][year] = float(value)
+
+    return found
+
+
+def check_units(rows: dict[str, list[dict]], price_base: int) -> None:
+    """Fail unless every row is in constant US dollars of `price_base`."""
+    for key, found in rows.items():
+        for row in found:
+            if key in RECIPE_KEYS:
+                unit = json.loads(row["unit"])
+                read = (unit.get("currency"), unit.get("prices"), unit.get("base_year"))
+            else:
+                read = (row["currency"], row["price_basis"], int(row["base_year"]))
+
+            if read != ("USD", "constant", price_base):
+                raise SystemExit(f"{key}: expected constant {price_base} US dollars, read {read}")
+
+
+def name_of(names: dict[str, str], code: str) -> str:
+    if code not in names:
+        raise SystemExit(f"names.json has no name for {code}")
+
+    return names[code]
+
+
+def aid_from_rows(
+    rows: dict[str, list[dict]],
+    *,
+    names: dict[str, dict[str, str]],
+    years: list[int],
+    price_base: int,
+) -> dict:
+    """`hiv.json`'s data from the rows of the aid recipes and the Global Fund reads. Sums run
+    over members in code order, as `aidFromRows` in `_lib/aid.ts` runs them, so both give the
+    same dollars."""
+    last_year = years[-1]
+    check_units(rows, price_base)
+
+    def keyed(by: dict[str, dict[int, float]]) -> dict[str, list[int]]:
+        return {
+            key: [
+                round(
+                    sum(by[code].get(year, 0.0) for code in sorted(by) if provider_key(code) == key)
+                )
+                for year in years
+            ]
+            for key in PROVIDERS
+        }
+
+    allocated = by_code("allocatedByProvider", rows["allocatedByProvider"])
+    totals = by_code("allocatedByRecipient", rows["allocatedByRecipient"])
+    us = by_code("usByRecipient", rows["usByRecipient"])
+    global_fund = by_code("globalFundByRecipient", rows["globalFundByRecipient"])
+    multi: dict[str, dict[int, float]] = {}
+
+    for key in GF_KEYS:
+        for code, values in by_code(key, rows[key]).items():
+            if code.startswith(COUNTRY):
+                for year, value in values.items():
+                    multi.setdefault(code, {})[year] = multi.get(code, {}).get(year, 0.0) + value
+
+    countries = []
+
+    for code in sorted(totals):
+        if not code.startswith(COUNTRY):
+            raise SystemExit(f"allocatedByRecipient holds {code}, which is not a country")
+
+        def at(by: dict[str, dict[int, float]], year: int, code: str = code) -> float:
+            return by.get(code, {}).get(year, 0.0)
+
+        aid = {
+            "us": [round(at(us, year)) for year in years],
+            "globalFund": [round(at(global_fund, year)) for year in years],
+            "other": [
+                round(at(totals, year) - at(us, year) - at(global_fund, year)) for year in years
+            ],
+        }
+
+        if sum(values[-1] for values in aid.values()) <= 0:
+            continue
+
+        countries.append(
+            {
+                "iso3": code.removeprefix(COUNTRY),
+                "name": name_of(names["recipients"], code),
+                "aid": aid,
+                "globalFundMulti": [round(at(multi, year)) for year in years],
+            }
+        )
+
+    countries.sort(key=lambda country: -sum(values[-1] for values in country["aid"].values()))
+    gf_totals = [by_code(key, rows[key]).get("", {}) for key in ("gf12250Total", "gf12110Total")]
+    return {
+        "years": years,
+        "priceBase": price_base,
+        "allocated": keyed(allocated),
+        "unallocated": keyed(by_code("unallocatedByProvider", rows["unallocatedByProvider"])),
+        "globalFundMulti": [
+            round(gf_totals[0].get(year, 0.0) + gf_totals[1].get(year, 0.0)) for year in years
+        ],
+        "otherProviders": other_providers(allocated, names["providers"], years),
+        "loans": loans(rows["loans"], names["providers"]),
+        "recipients": sum(1 for values in totals.values() if round(values.get(last_year, 0.0)) > 0),
+        "countries": countries,
     }
 
-    if units != {("USD", "constant", PRICE_BASE)}:
-        raise SystemExit(f"{key}: expected constant {PRICE_BASE} US dollars, read {units}")
 
-
-def read_aid(frame: pd.DataFrame) -> pd.DataFrame:
-    """The 13040 money in constant dollars, with each row's provider key."""
-    check_constant("aid", frame)
-    frame = frame.copy()
-    frame["provider"] = frame["financingProvider_label"].map(provider_key)
-    return frame
-
-
-def read_gf_multi(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """The Global Fund's disbursements under codes 12250 and 12110, by recipient and year."""
+def check_gf_reads(frames: dict[str, pd.DataFrame]) -> None:
+    """Fail unless each Global Fund read holds its own purpose code and the Global Fund alone."""
     for code in GF_QUESTIONS:
         key = f"gf-{code.removeprefix('CRSPurposeCode')}"
         frame = frames[key]
-        found = set(frame["crsPurpose"])
+        found, providers = set(frame["crsPurpose"]), set(frame[PROVIDER])
 
-        if found != {code} or set(frame["financingProvider_label"]) != {"Global Fund"}:
-            raise SystemExit(
-                f"{code}: read {sorted(found)} for {sorted(set(frame['financingProvider_label']))}"
+        if found != {code} or providers != {GLOBAL_FUND}:
+            raise SystemExit(f"{code}: read {sorted(found)} for {sorted(providers)}")
+
+
+def labels(frame: pd.DataFrame, column: str) -> dict[str, str]:
+    """Each code of `column` with its label, in code order. Fails on a code with two labels."""
+    pairs = frame[[column, f"{column}_label"]].dropna().drop_duplicates()
+
+    if pairs[column].duplicated().any():
+        raise SystemExit(f"{column}: a code with more than one label")
+
+    return dict(sorted((str(code), str(label)) for code, label in pairs.itertuples(index=False)))
+
+
+def aid_names(aid: pd.DataFrame) -> dict[str, dict[str, str]]:
+    """The names the page prints: each provider's label, and each recipient country's label
+    or the name in `NAMES`."""
+    return {
+        "providers": labels(aid, PROVIDER),
+        "recipients": {
+            code: NAMES.get(code.removeprefix(COUNTRY), label)
+            for code, label in labels(aid, RECIPIENT).items()
+            if code.startswith(COUNTRY)
+        },
+    }
+
+
+def compact_rows(rows: dict[str, list[dict]]) -> dict[str, dict]:
+    """Each key's rows as [member, year, value] lists, with the unit all its rows share, which
+    keeps `aid-fixture.json` small. A total's member is null."""
+    compact = {}
+
+    for key, found in rows.items():
+        column = AID_COLUMNS[key]
+        units = {
+            json.dumps(
+                {name: row[name] for name in row if name not in (column, "time_period", "value")}
             )
+            for row in found
+        }
 
-        check_constant(key, frame)
+        if len(units) > 1:
+            raise SystemExit(f"{key}: rows in more than one unit, {sorted(units)}")
 
-    frame = pd.concat([frames[key] for key in AID_KEYS[1:]], ignore_index=True)
-    frame["year"] = frame["time_period"].astype(int)
-    return frame
+        compact[key] = {
+            "unit": json.loads(units.pop()) if units else None,
+            "rows": [
+                [row[column] if column else None, row["time_period"], row["value"]] for row in found
+            ],
+        }
+
+    return compact
+
+
+def check_allocation(aid: pd.DataFrame, rows: dict[str, list[dict]]) -> None:
+    """Fail unless DFO's parties are the aid read's `country/` recipients, the rule the page
+    states for money to countries."""
+    countries = {place for place in aid[RECIPIENT].dropna() if place.startswith(COUNTRY)}
+    parties = set(by_code("allocatedByRecipient", rows["allocatedByRecipient"]))
+
+    if parties != countries:
+        raise SystemExit(
+            f"DFO's recipient parties are not the country recipients: {sorted(parties ^ countries)}"
+        )
 
 
 def one_stat_var(key: str, frame: pd.DataFrame) -> pd.DataFrame:
@@ -423,38 +673,36 @@ def unaids_frames(reads: dict[str, dfo.Dataset]) -> dict[str, pd.DataFrame]:
     }
 
 
-def multi_series(rows: pd.DataFrame) -> list[int]:
-    """The Global Fund's multi-disease money by year, 0 where none is recorded."""
-    totals = rows.groupby("year")["value"].sum()
-    return [round(float(totals.get(year, 0.0))) for year in YEARS]
-
-
-def other_providers(allocated: pd.DataFrame) -> list[dict]:
+def other_providers(
+    allocated: dict[str, dict[int, float]], names: dict[str, str], years: list[int]
+) -> list[dict]:
     """Providers in "other" with $1m or more to countries in the first or last year."""
-    rows = allocated[allocated["provider"] == "other"]
-    totals = rows.groupby(["financingProvider_label", rows["time_period"].astype(int)])[
-        "value"
-    ].sum()
     found = []
 
-    for name in sorted(set(rows["financingProvider_label"])):
-        first, last = (round(float(totals.get((name, year), 0.0))) for year in WINDOW)
+    for code, values in allocated.items():
+        first, last = (round(values.get(year, 0.0)) for year in (years[0], years[-1]))
 
-        if max(first, last) >= MIN_AID:
-            found.append({"name": str(name), "first": first, "last": last})
+        if provider_key(code) == "other" and max(first, last) >= MIN_AID:
+            found.append({"name": name_of(names, code), "first": first, "last": last})
 
+    found.sort(key=lambda provider: provider["name"])
     return sorted(found, key=lambda provider: -provider["first"])
 
 
-def loans(allocated: pd.DataFrame) -> dict:
-    """The ODA loans inside the 13040 money to countries over the window, by lender."""
-    rows = allocated[allocated["crsTypeOfFinance_label"] == "standard loan"]
-    by_lender = rows.groupby("financingProvider_label")["value"].sum().sort_values(ascending=False)
+def loans(rows: list[dict], names: dict[str, str]) -> dict:
+    """The ODA loans inside the 13040 money to countries over the window, by lender, from
+    DFO's ranking: largest first, a tie in name order."""
+    lenders = sorted(
+        ((name_of(names, str(row[PROVIDER])), float(row["value"])) for row in rows),
+        key=lambda lender: (-lender[1], lender[0]),
+    )
+
+    if len({name for name, _ in lenders}) != len(lenders):
+        raise SystemExit("loans: more than one row for a lender")
+
     return {
-        "total": round(float(rows["value"].sum())),
-        "lenders": [
-            {"name": str(name), "value": round(float(value))} for name, value in by_lender.items()
-        ],
+        "total": round(sum(value for _, value in lenders)),
+        "lenders": [{"name": name, "value": round(value)} for name, value in lenders],
     }
 
 
@@ -471,58 +719,6 @@ def log_left_out(aid: pd.DataFrame, plhiv: pd.DataFrame) -> None:
                 place,
                 f"{people:,.0f}",
             )
-
-
-def build(aid: pd.DataFrame, multi: pd.DataFrame) -> dict:
-    multi = multi[multi["financingRecipient"].str.startswith(COUNTRY, na=False)]
-    allocated_mask = aid["financingRecipient"].str.startswith(COUNTRY, na=False)
-    allocated, unallocated = aid[allocated_mask], aid[~allocated_mask]
-    recipients = {
-        str(place): str(label)
-        for place, label in allocated.groupby("financingRecipient")["financingRecipient_label"]
-        .first()
-        .items()
-    }
-    last_year_aid = (
-        allocated[allocated["time_period"].astype(int) == LAST_YEAR]
-        .groupby("financingRecipient")["value"]
-        .sum()
-    )
-    countries = []
-
-    for place, label in recipients.items():
-        iso3 = place.removeprefix(COUNTRY)
-        rows = allocated[allocated["financingRecipient"] == place]
-        series = (
-            provider_series(rows) if len(rows) else {key: [0] * len(YEARS) for key in PROVIDERS}
-        )
-        last = sum(values[-1] for values in series.values())
-
-        # The same rounding as `recipients`, so the two counts agree.
-        if round(last) <= 0:
-            continue
-
-        countries.append(
-            {
-                "iso3": iso3,
-                "name": NAMES.get(iso3, label),
-                "aid": series,
-                "globalFundMulti": multi_series(multi[multi["financingRecipient"] == place]),
-            }
-        )
-
-    countries.sort(key=lambda country: -sum(values[-1] for values in country["aid"].values()))
-    return {
-        "years": YEARS,
-        "priceBase": PRICE_BASE,
-        "allocated": provider_series(allocated),
-        "unallocated": provider_series(unallocated),
-        "globalFundMulti": multi_series(multi),
-        "otherProviders": other_providers(allocated),
-        "loans": loans(allocated),
-        "recipients": int((last_year_aid.round() > 0).sum()),
-        "countries": countries,
-    }
 
 
 def figures(data: dict) -> dict[str, float]:
@@ -595,7 +791,7 @@ def report(old: dict | None, new: dict) -> None:
     log.info("Refresh report, last hiv.json -> this run:\n%s", "\n".join(lines))
 
 
-def check(data: dict, multi: pd.DataFrame, unaids: dict[str, dict]) -> None:
+def check(data: dict, rows: dict[str, list[dict]], unaids: dict[str, dict]) -> None:
     """Fail when the data are not what the page assumes. The printed values may move freely."""
     problems = []
     kenya = unaids.get("KEN")
@@ -638,15 +834,12 @@ def check(data: dict, multi: pd.DataFrame, unaids: dict[str, dict]) -> None:
 
     # How to interpret says the Global Fund recorded these grants mostly under 12250 to 2019
     # and mostly under 12110 from 2020.
-    by_code = (
-        multi[multi["financingRecipient"].str.startswith(COUNTRY, na=False)]
-        .groupby(["crsPurpose", "year"])["value"]
-        .sum()
+    early_by, late_by = (
+        by_code(key, rows[key]).get("", {}) for key in ("gf12250Total", "gf12110Total")
     )
 
     for year in YEARS:
-        early = float(by_code.get(("CRSPurposeCode12250", year), 0.0))
-        late = float(by_code.get(("CRSPurposeCode12110", year), 0.0))
+        early, late = early_by.get(year, 0.0), late_by.get(year, 0.0)
 
         if (year < 2020 and early < late) or (year >= 2020 and late < early):
             problems.append(
@@ -780,18 +973,36 @@ def fixture(frames: dict[str, pd.DataFrame], unaids: dict[str, dict]) -> dict:
     }
 
 
-def write(path: Path, query: str, retrieved: str, data: object, **extra: object) -> None:
+def write(
+    path: Path,
+    query: str,
+    retrieved: str,
+    data: object,
+    *,
+    flat_lists: bool = False,
+    **extra: object,
+) -> None:
+    """Writes the envelope. `flat_lists` puts each list of plain values on one line."""
     envelope = {
         "provenance": {"sdk": SDK, "query": query, "retrieved": retrieved, **extra},
         "data": data,
     }
-    path.write_text(json.dumps(envelope, indent=1, ensure_ascii=False) + "\n")
+    text = json.dumps(envelope, indent=1, ensure_ascii=False)
+
+    if flat_lists:
+        text = re.sub(
+            r"\[\s+([^\[\]{}]*?)\s+\]",
+            lambda match: "[" + re.sub(r",\s+", ", ", match.group(1)) + "]",
+            text,
+        )
+
+    path.write_text(text + "\n")
     log.info("Wrote %s.", path.name)
 
 
 def live_refs(reads: dict[str, dfo.Dataset]) -> dict[str, dict]:
-    """The ref of each UNAIDS read, for the browser."""
-    return {key: json.loads(reads[key].ref.to_json()) for key in UNAIDS_KEYS}
+    """The ref of each read the browser reads: the UNAIDS reads, and the aid reads."""
+    return {key: json.loads(reads[key].ref.to_json()) for key in (*UNAIDS_KEYS, *AID_KEYS)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -817,9 +1028,12 @@ def main(argv: list[str] | None = None) -> int:
         log.info("%s: %s (%d rows)", key, data.sentence, len(data))
 
     frames = {key: data.to_pandas() for key, data in reads.items()} | unaids_frames(reads)
-    aid = read_aid(frames["aid"])
-    multi = read_gf_multi(frames)
-    data = build(aid, multi)
+    aid = frames["aid"]
+    check_gf_reads(frames)
+    rows, trees = analysis_rows(reads)
+    check_allocation(aid, rows)
+    names = aid_names(aid)
+    data = aid_from_rows(rows, names=names, years=YEARS, price_base=PRICE_BASE)
     log_left_out(aid, frames["plhiv"])
     kept = [country["iso3"] for country in data["countries"]]
     unaids = unaids_by_country(kept, frames["plhiv"], frames["art"], frames["deaths"])
@@ -831,7 +1045,7 @@ def main(argv: list[str] | None = None) -> int:
         warned = {key: list(read.provenance.warnings) for key, read in reads.items()}
 
     check_warnings(warned, refused, unaids)
-    check(data, multi, unaids)
+    check(data, rows, unaids)
     check_places(kept, reads["deaths"])
 
     if mode == "refresh":
@@ -864,17 +1078,38 @@ def main(argv: list[str] | None = None) -> int:
         refs=REFS.name,
     )
 
+    # The parity test builds the recipes from live-refs.json, so aid-fixture.json moves with it.
     if args.no_pin:
-        log.info("Trial run (--no-pin): left %s and %s alone.", REFS.name, LIVE_REFS.name)
+        log.info(
+            "Trial run (--no-pin): left %s, %s and %s alone.",
+            REFS.name,
+            LIVE_REFS.name,
+            AID_FIXTURE.name,
+        )
     else:
         write(REFS, "hiv-financing pinned reads", retrieved, records)
         write(
             LIVE_REFS,
-            "hiv-financing pinned UNAIDS reads, read in the browser",
+            "hiv-financing pinned reads the browser reads: the UNAIDS reads, and the aid "
+            "reads its recipes start from",
             retrieved,
             live_refs(reads),
         )
+        write(
+            AID_FIXTURE,
+            "The rows of each aid recipe DFO computed and of the Global Fund reads, with each "
+            "recipe's tree, for the page's parity test",
+            retrieved,
+            {"recipes": trees, "rows": compact_rows(rows)},
+            flat_lists=True,
+        )
 
+    write(
+        NAMES_FILE,
+        "The names the page prints for each recipient country and provider of the aid read",
+        retrieved,
+        names,
+    )
     write(
         FIXTURE,
         "UNAIDS rows from the reads in live-refs.json, and the figures the step derives "

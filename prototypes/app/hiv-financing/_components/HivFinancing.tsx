@@ -8,6 +8,7 @@ import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
+import { useAid } from './useAid';
 import { UnaidsStatus } from './UnaidsStatus';
 import { useUnaids } from './useUnaids';
 
@@ -20,6 +21,7 @@ import {
     tableRule,
     unallocatedCaption,
 } from '../_lib/copy.ts';
+import { islandTier } from '../_lib/aid.ts';
 import { lastYear, PER_PERSON_MIN_PLHIV, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
@@ -57,13 +59,14 @@ const scrollBehaviour = (): ScrollBehavior =>
  * per-person strip, and the country table. Choosing the selected country again from a dot
  * or a row returns to all countries; choosing it in the search keeps it.
  *
- * The UNAIDS figures come from the browser reads (useUnaids). Until they arrive,
+ * The aid figures are hiv.json's, or DFO's newest stored ones when the page reads them live
+ * (useAid). The UNAIDS figures come from the browser reads (useUnaids). Until they arrive,
  * or when they fail, a country's sentence leaves out its per-person, treatment and deaths
  * clauses, the strip gives way to a status line in the strip's room, and the table's UNAIDS
  * columns wait. The sentence reserves room for those clauses from the first paint.
  */
 export const HivFinancing = ({
-    data,
+    data: committed,
     sections,
 }: {
     data: HivData;
@@ -74,6 +77,8 @@ export const HivFinancing = ({
     const islandRef = useRef<HTMLDivElement>(null);
     const topRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLElement>(null);
+    const aid = useAid(committed);
+    const { data } = aid;
     const unaids = useUnaids(data.countries, data.years);
     const countries = useMemo(
         () =>
@@ -138,7 +143,11 @@ export const HivFinancing = ({
     };
 
     return (
-        <div ref={islandRef} className={styles.island} data-read-tier={tierAttribute(unaids)}>
+        <div
+            ref={islandRef}
+            className={styles.island}
+            data-read-tier={islandTier(aid.tier, tierAttribute(unaids))}
+        >
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>
                     <button

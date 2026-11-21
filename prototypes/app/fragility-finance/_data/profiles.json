@@ -1,6 +1,6 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.4.2",
+  "sdk": "development-finance==0.6.0",
   "query": "For each of the OECD's 62 fragile contexts in 2026: gross ODA disbursements by purpose and provider and gross OOF disbursements (OECD CRS), DAC members' total ODA in 2024 and 2025 (OECD DAC1), inward remittances (WDI), FDI inflows (SDG database), public external debt service (World Bank IDS), climate finance (ONE Data), population (UNICEF) and three living-conditions indicators (SDG database)",
   "retrieved": "2026-11-19T22:44:40.999Z",
   "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory; OECD DAC1 (2026), via the Development Finance Observatory; ONE Data Climate Finance (2026), via the Development Finance Observatory; SDG Global Database (2026), via the Development Finance Observatory; United Nations Children's Fund (UNICEF) (2026), via the Development Finance Observatory; World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory; World Development Indicators (2026), via the Development Finance Observatory",
@@ -18841,7 +18841,7 @@
     "year": 2024,
     "adaptation": 295681092,
     "mitigation": 64202645,
-    "both": 23381933
+    "both": 23381934
    },
    "population": {
     "2024": 21655286
@@ -19828,7 +19828,7 @@
     "year": 2024,
     "adaptation": 64284737,
     "mitigation": 68932156,
-    "both": 12371681
+    "both": 12371682
    },
    "population": {
     "2024": 8406558

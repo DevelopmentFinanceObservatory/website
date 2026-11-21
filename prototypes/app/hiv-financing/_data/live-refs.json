@@ -1,7 +1,7 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.4.2",
-  "query": "hiv-financing pinned UNAIDS reads, read in the browser",
+  "sdk": "development-finance==0.6.0",
+  "query": "hiv-financing pinned reads the browser reads: the UNAIDS reads, and the aid reads its recipes start from",
   "retrieved": "2026-11-19T22:50:06.372Z"
  },
  "data": {
@@ -346,6 +346,299 @@
      "content_version": "cv_35568ba50fb03fb168ef64033b5ffae6",
      "artifact": {
       "digest": "sha256:252f27636c4ec93d60ebb3c1c15cf2be365cc9aa936a83337be391ea78b0f301",
+      "rendering": {
+       "format": "parquet",
+       "bundle": false,
+       "without_party_totals": true
+      }
+     }
+    }
+   ]
+  },
+  "aid": {
+   "format_version": 1,
+   "members": [
+    {
+     "parts": [
+      "HIV/AIDS aid"
+     ],
+     "sentence": "Gross ODA disbursements to 166 recipients from 45 providers for sexually transmitted disease control, 2015 to 2024. Constant 2024 US dollars, donor prices · OECD Creditor Reporting System (CRS).",
+     "spec": {
+      "spec_id": "spec_2bb7270517267f44a3c753068b3a9049",
+      "definition": {
+       "schema_version": 1,
+       "spec_id": "spec_2bb7270517267f44a3c753068b3a9049",
+       "identity": {
+        "shape": {
+         "kind": "statvar_schema",
+         "stat_type": "measuredValue",
+         "population_type": "FinancialFlow",
+         "measured_property": "amount",
+         "measurement_qualifier": "Nominal"
+        },
+        "slots": [
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "crsCooperationModality"
+         },
+         {
+          "binding": {
+           "ref": "CRSPurposeCode13040",
+           "state": "value"
+          },
+          "property": "crsPurpose"
+         },
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "crsTypeOfFinance"
+         },
+         {
+          "binding": {
+           "ref": "CRSTypeOfFlow10",
+           "state": "value"
+          },
+          "property": "crsTypeOfFlow"
+         },
+         {
+          "binding": {
+           "ref": "Disbursement",
+           "state": "value"
+          },
+          "property": "financialFlowType"
+         },
+         {
+          "binding": {
+           "ref": "Gross",
+           "state": "value"
+          },
+          "property": "nettingBasis"
+         }
+        ],
+        "facets": {
+         "unit": {
+          "state": "value",
+          "request": {
+           "prices": "constant",
+           "currency": "USD",
+           "base_year": 2024
+          }
+         }
+        },
+        "entities": {},
+        "identity_version": "spec1",
+        "requested_window": {
+         "kind": "range",
+         "end_year": 2024,
+         "start_year": 2015
+        }
+       }
+      }
+     },
+     "content_version": "cv_1974592ea5a5d0b133d2f631783bd91c",
+     "artifact": {
+      "digest": "sha256:ee68269666be5432f4e025dce7b4200e7bdda26b6c8aa58a8ba075fe9682a5a2",
+      "rendering": {
+       "format": "parquet",
+       "bundle": false,
+       "without_party_totals": true
+      }
+     }
+    }
+   ]
+  },
+  "gf-12250": {
+   "format_version": 1,
+   "members": [
+    {
+     "parts": [
+      "infectious disease control aid"
+     ],
+     "sentence": "Global Fund's gross ODA disbursements to 54 recipients for infectious disease control, 2015 to 2019. Constant 2024 US dollars, donor prices · OECD Creditor Reporting System (CRS).",
+     "spec": {
+      "spec_id": "spec_afa6b591e030210606939d622e9471f0",
+      "definition": {
+       "schema_version": 1,
+       "spec_id": "spec_afa6b591e030210606939d622e9471f0",
+       "identity": {
+        "shape": {
+         "kind": "statvar_schema",
+         "stat_type": "measuredValue",
+         "population_type": "FinancialFlow",
+         "measured_property": "amount",
+         "measurement_qualifier": "Nominal"
+        },
+        "slots": [
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "crsCooperationModality"
+         },
+         {
+          "binding": {
+           "ref": "CRSPurposeCode12250",
+           "state": "value"
+          },
+          "property": "crsPurpose"
+         },
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "crsTypeOfFinance"
+         },
+         {
+          "binding": {
+           "ref": "CRSTypeOfFlow10",
+           "state": "value"
+          },
+          "property": "crsTypeOfFlow"
+         },
+         {
+          "binding": {
+           "ref": "Disbursement",
+           "state": "value"
+          },
+          "property": "financialFlowType"
+         },
+         {
+          "binding": {
+           "ref": "Gross",
+           "state": "value"
+          },
+          "property": "nettingBasis"
+         }
+        ],
+        "facets": {
+         "unit": {
+          "state": "value",
+          "request": {
+           "prices": "constant",
+           "currency": "USD",
+           "base_year": 2024
+          }
+         }
+        },
+        "entities": {
+         "origin": [
+          "GlobalFund"
+         ]
+        },
+        "identity_version": "spec1",
+        "requested_window": {
+         "kind": "range",
+         "end_year": 2024,
+         "start_year": 2015
+        }
+       }
+      }
+     },
+     "content_version": "cv_aff9a748463027610b5ec76af1076225",
+     "artifact": {
+      "digest": "sha256:22182af4cde10ae7bf8e9ccf9a69809cb19afaf58ba8f0d9cecbd69cfa6578e0",
+      "rendering": {
+       "format": "parquet",
+       "bundle": false,
+       "without_party_totals": true
+      }
+     }
+    }
+   ]
+  },
+  "gf-12110": {
+   "format_version": 1,
+   "members": [
+    {
+     "parts": [
+      "Global Fund aid for health policy and administrative management"
+     ],
+     "sentence": "Global Fund's gross ODA disbursements to 39 recipients for health policy and administrative management, 2015 to 2024. Constant 2024 US dollars, donor prices · OECD Creditor Reporting System (CRS).",
+     "spec": {
+      "spec_id": "spec_674165a858b276f39274f8f5a19c9d5e",
+      "definition": {
+       "schema_version": 1,
+       "spec_id": "spec_674165a858b276f39274f8f5a19c9d5e",
+       "identity": {
+        "shape": {
+         "kind": "statvar_schema",
+         "stat_type": "measuredValue",
+         "population_type": "FinancialFlow",
+         "measured_property": "amount",
+         "measurement_qualifier": "Nominal"
+        },
+        "slots": [
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "crsCooperationModality"
+         },
+         {
+          "binding": {
+           "ref": "CRSPurposeCode12110",
+           "state": "value"
+          },
+          "property": "crsPurpose"
+         },
+         {
+          "binding": {
+           "state": "unbound"
+          },
+          "property": "crsTypeOfFinance"
+         },
+         {
+          "binding": {
+           "ref": "CRSTypeOfFlow10",
+           "state": "value"
+          },
+          "property": "crsTypeOfFlow"
+         },
+         {
+          "binding": {
+           "ref": "Disbursement",
+           "state": "value"
+          },
+          "property": "financialFlowType"
+         },
+         {
+          "binding": {
+           "ref": "Gross",
+           "state": "value"
+          },
+          "property": "nettingBasis"
+         }
+        ],
+        "facets": {
+         "unit": {
+          "state": "value",
+          "request": {
+           "prices": "constant",
+           "currency": "USD",
+           "base_year": 2024
+          }
+         }
+        },
+        "entities": {
+         "origin": [
+          "GlobalFund"
+         ]
+        },
+        "identity_version": "spec1",
+        "requested_window": {
+         "kind": "range",
+         "end_year": 2024,
+         "start_year": 2015
+        }
+       }
+      }
+     },
+     "content_version": "cv_9b1f4ea2b313f7ade77e4999d49c0c8c",
+     "artifact": {
+      "digest": "sha256:0812f33b64c645fc5baa49f2f980dda2b858522588dd97e562973eb1c22a5381",
       "rendering": {
        "format": "parquet",
        "bundle": false,

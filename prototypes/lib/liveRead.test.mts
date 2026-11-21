@@ -175,9 +175,27 @@ test('a page with committed figures shows them when a stored read fails, with no
     });
 });
 
-test('a recipe reads no stored version on client 0.5.0, so the page shows its committed figures', async () => {
-    await quietly(async () => {
-        const { calls, client } = stubClient(dataset(2));
+test('runs a recipe at the newest stored versions before the refs, and derives from both', async () => {
+    const { calls, client } = stubClient(dataset(3), dataset(2));
+    const chain = recipe(DatasetRef.fromJSON(ref)).aggregate({ by: 'destination' });
+
+    const read = await readLive({ a: { ref }, b: { recipe: chain } }, valueOf, {
+        fallback: { tier: 'committed', value: [7, 7] },
+        // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+        client,
+    });
+
+    assert.equal(read.tier, 'stored');
+    assert.deepEqual(read.value, [2, 3]);
+    assert.equal(read.asCommitted, false);
+    assert.equal(calls[0]?.target, chain);
+    assert.equal(calls[0]?.options.latest, 'stored');
+    assert.equal(calls[0]?.options.timeout, STORED_TIMEOUT_MS);
+});
+
+test('a recipe that fails at the newest stored versions shows the committed figures', async () => {
+    await quietly(async (warn) => {
+        const { calls, client } = stubClient(new Error('analysis refused'));
 
         const read = await readLive(
             { a: { ref }, b: { recipe: recipe(DatasetRef.fromJSON(ref)) } },
@@ -189,8 +207,14 @@ test('a recipe reads no stored version on client 0.5.0, so the page shows its co
             },
         );
 
-        assert.equal(read.tier, 'committed');
-        assert.equal(calls.length, 0);
+        assert.deepEqual(read, {
+            tier: 'committed',
+            value: [7, 7],
+            datasets: null,
+            asCommitted: true,
+        });
+        assert.equal(calls.length, 1);
+        assert.equal(warn.mock.callCount(), 1);
     });
 });
 
