@@ -599,7 +599,7 @@ export type StudioFrame =
           seq: number;
           trace_id: string;
           composition?: CompositionManifest | null;
-          // Set when the user's `amend` text asked a different question: the
+          // Set when the user's `amend` text asked a different question. The
           // turn set its plan aside, and the page sends the text as the next
           // turn.
           new_question?: string | null;

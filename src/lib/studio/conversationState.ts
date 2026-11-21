@@ -22,8 +22,8 @@ import type { ClosedTurn, ConversationRead, StudioFrame } from './wire.ts';
  */
 
 /**
- * The state read after `since` with every closed turn up to `closed_total`:
- * each read returns at most 3, so it reads again from the last one it got
+ * The state read after `since` with every closed turn up to `closed_total`.
+ * Each read returns at most 3, so it reads again from the last one it got
  * until it holds them all. The turn, pause and manifest are the last read's.
  * Null when a read fails.
  */
@@ -136,10 +136,11 @@ export const mergeClosedTurns = (
 /**
  * The question the harness's latest turn was ended by (a change to its plan
  * that asked something else), while the page still owes it as the next
- * turn: no prompt of its own was sent from it (`fromNewQuestion`; a fork's
- * inherited prompts answer another session's turns) and the page holds no
- * turn after it. The turn's index and the text, or null, also for a read
- * whose latest turn `closed_since` does not hold.
+ * turn. That holds when no prompt of its own was sent from it
+ * (`fromNewQuestion`, and a fork's inherited prompts answer another session's
+ * turns) and the page holds no turn after it. Returns the turn's index and
+ * the text, or null, and null also for a read whose latest turn
+ * `closed_since` does not hold.
  */
 export const owedNewQuestion = (
     read: ConversationRead,

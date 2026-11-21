@@ -35,9 +35,9 @@ export const splitSuggestions = (
     return { followups, chips };
 };
 
-/** A count chip or count row: its choice switches how a source's flow is
- *  counted ("net disbursements"), and its `choice_id` ends in `:count`. Any
- *  other choice with options is a scope choice. */
+/** A count chip or count row switches how a source's flow is counted
+ *  ("net disbursements"), and its `choice_id` ends in `:count`. Any other
+ *  choice with options is a scope choice. */
 export const isCountChoice = (choiceId: string): boolean => choiceId.endsWith(':count');
 
 /**

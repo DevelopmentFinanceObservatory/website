@@ -136,7 +136,7 @@ export const withHarnessTurn = (messages: ChatMessage[], index: number): ChatMes
 /**
  * The transcript holding harness turn `index`: unchanged when a prompt
  * already holds it, else with `userMessage` as the turn's prompt and an
- * empty reply, placed by index: before the first prompt of a later turn
+ * empty reply, placed by index before the first prompt of a later turn
  * (one another tab's turn went ahead of), else after the last message.
  */
 export const ensureTurn = (
@@ -197,7 +197,7 @@ export const NEW_QUESTION_NOTE = '_Taken as a new question._';
 
 /**
  * The transcript once the harness took the user's change to the plan as a
- * new question (`done`'s `new_question`): the plan card closes, so the turn's
+ * new question (`done`'s `new_question`). The plan card closes, so the turn's
  * empty reply says so, and the typed text leaves the turn, since the next
  * turn opens with it.
  */

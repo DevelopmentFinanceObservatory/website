@@ -77,7 +77,7 @@ export const isHarnessCard = (
 
 /**
  * The canvas half of a fork of `saved`, a conversation with no harness
- * session behind it: every card it inherits is local (`localIds`), and the
+ * session behind it. Every card it inherits is local (`localIds`), and the
  * ones its canvas did not show are removed, so Add brings one back on the
  * page alone.
  */

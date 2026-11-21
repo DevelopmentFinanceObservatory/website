@@ -638,8 +638,7 @@ const Studio = ({
     // From the first send until the workspace mounts, the landing's field is
     // still on screen and keeps focus, so a quick follow-up is typed into it.
     // It then holds the follow-up draft, so that text carries into the chat's
-    // follow-up field, and Enter sends it as a follow-up rather than starting
-    // the conversation again.
+    // follow-up field, and Enter sends it as a follow-up.
     const leaving = mode === 'leaving';
     const sendDraft = (text: string) => {
         if (text.trim()) {

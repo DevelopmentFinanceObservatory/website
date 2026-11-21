@@ -394,7 +394,7 @@ test('whileBusy: a turn refused 409 while another stream holds the conversation 
     assert.equal(fetch.mock.callCount(), 2);
     assert.deepEqual(waits, [4000]);
     assert.deepEqual(refusals, []);
-    // The refusal's detail never becomes a frame, so never the reply.
+    // The refusal's detail becomes no frame, so it cannot become the reply.
     assert.deepEqual(frames, [{ event: 'message.complete', seq: 3, text: 'The answer.' }]);
 });
 

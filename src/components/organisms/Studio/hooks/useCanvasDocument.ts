@@ -27,8 +27,8 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     const [removedIds, setRemovedIds] = useState<string[]>(initial?.removedIds ?? []);
     // A fork's inherited cards, which its harness session never held.
     const [localIds, setLocalIds] = useState<string[]>(initial?.localIds ?? []);
-    // A save from before the manifest decided the canvas: the grace set its
-    // canvas was drawn with, kept as loaded (legacyCanvasWidgetsOf).
+    // A save from before the manifest decided the canvas keeps the grace set
+    // its canvas was drawn with, as loaded (legacyCanvasWidgetsOf).
     const [grace, setGrace] = useState<{ ids: string[]; turn: number }>({
         ids: initial?.graceIds ?? [],
         turn: initial?.graceTurn ?? 0,

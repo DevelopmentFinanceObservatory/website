@@ -75,7 +75,7 @@ export const pruneForShare = (
         widgets: widget ? [{ ...widget, turn: 1 }] : [],
         textCards: textCard ? [textCard] : [],
         // The one card shows by the legacy rule, as the pinned card of its
-        // only turn: no manifest or inherited set names it.
+        // only turn, since no manifest or inherited set names it.
         canvas: null,
         localIds: [],
         pinnedIds: widget ? [widget.id] : [],

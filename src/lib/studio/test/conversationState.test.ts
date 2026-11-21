@@ -388,8 +388,8 @@ test("a fork's first turn is keyed from 1, whatever the source's prompts held", 
 
     assert.deepEqual(messages.at(-1), { role: 'bot', text: 'the answer' });
 
-    // A fork that went on before prompts carried their turn: seven prompts,
-    // of which the session's two turns are the last two.
+    // A fork that went on before prompts carried their turn has seven
+    // prompts, of which the session's two turns are the last two.
     const unkeyed = Array.from({ length: 7 }, (_, at): ChatMessage[] => [
         { role: 'user', text: `question ${at + 1}` },
         { role: 'bot', text: `reply ${at + 1}` },

@@ -12,7 +12,7 @@ export type CanvasBaseline = { compositionId: string | null; revision: number; i
 /** The canvas a save reopens with: its saved baseline, else, for a save
  *  from before the page kept the manifest, a legacy canvas of the harness
  *  cards it showed. A fork's inherited cards (`localIds`) are no harness
- *  cards. */
+ *  cards, so the baseline leaves them out. */
 export const restoreCanvas = (
     saved:
         | ({ sessionId: string | null; canvas?: CanvasBaseline | null } & Pick<
@@ -47,9 +47,9 @@ export const restoreCanvas = (
 };
 
 /**
- * Take a canvas manifest: the new baseline. A manifest of the same
- * composition no newer than the baseline (a frame or response arriving
- * late) changes nothing: null. A manifest of another composition (a forked
+ * Take a canvas manifest as the new baseline, or null for a manifest of the
+ * same composition no newer than the baseline (a frame or response arriving
+ * late), which changes nothing. A manifest of another composition (a forked
  * conversation's new session, or the first after a legacy canvas) starts a
  * new baseline.
  */
@@ -72,11 +72,11 @@ export const takeManifest = (
  * hid. The first manifest `offer`ed sends one `remove` for each card on it
  * that the page does not show, and `onTake` hears the manifest that answers,
  * then any later one offered meanwhile, as the canvas to take from then on.
- * Before it, `onLocal` hears the cards the page shows that the answer lacks:
- * cards the harness never held, such as a fork's inherited ones, which stay
+ * Before it, `onLocal` hears the cards the page shows that the answer lacks,
+ * cards the harness never held such as a fork's inherited ones, which stay
  * on the page as local cards.
- * Until then the canvas shows `ids()`: the legacy cards, the cards drawn
- * since (`keep`) and less the ones the user took off (`drop`), and
+ * Until then the canvas shows `ids()`: the legacy cards plus the cards drawn
+ * since (`keep`), less the ones the user took off (`drop`), and
  * `onChange` hears each change. A failed `remove` leaves the canvas legacy,
  * so the save stays legacy and the next open tries again.
  */

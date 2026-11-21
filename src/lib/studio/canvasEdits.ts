@@ -56,9 +56,9 @@ export const createCanvasEdits = ({
     };
 };
 
-/** The edit a pin toggle sends the harness: `unpin` for a card pinned
- *  before the toggle, else `pin`. The harness keeps a pinned card when the
- *  model clears the canvas. */
+/** The edit a pin toggle sends the harness, `unpin` for a card pinned
+ *  before the toggle and `pin` otherwise. The harness keeps a pinned card
+ *  when the model clears the canvas. */
 export const pinEdit = (pinnedIds: readonly string[], id: string): MutationOperation => ({
     op: pinnedIds.includes(id) ? 'unpin' : 'pin',
     component_id: id,

@@ -302,7 +302,7 @@ export const runInterrupt = (
     );
 
 /** Carry on the conversation's open turn `turnIndex`, which is running with
- *  no stream holding it; the response is a NEW stream continuing the turn. */
+ *  no stream holding it; the response is a new stream continuing the turn. */
 export const runResume = (
     conversationId: string,
     turnIndex: number,
@@ -355,7 +355,7 @@ export const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> 
  * Run the stream request `run` and, while the harness answers that another
  * stream holds the conversation (busyRetryAfter), wait the seconds it names
  * and send it again. `onWait` hears each wait. Any other refusal goes to
- * `handlers.onRefusal` as usual, and the busy answer never does.
+ * `handlers.onRefusal` as usual, and the busy answer ends in the wait.
  */
 export const whileBusy = async (
     run: (handlers: StreamHandlers) => Promise<void>,
@@ -393,7 +393,7 @@ export const whileBusy = async (
 
 /**
  * The conversation as the harness holds it, with the closed turns after
- * `since`. Null on any failure, a 404 included: the proxy answers 404 for a
+ * `since`. Null on any failure, a 404 included, which the proxy answers for a
  * conversation that is not the signed-in user's.
  */
 export const readState = async (

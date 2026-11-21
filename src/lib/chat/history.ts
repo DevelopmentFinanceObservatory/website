@@ -32,16 +32,15 @@ export type SavedConversation = {
     // its ids are the harness cards the canvas shows (canvasWidgetsOf).
     // Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;
-    // Cards on the canvas that the harness session never held: a fork's
-    // inherited cards, which no manifest of the fork names. Optional: only a
-    // fork has them.
+    // A fork's inherited cards, which the harness session never held and no
+    // manifest of the fork names. Optional: only a fork has them.
     localIds?: string[];
     pinnedIds: string[];
     // The cards the harness never held (`localIds`, text cards) that the
-    // user took off the canvas; a save from before `canvas` also lists
+    // user took off the canvas. A save from before `canvas` also lists
     // harness cards here.
     removedIds: string[];
-    // A save from before `canvas`: the unpinned cards of older turns its
+    // In a save from before `canvas`, the unpinned cards of older turns its
     // canvas still showed, and the turn that set belongs to (a later turn
     // made it stale). Only the legacy rule reads them (legacyCanvasWidgetsOf).
     graceIds?: string[];

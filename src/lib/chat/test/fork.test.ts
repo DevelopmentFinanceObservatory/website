@@ -10,8 +10,8 @@ import { canvasWidgetsOf, isHarnessCard } from '../canvas.ts';
 import { openedSave } from '../fork.ts';
 import type { SavedConversation } from '../history.ts';
 
-// A fork as origin/dev saved it: no session, the source's cards, and no
-// local cards named.
+// A fork saved before forks named their local cards: no session, the
+// source's cards, and no `localIds`.
 const devFork = {
     id: 'fork',
     sessionId: null,
@@ -34,7 +34,7 @@ const devFork = {
 
 const shown = (saved: SavedConversation) => canvasWidgetsOf(saved).map((widget) => widget.id);
 
-test("Remove and Add work on an origin/dev fork's inherited cards", () => {
+test("Remove and Add work on the inherited cards of a fork saved before forks named their local cards", () => {
     const opened = openedSave(devFork);
 
     assert.deepEqual(shown(opened), ['cmp_pinned', 'cmp_latest']);
@@ -53,7 +53,7 @@ test("Remove and Add work on an origin/dev fork's inherited cards", () => {
     assert.ok(opened.messages.every((message) => message.inherited));
 });
 
-test('an origin/dev fork keeps its inherited cards once its own session draws', () => {
+test('a fork saved before forks named their local cards keeps its inherited cards once its own thread draws', () => {
     const opened = openedSave(devFork);
     const drawn = {
         ...opened,

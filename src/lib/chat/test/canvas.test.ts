@@ -1,6 +1,6 @@
 /**
  * `canvas.ts`: which cards a canvas shows. The harness manifest decides for a
- * save that holds one, so cards accumulate across turns; a save from before
+ * save that holds one, so cards accumulate across turns. A save from before
  * it keeps the latest-turn rule it was drawn under.
  */
 import assert from 'node:assert/strict';

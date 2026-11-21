@@ -141,7 +141,8 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
 });
 
 test('a legacy canvas keeps the inherited cards its session never held as local cards', async () => {
-    // An origin/dev fork that went on: a pinned inherited card and its own.
+    // A fork saved before forks named their local cards, after it went on: a
+    // pinned inherited card and its own.
     const save = {
         sessionId: 'conversation_1',
         widgets: [

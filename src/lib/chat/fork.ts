@@ -4,7 +4,7 @@ import { forkedCanvas } from './canvas.ts';
 import type { SavedConversation } from './history.ts';
 
 /**
- * A fork of `saved`, a conversation with no harness session behind it: its
+ * A fork of `saved`, a conversation with no harness session behind it. Its
  * messages are inherited, so none of their turn keys numbers the fork's own
  * session, and its cards are local (forkedCanvas).
  */
@@ -18,7 +18,7 @@ export const forkOf = (
 /**
  * A saved conversation as Studio opens it. A save with no harness session is
  * a fork that has not run a turn yet, so it holds no turn and no card of its
- * own: its messages are inherited and, for a fork saved before forks named
+ * own. Its messages are inherited and, for a fork saved before forks named
  * their local cards, its cards become local (forkOf).
  */
 export const openedSave = (saved: SavedConversation): SavedConversation => {

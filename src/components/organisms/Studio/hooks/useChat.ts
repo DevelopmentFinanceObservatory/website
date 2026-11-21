@@ -381,7 +381,7 @@ export const useChat = (initial?: ChatSnapshot) => {
     // has to address both (the contract rejects a stale revision). Frames
     // keep it current; a reopened conversation starts from its saved cards.
     const revisionsRef = useRef(restoreCardRevisions(initial));
-    // The harness's latest canvas manifest as this page saw it: its ids are
+    // The harness's latest canvas manifest as this page saw it. Its ids are
     // the harness cards the canvas shows (canvasWidgetsOf). Saved with the
     // conversation, so a reopened one keeps it. A share's copy has no
     // session, so it shows the canvas it was saved with.
@@ -413,7 +413,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         }
     }, []);
     // A legacy canvas a reopened conversation (hydrate) restored for
-    // `session` is brought to the harness's manifest once one arrives; until
+    // `session` is brought to the harness's manifest once one arrives. Until
     // then it shows the legacy cards and the cards drawn since. A share's
     // copy (`initial`) runs no turn and edits nothing, so it starts none.
     const startLegacy = useCallback(
@@ -460,7 +460,7 @@ export const useChat = (initial?: ChatSnapshot) => {
     // queued, so a stream's `done` and a later state read send it once.
     const askedRef = useRef(new Set<number>());
     // A turn the harness ended because the user's change to its plan asked
-    // something else: the text goes to the front of the queue and is sent as
+    // something else. The text goes to the front of the queue and is sent as
     // the next turn (metered, as typed) once the conversation is free.
     const askNewQuestion = useCallback((turnIndex: number, text: string) => {
         if (askedRef.current.has(turnIndex)) {
@@ -1131,8 +1131,8 @@ export const useChat = (initial?: ChatSnapshot) => {
     // A turn request sent while another stream holds the conversation (a
     // second tab, or a stream the harness has not yet seen end) is answered
     // 409 `transient_unavailable`. It is sent again after the wait the
-    // answer names, with the chat line saying so, and the refusal never
-    // reaches the transcript.
+    // answer names, with the chat line saying so, and the refusal stays out
+    // of the transcript.
     const untilFree = useCallback(
         (
             run: (handlers: StreamHandlers) => Promise<void>,
@@ -1590,7 +1590,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         chainRef.current = chainRef.current.then(() => cancelled);
     }, []);
 
-    // Merge a state read into the conversation: the harness's closed turns
+    // Merge a state read into the conversation. The harness's closed turns
     // the page does not hold join the transcript (mergeClosedTurns), each
     // with a closed Activity entry, and its manifest says which cards are on
     // the canvas. A latest turn ended by a new question the page has not
@@ -1648,15 +1648,15 @@ export const useChat = (initial?: ChatSnapshot) => {
         [applyManifest, askNewQuestion],
     );
 
-    // A reopened conversation against the harness's copy (see
-    // conversationState.ts): its closed turns, read from the lowest one the
-    // transcript lacks (readSince) up to `closed_total`, and its canvas merge
-    // in, a pause comes back as its card, and a running
+    // Bring a reopened conversation up to the harness's copy (see
+    // conversationState.ts). Its closed turns, read from the lowest one the
+    // transcript lacks (readSince) up to `closed_total`, merge in along with
+    // its canvas. A pause comes back as its card, and a running
     // turn is carried on (carryOnTurn). An open turn the snapshot never got
     // joins the transcript as its prompt and an empty reply (ensureTurn),
     // with its own Activity entry. Sends made while the state is read wait
     // for it, as they wait for a stream. Called after hydrate(), for a
-    // signed-in user's own conversation: the proxy answers 404 for anyone
+    // signed-in user's own conversation. The proxy answers 404 for anyone
     // else, and the page then keeps its snapshot.
     const reattach = useCallback(() => {
         const conversation = sessionRef.current;
