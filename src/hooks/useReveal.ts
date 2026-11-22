@@ -11,12 +11,13 @@ export function useReveal<T extends HTMLElement>(margin = 12, deps: unknown[] = 
     useEffect(() => {
         const el = ref.current;
 
-        if (!el) {
+        // Under reduced motion the CSS shows everything at once; nothing to observe.
+        if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             return;
         }
 
         // Groups ([data-reveal-group]) are observed as a single element — their inner
-        // [data-reveal] children ride on the group's class instead of their own observer.
+        // [data-reveal] children ride on the group's parking instead of their own observer.
         const collect = () =>
             [
                 ...(el.matches('[data-reveal], [data-reveal-group]') ? [el] : []),
@@ -27,52 +28,48 @@ export function useReveal<T extends HTMLElement>(margin = 12, deps: unknown[] = 
                     target.closest('[data-reveal-group]') === null,
             );
 
-        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-        // Each element reveals when IT enters the middle band of the viewport and resets
-        // only once it has left the viewport entirely — two observers, with hysteresis
-        // between them. One band for both used to loop: the hidden state translates the
-        // element rem(16) down (and the entrance overshoots), so an element resting on
-        // the band's top edge kept sliding in and out of it, revealing and resetting
-        // forever. Band-based (rootMargin) instead of ratio thresholds — immune to
-        // elements resting exactly on a viewport edge. The revealed flag is an attribute,
-        // not a class: React rewrites className wholesale on re-render (e.g. Button's
-        // .swapping toggle), which would wipe an observer-added class.
-        const enter = reduced
-            ? null
-            : new IntersectionObserver(
-                  (entries) => {
-                      entries.forEach((entry) => {
-                          if (entry.isIntersecting) {
-                              entry.target.setAttribute('data-revealed', '');
-                          }
-                      });
-                  },
-                  { rootMargin: `-${margin}% 0px -${margin}% 0px`, threshold: 0 },
-              );
-        const leave = reduced
-            ? null
-            : new IntersectionObserver(
-                  (entries) => {
-                      entries.forEach((entry) => {
-                          if (!entry.isIntersecting) {
-                              entry.target.removeAttribute('data-revealed');
-                          }
-                      });
-                  },
-                  { rootMargin: '0px', threshold: 0 },
-              );
+        // The entrance itself is a CSS animation that plays as soon as an element
+        // is styled (styles/_reveal.scss); this hook only parks elements so they
+        // replay on scroll. An element is parked (hidden, animation none) once it
+        // has left the viewport entirely, and unparked when it enters the middle
+        // band — two observers, with hysteresis between them. One band for both
+        // used to loop: the hidden pose translates the element rem(16) down, so an
+        // element resting on the band's top edge kept sliding in and out of it.
+        // Band-based (rootMargin) instead of ratio thresholds — immune to elements
+        // resting exactly on a viewport edge. The flag is an attribute, not a
+        // class: React rewrites className wholesale on re-render (e.g. Button's
+        // .swapping toggle), which would wipe an observer-added class. An element
+        // off screen when first observed played its entrance unseen and is parked
+        // by the leave observer's first report; one on screen keeps its entrance.
+        const enter = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        entry.target.removeAttribute('data-reveal-parked');
+                    }
+                });
+            },
+            { rootMargin: `-${margin}% 0px -${margin}% 0px`, threshold: 0 },
+        );
+        const leave = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) {
+                        entry.target.setAttribute('data-reveal-parked', '');
+                    }
+                });
+            },
+            { rootMargin: '0px', threshold: 0 },
+        );
 
         const observed = new WeakSet<Element>();
 
         const scan = () => {
             for (const target of collect()) {
-                if (reduced) {
-                    target.setAttribute('data-revealed', '');
-                } else if (!observed.has(target)) {
+                if (!observed.has(target)) {
                     observed.add(target);
-                    enter!.observe(target);
-                    leave!.observe(target);
+                    enter.observe(target);
+                    leave.observe(target);
                 }
             }
         };
@@ -86,8 +83,8 @@ export function useReveal<T extends HTMLElement>(margin = 12, deps: unknown[] = 
         mutations.observe(el, { childList: true, subtree: true });
 
         return () => {
-            enter?.disconnect();
-            leave?.disconnect();
+            enter.disconnect();
+            leave.disconnect();
             mutations.disconnect();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- deps is a caller-owned dependency list

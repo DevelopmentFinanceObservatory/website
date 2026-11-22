@@ -435,6 +435,24 @@ export function startHeroNet(
         return () => resizeObserver.disconnect();
     }
 
+    // The first entrance keeps the clock of the hero's CSS telescope, which
+    // starts when the page is styled, before this runs after hydration: the
+    // flights are backdated to the earliest running CSS animation in the hero.
+    // None running means the telescope has already landed, so the squares start
+    // settled; a pending one (a client-side mount) starts on the first frame.
+    const cssEntrance = watchEl
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation instanceof CSSAnimation);
+    const cssStarts = cssEntrance
+        .map((animation) => animation.startTime)
+        .filter((time): time is number => typeof time === 'number');
+
+    if (cssEntrance.length === 0) {
+        introStart = Number.NEGATIVE_INFINITY;
+    } else if (cssStarts.length === cssEntrance.length) {
+        introStart = Math.min(...cssStarts);
+    }
+
     const stopLoop = runWhileSeen(
         watchEl,
         (now) => {

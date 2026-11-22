@@ -207,8 +207,9 @@
 // --- Landing → workspace choreography --------------------------------------
 
 // The landing staggers out child by child (an animation, not a transition —
-// it has to override the reveal system's own opacity styling cleanly).
-.stageOut > * {
+// it has to override the reveal system's own opacity styling cleanly). The
+// doubled class outranks the reveal entrance's own animation (styles/_reveal.scss).
+.stage.stageOut > * {
     animation: stage-out 0.35s $ease-out both;
 }
 
