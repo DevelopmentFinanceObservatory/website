@@ -12,6 +12,8 @@ import {
     ACCOUNT_SCHEMA,
     ACCOUNT_TABLES,
     type AccountOrganisationRow,
+    CONVERSATION_SCHEMA,
+    type ConversationRow,
     type AccountRead,
     type AccountRow,
     type AccountTable,
@@ -315,6 +317,82 @@ test('account_daily and account_organisation leave out an account being deleted'
     ]);
 });
 
+test('the export reader reads each conversation with a user, and no title or content', async (t) => {
+    const database = await createTestDatabase();
+    const admin = database.adminPool();
+    const reader = `test_export_${randomBytes(4).toString('hex')}`;
+    const password = randomBytes(16).toString('hex');
+    let readerPool: Pool | null = null;
+
+    t.after(async () => {
+        await readerPool?.end();
+        await admin.query(`drop role if exists "${reader}"`);
+        await database.teardown();
+    });
+
+    await migrate(database);
+    await admin.query(
+        `create role "${reader}" login password '${password}' in role ${EXPORT_READER_ROLE}`,
+    );
+    await database
+        .runtimePool()
+        .query(`insert into "user" (id, name, email) values ('u-1', 'Name', 'a@one.org')`);
+    await database.runtimePool().query(
+        `insert into conversation (id, user_id, title, agent_session_id, data, created_at)
+         values ('c-1', 'u-1', 'A private title', 'session-1', '{"secret":1}',
+                 '2026-10-20T09:30:00.123456Z'),
+                ('c-2', 'u-1', 'Another', null, '{}', '2026-10-21T00:00:00Z')`,
+    );
+
+    readerPool = new Pool({
+        host: process.env.PGHOST ?? 'localhost',
+        port: Number(process.env.PGPORT ?? 5433),
+        user: reader,
+        password,
+        database: database.databaseName,
+        max: 1,
+    });
+
+    const read = await readAccounts(readerPool);
+    const { loaded, replace, rows } = capture();
+
+    assert.deepEqual(read.conversations, [
+        {
+            id: 'c-1',
+            agentSessionId: 'session-1',
+            userId: 'u-1',
+            createdAt: '2026-10-20T09:30:00.123456Z',
+        },
+        {
+            id: 'c-2',
+            agentSessionId: null,
+            userId: 'u-1',
+            createdAt: '2026-10-21T00:00:00.000000Z',
+        },
+    ]);
+
+    await runAccountExport({
+        read: async () => read,
+        replace,
+        hmacKey: HMAC_KEY,
+        scratchFile: scratchFile(),
+        log: () => {},
+    });
+
+    assert.deepEqual(
+        (rows('conversation') as ConversationRow[]).map(({ id, user_hash }) => [id, user_hash]),
+        [
+            ['c-1', eventUserHash('u-1')],
+            ['c-2', eventUserHash('u-1')],
+        ],
+    );
+
+    const text = loaded.map((load) => load.text).join('');
+
+    assert.doesNotMatch(text, /u-1|private title|secret/);
+    await assert.rejects(readerPool.query('select 1 from conversation'), /permission denied/);
+});
+
 test('account_daily holds no rows while webmail_domain is empty, and the export fails', async (t) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
@@ -362,6 +440,7 @@ test('readAccounts reads no rows from an empty user table', async (t) => {
     assert.deepEqual(await readAccounts(database.adminPool()), {
         rows: [],
         organisations: [],
+        conversations: [],
         webmailDomains: true,
     });
 });
@@ -404,6 +483,7 @@ test('bigQueryAccountTable replaces the whole table in one load', async (t) => {
     const cases: [AccountTable, typeof ACCOUNT_SCHEMA][] = [
         ['account_daily', ACCOUNT_SCHEMA],
         ['account_organisation', ACCOUNT_ORGANISATION_SCHEMA],
+        ['conversation', CONVERSATION_SCHEMA],
     ];
 
     assert.deepEqual(
@@ -464,6 +544,16 @@ const ROWS: AccountRow[] = [
     { day: '2026-10-21', organisation: 'one.org', accounts: 3 },
 ];
 
+const CONVERSATIONS: AccountRead['conversations'] = [
+    {
+        id: 'c-1',
+        agentSessionId: 'session-1',
+        userId: 'user-1',
+        createdAt: '2026-10-20T09:30:00.123456Z',
+    },
+    { id: 'c-2', agentSessionId: null, userId: 'user-2', createdAt: '2026-10-21T00:00:00.000000Z' },
+];
+
 const ORGANISATIONS: AccountRead['organisations'] = [
     { userId: 'user-1', organisation: 'Personal email' },
     { userId: 'user-2', organisation: 'one.org' },
@@ -477,6 +567,7 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
         read: async () => ({
             rows: ROWS,
             organisations: ORGANISATIONS,
+            conversations: CONVERSATIONS,
             webmailDomains: true,
         }),
         replace,
@@ -487,7 +578,7 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
 
     assert.deepEqual(
         loaded.map(({ table }) => table),
-        ['account_daily', 'account_organisation'],
+        ['account_daily', 'account_organisation', 'conversation'],
     );
     assert.deepEqual(rows('account_daily'), ROWS);
     assert.deepEqual(rows('account_organisation'), [
@@ -497,11 +588,29 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
         },
         { user_hash: eventUserHash('user-2'), organisation: 'one.org' },
     ]);
+    assert.deepEqual(rows('conversation'), [
+        {
+            id: 'c-1',
+            agent_session_id: 'session-1',
+            user_hash: eventUserHash('user-1')!,
+            created_at: '2026-10-20T09:30:00.123456Z',
+        },
+        {
+            id: 'c-2',
+            agent_session_id: null,
+            user_hash: eventUserHash('user-2')!,
+            created_at: '2026-10-21T00:00:00.000000Z',
+        },
+    ] satisfies ConversationRow[]);
     await assert.rejects(fs.access(file));
 });
 
 test('runAccountExport empties both tables on an empty read, and rejects one with webmail_domain empty', async (t) => {
-    const cases: [string, Omit<AccountRead, 'rows' | 'organisations'>, RegExp | null][] = [
+    const cases: [
+        string,
+        Omit<AccountRead, 'rows' | 'organisations' | 'conversations'>,
+        RegExp | null,
+    ][] = [
         ['every account from today, or none', { webmailDomains: true }, null],
         ['an empty webmail_domain', { webmailDomains: false }, /webmail_domain is empty/],
     ];
@@ -510,7 +619,7 @@ test('runAccountExport empties both tables on an empty read, and rejects one wit
         await t.test(label, async () => {
             const { loaded, replace } = capture();
             const run = runAccountExport({
-                read: async () => ({ rows: [], organisations: [], ...source }),
+                read: async () => ({ rows: [], organisations: [], conversations: [], ...source }),
                 replace,
                 hmacKey: HMAC_KEY,
                 scratchFile: scratchFile(),
@@ -522,6 +631,7 @@ test('runAccountExport empties both tables on an empty read, and rejects one wit
                 assert.deepEqual(loaded, [
                     { table: 'account_daily', text: '' },
                     { table: 'account_organisation', text: '' },
+                    { table: 'conversation', text: '' },
                 ]);
             } else {
                 await assert.rejects(run, rejects);
