@@ -99,7 +99,7 @@ export DATABASE_URL=postgresql://website_runtime:website_runtime_dev_password@12
 export BETTER_AUTH_SECRET=$(openssl rand -hex 32)
 SEARCH_API_BASE=http://127.0.0.1:58083 BETTER_AUTH_URL=http://127.0.0.1:3000 \
   DFO_CALLER_PRINCIPAL=local-caller-principal CALLER_HMAC_KEY=local-caller-hmac-key \
-  RATE_LIMIT_API=100000 pnpm dev -H 127.0.0.1 -p 3000 &
+  RATE_LIMIT_API=100000 RATE_LIMIT_DATASETS=100000 pnpm dev -H 127.0.0.1 -p 3000 &
 DFO_APIS_DIR=/path/to/dfo-apis node scripts/share-migration-round-trip.ts
 ```
 
