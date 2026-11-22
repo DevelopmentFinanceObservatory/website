@@ -45,6 +45,7 @@
 @keyframes hero-rise {
     from {
         translate: 0 rem(16);
+        scale: var(--reveal-from-scale, 0.985);
     }
 }
 

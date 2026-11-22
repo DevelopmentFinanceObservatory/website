@@ -208,13 +208,15 @@
 
 // The landing staggers out child by child (an animation, not a transition —
 // it has to override the reveal system's own opacity styling cleanly). The
-// doubled class outranks the reveal entrance's own animation (styles/_reveal.scss).
-.stage.stageOut > * {
+// repeated class lifts the selector to (0,4,0), above every reveal rule that
+// sets `animation` on a child, the parked-group rule (0,3,0) included
+// (styles/_reveal.scss), so cascade order never decides.
+.stage.stageOut.stageOut.stageOut > * {
     animation: stage-out 0.35s $ease-out both;
 }
 
 @for $i from 1 through 7 {
-    .stageOut > *:nth-child(#{$i}) {
+    .stage.stageOut.stageOut.stageOut > *:nth-child(#{$i}) {
         animation-delay: #{($i - 1) * 40}ms;
     }
 }

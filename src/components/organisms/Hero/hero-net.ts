@@ -454,17 +454,21 @@ export function startHeroNet(
     // the first paint, when the page was first styled, so flights still due
     // finish and the rest start landed. Both clocks share the document
     // timeline's origin, as do the frame timestamps update() receives.
-    const cssEntrance = watchEl
-        .getAnimations({ subtree: true })
-        .filter((animation) => animation instanceof CSSAnimation);
-    const cssStarts = cssEntrance
-        .map((animation) => animation.startTime)
-        .filter((time): time is number => typeof time === 'number');
+    // Without the Web Animations API there is no CSS clock to read: introStart
+    // stays null and the flights start on the first frame.
+    if (typeof watchEl.getAnimations === 'function' && typeof CSSAnimation !== 'undefined') {
+        const cssEntrance = watchEl
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation instanceof CSSAnimation);
+        const cssStarts = cssEntrance
+            .map((animation) => animation.startTime)
+            .filter((time): time is number => typeof time === 'number');
 
-    if (cssEntrance.length === 0) {
-        introStart = firstStyledAt();
-    } else if (cssStarts.length === cssEntrance.length) {
-        introStart = Math.min(...cssStarts);
+        if (cssEntrance.length === 0) {
+            introStart = firstStyledAt();
+        } else if (cssStarts.length === cssEntrance.length) {
+            introStart = Math.min(...cssStarts);
+        }
     }
 
     const stopLoop = runWhileSeen(
