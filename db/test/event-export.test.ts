@@ -149,6 +149,20 @@ test('exportRow drops a value its rule refuses', async (t) => {
     }
 });
 
+test('exportRow keeps the intent of every prompt Studio sends', async (t) => {
+    for (const intent of ['new', 'follow_up', 'edit', 'apply_choice', 'apply_unit']) {
+        await t.test(intent, () => {
+            const row = exportRow(
+                sourceEvent({ name: 'studio.prompt', props: { intent } }),
+                KEY,
+                RULES,
+            );
+
+            assert.deepEqual(row.props, { intent });
+        });
+    }
+});
+
 test('exportRow keeps a measures entry joined with `|`', () => {
     const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
     const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);
