@@ -199,7 +199,7 @@ export const readAccounts = async (db: ExportDb): Promise<AccountSnapshot> =>
         // The view always returns one row, so any other count is a read that did
         // not see the schema it expects.
         if (source.length !== 1) {
-            throw new Error(`account export: account_daily_source returned ${source.length} rows`);
+            throw new Error(`account_daily_source returned ${source.length} rows`);
         }
 
         const organisations = await query<AccountOrganisationSource>(
@@ -287,7 +287,7 @@ export class AccountExportError extends AggregateError {
     readonly failedTables: FailedTable[];
 
     constructor(errors: Error[], failedTables: FailedTable[]) {
-        super(errors, `account export: ${errors.map((error) => error.message).join('; ')}`);
+        super(errors, errors.map((error) => error.message).join('; '));
         this.name = 'AccountExportError';
         this.failedTables = failedTables;
     }

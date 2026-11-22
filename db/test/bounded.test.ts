@@ -290,6 +290,17 @@ test(
                 (calls) => assert.deepEqual(calls, []),
             ],
             [
+                'a credentials client that throws as it is asked, before any request',
+                {
+                    auth: () => {
+                        throw new Error('no credentials');
+                    },
+                    states: [RUNNING],
+                },
+                'kept',
+                (calls) => assert.deepEqual(calls, []),
+            ],
+            [
                 'an upload whose host is not found, after its file was read to its end',
                 { upload: failWith('ENOTFOUND'), states: [RUNNING] },
                 'kept',

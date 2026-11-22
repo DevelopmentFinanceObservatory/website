@@ -6,7 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
-import { runAccountExport } from '../account-export.ts';
+import { AccountExportError, runAccountExport } from '../account-export.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { type ExportBigQuery, type ExportDb, exportDb, type Load } from '../bounded.ts';
 import {
@@ -1111,7 +1111,11 @@ test('runExport reloads the days holding rows under other rules, and retries a f
             scratchFile: scratch(),
             log: () => undefined,
         }),
-        /event export 2026-10-18: connection lost$/,
+        (error: unknown) => {
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [{ day: '2026-10-18', outcome: 'kept' }]);
+            return true;
+        },
     );
     assert.deepEqual(first.calls, [
         'ensureTable',
@@ -1324,7 +1328,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
 
 test('runExportJob runs both exports, failed or not, then fails with every failure', async (t) => {
     const accountError = new Error('bigquery down');
-    const eventError = new Error('event export 2026-10-21: load job failed');
+    const eventError = new Error('2026-10-21: load job failed');
     // The errors the run rejects with, each read back to the phase's own error.
     const cases: [string, () => Promise<void>, (error: unknown) => unknown[]][] = [
         ['the account export alone', async () => undefined, (error) => [(error as Error).cause]],
@@ -1548,6 +1552,43 @@ test(
         assert.deepEqual(error.faults, []);
     },
 );
+
+test('runAndExit names each failed phase once in its report', async () => {
+    const logged: unknown[] = [];
+
+    await runAndExit(
+        (progress) =>
+            runExportJob({
+                exportEvents: async () => {
+                    throw new EventExportError(
+                        '2026-10-22: load job failed',
+                        [new Error('load job failed')],
+                        {
+                            failedDays: [{ day: '2026-10-22', outcome: 'kept' }],
+                            shortDays: [],
+                            daysLeft: [],
+                        },
+                    );
+                },
+                exportAccounts: async () => {
+                    throw new AccountExportError(
+                        [new Error('load job failed')],
+                        [{ table: 'account_daily', outcome: 'kept' }],
+                    );
+                },
+                progress,
+            }),
+        { exit: () => undefined, logError: (error) => logged.push(error) },
+    );
+
+    const [error] = logged;
+
+    assert.ok(error instanceof ExportJobError);
+
+    for (const phase of ['event export', 'account export']) {
+        assert.equal(error.message.split(phase).length - 1, 1, phase);
+    }
+});
 
 test(
     'runAndExit stops a run hung past its deadline, names each phase and exits 1',

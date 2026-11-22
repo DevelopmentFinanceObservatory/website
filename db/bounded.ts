@@ -363,35 +363,29 @@ export const loadWithin = async ({
     confirmTimeoutMs?: number;
     pollMs?: number;
 }): Promise<Load> => {
+    const deadline = Date.now() + timeoutMs;
+
+    // The client gets its credentials before it sends any byte, so a load
+    // whose file or credentials fail here, or whose credentials take past
+    // the deadline, sent nothing.
     try {
         await fs.stat(file);
+
+        const authorised = await within(
+            table.bigQuery.authClient.getAccessToken(),
+            Math.max(0, deadline - Date.now()),
+        );
+
+        if (authorised === TIMED_OUT) {
+            return {
+                outcome: 'kept',
+                error: new Error(`load not sent: no credentials after ${timeoutMs / 1000} s`),
+            };
+        }
     } catch (error) {
         return {
             outcome: 'kept',
             error: new Error(`load not sent: ${messageOf(error)}`, { cause: error }),
-        };
-    }
-
-    const deadline = Date.now() + timeoutMs;
-    // The client gets its credentials before it sends any byte, so a load
-    // whose credentials fail here, or take past the deadline, sent nothing.
-    const authorised = await within(
-        table.bigQuery.authClient.getAccessToken().then(
-            () => null,
-            (error: unknown) => ({ error }),
-        ),
-        timeoutMs,
-    );
-
-    if (authorised !== null) {
-        return {
-            outcome: 'kept',
-            error:
-                authorised === TIMED_OUT
-                    ? new Error(`load not sent: no credentials after ${timeoutMs / 1000} s`)
-                    : new Error(`load not sent: ${messageOf(authorised.error)}`, {
-                          cause: authorised.error,
-                      }),
         };
     }
 

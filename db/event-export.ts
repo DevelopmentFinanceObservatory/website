@@ -955,7 +955,7 @@ export const runExport = async ({
 
     if (faults.length > 0) {
         throw new EventExportError(
-            `event export ${faults.join('; ')}`,
+            faults.join('; '),
             failed.map(({ error }) => error),
             {
                 failedDays: failed.map(({ day, outcome }) => ({ day, outcome })),
@@ -1015,10 +1015,11 @@ export const runExportJob = async ({
               })
             : null;
 
+    // A phase's own error names no phase, so the run's error names it.
     if (eventFailure !== null && accountFailure !== null) {
         throw new AggregateError(
             [accountFailure, eventFailure],
-            `${accountFailure.message}; ${eventFailure.message}`,
+            `${accountFailure.message}; event export failed: ${eventFailure.message}`,
         );
     }
 
