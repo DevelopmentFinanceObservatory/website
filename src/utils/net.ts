@@ -43,7 +43,9 @@ export function sizeCanvas(
  * Calls `frame` once per animation frame while `target` overlaps the viewport
  * and the tab is visible, and calls nothing otherwise, so a net costs no main
  * thread while nobody can see it. The clock handed to `frame` excludes the
- * paused spans, so a net resumes from the frame it stopped on. `onReturn`
+ * spans where `target` was off screen, so a net resumes from the frame it
+ * stopped on; a hidden tab does not stop the clock, as with a bare
+ * requestAnimationFrame. `onReturn`
  * runs when `target` comes back after leaving the viewport entirely. Returns
  * the stop function.
  */
@@ -55,15 +57,21 @@ export function runWhileSeen(
     let handle = 0;
     let onScreen = false;
     let wasOut = false;
-    // The net's clock: frame time minus every paused span. It stands still
-    // across a pause, so the first frame after a resume repeats the last time.
+    // The net's clock: frame time minus every off-screen span. It stands still
+    // while `target` is off screen, so the first frame after the reader
+    // scrolls back repeats the last time. Hidden-tab pauses keep it running.
     let clock = performance.now();
     let offset = 0;
     let resuming = true;
+    let offScreenSince = 0;
 
     function tick(now: number): void {
         if (resuming) {
-            offset = now - clock;
+            if (offScreenSince !== 0) {
+                offset += now - offScreenSince;
+                offScreenSince = 0;
+            }
+
             resuming = false;
         }
 
@@ -74,6 +82,10 @@ export function runWhileSeen(
 
     function sync(): void {
         const run = onScreen && document.visibilityState === 'visible';
+
+        if (!onScreen && offScreenSince === 0) {
+            offScreenSince = performance.now();
+        }
 
         if (run && handle === 0) {
             resuming = true;
@@ -109,12 +121,12 @@ export function runWhileSeen(
     };
 }
 
-export interface LinkBatches {
+export type LinkBatches = {
     /** Queues a segment at `strength` (0 to 1) of the full alpha. */
     add: (strength: number, x1: number, y1: number, x2: number, y2: number) => void;
     /** Strokes every queued level, then empties the queues. */
     stroke: (context: CanvasRenderingContext2D) => void;
-}
+};
 
 /**
  * Collects line segments into a fixed number of alpha levels and strokes each
@@ -130,7 +142,11 @@ export function createLinkBatches(rgb: string, maxAlpha: number, levels: number)
 
     return {
         add(strength: number, x1: number, y1: number, x2: number, y2: number): void {
-            const level = Math.min(levels, Math.max(1, Math.round(strength * levels)));
+            const level = Math.min(levels, Math.round(strength * levels));
+
+            if (level < 1) {
+                return;
+            }
 
             segments[level]!.push(x1, y1, x2, y2);
         },

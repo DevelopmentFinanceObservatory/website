@@ -51,7 +51,16 @@ const TEXT = {
     returnStrength: 0.0013,
 };
 
-export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): StopNet => {
+/**
+ * `watchEl` bounds where the net can be seen: the frame loop runs only while
+ * it overlaps the viewport. The host cannot be watched itself, because it is
+ * fixed and taller than the viewport, so it always intersects.
+ */
+export const startTextNet = (
+    host: HTMLElement,
+    canvas: HTMLCanvasElement,
+    watchEl: Element,
+): StopNet => {
     const context = context2d(canvas);
 
     if (!context) {
@@ -332,7 +341,7 @@ export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): Stop
         });
     };
 
-    const stopLoop = runWhileSeen(host, (now) => {
+    const stopLoop = runWhileSeen(watchEl, (now) => {
         update(now);
         draw();
     });
