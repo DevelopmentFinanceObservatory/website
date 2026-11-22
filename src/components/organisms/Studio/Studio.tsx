@@ -177,7 +177,9 @@ const Studio = ({
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const leaveTimer = useRef(0);
 
-    const conversation = useChat(sharedSaved);
+    const doc = useCanvasDocument(sharedSaved);
+    // A card the harness redrew under a new id keeps the old card's settings.
+    const conversation = useChat(sharedSaved, { onCardReplaced: doc.renameWidget });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
     // A prompt counts once it is actually sent (a queued one can still be
@@ -295,8 +297,6 @@ const Studio = ({
             track('guest.wall_hit', { prompts: guestUsed });
         }
     }, [walled, guestUsed]);
-
-    const doc = useCanvasDocument(sharedSaved);
 
     useEffect(() => {
         logRefusedDescriptions(sharedSaved?.widgets ?? []);
@@ -724,6 +724,7 @@ const Studio = ({
                         onRemoveNote={doc.removeNote}
                         initialLayout={save.openedLayout}
                         onLayoutChange={save.handleLayoutChange}
+                        replacedIds={doc.replacedIds}
                         flyToCardRef={flyToCardRef}
                         theme={derivedTheme}
                         views={doc.views}

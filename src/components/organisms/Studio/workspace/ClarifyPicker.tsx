@@ -492,7 +492,8 @@ const SeveralQuestions = ({
     useEffect(() => () => window.clearTimeout(markTimer.current), []);
 
     // After a move, focus lands on the open question's marked option (or its
-    // first), its text field when it offers no options, or Send.
+    // first), its first unit chip, its text field when it offers no options,
+    // or Send.
     useEffect(() => {
         if (moves === 0) {
             return;
@@ -501,7 +502,9 @@ const SeveralQuestions = ({
         const card = cardRef.current;
         const target =
             card?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]') ??
-            card?.querySelector<HTMLElement>('[role="radio"], [role="checkbox"], input') ??
+            card?.querySelector<HTMLElement>(
+                '[role="radio"], [role="checkbox"], [data-unit-focus], input',
+            ) ??
             sendRef.current;
 
         target?.focus({ preventScroll: true });

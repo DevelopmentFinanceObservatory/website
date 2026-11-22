@@ -81,6 +81,9 @@ export type WhiteboardProps = {
     initialLayout?: CardLayout;
     // Reports the live layout after every settle, for persistence.
     onLayoutChange?: (layout: CardLayout) => void;
+    // Cards that replaced another in its slot, new id → old id: each keeps
+    // the old card's place and size.
+    replacedIds?: Record<string, string>;
     // Filled with a fly-to-card function for the parent (Activity → View on
     // whiteboard, chat chips).
     flyToCardRef?: MutableRefObject<((id: string) => void) | null>;
@@ -141,6 +144,7 @@ const Whiteboard = ({
     onRemoveNote,
     initialLayout,
     onLayoutChange,
+    replacedIds,
     flyToCardRef,
     theme,
     views,
@@ -173,6 +177,7 @@ const Whiteboard = ({
         initialLayout,
         viewCols,
         onLayoutChange,
+        replacedIds,
     });
     const widgetIds = useMemo(() => new Set(widgets.map((widget) => widget.id)), [widgets]);
     // Which card the pointer is resting on — the whole card, not a tag in it,

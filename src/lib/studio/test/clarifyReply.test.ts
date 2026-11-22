@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 
 import {
     clarifyAnswer,
@@ -10,6 +10,7 @@ import {
     type Clarify,
 } from '../clarify.ts';
 import { recordAnswer, startStepper, stepperAnswers } from '../clarifyStepper.ts';
+import { runInterrupt } from '../studioClient.ts';
 import { unitAnswer, withCurrency } from '../unitChoice.ts';
 import type { ElicitationRequest, InterruptResponse } from '../wire.ts';
 
@@ -191,7 +192,22 @@ test('the note for one question answered in own words is the text alone', () => 
 const fixture = (name: string): unknown =>
     JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
-test('the card answers the harness fixture frame with the fixture reply', () => {
+/** The body the website posts for `request`'s interrupt and `reply`. */
+const posted = async (
+    t: TestContext,
+    request: InterruptResponse,
+    reply: ReturnType<typeof clarifyReply>,
+): Promise<unknown> => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+
+    await runInterrupt(request.conversation_id, request.interrupt_id, reply, {
+        onFrame: () => {},
+    });
+
+    return JSON.parse((fetch.mock.calls[0]?.arguments[1] as RequestInit).body as string);
+};
+
+test('the card answers the harness fixture frame with the fixture reply', async (t) => {
     const frame = fixture('event-14-elicitation-questions.json') as ElicitationRequest;
     const request = fixture('request-12-interrupt-answers.json') as InterruptResponse;
     const clarify = clarifyFromFrame(frame);
@@ -208,13 +224,13 @@ test('the card answers the harness fixture frame with the fixture reply', () => 
     const answers = stepperAnswers(clarify, stepper);
 
     assert.ok(answers);
-    assert.deepEqual(clarifyReply(clarify, answers), {
-        decision: request.decision,
-        answers: request.answers,
+    assert.deepEqual(await posted(t, request, clarifyReply(clarify, answers)), {
+        ...request,
+        client_features: ['unit_question', 'multi_select'],
     });
 });
 
-test('the unit card answers the harness unit frame with the fixture reply', () => {
+test('the unit card answers the harness unit frame with the fixture reply', async (t) => {
     const frame = fixture('event-18-elicitation-unit.json') as ElicitationRequest;
     const request = fixture('request-15-interrupt-unit.json') as InterruptResponse;
     const clarify = clarifyFromFrame(frame);
@@ -225,10 +241,7 @@ test('the unit card answers the harness unit frame with the fixture reply', () =
 
     const answers = { q1: unitAnswer(withCurrency(question.unit, question.unit.start, 'EUR')) };
 
-    assert.deepEqual(clarifyReply(clarify, answers), {
-        decision: request.decision,
-        answers: request.answers,
-    });
+    assert.deepEqual(await posted(t, request, clarifyReply(clarify, answers)), request);
     assert.equal(clarifyAnswer(clarify, answers), 'Constant 2023 Euros');
     assert.throws(() =>
         clarifyReply(clarify, {
@@ -237,7 +250,33 @@ test('the unit card answers the harness unit frame with the fixture reply', () =
     );
 });
 
-test('the multi-select card answers the harness frame with the fixture reply', () => {
+test('a fallback unit pick is a plain single-select question answered with an option', async (t) => {
+    const frame = fixture('event-21-elicitation-unit-pick.json') as ElicitationRequest;
+    const request = fixture('request-18-interrupt-unit-pick.json') as InterruptResponse;
+    const clarify = clarifyFromFrame(frame);
+    const [question] = clarify.questions;
+
+    assert.ok(question);
+    assert.equal(question.unit, undefined);
+    assert.equal(question.multi, false);
+    assert.equal(clarify.interruptId, request.interrupt_id);
+
+    const chosen = question.options[1];
+
+    assert.ok(chosen);
+
+    const stepper = recordAnswer(clarify, startStepper(), { kind: 'option', option_id: chosen.id });
+    const answers = stepperAnswers(clarify, stepper);
+
+    assert.ok(answers);
+    assert.deepEqual(await posted(t, request, clarifyReply(clarify, answers)), {
+        ...request,
+        client_features: ['unit_question', 'multi_select'],
+    });
+    assert.equal(clarifyAnswer(clarify, answers), 'You chose: Current US dollars');
+});
+
+test('the multi-select card answers the harness frame with the fixture reply', async (t) => {
     const frame = fixture('event-20-elicitation-multi-select.json') as ElicitationRequest;
     const request = fixture('request-17-interrupt-options.json') as InterruptResponse;
     const clarify = clarifyFromFrame(frame);
@@ -254,10 +293,7 @@ test('the multi-select card answers the harness frame with the fixture reply', (
     const answers = stepperAnswers(clarify, stepper);
 
     assert.ok(answers);
-    assert.deepEqual(clarifyReply(clarify, answers), {
-        decision: request.decision,
-        answers: request.answers,
-    });
+    assert.deepEqual(await posted(t, request, clarifyReply(clarify, answers)), request);
     assert.equal(
         clarifyAnswer(clarify, answers),
         'You chose: Principal repayments, Interest payments',

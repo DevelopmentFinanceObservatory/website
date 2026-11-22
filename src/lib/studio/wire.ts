@@ -271,6 +271,10 @@ export type ApplyUnit = {
     unit: UnitChoice;
 };
 
+/** A question form a client renders: a `unit` question, a `multi_select`
+ *  question. */
+export type ClientFeature = 'unit_question' | 'multi_select';
+
 export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
@@ -296,6 +300,10 @@ export type TurnRequest = {
     /** A card's unit change. It comes alone, as `apply_choice` does, so a
      *  request carries one of the two. */
     apply_unit?: ApplyUnit | null;
+    /** The question forms this client renders. The harness asks a form only
+     *  of a client that names it, and keeps the set the latest request
+     *  declared. */
+    client_features?: ClientFeature[];
 };
 
 export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
@@ -322,6 +330,9 @@ export type InterruptResponse = {
     choice_id?: string;
     option_id?: string;
     plan_revision?: string;
+    // Replaces the set the conversation keeps for the questions the resumed
+    // turn asks next.
+    client_features?: ClientFeature[];
 };
 
 /** The ticked options of a multi-select question: at least one, no repeats. */
@@ -551,6 +562,10 @@ export type ComponentCreated = {
     created_from?: { step_id: string; message_seq?: number | null } | null;
     // Set only when the card reads from one convertible spec.
     unit_change?: UnitChange | null;
+    // The component_id of the card this one replaces in its slot (a Change
+    // unit, or an edit the harness redrew). The page keeps the old card's
+    // turn, pin, place, size, title and note on the new id.
+    replaces?: string | null;
 };
 
 export type ComponentRevised = {
