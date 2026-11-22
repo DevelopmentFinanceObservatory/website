@@ -7,6 +7,7 @@ import { DfoTimeoutError } from '@developmentfinance/client/errors';
 import { recipe } from '@developmentfinance/client';
 
 import { READ_CONCURRENCY, readLive, STORED_TIMEOUT_MS } from './liveRead.ts';
+import { pacer } from './pacing.ts';
 
 const SPEC_ID = `spec_${'a'.repeat(32)}`;
 const VERSION = `cv_${'b'.repeat(32)}`;
@@ -258,6 +259,28 @@ test('reads at most READ_CONCURRENCY at once, and starts none after one fails', 
     });
 });
 
+test("waits for the page pacer's slots, which other requests hold", async () => {
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const holders = Array.from({ length: READ_CONCURRENCY }, () => pacer.run(() => held));
+    const { calls, client } = stubClient(dataset(2));
+    const read = readLive({ a: { ref } }, valueOf, {
+        fallback: PINNED,
+        // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+        client,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(calls.length, 0);
+
+    release();
+    await Promise.all(holders);
+    assert.deepEqual((await read).value, [2]);
+    assert.equal(calls.length, 1);
+});
+
 test('a recipe with a pinned fallback rejects before any request', async () => {
     const { calls, client } = stubClient(dataset(2));
 
@@ -310,7 +333,7 @@ test('rejects a ref the client cannot read, before any request', async () => {
     }
 });
 
-test('the default client reads the spec, then the pinned version, from the production API anonymously', async () => {
+test('the default client reads the spec, then the pinned version, from the production API anonymously, through the pacer', async () => {
     const real = globalThis.fetch;
     const seen: { url: URL; headers: Headers }[] = [];
     globalThis.fetch = (async (input: Request | URL | string, init?: RequestInit) => {
@@ -319,7 +342,11 @@ test('the default client reads the spec, then the pinned version, from the produ
 
         return new Response(JSON.stringify({ error: { code: 'not_found' } }), {
             status: 404,
-            headers: { 'content-type': 'application/json' },
+            headers: {
+                'content-type': 'application/json',
+                'x-ratelimit-remaining': '41',
+                'x-ratelimit-reset': '30',
+            },
         });
     }) as typeof fetch;
 
@@ -333,6 +360,7 @@ test('the default client reads the spec, then the pinned version, from the produ
         );
         assert.ok(seen.slice(1).some(({ url }) => url.pathname.includes(VERSION)));
         assert.ok(seen.every(({ headers }) => !headers.has('authorization')));
+        assert.equal(pacer.allowance()?.remaining, 41);
     } finally {
         globalThis.fetch = real;
     }

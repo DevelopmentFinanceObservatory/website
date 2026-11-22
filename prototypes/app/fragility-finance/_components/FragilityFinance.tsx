@@ -6,6 +6,7 @@ import { ClimateBars } from './ClimateBars';
 import { ContextSearch } from './ContextSearch';
 import { DebtChart } from './DebtChart';
 import { DonorList } from './DonorList';
+import { usePageFigures } from './Figures';
 import styles from './FragilityFinance.module.scss';
 import { MoneyChart } from './MoneyChart';
 import { Card, Panel } from './Panel';
@@ -13,9 +14,9 @@ import panelStyles from './Panel.module.scss';
 import { PillarChart } from './PillarChart';
 import { Reserved } from './Reserved';
 import { Strip } from './Strip';
-import { useFigures } from './useFigures';
+import { READ_LIVE } from './useFigures';
 
-import type { Context, GroupKey, Groups } from '../_data/types.ts';
+import type { GroupKey } from '../_data/types.ts';
 import { FLOW_COLOURS, PILLAR_COLOURS } from '../_lib/chart.ts';
 import {
     cardTitle,
@@ -46,12 +47,12 @@ const LIVING_COLOUR = '#5e5e52';
 /**
  * The interactive part of the page: the scope row, the one headline sentence, and every
  * section that follows the scope, from the money in and out to living conditions. Its root's
- * `data-read-tier` says where the figures `figuresFromRows` replaces came from (`useFigures`):
- * each context's pillars, ODA, OOF, donors and climate split, and each group's donors. The
- * page's other figures stay at profiles.json's pinned versions.
+ * `data-read-tier` says where the figures `figuresFromRows` replaces came from (`useFigures`,
+ * held by `FiguresProvider`): each context's pillars, ODA, OOF, donors and climate split, and
+ * each group's donors. The page's other figures stay at profiles.json's pinned versions.
  */
-export const FragilityFinance = (committed: { contexts: Context[]; groups: Groups }) => {
-    const { contexts, groups, tier } = useFigures(committed);
+export const FragilityFinance = () => {
+    const { contexts, groups, tier } = usePageFigures();
     const [scope, setScope] = useState<Scope>(DEFAULT_SCOPE);
     const [group, setGroup] = useState<GroupKey>('all');
     const chosen = scope.kind === 'context' ? findContext(contexts, scope.iso3) : undefined;
@@ -95,7 +96,7 @@ export const FragilityFinance = (committed: { contexts: Context[]; groups: Group
     );
 
     return (
-        <div className={styles.island} data-read-tier={tier}>
+        <div className={styles.island} data-read-tier={tier} data-read-live={String(READ_LIVE)}>
             <div className={styles.top}>
                 <div className={styles.controls}>
                     <span className={styles.seg} role="group" aria-label="Contexts shown">

@@ -1,25 +1,19 @@
 'use client';
 
+import { useAidFigures } from './AidProse';
 import { UnaidsStatus } from './UnaidsStatus';
 import { useUnaids } from './useUnaids';
 
-import type { Country } from '../_data/types.ts';
 import { plhivGapNote, unaidsGapNote } from '../_lib/copy.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
 /**
  * The Notes items on the UNAIDS figures the table lacks, as list items. They derive from the
  * reads in the browser, so they show a loading line first, or the failure, which the table's
- * line announces.
+ * line announces. The countries and years are the island's, from AidProvider.
  */
-export const UnaidsNotes = ({
-    countries,
-    years,
-}: {
-    /** The table's countries, in table order. */
-    countries: readonly Pick<Country, 'iso3' | 'name'>[];
-    years: readonly number[];
-}) => {
+export const UnaidsNotes = () => {
+    const { countries, years } = useAidFigures().data;
     const state = useUnaids(countries, years);
 
     if (state.status !== 'ready') {

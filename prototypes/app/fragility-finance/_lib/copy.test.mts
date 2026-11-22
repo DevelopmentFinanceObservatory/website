@@ -7,11 +7,13 @@ import {
     dotLabel,
     groupHeadline,
     odaNote,
+    PROSE_FIGURES,
     SOURCES,
     stripSummary,
 } from './copy.ts';
 import { context, flow, PROFILES } from './fixture.mts';
 import { scopeDebt, scopeFlows } from './groups.ts';
+import { inIds } from './profile.ts';
 import { findContext, groupContexts, type Scope } from './scope.ts';
 import { buildStrip, scalePosition, STRIPS, stripMedian } from './strip.ts';
 
@@ -147,4 +149,25 @@ test('the debt title names the set a group sum covers', () => {
 test('every source links over https, the fragility list to the 2026 update', () => {
     assert.ok(SOURCES.every((source) => new URL(source.url).protocol === 'https:'));
     assert.ok(SOURCES.some((source) => source.url.includes('states-of-fragility-2026-update')));
+});
+
+test("the prose outside the island follows the figures it is given, the island's", () => {
+    // Live figures with half the ODA, and one context outside IDS dropped.
+    const dropped = PROFILES.find((each) => !inIds(each))?.iso3;
+    const live = PROFILES.filter((each) => each.iso3 !== dropped).map((each) => ({
+        ...each,
+        flows: each.flows.map((year) => ({
+            ...year,
+            oda: year.oda === null ? null : year.oda / 2,
+        })),
+    }));
+
+    for (const [part, text] of Object.entries(PROSE_FIGURES)) {
+        assert.notEqual(text(live), text(PROFILES), part);
+    }
+    assert.equal(PROSE_FIGURES.contextCount(live), String(PROFILES.length - 1));
+    assert.ok(
+        Number(PROSE_FIGURES.debtAboveOda(live)) > Number(PROSE_FIGURES.debtAboveOda(PROFILES)),
+    );
+    assert.notDeepEqual(odaNote(live), odaNote(PROFILES));
 });

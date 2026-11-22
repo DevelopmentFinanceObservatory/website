@@ -207,20 +207,20 @@ export const unaidsGapNote = (
     );
 };
 
-/** The lede says "almost all" from this US and Global Fund share up. Below it the lede throws. */
+/** The lede says "almost all" from this US and Global Fund share up, and the share below it. */
 const ALMOST_ALL = 0.95;
 
+/**
+ * The lede: how much of the last year's HIV aid to countries the United States and the Global
+ * Fund disbursed, "almost all" from ALMOST_ALL up and the share itself below it, and how many
+ * countries over $1m each led. It holds for any figures, since it renders with a live read's.
+ */
 export const ledeSentence = (data: HivData): string => {
     const { usGfShare, over1m, gfMajority, usMajority } = ledeFigures(data);
-
-    if (usGfShare < ALMOST_ALL) {
-        throw new Error(
-            `The lede says "almost all", but the US and Global Fund share is ${pct(usGfShare)}`,
-        );
-    }
+    const share = usGfShare >= ALMOST_ALL ? 'almost all' : `${pct(usGfShare)} of`;
 
     return [
-        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed almost all HIV aid recorded for countries.`,
+        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed ${share} HIV aid recorded for countries.`,
         `Of the ${over1m} countries that received more than $1m, the Global Fund disbursed more than half in ${gfMajority} and the United States in ${usMajority}.`,
     ].join(' ');
 };
@@ -586,3 +586,33 @@ export const countrySentence = (country: UnaidsCountry, years: readonly number[]
         .filter((clause) => clause !== null)
         .join(' ');
 };
+
+/** A section of the page, by element id, for the rail and the island's heading. */
+export type Section = { id: string; title: string };
+
+/** The island's two sections, the chart's and the table's, whose title counts the countries. */
+export const aidSections = (data: HivData): readonly [Section, Section] => [
+    { id: 'by-provider', title: 'HIV aid by provider' },
+    { id: 'every-country', title: `${data.countries.length} countries, ${lastYear(data)}` },
+];
+
+/**
+ * The prose outside the island that prints an aid figure, each from the figures the island
+ * shows, so the lede and How to interpret follow them (AidProse.tsx). A sentence the figures
+ * give no reason for is empty.
+ */
+export const AID_TEXT = {
+    lede: ledeSentence,
+    share: shareNote,
+    loans: (data) => loansSentence(data) ?? '',
+    codeChange: (data) => codeChangeSentence(data) ?? '',
+    usSwing: (data) => usSwingSentence(data) ?? '',
+    firstYear: (data) => String(data.years[0] ?? ''),
+    lastYear: (data) => String(lastYear(data)),
+} as const satisfies Record<string, (data: HivData) => string>;
+
+/** The cited prose outside the island that prints an aid figure, as AID_TEXT. */
+export const AID_CITED = {
+    otherMeasures: (data) => [otherMeasures(data)],
+    usTotal: usTotalNote,
+} as const satisfies Record<string, (data: HivData) => Cited[]>;
