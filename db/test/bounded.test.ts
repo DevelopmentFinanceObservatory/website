@@ -1,12 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
+import { setTimeout as sleep } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { BigQuery, Table } from '@google-cloud/bigquery';
+import { BigQuery, type Table } from '@google-cloud/bigquery';
 import {
     type ExportBigQuery,
     exportBigQuery,
@@ -52,6 +54,8 @@ type Fake = {
     /** The client's wait for the created job. */
     promise?: () => Promise<unknown>;
     cancel?: () => Promise<unknown>;
+    /** How long each read of the job's state takes, 0 unless given. */
+    readMs?: number;
     /** The job id's states, read by read, the last repeated. */
     states?: (JobState | typeof NOT_FOUND | 'hang')[];
     /** The job's state once BigQuery accepted a cancel, when the cancel stops it. */
@@ -73,6 +77,7 @@ const fakeTable = ({
     cancel = async () => [{}],
     states = [RUNNING],
     afterCancel,
+    readMs = 0,
 }: Fake) => {
     const calls: string[] = [];
     const jobIds: { created?: string; looked?: string; location?: string } = {};
@@ -94,6 +99,7 @@ const fakeTable = ({
                     },
                     getMetadata: async () => {
                         calls.push('state');
+                        await sleep(readMs);
                         const state =
                             afterCancel !== undefined && cancelled
                                 ? afterCancel
@@ -419,6 +425,91 @@ test(
                 assert.ok(ms < SLOT_MS);
                 checkCalls(calls, ms);
             });
+        }
+    },
+);
+
+test(
+    'a job BigQuery creates after refusing its cancel, then stops at a re-sent cancel left unanswered, is read once more and replaced',
+    { timeout: 5_000 },
+    async () => {
+        const states: Fake['states'] = [RUNNING];
+        let sent = 0;
+        const { table, calls } = fakeTable({
+            stall: true,
+            states,
+            readMs: 5,
+            cancel: async () => {
+                sent += 1;
+
+                if (sent === 1) {
+                    return refuse(404)();
+                }
+
+                // BigQuery stops the job but never answers the cancel.
+                states.splice(0, states.length, DONE);
+                return never();
+            },
+        });
+        // Polls slower than the window, so only the read straight after the
+        // re-sent cancel can see the job DONE.
+        const load = await loadWithin({
+            table,
+            file: FILE,
+            metadata: {},
+            ...BOUNDS,
+            pollMs: 1_000,
+        });
+
+        assert.deepEqual(load, { outcome: 'replaced', late: 'timeout' });
+        assert.deepEqual(calls, ['load', 'abort', 'cancel', 'state', 'cancel', 'state']);
+    },
+);
+
+test(
+    "a small file's upload past its bound, unanswered by a server that reads none of it, is unknown",
+    { timeout: 5_000 },
+    async () => {
+        // The real client against a server that takes the connection and
+        // never reads the upload or answers it, and knows no job id.
+        const requests: string[] = [];
+        const server = http.createServer((request, response) => {
+            requests.push(`${request.method} ${request.url?.split('?')[0]?.split('/').at(-1)}`);
+
+            if (request.url?.startsWith('/upload/')) {
+                request.pause();
+                return;
+            }
+
+            response.writeHead(404, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: { code: 404, message: 'Not found' } }));
+        });
+
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+        try {
+            const { port } = server.address() as net.AddressInfo;
+            const bigquery = new BigQuery({
+                projectId: 'p',
+                apiEndpoint: `http://127.0.0.1:${port}`,
+                // Credentials that never leave the process.
+                authClient: {
+                    getAccessToken: async () => ({ token: 'token' }),
+                    getRequestHeaders: async () => new Headers({ authorization: 'Bearer token' }),
+                } as never,
+            });
+            const table = bigquery.dataset('d', { location: 'EU' }).table('t');
+            const load = await loadWithin({ table, file: FILE, metadata: {}, ...BOUNDS });
+
+            // The client took the file whole before any of it was read, so
+            // the send may have completed.
+            assert.equal(load.outcome, 'unknown');
+            // The upload started, then its job id was cancelled.
+            assert.equal(requests[0], 'POST jobs');
+            assert.ok(requests.includes('POST cancel'));
+        } finally {
+            server.closeAllConnections();
+            server.close();
         }
     },
 );

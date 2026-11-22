@@ -239,13 +239,14 @@ const readState = async (
  * pass: `kept` when the job failed, since a failed WRITE_TRUNCATE load
  * leaves its table as it was, `replaced` when it succeeded, and `unknown`
  * when no read by `ms` found it DONE. `onRunning` runs after each read that
- * finds the job running, given the time left.
+ * finds the job running, given half the time left, and when it says it
+ * acted the job is read again at once, in the other half.
  */
 const finalState = async (
     job: Job,
     ms: number,
     pollMs: number,
-    onRunning: (ms: number) => Promise<void> = async () => undefined,
+    onRunning: (ms: number) => Promise<boolean> = async () => false,
 ): Promise<'replaced' | 'kept' | 'unknown'> => {
     const until = Date.now() + ms;
 
@@ -256,8 +257,12 @@ const finalState = async (
             return state;
         }
 
-        if (state === 'running') {
-            await onRunning(Math.max(0, until - Date.now()));
+        if (
+            state === 'running' &&
+            Date.now() < until &&
+            (await onRunning(Math.max(0, until - Date.now()) / 2))
+        ) {
+            continue;
         }
 
         const wait = Math.min(pollMs, until - Date.now());
@@ -305,9 +310,12 @@ const cancelJob = async (job: Job, ms: number): Promise<{ answer: string; absent
  *
  * The job's insert and its file go in one request, which BigQuery acts on
  * only once it has the whole body, and the body ends only once the file has
- * been read to its end. A request that never connected, or that BigQuery
- * refused for its caller, created no job either. So, with `kept` at once
- * and no cancel:
+ * been read to its end. The client exposes no sign of what it has sent
+ * before BigQuery answers, and it and the kernel take in a file of up to
+ * about 512 KiB whole before the server reads any of it, the size set by the
+ * socket buffers, so the read of such a file ends at once and says nothing
+ * of the send. A request that never connected, or that BigQuery refused for
+ * its caller, created no job either. So, with `kept` at once and no cancel:
  *
  * - a file that cannot be read, or credentials that cannot be had within
  *   `timeoutMs`, which the client needs before it sends any byte;
@@ -330,9 +338,10 @@ const cancelJob = async (job: Job, ms: number): Promise<{ answer: string; absent
  *   One aborted after its body ended may have reached BigQuery whole and
  *   create its job after a cancel BigQuery refused with a 404, so while the
  *   last cancel was refused that way, each read in those
- *   `confirmTimeoutMs` that finds the job running sends another. A job
- *   with no confirmed final state by then is `unknown`, including one
- *   BigQuery creates after the last read.
+ *   `confirmTimeoutMs` that finds the job running sends another, waited for
+ *   at most half the time left, and the job is read again once it is
+ *   answered or that half passes. A job with no confirmed final state by
+ *   then is `unknown`, including one BigQuery creates after the last read.
  *
  * One call thus takes at most `timeoutMs + cancelTimeoutMs +
  * confirmTimeoutMs`, LOAD_SLOT_MS by default.
@@ -478,10 +487,13 @@ export const loadWithin = async ({
         }
 
         let cancel = await cancelJob(job, cancelTimeoutMs);
-        const outcome = await finalState(job, confirmTimeoutMs, pollMs, async (left) => {
-            if (cancel.absent) {
-                cancel = await cancelJob(job, left);
+        const outcome = await finalState(job, confirmTimeoutMs, pollMs, async (ms) => {
+            if (!cancel.absent) {
+                return false;
             }
+
+            cancel = await cancelJob(job, ms);
+            return true;
         });
 
         if (outcome === 'replaced') {
