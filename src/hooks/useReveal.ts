@@ -14,8 +14,19 @@ export function useReveal<T extends HTMLElement>(margin = 12, deps: unknown[] = 
     useEffect(() => {
         const el = ref.current;
 
+        if (!el) {
+            return;
+        }
+
         // Under reduced motion the CSS shows everything at once; nothing to observe.
-        if (!el || reducedMotion) {
+        // Elements parked before the preference changed are released so no stale
+        // flag outlives the observers.
+        if (reducedMotion) {
+            el.querySelectorAll('[data-reveal-parked]').forEach((target) =>
+                target.removeAttribute('data-reveal-parked'),
+            );
+            el.removeAttribute('data-reveal-parked');
+
             return;
         }
 
