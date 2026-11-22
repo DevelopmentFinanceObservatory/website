@@ -16,13 +16,14 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  *   {spec}/{cv}/file?format=...  selector  picks the current file, so never cached
  *   {spec}                       current   the spec's latest stored version, with
  *                                          its freshness, so cached briefly
- *   derived/{ops}/{cv}/files/{digest}
+ *   derived/{ops}/{ocv}/files/{digest}
  *                                file      a derived frame's file, which the
  *                                          analysis runner stored, served as a
  *                                          dataset file is
  *
- * A spec id starts `spec_`, a derived frame's id `ops_` and a content version
- * `cv_`, case-sensitive, as dfo-apis names them and as the edge cache rule
+ * A spec id starts `spec_` and its content version `cv_`; a derived frame's
+ * id starts `ops_` and its content version `ocv_`. Each is case-sensitive, as
+ * dfo-apis names them and as the edge cache rule
  * matches them (dfo-infra, infra/stacks/edge/cloudflare_rules.tf). Every other
  * datasets path, such as operations/{id}, exports/{id}, {spec}/versions,
  * {spec}/options and a derived frame's manifest and file selector, is
@@ -52,9 +53,10 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  * stale) is relayed and exposed to pages when dfo-apis sends it.
  *
  * dfo-apis names the artifact's tier in `x-dfo-artifact-tier`, an internal
- * header the gateway reads and does not relay, on a dataset file's 302. A
- * derived file's 302 may carry it too; without it the file is treated as
- * working, as any untiered file is. A pinned file is kept a year at
+ * header the gateway reads and does not relay, on a file's 302. A derived
+ * file is kept as a working file is, whatever tier dfo-apis names, because a
+ * revocation cannot yet name the derived frames it reaches, so none is held
+ * longer than a working file. A pinned dataset file is kept a year at
  * the edge and an hour in the browser, which bounds how long a takedown takes
  * to reach a returning visitor. A working file, or one whose tier is unnamed,
  * is kept briefly, because a held version renews only when a download reaches
@@ -96,7 +98,7 @@ export type DeliveryDoor = (typeof DELIVERY_DOORS)[DatasetReadKind] | typeof DER
 /**
  * A read route, the door dfo-apis logs it under, and the ids its path names:
  * `specId` is a spec id, or a derived frame's `ops_` id; `contentVersion` is
- * null for a current read, whose path names no version; `digest` is set on a
+ * a `cv_` version, a derived frame's `ocv_` version, or null for a current read, whose path names no version; `digest` is set on a
  * file read.
  */
 export type DatasetRead = { door: DeliveryDoor; specId: string; digest?: string } & (
@@ -119,15 +121,16 @@ const NO_STORE = 'no-store';
 const SPEC_PREFIX = 'spec_';
 const DERIVED_PREFIX = 'ops_';
 const CONTENT_VERSION_PREFIX = 'cv_';
+const DERIVED_VERSION_PREFIX = 'ocv_';
 
-// derived/{ops}/{cv}/files/{digest}: a derived frame's file by digest, the
+// derived/{ops}/{ocv}/files/{digest}: a derived frame's file by digest, the
 // only derived path read here.
 const derivedRead = (segments: readonly string[]): DatasetRead | undefined => {
     const [, specId, contentVersion, files, digest] = segments;
 
     return segments.length === 5 &&
         specId?.startsWith(DERIVED_PREFIX) &&
-        contentVersion?.startsWith(CONTENT_VERSION_PREFIX) &&
+        contentVersion?.startsWith(DERIVED_VERSION_PREFIX) &&
         files === 'files' &&
         digest
         ? { kind: 'file', door: DERIVED_FILES_DOOR, specId, contentVersion, digest }
@@ -628,7 +631,12 @@ export const forwardDatasets = async (
 
     headers.delete(CONTENT_VERSION_HEADER);
 
-    const cacheControl = readCacheControl(read.kind, relayed.status, tier);
+    // A derived file is held as a working file is (see above); its line keeps the named tier.
+    const cacheControl = readCacheControl(
+        read.kind,
+        relayed.status,
+        read.door === DERIVED_FILES_DOOR ? null : tier,
+    );
 
     headers.set('Cache-Control', cacheControl);
     headers.set('Vary', 'Origin');

@@ -22,8 +22,10 @@ process.env.CALLER_HMAC_KEY = 'caller-key';
 const { dropPerRequestHeaders, forwardDatasets, isDfoOrigin } = await import('../datasetReads.ts');
 
 const SPEC = 'spec_abc';
-const OPS = 'ops_abc';
 const CV = 'cv_123';
+// A derived frame's ids, shaped as dfo-apis mints them.
+const OPS = 'ops_0123456789abcdef0123456789abcdef';
+const OCV = 'ocv_fedcba9876543210fedcba9876543210';
 const PARQUET = Buffer.concat([Buffer.from('PAR1'), Buffer.alloc(4096, 7), Buffer.from('PAR1')]);
 const STORED_ETAG = '"stored-etag"';
 const MANIFEST_ETAG = '"manifest-etag"';
@@ -48,7 +50,8 @@ const apisRequests: Record<string, string | string[] | undefined>[] = [];
 // object answers 304 to its own ETag. The selector redirects, or answers
 // itself for `format=rendered`. A path that is not a known spec and a cv_
 // version answers 200 with OTHER_CACHE_CONTROL. A derived path answers as a
-// spec's does with OPS in place of SPEC, for its files route only.
+// spec's does with OPS and an ocv_ version in place of SPEC and a cv_ one,
+// for its files route only.
 const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://upstream.test');
     const derived = url.pathname.startsWith('/api/datasets/derived/');
@@ -127,7 +130,7 @@ const server = createServer((req, res) => {
 
     if (
         spec !== (derived ? OPS : SPEC) ||
-        !cv?.startsWith('cv_') ||
+        !cv?.startsWith(derived ? 'ocv_' : 'cv_') ||
         parts.length > 7 ||
         (derived && selector !== 'files')
     ) {
@@ -136,7 +139,7 @@ const server = createServer((req, res) => {
             'cache-control': OTHER_CACHE_CONTROL,
         });
         res.end('{}');
-    } else if (cv !== CV) {
+    } else if (cv !== (derived ? OCV : CV)) {
         res.writeHead(404, { 'content-type': 'application/problem+json' }).end('{}');
     } else if (selector === undefined && req.headers['if-none-match'] === MANIFEST_ETAG) {
         res.writeHead(304, { etag: MANIFEST_ETAG }).end();
@@ -217,7 +220,7 @@ const call = (
     );
 
 const file = (digest: string) => `${SPEC}/${CV}/files/${digest}`;
-const derivedFile = (digest: string) => `derived/${OPS}/${CV}/files/${digest}`;
+const derivedFile = (digest: string) => `derived/${OPS}/${OCV}/files/${digest}`;
 
 const SHORT_BOUNDS = { headersMs: 100, stallMs: 100 };
 
@@ -268,15 +271,15 @@ test('derived file: follows the storage redirect and logs its own door', async (
 
     assert.equal(entry.door, 'derived_files');
     assert.equal(entry.spec_id, OPS);
-    assert.equal(entry.content_version, CV);
+    assert.equal(entry.content_version, OCV);
     assert.equal(entry.digest, 'working');
     assert.equal(entry.trace_id, FILE_TRACE);
     assert.equal(entry.tier, 'working');
 });
 
-for (const [name, path] of [
-    ['file', file],
-    ['derived file', derivedFile],
+for (const [name, path, version] of [
+    ['file', file, CV],
+    ['derived file', derivedFile, OCV],
 ] as const) {
     for (const digest of ['pinned', 'working', 'none']) {
         test(`${name}: a ${digest} tier is cached publicly and tagged`, async () => {
@@ -284,20 +287,35 @@ for (const [name, path] of [
 
             assert.equal(res.status, 200);
             assert.ok(directives(res.headers.get('cache-control')).has('public'));
-            assert.equal(res.headers.get('cache-tag'), CV);
+            assert.equal(res.headers.get('cache-tag'), version);
             await res.body?.cancel();
         });
     }
-
-    test(`${name}: a pinned file is held longer than a working or untiered one`, async () => {
-        const pinned = directives(await cacheControlOf(path('pinned')));
-        const working = await cacheControlOf(path('working'));
-
-        assert.equal(await cacheControlOf(path('none')), working);
-        assert.ok(Number(pinned.get('s-maxage')) > Number(directives(working).get('s-maxage')));
-        assert.ok(Number(pinned.get('max-age')) > Number(directives(working).get('max-age')));
-    });
 }
+
+test('file: a pinned file is held longer than a working or untiered one', async () => {
+    const pinned = directives(await cacheControlOf(file('pinned')));
+    const working = await cacheControlOf(file('working'));
+
+    assert.equal(await cacheControlOf(file('none')), working);
+    assert.ok(Number(pinned.get('s-maxage')) > Number(directives(working).get('s-maxage')));
+    assert.ok(Number(pinned.get('max-age')) > Number(directives(working).get('max-age')));
+});
+
+test('derived file: every tier is held as a working dataset file, and the line keeps the tier', async () => {
+    const working = await cacheControlOf(file('working'));
+
+    logged.mock.resetCalls();
+
+    for (const tier of ['pinned', 'working', 'none']) {
+        assert.equal(await cacheControlOf(derivedFile(tier)), working);
+    }
+
+    assert.deepEqual(
+        loggedReads().map((entry) => entry.tier),
+        ['pinned', 'working', null],
+    );
+});
 
 for (const [name, rest, status] of [
     ['a file redirect off storage', file('elsewhere'), 302],
@@ -340,12 +358,13 @@ for (const [name, rest] of [
     ['an options list', `${SPEC}/options`],
     ['a path below a file', `${file('pinned')}/extra`],
     ['a spec id in the wrong case', `Spec_abc/${CV}`],
-    ['a derived manifest', `derived/${OPS}/${CV}`],
-    ['a derived file selector', `derived/${OPS}/${CV}/file?format=csv`],
+    ['a derived manifest', `derived/${OPS}/${OCV}`],
+    ['a derived file selector', `derived/${OPS}/${OCV}/file?format=csv`],
     ['a path below a derived file', `${derivedFile('pinned')}/extra`],
-    ['a derived id in the wrong case', `derived/Ops_abc/${CV}/files/pinned`],
-    ['a spec id where a derived id goes', `derived/${SPEC}/${CV}/files/pinned`],
-    ['a derived version in the wrong case', `derived/${OPS}/Cv_123/files/pinned`],
+    ['a derived id in the wrong case', `derived/Ops_${OPS.slice(4)}/${OCV}/files/pinned`],
+    ['a spec id where a derived id goes', `derived/${SPEC}/${OCV}/files/pinned`],
+    ['a derived version in the wrong case', `derived/${OPS}/Ocv_${OCV.slice(4)}/files/pinned`],
+    ['a dataset version where a derived version goes', `derived/${OPS}/${CV}/files/pinned`],
 ] as const) {
     test(`other routes: ${name} is forwarded with no read handling`, async () => {
         logged.mock.resetCalls();
@@ -400,9 +419,9 @@ test('revalidation: a manifest relays dfo-apis 304 with the 200 cache headers', 
     await fresh.body?.cancel();
 });
 
-for (const [name, path] of [
-    ['file', file],
-    ['derived file', derivedFile],
+for (const [name, path, version] of [
+    ['file', file, CV],
+    ['derived file', derivedFile, OCV],
 ] as const) {
     test(`revalidation: a ${name} sends If-None-Match to storage and relays its 304`, async () => {
         const fresh = await call(path('pinned'));
@@ -412,7 +431,7 @@ for (const [name, path] of [
         assert.equal(res.status, 304);
         assert.equal(res.headers.get('etag'), STORED_ETAG);
         assert.equal(res.headers.get('cache-control'), fresh.headers.get('cache-control'));
-        assert.equal(res.headers.get('cache-tag'), CV);
+        assert.equal(res.headers.get('cache-tag'), version);
         await fresh.body?.cancel();
     });
 }
