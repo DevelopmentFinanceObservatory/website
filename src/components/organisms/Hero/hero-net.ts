@@ -68,6 +68,16 @@ interface Cursor {
     speed: number;
 }
 
+// When the document was first styled, on the document timeline: the first
+// paint follows the first style pass, so it is the closest recorded mark.
+// Without paint timing, the navigation start (0) dates the flights a little
+// early, which only lands them sooner.
+const firstStyledAt = (): number => {
+    const [paint] = performance.getEntriesByType('paint');
+
+    return paint?.startTime ?? 0;
+};
+
 /**
  * Starts the mosaic in `canvasEl`, sized to `innerEl`. The loop runs only
  * while `watchEl` is on screen and the tab is visible, and the entrance
@@ -433,6 +443,32 @@ export function startHeroNet(
         draw();
 
         return () => resizeObserver.disconnect();
+    }
+
+    // The first entrance keeps the clock of the hero's CSS telescope, which
+    // starts when the page is styled, before this runs after hydration: the
+    // flights are backdated to the earliest running CSS animation in the hero.
+    // A pending one (a client-side mount) starts the flights on the first
+    // frame. With none running, the hero's CSS entrance (done by about 2.3 s)
+    // has ended, but the last flights land near 2.6 s: the clock falls back to
+    // the first paint, when the page was first styled, so flights still due
+    // finish and the rest start landed. Both clocks share the document
+    // timeline's origin, as do the frame timestamps update() receives.
+    // Without the Web Animations API there is no CSS clock to read: introStart
+    // stays null and the flights start on the first frame.
+    if (typeof watchEl.getAnimations === 'function' && typeof CSSAnimation !== 'undefined') {
+        const cssEntrance = watchEl
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation instanceof CSSAnimation);
+        const cssStarts = cssEntrance
+            .map((animation) => animation.startTime)
+            .filter((time): time is number => typeof time === 'number');
+
+        if (cssEntrance.length === 0) {
+            introStart = firstStyledAt();
+        } else if (cssStarts.length === cssEntrance.length) {
+            introStart = Math.min(...cssStarts);
+        }
     }
 
     const stopLoop = runWhileSeen(
