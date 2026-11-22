@@ -21,6 +21,13 @@ gtag('consent', 'default', {
 // allow a plain <script src>, but Next 16.3 then serves unknown URLs' 404
 // either without the consent scripts or only behind its experimental
 // globalNotFound flag.
+//
+// Usercentrics appends its UI root (aside#usercentrics-cmp-ui) and its consent
+// sharing iframe to <body>, and with the loader inline it can do so before
+// hydration ends. When hydration fails and React renders the root on the
+// client, React removes every <body> child it does not own except scripts and
+// styles, and the banner vanishes. Usercentrics never removes either node
+// itself, so the observer puts them back.
 const CMP_LOADER = `if (!location.pathname.startsWith(${JSON.stringify(EMBED_PREFIX)})) {
     const cmp = document.createElement('script');
     cmp.id = 'usercentrics-cmp';
@@ -28,6 +35,16 @@ const CMP_LOADER = `if (!location.pathname.startsWith(${JSON.stringify(EMBED_PRE
     cmp.setAttribute('data-settings-id', '${CMP_SETTINGS_ID}');
     cmp.async = true;
     document.head.appendChild(cmp);
+    const cmpNodes = ['usercentrics-cmp-ui', 'uc-cross-domain-consent-sharing-bridge'];
+    new MutationObserver((records) => {
+        for (const record of records) {
+            for (const node of record.removedNodes) {
+                if (node instanceof Element && cmpNodes.includes(node.id) && !node.isConnected) {
+                    document.body.appendChild(node);
+                }
+            }
+        }
+    }).observe(document.body, { childList: true });
 }`;
 
 // The consent scripts and GA4 tag every root layout renders: the website's
@@ -37,14 +54,13 @@ const CMP_LOADER = `if (!location.pathname.startsWith(${JSON.stringify(EMBED_PRE
 //
 // Both scripts are plain inline <script> tags, which the browser runs while it
 // parses the server HTML, in source order: the defaults, then the loader. GA4
-// loads after hydration (GoogleAnalytics is a client component), so it still
-// follows the defaults. next/script's beforeInteractive strategy instead queues
-// them in self.__next_s until Next's client JavaScript has downloaded, which
-// started the loader about 2 s later on a throttled mobile load. On a first
+// loads after hydration (GoogleAnalytics is a client component), so it follows
+// the defaults. next/script's beforeInteractive strategy would defer both
+// scripts until Next's client chunks load, which delays the banner: on a first
 // visit the banner text is the page's largest paint, and Usercentrics reaches
-// it through about ten sequential requests that begin with the loader, so the
-// banner paints that much later too. Inside <body>: a <script> straight under
-// <html> is invalid markup and breaks hydration.
+// it through about ten sequential requests that begin with the loader. Inside
+// <body>: a <script> straight under <html> is invalid markup and breaks
+// hydration.
 const Analytics = () => (
     <>
         <script id="consent-defaults" dangerouslySetInnerHTML={{ __html: CONSENT_DEFAULTS }} />
