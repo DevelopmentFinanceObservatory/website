@@ -1,10 +1,12 @@
 """The step's checks and its pin and write order, over stubbed reads.
 
 Each read is a `FakeRead` holding a small frame that passes every check in `fetch.check`.
-Kenya and Uganda are the kept countries; the deaths read binds both by default.
+Kenya and Uganda are the kept countries. The deaths read binds both by default. DFO's analysis
+is stubbed by `analysis_rows`, which sums the aid read's rows as the recipes do.
 """
 
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 
@@ -16,6 +18,15 @@ import fetch
 
 YEARS = fetch.YEARS
 UNIT = {"currency": "USD", "price_basis": "constant", "base_year": fetch.PRICE_BASE}
+UNIT_TEXT = json.dumps(
+    {
+        "base_year": fetch.PRICE_BASE,
+        "currency": "USD",
+        "deflation_basis": "donor",
+        "prices": "constant",
+    }
+)
+PROVIDERS = {"United States": fetch.US, "Global Fund": fetch.GLOBAL_FUND, "Germany": "country/DEU"}
 PLACES = ("country/KEN", "country/UGA")
 
 
@@ -56,11 +67,13 @@ def aid_rows() -> tuple[dict, ...]:
         ("country/KEN", "Global Fund", 50_000_000),
         ("country/KEN", "Germany", 2_000_000),
         ("country/UGA", "United States", 1_000_000),
+        ("AfricaUnallocated", "United States", 3_000_000),
     ]
     return tuple(
         {
             "financingRecipient": place,
             "financingRecipient_label": place.removeprefix(fetch.COUNTRY),
+            "financingProvider": PROVIDERS[provider],
             "financingProvider_label": provider,
             "crsTypeOfFinance_label": "standard grant",
             "time_period": year,
@@ -77,6 +90,7 @@ def gf_rows(code: str, *, leads_from: int, lags_from: int) -> tuple[dict, ...]:
     return tuple(
         {
             "financingRecipient": "country/KEN",
+            "financingProvider": fetch.GLOBAL_FUND,
             "financingProvider_label": "Global Fund",
             "crsPurpose": code,
             "time_period": year,
@@ -134,12 +148,66 @@ def stub_reads(unaids: Unaids) -> dict[str, FakeRead]:
     }
 
 
+def summed(rows: list[dict], column: str | None) -> list[dict]:
+    """`rows` summed by `column` and year, as a DFO aggregate answers."""
+    sums: dict[tuple, float] = defaultdict(float)
+
+    for row in rows:
+        sums[(row[column] if column else None, row["time_period"])] += row["value"]
+
+    return [
+        {
+            **({column: code} if column else {}),
+            "time_period": str(year),
+            "value": value,
+            "unit": UNIT_TEXT,
+        }
+        for (code, year), value in sums.items()
+    ]
+
+
+def analysis_rows(reads: dict) -> tuple[dict[str, list[dict]], dict]:
+    """What DFO's recipes answer for the stubbed aid read, and the Global Fund reads' rows."""
+    aid = list(reads["aid"].rows)
+    party = [row for row in aid if row["financingRecipient"].startswith(fetch.COUNTRY)]
+    residual = [row for row in aid if row not in party]
+    gf = {key: [row for row in reads[key].rows] for key in fetch.GF_KEYS}
+
+    def of(provider: str) -> list[dict]:
+        return [row for row in party if row["financingProvider"] == provider]
+
+    loans = [row for row in party if row["crsTypeOfFinance_label"] == "standard loan"]
+    rows = {
+        "allocatedByProvider": summed(party, "financingProvider"),
+        "unallocatedByProvider": summed(residual, "financingProvider"),
+        "allocatedByRecipient": summed(party, "financingRecipient"),
+        "usByRecipient": summed(of(fetch.US), "financingRecipient"),
+        "globalFundByRecipient": summed(of(fetch.GLOBAL_FUND), "financingRecipient"),
+        "loans": [
+            {**row, "time_period": "2015/2024"}
+            for row in summed([{**row, "time_period": 0} for row in loans], "financingProvider")
+        ],
+        "gf12250Total": summed(gf["gf-12250"], None),
+        "gf12110Total": summed(gf["gf-12110"], None),
+        **{
+            key: [
+                {name: row[name] for name in ("financingRecipient", "time_period", "value", *UNIT)}
+                for row in rows
+            ]
+            for key, rows in gf.items()
+        },
+    }
+    return rows, {}
+
+
 @pytest.fixture
 def step(tmp_path, monkeypatch):
     """`run` runs `fetch.main` in `tmp_path` over stubbed reads, the committed ones from
     `Unaids()` and the newest ones from the `Unaids` it is passed; `pins` lists each read
     pinned."""
-    for name in ("TARGET", "REFS", "LIVE_REFS", "FIXTURE"):
+    monkeypatch.setattr(fetch, "analysis_rows", analysis_rows)
+
+    for name in ("TARGET", "REFS", "LIVE_REFS", "FIXTURE", "AID_FIXTURE", "NAMES_FILE"):
         monkeypatch.setattr(fetch, name, tmp_path / getattr(fetch, name).name)
 
     committed = stub_reads(Unaids())
@@ -179,16 +247,22 @@ def test_a_refresh_with_every_figure_kept_pins_each_read_and_writes_the_refs(ste
 
     assert len(step.pins) == len(fetch.AID_KEYS) + len(fetch.UNAIDS_KEYS)
     assert json.loads(fetch.REFS.read_text())["data"]["aid"]["ref"] == {"pinned": True}
-    assert set(json.loads(fetch.LIVE_REFS.read_text())["data"]) == set(fetch.UNAIDS_KEYS)
+    assert set(json.loads(fetch.LIVE_REFS.read_text())["data"]) == {
+        *fetch.UNAIDS_KEYS,
+        *fetch.AID_KEYS,
+    }
+    assert fetch.AID_FIXTURE.exists()
 
 
-def test_no_pin_pins_nothing_and_leaves_both_refs_files(step):
+def test_no_pin_pins_nothing_and_leaves_the_refs_files_and_the_aid_fixture(step):
     refs, live = fetch.REFS.read_text(), fetch.LIVE_REFS.read_text()
 
     step.run(Unaids(), "--no-pin")
 
     assert step.pins == []
     assert (fetch.REFS.read_text(), fetch.LIVE_REFS.read_text()) == (refs, live)
+    # The aid fixture's trees name the versions live-refs.json holds, so it moves with it.
+    assert not fetch.AID_FIXTURE.exists()
     assert fetch.TARGET.exists()
 
 

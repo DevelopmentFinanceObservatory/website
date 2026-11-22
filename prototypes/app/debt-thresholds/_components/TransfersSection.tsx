@@ -14,6 +14,8 @@ import {
     type TransfersMembers,
 } from '../_lib/transfers.ts';
 
+import { tierAttribute } from '#lib/liveRead.ts';
+
 const QUESTION = 'How much do these countries borrow, net of what they repay?';
 
 const Ready = ({
@@ -69,7 +71,13 @@ export const TransfersSection = ({
     const state = useTransfers(members);
 
     return (
-        <section className={styles.transfers} aria-labelledby="net-transfers">
+        <section
+            className={styles.transfers}
+            aria-labelledby="net-transfers"
+            data-read-tier={tierAttribute(state)}
+            // The section has no switch, so its read is always on.
+            data-read-live="true"
+        >
             {state.status === 'ready' ? (
                 <Ready
                     data={state.data}

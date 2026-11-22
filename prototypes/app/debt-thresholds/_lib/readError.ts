@@ -1,7 +1,7 @@
 // What the page shows a reader when a browser read fails, which is the error's code in
 // small text beside a short sentence the section writes. The full error goes to the console.
 
-/** The public API the browser reads from, as `lib/liveRef.ts`'s client defaults to. */
+/** The public API the browser reads from, as `lib/liveRead.ts`'s client defaults to. */
 export const API_ORIGIN = 'https://developmentfinance.org/api/v1';
 
 /**

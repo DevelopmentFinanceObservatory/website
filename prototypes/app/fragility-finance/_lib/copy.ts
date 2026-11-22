@@ -8,7 +8,15 @@ import type { StripDot, StripSpec } from './strip.ts';
 
 import { scopeFlows, totalPopulation } from './groups.ts';
 import { formatMoney, formatPeople, listOf, ordinal } from './format.ts';
-import { DIMENSIONS, FLOW_YEAR, flowAt, mostFragileDimensions, MOVES_2026 } from './profile.ts';
+import {
+    debtAboveOdaCount,
+    DIMENSIONS,
+    FLOW_YEAR,
+    flowAt,
+    inIds,
+    mostFragileDimensions,
+    MOVES_2026,
+} from './profile.ts';
 import { findContext, groupContexts, groupNoun, type Scope } from './scope.ts';
 
 export type Source = { name: string; url: string };
@@ -114,6 +122,19 @@ export const odaNote = (contexts: readonly Context[]): Words => {
         ` counts ${OECD_DAC_ODA_2024}, from DAC members only.`,
     ];
 };
+
+/**
+ * The figures the prose outside the island prints, each from the contexts the island shows,
+ * so the lede and notes follow the island's figures (Counts.tsx).
+ */
+export const PROSE_FIGURES = {
+    /** How many contexts paid more in debt service than they received in ODA in 2024. */
+    debtAboveOda: (contexts) => String(debtAboveOdaCount(contexts, FLOW_YEAR)),
+    contextCount: (contexts) => String(contexts.length),
+    /** The contexts outside the World Bank's International Debt Statistics, in prose. */
+    withoutIds: (contexts) =>
+        listOf(contexts.filter((context) => !inIds(context)).map((context) => context.name)),
+} as const satisfies Record<string, (contexts: readonly Context[]) => string>;
 
 export const ARREARS_NOTE =
     'The group debt chart leaves out Sudan, Yemen, and Syria, whose arrears are largest. Others ' +

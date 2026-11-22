@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAidFigures } from './AidProse';
 import { CountrySearch } from './CountrySearch';
 import { CountryTable, FAILED } from './CountryTable';
 import styles from './HivFinancing.module.scss';
@@ -9,10 +10,12 @@ import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
 import { UnaidsStatus } from './UnaidsStatus';
+import { READ_AID_LIVE } from './useAid';
 import { useUnaids } from './useUnaids';
 
 import type { HivData, UnaidsFigures } from '../_data/types.ts';
 import {
+    aidSections,
     allSentence,
     countrySentence,
     flagLegend,
@@ -20,10 +23,11 @@ import {
     tableRule,
     unallocatedCaption,
 } from '../_lib/copy.ts';
+import { islandTier } from '../_lib/aid.ts';
 import { lastYear, PER_PERSON_MIN_PLHIV, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
-export type Section = { id: string; title: string };
+import { tierAttribute } from '#lib/liveRead.ts';
 
 const ALL_COUNTRIES = 'All countries';
 
@@ -55,23 +59,19 @@ const scrollBehaviour = (): ScrollBehavior =>
  * per-person strip, and the country table. Choosing the selected country again from a dot
  * or a row returns to all countries; choosing it in the search keeps it.
  *
- * The UNAIDS figures come from the browser reads (useUnaids). Until they arrive,
- * or when they fail, a country's sentence leaves out its per-person, treatment and deaths
- * clauses, the strip gives way to a status line in the strip's room, and the table's UNAIDS
- * columns wait. The sentence reserves room for those clauses from the first paint.
+ * The aid figures are hiv.json's, or DFO's newest stored ones when the page reads them live
+ * (useAid, held by AidProvider for the island and the prose around it). The UNAIDS figures
+ * come from the browser reads (useUnaids). Until they arrive, or when they fail, a country's
+ * sentence leaves out its per-person, treatment and deaths clauses, the strip gives way to a
+ * status line in the strip's room, and the table's UNAIDS columns wait. The sentence reserves room for those clauses from the first paint.
  */
-export const HivFinancing = ({
-    data,
-    sections,
-}: {
-    data: HivData;
-    /** The rail's entries for the chart section and the table section, in that order. */
-    sections: readonly [Section, Section];
-}) => {
+export const HivFinancing = () => {
     const [selected, setSelected] = useState<string | null>(null);
     const islandRef = useRef<HTMLDivElement>(null);
     const topRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLElement>(null);
+    const aid = useAidFigures();
+    const { data } = aid;
     const unaids = useUnaids(data.countries, data.years);
     const countries = useMemo(
         () =>
@@ -84,7 +84,7 @@ export const HivFinancing = ({
     );
     const chosen =
         selected === null ? undefined : countries.find((country) => country.iso3 === selected);
-    const [chartSection, tableSection] = sections;
+    const [chartSection, tableSection] = aidSections(data);
     const year = lastYear(data);
 
     const sentence = chosen === undefined ? allSentence(data) : countrySentence(chosen, data.years);
@@ -136,7 +136,12 @@ export const HivFinancing = ({
     };
 
     return (
-        <div ref={islandRef} className={styles.island}>
+        <div
+            ref={islandRef}
+            className={styles.island}
+            data-read-tier={islandTier(aid.tier, tierAttribute(unaids))}
+            data-read-live={String(READ_AID_LIVE)}
+        >
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>
                     <button
