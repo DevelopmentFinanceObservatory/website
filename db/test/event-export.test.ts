@@ -1489,6 +1489,51 @@ test(
 );
 
 test(
+    "the deadline report leaves a failed phase's faults to its error",
+    { timeout: 2_000 },
+    async () => {
+        const logged: unknown[] = [];
+
+        await runAndExit(
+            (progress) =>
+                runExportJob({
+                    exportEvents: () =>
+                        runExport({
+                            source: fakeSource({
+                                '2026-10-22': [
+                                    [
+                                        sourceEvent({
+                                            id: 1,
+                                            createdAt: '2026-10-22T08:00:00.000000Z',
+                                        }),
+                                    ],
+                                ],
+                            }),
+                            warehouse: fakeWarehouse(new Map(), { failLoad: ['2026-10-22'] })
+                                .warehouse,
+                            hmacKey: KEY,
+                            today: '2026-10-22',
+                            scratchFile: scratch(),
+                            log: () => undefined,
+                            progress,
+                        }),
+                    exportAccounts: hang,
+                    progress,
+                }),
+            { deadlineMs: 200, exit: () => undefined, logError: (error) => logged.push(error) },
+        );
+
+        const [error] = logged;
+
+        assert.ok(error instanceof ExportJobError);
+        assert.ok(error.cause instanceof Error);
+        assert.ok(error.events.startsWith('failed: '));
+        assert.deepEqual(error.faults, []);
+        assert.equal(error.message.split('load job failed').length - 1, 1);
+    },
+);
+
+test(
     'runAndExit stops a run hung past its deadline, names each phase and exits 1',
     { timeout: 5_000 },
     async (t) => {

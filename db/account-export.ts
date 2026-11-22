@@ -178,7 +178,7 @@ export type AccountSnapshot = {
  * on it. runAccountExport logs each read's duration, so the bound can follow
  * the measured times.
  */
-export const ACCOUNT_READ_MS = 2 * 60_000;
+export const ACCOUNT_STATEMENT_MS = 2 * 60_000;
 
 /**
  * Every row of `account_daily`, oldest day first, every row of
@@ -348,9 +348,7 @@ export const runAccountExport = async ({
 }): Promise<void> => {
     const failedTables: FailedTable[] = [];
     const errors: Error[] = [];
-    const earlierFaults = progress.faults;
-
-    progress.faults = () => [...earlierFaults(), ...errors.map((error) => error.message)];
+    progress.faults.accounts = () => errors.map((error) => error.message);
 
     const fail = (
         table: AccountTable,
@@ -411,7 +409,7 @@ export const runAccountExport = async ({
         }
     };
 
-    // Logged on every run, so ACCOUNT_READ_MS can follow the measured times.
+    // Logged on every run, so ACCOUNT_STATEMENT_MS can follow the measured times.
     const timed = async <T>(label: string, read: () => Promise<T>): Promise<T> => {
         const started = performance.now();
 

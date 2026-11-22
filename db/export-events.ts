@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import {
-    ACCOUNT_READ_MS,
+    ACCOUNT_STATEMENT_MS,
     bigQueryAccountTable,
     readAccounts,
     readConversations,
@@ -46,7 +46,7 @@ async function main(progress: JobProgress, deadlineAt: number): Promise<void> {
     }
 
     const events = exportDb(exportPool(process.env, { statementMs: EVENT_STATEMENT_MS }));
-    const accounts = exportDb(exportPool(process.env, { statementMs: ACCOUNT_READ_MS }));
+    const accounts = exportDb(exportPool(process.env, { statementMs: ACCOUNT_STATEMENT_MS }));
     // Read once, before both phases, when EXPORT_BQ_LOCATION leaves the location unset.
     const bigquery = await exportBigQuery(settings);
     const log = (line: string) => console.log(line);

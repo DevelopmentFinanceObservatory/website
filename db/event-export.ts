@@ -719,22 +719,25 @@ export type JobProgress = {
     events: string;
     /** The account export's step, `done`, or `failed: ` and its error's message. */
     accounts: string;
-    /** The errors the phases that failed rejected with. */
-    failures: Error[];
+    /** The error each phase that failed rejected with. */
+    failures: Partial<Record<JobPhase, Error>>;
     /** The loads in flight, each by its day or table. */
     loading: Set<string>;
     unstarted: readonly string[];
-    /** The failed and short days and the failed tables so far, as the run's report names them. */
-    faults: () => readonly string[];
+    /** Each phase's failed and short days or failed tables so far, as the run's report names them. */
+    faults: Record<JobPhase, () => readonly string[]>;
 };
+
+/** The export Job's two phases. */
+export type JobPhase = 'events' | 'accounts';
 
 export const jobProgress = (): JobProgress => ({
     events: 'the start',
     accounts: 'the start',
-    failures: [],
+    failures: {},
     loading: new Set(),
     unstarted: [],
-    faults: () => [],
+    faults: { events: () => [], accounts: () => [] },
 });
 
 /**
@@ -821,9 +824,7 @@ export const runExport = async ({
         ...(short.length > 0 ? [`short days: ${short.join(', ')}`] : []),
         ...(left.length > 0 ? [`days left for the next run: ${left.join(', ')}`] : []),
     ];
-    const earlierFaults = progress.faults;
-
-    progress.faults = () => [...earlierFaults(), ...faultsSoFar()];
+    progress.faults.events = faultsSoFar;
 
     try {
         for (const [index, day] of days.entries()) {
@@ -922,7 +923,7 @@ export const runExport = async ({
  * account export at once, each on its own pool and scratch file, so neither
  * waits on the other and a call that stalls in one costs that one alone.
  * Each phase's step in `progress` turns `done` as it succeeds, or `failed: `
- * and its error's message as it rejects, its error joining
+ * and its error's message as it rejects, its error kept in
  * `progress.failures`. Rejects once both are done with the one that failed,
  * or with both in one AggregateError.
  */
@@ -935,7 +936,7 @@ export const runExportJob = async ({
     exportEvents: () => Promise<unknown>;
     progress?: JobProgress;
 }): Promise<void> => {
-    const run = async (phase: 'events' | 'accounts', work: () => Promise<unknown>) => {
+    const run = async (phase: JobPhase, work: () => Promise<unknown>) => {
         try {
             await work();
             progress[phase] = 'done';
@@ -943,7 +944,7 @@ export const runExportJob = async ({
             const failure = error instanceof Error ? error : new Error(messageOf(error));
 
             progress[phase] = `failed: ${failure.message}`;
-            progress.failures.push(failure);
+            progress.failures[phase] = failure;
             throw failure;
         }
     };
@@ -979,7 +980,8 @@ export const runExportJob = async ({
 /**
  * What runAndExit logs for a run that failed or met its deadline: each
  * phase's step then, the loads it stopped, whose outcome is unknown, the
- * days not started, and the faults so far. Its `cause` is what `main`
+ * days not started, and the faults so far of each phase that has not failed,
+ * since a failed phase's error names its own. Its `cause` is what `main`
  * rejected with, or at the deadline the error of the phase that had
  * already failed.
  */
@@ -993,14 +995,17 @@ export class ExportJobError extends Error {
     constructor(lead: string, progress: JobProgress, { rejected }: { rejected?: unknown } = {}) {
         const unknown = [...progress.loading];
         const unstarted = [...progress.unstarted];
-        const faults = [...progress.faults()];
-        const [failure, ...more] = progress.failures;
+        const phases: JobPhase[] = ['events', 'accounts'];
+        const faults = phases
+            .filter((phase) => progress.failures[phase] === undefined)
+            .flatMap((phase) => progress.faults[phase]());
+        const failures = phases.flatMap((phase) => progress.failures[phase] ?? []);
         const cause =
             rejected !== undefined
                 ? rejected
-                : more.length > 0
-                  ? new AggregateError(progress.failures)
-                  : failure;
+                : failures.length > 1
+                  ? new AggregateError(failures)
+                  : failures[0];
 
         super(
             [
@@ -1065,7 +1070,7 @@ export const runAndExit = async (
     } catch (error) {
         // A phase that failed names its error in its own line.
         const lead =
-            progress.failures.length > 0
+            Object.keys(progress.failures).length > 0
                 ? 'export Job failed'
                 : `export Job failed: ${messageOf(error)}`;
 

@@ -139,10 +139,10 @@ export const LOAD_SLOT_MS = LOAD_TIMEOUT_MS + CANCEL_TIMEOUT_MS + CONFIRM_TIMEOU
  * `replaced`: the job is DONE without an error, and `late` says when that
  * was confirmed: null when the client reported it in time, `failure` after
  * the client reported a failure, `timeout` after the load's timeout and its
- * cancel. `kept`: no request was sent, the job is DONE with an error, or
- * BigQuery refused the job's insert and knows no job of its id. `unknown`:
- * anything else, such as a job still running, a job id BigQuery does not
- * know after a request that got no answer, or a state that cannot be read.
+ * cancel. `kept`: the job is DONE with an error, or the load created no job
+ * (loadWithin lists when). `unknown`: anything else, such as a job still
+ * running, a job id BigQuery does not know after a whole request that got no
+ * answer, or a state that cannot be read.
  */
 export type Load =
     | { outcome: 'replaced'; late: null | 'timeout' | 'failure' }
@@ -187,6 +187,25 @@ const httpStatus = (error: unknown): number | undefined =>
  * it did not authenticate or authorise creates no job.
  */
 const UNAUTHORISED = new Set([401, 403]);
+
+/**
+ * The codes of a request that never reached BigQuery: its host was not
+ * found, or no connection to it could be made, so no byte of it was sent.
+ */
+const UNCONNECTED = new Set([
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'ECONNREFUSED',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+]);
+
+const unconnected = (error: unknown): boolean =>
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    UNCONNECTED.has(error.code);
 
 /**
  * The statuses of a job insert BigQuery answered and refused, whose job id
@@ -252,18 +271,24 @@ const finalState = async (
  *
  * The job's insert and its file go in one request, which BigQuery acts on
  * only once it has the whole body, and the body ends only once the file has
- * been read to its end. So:
+ * been read to its end. A request that never connected, or that BigQuery
+ * refused for its caller, created no job either. So, with `kept` at once
+ * and no cancel:
  *
- * - A file that cannot be read sends no request: `kept`.
- * - An upload that fails, or that BigQuery has not answered by `timeoutMs`,
- *   before the file was read to its end is aborted and created no job:
- *   `kept`, at once, with no cancel.
- * - A job insert BigQuery answered with a 401 or 403 created no job:
- *   `kept`, at once. One answered with a 400 or 404 created none when its
- *   job id then reads as unknown to BigQuery: `kept`, at once.
- * - Any other client error before `timeoutMs` is followed by reads of the
- *   job's state until `timeoutMs` from the start, since the job may still
- *   be running or not yet created.
+ * - a file that cannot be read, or credentials that cannot be had within
+ *   `timeoutMs`, which the client needs before it sends any byte;
+ * - an upload that fails, or that BigQuery has not answered by
+ *   `timeoutMs`, before the file was read to its end, which is aborted;
+ * - an upload whose host was not found or refused the connection
+ *   (UNCONNECTED);
+ * - a job insert BigQuery answered with a 401 or 403, or with a 400 or 404
+ *   when its job id then reads as unknown to BigQuery.
+ *
+ * A request that failed in any other way after its body ended, such as a
+ * connection reset, may have reached BigQuery whole, so:
+ *
+ * - Its job's state is read until `timeoutMs` from the start, since the job
+ *   may still be running or not yet created.
  * - A load with no confirmed final state at `timeoutMs`, whether its client
  *   is still waiting or failed earlier, is cancelled, the cancel waited for
  *   at most `cancelTimeoutMs`, and the job's state read for at most
@@ -301,20 +326,42 @@ export const loadWithin = async ({
         };
     }
 
+    const deadline = Date.now() + timeoutMs;
+    // The client gets its credentials before it sends any byte, so a load
+    // whose credentials fail here, or take past the deadline, sent nothing.
+    const authorised = await within(
+        table.bigQuery.authClient.getAccessToken().then(
+            () => null,
+            (error: unknown) => ({ error }),
+        ),
+        timeoutMs,
+    );
+
+    if (authorised !== null) {
+        return {
+            outcome: 'kept',
+            error:
+                authorised === TIMED_OUT
+                    ? new Error(`load not sent: no credentials after ${timeoutMs / 1000} s`)
+                    : new Error(`load not sent: ${messageOf(authorised.error)}`, {
+                          cause: authorised.error,
+                      }),
+        };
+    }
+
     try {
         const jobId = `website_export_${randomUUID()}`;
         const job = table.bigQuery.job(jobId, { location: table.location });
-        const deadline = Date.now() + timeoutMs;
         // BigQuery answered the insert with a job.
         let inserted = false;
         // The file was read to its end, so the pipe ended the request's body.
-        let sent = false;
+        let sourceEnded = false;
         // The client deletes `jobId` from the metadata it is given.
         const upload = table.createWriteStream({ ...metadata, jobId });
         const source = createReadStream(file);
         const load = new Promise<void>((resolve, reject) => {
             source.on('end', () => {
-                sent = true;
+                sourceEnded = true;
             });
             source.on('error', reject);
             upload.on('job', () => {
@@ -333,20 +380,20 @@ export const loadWithin = async ({
 
         let failure: { error: unknown } | undefined;
         // An upload aborted at the timeout after its body ended.
-        let aborted: { sent: boolean } | undefined;
+        let aborted = false;
 
         try {
-            if ((await within(load, timeoutMs)) !== TIMED_OUT) {
+            if ((await within(load, Math.max(0, deadline - Date.now()))) !== TIMED_OUT) {
                 return { outcome: 'replaced', late: null };
             }
 
             if (!inserted) {
-                aborted = { sent };
+                aborted = true;
                 source.destroy();
                 upload.destroy();
 
                 // An incomplete request creates no job, so there is none to cancel.
-                if (!sent) {
+                if (!sourceEnded) {
                     return {
                         outcome: 'kept',
                         error: new Error(
@@ -365,8 +412,12 @@ export const loadWithin = async ({
                 error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
             });
 
-            // An incomplete request, or one refused for its caller, creates no job.
-            if (!inserted && (!sent || UNAUTHORISED.has(httpStatus(error) ?? 0))) {
+            // An incomplete or unconnected request, or one refused for its
+            // caller, creates no job.
+            if (
+                !inserted &&
+                (!sourceEnded || unconnected(error) || UNAUTHORISED.has(httpStatus(error) ?? 0))
+            ) {
                 return kept();
             }
 
@@ -402,12 +453,11 @@ export const loadWithin = async ({
             return { outcome: 'replaced', late: 'timeout' };
         }
 
-        const ended =
-            aborted !== undefined
-                ? `upload ran past ${timeoutMs / 1000} s and was aborted after its body ended`
-                : failure === undefined
-                  ? `load ran past ${timeoutMs / 1000} s`
-                  : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
+        const ended = aborted
+            ? `upload ran past ${timeoutMs / 1000} s and was aborted after its body ended`
+            : failure === undefined
+              ? `load ran past ${timeoutMs / 1000} s`
+              : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
         const cancelled =
             cancel === TIMED_OUT ? `cancel unanswered after ${cancelTimeoutMs / 1000} s` : cancel;
 

@@ -28,11 +28,16 @@ const NOT_FOUND = 'not found';
 
 const never = () => new Promise<never>(() => undefined);
 const reject = async () => Promise.reject(new Error('boom'));
+// A request that failed with no answer from BigQuery, as Node's error with `code`.
+const failWith = (code: string) => async () =>
+    Promise.reject(Object.assign(new Error(code), { code }));
 // BigQuery's answer to a job insert it refuses, as the client's ApiError.
 const refuse = (code: number) => async () =>
     Promise.reject(Object.assign(new Error('Refused'), { code }));
 
 type Fake = {
+    /** The client's credentials: a rejection is a failure before any request. */
+    auth?: () => Promise<unknown>;
     /**
      * BigQuery's answer to the upload once its body has ended: a rejection
      * is a client error before the job.
@@ -60,6 +65,7 @@ type Fake = {
  * client's does.
  */
 const fakeTable = ({
+    auth = async () => 'token',
     upload = async () => undefined,
     stall = false,
     failWrite = false,
@@ -73,6 +79,7 @@ const fakeTable = ({
     const table = {
         location: 'EU',
         bigQuery: {
+            authClient: { getAccessToken: auth },
             job: (id: string, { location }: { location?: string }) => {
                 jobIds.looked = id;
                 jobIds.location = location;
@@ -264,6 +271,30 @@ test(
                 (calls) => {
                     assert.equal(count(calls, 'cancel'), 1);
                     assert.equal(calls.at(-1), 'state');
+                },
+            ],
+            [
+                'credentials the client cannot get, before any request',
+                { auth: reject, states: [RUNNING] },
+                'kept',
+                (calls) => assert.deepEqual(calls, []),
+            ],
+            [
+                'an upload whose host is not found, after its file was read to its end',
+                { upload: failWith('ENOTFOUND'), states: [RUNNING] },
+                'kept',
+                (calls, ms) => {
+                    assert.deepEqual(calls, ['load']);
+                    assert.ok(ms < BOUNDS.timeoutMs);
+                },
+            ],
+            [
+                'an upload whose connection resets after its file was read to its end',
+                { upload: failWith('ECONNRESET'), states: [NOT_FOUND] },
+                'unknown',
+                (calls) => {
+                    assert.equal(count(calls, 'cancel'), 1);
+                    assert.ok(count(calls, 'state') > 1);
                 },
             ],
             [
