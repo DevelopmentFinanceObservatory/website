@@ -215,20 +215,23 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
         ]),
     );
 
-    assert.deepEqual(read.conversations, [
-        {
-            idSha256: sha256Hex('conv-raw-1'),
-            agentSessionSha256: sha256Hex('session-raw-1'),
-            userId: idOf('a@one.org'),
-            createdAt: '2026-10-20T09:30:00.123456Z',
-        },
-        {
-            idSha256: sha256Hex('conv-raw-2'),
-            agentSessionSha256: null,
-            userId: idOf('a@one.org'),
-            createdAt: '2026-10-21T00:00:00.000000Z',
-        },
-    ].toSorted((a, b) => a.idSha256.localeCompare(b.idSha256)));
+    assert.deepEqual(
+        read.conversations,
+        [
+            {
+                idSha256: sha256Hex('conv-raw-1'),
+                agentSessionSha256: sha256Hex('session-raw-1'),
+                userId: idOf('a@one.org'),
+                createdAt: '2026-10-20T09:30:00.123456Z',
+            },
+            {
+                idSha256: sha256Hex('conv-raw-2'),
+                agentSessionSha256: null,
+                userId: idOf('a@one.org'),
+                createdAt: '2026-10-21T00:00:00.000000Z',
+            },
+        ].toSorted((a, b) => a.idSha256.localeCompare(b.idSha256)),
+    );
 
     // Each account created before today, with the label its domain has in
     // account_daily, keyed by the digest its events carry.

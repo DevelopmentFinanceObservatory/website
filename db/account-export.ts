@@ -195,7 +195,7 @@ const readInTransaction = async (client: PoolClient): Promise<AccountRead> => {
 };
 
 /** How long the account read may take: its four queries at the statement timeout, then the grace. */
-const ACCOUNT_READ_MS = 4 * STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS;
+export const ACCOUNT_READ_MS = 4 * STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS;
 
 /**
  * Every row of `account_daily`, oldest day first, every row of
@@ -304,8 +304,8 @@ export class AccountExportError extends AggregateError {
 /**
  * One account export run. For `account_daily`, then `account_organisation`,
  * then `conversation`, writes every row to `scratchFile` and replaces the table with it,
- * so a failed load leaves that table as it was. Each table loads on its own: a
- * failed table does not stop the next, and the run rejects at the end with an
+ * so a failed load leaves that table as it was. Each table loads on its own, so a
+ * failed table does not stop the next, logs its failure as it happens, and the run rejects at the end with an
  * AccountExportError that carries every failed table in `failedTables` and
  * every error in `errors`. `account_daily` holds a row for every day from the first
  * account's through yesterday's while `webmail_domain` holds any domain,
@@ -350,8 +350,11 @@ export const runAccountExport = async ({
 
     for (const [table, tableRows, kept] of tables) {
         if (kept) {
+            const message = `${table}: read no rows, webmail_domain is empty, table kept`;
+
             failedTables.push(table);
-            errors.push(new Error(`${table}: read no rows, webmail_domain is empty, table kept`));
+            errors.push(new Error(message));
+            log(message);
             continue;
         }
 
@@ -363,19 +366,19 @@ export const runAccountExport = async ({
             await replace(table, scratchFile);
             log(`${table}: ${tableRows.length} rows loaded`);
         } catch (error) {
+            const message = `${table}: ${error instanceof Error ? error.message : String(error)}`;
+
             failedTables.push(table);
-            errors.push(
-                new Error(
-                    `${table}: ${error instanceof Error ? error.message : String(error)}`,
-                    { cause: error },
-                ),
-            );
+            errors.push(new Error(message, { cause: error }));
+            log(`${message}, table kept`);
         }
 
         try {
             await fs.rm(scratchFile, { force: true });
         } catch (error) {
-            errors.push(error instanceof Error ? error : new Error(String(error)));
+            log(
+                `${table}: scratch file not removed, ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
     }
 
