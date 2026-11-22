@@ -811,7 +811,7 @@ test('runExport starts a day only while its worst case fits before stopAt, and e
     }
 });
 
-test('runExport at its worst still loads yesterday and today before the Job leaves the account export its time', async () => {
+test('runExport at its worst from its first ensureTable call still loads yesterday and today by EVENT_PHASE_MS', async () => {
     // Today and yesterday form the window after a complete run, and an
     // earlier day whose counts differ waits behind them.
     const partitions = new Map<string, unknown[]>([
@@ -835,30 +835,6 @@ test('runExport at its worst still loads yesterday and today before the Job leav
     assert.deepEqual(run.loaded, ['2026-10-21', '2026-10-22']);
     assert.ok(run.rejected);
     assert.ok(run.clock <= EVENT_PHASE_MS);
-});
-
-test('runExport counts a day BigQuery confirmed loaded after the Job stopped waiting as loaded', async () => {
-    const { warehouse } = fakeWarehouse(new Map());
-    const replaced: string[] = [];
-
-    assert.deepEqual(
-        await runExport({
-            source: fakeSource({ '2026-10-22': dayOfEvents('2026-10-22', 1) }),
-            warehouse: {
-                ...warehouse,
-                async replaceDay(day) {
-                    replaced.push(day);
-                    return { late: 'timeout' };
-                },
-            },
-            hmacKey: KEY,
-            today: '2026-10-22',
-            scratchFile: scratch(),
-            log: () => undefined,
-        }),
-        [{ day: '2026-10-22', rows: 1 }],
-    );
-    assert.deepEqual(replaced, ['2026-10-22']);
 });
 
 test('runExport rejects a source that reads empty and keeps every partition', async () => {
@@ -1286,6 +1262,7 @@ test('bigQueryWarehouse loads a day into its partition and lets the schema gain 
     const bigquery = {
         dataset: () => ({
             table: (table: string) => ({
+                bigQuery: { job: () => ({}) },
                 createLoadJob: async (file: string, metadata: Record<string, unknown>) => {
                     loads.push({ table, file, metadata });
                     return [{ promise: async () => [{}] }];

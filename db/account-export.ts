@@ -22,9 +22,10 @@ import {
  * and the view `account_organisation` (migration 0025) into the table
  * `account_organisation`, and the view `conversation_export` (migration 0026)
  * into the table `conversation`, replacing each whole table in one load job,
- * so a failed load leaves that table as it was. A load that BigQuery
- * finished after the Job stopped waiting for it replaced its table, and
- * counts as loaded. `account_daily` counts new
+ * and logs each failed load with what BigQuery confirms the table holds,
+ * `kept` or `unknown` (loadWithin). A load that BigQuery confirms finished
+ * after the Job stopped waiting for it replaced its table, and counts as
+ * loaded. `account_daily` counts new
  * accounts per UTC day and organisation, for every day from the first
  * account's through yesterday's. `account_organisation` holds one row per
  * account counted there, keyed by `user_hash`, the digest the event export

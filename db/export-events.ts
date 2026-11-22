@@ -58,7 +58,7 @@ async function main(progress: JobProgress): Promise<void> {
         connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
     });
 
-    const bigquery = new BigQuery({ projectId: settings.projectId });
+    const bigquery = new BigQuery({ projectId: settings.projectId, location: settings.location });
     const log = (line: string) => console.log(line);
 
     await runExportJob({

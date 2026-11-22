@@ -452,6 +452,7 @@ const fakeBigQuery = () => {
     const bigquery = {
         dataset: (dataset: string) => ({
             table: (table: string) => ({
+                bigQuery: { job: () => ({}) },
                 createLoadJob: async (
                     file: string,
                     { jobId, ...metadata }: Record<string, unknown>,

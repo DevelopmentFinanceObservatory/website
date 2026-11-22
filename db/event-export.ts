@@ -524,9 +524,11 @@ const UNBOUNDED_WORK_MS = 60_000;
  * runExport starts a day only while DAY_WORST_MS (245 s) still fits before
  * this bound, so the event export ends by it, and the days it did not
  * start wait for the next hourly run. Its start takes at most
- * EVENT_SETUP_WORST_MS (585 s), and two days at their worst take 490 s,
- * 1075 s together, so the first two days of the window always load. Those
- * are yesterday and today in every run that follows a complete one.
+ * EVENT_SETUP_WORST_MS (585 s) from its first ensureTable call, and two
+ * days at their worst take 490 s, 1075 s together. The first two days of
+ * the window therefore load whenever the work before that call, the Cloud
+ * SQL connector's start, takes at most 25 s. Those are yesterday and today
+ * in every run that follows a complete one.
  */
 export const EVENT_PHASE_MS = JOB_DEADLINE_MS - ACCOUNT_EXPORT_MS - UNBOUNDED_WORK_MS;
 
@@ -829,9 +831,10 @@ const jobProgress = (): JobProgress => ({ phase: 'the start', unstarted: [], fau
  * the day loads by the rule above, and the run then rejects naming it with
  * both counts. Today's count is taken before its read, so a read above the
  * count is normal. A day that reads no rows and holds none loads nothing.
- * A day whose read or load fails keeps its partition as it was, the later
- * days still load, and the run then rejects naming every such day with its
- * error. Each row carries the run's exportRules digest, so a day that
+ * A day whose read fails keeps its partition as it was. A day whose load
+ * fails is logged with what BigQuery confirms the partition holds, `kept`
+ * or `unknown` (loadWithin). Either way the later days still load, and the
+ * run then rejects naming every such day with its error. Each row carries the run's exportRules digest, so a day that
  * fails under new rules still holds the old digest and is the one day the
  * next run reloads for them. A read or load past its bound fails its day
  * the same way. A day starts only while DAY_WORST_MS still fits before
@@ -1075,5 +1078,8 @@ export const runAndExit = async (
 export const readExportEnv = () => ({
     projectId: requiredEnv('EXPORT_BQ_PROJECT'),
     datasetId: requiredEnv('EXPORT_BQ_DATASET'),
+    // The dataset's location, which every load job runs in and is read back
+    // from (loadWithin): a job looked up elsewhere reads as unknown.
+    location: requiredEnv('EXPORT_BQ_LOCATION'),
     hmacKey: requiredEnv('EXPORT_ID_HMAC_KEY'),
 });
