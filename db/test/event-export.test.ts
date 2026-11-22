@@ -16,8 +16,10 @@ import {
     type EventSource,
     exportDays,
     type ExportField,
+    EventExportError,
     ExportJobError,
     exportRow,
+    type JobProgress,
     type ExportRow,
     exportRules,
     pgEventSource,
@@ -840,10 +842,12 @@ test('runExport rejects a source that reads empty and keeps every partition', as
             log: () => undefined,
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /2026-10-21\D+0\D+1\b/);
-            assert.match(error.message, /2026-10-22\D+0\D+1\b/);
-            assert.doesNotMatch(error.message, /2026-10-23/);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.shortDays, [
+                { day: '2026-10-21', read: 0, count: 1, countedIn: 'partition' },
+                { day: '2026-10-22', read: 0, count: 1, countedIn: 'partition' },
+            ]);
+            assert.deepEqual([error.failedDays, error.daysLeft], [[], []]);
             return true;
         },
     );
@@ -873,9 +877,11 @@ test('runExport keeps a partition that holds more rows than the day reads', asyn
             log: (line) => logged.push(line),
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /2026-10-22\D+1\D+2\b/);
-            assert.doesNotMatch(error.message, /2026-10-2[13]/);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.shortDays, [
+                { day: '2026-10-22', read: 1, count: 2, countedIn: 'partition' },
+            ]);
+            assert.deepEqual([error.failedDays, error.daysLeft], [[], []]);
             return true;
         },
     );
@@ -1028,14 +1034,14 @@ test('runExport loads the days after a failed one, then names every failed day',
             log: (line) => logged.push(line),
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.equal(
-                error.message,
-                'event export 2026-10-21: connection lost; 2026-10-22: load job failed',
-            );
-            assert.ok(error.cause instanceof AggregateError);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [
+                { day: '2026-10-21', outcome: 'kept' },
+                { day: '2026-10-22', outcome: 'kept' },
+            ]);
+            // The fakes' own errors: the source's failed read and the load's.
             assert.deepEqual(
-                error.cause.errors.map((cause: Error) => cause.message),
+                error.errors.map((cause: Error) => cause.message),
                 ['connection lost', 'load job failed'],
             );
             return true;
@@ -1052,7 +1058,6 @@ test('runExport loads the days after a failed one, then names every failed day',
 
 test('runExport fails a day whose load rejects as unknown and loads the next day', async () => {
     const { warehouse, calls } = fakeWarehouse(new Map(), { throwLoad: ['2026-10-22'] });
-    const logged: string[] = [];
 
     await assert.rejects(
         runExport({
@@ -1064,12 +1069,16 @@ test('runExport fails a day whose load rejects as unknown and loads the next day
             hmacKey: KEY,
             today: '2026-10-23',
             scratchFile: scratch(),
-            log: (line) => logged.push(line),
+            log: () => undefined,
         }),
+        (error: unknown) => {
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [{ day: '2026-10-22', outcome: 'unknown' }]);
+            return true;
+        },
     );
 
     assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
-    assert.ok(logged.some((line) => line.startsWith('2026-10-22: failed, partition unknown')));
 });
 
 test('runExport reloads the days holding rows under other rules, and retries a failed one alone', async () => {
@@ -1150,9 +1159,11 @@ test('runExport names the short days beside a failed day', async () => {
             log: () => undefined,
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /^event export 2026-10-22: /);
-            assert.match(error.message, /2026-10-21\D+1\D+2\b/);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [{ day: '2026-10-22', outcome: 'kept' }]);
+            assert.deepEqual(error.shortDays, [
+                { day: '2026-10-21', read: 1, count: 2, countedIn: 'partition' },
+            ]);
             return true;
         },
     );
@@ -1225,7 +1236,7 @@ test('bigQueryWarehouse loads a day into its partition and lets the schema gain 
             return REPLACED;
         },
     } as unknown as ExportBigQuery;
-    const warehouse = bigQueryWarehouse({ projectId: 'p', datasetId: 'd', bigquery });
+    const warehouse = bigQueryWarehouse({ bigquery });
 
     assert.deepEqual(await warehouse.replaceDay('2026-10-22', '/tmp/day.ndjson'), REPLACED);
     assert.equal(loads.length, 1);
@@ -1254,7 +1265,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
             },
             query: async (query: string, params?: unknown) => {
                 // The table itself, so each count is exact.
-                calls.push(['query', query.match(/FROM `([^`]+)`/)?.[1], params]);
+                calls.push(['query', query.match(/FROM (\w+)/)?.[1], params]);
                 const stale = fields.includes('export_rules') ? [true, false] : [true, true];
                 return [
                     { day: '2026-10-21', n: 3, stale: stale[0] },
@@ -1262,7 +1273,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
                 ];
             },
         } as unknown as ExportBigQuery;
-        const warehouse = bigQueryWarehouse({ projectId: 'p', datasetId: 'd', bigquery });
+        const warehouse = bigQueryWarehouse({ bigquery });
 
         return { warehouse, calls };
     };
@@ -1285,7 +1296,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
             counts,
             stale: new Set(['2026-10-21']),
         });
-        assert.deepEqual(calls, [['query', 'p.d.event', { rules: 'r1' }]]);
+        assert.deepEqual(calls, [['query', 'event', { rules: 'r1' }]]);
     });
 
     await t.test('a table without export_rules is stale on every day', async () => {
@@ -1295,7 +1306,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
             counts,
             stale: new Set(['2026-10-21', '2026-10-22']),
         });
-        assert.deepEqual(calls, [['query', 'p.d.event', { rules: 'r1' }]]);
+        assert.deepEqual(calls, [['query', 'event', { rules: 'r1' }]]);
     });
 
     await t.test('a query over the bytes-billed cap fails naming the cap', async () => {
@@ -1305,7 +1316,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
                 throw new Error('Query exceeded limit for bytes billed: 1000000000.');
             },
         } as unknown as ExportBigQuery;
-        const warehouse = bigQueryWarehouse({ projectId: 'p', datasetId: 'd', bigquery });
+        const warehouse = bigQueryWarehouse({ bigquery });
 
         await assert.rejects(warehouse.days('r1'), /maximumBytesBilled cap/);
     });
@@ -1314,24 +1325,24 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
 test('runExportJob runs both exports, failed or not, then fails with every failure', async (t) => {
     const accountError = new Error('bigquery down');
     const eventError = new Error('event export 2026-10-21: load job failed');
-    const cases: [string, () => Promise<void>, RegExp, number][] = [
-        [
-            'the account export alone',
-            async () => undefined,
-            /^account export failed: bigquery down$/,
-            1,
-        ],
+    // The errors the run rejects with, each read back to the phase's own error.
+    const cases: [string, () => Promise<void>, (error: unknown) => unknown[]][] = [
+        ['the account export alone', async () => undefined, (error) => [(error as Error).cause]],
         [
             'both',
             async () => {
                 throw eventError;
             },
-            /^account export failed: bigquery down; event export 2026-10-21: load job failed$/,
-            2,
+            (error) => {
+                assert.ok(error instanceof AggregateError);
+                const [account, event] = error.errors as Error[];
+
+                return [account?.cause, event];
+            },
         ],
     ];
 
-    for (const [label, exportEvents, message, causes] of cases) {
+    for (const [label, exportEvents, phaseErrors] of cases) {
         await t.test(label, async () => {
             const ran: string[] = [];
 
@@ -1347,9 +1358,10 @@ test('runExportJob runs both exports, failed or not, then fails with every failu
                     },
                 }),
                 (error: unknown) => {
-                    assert.ok(error instanceof Error);
-                    assert.match(error.message, message);
-                    assert.equal(error instanceof AggregateError ? error.errors.length : 1, causes);
+                    assert.deepEqual(
+                        phaseErrors(error),
+                        label === 'both' ? [accountError, eventError] : [accountError],
+                    );
                     return true;
                 },
             );
@@ -1493,10 +1505,13 @@ test(
     { timeout: 2_000 },
     async () => {
         const logged: unknown[] = [];
+        let failures: JobProgress['failures'] = {};
 
         await runAndExit(
-            (progress) =>
-                runExportJob({
+            (progress) => {
+                failures = progress.failures;
+
+                return runExportJob({
                     exportEvents: () =>
                         runExport({
                             source: fakeSource({
@@ -1519,17 +1534,18 @@ test(
                         }),
                     exportAccounts: hang,
                     progress,
-                }),
+                });
+            },
             { deadlineMs: 200, exit: () => undefined, logError: (error) => logged.push(error) },
         );
 
         const [error] = logged;
 
         assert.ok(error instanceof ExportJobError);
-        assert.ok(error.cause instanceof Error);
-        assert.ok(error.events.startsWith('failed: '));
+        assert.ok(error.cause instanceof EventExportError);
+        assert.equal(error.cause, failures.events);
+        assert.deepEqual(error.cause.failedDays, [{ day: '2026-10-22', outcome: 'kept' }]);
         assert.deepEqual(error.faults, []);
-        assert.equal(error.message.split('load job failed').length - 1, 1);
     },
 );
 
@@ -1635,7 +1651,7 @@ test("runAndExit names a failed phase's error once, in that phase's line", async
     assert.ok(error instanceof ExportJobError);
     assert.equal(error.cause, failure);
     assert.equal(error.events, `failed: ${failure.message}`);
-    assert.equal(error.message.split(failure.message).length - 1, 1);
+    assert.deepEqual(error.faults, []);
 });
 
 test('runAndExit exits with 0 after main resolves, and with 1 after one error naming each phase when it rejects', async (t) => {

@@ -25,6 +25,7 @@ import {
     CONNECTION_TIMEOUT_MS,
     type ExportBigQuery,
     type ExportDb,
+    type FailedLoad,
     type Load,
     LOAD_SLOT_MS,
     MAX_BYTES_BILLED,
@@ -636,19 +637,10 @@ export const pgEventSource = (
 });
 
 /**
- * The BigQuery table `event` in the dataset `projectId.datasetId` that
- * `bigquery` reaches. A query job fails past MAX_BYTES_BILLED, and the run
- * fails with it.
+ * The table `event` in the dataset `bigquery` reaches. A query past
+ * MAX_BYTES_BILLED fails, and the run fails with it.
  */
-export const bigQueryWarehouse = ({
-    projectId,
-    datasetId,
-    bigquery,
-}: {
-    projectId: string;
-    datasetId: string;
-    bigquery: ExportBigQuery;
-}): Warehouse => ({
+export const bigQueryWarehouse = ({ bigquery }: { bigquery: ExportBigQuery }): Warehouse => ({
     async ensureTable() {
         if (!(await bigquery.tableExists('event'))) {
             await bigquery.createTable('event', {
@@ -673,7 +665,7 @@ export const bigQueryWarehouse = ({
                 `SELECT FORMAT_DATE('%F', DATE(created_at)) AS day,
                         COUNT(*) AS n,
                         ${stale} AS stale
-                 FROM \`${projectId}.${datasetId}.event\`
+                 FROM event
                  GROUP BY day`,
                 { rules },
             );
@@ -740,6 +732,43 @@ export const jobProgress = (): JobProgress => ({
     faults: { events: () => [], accounts: () => [] },
 });
 
+/** A day a run failed, and what its partition holds after it: `kept` after a failed read. */
+export type FailedDay = { day: string; outcome: FailedLoad['outcome'] };
+
+/** A day whose read held fewer rows than its partition or than the source counts for it. */
+export type ShortDay = {
+    day: string;
+    read: number;
+    count: number;
+    countedIn: 'partition' | 'source';
+};
+
+/**
+ * What a run with failed, short or left days throws, each failed day's
+ * error in `errors`.
+ */
+export class EventExportError extends AggregateError {
+    readonly failedDays: FailedDay[];
+    readonly shortDays: ShortDay[];
+    readonly daysLeft: string[];
+
+    constructor(
+        message: string,
+        errors: Error[],
+        {
+            failedDays,
+            shortDays,
+            daysLeft,
+        }: { failedDays: FailedDay[]; shortDays: ShortDay[]; daysLeft: string[] },
+    ) {
+        super(errors, message);
+        this.name = 'EventExportError';
+        this.failedDays = failedDays;
+        this.shortDays = shortDays;
+        this.daysLeft = daysLeft;
+    }
+}
+
 /**
  * One export run over the days exportDays picks. Each day is written to
  * `scratchFile` page by page before its load, so memory holds one page of
@@ -768,6 +797,8 @@ export const jobProgress = (): JobProgress => ({
  * DAY_WORST_MS still fits before `stopAt` on `now`'s clock, so the run
  * ends by `stopAt` with no load in flight. The days left then are logged,
  * and the run rejects naming them, as a fault the next run makes up.
+ * Each such rejection is an EventExportError listing the failed, short and
+ * left days.
  * `progress` names the step and the load in flight, the days not yet
  * started and the faults so far, for runAndExit's deadline. Logs how long
  * the day counts took and each day as it is done, and returns the rows
@@ -816,12 +847,22 @@ export const runExport = async ({
     ]);
     const days = exportDays({ today, events, partitions, stale });
     const read: { day: string; rows: number }[] = [];
-    const failed: { day: string; error: unknown }[] = [];
-    const short: string[] = [];
+    const failed: (FailedDay & { error: Error })[] = [];
+    const short: ShortDay[] = [];
     let left: string[] = [];
     const faultsSoFar = () => [
-        ...failed.map(({ day, error }) => `${day}: ${messageOf(error)}`),
-        ...(short.length > 0 ? [`short days: ${short.join(', ')}`] : []),
+        ...failed.map(({ day, error }) => `${day}: ${error.message}`),
+        ...(short.length > 0
+            ? [
+                  `short days: ${short
+                      .map(({ day, read, count, countedIn }) =>
+                          countedIn === 'partition'
+                              ? `${day} read ${read} of ${count} in BigQuery`
+                              : `${day} read ${read} of source ${count}`,
+                      )
+                      .join(', ')}`,
+              ]
+            : []),
         ...(left.length > 0 ? [`days left for the next run: ${left.join(', ')}`] : []),
     ];
     progress.faults.events = faultsSoFar;
@@ -830,7 +871,9 @@ export const runExport = async ({
         for (const [index, day] of days.entries()) {
             if (now() + DAY_WORST_MS > stopAt) {
                 left = days.slice(index);
-                log(`days left for the next run, past the Job's deadline: ${left.join(', ')}`);
+                log(
+                    `days left for the next run, as a day's worst case no longer fits before the run's stop: ${left.join(', ')}`,
+                );
                 break;
             }
 
@@ -856,7 +899,11 @@ export const runExport = async ({
             } catch (error) {
                 // No load was sent, so the partition is as it was.
                 log(`${day}: failed, partition kept: ${messageOf(error)}`);
-                failed.push({ day, error });
+                failed.push({
+                    day,
+                    outcome: 'kept',
+                    error: error instanceof Error ? error : new Error(messageOf(error)),
+                });
                 continue;
             }
 
@@ -874,7 +921,7 @@ export const runExport = async ({
 
                 if (loaded.outcome !== 'replaced') {
                     log(`${day}: failed, partition ${loaded.outcome}: ${loaded.error.message}`);
-                    failed.push({ day, error: loaded.error });
+                    failed.push({ day, outcome: loaded.outcome, error: loaded.error });
                     continue;
                 }
 
@@ -887,7 +934,7 @@ export const runExport = async ({
                 log(
                     `${day}: ${rows} events read, partition holds ${held}, partition kept${belowSource}`,
                 );
-                short.push(`${day} read ${rows} of ${held} in BigQuery`);
+                short.push({ day, read: rows, count: held, countedIn: 'partition' });
             } else {
                 log(
                     `${rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`}${late ? `, confirmed after the load's ${late}, partition replaced` : ''}${belowSource}`,
@@ -895,7 +942,7 @@ export const runExport = async ({
             }
 
             if (rows < counted) {
-                short.push(`${day} read ${rows} of source ${counted}`);
+                short.push({ day, read: rows, count: counted, countedIn: 'source' });
             }
             read.push({ day, rows });
         }
@@ -907,12 +954,15 @@ export const runExport = async ({
     const faults = faultsSoFar();
 
     if (faults.length > 0) {
-        throw new Error(`event export ${faults.join('; ')}`, {
-            cause:
-                failed.length > 0
-                    ? new AggregateError(failed.map(({ error }) => error))
-                    : undefined,
-        });
+        throw new EventExportError(
+            `event export ${faults.join('; ')}`,
+            failed.map(({ error }) => error),
+            {
+                failedDays: failed.map(({ day, outcome }) => ({ day, outcome })),
+                shortDays: short,
+                daysLeft: left,
+            },
+        );
     }
 
     return read;

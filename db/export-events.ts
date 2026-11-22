@@ -65,7 +65,7 @@ async function main(progress: JobProgress, deadlineAt: number): Promise<void> {
         exportEvents: () =>
             runExport({
                 source: pgEventSource(events),
-                warehouse: bigQueryWarehouse({ ...settings, bigquery }),
+                warehouse: bigQueryWarehouse({ bigquery }),
                 hmacKey: settings.hmacKey,
                 today: new Date().toISOString().slice(0, 10),
                 progress,

@@ -54,7 +54,7 @@ type Fake = {
     cancel?: () => Promise<unknown>;
     /** The job id's states, read by read, the last repeated. */
     states?: (JobState | typeof NOT_FOUND | 'hang')[];
-    /** The job's state once a cancel was sent, when the cancel stops it. */
+    /** The job's state once BigQuery accepted a cancel, when the cancel stops it. */
     afterCancel?: JobState;
 };
 
@@ -76,6 +76,7 @@ const fakeTable = ({
 }: Fake) => {
     const calls: string[] = [];
     const jobIds: { created?: string; looked?: string; location?: string } = {};
+    let cancelled = false;
     const table = {
         location: 'EU',
         bigQuery: {
@@ -84,14 +85,17 @@ const fakeTable = ({
                 jobIds.looked = id;
                 jobIds.location = location;
                 return {
-                    cancel: () => {
+                    cancel: async () => {
                         calls.push('cancel');
-                        return cancel();
+                        const answer = await cancel();
+
+                        cancelled = true;
+                        return answer;
                     },
                     getMetadata: async () => {
                         calls.push('state');
                         const state =
-                            afterCancel !== undefined && calls.includes('cancel')
+                            afterCancel !== undefined && cancelled
                                 ? afterCancel
                                 : states.length > 1
                                   ? states.shift()!
@@ -361,6 +365,36 @@ test(
                 },
             ],
             [
+                'an upload stalled past the load bound after its body ended, whose job BigQuery creates after refusing its cancel',
+                {
+                    stall: true,
+                    cancel: (() => {
+                        let sent = 0;
+
+                        return async () => (sent++ === 0 ? refuse(404)() : [{}]);
+                    })(),
+                    states: [NOT_FOUND, RUNNING],
+                    afterCancel: FAILED,
+                },
+                'kept',
+                (calls) =>
+                    assert.deepEqual(calls, [
+                        'load',
+                        'abort',
+                        'cancel',
+                        'state',
+                        'state',
+                        'cancel',
+                        'state',
+                    ]),
+            ],
+            [
+                'a load whose cancel BigQuery refuses for a job it knows, while the job runs on',
+                { cancel: reject, states: [RUNNING] },
+                'unknown',
+                (calls) => assert.equal(count(calls, 'cancel'), 1),
+            ],
+            [
                 'an upload stalled past the load bound after its body ended',
                 { stall: true, states: [NOT_FOUND] },
                 'unknown',
@@ -444,7 +478,7 @@ test(
     },
 );
 
-test('exportBigQuery runs in the location it is given, else in the one the dataset names', async (t) => {
+test('exportBigQuery queries its dataset by default, in the location it is given, else in the one the dataset names', async (t) => {
     /** A client whose dataset names `named`, and the calls it gets. */
     const client = (named?: string) => {
         const calls: unknown[] = [];
@@ -458,14 +492,21 @@ test('exportBigQuery runs in the location it is given, else in the one the datas
                     },
                 };
             },
-            query: async ({ location }: { location?: string }) => {
-                calls.push(['query', location]);
+            query: async ({
+                location,
+                defaultDataset,
+            }: {
+                location?: string;
+                defaultDataset?: unknown;
+            }) => {
+                calls.push(['query', location, defaultDataset]);
                 return [[]];
             },
         } as unknown as BigQuery;
 
         return { bigquery, calls };
     };
+    const DATASET = { projectId: 'p', datasetId: 'd' };
     const cases: [string, string | undefined, string | undefined, unknown[]][] = [
         [
             'a location given',
@@ -473,14 +514,19 @@ test('exportBigQuery runs in the location it is given, else in the one the datas
             'US',
             [
                 ['dataset', 'd', 'EU'],
-                ['query', 'EU'],
+                ['query', 'EU', DATASET],
             ],
         ],
         [
             'no location given',
             undefined,
             'EU',
-            [['dataset', 'd', undefined], ['getMetadata'], ['dataset', 'd', 'EU'], ['query', 'EU']],
+            [
+                ['dataset', 'd', undefined],
+                ['getMetadata'],
+                ['dataset', 'd', 'EU'],
+                ['query', 'EU', DATASET],
+            ],
         ],
     ];
 
