@@ -430,7 +430,7 @@ test('the default client reads the spec, then the pinned version, from the produ
         );
         assert.ok(seen.slice(1).some(({ url }) => url.pathname.includes(VERSION)));
         assert.ok(seen.every(({ headers }) => !headers.has('authorization')));
-        assert.equal(pacer.allowance()?.remaining, 41);
+        assert.equal(pacer.allowance('datasets')?.remaining, 41);
     } finally {
         globalThis.fetch = real;
     }

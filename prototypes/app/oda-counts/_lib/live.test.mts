@@ -200,7 +200,8 @@ type Sent = { method: string; url: URL; accept: string | null; body: Body };
 
 /**
  * The page's client on a stand-in network that answers each resolve body with a part per
- * entry, or `refusal`, through a pacer bounded at `limit` whose `fetch` the client uses.
+ * entry, or `refusal`, through a pacer bounded at `limit` whose `fetch` the client uses. A GET
+ * below /api/v1/datasets/ answers with 2 left of the `datasets` allowance and is not recorded.
  */
 const resolveOver = ({ limit = 4, refusal }: { limit?: number; refusal?: Response } = {}) => {
     const sent: Sent[] = [];
@@ -210,6 +211,14 @@ const resolveOver = ({ limit = 4, refusal }: { limit?: number; refusal?: Respons
         limit,
         fetch: async (input, init) => {
             const request = new Request(input, init);
+
+            if (request.method === 'GET') {
+                return Response.json(
+                    {},
+                    { headers: { 'x-ratelimit-remaining': '2', 'x-ratelimit-reset': '30' } },
+                );
+            }
+
             sent.push({
                 method: request.method,
                 url: new URL(request.url),
@@ -250,6 +259,9 @@ const FRANCE_EUR = {
 test('fetchBasis posts each one-entry resolve body through the client, within the pacer bound', async () => {
     const { client, pacer, sent, most } = resolveOver({ limit: 3 });
 
+    // A stored read's GET, nearly spent on `datasets`, which Search's allowance does not share.
+    await pacer.fetch('https://developmentfinance.org/api/v1/datasets/ds_x/versions/latest');
+
     const basis = await fetchBasis({ ...FRANCE_EUR, client, lane: pacer, perRequest: 1 });
 
     const requests = resolveRequests(live, 'country/FRA', EUR_2023, 1);
@@ -273,7 +285,8 @@ test('fetchBasis posts each one-entry resolve body through the client, within th
         live.identities.map(({ key }) => key),
     );
     assert.ok(Object.values(basis).every((values) => values.join() === '9506,10097,11733'));
-    assert.equal(pacer.allowance()?.remaining, 80);
+    assert.equal(pacer.allowance('api')?.remaining, 80);
+    assert.equal(pacer.allowance('datasets')?.remaining, 2);
 });
 
 test("fetchBasis rejects a gateway 429 as the client's RateLimitError, with the allowance it reports", async () => {
@@ -294,7 +307,7 @@ test("fetchBasis rejects a gateway 429 as the client's RateLimitError, with the 
         fetchBasis({ ...FRANCE_EUR, client, lane: pacer, perRequest: live.maxEntries }),
         RateLimitError,
     );
-    assert.equal(pacer.allowance()?.remaining, 0);
+    assert.equal(pacer.allowance('api')?.remaining, 0);
     // No retry: each request went out once.
     assert.equal(sent.length, resolveRequests(live, 'country/FRA', EUR_2023).length);
 });

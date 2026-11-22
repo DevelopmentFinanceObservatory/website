@@ -8,12 +8,12 @@ import { readLive, type ReadTier } from '#lib/liveRead.ts';
 
 /**
  * Whether the page reads its DFO figures in the browser. Off, it shows the committed figures
- * and makes no request. The read is 11 analysis recipes and 6 reads of rows, 50 requests to
- * the gateway. Warm, it reached `stored` in 8.7 to 9.9 s against production with every read
- * under 2 s. A new answer for a sum by recipient and purpose took about 6 s, so a cold load
- * after a data release can pass readLive's 10 s limit for one read.
+ * and makes no request. The read is 11 analysis recipes and 6 reads of rows, two requests
+ * each, 34 requests to the gateway. Against production it reached `stored` in 3.1 to 5.2 s. A
+ * new answer for a sum by recipient and purpose took about 6 s, so a cold load after a data
+ * release can pass readLive's 10 s limit for one read.
  */
-export const READ_LIVE = false;
+export const READ_LIVE = true;
 
 export type LiveFigures = Figures & {
     /** `loading` until the read settles, while the figures are the committed ones */

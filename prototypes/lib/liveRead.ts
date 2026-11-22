@@ -12,9 +12,10 @@
 // DFO refreshes each spec on its own, so stored reads of two specs can come from releases a
 // refresh apart. The client is anonymous, since DFO serves these reads to DFO pages with no key.
 // The reads run through the page's pacer (./pacing.ts), which bounds the reads in flight and
-// reads the gateway's allowance, shared with the page's Search resolve calls. Recipes also run
-// in the analysis lane, two at a time (`ANALYSIS_CONCURRENCY`). A file the edge cache serves
-// does not reach the gateway.
+// reads the gateway's allowances. Every read here counts against the `datasets` allowance, 300 a
+// minute per address, apart from the `api` allowance the page's Search resolve calls share.
+// Recipes also run in the analysis lane, two at a time (`ANALYSIS_CONCURRENCY`). A file the edge
+// cache serves does not reach the gateway.
 // Pages own the React hook that calls this, and put the tier on their root as `data-read-tier`.
 import { DatasetRef, type Client, type Dataset, type recipe } from '@developmentfinance/client';
 import type { Row } from '@developmentfinance/client/types';
@@ -25,10 +26,12 @@ import { recordOf } from './record.ts';
 export { READ_CONCURRENCY };
 
 /**
- * How many analysis recipes run at once, matching the two threads of production's analysis
- * door (dfo-apis `DATASETS_ANALYSIS_MAX_CONCURRENCY`), which answers 503 to a third POST. A
- * stored answer takes a thread too. Measured on fragility-finance against production, four
- * recipes at once drew 7 503s and 3 failed reads a load; two drew none.
+ * How many analysis recipes run at once. Production answers a stored recipe without an analysis
+ * thread, so the bound covers a cold compute, when each recipe holds a thread while DFO computes
+ * its answer. Measured on fragility-finance against production, four at once saved nothing on a
+ * first load (3.8 to 4.4 s against 3.9 to 4.2 s) and about half a second on a repeat load (2.5
+ * to 2.7 s against 3.1 to 3.2 s). Two leaves analysis threads for other readers while a cold
+ * page computes.
  */
 export const ANALYSIS_CONCURRENCY = 2;
 
@@ -83,8 +86,9 @@ export type Derive<K extends string, T> = (
 ) => T;
 
 /**
- * Runs a recipe on the newest versions DFO stores of the datasets it starts from: one manifest
- * GET per dataset, no file, then the analysis POST and the result's manifest and file.
+ * Runs a recipe on the newest versions DFO stores of the datasets it starts from, in two
+ * requests: the analysis POST, whose answer carries the result's manifest, then the result's
+ * file by its digest.
  */
 const fetchStoredRecipe = (
     client: Fetcher,
