@@ -16,11 +16,17 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  *   {spec}/{cv}/file?format=...  selector  picks the current file, so never cached
  *   {spec}                       current   the spec's latest stored version, with
  *                                          its freshness, so cached briefly
+ *   derived/{ops}/{ocv}/files/{digest}
+ *                                file      a derived frame's file, which the
+ *                                          analysis runner stored, served as a
+ *                                          dataset file is
  *
- * A spec id starts `spec_` and a content version `cv_`, case-sensitive, as
- * dfo-apis names them and as the edge cache rule matches them (dfo-infra,
- * infra/stacks/edge/cloudflare_rules.tf). Every other datasets path, such as
- * operations/{id}, exports/{id}, {spec}/versions and {spec}/options, is
+ * A spec id starts `spec_` and its content version `cv_`; a derived frame's
+ * id starts `ops_` and its content version `ocv_`. Each is case-sensitive, as
+ * dfo-apis names them and as the edge cache rule
+ * matches them (dfo-infra, infra/stacks/edge/cloudflare_rules.tf). Every other
+ * datasets path, such as operations/{id}, exports/{id}, {spec}/versions,
+ * {spec}/options and a derived frame's manifest and file selector, is
  * forwarded as forward() does, with the upstream's own Cache-Control.
  *
  * dfo-apis answers a file with a 302 to a signed storage.googleapis.com URL.
@@ -47,7 +53,10 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  * stale) is relayed and exposed to pages when dfo-apis sends it.
  *
  * dfo-apis names the artifact's tier in `x-dfo-artifact-tier`, an internal
- * header the gateway reads and does not relay. A pinned file is kept a year at
+ * header the gateway reads and does not relay, on a file's 302. A derived
+ * file is kept as a working file is, whatever tier dfo-apis names, because a
+ * revocation cannot yet name the derived frames it reaches, so none is held
+ * longer than a working file. A pinned dataset file is kept a year at
  * the edge and an hour in the browser, which bounds how long a takedown takes
  * to reach a returning visitor. A working file, or one whose tier is unnamed,
  * is kept briefly, because a held version renews only when a download reaches
@@ -81,12 +90,21 @@ export const DELIVERY_DOORS = {
     current: 'definition',
 } as const satisfies Record<DatasetReadKind, string>;
 
-export type DeliveryDoor = (typeof DELIVERY_DOORS)[DatasetReadKind];
+/** dfo-apis's door name for a derived frame's file addressed by digest. */
+export const DERIVED_FILES_DOOR = 'derived_files';
 
-/** `contentVersion` is null for a current read, whose path names no version. */
-export type DatasetRead =
+export type DeliveryDoor = (typeof DELIVERY_DOORS)[DatasetReadKind] | typeof DERIVED_FILES_DOOR;
+
+/**
+ * A read route, the door dfo-apis logs it under, and the ids its path names:
+ * `specId` is a spec id, or a derived frame's `ops_` id; `contentVersion` is
+ * a `cv_` version, a derived frame's `ocv_` version, or null for a current read, whose path names no version; `digest` is set on a
+ * file read.
+ */
+export type DatasetRead = { door: DeliveryDoor; specId: string; digest?: string } & (
     | { kind: Exclude<DatasetReadKind, 'current'>; contentVersion: string }
-    | { kind: 'current'; contentVersion: null };
+    | { kind: 'current'; contentVersion: null }
+);
 
 export const STORAGE_ORIGIN = 'https://storage.googleapis.com';
 
@@ -101,30 +119,54 @@ const CURRENT_CACHE = 'public, max-age=60, s-maxage=60';
 const NO_STORE = 'no-store';
 
 const SPEC_PREFIX = 'spec_';
+const DERIVED_PREFIX = 'ops_';
 const CONTENT_VERSION_PREFIX = 'cv_';
+const DERIVED_VERSION_PREFIX = 'ocv_';
+
+// derived/{ops}/{ocv}/files/{digest}: a derived frame's file by digest, the
+// only derived path read here.
+const derivedRead = (segments: readonly string[]): DatasetRead | undefined => {
+    const [, specId, contentVersion, files, digest] = segments;
+
+    return segments.length === 5 &&
+        specId?.startsWith(DERIVED_PREFIX) &&
+        contentVersion?.startsWith(DERIVED_VERSION_PREFIX) &&
+        files === 'files' &&
+        digest
+        ? { kind: 'file', door: DERIVED_FILES_DOOR, specId, contentVersion, digest }
+        : undefined;
+};
 
 /** Which read route a datasets path's decoded segments name, if any. */
 export const datasetRead = (segments: readonly string[]): DatasetRead | undefined => {
-    const [spec, contentVersion, ...rest] = segments;
+    const [specId, contentVersion, ...rest] = segments;
 
-    if (spec?.startsWith(SPEC_PREFIX) && segments.length === 1) {
-        return { kind: 'current', contentVersion: null };
+    if (specId === 'derived') {
+        return derivedRead(segments);
     }
 
-    if (!spec?.startsWith(SPEC_PREFIX) || !contentVersion?.startsWith(CONTENT_VERSION_PREFIX)) {
+    if (!specId?.startsWith(SPEC_PREFIX)) {
+        return undefined;
+    }
+
+    if (segments.length === 1) {
+        return { kind: 'current', door: DELIVERY_DOORS.current, specId, contentVersion: null };
+    }
+
+    if (!contentVersion?.startsWith(CONTENT_VERSION_PREFIX)) {
         return undefined;
     }
 
     if (rest.length === 0) {
-        return { kind: 'manifest', contentVersion };
+        return { kind: 'manifest', door: DELIVERY_DOORS.manifest, specId, contentVersion };
     }
 
     if (rest.length === 1 && rest[0] === 'file') {
-        return { kind: 'selector', contentVersion };
+        return { kind: 'selector', door: DELIVERY_DOORS.selector, specId, contentVersion };
     }
 
     if (rest.length === 2 && rest[0] === 'files' && rest[1]) {
-        return { kind: 'file', contentVersion };
+        return { kind: 'file', door: DELIVERY_DOORS.file, specId, contentVersion, digest: rest[1] };
     }
 
     return undefined;
@@ -397,7 +439,7 @@ export type GatewayDeliveryEntry = {
     spec_id: string;
     // Null on a current read when dfo-apis named no version.
     content_version: string | null;
-    // The file's SHA-256 name, on a `files` line only.
+    // The file's SHA-256 name, on a file read's line only.
     digest?: string;
     // What forward() sent dfo-apis in x-dfo-caller, vouched by the principal.
     caller: string | null;
@@ -503,12 +545,12 @@ type DatasetsOptions = ForwardOptions & {
     storageBounds?: StorageBounds;
 };
 
-const logCorsRefused = (req: NextRequest, read: DatasetReadKind, origin: string): void => {
+const logCorsRefused = (req: NextRequest, door: DeliveryDoor, origin: string): void => {
     console.log(
         JSON.stringify({
             severity: 'INFO',
             message: 'gateway.cors_refused',
-            door: DELIVERY_DOORS[read],
+            door,
             method: req.method,
             path: new URL(req.url).pathname,
             origin_host: hostOf(origin),
@@ -537,7 +579,7 @@ export const forwardDatasets = async (
     const corsOrigin = isDfoOrigin(origin) ? origin : undefined;
 
     if (read && origin !== null && !corsOrigin && ['GET', 'OPTIONS'].includes(req.method)) {
-        logCorsRefused(req, read.kind, origin);
+        logCorsRefused(req, read.door, origin);
     }
 
     if (read && corsOrigin && req.method === 'OPTIONS' && isReadPreflight(req)) {
@@ -589,7 +631,12 @@ export const forwardDatasets = async (
 
     headers.delete(CONTENT_VERSION_HEADER);
 
-    const cacheControl = readCacheControl(read.kind, relayed.status, tier);
+    // A derived file is held as a working file is (see above); its line keeps the named tier.
+    const cacheControl = readCacheControl(
+        read.kind,
+        relayed.status,
+        read.door === DERIVED_FILES_DOOR ? null : tier,
+    );
 
     headers.set('Cache-Control', cacheControl);
     headers.set('Vary', 'Origin');
@@ -613,7 +660,6 @@ export const forwardDatasets = async (
         headers.set('Access-Control-Expose-Headers', exposed.join(', '));
     }
 
-    const [specId = '', , , digest] = segments;
     const identity = {
         ...sentCaller(req, options.target),
         surface: requestSurface(req.headers),
@@ -630,11 +676,11 @@ export const forwardDatasets = async (
         logDelivery({
             severity: failed ? 'ERROR' : 'INFO',
             message: 'gateway.delivery',
-            door: DELIVERY_DOORS[read.kind],
+            door: read.door,
             trace_id: traceId,
-            spec_id: specId,
+            spec_id: read.specId,
             content_version: contentVersion,
-            ...(read.kind === 'file' && digest ? { digest } : {}),
+            ...(read.digest ? { digest: read.digest } : {}),
             ...identity,
             served_by: 'gateway',
             status: relayed.status,
