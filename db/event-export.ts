@@ -506,8 +506,8 @@ export const EVENT_SETUP_WORST_MS =
     Math.max(CONNECTION_TIMEOUT_MS + STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS, 2 * BIGQUERY_CALL_MS);
 
 /**
- * Margin for the Job's work outside any bounded call: the Cloud SQL
- * connector's start, scratch files, digests and logs.
+ * Margin for the account export's work outside its bounded calls: its
+ * scratch files, digests and logs, and the run's report.
  */
 const UNBOUNDED_WORK_MS = 60_000;
 
@@ -610,9 +610,10 @@ const PAGE_SIZE = 5_000;
 /**
  * The event table over `pool`. Each query has a client-side bound: the day
  * counts the pool's `statement_timeout` plus `graceMs`, and a day's pages
- * together `readMs` plus `graceMs`. A client whose query runs past its
- * bound is still mid-query, so it is released with the error, which
- * destroys it.
+ * together `readMs` plus `graceMs`. A day's pages run in one read-only
+ * transaction whose `statement_timeout` stops each page on the server at
+ * the day's deadline. A client whose query runs past its bound is still
+ * mid-query, so it is released with the error, which destroys it.
  */
 export const pgEventSource = (
     pool: Pool,
@@ -658,9 +659,20 @@ export const pgEventSource = (
         const deadline = Date.now() + readMs;
         const client = await pool.connect();
         let failure: Error | undefined;
+        let committed = false;
 
         try {
+            // One read-only transaction, so each page's SET LOCAL ends with it
+            // and leaves the pooled connection's own statement_timeout alone.
+            await client.query('BEGIN READ ONLY');
+
             for (;;) {
+                // The server stops each page at the day's deadline, so a page
+                // the Job abandons below stops in Postgres too.
+                await client.query(
+                    `SET LOCAL statement_timeout = ${Math.max(1, Math.round(deadline - Date.now()))}`,
+                );
+
                 const { rows } = await callWithin(
                     client.query<SourceEvent>(READ_DAY_SQL, [
                         after.createdAt,
@@ -679,6 +691,8 @@ export const pgEventSource = (
 
                 // A short page is the day's last.
                 if (rows.length < pageSize) {
+                    await client.query('COMMIT');
+                    committed = true;
                     return;
                 }
 
@@ -688,7 +702,9 @@ export const pgEventSource = (
             failure = error instanceof Error ? error : new Error(String(error));
             throw error;
         } finally {
-            client.release(failure);
+            // A read left before its COMMIT, by a failure or a consumer that
+            // stopped, still holds its transaction, so its client is destroyed.
+            client.release(committed ? undefined : (failure ?? true));
         }
     },
 });

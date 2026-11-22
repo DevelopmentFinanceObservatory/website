@@ -1166,8 +1166,10 @@ test(
     async () => {
         const partitions = new Map<string, unknown[]>();
         const { warehouse, calls } = fakeWarehouse(partitions);
-        // Each client's queries by text, and what it was released with.
+        // Each client's queries by their first word, and what it was released with.
         const clients: { queries: string[]; released?: Error | 'reused' }[] = [];
+        // The statement_timeout each page's SET LOCAL gives the server.
+        const serverTimeouts: number[] = [];
         const pool = {
             options: {},
             connect: async () => {
@@ -1177,6 +1179,12 @@ test(
                 return {
                     query: (text: string, values?: unknown[]) => {
                         client.queries.push(text.split(/\s/, 1)[0]!);
+
+                        const timeout = /^SET LOCAL statement_timeout = (\d+)$/.exec(text);
+
+                        if (timeout) {
+                            serverTimeouts.push(Number(timeout[1]));
+                        }
 
                         if (text.includes('count(*)')) {
                             return Promise.resolve({
@@ -1225,11 +1233,17 @@ test(
 
         // The 50 ms deadline plus the 20 ms grace, with room for a slow machine.
         assert.ok(Date.now() - started < 1_000);
-        // The day counts' client, then each day's.
+        // The day counts' client, then each day's, whose page runs in a
+        // transaction with a server-side timeout within the day's deadline.
         assert.deepEqual(clients[0], { queries: ['SELECT'], released: 'reused' });
-        assert.deepEqual(clients[1]?.queries, ['SELECT']);
+        assert.deepEqual(clients[1]?.queries, ['BEGIN', 'SET', 'SELECT']);
         assert.ok(clients[1]?.released instanceof Error);
-        assert.deepEqual(clients[2], { queries: ['SELECT'], released: 'reused' });
+        assert.deepEqual(clients[2], {
+            queries: ['BEGIN', 'SET', 'SELECT', 'COMMIT'],
+            released: 'reused',
+        });
+        assert.equal(serverTimeouts.length, 2);
+        assert.ok(serverTimeouts.every((ms) => ms >= 1 && ms <= 50));
         assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-22']);
     },
 );
@@ -1631,8 +1645,32 @@ test('the export reader reads every row of each UTC day and no other table', asy
     assert.deepEqual(read, expected);
     // Days of 1, 3, 1 and 3 rows take 1, 2, 1 and 2 page queries, each the
     // SQL the export_rules digest covers.
-    assert.equal(pageQueries.length, 6);
-    assert.ok(pageQueries.every((text) => text === ROW_SHAPE.READ_DAY_SQL));
+    const pages = pageQueries.filter((text) => text === ROW_SHAPE.READ_DAY_SQL);
+
+    assert.equal(pages.length, 6);
+    // Each day's pages run in one transaction, each page after its own
+    // server-side statement_timeout.
+    assert.deepEqual(
+        pageQueries
+            .filter((text) => text !== ROW_SHAPE.READ_DAY_SQL)
+            .map((text) => text.split(' ', 2).join(' ')),
+        [
+            'BEGIN READ',
+            'SET LOCAL',
+            'COMMIT',
+            'BEGIN READ',
+            'SET LOCAL',
+            'SET LOCAL',
+            'COMMIT',
+            'BEGIN READ',
+            'SET LOCAL',
+            'COMMIT',
+            'BEGIN READ',
+            'SET LOCAL',
+            'SET LOCAL',
+            'COMMIT',
+        ],
+    );
     // The three rows that share 05:00 on 22 October span two pages.
     assert.deepEqual(ids, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual(

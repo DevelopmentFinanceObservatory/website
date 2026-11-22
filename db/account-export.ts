@@ -402,7 +402,12 @@ const messageOf = (error: unknown): string =>
  * snapshot, then `readConversations` and `conversation` loaded from it.
  * Each table is written to `scratchFile` and replaces its BigQuery table in
  * one load. A failed read fails its group's tables, which keep what they
- * held, and leaves the other group to run. A failed load fails its table
+ * held, and leaves the other group to run. The two reads are separate
+ * snapshots, so for one run `conversation` can name a `user_hash` that
+ * `account_organisation` lacks, or the reverse, as when an account is
+ * created or starts its deletion between them, and a join on `user_hash`
+ * can disagree until the next run. That is the cost of letting either
+ * group load when the other's read fails. A failed load fails its table
  * alone. Each failure is logged as it happens with what the table holds,
  * `kept` or `unknown` (FailedOutcome), and the run rejects at the
  * end with an AccountExportError that carries every failed table and its
