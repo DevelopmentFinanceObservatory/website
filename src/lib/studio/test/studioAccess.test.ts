@@ -100,8 +100,8 @@ test('canonicalStudioCall reads the query of a GET and the JSON body otherwise',
     assert.equal(canonicalStudioCall('POST', search, '{"message":"hi"}')?.conversationId, null);
 });
 
-// The harness reads a repeated query parameter's last value, an
-// `session_id` member as `conversation_id`, and parses JSON that
+// The harness reads a repeated query parameter's last value, an older
+// harness reads a `session_id` member as `conversation_id`, and it parses JSON that
 // JSON.parse refuses (`NaN`). Each pair names the conversation the proxy
 // checks first and the one the raw request would have named to the harness.
 test('studioAccess forwards only the conversation it checked', async () => {

@@ -54,6 +54,7 @@ import {
     type LegacyLocal,
 } from '@/lib/studio/composition';
 import {
+    approvalRevisions,
     attachStep,
     cardsToRead,
     carryOnTurn,
@@ -61,13 +62,13 @@ import {
     owedNewQuestion,
     readConversation,
     sendNewQuestion,
+    takeApproval,
     widgetFromRead,
-    type NewQuestionSkip,
+    withTurnApprovals,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
     approveReply,
-    approvedFromFrame,
     planFromFrame,
     refusedSwitch,
     stalePlan,
@@ -191,8 +192,7 @@ export type CardTarget = {
 // conversation to be free and enters the transcript when it is sent. A
 // clicked `apply_choice` chip waits the same way, under its label. A new
 // question a harness turn handed back carries that turn's index
-// (`fromNewQuestion`), which its prompt keeps, and `fromRead` when a state
-// read rather than this page's own stream handed it over.
+// (`fromNewQuestion`), which its prompt keeps.
 export type QueuedMessage = {
     id: string;
     text: string;
@@ -200,7 +200,6 @@ export type QueuedMessage = {
     seeds?: Seed[];
     chip?: ApplyChoiceSuggestion;
     fromNewQuestion?: number;
-    fromRead?: true;
 };
 
 export type ChatState = {
@@ -359,6 +358,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     useEffect(() => {
         messagesRef.current = state.messages;
     }, [state.messages]);
+    // The revisions of the approved plans the page holds, so a repeated
+    // plan.approved, or a state read's, attaches none again.
+    const approvalsRef = useRef(approvalRevisions(initial ? restoredMessages(initial) : []));
     // The cards as last rendered, for the state reads that draw the cards a
     // manifest names and the page lacks (drawCards).
     const widgetsRef = useRef<TurnWidget[]>([]);
@@ -476,21 +478,15 @@ export const useChat = (initial?: ChatSnapshot) => {
     const askedRef = useRef(new Set<number>());
     // A turn the harness ended because the user's change to its plan asked
     // something else. The text goes to the front of the queue and is sent as
-    // the next turn (metered, as typed) once the conversation is free and a
-    // state read says no tab has sent it yet (sendNewQuestion). `fromRead`
-    // marks a question a state read handed over, which another tab may also
-    // have read.
-    const askNewQuestion = useCallback((turnIndex: number, text: string, fromRead: boolean) => {
+    // the next turn (metered, as typed) once the conversation is free, as
+    // the turn that follows `turnIndex` (sendNewQuestion), so of two pages
+    // that send it the harness begins one turn.
+    const askNewQuestion = useCallback((turnIndex: number, text: string) => {
         if (askedRef.current.has(turnIndex)) {
             return;
         }
 
-        const queued: QueuedMessage = {
-            id: uuid(),
-            text,
-            fromNewQuestion: turnIndex,
-            ...(fromRead && { fromRead: true }),
-        };
+        const queued: QueuedMessage = { id: uuid(), text, fromNewQuestion: turnIndex };
 
         askedRef.current.add(turnIndex);
         queueRef.current.unshift(queued);
@@ -843,8 +839,16 @@ export const useChat = (initial?: ChatSnapshot) => {
                         // Comes first on the approve's stream, so the reply it
                         // writes into is the transcript's last message. The
                         // turn's Activity entry records the approval time,
-                        // which places the plan among its steps.
-                        const approved = approvedFromFrame(frame);
+                        // which places the plan among its steps. A resume and
+                        // an /interrupt retry open with the approvals the turn
+                        // already took, which are ignored by revision
+                        // (takeApproval).
+                        const approved = takeApproval(frame, approvalsRef.current);
+
+                        if (!approved) {
+                            break;
+                        }
+
                         const approvedAt = Date.now();
 
                         setState((prev) => ({
@@ -928,7 +932,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                             });
 
                             if (origin !== null) {
-                                askNewQuestion(origin, question, false);
+                                askNewQuestion(origin, question);
                             }
                         }
 
@@ -1203,71 +1207,38 @@ export const useChat = (initial?: ChatSnapshot) => {
         [],
     );
 
-    // A new question's send that ended without reaching the harness's turn
+    // A new question the harness refused because a later turn began first
     // (sendNewQuestion) takes its prompt and empty reply back off the
-    // transcript, with the turn's Activity entry. Another tab's turn that
-    // took it is then read in and carried on (reattach). One no read could
-    // vouch for is offered on the turn that asked it, for the user to send.
+    // transcript, with the turn's Activity entry, and the turns the page
+    // lacks are then read in and carried on (reattach).
     const reattachRef = useRef<() => void>(() => {});
-    const skipNewQuestion = useCallback(
-        (turn: number, turnIndex: number, text: string, skip: NewQuestionSkip) => {
-            if (skip.kind === 'unverified') {
-                askedRef.current.delete(turnIndex);
-            }
+    const dropMovedQuestion = useCallback((turn: number, turnIndex: number) => {
+        if (turnCount.current === turn) {
+            turnCount.current -= 1;
+        }
 
-            if (turnCount.current === turn) {
-                turnCount.current -= 1;
-            }
-
-            // Set at once, since reattach() reads it before the next render.
-            messagesRef.current = withoutUnsentQuestion(messagesRef.current, turnIndex);
-            setState((prev) => {
-                const messages = withoutUnsentQuestion(prev.messages, turnIndex);
-
-                return {
-                    ...prev,
-                    ...NO_LINE,
-                    thinking: false,
-                    messages:
-                        skip.kind === 'unverified'
-                            ? withFollowup(messages, turnIndex, text)
-                            : messages,
-                    activity: prev.activity.filter((entry) => entry.turn !== turn),
-                };
-            });
-
-            if (skip.kind === 'taken') {
-                reattachRef.current();
-            }
-        },
-        [],
-    );
+        // Set at once, since reattach() reads it before the next render.
+        messagesRef.current = withoutUnsentQuestion(messagesRef.current, turnIndex);
+        setState((prev) => ({
+            ...prev,
+            ...NO_LINE,
+            thinking: false,
+            messages: withoutUnsentQuestion(prev.messages, turnIndex),
+            activity: prev.activity.filter((entry) => entry.turn !== turn),
+        }));
+        reattachRef.current();
+    }, []);
 
     // `fromNewQuestion` is the harness turn whose new question this sends
-    // (askNewQuestion), and `fromRead` says a state read handed it over. The
-    // question is sent only while no tab has sent it (sendNewQuestion), and
-    // counts as sent once the harness admits its turn: a refused send, or
-    // one that never reached the harness, leaves it owed for a later read.
+    // (askNewQuestion). The request names that turn as the one it follows,
+    // and counts as sent once the harness admits its turn: a refused send,
+    // or one that never reached the harness, leaves it owed for a later
+    // read.
     const send = useCallback(
-        (
-            message: string,
-            card?: CardTarget,
-            seeds?: Seed[],
-            fromNewQuestion?: number,
-            fromRead?: boolean,
-        ) => {
+        (message: string, card?: CardTarget, seeds?: Seed[], fromNewQuestion?: number) => {
             const text = message.trim();
 
-            if (
-                !text ||
-                holdTurn({
-                    text,
-                    card,
-                    seeds,
-                    fromNewQuestion,
-                    ...(fromRead && { fromRead: true }),
-                })
-            ) {
+            if (!text || holdTurn({ text, card, seeds, fromNewQuestion })) {
                 return;
             }
 
@@ -1303,10 +1274,11 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             // A question handed over from search carries its seeds, the
             // datasets the user saw there, so the harness starts from them.
-            const run = (handlers: StreamHandlers, signal: AbortSignal) =>
+            const run = (handlers: StreamHandlers, signal: AbortSignal, afterTurn?: number) =>
                 runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
                     ...(componentRef && { component_ref: componentRef }),
                     ...(seeds && { seed_spec: seeds }),
+                    ...(afterTurn !== undefined && { after_turn: afterTurn }),
                 });
 
             stream(
@@ -1318,13 +1290,11 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                     const generation = generationRef.current;
                     let admitted = false;
-                    let taken = false;
+                    let moved = false;
 
                     return sendNewQuestion({
-                        conversationId: conversation,
                         turnIndex: fromNewQuestion,
-                        readRequired: !!fromRead,
-                        run: (busy) => run(busy, signal),
+                        send: (afterTurn, busy) => run(busy, signal, afterTurn),
                         handlers: {
                             ...handlers,
                             onTurnIndex: (index) => {
@@ -1338,15 +1308,15 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 setState((prev) => withLine(prev, BUSY_LINE));
                             }
                         },
-                        onSkip: (skip) => {
-                            taken = skip.kind === 'taken';
+                        onMoved: () => {
+                            moved = true;
 
                             if (generationRef.current === generation) {
-                                skipNewQuestion(turn, fromNewQuestion, text, skip);
+                                dropMovedQuestion(turn, fromNewQuestion);
                             }
                         },
                     }).finally(() => {
-                        if (!admitted && !taken) {
+                        if (!admitted && !moved) {
                             askedRef.current.delete(fromNewQuestion);
                         }
                     });
@@ -1354,7 +1324,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                 { metered: true },
             );
         },
-        [holdTurn, skipNewQuestion, startTurn, stream, untilFree],
+        [dropMovedQuestion, holdTurn, startTurn, stream, untilFree],
     );
 
     const unqueue = useCallback((id: string) => {
@@ -1707,7 +1677,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             if (next.chip) {
                 applyChoice(next.chip);
             } else {
-                send(next.text, next.card, next.seeds, next.fromNewQuestion, next.fromRead);
+                send(next.text, next.card, next.seeds, next.fromNewQuestion);
             }
         };
     }, [applyChoice, send]);
@@ -1816,8 +1786,33 @@ export const useChat = (initial?: ChatSnapshot) => {
             );
 
             turnCount.current += appended.length;
+
+            // The approvals of the turns the read names, the open one's
+            // included when the page holds it (reattach adds one it lacks).
+            const approvals = [
+                ...read.closed_since.map((turn) => [turn.turn_index, turn.approved] as const),
+                ...(read.turn ? [[read.turn.index, read.turn.approved] as const] : []),
+            ].filter(([, approved]) => approved?.length);
+            const heldApprovals = approvalsRef.current;
+            const approve = (messages: ChatMessage[]) => {
+                const seen = new Set(heldApprovals);
+
+                return approvals.reduce(
+                    (current, [index, approved]) =>
+                        withTurnApprovals(current, index, approved, seen),
+                    messages,
+                );
+            };
+
+            approvalsRef.current = new Set([
+                ...heldApprovals,
+                ...approvals.flatMap(([, approved]) =>
+                    (approved ?? []).flatMap((frame) => (frame.revision ? [frame.revision] : [])),
+                ),
+            ]);
             setState((prev) => {
-                const { messages } = mergeClosedTurns(prev.messages, read.closed_since);
+                const { messages: closed } = mergeClosedTurns(prev.messages, read.closed_since);
+                const messages = approve(closed);
 
                 return messages === prev.messages
                     ? prev
@@ -1850,7 +1845,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         messages: held ? withNewQuestion(messages, owed.text) : messages,
                     };
                 });
-                askNewQuestion(owed.turnIndex, owed.text, true);
+                askNewQuestion(owed.turnIndex, owed.text);
             }
 
             if (read.manifest) {
@@ -1930,9 +1925,16 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                             const turn = turnCount.current;
 
+                            // The turn's approvals ride on its reply, as the
+                            // stream would have put them.
                             setState((prev) => ({
                                 ...prev,
-                                messages: ensureTurn(prev.messages, step.turnIndex, prompt),
+                                messages: withTurnApprovals(
+                                    ensureTurn(prev.messages, step.turnIndex, prompt),
+                                    step.turnIndex,
+                                    read?.turn?.approved,
+                                    new Set(),
+                                ),
                                 activity: [
                                     ...prev.activity,
                                     { turn, prompt, startedAt: Date.now(), tools: [] },
@@ -1989,6 +1991,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         cardReadsRef.current.clear();
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
+        approvalsRef.current = new Set();
         messagesRef.current = [];
         widgetsRef.current = [];
         pendingInterruptRef.current = null;
@@ -2035,6 +2038,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             turnCount.current = saved.turnCount;
             // Set at once, since reattach() reads it before the next render.
             messagesRef.current = restoredMessages(saved);
+            approvalsRef.current = approvalRevisions(messagesRef.current);
             widgetsRef.current = saved.widgets;
             setState({
                 messages: messagesRef.current,

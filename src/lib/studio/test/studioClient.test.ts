@@ -304,13 +304,13 @@ test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', a
 test('runApplyChoice: a chip posts the harness fixture request, with no message', async (t) => {
     const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
     // The harness's wire fixtures (`services/harness/tests/wire_fixtures/studio`
-    // in dfo-ai), copied. The request names the conversation by the
-    // `session_id` alias the harness also accepts.
+    // in dfo-ai), copied.
     const read = (name: string): unknown =>
         JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
-    const { session_id: conversation, ...request } = read(
-        'request-13-turn-apply-choice.json',
-    ) as Record<string, unknown> & { session_id: string };
+    const request = read('request-13-turn-apply-choice.json') as Record<string, unknown> & {
+        conversation_id: string;
+    };
+    const conversation = request.conversation_id;
     const { items } = read('event-15-suggestions-apply-choice.json') as {
         items: ApplyChoiceSuggestion[];
     };
@@ -324,7 +324,7 @@ test('runApplyChoice: a chip posts the harness fixture request, with no message'
     assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
     const body = JSON.parse(init.body as string) as { apply_choice: Record<string, unknown> };
 
-    assert.deepEqual(body, { ...request, conversation_id: conversation });
+    assert.deepEqual(body, request);
     assert.equal(body.apply_choice.turn, chip.turn);
     assert.equal(body.apply_choice.spec_id, chip.spec_id);
 });

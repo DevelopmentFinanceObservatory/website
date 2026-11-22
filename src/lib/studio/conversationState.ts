@@ -6,6 +6,7 @@ import { STOPPED_NOTE } from './chatLine.ts';
 import {
     abortableSleep,
     busyRetryAfter,
+    isTurnMoved,
     readState,
     runResume,
     type ComponentRead,
@@ -13,6 +14,7 @@ import {
     type StreamRefusal,
 } from './studioClient.ts';
 import { factsOf } from './liveCards.ts';
+import { approvedFromFrame, type ApprovedPlan } from './plan.ts';
 import { describedBy, payloadDescription } from './payload.ts';
 import { ensureTurn, NEW_QUESTION_NOTE, turnReplyAt } from './transcript.ts';
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
@@ -21,6 +23,7 @@ import type {
     CompositionBlock,
     CompositionManifest,
     ConversationRead,
+    PlanApproved,
     Provenance,
     StudioFrame,
 } from './wire.ts';
@@ -184,102 +187,55 @@ export const owedNewQuestion = (
 const DEFAULT_WAIT_SECONDS = 2;
 
 /**
- * Whether harness turn `turnIndex`'s new question is still for this page to
- * send, by a state read taken just before the send: `send` while that turn is
- * the latest and closed, `wait` while it still runs (its stream has not let
- * go), and `taken` once a later turn exists, which another tab or an earlier
- * send of this page opened, or the turn paused again. `unknown` for a read
- * that names no such turn.
- */
-export const newQuestionState = (
-    read: ConversationRead,
-    turnIndex: number,
-): 'send' | 'wait' | 'taken' | 'unknown' => {
-    const latest = read.turn;
-
-    if (!latest || latest.index < turnIndex) {
-        return 'unknown';
-    }
-
-    if (latest.index > turnIndex || latest.status === 'paused') {
-        return 'taken';
-    }
-
-    return latest.status === 'running' ? 'wait' : 'send';
-};
-
-/** How a new question's send ended without a request: another tab or turn
- *  took it (`taken`), or no read could tell and the send needed one
- *  (`unverified`). */
-export type NewQuestionSkip = { kind: 'taken' } | { kind: 'unverified' };
-
-/**
- * Send harness turn `turnIndex`'s new question with `run`, once a state read
- * says it is still owed (newQuestionState), and read again before every
- * retry: a request the harness answers busy waits the time it names, and a
- * turn still open waits DEFAULT_WAIT_SECONDS. Two tabs that owe the same
- * question therefore send it once: the second finds the first's turn. A read
- * that fails sends anyway when `readRequired` is false, the case of a
- * question this page's own stream was handed, which no other page has seen
- * without a read; otherwise the send is skipped as `unverified`, as it is
- * for a read that names no such turn. `onSkip`
- * hears a send that ends without a request reaching the harness's turn.
+ * Send harness turn `turnIndex`'s new question with `send`, which names that
+ * turn as the one the request follows (`after_turn`). A request the harness
+ * answers busy waits the time it names and is sent again. One it refuses
+ * `turn_moved` (isTurnMoved) found a later turn begun, by another page that
+ * sent the question or by this page's own earlier send, so it is not sent
+ * again and `onMoved` hears it. Two pages that owe the same question
+ * therefore begin one turn.
  */
 export const sendNewQuestion = async ({
-    conversationId,
     turnIndex,
-    readRequired,
-    run,
+    send,
     handlers,
     signal,
     onWait,
-    onSkip,
-    read = readConversation,
+    onMoved,
     sleep = abortableSleep,
 }: {
-    conversationId: string;
     turnIndex: number;
-    readRequired: boolean;
-    run: (handlers: StreamHandlers) => Promise<void>;
+    send: (afterTurn: number, handlers: StreamHandlers) => Promise<void>;
     handlers: StreamHandlers;
     signal: AbortSignal;
     onWait?: (seconds: number) => void;
-    onSkip: (skip: NewQuestionSkip) => void;
-    read?: (
-        conversationId: string,
-        since: number,
-        signal?: AbortSignal,
-    ) => Promise<ConversationRead | null>;
+    onMoved: () => void;
     sleep?: typeof abortableSleep;
 }): Promise<void> => {
     for (;;) {
-        const answer = await read(conversationId, turnIndex - 1, signal);
-        const known = answer ? newQuestionState(answer, turnIndex) : 'unknown';
-        const state = known === 'unknown' && !readRequired ? 'send' : known;
+        // Set by the refusal handler during `send`.
+        let wait = null as number | null;
+        let moved = false;
 
-        if (state === 'unknown') {
-            onSkip({ kind: 'unverified' });
+        await send(turnIndex, {
+            ...handlers,
+            onRefusal: (refusal) => {
+                if (isTurnMoved(refusal)) {
+                    moved = true;
+
+                    return true;
+                }
+
+                wait = busyRetryAfter(refusal);
+
+                return wait !== null || (handlers.onRefusal?.(refusal) ?? false);
+            },
+        });
+
+        if (moved) {
+            onMoved();
 
             return;
-        }
-
-        if (state === 'taken') {
-            onSkip({ kind: 'taken' });
-
-            return;
-        }
-
-        let wait = state === 'wait' ? DEFAULT_WAIT_SECONDS : (null as number | null);
-
-        if (state === 'send') {
-            await run({
-                ...handlers,
-                onRefusal: (refusal) => {
-                    wait = busyRetryAfter(refusal);
-
-                    return wait !== null || (handlers.onRefusal?.(refusal) ?? false);
-                },
-            });
         }
 
         if (wait === null) {
@@ -289,6 +245,72 @@ export const sendNewQuestion = async ({
         onWait?.(wait);
         await sleep(wait * 1000, signal);
     }
+};
+
+/** The revisions of the approved plans the transcript holds, which a
+ *  repeated `plan.approved` is told apart by. */
+export const approvalRevisions = (messages: readonly ChatMessage[]): Set<string> =>
+    new Set(
+        messages.flatMap((message) =>
+            message.role === 'bot' && message.plan?.revision ? [message.plan.revision] : [],
+        ),
+    );
+
+/**
+ * The plan a `plan.approved` frame brings, or null for one whose revision
+ * the page already took (`held`, which then holds it): a resume, and an
+ * `/interrupt` retry whose approval the run already took, open with the
+ * frames of the plans the turn approved. A frame without a revision is
+ * always taken.
+ */
+export const takeApproval = (frame: PlanApproved, held: Set<string>): ApprovedPlan | null => {
+    const revision = frame.revision;
+
+    if (revision) {
+        if (held.has(revision)) {
+            return null;
+        }
+
+        held.add(revision);
+    }
+
+    return approvedFromFrame(frame);
+};
+
+/**
+ * The transcript with harness turn `turnIndex`'s approvals from a state read
+ * (`turn.approved`, `closed_since[].approved`): the latest one the page does
+ * not hold (`held`) rides on the turn's reply, as the stream's frame would
+ * have put it. Every revision then counts as held. Unchanged when the page
+ * holds them all, or holds no reply of that turn.
+ */
+export const withTurnApprovals = (
+    messages: ChatMessage[],
+    turnIndex: number,
+    approved: readonly PlanApproved[] | null | undefined,
+    held: Set<string>,
+): ChatMessage[] => {
+    const at = turnReplyAt(messages, turnIndex);
+    const reply = messages[at];
+
+    if (reply?.role !== 'bot' || !approved?.length) {
+        return messages;
+    }
+
+    const latest = approved.at(-1)!;
+    const fresh = !latest.revision || !held.has(latest.revision);
+
+    for (const frame of approved) {
+        if (frame.revision) {
+            held.add(frame.revision);
+        }
+    }
+
+    return fresh
+        ? messages.map((message, other) =>
+              other === at ? { ...reply, plan: approvedFromFrame(latest) } : message,
+          )
+        : messages;
 };
 
 /**

@@ -41,8 +41,9 @@ export type StudioCall = {
  * body, which is forwarded as re-serialised here: the raw text never reaches
  * the harness, so a body the harness's JSON parser would read differently
  * (a repeated member, `NaN`) cannot name a conversation the proxy did not
- * check. The body loses `session_id`, which the harness reads as an alias of
- * `conversation_id`, so only `conversation_id` names the conversation.
+ * check. The body loses `session_id`, which a harness older than the one this
+ * page needs read as an alias of `conversation_id`, so only `conversation_id`
+ * names the conversation whichever harness answers.
  */
 export const canonicalStudioCall = (
     method: string,

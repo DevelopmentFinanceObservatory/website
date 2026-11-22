@@ -245,7 +245,9 @@ export const runTurn = (
     message: string,
     handlers: StreamHandlers,
     signal?: AbortSignal,
-    extras?: Partial<Pick<TurnRequest, 'component_ref' | 'auto_add' | 'surface' | 'seed_spec'>>,
+    extras?: Partial<
+        Pick<TurnRequest, 'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn'>
+    >,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -334,6 +336,11 @@ export const busyRetryAfter = (refusal: StreamRefusal): number | null =>
     refusal.status === 409 && refusal.error?.error === 'transient_unavailable'
         ? Math.max(1, refusal.error.retry_after_seconds ?? 1)
         : null;
+
+/** Whether a turn request naming `after_turn` was refused because a later
+ *  turn began first (409 `edit_conflict`, `constraint_id: "turn_moved"`). */
+export const isTurnMoved = (refusal: StreamRefusal): boolean =>
+    refusal.status === 409 && refusal.error?.constraint_id === 'turn_moved';
 
 /** Resolves after `ms`, or rejects with an AbortError when `signal` aborts. */
 export const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> =>

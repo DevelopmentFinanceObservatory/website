@@ -4,26 +4,27 @@
  * holds is resumed.
  */
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { takeManifest } from '../composition.ts';
 import {
+    approvalRevisions,
     attachStep,
     cardsToRead,
     carryOnTurn,
     mergeClosedTurns,
-    newQuestionState,
     owedNewQuestion,
     readConversation,
     sendNewQuestion,
+    takeApproval,
     widgetFromRead,
+    withTurnApprovals,
     type AttachStep,
-    type NewQuestionSkip,
 } from '../conversationState.ts';
-import { planFromFrame } from '../plan.ts';
+import { approvedFromFrame, planFromFrame, withApprovedPlan } from '../plan.ts';
 import {
     ensureTurn,
     forkRecap,
@@ -36,11 +37,17 @@ import {
     withInherited,
     withoutUnsentQuestion,
 } from '../transcript.ts';
-import { readComponent, type StreamHandlers, type StreamRefusal } from '../studioClient.ts';
+import {
+    readComponent,
+    runTurn,
+    type StreamHandlers,
+    type StreamRefusal,
+} from '../studioClient.ts';
 import type {
     ClosedTurn,
     CompositionManifest,
     ConversationRead,
+    PlanApproved,
     PlanProposed,
     StudioFrame,
     TurnState,
@@ -398,50 +405,6 @@ test('an owed question sent again replaces the send the harness never admitted',
     assert.equal(withoutUnsentQuestion(shown, 3), shown);
 });
 
-// A run of sendNewQuestion against a harness whose latest turn the reads
-// name in order, and whose turn requests answer `posts` in order.
-const sendRun = async ({
-    reads,
-    posts = [],
-    readRequired = true,
-}: {
-    reads: (ConversationRead | null)[];
-    posts?: (StreamRefusal | 'admitted')[];
-    readRequired?: boolean;
-}) => {
-    const calls: string[] = [];
-    const skips: NewQuestionSkip[] = [];
-
-    await sendNewQuestion({
-        conversationId: 'conv',
-        turnIndex: 3,
-        readRequired,
-        run: async (handlers) => {
-            calls.push('post');
-            const answer = posts.shift();
-
-            if (answer === 'admitted') {
-                handlers.onTurnIndex?.(4);
-            } else if (answer) {
-                handlers.onRefusal?.(answer);
-            }
-        },
-        handlers: { onFrame: () => {} },
-        signal: new AbortController().signal,
-        onSkip: (skip) => skips.push(skip),
-        read: async (conversationId, since) => {
-            calls.push(`read ${conversationId} ${since}`);
-
-            return reads.shift() ?? null;
-        },
-        sleep: async (ms) => {
-            calls.push(`sleep ${ms}`);
-        },
-    });
-
-    return { calls, skips };
-};
-
 const BUSY: StreamRefusal = {
     status: 409,
     detail: 'busy',
@@ -453,55 +416,85 @@ const BUSY: StreamRefusal = {
     },
 };
 
-test('two tabs owing one new question send it once', async () => {
-    const owing = readOf({ turn: turnState({ index: 3, status: 'done' }) });
-    const takenByA = readOf({ turn: turnState({ index: 4, status: 'running', lease_live: true }) });
+const MOVED: StreamRefusal = {
+    status: 409,
+    detail: "the request follows turn 3, and the conversation's latest turn is 4",
+    error: {
+        error: 'edit_conflict',
+        retry: 'refresh_then_retry',
+        constraint_id: 'turn_moved',
+        pointer: '/after_turn',
+        detail: "the request follows turn 3, and the conversation's latest turn is 4",
+    },
+};
 
-    // Tab A reads, finds it owed, and its turn is admitted.
-    const a = await sendRun({ reads: [owing], posts: ['admitted'] });
+// A page sending turn 3's new question through runTurn against a harness
+// that answers each request with `answers` in order: a refusal, or an
+// admitted turn 4.
+const sendRun = async (t: TestContext, answers: (StreamRefusal | 'admitted')[]) => {
+    const bodies: Record<string, unknown>[] = [];
+    const calls: string[] = [];
+    const refused: StreamRefusal[] = [];
 
-    assert.deepEqual(a.calls, ['read conv 2', 'post']);
+    t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(init.body as string) as Record<string, unknown>);
+        calls.push('post');
 
-    // Tab B read before A's turn was admitted, and meets A's lease. Before
-    // trying again it reads, finds A's turn, and sends nothing more.
-    const b = await sendRun({ reads: [owing, takenByA], posts: [BUSY] });
+        const answer = answers.shift();
 
-    assert.deepEqual(b.calls, ['read conv 2', 'post', 'sleep 1000', 'read conv 2']);
-    assert.deepEqual(b.skips, [{ kind: 'taken' }]);
+        return answer === 'admitted'
+            ? new Response('data: {"event":"done","seq":1,"trace_id":"t"}\n\n', {
+                  headers: { 'x-dfo-turn-index': '4' },
+              })
+            : Response.json(answer?.error, { status: answer?.status ?? 500 });
+    });
 
-    // A tab reading after A's turn opened sends nothing.
-    const c = await sendRun({ reads: [takenByA] });
+    await sendNewQuestion({
+        turnIndex: 3,
+        send: (afterTurn, handlers) =>
+            runTurn('conv', 'ODA to Ghana', handlers, undefined, { after_turn: afterTurn }),
+        handlers: {
+            onFrame: () => {},
+            onRefusal: (refusal) => {
+                refused.push(refusal);
 
-    assert.deepEqual(c.calls, ['read conv 2']);
-});
+                return true;
+            },
+        },
+        signal: new AbortController().signal,
+        onMoved: () => calls.push('moved'),
+        sleep: async (ms) => {
+            calls.push(`sleep ${ms}`);
+        },
+    });
 
-test("a new question waits out its turn's open stream, and an unreadable state", async () => {
-    const open = readOf({ turn: turnState({ index: 3, status: 'running', lease_live: true }) });
-    const owing = readOf({ turn: turnState({ index: 3, status: 'done' }) });
-    const waited = await sendRun({ reads: [open, owing], posts: ['admitted'] });
+    return { bodies, calls, refused };
+};
 
-    assert.deepEqual(waited.calls, ['read conv 2', 'sleep 2000', 'read conv 2', 'post']);
+test('two pages owing one new question begin one turn', async (t) => {
+    // Page A's request follows turn 3 and is admitted.
+    const a = await sendRun(t, ['admitted']);
 
-    // A question a state read handed over needs a read to vouch for it.
-    const unread = await sendRun({ reads: [null] });
+    assert.deepEqual(a.calls, ['post']);
+    assert.equal(a.bodies[0]?.['after_turn'], 3);
 
-    assert.deepEqual(unread.calls, ['read conv 2']);
-    assert.deepEqual(unread.skips, [{ kind: 'unverified' }]);
+    // Page B meets A's stream, waits, and the retry finds A's turn begun:
+    // it is not sent again, and no refusal reaches the stream's handlers,
+    // so the meter's give-back does not mark it.
+    const b = await sendRun(t, [BUSY, MOVED]);
 
-    // One this page's own stream was handed, which no other page has seen
-    // without a read, is sent.
-    const own = await sendRun({ reads: [null], posts: ['admitted'], readRequired: false });
-
-    assert.deepEqual(own.calls, ['read conv 2', 'post']);
-    assert.deepEqual(own.skips, []);
-
-    // The turn paused again went on elsewhere; a read naming no such turn
-    // cannot vouch for it.
-    assert.equal(
-        newQuestionState(readOf({ turn: turnState({ index: 3, status: 'paused' }) }), 3),
-        'taken',
+    assert.deepEqual(b.calls, ['post', 'sleep 1000', 'post', 'moved']);
+    assert.deepEqual(
+        b.bodies.map((body) => body['after_turn']),
+        [3, 3],
     );
-    assert.equal(newQuestionState(readOf({}), 3), 'unknown');
+    assert.deepEqual(b.refused, []);
+
+    // Any other refusal goes to the stream as before.
+    const c = await sendRun(t, [{ status: 429, detail: 'limit', error: null }]);
+
+    assert.deepEqual(c.calls, ['post']);
+    assert.equal(c.refused[0]?.status, 429);
 });
 
 // A transcript holding harness turns `turns`, each a keyed prompt and reply.
@@ -795,4 +788,72 @@ test("a state read draws the card another tab made, and a held card's newer revi
         cardsToRead(manifestOf([[CARD, 2]]), new Map([[CARD, 2]]), new Set([CARD])),
         [],
     );
+});
+
+// A plan.approved frame of revision `revision`, titled after it.
+const approvedOf = (revision: string): PlanApproved => ({
+    event: 'plan.approved',
+    seq: 1,
+    plan_version_id: `pv-${revision}`,
+    version: 1,
+    revision,
+    title: `plan ${revision}`,
+    steps: [],
+    choices: [],
+});
+
+test("a resume's repeated approvals leave the plan the page holds", () => {
+    // The page holds turn 2's reply with plan B. The state read before the
+    // resume names the turn's approvals, A then B, and the resume opens with
+    // their frames.
+    const messages: ChatMessage[] = [
+        ...keyed([1]),
+        { role: 'user', text: 'question 2', harnessTurn: 2 },
+        { role: 'bot', text: '', plan: approvedFromFrame(approvedOf('rev-b')) },
+    ];
+    const held = approvalRevisions(messages);
+    let shown = withTurnApprovals(messages, 2, [approvedOf('rev-a'), approvedOf('rev-b')], held);
+
+    assert.equal(shown, messages);
+
+    for (const frame of [approvedOf('rev-a'), approvedOf('rev-b')]) {
+        const plan = takeApproval(frame, held);
+
+        if (plan) {
+            shown = withApprovedPlan(shown, plan);
+        }
+    }
+
+    assert.equal(shown, messages);
+
+    // A plan the page has not seen is taken once, and its repeat ignored.
+    const later = approvedOf('rev-c');
+
+    assert.equal(takeApproval(later, held)?.revision, 'rev-c');
+    assert.equal(takeApproval(later, held), null);
+});
+
+test('a state read restores the approved plan of a turn whose stream the page lost', () => {
+    const messages: ChatMessage[] = [
+        ...keyed([1]),
+        { role: 'user', text: 'question 2', harnessTurn: 2 },
+        { role: 'bot', text: '' },
+    ];
+    const held = approvalRevisions(messages);
+    const restored = withTurnApprovals(
+        messages,
+        2,
+        [approvedOf('rev-a'), approvedOf('rev-b')],
+        held,
+    );
+    const reply = restored.at(-1);
+
+    assert.ok(reply?.role === 'bot');
+    assert.equal(reply.plan?.revision, 'rev-b');
+    assert.deepEqual([...held], ['rev-a', 'rev-b']);
+
+    // Read again, or after the stream's own frame, nothing changes; nor for
+    // a turn the page does not hold.
+    assert.equal(withTurnApprovals(restored, 2, [approvedOf('rev-b')], held), restored);
+    assert.equal(withTurnApprovals(messages, 5, [approvedOf('rev-z')], new Set()), messages);
 });
