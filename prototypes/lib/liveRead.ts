@@ -12,16 +12,28 @@
 // DFO refreshes each spec on its own, so stored reads of two specs can come from releases a
 // refresh apart. The client is anonymous, since DFO serves these reads to DFO pages with no key.
 // The reads run through the page's pacer (./pacing.ts), which bounds the reads in flight and
-// reads the gateway's allowance, shared with the page's Search resolve calls. A file the edge
-// cache serves does not reach the gateway.
+// reads the gateway's allowance, shared with the page's Search resolve calls. Recipes also run
+// in the analysis lane, two at a time (`ANALYSIS_CONCURRENCY`). A file the edge cache serves
+// does not reach the gateway.
 // Pages own the React hook that calls this, and put the tier on their root as `data-read-tier`.
 import { DatasetRef, type Client, type Dataset, type recipe } from '@developmentfinance/client';
 import type { Row } from '@developmentfinance/client/types';
 
-import { liveClient, pacer, READ_CONCURRENCY } from './pacing.ts';
+import { createLane, type Lane, liveClient, pacer, READ_CONCURRENCY } from './pacing.ts';
 import { recordOf } from './record.ts';
 
 export { READ_CONCURRENCY };
+
+/**
+ * How many analysis recipes run at once, matching the two threads of production's analysis
+ * door (dfo-apis `DATASETS_ANALYSIS_MAX_CONCURRENCY`), which answers 503 to a third POST. A
+ * stored answer takes a thread too. Measured on fragility-finance against production, four
+ * recipes at once drew 7 503s and 3 failed reads a load; two drew none.
+ */
+export const ANALYSIS_CONCURRENCY = 2;
+
+/** The lane every page's recipes run in, inside the pacer's lane. */
+const analysisLane = createLane(ANALYSIS_CONCURRENCY);
 
 /** How long each stored read may take before the page falls back. One waits on a build when
  *  DFO stores no version it can serve. */
@@ -81,27 +93,32 @@ const fetchStoredRecipe = (
 ): Promise<Dataset> => client.fetch(source, { ...options, latest: 'stored' });
 
 /**
- * `fn` of each item, through the page's pacer, in the items' order. After the first rejection no
- * other item starts, and the result rejects with it.
+ * `fn` of each item, through the page's pacer, in the items' order, each first waiting for a
+ * slot in `lane` when one is given. The result rejects with the first rejection. After it, no
+ * other item starts, unless `finish` is true, when every item still runs.
  */
-const mapPaced = async <I, O>(items: readonly I[], fn: (item: I) => Promise<O>): Promise<O[]> => {
+const mapPaced = async <I, O>(
+    items: readonly I[],
+    fn: (item: I) => Promise<O>,
+    { lane, finish = false }: { lane?: Lane; finish?: boolean } = {},
+): Promise<O[]> => {
     let failed = false;
+    const paced = (item: I) =>
+        pacer.run(async () => {
+            if (failed && !finish) {
+                throw new Error('An earlier read failed.');
+            }
+
+            try {
+                return await fn(item);
+            } catch (error) {
+                failed = true;
+                throw error;
+            }
+        });
 
     return Promise.all(
-        items.map((item) =>
-            pacer.run(async () => {
-                if (failed) {
-                    throw new Error('An earlier read failed.');
-                }
-
-                try {
-                    return await fn(item);
-                } catch (error) {
-                    failed = true;
-                    throw error;
-                }
-            }),
-        ),
+        items.map((item) => (lane === undefined ? paced(item) : lane.run(() => paced(item)))),
     );
 };
 
@@ -112,6 +129,7 @@ const read = async <K extends string, T>(
     derive: Derive<K, T>,
     tier: 'stored' | 'pinned',
     options: CallOptions,
+    finish = false,
 ): Promise<LiveRead<K, T>> => {
     const readOne = async (key: K) => {
         const source = sources[key];
@@ -126,9 +144,13 @@ const read = async <K extends string, T>(
         return { data, rows: await data.toRows() };
     };
     // Recipes go first, so a recipe that cannot be read stops the page before any ref is read.
+    // With `finish`, the other recipes still run once one fails, so DFO stores their answers.
     const recipes = keys.filter((key) => 'recipe' in sources[key]);
     const refs = keys.filter((key) => !('recipe' in sources[key]));
-    const done = [...(await mapPaced(recipes, readOne)), ...(await mapPaced(refs, readOne))];
+    const done = [
+        ...(await mapPaced(recipes, readOne, { lane: analysisLane, finish })),
+        ...(await mapPaced(refs, readOne)),
+    ];
     const byKey = new Map([...recipes, ...refs].map((key, index) => [key, done[index]!]));
     const datasets = recordOf(keys, (key) => byKey.get(key)!.data);
 
@@ -151,7 +173,9 @@ const read = async <K extends string, T>(
  * Fetches the newest stored data for each of `sources`, through the page's pacer, and runs
  * `derive` on the rows. When a stored read or `derive` fails, it returns `fallback.value` as the
  * `committed` tier or, when `fallback.tier` is `pinned`, reads every ref's pinned version and
- * derives from those rows. The stored read's failure goes to `console.warn`. A dataset's `freshness` says how new a stored
+ * derives from those rows. With the `committed` fallback, the recipes still waiting or running
+ * go on in the background, so DFO stores their answers for the next reader; with `pinned`, they
+ * stop. The stored read's failure goes to `console.warn`. A dataset's `freshness` says how new a stored
  * read is. `client` stands in for the anonymous one on the production API, as a test does.
  *
  * @throws A ref the client cannot read, or a recipe with a `pinned` fallback, before any
@@ -185,21 +209,33 @@ export const readLive = async <K extends string, T>(
 
         return { ref: DatasetRef.fromJSON(source.ref) };
     });
-    // Stops the stored reads still running once one fails, so they leave the connection to the
-    // pinned reads.
+    // A pinned fallback stops the stored reads still running once one fails, so they leave the
+    // connection to the pinned reads. A committed fallback sends no other request, so the page's
+    // recipes run on in the background: each answer DFO computes is stored, and the next reader
+    // gets it at once. Their rows change nothing on the page.
+    const finish = fallback.tier === 'committed';
     const stored = new AbortController();
     const storedSignal = signal ? AbortSignal.any([signal, stored.signal]) : stored.signal;
 
     try {
-        return await read(client, keys, parsed, derive, 'stored', {
-            signal: storedSignal,
-            timeout,
-        });
+        return await read(
+            client,
+            keys,
+            parsed,
+            derive,
+            'stored',
+            { signal: storedSignal, timeout },
+            finish,
+        );
     } catch (error) {
         if (signal?.aborted) {
             throw error;
         }
-        stored.abort();
+
+        if (!finish) {
+            stored.abort();
+        }
+
         console.warn(
             `The newest stored data failed to load, timed out, or gave rows the page refused, so the page shows the ${fallback.tier === 'committed' ? 'committed figures' : 'pinned versions'}.`,
             error,

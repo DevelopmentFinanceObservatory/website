@@ -13,9 +13,9 @@ import { readFileSync } from 'node:fs';
 import { Client } from '@developmentfinance/client';
 
 import type { Context, Groups } from './types.ts';
-import { figuresFromRows, recipes, type LiveInputs } from '../_lib/live.ts';
+import { figuresFromRows, sources, type LiveInputs } from '../_lib/live.ts';
 
-import { READ_CONCURRENCY, readLive } from '#lib/liveRead.ts';
+import { ANALYSIS_CONCURRENCY, READ_CONCURRENCY, readLive } from '#lib/liveRead.ts';
 
 const json = <T,>(name: string): T =>
     JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), 'utf8')) as T;
@@ -27,14 +27,8 @@ const committed = {
     groups: json<{ data: Groups }>('groups.json').data,
 };
 const timeout = Number(process.argv[2] ?? 120) * 1000;
-const chains = recipes(
-    refs,
-    live,
-    new Map(committed.contexts.map((context) => [`country/${context.iso3}`, context.tier])),
-);
-const sources = Object.fromEntries(
-    Object.entries(chains).map(([key, chain]) => [key, { recipe: chain }]),
-);
+const page = sources(refs, live);
+const recipes = Object.values(page).filter((source) => 'recipe' in source).length;
 let failed = false;
 
 for (const pass of ['first', 'second']) {
@@ -50,7 +44,7 @@ for (const pass of ['first', 'second']) {
         },
     });
     const start = performance.now();
-    const read = await readLive(sources, (rows) => figuresFromRows(rows, committed, live), {
+    const read = await readLive(page, (rows) => figuresFromRows(rows, committed, live), {
         fallback: { tier: 'committed', value: committed },
         client,
         timeout,
@@ -60,8 +54,9 @@ for (const pass of ['first', 'second']) {
 
     console.log(
         `${pass} pass: tier ${read.tier}, ${seconds.toFixed(1)} s, ${requests.length} requests ` +
-            `(${posts} analysis POSTs) for ${Object.keys(sources).length} recipes, ` +
-            `${READ_CONCURRENCY} at a time, ${client.toString()}`,
+            `(${posts} analysis POSTs) for ${recipes} recipes and ` +
+            `${Object.keys(page).length - recipes} reads of rows, ${READ_CONCURRENCY} at a time ` +
+            `and ${ANALYSIS_CONCURRENCY} recipes at a time, ${client.toString()}`,
     );
 
     if (read.tier !== 'stored') {

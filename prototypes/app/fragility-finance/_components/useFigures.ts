@@ -8,8 +8,10 @@ import { readLive, type ReadTier } from '#lib/liveRead.ts';
 
 /**
  * Whether the page reads its DFO figures in the browser. Off, it shows the committed figures
- * and makes no request. The read is 30 analysis recipes, two of them filtered per CRS read,
- * which take 15 to 25 seconds each on dev, past readLive's limit for one read.
+ * and makes no request. The read is 11 analysis recipes and 6 reads of rows, 50 requests to
+ * the gateway. Warm, it reached `stored` in 8.7 to 9.9 s against production with every read
+ * under 2 s. A new answer for a sum by recipient and purpose took about 6 s, so a cold load
+ * after a data release can pass readLive's 10 s limit for one read.
  */
 export const READ_LIVE = false;
 
@@ -19,24 +21,19 @@ export type LiveFigures = Figures & {
 };
 
 /**
- * Runs fetch.py's recipes on DFO's newest stored data and derives the page's figures, each
+ * Reads the page's sources on DFO's newest stored data and derives the page's figures, each
  * place's tier taken from profiles.json. The refs, live.json and the derivation load with the
  * read, so a page with `READ_LIVE` off carries none of refs.json's 160 kB.
  */
 const readFigures = async (committed: Figures, signal: AbortSignal) => {
-    const [{ default: refs }, { default: live }, { figuresFromRows, recipes }] = await Promise.all([
+    const [{ default: refs }, { default: live }, { figuresFromRows, sources }] = await Promise.all([
         import('../_data/refs.json'),
         import('../_data/live.json'),
         import('../_lib/live.ts'),
     ]);
-    const chains = recipes(
-        refs.data,
-        live.data,
-        new Map(committed.contexts.map((context) => [`country/${context.iso3}`, context.tier])),
-    );
 
     return readLive(
-        Object.fromEntries(Object.entries(chains).map(([key, chain]) => [key, { recipe: chain }])),
+        sources(refs.data, live.data),
         (rows) => figuresFromRows(rows, committed, live.data),
         { fallback: { tier: 'committed', value: committed }, signal },
     );
@@ -45,7 +42,7 @@ const readFigures = async (committed: Figures, signal: AbortSignal) => {
 /**
  * The page's figures: the committed ones on the server render and until the read settles,
  * then, with `READ_LIVE` on, the figures DFO computes on its newest stored data for the
- * recipes fetch.py runs. When a read fails, takes too long, or gives rows `figuresFromRows`
+ * figures fetch.py has it compute. When a read fails, takes too long, or gives rows `figuresFromRows`
  * refuses, the committed figures stay, with the tier `committed`. The read runs once per mount.
  */
 export const useFigures = (committed: Figures): LiveFigures => {

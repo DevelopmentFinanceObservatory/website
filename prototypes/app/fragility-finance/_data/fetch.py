@@ -27,8 +27,9 @@ the other two. The CRS reads hold 16 recipients each, and DFO computes on one re
 each figure takes one call per read, and the step joins the disjoint results. The step keeps
 the small arithmetic: development, climate "both" as the total less adaptation and
 mitigation, and the change joined to each provider. The page's browser read
-(`_lib/live.ts`) runs the same recipes on DFO's newest stored data, with the labels, providers
-and read groups the step writes to `live.json`.
+(`_lib/live.ts`) computes the same figures on DFO's newest stored data from fewer, larger
+recipes and the OOF and DAC1 rows, with the providers and read groups the step writes to
+`live.json`.
 
 Every read is pinned, and `refs.json` beside this file keeps each read's ref and provenance.
 The step runs in one of three modes:
@@ -49,8 +50,9 @@ Checks known values, failing loudly when one differs, then writes `profiles.json
 `groups.json`, with the six largest providers of ODA in 2024 to all 62 contexts and to each
 tier, and `live.json`. All money is in current US dollars. Beside `refs.json`, it writes
 `live-fixture.json`, which holds each recipe's tree and the rows DFO computed for it.
-`_lib/live.test.mts` checks against it that `_lib/live.ts` builds the same trees and derives
-the committed figures from those rows.
+`_lib/live.test.mts` checks against it that `_lib/live.ts` builds the same climate trees, and
+against `live-sources-fixture.json.gz` (written by `live-sources.mts`) that the page's own reads
+at the pinned versions derive the committed figures.
 
 `fragility-2026.tsv` is the OECD's data file behind its fragility chart, linked from the
 OECD's multidimensional fragility dashboard
@@ -505,7 +507,8 @@ def figures(
     tiers: dict[str, str],
 ) -> dict[str, Recipe]:
     """The recipes DFO computes, by a key naming the read and the figure, such as
-    `aid-1/humanitarian`. `_lib/live.ts`'s `recipes` builds the same ones."""
+    `aid-1/humanitarian`. `_lib/live.ts`'s `sources` builds the same climate recipes and
+    computes the other figures from fewer, larger ones."""
     recipe = dfo.analysis.recipe
     found: dict[str, Recipe] = {}
 

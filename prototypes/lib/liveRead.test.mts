@@ -6,7 +6,7 @@ import { DfoTimeoutError } from '@developmentfinance/client/errors';
 
 import { recipe } from '@developmentfinance/client';
 
-import { READ_CONCURRENCY, readLive, STORED_TIMEOUT_MS } from './liveRead.ts';
+import { ANALYSIS_CONCURRENCY, READ_CONCURRENCY, readLive, STORED_TIMEOUT_MS } from './liveRead.ts';
 import { pacer } from './pacing.ts';
 
 const SPEC_ID = `spec_${'a'.repeat(32)}`;
@@ -256,6 +256,76 @@ test('reads at most READ_CONCURRENCY at once, and starts none after one fails', 
         assert.equal(read.tier, 'committed');
         assert.equal(most, READ_CONCURRENCY);
         assert.ok(started < READ_CONCURRENCY * 2, `${started} reads started`);
+    });
+});
+
+/** `count` recipes on the test ref, keyed `c0`, `c1` and on. */
+const recipes = (count: number) =>
+    Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+            `c${index}`,
+            { recipe: recipe(DatasetRef.fromJSON(ref)).aggregate({ by: 'destination' }) },
+        ]),
+    );
+
+/** A stand-in client that counts the recipes in flight and answers each after a tick, failing
+ *  the calls `fails` names by their order. */
+const countingClient = (fails: readonly number[] = []) => {
+    const seen = { started: 0, finished: 0, most: 0, running: 0 };
+    const client = {
+        fetch: async () => {
+            seen.started += 1;
+            const call = seen.started;
+            seen.running += 1;
+            seen.most = Math.max(seen.most, seen.running);
+            await new Promise((resolve) => setTimeout(resolve, 2));
+            seen.running -= 1;
+            seen.finished += 1;
+
+            if (fails.includes(call)) {
+                throw new Error('analysis refused');
+            }
+
+            return dataset(2);
+        },
+    };
+
+    return { seen, client };
+};
+
+test('runs at most ANALYSIS_CONCURRENCY recipes at once, below the pacer bound', async () => {
+    const { seen, client } = countingClient();
+
+    const read = await readLive(recipes(READ_CONCURRENCY * 2), valueOf, {
+        fallback: { tier: 'committed', value: [] },
+        // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+        client,
+    });
+
+    assert.equal(read.tier, 'stored');
+    assert.ok(ANALYSIS_CONCURRENCY < READ_CONCURRENCY);
+    assert.equal(seen.most, ANALYSIS_CONCURRENCY);
+    assert.equal(seen.finished, READ_CONCURRENCY * 2);
+});
+
+test('after a recipe fails, the page shows the committed figures and the other recipes run to the end', async () => {
+    await quietly(async () => {
+        const count = READ_CONCURRENCY * 2;
+        const { seen, client } = countingClient([1]);
+
+        const read = await readLive(recipes(count), valueOf, {
+            fallback: { tier: 'committed', value: [7] },
+            // @ts-expect-error the stand-in client implements only `fetch`, and returns a dataset stub
+            client,
+        });
+
+        assert.equal(read.tier, 'committed');
+        assert.ok(seen.finished < count, `${seen.finished} recipes had finished`);
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        assert.equal(seen.finished, count);
+        assert.equal(seen.most, ANALYSIS_CONCURRENCY);
     });
 });
 
