@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 
 import type { BigQuery, TableField } from '@google-cloud/bigquery';
@@ -20,9 +21,12 @@ import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './
  * account counted there, keyed by `user_hash`, the digest the event export
  * writes for the account's events, with its organisation and no creation
  * day. All three views leave out accounts being deleted. `conversation` holds
- * one row per saved conversation of such an account: its id, its `agent_session_id`, the
- * user's `user_hash` and its creation time, and no title or content. No table holds an
- * email address or a user id.
+ * one row per saved conversation of such an account: the SHA-256 digests of its id
+ * and of its agent session id, the user's `user_hash` and its creation time, and no title
+ * or content. The agent session id is a bearer credential for the agent, and the
+ * conversation id can equal it, so neither leaves raw. A query joins Langfuse sessions
+ * with `to_hex(sha256(session_id))`. No table holds an email address, a user id, or a
+ * session id.
  */
 
 /** One `account_daily` row. */
@@ -92,8 +96,10 @@ export type AccountOrganisationSource = {
 
 /** One `conversation` row. */
 export type ConversationExportRow = {
-    id: string;
-    agent_session_id: string | null;
+    // sha256Hex of the conversation id
+    id_sha256: string;
+    // sha256Hex of the agent session id, null before the conversation's first turn
+    agent_session_sha256: string | null;
     // exportDigest of the user id under EXPORT_ID_HMAC_KEY, the events' `user_hash`
     user_hash: string;
     // UTC, 2026-10-20T09:30:00.123456Z
@@ -102,17 +108,19 @@ export type ConversationExportRow = {
 
 export const CONVERSATION_SCHEMA: TableField[] = [
     {
-        name: 'id',
+        name: 'id_sha256',
         type: 'STRING',
         mode: 'REQUIRED',
-        description: "The conversation's id, the `id` of the Studio conversation",
+        description:
+            "Lower-case hex SHA-256 of the conversation's id, the `id` of the Studio conversation",
     },
     {
-        name: 'agent_session_id',
+        name: 'agent_session_sha256',
         type: 'STRING',
         description:
-            "The agent's session id for the conversation, NULL before its first turn. " +
-            'Joins the agent traces',
+            "Lower-case hex SHA-256 of the agent's session id for the conversation, NULL " +
+            'before its first turn. Equals `to_hex(sha256(session_id))` of the Langfuse ' +
+            'session, so it joins the agent traces',
     },
     {
         name: 'user_hash',
@@ -236,16 +244,20 @@ export const accountOrganisationRow = (
     organisation,
 });
 
+const sha256Hex = (text: string): string => createHash('sha256').update(text).digest('hex');
+
 /**
- * The `conversation` row for one saved conversation. The user id becomes
- * exportDigest under `hmacKey`, as in accountOrganisationRow.
+ * The `conversation` row for one saved conversation. The conversation id and
+ * the agent session id become unkeyed SHA-256 digests, so no raw id reaches
+ * BigQuery and the session digest joins Langfuse's session id. The user id
+ * becomes exportDigest under `hmacKey`, as in accountOrganisationRow.
  */
 export const conversationRow = (
     { id, agentSessionId, userId, createdAt }: ConversationSource,
     hmacKey: string,
 ): ConversationExportRow => ({
-    id,
-    agent_session_id: agentSessionId,
+    id_sha256: sha256Hex(id),
+    agent_session_sha256: agentSessionId === null ? null : sha256Hex(agentSessionId),
     user_hash: exportDigest(userId, hmacKey),
     created_at: createdAt,
 });
@@ -279,12 +291,24 @@ export const bigQueryAccountTable =
         });
     };
 
+/** What a run that failed to load some tables throws. */
+export class AccountExportError extends AggregateError {
+    readonly failedTables: AccountTable[];
+
+    constructor(errors: Error[], failedTables: AccountTable[]) {
+        super(errors, `account export: ${errors.map((error) => error.message).join('; ')}`);
+        this.name = 'AccountExportError';
+        this.failedTables = failedTables;
+    }
+}
+
 /**
  * One account export run. For `account_daily`, then `account_organisation`,
  * then `conversation`, writes every row to `scratchFile` and replaces the table with it,
  * so a failed load leaves that table as it was. Each table loads on its own: a
- * failed table does not stop the next, and the run rejects at the end naming
- * every failed table. `account_daily` holds a row for every day from the first
+ * failed table does not stop the next, and the run rejects at the end with an
+ * AccountExportError that carries every failed table in `failedTables` and
+ * every error in `errors`. `account_daily` holds a row for every day from the first
  * account's through yesterday's while `webmail_domain` holds any domain,
  * so a read with no rows means one of two things. While `webmail_domain`
  * is empty, `account_daily` and `account_organisation` fail with their
@@ -322,11 +346,13 @@ export const runAccountExport = async ({
         ],
         ['conversation', conversations.map((source) => conversationRow(source, hmacKey)), false],
     ];
-    const failures: string[] = [];
+    const failedTables: AccountTable[] = [];
+    const errors: Error[] = [];
 
     for (const [table, tableRows, kept] of tables) {
         if (kept) {
-            failures.push(`${table}: read no rows, webmail_domain is empty, table kept`);
+            failedTables.push(table);
+            errors.push(new Error(`${table}: read no rows, webmail_domain is empty, table kept`));
             continue;
         }
 
@@ -338,13 +364,19 @@ export const runAccountExport = async ({
             await replace(table, scratchFile);
             log(`${table}: ${tableRows.length} rows loaded`);
         } catch (error) {
-            failures.push(`${table}: ${error instanceof Error ? error.message : String(error)}`);
+            failedTables.push(table);
+            errors.push(
+                new Error(
+                    `${table}: ${error instanceof Error ? error.message : String(error)}`,
+                    { cause: error },
+                ),
+            );
         } finally {
             await fs.rm(scratchFile, { force: true });
         }
     }
 
-    if (failures.length > 0) {
-        throw new Error(`account export: ${failures.join('; ')}`);
+    if (errors.length > 0) {
+        throw new AccountExportError(errors, failedTables);
     }
 };

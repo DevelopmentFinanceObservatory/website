@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,7 @@ import {
     ACCOUNT_ORGANISATION_SCHEMA,
     ACCOUNT_SCHEMA,
     ACCOUNT_TABLES,
+    AccountExportError,
     type AccountOrganisationRow,
     CONVERSATION_SCHEMA,
     type ConversationExportRow,
@@ -82,6 +83,8 @@ const capture = () => {
 
     return { loaded, replace, rows };
 };
+
+const sha256Hex = (text: string): string => createHash('sha256').update(text).digest('hex');
 
 const scratchFile = () =>
     path.join(
@@ -382,23 +385,26 @@ test('the export reader reads each conversation of an account not being deleted,
     });
 
     assert.deepEqual(
-        (rows('conversation') as ConversationExportRow[]).map(({ id, user_hash }) => [
-            id,
-            user_hash,
-        ]),
+        (rows('conversation') as ConversationExportRow[]).map(
+            ({ id_sha256, agent_session_sha256, user_hash }) => [
+                id_sha256,
+                agent_session_sha256,
+                user_hash,
+            ],
+        ),
         [
-            ['c-1', eventUserHash('u-1')],
-            ['c-2', eventUserHash('u-1')],
+            [sha256Hex('c-1'), sha256Hex('session-1'), eventUserHash('u-1')],
+            [sha256Hex('c-2'), null, eventUserHash('u-1')],
         ],
     );
 
     const text = loaded.map((load) => load.text).join('');
 
-    assert.doesNotMatch(text, /u-1|u-gone|private title|secret|c-3/);
+    assert.doesNotMatch(text, /u-1|u-gone|private title|secret|c-3|c-1|c-2|session-1/);
     await assert.rejects(readerPool.query('select 1 from conversation'), /permission denied/);
 });
 
-test('account_daily holds no rows while webmail_domain is empty, and the export fails after loading conversation', async (t) => {
+test('account_daily holds no rows while webmail_domain is empty, and the export fails naming both account tables after loading conversation', async (t) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
 
@@ -431,7 +437,12 @@ test('account_daily holds no rows while webmail_domain is empty, and the export 
             scratchFile: scratchFile(),
             log: () => {},
         }),
-        /webmail_domain is empty/,
+        (error) => {
+            assert.ok(error instanceof AccountExportError);
+            assert.deepEqual(error.failedTables, ['account_daily', 'account_organisation']);
+            assert.equal(error.errors.length, 2);
+            return true;
+        },
     );
     assert.deepEqual(replaced, ['conversation']);
 });
@@ -595,14 +606,14 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
     ]);
     assert.deepEqual(rows('conversation'), [
         {
-            id: 'c-1',
-            agent_session_id: 'session-1',
+            id_sha256: sha256Hex('c-1'),
+            agent_session_sha256: sha256Hex('session-1'),
             user_hash: eventUserHash('user-1')!,
             created_at: '2026-10-20T09:30:00.123456Z',
         },
         {
-            id: 'c-2',
-            agent_session_id: null,
+            id_sha256: sha256Hex('c-2'),
+            agent_session_sha256: null,
             user_hash: eventUserHash('user-2')!,
             created_at: '2026-10-21T00:00:00.000000Z',
         },
@@ -633,30 +644,6 @@ test('runAccountExport empties every table on an empty read', async () => {
     ]);
 });
 
-test('runAccountExport keeps the account tables with webmail_domain empty, and still loads conversation', async () => {
-    const { loaded, replace } = capture();
-
-    await assert.rejects(
-        runAccountExport({
-            read: async () => ({
-                rows: [],
-                organisations: [],
-                conversations: CONVERSATIONS,
-                webmailDomains: false,
-            }),
-            replace,
-            hmacKey: HMAC_KEY,
-            scratchFile: scratchFile(),
-            log: () => {},
-        }),
-        /account_daily: .*webmail_domain is empty.*account_organisation: .*webmail_domain is empty/,
-    );
-    assert.deepEqual(
-        loaded.map(({ table }) => table),
-        ['conversation'],
-    );
-});
-
 test('runAccountExport loads the later tables after a failed load, then rejects naming each failure', async () => {
     const { loaded, replace } = capture();
     const failing = async (table: AccountTable, file: string) => {
@@ -680,7 +667,12 @@ test('runAccountExport loads the later tables after a failed load, then rejects 
             scratchFile: scratchFile(),
             log: () => {},
         }),
-        /account_daily: load boom/,
+        (error) => {
+            assert.ok(error instanceof AccountExportError);
+            assert.deepEqual(error.failedTables, ['account_daily']);
+            assert.equal((error.errors[0] as Error).cause instanceof Error, true);
+            return true;
+        },
     );
     assert.deepEqual(
         loaded.map(({ table }) => table),
