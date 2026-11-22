@@ -24,17 +24,21 @@ const eslintConfig = defineConfig([
     "prototypes/node_modules/**",
   ]),
   // The export Job reaches Postgres and BigQuery only through db/bounded.ts,
-  // whose clients bound every call in time.
+  // whose clients bound every call in time. It still imports the Cloud SQL
+  // connector's setup from db/connection.ts, but none of its pool builders.
   {
     files: ["db/event-export.ts", "db/account-export.ts", "db/export-events.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          paths: ["pg", "@google-cloud/bigquery"].map((name) => ({
-            name,
-            message: "Use the bounded clients in db/bounded.ts.",
-          })),
+          paths: [
+            ...["pg", "@google-cloud/bigquery"].map((name) => ({ name })),
+            ...["./connection", "./connection.ts"].map((name) => ({
+              name,
+              importNames: ["buildRuntimePool", "buildCounterPool", "buildMigratorPool"],
+            })),
+          ].map((path) => ({ ...path, message: "Use the bounded clients in db/bounded.ts." })),
         },
       ],
     },

@@ -615,11 +615,12 @@ const REPLACED: Load = { outcome: 'replaced', late: null };
 /**
  * An in-memory warehouse. Each partition is the parsed lines of its last
  * load, and a day is stale while any of its rows carries an `export_rules`
- * other than the run's. A load of a day in `failLoad` fails, its partition kept.
+ * other than the run's. A load of a day in `failLoad` fails, its partition
+ * kept, and a load of a day in `throwLoad` rejects.
  */
 const fakeWarehouse = (
     partitions: Map<string, unknown[]>,
-    { failLoad = [] }: { failLoad?: string[] } = {},
+    { failLoad = [], throwLoad = [] }: { failLoad?: string[]; throwLoad?: string[] } = {},
 ) => {
     const calls: string[] = [];
     const warehouse: Warehouse = {
@@ -641,6 +642,10 @@ const fakeWarehouse = (
             };
         },
         async replaceDay(day, file) {
+            if (throwLoad.includes(day)) {
+                throw new Error('load client failed');
+            }
+
             if (failLoad.includes(day)) {
                 return { outcome: 'kept', error: new Error('load job failed') };
             }
@@ -1043,6 +1048,28 @@ test('runExport loads the days after a failed one, then names every failed day',
     assert.equal(partitions.get('2026-10-22'), kept);
     assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY, RULES)]);
     await assert.rejects(fs.access(scratchFile));
+});
+
+test('runExport fails a day whose load rejects as unknown and loads the next day', async () => {
+    const { warehouse, calls } = fakeWarehouse(new Map(), { throwLoad: ['2026-10-22'] });
+    const logged: string[] = [];
+
+    await assert.rejects(
+        runExport({
+            source: fakeSource({
+                '2026-10-22': [[sourceEvent({ id: 1, createdAt: '2026-10-22T08:00:00.000000Z' })]],
+                '2026-10-23': [[sourceEvent({ id: 2, createdAt: '2026-10-23T08:00:00.000000Z' })]],
+            }),
+            warehouse,
+            hmacKey: KEY,
+            today: '2026-10-23',
+            scratchFile: scratch(),
+            log: (line) => logged.push(line),
+        }),
+    );
+
+    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
+    assert.ok(logged.some((line) => line.startsWith('2026-10-22: failed, partition unknown')));
 });
 
 test('runExport reloads the days holding rows under other rules, and retries a failed one alone', async () => {

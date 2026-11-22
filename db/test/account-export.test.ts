@@ -586,37 +586,54 @@ test('runAccountExport empties every table on an empty read', async () => {
     ]);
 });
 
-test('runAccountExport loads the later tables after a failed load, then rejects naming each failure', async () => {
-    const { loaded, replace } = capture();
-    const failing = async (table: AccountTable, file: string): Promise<Load> =>
-        table === 'account_daily'
-            ? { outcome: 'kept', error: new Error('load boom') }
-            : replace(table, file);
+test('runAccountExport loads the later tables after a failed load, then rejects naming each failure', async (t) => {
+    const cases: [string, () => Promise<Load>, 'kept' | 'unknown'][] = [
+        [
+            'a load that returns its table kept',
+            async () => ({ outcome: 'kept', error: new Error('load boom') }),
+            'kept',
+        ],
+        // Against loadWithin's contract, so nothing confirms what the table holds.
+        [
+            'a load that rejects',
+            async () => {
+                throw new Error('load boom');
+            },
+            'unknown',
+        ],
+    ];
 
-    await assert.rejects(
-        runAccountExport({
-            readAccounts: async () => ({
-                rows: ROWS,
-                organisations: ORGANISATIONS,
-                webmailDomains: true,
-            }),
-            readConversations: async () => CONVERSATIONS,
-            replace: failing,
-            hmacKey: HMAC_KEY,
-            scratchFile: scratchFile(),
-            log: () => {},
-        }),
-        (error) => {
-            assert.ok(error instanceof AccountExportError);
-            assert.deepEqual(error.failedTables, [{ table: 'account_daily', outcome: 'kept' }]);
-            assert.equal((error.errors[0] as Error).cause instanceof Error, true);
-            return true;
-        },
-    );
-    assert.deepEqual(
-        loaded.map(({ table }) => table),
-        ['account_organisation', 'conversation'],
-    );
+    for (const [label, fail, outcome] of cases) {
+        await t.test(label, async () => {
+            const { loaded, replace } = capture();
+
+            await assert.rejects(
+                runAccountExport({
+                    readAccounts: async () => ({
+                        rows: ROWS,
+                        organisations: ORGANISATIONS,
+                        webmailDomains: true,
+                    }),
+                    readConversations: async () => CONVERSATIONS,
+                    replace: (table, file) =>
+                        table === 'account_daily' ? fail() : replace(table, file),
+                    hmacKey: HMAC_KEY,
+                    scratchFile: scratchFile(),
+                    log: () => {},
+                }),
+                (error) => {
+                    assert.ok(error instanceof AccountExportError);
+                    assert.deepEqual(error.failedTables, [{ table: 'account_daily', outcome }]);
+                    assert.equal((error.errors[0] as Error).cause instanceof Error, true);
+                    return true;
+                },
+            );
+            assert.deepEqual(
+                loaded.map(({ table }) => table),
+                ['account_organisation', 'conversation'],
+            );
+        });
+    }
 });
 
 test('runAccountExport loads one read group when the other read fails', async (t) => {

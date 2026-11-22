@@ -2,7 +2,14 @@ import fs from 'node:fs/promises';
 
 import { exportDigest } from '../src/lib/proxy/account.ts';
 
-import type { ExportBigQuery, ExportDb, FailedLoad, Load, TableField } from './bounded.ts';
+import {
+    type ExportBigQuery,
+    type ExportDb,
+    type FailedLoad,
+    type Load,
+    settleLoad,
+    type TableField,
+} from './bounded.ts';
 import { type JobProgress, jobProgress } from './event-export.ts';
 
 /**
@@ -300,7 +307,8 @@ const messageOf = (error: unknown): string =>
  * can disagree until the next run. That is the cost of letting either
  * group load when the other's read fails. A failed load fails its table
  * alone. Each failure is logged as it happens with what the table holds,
- * `kept` or `unknown`, as the load returned it, and the run rejects at the
+ * `kept` or `unknown`, as the load returned it, or `unknown` for a load
+ * that rejects (settleLoad), and the run rejects at the
  * end with an AccountExportError that carries every failed table and its
  * outcome in `failedTables` and every error in `errors`. `account_daily`
  * holds a row for every day from the first account's through yesterday's
@@ -366,7 +374,7 @@ export const runAccountExport = async ({
         let loaded: Load;
 
         try {
-            loaded = await replace(table, scratchFile);
+            loaded = await settleLoad(() => replace(table, scratchFile));
         } finally {
             progress.loading.delete(table);
         }

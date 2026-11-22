@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { Writable } from 'node:stream';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { BigQuery, Table } from '@google-cloud/bigquery';
@@ -31,8 +32,15 @@ const reject = async () => Promise.reject(new Error('boom'));
 const refuse = async () => Promise.reject(Object.assign(new Error('Access Denied'), { code: 403 }));
 
 type Fake = {
-    /** The upload and create call: a rejection is a client error before the job. */
+    /**
+     * BigQuery's answer to the upload once its body has ended: a rejection
+     * is a client error before the job.
+     */
     upload?: () => Promise<unknown>;
+    /** The upload takes no bytes, as over a stalled connection. */
+    stall?: boolean;
+    /** The file the load sends, FILE unless given. */
+    file?: string;
     /** The client's wait for the created job. */
     promise?: () => Promise<unknown>;
     cancel?: () => Promise<unknown>;
@@ -44,10 +52,13 @@ type Fake = {
 
 /**
  * A table whose load runs as `fake` says, the calls it gets (`load`,
- * `cancel`, `state`), and the job ids it was given and looked up.
+ * `abort` of its upload, `cancel`, `state`), and the job ids it was given
+ * and looked up. Its upload stream emits `job` and `complete` as the
+ * client's does.
  */
 const fakeTable = ({
     upload = async () => undefined,
+    stall = false,
     promise = never,
     cancel = async () => [{}],
     states = [RUNNING],
@@ -88,11 +99,38 @@ const fakeTable = ({
                 };
             },
         },
-        createLoadJob: async (_file: string, metadata: { jobId?: string }) => {
+        createWriteStream: (metadata: { jobId?: string }) => {
             calls.push('load');
             jobIds.created = metadata.jobId;
-            await upload();
-            return [{ promise }];
+
+            const stream: Writable = new Writable({
+                write: (_chunk, _encoding, done) => {
+                    if (!stall) {
+                        done();
+                    }
+                },
+                final: () => {
+                    void (async () => {
+                        try {
+                            await upload();
+                            stream.emit('job', {});
+                            await promise();
+                            stream.emit('complete', {});
+                        } catch (error) {
+                            stream.destroy(error as Error);
+                        }
+                    })();
+                },
+                destroy: (error, done) => {
+                    if (error === null) {
+                        calls.push('abort');
+                    }
+
+                    done(error);
+                },
+            });
+
+            return stream;
         },
     } as unknown as Table;
 
@@ -108,9 +146,17 @@ const count = (calls: string[], call: string) => calls.filter((made) => made ===
 
 // A file the loads can send. A file that cannot be read sends nothing.
 const FILE = path.join(os.tmpdir(), `bounded-test-${randomBytes(4).toString('hex')}.ndjson`);
+// A file larger than a stalled upload's buffers, so it is never read to its end.
+const LARGE_FILE = `${FILE}.large`;
 
-test.before(() => fs.writeFile(FILE, '{}\n'));
-test.after(() => fs.rm(FILE, { force: true }));
+test.before(async () => {
+    await fs.writeFile(FILE, '{}\n');
+    await fs.writeFile(LARGE_FILE, '{}\n'.repeat(400_000));
+});
+test.after(async () => {
+    await fs.rm(FILE, { force: true });
+    await fs.rm(LARGE_FILE, { force: true });
+});
 
 test(
     'loadWithin resolves a load BigQuery confirms DONE without an error as replaced',
@@ -240,13 +286,30 @@ test(
                     assert.ok(count(calls, 'state') > 1);
                 },
             ],
+            [
+                'an upload stalled past the load bound before its file was read to its end',
+                { stall: true, file: LARGE_FILE, states: [NOT_FOUND] },
+                'kept',
+                (calls) => assert.deepEqual(calls.slice(0, 3), ['load', 'abort', 'cancel']),
+            ],
+            [
+                'an upload stalled past the load bound after its body ended',
+                { stall: true, states: [NOT_FOUND] },
+                'unknown',
+                (calls) => assert.deepEqual(calls.slice(0, 3), ['load', 'abort', 'cancel']),
+            ],
         ];
 
         for (const [label, fake, outcome, checkCalls] of cases) {
             await t.test(label, async () => {
                 const { table, calls } = fakeTable(fake);
                 const started = performance.now();
-                const load = await loadWithin({ table, file: FILE, metadata: {}, ...BOUNDS });
+                const load = await loadWithin({
+                    table,
+                    file: fake.file ?? FILE,
+                    metadata: {},
+                    ...BOUNDS,
+                });
                 const ms = performance.now() - started;
 
                 assert.equal(load.outcome, outcome);

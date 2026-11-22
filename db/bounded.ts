@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -249,7 +250,13 @@ const finalState = async (
  * - A load with no confirmed final state at `timeoutMs`, whether its client
  *   is still waiting or failed earlier, is cancelled, the cancel waited for
  *   at most `cancelTimeoutMs`, and the job's state read for at most
- *   `confirmTimeoutMs`, so no load is left running uncancelled.
+ *   `confirmTimeoutMs`, so no load is left running uncancelled. An upload
+ *   BigQuery has not answered by `timeoutMs` is first aborted. The job's
+ *   insert and its file go in one request, which BigQuery acts on only once
+ *   it has the whole body, so an upload aborted before the file was read to
+ *   its end, and the request's body ended, created no job: `kept`. An
+ *   upload aborted later may have reached BigQuery whole, so with no job
+ *   confirmed it stays `unknown`.
  *
  * One call thus takes at most `timeoutMs + cancelTimeoutMs +
  * confirmTimeoutMs`, LOAD_SLOT_MS by default.
@@ -284,24 +291,50 @@ export const loadWithin = async ({
         const jobId = `website_export_${randomUUID()}`;
         const job = table.bigQuery.job(jobId, { location: table.location });
         const deadline = Date.now() + timeoutMs;
+        // BigQuery answered the insert with a job.
         let inserted = false;
+        // The file was read to its end, so the pipe ended the request's body.
+        let sent = false;
         // The client deletes `jobId` from the metadata it is given.
-        const load = table.createLoadJob(file, { ...metadata, jobId }).then(([created]) => {
-            inserted = true;
-            return created.promise();
+        const upload = table.createWriteStream({ ...metadata, jobId });
+        const source = createReadStream(file);
+        const load = new Promise<void>((resolve, reject) => {
+            source.on('end', () => {
+                sent = true;
+            });
+            source.on('error', reject);
+            upload.on('job', () => {
+                inserted = true;
+            });
+            // The client emits `complete` once the job is DONE without an
+            // error, and fails the stream on a job DONE with one.
+            upload.on('complete', () => resolve());
+            upload.on('error', reject);
         });
+
+        source.pipe(upload);
 
         // A load left running past its timeout settles unobserved.
         load.catch(() => undefined);
 
         let failure: { error: unknown } | undefined;
+        // An upload aborted at the timeout, and whether its body had ended.
+        let aborted: { sent: boolean } | undefined;
 
         try {
             if ((await within(load, timeoutMs)) !== TIMED_OUT) {
                 return { outcome: 'replaced', late: null };
             }
+
+            if (!inserted) {
+                aborted = { sent };
+                source.destroy();
+                upload.destroy();
+            }
         } catch (error) {
             failure = { error };
+            // The upload failed, so the rest of the file goes nowhere.
+            source.destroy();
 
             const kept = (): Load => ({
                 outcome: 'kept',
@@ -341,18 +374,36 @@ export const loadWithin = async ({
         }
 
         const ended =
-            failure === undefined
-                ? `load ran past ${timeoutMs / 1000} s`
-                : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
+            aborted !== undefined
+                ? `upload ran past ${timeoutMs / 1000} s and was aborted ${aborted.sent ? 'after' : 'before'} its body ended`
+                : failure === undefined
+                  ? `load ran past ${timeoutMs / 1000} s`
+                  : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
         const cancelled =
             cancel === TIMED_OUT ? `cancel unanswered after ${cancelTimeoutMs / 1000} s` : cancel;
 
         return {
-            outcome,
+            // An incomplete request creates no job.
+            outcome: aborted?.sent === false ? 'kept' : outcome,
             error: new Error(`${ended}, ${cancelled}`, { cause: failure?.error }),
         };
     } catch (error) {
         // A fault once the request may have started, which can have created the job.
+        return {
+            outcome: 'unknown',
+            error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
+        };
+    }
+};
+
+/**
+ * What `load` left in its table. A load that rejects broke its contract
+ * after it may have sent a request, so its table is `unknown`.
+ */
+export const settleLoad = async (load: () => Promise<Load>): Promise<Load> => {
+    try {
+        return await load();
+    } catch (error) {
         return {
             outcome: 'unknown',
             error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),

@@ -29,6 +29,7 @@ import {
     LOAD_SLOT_MS,
     MAX_BYTES_BILLED,
     QUERY_GRACE_MS,
+    settleLoad,
     type TableField,
     TIMED_OUT,
     within,
@@ -748,7 +749,8 @@ export const jobProgress = (): JobProgress => ({
  * count is normal. A day that reads no rows and holds none loads nothing.
  * A day whose read fails keeps its partition as it was. A day whose load
  * fails is logged with what its load returned the partition holds, `kept`
- * or `unknown` (Load). Either way the later days still load, and the run
+ * or `unknown` (Load), and a load that rejects leaves it `unknown`
+ * (settleLoad). Either way the later days still load, and the run
  * then rejects naming every such day with its error. Each row carries the
  * run's exportRules digest, so a day that fails under new rules still holds
  * the old digest and is the one day the next run reloads for them. A read
@@ -858,7 +860,7 @@ export const runExport = async ({
                 let loaded: Load;
 
                 try {
-                    loaded = await warehouse.replaceDay(day, scratchFile);
+                    loaded = await settleLoad(() => warehouse.replaceDay(day, scratchFile));
                 } finally {
                     progress.loading.delete(day);
                 }
