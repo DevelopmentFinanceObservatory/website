@@ -2,9 +2,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { BigQuery } from '@google-cloud/bigquery';
 import {
-    ACCOUNT_READ_MS,
     bigQueryAccountTable,
     readAccounts,
+    readConversations,
     runAccountExport,
 } from './account-export';
 import { STATEMENT_TIMEOUT_MS } from './bounded';
@@ -17,10 +17,10 @@ import {
 import {
     bigQueryWarehouse,
     CONNECTION_TIMEOUT_MS,
+    EVENT_PHASE_MS,
     type JobProgress,
     pgEventSource,
     readExportEnv,
-    JOB_DEADLINE_MS,
     runAndExit,
     runExport,
     runExportJob,
@@ -31,9 +31,8 @@ import {
 // WEBSITE_DB_* over the Cloud SQL connector, or DATABASE_URL locally, and
 // runs the event export (runExportJob), then the account export, under
 // runAndExit's deadline, which names the phase in `progress` if it fires.
-// What the account export keeps for its loads when the event export has used
-// most of the Job's time, so the read's own timeout fires before runAndExit's.
-const ACCOUNT_LOAD_RESERVE_MS = 2 * 60_000;
+// The event export stops starting days at EVENT_PHASE_MS from the start, so
+// the account export's bounded reads and loads end before that deadline.
 
 async function main(progress: JobProgress): Promise<void> {
     const startedAt = Date.now();
@@ -65,18 +64,8 @@ async function main(progress: JobProgress): Promise<void> {
     await runExportJob({
         exportAccounts: () =>
             runAccountExport({
-                read: () =>
-                    readAccounts(pool, {
-                        timeoutMs: Math.max(
-                            0,
-                            Math.min(
-                                ACCOUNT_READ_MS,
-                                JOB_DEADLINE_MS -
-                                    (Date.now() - startedAt) -
-                                    ACCOUNT_LOAD_RESERVE_MS,
-                            ),
-                        ),
-                    }),
+                readAccounts: () => readAccounts(pool),
+                readConversations: () => readConversations(pool),
                 replace: bigQueryAccountTable({ datasetId: settings.datasetId, bigquery }),
                 hmacKey: settings.hmacKey,
                 scratchFile: path.join(os.tmpdir(), `account-export-${process.pid}.ndjson`),
@@ -89,6 +78,7 @@ async function main(progress: JobProgress): Promise<void> {
                 hmacKey: settings.hmacKey,
                 today: new Date().toISOString().slice(0, 10),
                 progress,
+                stopAt: startedAt + EVENT_PHASE_MS,
                 scratchFile: path.join(os.tmpdir(), `event-export-${process.pid}.ndjson`),
                 log,
             }),

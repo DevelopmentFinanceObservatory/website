@@ -5,7 +5,15 @@ import type { Pool, PoolClient } from 'pg';
 
 import { exportDigest } from '../src/lib/proxy/account.ts';
 
-import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './bounded.ts';
+import {
+    callWithin,
+    LOAD_SLOT_MS,
+    loadOutcome,
+    loadWithin,
+    type FailedOutcome,
+    type LoadResult,
+    QUERY_GRACE_MS,
+} from './bounded.ts';
 
 /**
  * The account export, which the event export Job (db/export-events.ts) runs
@@ -14,7 +22,9 @@ import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './
  * and the view `account_organisation` (migration 0025) into the table
  * `account_organisation`, and the view `conversation_export` (migration 0026)
  * into the table `conversation`, replacing each whole table in one load job,
- * so a failed load leaves that table as it was. `account_daily` counts new
+ * so a failed load leaves that table as it was. A load that BigQuery
+ * finished after the Job stopped waiting for it replaced its table, and
+ * counts as loaded. `account_daily` counts new
  * accounts per UTC day and organisation, for every day from the first
  * account's through yesterday's. `account_organisation` holds one row per
  * account counted there, keyed by `user_hash`, the digest the event export
@@ -146,90 +156,161 @@ export type ConversationSource = {
 };
 
 /**
- * What one read of the views returns. `webmailDomains` comes from the view
- * `account_daily_source`: whether `webmail_domain` holds any domain.
+ * What the read of `account_daily` and `account_organisation` returns.
+ * `webmailDomains` comes from the view `account_daily_source`: whether
+ * `webmail_domain` holds any domain.
  */
-export type AccountRead = {
+export type AccountSnapshot = {
     rows: AccountRow[];
     organisations: AccountOrganisationSource[];
-    conversations: ConversationSource[];
     webmailDomains: boolean;
 };
 
-const readInTransaction = async (client: PoolClient): Promise<AccountRead> => {
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-
-    const { rows } = await client.query<AccountRow>(
-        `SELECT to_char(day, 'YYYY-MM-DD') AS day, organisation, accounts
-         FROM account_daily
-         ORDER BY day, organisation`,
-    );
-    const { rows: source } = await client.query<{ webmailDomains: boolean }>(
-        `SELECT webmail_domains AS "webmailDomains" FROM account_daily_source`,
-    );
-
-    // The view always returns one row, so any other count is a read that did
-    // not see the schema it expects.
-    if (source.length !== 1) {
-        throw new Error(`account export: account_daily_source returned ${source.length} rows`);
-    }
-
-    const { rows: organisations } = await client.query<AccountOrganisationSource>(
-        `SELECT user_id AS "userId", organisation
-         FROM account_organisation
-         ORDER BY user_id`,
-    );
-
-    const { rows: conversations } = await client.query<ConversationSource>(
-        `SELECT id_sha256 AS "idSha256", agent_session_sha256 AS "agentSessionSha256",
-                user_id AS "userId",
-                to_char("created_at" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
-                    AS "createdAt"
-         FROM conversation_export
-         ORDER BY id_sha256`,
-    );
-
-    await client.query('COMMIT');
-
-    return { rows, organisations, conversations, ...source[0]! };
-};
-
-/** How long the account read may take: its four queries at the statement timeout, then the grace. */
-export const ACCOUNT_READ_MS = 4 * STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS;
+/**
+ * How long one of the account export's two reads may take, its connection
+ * included. The server stops each of its statements at the same bound, and
+ * the Job stops waiting QUERY_GRACE_MS later, for a connection that stalls
+ * where the server's timeout cannot reach it.
+ */
+export const ACCOUNT_READ_MS = 60_000;
 
 /**
- * Every row of `account_daily`, oldest day first, every row of
- * `account_organisation`, every row of `conversation_export`, and the facts that say why `account_daily` holds
- * none. One read-only transaction reads all of them, so they share one
- * `now()` and one snapshot. The loads that follow are separate, so for
- * one run the BigQuery tables can differ, and the next run reconciles them.
- * A read still running at `timeoutMs`, as over a connection that stalls
- * past Postgres's timeout, throws.
+ * The most the account export can take from its start: its two reads,
+ * 65 s each with the grace, then a load for each of its three tables,
+ * LOAD_SLOT_MS (150 s) each, 580 s. Each step has its own bound, so a slow
+ * read or load cannot take a later one's time. The event export stops in
+ * time to leave the account export this much before the Job's deadline
+ * (EVENT_PHASE_MS in db/event-export.ts).
  */
-export const readAccounts = async (
+export const ACCOUNT_EXPORT_MS = 2 * (ACCOUNT_READ_MS + QUERY_GRACE_MS) + 3 * LOAD_SLOT_MS;
+
+/**
+ * `read`'s result from one read-only REPEATABLE READ transaction over a
+ * client of `pool`, so its queries share one `now()` and one snapshot.
+ * The connection counts towards `timeoutMs`, each statement stops on the
+ * server at `timeoutMs`, and a read still running `graceMs` later
+ * throws `timedOut()`. A failed or timed-out read leaves the transaction
+ * open, or a query in flight, and a release with the error discards the
+ * connection with it.
+ */
+/** An account read's bound, and how long past it the Job waits for a stalled connection. */
+type ReadBounds = { timeoutMs: number; graceMs: number };
+
+const readInTransaction = async <T>(
     pool: Pool,
-    { timeoutMs = ACCOUNT_READ_MS }: { timeoutMs?: number } = {},
-): Promise<AccountRead> => {
-    const client = await pool.connect();
+    { timeoutMs, graceMs }: ReadBounds,
+    read: (client: PoolClient) => Promise<T>,
+    timedOut: () => Error,
+): Promise<T> => {
+    let client: PoolClient | undefined;
+    let abandoned = false;
 
     try {
-        const read = await callWithin(
-            readInTransaction(client),
-            timeoutMs,
-            () => new Error(`account read ran past ${timeoutMs / 1000} s`),
+        const result = await callWithin(
+            (async () => {
+                const connected = await pool.connect();
+
+                // A connection that arrives after the bound is not used.
+                if (abandoned) {
+                    connected.release(true);
+                    throw new Error('connected after the read was abandoned');
+                }
+
+                client = connected;
+                await client.query(
+                    `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
+                     SET LOCAL statement_timeout = ${Math.max(1, Math.round(timeoutMs))}`,
+                );
+
+                const value = await read(client);
+
+                await client.query('COMMIT');
+
+                return value;
+            })(),
+            timeoutMs + graceMs,
+            timedOut,
         );
 
-        client.release();
+        client?.release();
 
-        return read;
+        return result;
     } catch (error) {
-        // A failed or timed-out read leaves the transaction open, or a query
-        // in flight, and a release with the error discards the connection
-        // with it.
-        client.release(error instanceof Error ? error : true);
+        abandoned = true;
+        client?.release(error instanceof Error ? error : true);
+
         throw error;
     }
 };
+
+/**
+ * Every row of `account_daily`, oldest day first, every row of
+ * `account_organisation`, and the facts that say why `account_daily` holds
+ * none, from one snapshot. A read still running past `timeoutMs` plus the
+ * grace, as over a connection that stalls past Postgres's timeout, throws.
+ */
+export const readAccounts = async (
+    pool: Pool,
+    { timeoutMs = ACCOUNT_READ_MS, graceMs = QUERY_GRACE_MS }: Partial<ReadBounds> = {},
+): Promise<AccountSnapshot> =>
+    readInTransaction(
+        pool,
+        { timeoutMs, graceMs },
+        async (client) => {
+            const { rows } = await client.query<AccountRow>(
+                `SELECT to_char(day, 'YYYY-MM-DD') AS day, organisation, accounts
+                 FROM account_daily
+                 ORDER BY day, organisation`,
+            );
+            const { rows: source } = await client.query<{ webmailDomains: boolean }>(
+                `SELECT webmail_domains AS "webmailDomains" FROM account_daily_source`,
+            );
+
+            // The view always returns one row, so any other count is a read that did
+            // not see the schema it expects.
+            if (source.length !== 1) {
+                throw new Error(
+                    `account export: account_daily_source returned ${source.length} rows`,
+                );
+            }
+
+            const { rows: organisations } = await client.query<AccountOrganisationSource>(
+                `SELECT user_id AS "userId", organisation
+                 FROM account_organisation
+                 ORDER BY user_id`,
+            );
+
+            return { rows, organisations, ...source[0]! };
+        },
+        () => new Error(`account read ran past ${timeoutMs / 1000} s`),
+    );
+
+/**
+ * Every row of `conversation_export`, in its own read, so a failure here
+ * leaves the account tables to load, and theirs leaves this one. A read
+ * still running past `timeoutMs` plus the grace throws.
+ */
+export const readConversations = async (
+    pool: Pool,
+    { timeoutMs = ACCOUNT_READ_MS, graceMs = QUERY_GRACE_MS }: Partial<ReadBounds> = {},
+): Promise<ConversationSource[]> =>
+    readInTransaction(
+        pool,
+        { timeoutMs, graceMs },
+        async (client) => {
+            const { rows } = await client.query<ConversationSource>(
+                `SELECT id_sha256 AS "idSha256", agent_session_sha256 AS "agentSessionSha256",
+                        user_id AS "userId",
+                        to_char("created_at" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+                            AS "createdAt"
+                 FROM conversation_export
+                 ORDER BY id_sha256`,
+            );
+
+            return rows;
+        },
+        () => new Error(`conversation read ran past ${timeoutMs / 1000} s`),
+    );
 
 /**
  * The `account_organisation` row for one account. The user id becomes
@@ -272,14 +353,14 @@ export type AccountTable = keyof typeof ACCOUNT_TABLES;
 
 /**
  * Replaces the BigQuery table `table` with the rows in `file`, one JSON
- * object a line. A load past its timeout is cancelled and throws
- * (loadWithin).
+ * object a line. A load that fails throws a LoadError naming what the
+ * table holds (loadWithin).
  */
 export const bigQueryAccountTable =
     ({ datasetId, bigquery }: { datasetId: string; bigquery: BigQuery }) =>
-    async (table: AccountTable, file: string): Promise<void> => {
+    async (table: AccountTable, file: string): Promise<LoadResult> =>
         // Creates the table when it does not exist.
-        await loadWithin({
+        loadWithin({
             table: bigquery.dataset(datasetId).table(table),
             file,
             metadata: {
@@ -288,98 +369,136 @@ export const bigQueryAccountTable =
                 schema: { fields: ACCOUNT_TABLES[table] },
             },
         });
-    };
+
+/** A table a run failed to load, and what the table holds after it. */
+export type FailedTable = { table: AccountTable; outcome: FailedOutcome };
 
 /** What a run that failed to load some tables throws. */
 export class AccountExportError extends AggregateError {
-    readonly failedTables: AccountTable[];
+    readonly failedTables: FailedTable[];
 
-    constructor(errors: Error[], failedTables: AccountTable[]) {
+    constructor(errors: Error[], failedTables: FailedTable[]) {
         super(errors, `account export: ${errors.map((error) => error.message).join('; ')}`);
         this.name = 'AccountExportError';
         this.failedTables = failedTables;
     }
 }
 
+const messageOf = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
 /**
- * One account export run. For `account_daily`, then `account_organisation`,
- * then `conversation`, writes every row to `scratchFile` and replaces the table with it,
- * so a failed load leaves that table as it was. Each table loads on its own, so a
- * failed table does not stop the next, logs its failure as it happens, and the run rejects at the end with an
- * AccountExportError that carries every failed table in `failedTables` and
- * every error in `errors`. `account_daily` holds a row for every day from the first
- * account's through yesterday's while `webmail_domain` holds any domain,
- * so a read with no rows means one of two things. While `webmail_domain`
- * is empty, `account_daily` and `account_organisation` fail with their
- * tables kept. Otherwise the read succeeded and the user table holds no
- * account older than today, or none at all, so both tables are replaced
- * with no rows and an account deleted since the last run, and the
- * organisation it named, leave the export. `account_organisation` holds no
- * rows exactly when `account_daily` holds none, since both views read the
- * same accounts. `conversation` does not depend on `webmail_domain` and is
- * replaced from whatever the read returned, an empty list included. A failed
- * or partial read throws in `read`, before any table is replaced.
+ * One account export run, in two groups that fail apart: `readAccounts`,
+ * then `account_daily` and `account_organisation` loaded from its one
+ * snapshot, then `readConversations` and `conversation` loaded from it.
+ * Each table is written to `scratchFile` and replaces its BigQuery table in
+ * one load. A failed read fails its group's tables, which keep what they
+ * held, and leaves the other group to run. A failed load fails its table
+ * alone. Each failure is logged as it happens with what the table holds,
+ * `kept` or `unknown` (FailedOutcome), and the run rejects at the
+ * end with an AccountExportError that carries every failed table and its
+ * outcome in `failedTables` and every error in `errors`. `account_daily`
+ * holds a row for every day from the first account's through yesterday's
+ * while `webmail_domain` holds any domain, so a read with no rows means one
+ * of two things. While `webmail_domain` is empty, `account_daily` and
+ * `account_organisation` fail with their tables kept. Otherwise the read
+ * succeeded and the user table holds no account older than today, or none
+ * at all, so both tables are replaced with no rows and an account deleted
+ * since the last run, and the organisation it named, leave the export.
+ * `account_organisation` holds no rows exactly when `account_daily` holds
+ * none, since both views read the same accounts. `conversation` does not
+ * depend on `webmail_domain` and is replaced from whatever its read
+ * returned, an empty list included. A load that BigQuery finished after
+ * the Job stopped waiting for it replaced its table, so it is logged once
+ * as replaced, with what happened first, and is no failure.
  */
 export const runAccountExport = async ({
-    read,
+    readAccounts,
+    readConversations,
     replace,
     hmacKey,
     scratchFile,
     log,
 }: {
-    read: () => Promise<AccountRead>;
-    replace: (table: AccountTable, file: string) => Promise<void>;
+    readAccounts: () => Promise<AccountSnapshot>;
+    readConversations: () => Promise<ConversationSource[]>;
+    replace: (table: AccountTable, file: string) => Promise<LoadResult | void>;
     hmacKey: string;
     scratchFile: string;
     log: (line: string) => void;
 }): Promise<void> => {
-    const { rows, organisations, conversations, webmailDomains } = await read();
-    const heldBack = rows.length === 0 && !webmailDomains;
-
-    const tables: [AccountTable, object[], boolean][] = [
-        ['account_daily', rows, heldBack],
-        [
-            'account_organisation',
-            organisations.map((source) => accountOrganisationRow(source, hmacKey)),
-            heldBack,
-        ],
-        ['conversation', conversations.map((source) => conversationRow(source, hmacKey)), false],
-    ];
-    const failedTables: AccountTable[] = [];
+    const failedTables: FailedTable[] = [];
     const errors: Error[] = [];
 
-    for (const [table, tableRows, kept] of tables) {
-        if (kept) {
-            const message = `${table}: read no rows, webmail_domain is empty, table kept`;
+    const fail = (
+        table: AccountTable,
+        message: string,
+        outcome: FailedOutcome,
+        cause?: unknown,
+    ) => {
+        failedTables.push({ table, outcome });
+        errors.push(new Error(`${table}: ${message}`, { cause }));
+        log(`${table}: ${message}, table ${outcome}`);
+    };
 
-            failedTables.push(table);
-            errors.push(new Error(message));
-            log(message);
-            continue;
-        }
-
+    const load = async (table: AccountTable, rows: object[]) => {
         try {
-            await fs.writeFile(
-                scratchFile,
-                tableRows.map((row) => `${JSON.stringify(row)}\n`).join(''),
-            );
-            await replace(table, scratchFile);
-            log(`${table}: ${tableRows.length} rows loaded`);
-        } catch (error) {
-            const message = `${table}: ${error instanceof Error ? error.message : String(error)}`;
+            await fs.writeFile(scratchFile, rows.map((row) => `${JSON.stringify(row)}\n`).join(''));
+            const late = (await replace(table, scratchFile))?.late;
 
-            failedTables.push(table);
-            errors.push(new Error(message, { cause: error }));
-            log(`${message}, table kept`);
+            log(
+                late
+                    ? `${table}: ${rows.length} rows loaded ${late}, table replaced`
+                    : `${table}: ${rows.length} rows loaded`,
+            );
+        } catch (error) {
+            fail(table, messageOf(error), loadOutcome(error), error);
         }
 
         try {
             await fs.rm(scratchFile, { force: true });
         } catch (error) {
-            log(
-                `${table}: scratch file not removed, ${error instanceof Error ? error.message : String(error)}`,
+            log(`${table}: scratch file not removed, ${messageOf(error)}`);
+        }
+    };
+
+    let snapshot: AccountSnapshot | undefined;
+
+    try {
+        snapshot = await readAccounts();
+    } catch (error) {
+        fail('account_daily', `read failed, ${messageOf(error)}`, 'kept', error);
+        fail('account_organisation', `read failed, ${messageOf(error)}`, 'kept', error);
+    }
+
+    if (snapshot !== undefined) {
+        const { rows, organisations, webmailDomains } = snapshot;
+
+        if (rows.length === 0 && !webmailDomains) {
+            fail('account_daily', 'read no rows, webmail_domain is empty', 'kept');
+            fail('account_organisation', 'read no rows, webmail_domain is empty', 'kept');
+        } else {
+            await load('account_daily', rows);
+            await load(
+                'account_organisation',
+                organisations.map((source) => accountOrganisationRow(source, hmacKey)),
             );
         }
+    }
+
+    let conversations: ConversationSource[] | undefined;
+
+    try {
+        conversations = await readConversations();
+    } catch (error) {
+        fail('conversation', `read failed, ${messageOf(error)}`, 'kept', error);
+    }
+
+    if (conversations !== undefined) {
+        await load(
+            'conversation',
+            conversations.map((source) => conversationRow(source, hmacKey)),
+        );
     }
 
     if (errors.length > 0) {

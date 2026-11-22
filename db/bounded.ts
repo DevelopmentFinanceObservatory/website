@@ -22,8 +22,65 @@ export const QUERY_GRACE_MS = 5_000;
 /** How long one BigQuery load may run, upload included. */
 export const LOAD_TIMEOUT_MS = 2 * 60_000;
 
-/** How long the cancel of a load past its timeout is waited for. */
+/**
+ * How long the cancel of a load past its timeout is waited for, and for a
+ * load past its timeout whose upload has not yet created its job, how long
+ * the job's creation is waited for before the cancel, the two together.
+ */
 export const CANCEL_TIMEOUT_MS = 10_000;
+
+/**
+ * How long the final state of a load that did not report success in time
+ * is read for, after its cancel. BigQuery cancels a job on a best-effort
+ * basis, so a cancelled or failed load can still have replaced its table.
+ */
+export const CONFIRM_TIMEOUT_MS = 20_000;
+
+/** How often the final state of such a load is read. */
+const CONFIRM_POLL_MS = 2_000;
+
+/**
+ * The most one load can take from its start to its outcome (loadWithin):
+ * 120 s for the load, 10 s for its cancel, and 20 s to confirm its job's
+ * final state, 150 s.
+ */
+export const LOAD_SLOT_MS = LOAD_TIMEOUT_MS + CANCEL_TIMEOUT_MS + CONFIRM_TIMEOUT_MS;
+
+/**
+ * What a load left in its table: the file's rows (`replaced`), the table
+ * as it was (`kept`), or either when BigQuery did not confirm the job's
+ * final state in time (`unknown`).
+ */
+type LoadOutcome = 'kept' | 'replaced' | 'unknown';
+
+/** What a failed load left in its table. Only these outcomes are failures. */
+export type FailedOutcome = Exclude<LoadOutcome, 'replaced'>;
+
+/**
+ * What a load that replaced its table resolves to. `late` says why BigQuery
+ * confirmed it only after the Job stopped waiting, as for a load past its
+ * timeout whose cancel failed and that then finished, and is null for a
+ * load that finished in time.
+ */
+export type LoadResult = { late: string | null };
+
+/** What loadWithin throws: the failure and the outcome BigQuery confirmed. */
+export class LoadError extends Error {
+    readonly outcome: FailedOutcome;
+
+    constructor(message: string, outcome: FailedOutcome, options?: ErrorOptions) {
+        super(message, options);
+        this.name = 'LoadError';
+        this.outcome = outcome;
+    }
+}
+
+/**
+ * What a failed load left in its table. Any error but a LoadError comes
+ * from before the load started, so the table is `kept`.
+ */
+export const loadOutcome = (error: unknown): FailedOutcome =>
+    error instanceof LoadError ? error.outcome : 'kept';
 
 /** What `within` resolves to when `work` is still running at `ms`. */
 export const TIMED_OUT = Symbol('timed out');
@@ -62,13 +119,63 @@ export const callWithin = async <T>(
     return result;
 };
 
+const messageOf = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
+/**
+ * The job's final state, read until it is DONE or `ms` pass: `kept` when
+ * the job failed, since a failed WRITE_TRUNCATE load leaves its table as it
+ * was, `replaced` when it succeeded, `unknown` when it is still pending or
+ * running, or its state could not be read, at `ms`.
+ */
+const finalState = async (job: Job, ms: number, pollMs: number): Promise<LoadOutcome> => {
+    const until = Date.now() + ms;
+    const read = async (): Promise<LoadOutcome | null> => {
+        const [metadata] = await job.getMetadata();
+
+        if (metadata.status?.state !== 'DONE') {
+            return null;
+        }
+
+        return metadata.status.errorResult ? 'kept' : 'replaced';
+    };
+
+    for (;;) {
+        const state = await within(
+            read().catch(() => null),
+            Math.max(0, until - Date.now()),
+        );
+
+        if (state !== TIMED_OUT && state !== null) {
+            return state;
+        }
+
+        const wait = Math.min(pollMs, until - Date.now());
+
+        if (wait <= 0) {
+            return 'unknown';
+        }
+
+        await sleep(wait);
+    }
+};
+
 /**
  * Loads `file` into `table` and resolves once the upload is done and the
- * load job has finished, or throws if it failed. The client takes no
- * timeout for an upload, so a load still running at `timeoutMs` is
- * cancelled, the cancel waited for at most `cancelTimeoutMs`, and the call
- * throws. A cancel that comes too late leaves the table holding the whole
- * file.
+ * load job has finished. The client takes no timeout for an upload, so a
+ * load still running at `timeoutMs` is cancelled, its cancel waited for at
+ * most `cancelTimeoutMs`. For a load with a job that did not finish in
+ * time, or whose client call failed, the job's final state is then read
+ * for at most `confirmTimeoutMs`, since a cancel can fail or come too late
+ * and a client error can hide a load that finished. A job that finished
+ * cleanly replaced the table, so the call resolves with `late` naming what
+ * happened first. Any other load throws a LoadError whose `outcome` says
+ * what the table holds. A load
+ * whose upload failed before it created a job leaves the table `kept`. A
+ * load past its timeout whose upload has created no job by the end of the
+ * cancel's wait may still create one, so its outcome is `unknown`. One call
+ * thus takes at most `timeoutMs + cancelTimeoutMs + confirmTimeoutMs`,
+ * LOAD_SLOT_MS by default.
  */
 export const loadWithin = async ({
     table,
@@ -76,30 +183,84 @@ export const loadWithin = async ({
     metadata,
     timeoutMs = LOAD_TIMEOUT_MS,
     cancelTimeoutMs = CANCEL_TIMEOUT_MS,
+    confirmTimeoutMs = CONFIRM_TIMEOUT_MS,
+    pollMs = CONFIRM_POLL_MS,
 }: {
     table: Table;
     file: string;
     metadata: JobLoadMetadata;
     timeoutMs?: number;
     cancelTimeoutMs?: number;
-}): Promise<void> => {
+    confirmTimeoutMs?: number;
+    pollMs?: number;
+}): Promise<LoadResult> => {
     let job: Job | undefined;
-    const load = (async () => {
-        [job] = await table.createLoadJob(file, metadata);
-        await job.promise();
-    })();
+    const created = table.createLoadJob(file, metadata).then(([createdJob]) => {
+        job = createdJob;
+        return createdJob;
+    });
+    const load = created.then((createdJob) => createdJob.promise());
 
     // A load left running past its timeout settles unobserved.
     load.catch(() => undefined);
 
-    if ((await within(load, timeoutMs)) === TIMED_OUT) {
-        if (job) {
-            await within(
-                job.cancel().catch(() => undefined),
-                cancelTimeoutMs,
-            );
+    let result: unknown;
+
+    try {
+        result = await within(load, timeoutMs);
+    } catch (error) {
+        if (job === undefined) {
+            throw new LoadError(`load failed: ${messageOf(error)}`, 'kept', { cause: error });
         }
 
-        throw new Error(`load ran past ${timeoutMs / 1000} s and was cancelled`);
+        const outcome = await finalState(job, confirmTimeoutMs, pollMs);
+
+        if (outcome === 'replaced') {
+            return { late: `after its client failed: ${messageOf(error)}` };
+        }
+
+        throw new LoadError(`load failed: ${messageOf(error)}`, outcome, { cause: error });
     }
+
+    if (result !== TIMED_OUT) {
+        return { late: null };
+    }
+
+    const cancelBy = Date.now() + cancelTimeoutMs;
+    const pastTimeout = `load ran past ${timeoutMs / 1000} s`;
+
+    if (job === undefined) {
+        const upload = await within(
+            created.then(
+                () => 'created' as const,
+                () => 'failed' as const,
+            ),
+            cancelTimeoutMs,
+        );
+
+        if (upload === 'failed') {
+            throw new LoadError(`${pastTimeout}, then its upload failed`, 'kept');
+        }
+    }
+
+    if (job === undefined) {
+        throw new LoadError(`${pastTimeout} with its upload unfinished`, 'unknown');
+    }
+
+    const cancelled = await within(
+        job.cancel().then(
+            () => true,
+            () => false,
+        ),
+        Math.max(0, cancelBy - Date.now()),
+    );
+
+    const outcome = await finalState(job, confirmTimeoutMs, pollMs);
+    const what = `${pastTimeout}, ${cancelled === true ? 'cancel sent' : 'cancel failed'}`;
+
+    if (outcome === 'replaced') {
+        return { late: `after the ${what}` };
+    }
+
+    throw new LoadError(what, outcome);
 };

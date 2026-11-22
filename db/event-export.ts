@@ -24,8 +24,12 @@ import type {
 import type { SearchShareMode } from '../src/lib/search/searchShareRequest.ts';
 import type { DeclinedReason, Known, ResolveResponse } from '../src/lib/search/types.ts';
 
+import { ACCOUNT_EXPORT_MS } from './account-export.ts';
 import {
     callWithin,
+    LOAD_SLOT_MS,
+    loadOutcome,
+    type LoadResult,
     loadWithin,
     QUERY_GRACE_MS,
     STATEMENT_TIMEOUT_MS,
@@ -481,6 +485,38 @@ const DAY_READ_MS = 5 * 60_000;
  */
 export const JOB_DEADLINE_MS = 28 * 60_000;
 
+/**
+ * The most one day can take once runExport starts it: its pages, its
+ * connection included, 305 s (DAY_READ_MS and the grace), then its load to
+ * a confirmed outcome, 150 s (LOAD_SLOT_MS), 455 s.
+ */
+export const DAY_WORST_MS = DAY_READ_MS + QUERY_GRACE_MS + LOAD_SLOT_MS;
+
+/**
+ * Margin for the Job's work outside any bounded call: the Cloud SQL
+ * connector's start, scratch files, digests and logs.
+ */
+const UNBOUNDED_WORK_MS = 60_000;
+
+/**
+ * How long after the Job's start the event export may still be running,
+ * so the account export after it always has ACCOUNT_EXPORT_MS before
+ * runAndExit stops the run at JOB_DEADLINE_MS:
+ *
+ *   1680 s (JOB_DEADLINE_MS)
+ *   - 580 s (ACCOUNT_EXPORT_MS: two reads of 65 s, three loads of 150 s)
+ *   - 60 s (UNBOUNDED_WORK_MS)
+ *   = 1040 s.
+ *
+ * The event export's start takes at most 585 s: the table check and its
+ * create, 125 s each (BIGQUERY_CALL_MS), then the day counts in Postgres,
+ * 335 s with the connection and grace, beside two BigQuery calls of 125 s.
+ * runExport then starts a day only while DAY_WORST_MS (455 s) still fits
+ * before this bound, so the event export ends by it, and the days it did
+ * not start wait for the next hourly run.
+ */
+export const EVENT_PHASE_MS = JOB_DEADLINE_MS - ACCOUNT_EXPORT_MS - UNBOUNDED_WORK_MS;
+
 /** The most one BigQuery query may bill (`maximumBytesBilled`). */
 const MAX_BYTES_BILLED = 1e9;
 
@@ -551,7 +587,7 @@ export type Warehouse = {
      */
     days(rules: string): Promise<{ counts: DayCounts; stale: ReadonlySet<string> }>;
     /** Replaces the day's partition with the rows in `file`, one JSON object a line. */
-    replaceDay(day: string, file: string): Promise<void>;
+    replaceDay(day: string, file: string): Promise<LoadResult | void>;
 };
 
 const PAGE_SIZE = 5_000;
@@ -730,7 +766,7 @@ export const bigQueryWarehouse = ({
             };
         },
         async replaceDay(day, file) {
-            await loadWithin({
+            return loadWithin({
                 table: dataset.table(`event$${day.replaceAll('-', '')}`),
                 file,
                 metadata: {
@@ -785,7 +821,10 @@ const jobProgress = (): JobProgress => ({ phase: 'the start', unstarted: [], fau
  * error. Each row carries the run's exportRules digest, so a day that
  * fails under new rules still holds the old digest and is the one day the
  * next run reloads for them. A read or load past its bound fails its day
- * the same way. `progress` names the phase in flight, the days not yet
+ * the same way. A day starts only while DAY_WORST_MS still fits before
+ * `stopAt` on `now`'s clock, so the run ends by `stopAt`. The days left
+ * then are logged, and the run rejects naming them, as a fault the next
+ * run makes up. `progress` names the phase in flight, the days not yet
  * started and the faults so far, for runAndExit's deadline. Logs each day
  * as it is done and returns the rows read per day.
  */
@@ -797,6 +836,8 @@ export const runExport = async ({
     scratchFile,
     log,
     progress = jobProgress(),
+    stopAt = Number.POSITIVE_INFINITY,
+    now = Date.now,
 }: {
     source: EventSource;
     warehouse: Warehouse;
@@ -805,6 +846,9 @@ export const runExport = async ({
     scratchFile: string;
     log: (line: string) => void;
     progress?: JobProgress;
+    /** When the run must be done by, in `now`'s milliseconds. */
+    stopAt?: number;
+    now?: () => number;
 }): Promise<{ day: string; rows: number }[]> => {
     const rules = exportRules(hmacKey);
 
@@ -819,9 +863,11 @@ export const runExport = async ({
     const read: { day: string; rows: number }[] = [];
     const failed: { day: string; error: unknown }[] = [];
     const short: string[] = [];
+    let left: string[] = [];
     const faultsSoFar = () => [
         ...failed.map(({ day, error }) => `${day}: ${messageOf(error)}`),
         ...(short.length > 0 ? [`short days: ${short.join(', ')}`] : []),
+        ...(left.length > 0 ? [`days left for the next run: ${left.join(', ')}`] : []),
     ];
     const earlierFaults = progress.faults;
 
@@ -829,8 +875,17 @@ export const runExport = async ({
 
     try {
         for (const [index, day] of days.entries()) {
+            if (now() + DAY_WORST_MS > stopAt) {
+                left = days.slice(index);
+                log(
+                    `days left for the next run, to leave the account export its time: ${left.join(', ')}`,
+                );
+                break;
+            }
+
             progress.unstarted = days.slice(index + 1);
             let rows = 0;
+            let late: string | null = null;
             const held = partitions.get(day) ?? 0;
             const counted = events.get(day) ?? 0;
 
@@ -851,10 +906,10 @@ export const runExport = async ({
 
                 if (rows > 0 && rows >= held) {
                     progress.phase = `the load of ${day}`;
-                    await warehouse.replaceDay(day, scratchFile);
+                    late = (await warehouse.replaceDay(day, scratchFile))?.late ?? null;
                 }
             } catch (error) {
-                log(`${day}: failed, partition kept: ${messageOf(error)}`);
+                log(`${day}: failed, partition ${loadOutcome(error)}: ${messageOf(error)}`);
                 failed.push({ day, error });
                 continue;
             }
@@ -868,7 +923,7 @@ export const runExport = async ({
                 short.push(`${day} read ${rows} of ${held} in BigQuery`);
             } else {
                 log(
-                    `${rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`}${belowSource}`,
+                    `${rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`}${late ? ` ${late}, partition replaced` : ''}${belowSource}`,
                 );
             }
 
