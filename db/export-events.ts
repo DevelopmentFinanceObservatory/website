@@ -1,42 +1,41 @@
 import os from 'node:os';
 import path from 'node:path';
-import { BigQuery } from '@google-cloud/bigquery';
 import {
-    ACCOUNT_READ_MS,
+    ACCOUNT_STATEMENT_MS,
     bigQueryAccountTable,
     readAccounts,
+    readConversations,
     runAccountExport,
 } from './account-export';
-import { STATEMENT_TIMEOUT_MS } from './bounded';
+import { exportBigQuery, exportDb, exportPool } from './bounded';
 import {
-    buildRuntimePool,
     connectCloudSqlRuntime,
     resolveRuntimeConnection,
     setCloudSqlRuntimeStream,
 } from './connection';
 import {
     bigQueryWarehouse,
-    CONNECTION_TIMEOUT_MS,
+    EVENT_STATEMENT_MS,
     type JobProgress,
     pgEventSource,
     readExportEnv,
-    JOB_DEADLINE_MS,
+    REPORT_MARGIN_MS,
     runAndExit,
     runExport,
     runExportJob,
 } from './event-export';
 
-// The event export Job's command (`node dist/export-events.cjs`, see
+// The export Job's command (`node dist/export-events.cjs`, see
 // deploy/Dockerfile). It reads the database as the runtime does, through
 // WEBSITE_DB_* over the Cloud SQL connector, or DATABASE_URL locally, and
-// runs the event export (runExportJob), then the account export, under
-// runAndExit's deadline, which names the phase in `progress` if it fires.
-// What the account export keeps for its loads when the event export has used
-// most of the Job's time, so the read's own timeout fires before runAndExit's.
-const ACCOUNT_LOAD_RESERVE_MS = 2 * 60_000;
+// runs the event export and the account export at once (runExportJob), each
+// on a pool of its own, under runAndExit's deadline, which names each
+// phase's step in `progress` if it fires. runAndExit stops the run at 28
+// minutes whatever is in flight, inside the Job's 1800 s task timeout and
+// before the next hourly run starts, and its exit closes the pools and the
+// connector.
 
-async function main(progress: JobProgress): Promise<void> {
-    const startedAt = Date.now();
+async function main(progress: JobProgress, deadlineAt: number): Promise<void> {
     const settings = readExportEnv();
     const connection = resolveRuntimeConnection();
     const cloudSql =
@@ -46,49 +45,31 @@ async function main(progress: JobProgress): Promise<void> {
         setCloudSqlRuntimeStream(cloudSql.stream);
     }
 
-    // One connection suffices, since the run sends one query at a time. A
-    // query past 5 minutes fails on the server, and a connection not made
-    // in 30 seconds fails the query that asked for it. Each call also has a
-    // bound on the Job's side (db/bounded.ts). runAndExit stops the run at
-    // 28 minutes whatever is in flight, inside the Job's 1800 s task timeout
-    // and before the next hourly run starts, and its exit closes the pool
-    // and the connector.
-    const pool = buildRuntimePool(process.env, {
-        max: 1,
-        statement_timeout: STATEMENT_TIMEOUT_MS,
-        connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
-    });
-
-    const bigquery = new BigQuery({ projectId: settings.projectId });
+    const events = exportDb(exportPool(process.env, { statementMs: EVENT_STATEMENT_MS }));
+    const accounts = exportDb(exportPool(process.env, { statementMs: ACCOUNT_STATEMENT_MS }));
+    // Read once, before both phases, when EXPORT_BQ_LOCATION leaves the location unset.
+    const bigquery = await exportBigQuery(settings);
     const log = (line: string) => console.log(line);
 
     await runExportJob({
         exportAccounts: () =>
             runAccountExport({
-                read: () =>
-                    readAccounts(pool, {
-                        timeoutMs: Math.max(
-                            0,
-                            Math.min(
-                                ACCOUNT_READ_MS,
-                                JOB_DEADLINE_MS -
-                                    (Date.now() - startedAt) -
-                                    ACCOUNT_LOAD_RESERVE_MS,
-                            ),
-                        ),
-                    }),
-                replace: bigQueryAccountTable({ datasetId: settings.datasetId, bigquery }),
+                readAccounts: () => readAccounts(accounts),
+                readConversations: () => readConversations(accounts),
+                replace: bigQueryAccountTable(bigquery),
                 hmacKey: settings.hmacKey,
                 scratchFile: path.join(os.tmpdir(), `account-export-${process.pid}.ndjson`),
                 log,
+                progress,
             }),
         exportEvents: () =>
             runExport({
-                source: pgEventSource(pool),
-                warehouse: bigQueryWarehouse({ ...settings, bigquery }),
+                source: pgEventSource(events),
+                warehouse: bigQueryWarehouse({ bigquery }),
                 hmacKey: settings.hmacKey,
                 today: new Date().toISOString().slice(0, 10),
                 progress,
+                stopAt: deadlineAt - REPORT_MARGIN_MS,
                 scratchFile: path.join(os.tmpdir(), `event-export-${process.pid}.ndjson`),
                 log,
             }),
