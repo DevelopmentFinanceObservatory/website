@@ -6,7 +6,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { studioAccessRefusal, studioConversationId } from '../studioAccess.ts';
+import { canonicalStudioCall, studioAccess } from '../studioAccess.ts';
+
+type AccessInput = Parameters<typeof studioAccess>[0];
+
+const studioAccessRefusal = async (input: AccessInput) => (await studioAccess(input)).refusal;
 
 const OWNERS: Record<string, string[]> = {
     'conv-ana': ['user-ana'],
@@ -75,16 +79,87 @@ test('studioAccessRefusal refuses a body over the cap and a state read naming no
     );
 });
 
-test('studioConversationId reads the query of a GET and the JSON body otherwise', () => {
+test('canonicalStudioCall reads the query of a GET and the JSON body otherwise', () => {
     const search = new URLSearchParams({ conversation_id: 'from-query' });
 
-    assert.equal(studioConversationId('GET', search, null), 'from-query');
+    assert.equal(canonicalStudioCall('GET', search, null)?.conversationId, 'from-query');
     assert.equal(
-        studioConversationId('POST', search, '{"conversation_id":"from-body"}'),
+        canonicalStudioCall('POST', search, '{"conversation_id":"from-body"}')?.conversationId,
         'from-body',
     );
-    assert.equal(studioConversationId('POST', search, 'not json'), null);
-    assert.equal(studioConversationId('POST', search, '{"conversation_id":7}'), null);
+    assert.equal(
+        canonicalStudioCall('POST', search, '{"conversation_id":7}')?.conversationId,
+        null,
+    );
+    assert.equal(canonicalStudioCall('POST', search, '{"message":"hi"}')?.conversationId, null);
+});
+
+// The harness reads a repeated query parameter's last value, an
+// `session_id` member as `conversation_id`, and parses JSON that
+// JSON.parse refuses (`NaN`). Each pair names the conversation the proxy
+// checks first and the one the raw request would have named to the harness.
+test('studioAccess forwards only the conversation it checked', async () => {
+    const owners: Record<string, string[]> = { 'conv-ana': ['user-ana'], 'conv-ben': ['user-ben'] };
+    const asBen = (route: string, method: string, search: URLSearchParams, body: string) =>
+        studioAccess({
+            route,
+            method,
+            search,
+            readBody: async () => body,
+            readUserId: async () => 'user-ben',
+            ownersOf: async (id) => owners[id] ?? [],
+        });
+
+    const repeated = await asBen(
+        'state',
+        'GET',
+        new URLSearchParams([
+            ['conversation_id', 'conv-ben'],
+            ['conversation_id', 'conv-ana'],
+        ]),
+        '',
+    );
+
+    assert.equal(repeated.refusal, 'malformed');
+
+    const nonJson = await asBen(
+        'turn',
+        'POST',
+        new URLSearchParams(),
+        '{"conversation_id":"conv-ana","message":NaN}',
+    );
+
+    assert.equal(nonJson.refusal, 'malformed');
+
+    const alias = await asBen(
+        'turn',
+        'POST',
+        new URLSearchParams(),
+        '{"session_id":"conv-ana","message":"hi"}',
+    );
+
+    assert.equal(alias.refusal, null);
+    assert.deepEqual(JSON.parse(alias.call?.body ?? ''), { message: 'hi' });
+
+    const duplicate = await asBen(
+        'turn',
+        'POST',
+        new URLSearchParams(),
+        '{"conversation_id":"conv-ana","conversation_id":"conv-ben"}',
+    );
+
+    assert.equal(duplicate.refusal, null);
+    assert.equal(duplicate.call?.body, '{"conversation_id":"conv-ben"}');
+
+    const own = await asBen(
+        'state',
+        'GET',
+        new URLSearchParams({ conversation_id: 'conv-ben', since: '3' }),
+        '',
+    );
+
+    assert.equal(own.refusal, null);
+    assert.equal(own.call?.search.toString(), 'conversation_id=conv-ben&since=3');
 });
 
 test('studioAccessRefusal refuses as unavailable when the owners cannot be read', async () => {

@@ -1,9 +1,10 @@
 /**
  * Who may call the harness about a conversation. The proxy sends every Studio
  * call with one shared token, so the harness holds no per-user identity and a
- * conversation id is all a call names. The site holds the ownership: a saved
- * conversation (src/lib/chat/conversationStore) records its harness id
- * (`agentSessionId`) under the account that saved it.
+ * conversation id is all a call names. The site holds the ownership: the
+ * first account to save a conversation naming a harness id owns that harness
+ * conversation, and no later save changes it (`studioSessionOwner` in
+ * db/schema.ts, written by src/lib/chat/conversationSave).
  *
  * A conversation an account has saved answers only to that account, on every
  * route. Reading its state and resuming its turn also need the caller's own
@@ -20,36 +21,73 @@ const OWNER_ROUTES: ReadonlySet<string> = new Set(['state', 'resume']);
 export const MAX_STUDIO_BODY_BYTES = 1_048_576;
 
 /**
- * The conversation a Studio call names: the `conversation_id` query parameter
- * of a GET, else the `conversation_id` member of the JSON body. Null when it
- * names none, or the body is not a JSON object.
+ * A Studio call in the one form the proxy both checks and forwards: the query
+ * and body the harness receives, and the conversation they name (null when
+ * they name none). The harness reads exactly `conversationId`, so the
+ * ownership check and the harness agree on the conversation by construction.
  */
-export const studioConversationId = (
+export type StudioCall = {
+    conversationId: string | null;
+    search: URLSearchParams;
+    body: string | null;
+};
+
+/**
+ * Rebuild a Studio call from its query and raw body, or null when it cannot
+ * name one conversation unambiguously. A GET or HEAD names its conversation
+ * in a single `conversation_id` query parameter; a repeated one is refused,
+ * since the harness's query parser keeps the last value where
+ * URLSearchParams keeps the first. Any other method carries a JSON object
+ * body, which is forwarded as re-serialised here: the raw text never reaches
+ * the harness, so a body the harness's JSON parser would read differently
+ * (a repeated member, `NaN`) cannot name a conversation the proxy did not
+ * check. The body loses `session_id`, which the harness reads as an alias of
+ * `conversation_id`, so only `conversation_id` names the conversation.
+ */
+export const canonicalStudioCall = (
     method: string,
     search: URLSearchParams,
     body: string | null,
-): string | null => {
+): StudioCall | null => {
+    const forwardedSearch = new URLSearchParams(search);
+
     if (method === 'GET' || method === 'HEAD') {
-        return search.get('conversation_id');
+        const ids = search.getAll('conversation_id');
+
+        return ids.length > 1
+            ? null
+            : { conversationId: ids[0] ?? null, search: forwardedSearch, body: null };
     }
 
-    try {
-        const parsed: unknown = JSON.parse(body ?? '');
-        const id =
-            parsed !== null && typeof parsed === 'object'
-                ? (parsed as Record<string, unknown>).conversation_id
-                : undefined;
+    let parsed: unknown;
 
-        return typeof id === 'string' ? id : null;
+    try {
+        parsed = JSON.parse(body ?? '');
     } catch {
         return null;
     }
+
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+    }
+
+    const members: Record<string, unknown> = { ...parsed };
+
+    delete members.session_id;
+
+    const id = members.conversation_id;
+
+    return {
+        conversationId: typeof id === 'string' ? id : null,
+        search: forwardedSearch,
+        body: JSON.stringify(members),
+    };
 };
 
 /**
  * Whether a call on `route` about a conversation may reach the harness, for
- * the signed-in `userId` (null for a guest), given `owners`, the accounts
- * whose saved conversations hold its harness id.
+ * the signed-in `userId` (null for a guest), given `owners`, the account
+ * that owns its harness conversation (none or one).
  */
 export const admitsStudioCall = (
     route: string,
@@ -69,19 +107,27 @@ export const admitsStudioCall = (
 export const OWNERSHIP_TIMEOUT_MS = 5_000;
 export const OWNERSHIP_RETRY_SECONDS = 5;
 
-export type StudioAccessRefusal = 'not_found' | 'too_large' | 'unavailable';
+export type StudioAccessRefusal = 'not_found' | 'too_large' | 'malformed' | 'unavailable';
+
+export type StudioAccess =
+    { refusal: StudioAccessRefusal; call: null } | { refusal: null; call: StudioCall | null };
 
 /**
- * The proxy's ownership check for one Studio call: null to forward it, or why
- * it is refused. `readBody` reads the request body (null when it is over
- * MAX_STUDIO_BODY_BYTES), `readUserId` the signed-in user, and `ownersOf` the
- * accounts holding a harness conversation id. A call that names no
- * conversation goes on to the harness, which refuses it, except on a route
- * that needs the caller's own copy. A check whose reads fail, or have not
- * answered within `timeoutMs`, refuses the call as `unavailable`, since
- * forwarding it unchecked would open a saved conversation to anyone.
+ * The proxy's ownership check for one Studio call: the call to forward
+ * (canonicalStudioCall), or why it is refused. `readBody` reads the request
+ * body (null when it is over MAX_STUDIO_BODY_BYTES), `readUserId` the
+ * signed-in user, and `ownersOf` the accounts holding a harness conversation
+ * id. The check reads the conversation id from the canonical call, and the
+ * proxy forwards that call's query and body, so the conversation checked is
+ * the conversation the harness reads. A call that cannot name one
+ * conversation unambiguously is refused as `malformed`. A call that names
+ * none goes on to the harness, which refuses it, except on a route that needs
+ * the caller's own copy. A check whose reads fail, or have not answered
+ * within `timeoutMs`, refuses the call as `unavailable`, since forwarding it
+ * unchecked would open a saved conversation to anyone. An OPTIONS call is
+ * forwarded as it came (`call` null).
  */
-export const studioAccessRefusal = async ({
+export const studioAccess = async ({
     route,
     method,
     search,
@@ -97,9 +143,9 @@ export const studioAccessRefusal = async ({
     readUserId: () => Promise<string | null>;
     ownersOf: (conversationId: string) => Promise<string[]>;
     timeoutMs?: number;
-}): Promise<StudioAccessRefusal | null> => {
+}): Promise<StudioAccess> => {
     if (method === 'OPTIONS') {
-        return null;
+        return { refusal: null, call: null };
     }
 
     let body: string | null = null;
@@ -108,14 +154,22 @@ export const studioAccessRefusal = async ({
         body = await readBody();
 
         if (body === null) {
-            return 'too_large';
+            return { refusal: 'too_large', call: null };
         }
     }
 
-    const conversationId = studioConversationId(method, search, body);
+    const call = canonicalStudioCall(method, search, body);
+
+    if (call === null) {
+        return { refusal: 'malformed', call: null };
+    }
+
+    const { conversationId } = call;
 
     if (conversationId === null) {
-        return OWNER_ROUTES.has(route) ? 'not_found' : null;
+        return OWNER_ROUTES.has(route)
+            ? { refusal: 'not_found', call: null }
+            : { refusal: null, call };
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -131,11 +185,13 @@ export const studioAccessRefusal = async ({
             }),
         ]);
 
-        return admitsStudioCall(route, userId, owners) ? null : 'not_found';
+        return admitsStudioCall(route, userId, owners)
+            ? { refusal: null, call }
+            : { refusal: 'not_found', call: null };
     } catch (error) {
         console.error('studio: the conversation owner was not read', error);
 
-        return 'unavailable';
+        return { refusal: 'unavailable', call: null };
     } finally {
         clearTimeout(timer);
     }

@@ -23,8 +23,9 @@ export * from './auth-schema.ts';
  * with their CSV, activity, pins, layout, theme, notes…) as one JSON
  * document, plus the columns the history list needs without unpacking it.
  * `agentSessionId` is the agent's server-side conversation, so a reopened
- * conversation resumes with its context, and the account that holds it is
- * the only one the Studio proxy lets call the harness about it.
+ * conversation resumes with its context. It is part of the saved document,
+ * which the account rewrites on every save, so it grants nothing: which
+ * account the harness conversation belongs to is `studioSessionOwner`.
  */
 export const conversation = pgTable(
     'conversation',
@@ -41,14 +42,26 @@ export const conversation = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
-    (table) => [
-        index('conversation_user_updated_idx').on(table.userId, table.updatedAt),
-        // The Studio proxy finds a harness conversation's owner on every call.
-        index('conversation_agent_session_idx').on(table.agentSessionId),
-    ],
+    (table) => [index('conversation_user_updated_idx').on(table.userId, table.updatedAt)],
 );
 
 export type ConversationRow = typeof conversation.$inferSelect;
+
+/**
+ * The account a harness conversation (`agentSessionId`) belongs to, which the
+ * Studio proxy (src/lib/studio/studioAccess) reads on every call. The first
+ * save naming the harness conversation writes the row
+ * (src/lib/chat/conversationSave), and no save changes it afterwards, so a
+ * save by another account, or the owner's save naming a different harness
+ * conversation, leaves the owner as it was.
+ */
+export const studioSessionOwner = pgTable('studio_session_owner', {
+    agentSessionId: text('agent_session_id').primaryKey(),
+    userId: text('user_id')
+        .notNull()
+        .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 /**
  * A public share: a pruned copy of a conversation (or its canvas, or one

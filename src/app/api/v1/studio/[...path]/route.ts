@@ -6,12 +6,17 @@ import { counterDb } from '@/lib/db';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
 import { STUDIO_HEADERS } from '@/lib/proxy/headers';
-import { missingProblem, notFoundProblem, problem } from '@/lib/proxy/problem';
+import {
+    missingProblem,
+    notFoundProblem,
+    problem,
+    requestInvalidProblem,
+} from '@/lib/proxy/problem';
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
 import {
     MAX_STUDIO_BODY_BYTES,
     OWNERSHIP_RETRY_SECONDS,
-    studioAccessRefusal,
+    studioAccess,
 } from '@/lib/studio/studioAccess';
 import {
     meterTurn,
@@ -36,13 +41,19 @@ const sessionOnce = () => {
     return () => (user ??= getUser());
 };
 
+const queryOf = (search: URLSearchParams): string => {
+    const query = search.toString();
+
+    return query ? `?${query}` : '';
+};
+
 const giveBack = (receipt: Parameters<typeof refundPrompt>[1]) =>
     refundPrompt(counterDb, receipt).catch((error) =>
         console.error('studio: a prompt was not given back', error),
     );
 
 // Only the routes the browser calls go through (studioRoute), each about a
-// conversation the caller may reach (studioAccessRefusal). A turn spends one
+// conversation the caller may reach (studioAccess). A turn spends one
 // prompt of the caller's daily allowance, and meterTurn
 // (src/lib/studio/spendPrompt) gives it back when the turn does not start.
 // Reading the state and resuming a turn spend none.
@@ -56,13 +67,13 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
     const session = sessionOnce();
 
     // A conversation an account saved answers only to that account
-    // (src/lib/studio/studioAccess). The body is read from a copy, so the
-    // request still streams to the harness.
-    const refusal = await studioAccessRefusal({
+    // (src/lib/studio/studioAccess). The harness gets the query and body the
+    // check read its conversation id from, so both name one conversation.
+    const { refusal, call } = await studioAccess({
         route,
         method: req.method,
         search: req.nextUrl.searchParams,
-        readBody: () => readBoundedText(req.clone().body, MAX_STUDIO_BODY_BYTES),
+        readBody: () => readBoundedText(req.body, MAX_STUDIO_BODY_BYTES),
         readUserId: async () => (await session())?.id ?? null,
         ownersOf: conversationOwners,
     });
@@ -74,6 +85,13 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
             detail: `The request body is over ${MAX_STUDIO_BODY_BYTES} bytes.`,
             retryable: false,
         });
+    }
+
+    if (refusal === 'malformed') {
+        return requestInvalidProblem(
+            'A Studio call names its conversation once: in one conversation_id query ' +
+                'parameter, or in the conversation_id member of a JSON object body.',
+        );
     }
 
     if (refusal === 'not_found') {
@@ -92,7 +110,10 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
 
     const options = {
         surface: 'api',
-        target: `${STUDIO_API_BASE}/api/studio/${route}${req.nextUrl.search}`,
+        target: call
+            ? `${STUDIO_API_BASE}/api/studio/${route}${queryOf(call.search)}`
+            : `${STUDIO_API_BASE}/api/studio/${route}${req.nextUrl.search}`,
+        body: call?.body ?? undefined,
         bearer: STUDIO_TOKEN,
         pass: STUDIO_HEADERS,
         unreachable: 'The studio agent is unreachable. Is it running? (just dev in dfo-ai)',
