@@ -101,9 +101,9 @@ const Hero = ({
     }, [reducedMotion]);
 
     // One reveal GROUP for the whole hero: the observer watches the
-    // full-viewport section (the telescoping panels start at scale 0 —
-    // zero-size boxes their own observers could never see), and every child
-    // rides the section's data-revealed on its own delay.
+    // full-viewport section (the telescoping panels start at scale 0, boxes
+    // too small for their own observers), and every child's entrance plays on
+    // its own delay and replays when the section's parking comes off.
     return (
         <section
             ref={sectionRef}
