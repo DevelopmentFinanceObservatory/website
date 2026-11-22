@@ -14,6 +14,14 @@ import { conversation, studioSessionOwner } from '../../../db/schema.ts';
 
 export type SaveDb = Pick<NodePgDatabase, 'select' | 'insert'>;
 
+// Make `userId` the owner of a harness conversation no account owns yet.
+const bindSessionOwner = async (db: SaveDb, agentSessionId: string, userId: string) => {
+    await db
+        .insert(studioSessionOwner)
+        .values({ agentSessionId, userId })
+        .onConflictDoNothing({ target: studioSessionOwner.agentSessionId });
+};
+
 /**
  * Insert or replace `userId`'s saved conversation: the client owns the id and
  * sends the full document. A save naming a harness conversation that belongs
@@ -37,10 +45,7 @@ export const saveConversation = async (
     };
 
     if (saved.sessionId) {
-        await db
-            .insert(studioSessionOwner)
-            .values({ agentSessionId: saved.sessionId, userId })
-            .onConflictDoNothing({ target: studioSessionOwner.agentSessionId });
+        await bindSessionOwner(db, saved.sessionId, userId);
     }
 
     await db
@@ -69,4 +74,20 @@ export const sessionOwners = async (db: SaveDb, agentSessionId: string): Promise
         .where(eq(studioSessionOwner.agentSessionId, agentSessionId));
 
     return rows.map((row) => row.userId);
+};
+
+/**
+ * Make `userId` the owner of the harness conversation `agentSessionId` if no
+ * account owns it, and answer its owner (src/lib/studio/studioAccess). Of
+ * concurrent claims, the first insert wins and every claim answers the
+ * winner.
+ */
+export const claimSessionOwner = async (
+    db: SaveDb,
+    agentSessionId: string,
+    userId: string,
+): Promise<string[]> => {
+    await bindSessionOwner(db, agentSessionId, userId);
+
+    return sessionOwners(db, agentSessionId);
 };

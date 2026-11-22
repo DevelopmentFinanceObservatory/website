@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
-import { conversationOwners } from '@/lib/chat/conversationStore';
+import { claimConversationOwner, conversationOwners } from '@/lib/chat/conversationStore';
 import { counterDb } from '@/lib/db';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
@@ -76,6 +76,7 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
         readBody: () => readBoundedText(req.body, MAX_STUDIO_BODY_BYTES),
         readUserId: async () => (await session())?.id ?? null,
         ownersOf: conversationOwners,
+        claimOwner: claimConversationOwner,
     });
 
     if (refusal === 'too_large') {

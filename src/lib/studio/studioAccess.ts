@@ -2,15 +2,15 @@
  * Who may call the harness about a conversation. The proxy sends every Studio
  * call with one shared token, so the harness holds no per-user identity and a
  * conversation id is all a call names. The site holds the ownership: the
- * first account to save a conversation naming a harness id owns that harness
- * conversation, and no later save changes it (`studioSessionOwner` in
- * db/schema.ts, written by src/lib/chat/conversationSave).
+ * first account to drive a turn in a harness conversation, or to save a
+ * conversation naming it, owns it, and nothing changes the owner afterwards
+ * (`studioSessionOwner` in db/schema.ts, written by
+ * src/lib/chat/conversationSave).
  *
- * A conversation an account has saved answers only to that account, on every
- * route. Reading its state and resuming its turn also need the caller's own
- * saved copy, so a guest, who saves nothing, gets neither. A conversation no
- * account has saved (a guest's, or an account's first seconds before its
- * first save) stays open to the routes that drive a turn.
+ * A conversation an account owns answers only to that account, on every
+ * route. Reading its state and resuming its turn also need the caller to own
+ * it, so a guest, who owns nothing, gets neither. A conversation no account
+ * owns (a guest's) stays open to the routes that drive a turn.
  */
 
 // The routes that need the caller's own saved copy of the conversation.
@@ -116,8 +116,12 @@ export type StudioAccess =
  * The proxy's ownership check for one Studio call: the call to forward
  * (canonicalStudioCall), or why it is refused. `readBody` reads the request
  * body (null when it is over MAX_STUDIO_BODY_BYTES), `readUserId` the
- * signed-in user, and `ownersOf` the accounts holding a harness conversation
- * id. The check reads the conversation id from the canonical call, and the
+ * signed-in user, and `ownersOf` the account owning a harness conversation
+ * (none or one). A signed-in call on a route that drives a turn, naming a
+ * conversation no account owns, first claims it with `claimOwner`, which
+ * binds the caller unless another account got there first and answers the
+ * owner either way: of two accounts racing on a new conversation, one owns it
+ * and the other is refused. The check reads the conversation id from the canonical call, and the
  * proxy forwards that call's query and body, so the conversation checked is
  * the conversation the harness reads. A call that cannot name one
  * conversation unambiguously is refused as `malformed`. A call that names
@@ -134,6 +138,7 @@ export const studioAccess = async ({
     readBody,
     readUserId,
     ownersOf,
+    claimOwner,
     timeoutMs = OWNERSHIP_TIMEOUT_MS,
 }: {
     route: string;
@@ -142,6 +147,7 @@ export const studioAccess = async ({
     readBody: () => Promise<string | null>;
     readUserId: () => Promise<string | null>;
     ownersOf: (conversationId: string) => Promise<string[]>;
+    claimOwner: (conversationId: string, userId: string) => Promise<string[]>;
     timeoutMs?: number;
 }): Promise<StudioAccess> => {
     if (method === 'OPTIONS') {
@@ -175,8 +181,15 @@ export const studioAccess = async ({
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
+        const read = async (): Promise<[string | null, string[]]> => {
+            const [userId, owners] = await Promise.all([readUserId(), ownersOf(conversationId)]);
+
+            return owners.length === 0 && userId !== null && !OWNER_ROUTES.has(route)
+                ? [userId, await claimOwner(conversationId, userId)]
+                : [userId, owners];
+        };
         const [userId, owners] = await Promise.race([
-            Promise.all([readUserId(), ownersOf(conversationId)]),
+            read(),
             new Promise<never>((_, reject) => {
                 timer = setTimeout(
                     () => reject(new Error(`no answer within ${timeoutMs} ms`)),

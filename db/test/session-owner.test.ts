@@ -4,7 +4,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { SavedConversation } from '../../src/lib/chat/history.ts';
-import { saveConversation, sessionOwners } from '../../src/lib/chat/conversationSave.ts';
+import {
+    claimSessionOwner,
+    saveConversation,
+    sessionOwners,
+} from '../../src/lib/chat/conversationSave.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { user } from '../schema.ts';
 import { createTestDatabase } from './harness.ts';
@@ -54,6 +58,46 @@ test('a save cannot rebind the account a harness conversation belongs to', async
 
     assert.deepEqual(await sessionOwners(db, 'harness-1'), ['user-ana']);
     assert.deepEqual(await sessionOwners(db, 'harness-2'), ['user-ana']);
+});
+
+/**
+ * Accounts claiming one new harness conversation at once, each on its own
+ * connection, all answer the same single owner, and a later save by another
+ * account leaves it.
+ */
+test('concurrent claims on a harness conversation agree on one owner', async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await applyMigrations(database.migratorPool(), {
+        migrationsFolder: MIGRATIONS_FOLDER,
+        runtimeDbUser: database.runtimeUser,
+        migratorDbUser: database.migratorUser,
+    });
+
+    const users = ['user-ana', 'user-ben', 'user-cai', 'user-dee'];
+
+    await drizzle(database.runtimePool())
+        .insert(user)
+        .values(users.map((id) => ({ id, name: id, email: `${id}@example.org` })));
+
+    const answers = await Promise.all(
+        users.map((id) => claimSessionOwner(drizzle(database.runtimePool()), 'harness-new', id)),
+    );
+    const [owner] = answers[0] ?? [];
+
+    assert.ok(owner !== undefined && users.includes(owner));
+    assert.deepEqual(
+        answers,
+        users.map(() => [owner]),
+    );
+
+    const db = drizzle(database.runtimePool());
+    const other = users.find((id) => id !== owner) ?? '';
+
+    await saveConversation(db, other, saved('conv-other', 'harness-new'));
+
+    assert.deepEqual(await sessionOwners(db, 'harness-new'), [owner]);
 });
 
 /**

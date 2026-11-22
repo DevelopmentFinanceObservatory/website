@@ -12,6 +12,9 @@ type AccessInput = Parameters<typeof studioAccess>[0];
 
 const studioAccessRefusal = async (input: AccessInput) => (await studioAccess(input)).refusal;
 
+// A claim on a conversation no other account has claimed: the caller owns it.
+const unclaimed = async (_id: string, userId: string) => [userId];
+
 const OWNERS: Record<string, string[]> = {
     'conv-ana': ['user-ana'],
     'conv-guest': [],
@@ -30,6 +33,7 @@ const check = (
         readBody: async () => JSON.stringify({ kind: 'x', conversation_id: conversationId }),
         readUserId: async () => userId,
         ownersOf: async (id) => OWNERS[id] ?? [],
+        claimOwner: unclaimed,
     });
 
 test('studioAccessRefusal answers 404 for a conversation another account saved', async () => {
@@ -46,8 +50,8 @@ test('studioAccessRefusal gives state and resume only to an owner with a saved c
         assert.equal(await check(route, 'user-ana', 'conv-guest'), 'not_found', route);
     }
 
-    // A conversation nobody has saved yet (a guest's, or an account's first
-    // turn before its first save) still drives its turn.
+    // A conversation no account owns yet (a guest's, or one an account is
+    // about to claim) still drives its turn.
     for (const route of ['turn', 'interrupt', 'cancel', 'composition']) {
         assert.equal(await check(route, null, 'conv-guest'), null, `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-guest'), null, route);
@@ -63,6 +67,7 @@ test('studioAccessRefusal refuses a body over the cap and a state read naming no
             readBody: async () => null,
             readUserId: async () => 'user-ana',
             ownersOf: async () => [],
+            claimOwner: unclaimed,
         }),
         'too_large',
     );
@@ -74,6 +79,7 @@ test('studioAccessRefusal refuses a body over the cap and a state read naming no
             readBody: async () => '',
             readUserId: async () => 'user-ana',
             ownersOf: async () => ['user-ana'],
+            claimOwner: unclaimed,
         }),
         'not_found',
     );
@@ -108,6 +114,7 @@ test('studioAccess forwards only the conversation it checked', async () => {
             readBody: async () => body,
             readUserId: async () => 'user-ben',
             ownersOf: async (id) => owners[id] ?? [],
+            claimOwner: unclaimed,
         });
 
     const repeated = await asBen(
@@ -162,6 +169,43 @@ test('studioAccess forwards only the conversation it checked', async () => {
     assert.equal(own.call?.search.toString(), 'conversation_id=conv-ben&since=3');
 });
 
+// Two accounts driving a turn in one new conversation: the first claims it,
+// and the second, whether it reads before or after that claim, is refused.
+test('studioAccess binds a new conversation to the first account to drive a turn in it', async () => {
+    const owners = new Map<string, string>();
+    const claims: string[] = [];
+    const turn = (userId: string | null, route = 'turn') =>
+        studioAccessRefusal({
+            route,
+            method: route === 'state' ? 'GET' : 'POST',
+            search: new URLSearchParams(route === 'state' ? { conversation_id: 'conv-new' } : {}),
+            readBody: async () => '{"conversation_id":"conv-new"}',
+            readUserId: async () => userId,
+            ownersOf: async (id) => [...(owners.has(id) ? [owners.get(id)!] : [])],
+            claimOwner: async (id, claimant) => {
+                claims.push(claimant);
+
+                if (!owners.has(id)) {
+                    owners.set(id, claimant);
+                }
+
+                return [owners.get(id)!];
+            },
+        });
+
+    assert.equal(await turn(null), null, 'a guest claims nothing');
+    assert.equal(await turn('user-ana', 'state'), 'not_found', 'a state read claims nothing');
+    assert.deepEqual(claims, []);
+
+    const [ana, ben] = await Promise.all([turn('user-ana'), turn('user-ben')]);
+
+    assert.deepEqual([ana, ben], [null, 'not_found']);
+    assert.deepEqual(claims, ['user-ana', 'user-ben']);
+    assert.equal(await turn('user-ben'), 'not_found');
+    assert.equal(await turn(null), 'not_found');
+    assert.equal(await turn('user-ana', 'state'), null);
+});
+
 test('studioAccessRefusal refuses as unavailable when the owners cannot be read', async () => {
     const refusal = (ownersOf: () => Promise<string[]>) =>
         studioAccessRefusal({
@@ -171,9 +215,25 @@ test('studioAccessRefusal refuses as unavailable when the owners cannot be read'
             readBody: async () => '',
             readUserId: async () => 'user-ana',
             ownersOf,
+            claimOwner: unclaimed,
             timeoutMs: 10,
         });
 
     assert.equal(await refusal(() => new Promise<string[]>(() => {})), 'unavailable');
     assert.equal(await refusal(() => Promise.reject(new Error('db down'))), 'unavailable');
+
+    const claimRefusal = (claimOwner: () => Promise<string[]>) =>
+        studioAccessRefusal({
+            route: 'turn',
+            method: 'POST',
+            search: new URLSearchParams(),
+            readBody: async () => '{"conversation_id":"conv-new"}',
+            readUserId: async () => 'user-ana',
+            ownersOf: async () => [],
+            claimOwner,
+            timeoutMs: 10,
+        });
+
+    assert.equal(await claimRefusal(() => new Promise<string[]>(() => {})), 'unavailable');
+    assert.equal(await claimRefusal(() => Promise.reject(new Error('db down'))), 'unavailable');
 });

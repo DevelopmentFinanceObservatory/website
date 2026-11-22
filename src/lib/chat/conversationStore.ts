@@ -5,7 +5,7 @@ import {
     searchConversations as searchIn,
     type ConversationMeta,
 } from './conversationSearch';
-import { saveConversation, sessionOwners } from './conversationSave';
+import { claimSessionOwner, saveConversation, sessionOwners } from './conversationSave';
 import type { SavedConversation } from './history';
 
 import { db } from '@/lib/db';
@@ -55,6 +55,11 @@ export const getConversation = async (
  *  list of none or one (src/lib/studio/studioAccess). */
 export const conversationOwners = (agentSessionId: string): Promise<string[]> =>
     sessionOwners(db, agentSessionId);
+
+/** Make `userId` the owner of a harness conversation no account owns, and
+ *  answer its owner (claimSessionOwner). */
+export const claimConversationOwner = (agentSessionId: string, userId: string): Promise<string[]> =>
+    claimSessionOwner(db, agentSessionId, userId);
 
 /** Insert or replace; see saveConversation for who a harness conversation
  *  belongs to. */
