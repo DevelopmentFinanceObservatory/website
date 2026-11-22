@@ -37,8 +37,10 @@ import {
     readSince,
     withHarnessTurn,
     withInherited,
+    offeredQuestionTurn,
     turnReplyAt,
     withFollowup,
+    withOfferedQuestion,
     withoutUnsentQuestion,
 } from '../transcript.ts';
 import {
@@ -992,4 +994,84 @@ test('a card a state read draws during a failed legacy reconcile joins the legac
     // Saved now, the legacy canvas shows the card, so the next open does not
     // take it for one the save hid.
     assert.deepEqual(legacy.ids(), ['cmp_1', CARD]);
+});
+
+test("a refused new question is offered on the last reply, which the turn's reply then is", () => {
+    // Turn 3 handed back the question; the page's send was refused 429.
+    const refused: ChatMessage[] = [
+        { role: 'user', text: 'question 3', harnessTurn: 3 },
+        { role: 'bot', text: NEW_QUESTION_NOTE },
+        { role: 'user', text: 'ODA to Ghana', refunded: true, fromNewQuestion: 3 },
+        { role: 'bot', text: '_You have used your prompts for today._' },
+    ];
+    const offered = withOfferedQuestion(refused, 3, 'ODA to Ghana');
+
+    assert.deepEqual(offered, [
+        refused[0],
+        {
+            role: 'bot',
+            text: NEW_QUESTION_NOTE,
+            followups: ['ODA to Ghana'],
+            newQuestion: 'ODA to Ghana',
+        },
+    ]);
+
+    // A click on the offer sends it as the turn that follows turn 3.
+    assert.equal(offeredQuestionTurn(offered, 'ODA to Ghana'), 3);
+    assert.equal(offeredQuestionTurn(offered, 'something else'), undefined);
+    assert.equal(offeredQuestionTurn(refused, 'ODA to Ghana'), undefined);
+
+    // The offer holds on reopen, whatever whitespace the harness kept.
+    const read = readOf({
+        turn: turnState({ index: 3, status: 'done' }),
+        closed_since: [{ ...closed(3, ''), new_question: '  ODA to Ghana\n' }],
+    });
+
+    assert.equal(owedNewQuestion(read, offered), null);
+});
+
+test('a card a missed turn revised is kept on a legacy canvas the save hid it from', async () => {
+    const legacy = createLegacyCanvas({
+        ids: ['cmp_1'],
+        hidden: new Map([
+            ['cmp_hidden', 1],
+            ['cmp_old', 1],
+        ]),
+        pinned: [],
+        mutate: async () => null,
+        onTake: () => assert.fail('the reconcile failed'),
+        onLocal: () => {},
+        onChange: () => {},
+    });
+    // A turn after the save revised cmp_hidden, so the reconcile leaves it;
+    // the remove of cmp_old fails.
+    const manifest = manifestOf([
+        ['cmp_old', 1],
+        ['cmp_1', 1],
+        ['cmp_hidden', 2],
+    ]);
+
+    await legacy.offer(manifest);
+    await drawManifestCards({
+        manifest,
+        held: new Map([
+            ['cmp_old', 1],
+            ['cmp_1', 1],
+            ['cmp_hidden', 1],
+        ]),
+        seen: new Set(['cmp_1', 'cmp_hidden', 'cmp_old']),
+        inFlight: new Set(),
+        isCurrent: () => true,
+        keep: legacy.keep,
+        onDrawn: () => {},
+        read: async (id, revision) => ({
+            component_id: id,
+            revision,
+            catalog_version: '',
+            payload: {},
+            fact_summary: { series: [], series_cut: 0, window: null, unit: null },
+        }),
+    });
+
+    assert.deepEqual(legacy.ids(), ['cmp_1', 'cmp_hidden']);
 });

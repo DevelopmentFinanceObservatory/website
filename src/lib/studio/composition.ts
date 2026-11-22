@@ -115,7 +115,8 @@ export type LegacyLocal = { shown: string[]; hidden: string[] };
  * then on. Before it, `onLocal` hears the cards the save held that the
  * offered manifest lacks, cards the harness never held such as a fork's
  * inherited ones, which stay on the page as local cards, those the page hid
- * or the user took off (`drop`) staying off the canvas.
+ * or the user took off and the harness refused to remove (`unheld`) staying
+ * off the canvas.
  * Until then the canvas shows `ids()`: the legacy cards plus the cards drawn
  * since (`keep`), less the ones the user took off (`drop`), and `onChange`
  * hears each change. A failed `remove`, a stale revision included, leaves
@@ -143,16 +144,19 @@ export const createLegacyCanvas = ({
     onChange: (ids: string[]) => void;
 }) => {
     const shown = new Set(ids);
-    // The cards the user took off before the manifest was taken. One the
-    // harness never held (a fork's inherited card) stays local and off the
-    // canvas.
-    const dropped = new Set<string>();
+    // The cards the user took off whose `remove` the harness refused, since
+    // it never held them (a fork's inherited card). Each stays local and off
+    // the canvas.
+    const unheld = new Set<string>();
     let state: 'waiting' | 'sent' | 'failed' | 'taken' = 'waiting';
     // The newest manifest offered while the `remove` was in flight.
     let later: CompositionManifest | null = null;
+    // The cards of the manifest taken.
+    let taken: ReadonlySet<string> = new Set();
 
     const take = (manifest: CompositionManifest, local: LegacyLocal) => {
         state = 'taken';
+        taken = new Set(manifest.blocks.map((block) => block.component_id));
 
         if (local.shown.length > 0 || local.hidden.length > 0) {
             onLocal(local);
@@ -171,15 +175,28 @@ export const createLegacyCanvas = ({
         ids: (): string[] => [...shown],
         keep: (id: string) => {
             if (state !== 'taken' && !shown.has(id)) {
-                dropped.delete(id);
+                unheld.delete(id);
                 shown.add(id);
                 onChange([...shown]);
             }
         },
         drop: (id: string) => {
             if (state !== 'taken' && shown.delete(id)) {
-                dropped.add(id);
                 onChange([...shown]);
+            }
+        },
+        // The harness refused the `remove` of card `id`, which it never held.
+        // Before the take, the take makes it local; after it, a card the
+        // taken manifest lacks is made local at once.
+        unheld: (id: string) => {
+            if (shown.has(id)) {
+                return;
+            }
+
+            if (state !== 'taken') {
+                unheld.add(id);
+            } else if (!taken.has(id)) {
+                onLocal({ shown: [], hidden: [id] });
             }
         },
         offer: async (manifest: CompositionManifest): Promise<void> => {
@@ -196,7 +213,7 @@ export const createLegacyCanvas = ({
             const held = new Set(manifest.blocks.map((block) => block.component_id));
             const local = {
                 shown: [...shown].filter((id) => !held.has(id)),
-                hidden: [...new Set([...hidden.keys(), ...dropped])].filter(
+                hidden: [...new Set([...hidden.keys(), ...unheld])].filter(
                     (id) => !shown.has(id) && !held.has(id),
                 ),
             };

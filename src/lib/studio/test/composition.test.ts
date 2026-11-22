@@ -379,12 +379,13 @@ test('takeManifest keeps which harness cards the manifest pins', () => {
     );
 });
 
-test('an inherited card taken off a legacy fork before the manifest is taken stays local', async () => {
+test('an inherited card taken off a legacy fork stays local once the harness refuses its remove', async () => {
     const save = {
         sessionId: 'conversation_1',
         widgets: [
             { kind: 'text' as const, id: 'cmp_inherited', title: 'Old', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
+            { kind: 'text' as const, id: 'cmp_late', title: 'Late', body: '', turn: 2 },
         ],
         pinnedIds: ['cmp_inherited'],
         removedIds: [],
@@ -401,10 +402,31 @@ test('an inherited card taken off a legacy fork before the manifest is taken sta
         onChange: () => {},
     });
 
-    // Removed before the first manifest arrived, so Remove went to the
-    // harness, which never held it.
+    // Removed before the first manifest arrived: the harness refused the
+    // inherited card's remove, which it never held, and took the harness
+    // card cmp_own off, so the manifest lacks both. Only the refused one
+    // becomes local.
     legacy.drop('cmp_inherited');
-    await legacy.offer(manifest(3, ['cmp_own']));
+    legacy.drop('cmp_own');
+    legacy.unheld('cmp_inherited');
+    await legacy.offer(manifest(3, ['cmp_late']));
 
-    assert.deepEqual(local, [{ shown: [], hidden: ['cmp_inherited'] }]);
+    assert.deepEqual<LegacyLocal[]>(local, [{ shown: [], hidden: ['cmp_inherited'] }]);
+
+    // A refusal answered after the take still makes the card local.
+    const after = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: new Map(),
+        pinned: [],
+        mutate: async () => assert.fail('nothing to bring to the harness'),
+        onTake: () => {},
+        onLocal: (cards) => local.push(cards),
+        onChange: () => {},
+    });
+
+    after.drop('cmp_inherited');
+    await after.offer(manifest(3, ['cmp_own', 'cmp_late']));
+    after.unheld('cmp_inherited');
+
+    assert.deepEqual(local.at(-1), { shown: [], hidden: ['cmp_inherited'] });
 });

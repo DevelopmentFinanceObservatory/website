@@ -2,7 +2,8 @@ import type { CanvasBaseline } from './composition.ts';
 import type { CompositionManifest, MutationOperation } from './wire.ts';
 
 /** Serialize each session's canvas edits, so a Remove then an Add land in
- *  order. `reset` drops the answers of edits sent before it. */
+ *  order. `reset` drops the answers of edits sent before it. `enqueue`
+ *  resolves true when the harness answered the edit with a manifest. */
 export const createCanvasEdits = ({
     mutate,
     onManifest,
@@ -16,13 +17,13 @@ export const createCanvasEdits = ({
     onFailure: (operations: MutationOperation[], error: unknown) => void;
 }) => {
     let generation = 0;
-    const chains = new Map<string, Promise<void>>();
+    const chains = new Map<string, Promise<unknown>>();
 
     return {
         reset: () => {
             generation += 1;
         },
-        enqueue: (session: string, operations: MutationOperation[]): Promise<void> => {
+        enqueue: (session: string, operations: MutationOperation[]): Promise<boolean> => {
             const queuedGeneration = generation;
             const chain = (chains.get(session) ?? Promise.resolve()).then(async () => {
                 let failure: unknown;
@@ -35,7 +36,7 @@ export const createCanvasEdits = ({
                             onManifest(manifest);
                         }
 
-                        return;
+                        return true;
                     }
                 } catch (error) {
                     failure = error;
@@ -44,6 +45,8 @@ export const createCanvasEdits = ({
                 if (queuedGeneration === generation) {
                     onFailure(operations, failure);
                 }
+
+                return false;
             });
 
             chains.set(session, chain);

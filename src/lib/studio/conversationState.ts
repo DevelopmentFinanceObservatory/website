@@ -186,7 +186,10 @@ export const owedNewQuestion = (
             message.harnessTurn > closed.turn_index,
     );
     const reply = messages[turnReplyAt(messages, closed.turn_index)];
-    const offered = reply?.role === 'bot' && !!reply.followups?.includes(closed.new_question);
+    const asked = closed.new_question.trim();
+    const offered =
+        reply?.role === 'bot' &&
+        [reply.newQuestion, ...(reply.followups ?? [])].some((text) => text?.trim() === asked);
 
     if (later || offered) {
         return null;
@@ -399,9 +402,10 @@ export const cardTurns = (
  * Draw the cards a state read's manifest names that the page lacks
  * (cardsToRead): each is read (`read`), dropped when a newer revision
  * arrived meanwhile (`held`) or the page moved on (`isCurrent`), and handed
- * to `onDrawn`. A card the page never saw is also kept on a legacy canvas
- * (`keep`), as a streamed card is, so a save made before the legacy canvas
- * is taken holds it as shown, never as a card the save hid. `inFlight`
+ * to `onDrawn`. Each card drawn, one the page never saw or one a missed turn
+ * revised, is also kept on a legacy canvas (`keep`), as a streamed card is,
+ * so a save made before the legacy canvas is taken holds it as shown, never
+ * as a card the save hid. `inFlight`
  * holds the reads under way, by id and revision, so overlapping reads ask
  * for each card once.
  */
@@ -446,11 +450,7 @@ export const drawManifestCards = async ({
             }
 
             held.set(id, answer.revision);
-
-            if (!seen.has(id)) {
-                keep(id);
-            }
-
+            keep(id);
             onDrawn(block, answer);
         }),
     );

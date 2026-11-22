@@ -50,8 +50,9 @@ test('a refused or failed edit is reported and releases the next edit', async ()
             },
         });
 
-        await edits.enqueue('session', remove);
-        await edits.enqueue('session', add);
+        // Each edit says whether the harness answered it with a manifest.
+        assert.equal(await edits.enqueue('session', remove), false);
+        assert.equal(await edits.enqueue('session', add), true);
         assert.equal(calls, 2);
         assert.equal(failures.length, 1);
     }

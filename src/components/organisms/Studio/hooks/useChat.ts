@@ -98,9 +98,11 @@ import {
     keyUnkeyedSave,
     readSince,
     withAnswer,
+    offeredQuestionTurn,
     withFollowup,
     withHarnessTurn,
     withNewQuestion,
+    withOfferedQuestion,
     withoutUnsentQuestion,
     withRefundedPrompt,
 } from '@/lib/studio/transcript';
@@ -146,6 +148,9 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // prompt of a save from before prompts carried their turn whose turn the
 // harness's record could not name (keyUnkeyedSave): it keeps its text and
 // numbers no turn.
+// A bot turn's `newQuestion` is the new question its turn handed back that
+// the page offers among its `followups` for the user to send
+// (withOfferedQuestion).
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
@@ -167,6 +172,7 @@ export type ChatMessage =
           text: string;
           inherited?: true;
           followups?: string[];
+          newQuestion?: string;
           chips?: ApplyChoiceSuggestion[];
           plan?: ApprovedPlan;
       };
@@ -503,8 +509,7 @@ export const useChat = (initial?: ChatSnapshot) => {
     // never sent on its own again (owedNewQuestion reads the offer). Its
     // unsent prompt leaves the transcript with its reply.
     const offerNewQuestion = useCallback((turnIndex: number, text: string) => {
-        const offer = (messages: ChatMessage[]) =>
-            withFollowup(withoutUnsentQuestion(messages, turnIndex), turnIndex, text);
+        const offer = (messages: ChatMessage[]) => withOfferedQuestion(messages, turnIndex, text);
 
         messagesRef.current = offer(messagesRef.current);
         setState((prev) => ({ ...prev, messages: offer(prev.messages) }));
@@ -547,9 +552,24 @@ export const useChat = (initial?: ChatSnapshot) => {
                     );
                 },
             });
-            void canvasEditsRef.current.enqueue(session, operations).then(() => {
-                if (generationRef.current === generation) {
-                    setPendingPins((prev) => withPinsSettled(prev, operations));
+            // A legacy canvas learns which removes the harness refused: a card
+            // it never held, such as a fork's inherited card, then stays on
+            // the page as a local card (createLegacyCanvas's `unheld`).
+            const legacy = legacyRef.current;
+
+            void canvasEditsRef.current.enqueue(session, operations).then((answered) => {
+                if (generationRef.current !== generation) {
+                    return;
+                }
+
+                setPendingPins((prev) => withPinsSettled(prev, operations));
+
+                if (!answered) {
+                    for (const operation of operations) {
+                        if (operation.op === 'remove') {
+                            legacy?.unheld(operation.component_id);
+                        }
+                    }
                 }
             });
         },
@@ -1246,13 +1266,18 @@ export const useChat = (initial?: ChatSnapshot) => {
     }, []);
 
     // `fromNewQuestion` is the harness turn whose new question this sends
-    // (askNewQuestion). The request names that turn as the one it follows.
+    // (askNewQuestion), or whose offer the user sent from the last reply
+    // (offeredQuestionTurn). The request names that turn as the one it
+    // follows, so a turn another page began first refuses it `turn_moved`.
     // A send the harness never admits (refused, never reached, or stopped)
     // is offered on that turn's reply for the user to send, and not sent
     // again on its own (offerNewQuestion).
     const send = useCallback(
-        (message: string, card?: CardTarget, seeds?: Seed[], fromNewQuestion?: number) => {
+        (message: string, card?: CardTarget, seeds?: Seed[], asked?: number) => {
             const text = message.trim();
+            const fromNewQuestion =
+                asked ??
+                (card || seeds ? undefined : offeredQuestionTurn(messagesRef.current, text));
 
             if (!text || holdTurn({ text, card, seeds, fromNewQuestion })) {
                 return;

@@ -407,6 +407,71 @@ export const withoutUnsentQuestion = (
 };
 
 /**
+ * The transcript with harness turn `turnIndex`'s new question `text` offered
+ * for the user to send, after the page's send of it was never admitted:
+ * every prompt sent for it that opened no turn of this conversation, refused
+ * or unsent, leaves with the messages up to the next prompt, and the turn's
+ * reply offers it as a follow-up and names it (`newQuestion`), which a click
+ * sends as the turn that follows (offeredQuestionTurn). With no later turn,
+ * that reply is the last message, the one whose follow-ups the chat shows.
+ */
+export const withOfferedQuestion = (
+    messages: ChatMessage[],
+    turnIndex: number,
+    text: string,
+): ChatMessage[] => {
+    const sent = (message: ChatMessage) =>
+        message.role === 'user' &&
+        message.fromNewQuestion === turnIndex &&
+        message.harnessTurn === undefined &&
+        !message.inherited;
+    let dropping = false;
+    const kept = messages.filter((message) => {
+        if (isPrompt(message)) {
+            dropping = sent(message);
+        }
+
+        return !dropping;
+    });
+    const at = turnReplyAt(kept, turnIndex);
+    const reply = kept[at];
+
+    if (reply?.role !== 'bot') {
+        return kept.length === messages.length ? messages : kept;
+    }
+
+    return kept.map((message, other) =>
+        other === at
+            ? {
+                  ...reply,
+                  followups: reply.followups?.includes(text)
+                      ? reply.followups
+                      : [...(reply.followups ?? []), text],
+                  newQuestion: text,
+              }
+            : message,
+    );
+};
+
+/** The harness turn whose new question the last reply, the one whose
+ *  follow-ups the chat shows, offers as `text` (withOfferedQuestion),
+ *  compared trimmed, or undefined. */
+export const offeredQuestionTurn = (
+    messages: readonly ChatMessage[],
+    text: string,
+): number | undefined => {
+    const last = messages.at(-1);
+
+    if (last?.role !== 'bot' || last.newQuestion?.trim() !== text.trim()) {
+        return undefined;
+    }
+
+    const prompt = messages.findLastIndex(isPrompt);
+
+    return promptTurns(messages).get(prompt);
+};
+
+/**
  * The transcript with `prompt` offered as a follow-up on harness turn
  * `turnIndex`'s reply, or on the last reply for a turn the stream did not
  * name (null), for the user to send: a new question the page could not
