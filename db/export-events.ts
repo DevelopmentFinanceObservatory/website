@@ -1,7 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
 import { BigQuery } from '@google-cloud/bigquery';
-import { bigQueryAccountTable, readAccounts, runAccountExport } from './account-export';
+import {
+    ACCOUNT_READ_MS,
+    bigQueryAccountTable,
+    readAccounts,
+    runAccountExport,
+} from './account-export';
 import { STATEMENT_TIMEOUT_MS } from './bounded';
 import {
     buildRuntimePool,
@@ -15,6 +20,7 @@ import {
     type JobProgress,
     pgEventSource,
     readExportEnv,
+    JOB_DEADLINE_MS,
     runAndExit,
     runExport,
     runExportJob,
@@ -23,9 +29,14 @@ import {
 // The event export Job's command (`node dist/export-events.cjs`, see
 // deploy/Dockerfile). It reads the database as the runtime does, through
 // WEBSITE_DB_* over the Cloud SQL connector, or DATABASE_URL locally, and
-// runs the account export, then the event export (runExportJob), under
+// runs the event export (runExportJob), then the account export, under
 // runAndExit's deadline, which names the phase in `progress` if it fires.
+// What the account export keeps for its loads when the event export has used
+// most of the Job's time, so the read's own timeout fires before runAndExit's.
+const ACCOUNT_LOAD_RESERVE_MS = 2 * 60_000;
+
 async function main(progress: JobProgress): Promise<void> {
+    const startedAt = Date.now();
     const settings = readExportEnv();
     const connection = resolveRuntimeConnection();
     const cloudSql =
@@ -54,7 +65,18 @@ async function main(progress: JobProgress): Promise<void> {
     await runExportJob({
         exportAccounts: () =>
             runAccountExport({
-                read: () => readAccounts(pool),
+                read: () =>
+                    readAccounts(pool, {
+                        timeoutMs: Math.max(
+                            0,
+                            Math.min(
+                                ACCOUNT_READ_MS,
+                                JOB_DEADLINE_MS -
+                                    (Date.now() - startedAt) -
+                                    ACCOUNT_LOAD_RESERVE_MS,
+                            ),
+                        ),
+                    }),
                 replace: bigQueryAccountTable({ datasetId: settings.datasetId, bigquery }),
                 hmacKey: settings.hmacKey,
                 scratchFile: path.join(os.tmpdir(), `account-export-${process.pid}.ndjson`),

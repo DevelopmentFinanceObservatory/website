@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,10 @@ import {
     ACCOUNT_ORGANISATION_SCHEMA,
     ACCOUNT_SCHEMA,
     ACCOUNT_TABLES,
+    AccountExportError,
     type AccountOrganisationRow,
+    CONVERSATION_SCHEMA,
+    type ConversationExportRow,
     type AccountRead,
     type AccountRow,
     type AccountTable,
@@ -80,6 +83,8 @@ const capture = () => {
 
     return { loaded, replace, rows };
 };
+
+const sha256Hex = (text: string): string => createHash('sha256').update(text).digest('hex');
 
 const scratchFile = () =>
     path.join(
@@ -166,6 +171,19 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
     const day = (back: number) =>
         new Date(Date.parse(today) - back * 86_400_000).toISOString().slice(0, 10);
 
+    await database.runtimePool().query(
+        `insert into "user" (id, name, email, deleting_at)
+         values ('id-gone', 'Name', 'gone@one.org', now())`,
+    );
+    await database.runtimePool().query(
+        `insert into conversation (id, user_id, title, agent_session_id, data, created_at)
+         values ('conv-raw-1', $1, 'A private title', 'session-raw-1', '{"secret":1}',
+                 '2026-10-20T09:30:00.123456Z'),
+                ('conv-raw-2', $1, 'Another', null, '{}', '2026-10-21T00:00:00Z'),
+                ('conv-raw-3', 'id-gone', 'Leaving', null, '{}', '2026-10-21T00:00:00Z')`,
+        [idOf('a@one.org')],
+    );
+
     readerPool = new Pool({
         host: process.env.PGHOST ?? 'localhost',
         port: Number(process.env.PGPORT ?? 5433),
@@ -195,6 +213,24 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
             { day: day(1), organisation: 'mail.example.org', accounts: 3 },
             { day: day(1), organisation: 'one.org', accounts: 1 },
         ]),
+    );
+
+    assert.deepEqual(
+        read.conversations,
+        [
+            {
+                idSha256: sha256Hex('conv-raw-1'),
+                agentSessionSha256: sha256Hex('session-raw-1'),
+                userId: idOf('a@one.org'),
+                createdAt: '2026-10-20T09:30:00.123456Z',
+            },
+            {
+                idSha256: sha256Hex('conv-raw-2'),
+                agentSessionSha256: null,
+                userId: idOf('a@one.org'),
+                createdAt: '2026-10-21T00:00:00.000000Z',
+            },
+        ].toSorted((a, b) => a.idSha256.localeCompare(b.idSha256)),
     );
 
     // Each account created before today, with the label its domain has in
@@ -253,8 +289,20 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
         assert.ok(!text.includes(`"${idOf(email)}"`), idOf(email));
     }
 
+    assert.doesNotMatch(text, /conv-raw|session-raw|private title|secret|id-gone/);
+    assert.deepEqual(
+        (exported('conversation') as ConversationExportRow[]).map((row) => row.user_hash),
+        read.conversations.map(() => eventUserHash(idOf('a@one.org'))),
+    );
+
     await assert.rejects(readerPool.query('select 1 from "user"'), /permission denied/);
     await assert.rejects(readerPool.query('select 1 from webmail_domain'), /permission denied/);
+    await assert.rejects(readerPool.query('select 1 from conversation'), /permission denied/);
+    await assert.rejects(readerPool.query('select id from conversation_export'), /does not exist/);
+    await assert.rejects(
+        readerPool.query('select agent_session_id from conversation_export'),
+        /does not exist/,
+    );
 });
 
 test('account_daily and account_organisation name a domain only once it holds 3 accounts before today', async (t) => {
@@ -315,7 +363,7 @@ test('account_daily and account_organisation leave out an account being deleted'
     ]);
 });
 
-test('account_daily holds no rows while webmail_domain is empty, and the export fails', async (t) => {
+test('account_daily holds no rows while webmail_domain is empty, and the export fails naming both account tables after loading conversation', async (t) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
 
@@ -331,7 +379,7 @@ test('account_daily holds no rows while webmail_domain is empty, and the export 
          from unnest(array['a@gmail.com', 'b@gmail.com', 'c@gmail.com']) as email`,
     );
 
-    let replaced = false;
+    const replaced: AccountTable[] = [];
 
     await assert.rejects(
         runAccountExport({
@@ -341,16 +389,21 @@ test('account_daily holds no rows while webmail_domain is empty, and the export 
                 assert.deepEqual(read.organisations, []);
                 return read;
             },
-            replace: async () => {
-                replaced = true;
+            replace: async (table) => {
+                replaced.push(table);
             },
             hmacKey: HMAC_KEY,
             scratchFile: scratchFile(),
             log: () => {},
         }),
-        /webmail_domain is empty/,
+        (error) => {
+            assert.ok(error instanceof AccountExportError);
+            assert.deepEqual(error.failedTables, ['account_daily', 'account_organisation']);
+            assert.equal(error.errors.length, 2);
+            return true;
+        },
     );
-    assert.equal(replaced, false);
+    assert.deepEqual(replaced, ['conversation']);
 });
 
 test('readAccounts reads no rows from an empty user table', async (t) => {
@@ -362,6 +415,7 @@ test('readAccounts reads no rows from an empty user table', async (t) => {
     assert.deepEqual(await readAccounts(database.adminPool()), {
         rows: [],
         organisations: [],
+        conversations: [],
         webmailDomains: true,
     });
 });
@@ -404,6 +458,7 @@ test('bigQueryAccountTable replaces the whole table in one load', async (t) => {
     const cases: [AccountTable, typeof ACCOUNT_SCHEMA][] = [
         ['account_daily', ACCOUNT_SCHEMA],
         ['account_organisation', ACCOUNT_ORGANISATION_SCHEMA],
+        ['conversation', CONVERSATION_SCHEMA],
     ];
 
     assert.deepEqual(
@@ -464,6 +519,21 @@ const ROWS: AccountRow[] = [
     { day: '2026-10-21', organisation: 'one.org', accounts: 3 },
 ];
 
+const CONVERSATIONS: AccountRead['conversations'] = [
+    {
+        idSha256: sha256Hex('c-1'),
+        agentSessionSha256: sha256Hex('session-1'),
+        userId: 'user-1',
+        createdAt: '2026-10-20T09:30:00.123456Z',
+    },
+    {
+        idSha256: sha256Hex('c-2'),
+        agentSessionSha256: null,
+        userId: 'user-2',
+        createdAt: '2026-10-21T00:00:00.000000Z',
+    },
+];
+
 const ORGANISATIONS: AccountRead['organisations'] = [
     { userId: 'user-1', organisation: 'Personal email' },
     { userId: 'user-2', organisation: 'one.org' },
@@ -477,6 +547,7 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
         read: async () => ({
             rows: ROWS,
             organisations: ORGANISATIONS,
+            conversations: CONVERSATIONS,
             webmailDomains: true,
         }),
         replace,
@@ -487,7 +558,7 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
 
     assert.deepEqual(
         loaded.map(({ table }) => table),
-        ['account_daily', 'account_organisation'],
+        ['account_daily', 'account_organisation', 'conversation'],
     );
     assert.deepEqual(rows('account_daily'), ROWS);
     assert.deepEqual(rows('account_organisation'), [
@@ -497,36 +568,78 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
         },
         { user_hash: eventUserHash('user-2'), organisation: 'one.org' },
     ]);
+    assert.deepEqual(rows('conversation'), [
+        {
+            id_sha256: sha256Hex('c-1'),
+            agent_session_sha256: sha256Hex('session-1'),
+            user_hash: eventUserHash('user-1')!,
+            created_at: '2026-10-20T09:30:00.123456Z',
+        },
+        {
+            id_sha256: sha256Hex('c-2'),
+            agent_session_sha256: null,
+            user_hash: eventUserHash('user-2')!,
+            created_at: '2026-10-21T00:00:00.000000Z',
+        },
+    ] satisfies ConversationExportRow[]);
     await assert.rejects(fs.access(file));
 });
 
-test('runAccountExport empties both tables on an empty read, and rejects one with webmail_domain empty', async (t) => {
-    const cases: [string, Omit<AccountRead, 'rows' | 'organisations'>, RegExp | null][] = [
-        ['every account from today, or none', { webmailDomains: true }, null],
-        ['an empty webmail_domain', { webmailDomains: false }, /webmail_domain is empty/],
-    ];
+test('runAccountExport empties every table on an empty read', async () => {
+    const { loaded, replace } = capture();
 
-    for (const [label, source, rejects] of cases) {
-        await t.test(label, async () => {
-            const { loaded, replace } = capture();
-            const run = runAccountExport({
-                read: async () => ({ rows: [], organisations: [], ...source }),
-                replace,
-                hmacKey: HMAC_KEY,
-                scratchFile: scratchFile(),
-                log: () => {},
-            });
+    await runAccountExport({
+        read: async () => ({
+            rows: [],
+            organisations: [],
+            conversations: [],
+            webmailDomains: true,
+        }),
+        replace,
+        hmacKey: HMAC_KEY,
+        scratchFile: scratchFile(),
+        log: () => {},
+    });
 
-            if (rejects === null) {
-                await run;
-                assert.deepEqual(loaded, [
-                    { table: 'account_daily', text: '' },
-                    { table: 'account_organisation', text: '' },
-                ]);
-            } else {
-                await assert.rejects(run, rejects);
-                assert.deepEqual(loaded, []);
-            }
-        });
-    }
+    assert.deepEqual(loaded, [
+        { table: 'account_daily', text: '' },
+        { table: 'account_organisation', text: '' },
+        { table: 'conversation', text: '' },
+    ]);
+});
+
+test('runAccountExport loads the later tables after a failed load, then rejects naming each failure', async () => {
+    const { loaded, replace } = capture();
+    const failing = async (table: AccountTable, file: string) => {
+        if (table === 'account_daily') {
+            throw new Error('load boom');
+        }
+
+        await replace(table, file);
+    };
+
+    await assert.rejects(
+        runAccountExport({
+            read: async () => ({
+                rows: ROWS,
+                organisations: ORGANISATIONS,
+                conversations: CONVERSATIONS,
+                webmailDomains: true,
+            }),
+            replace: failing,
+            hmacKey: HMAC_KEY,
+            scratchFile: scratchFile(),
+            log: () => {},
+        }),
+        (error) => {
+            assert.ok(error instanceof AccountExportError);
+            assert.deepEqual(error.failedTables, ['account_daily']);
+            assert.equal((error.errors[0] as Error).cause instanceof Error, true);
+            return true;
+        },
+    );
+    assert.deepEqual(
+        loaded.map(({ table }) => table),
+        ['account_organisation', 'conversation'],
+    );
 });
