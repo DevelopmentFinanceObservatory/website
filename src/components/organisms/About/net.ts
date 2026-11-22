@@ -1,8 +1,9 @@
 /**
  * The web behind the About page's prose, the same field the brochure site at
  * developmentfinance.org runs. Framework-free on purpose: the
- * starter takes a host element and its canvas, runs its own rAF loop, and
- * returns the stop function React's effect cleanup calls.
+ * starter takes a host element and its canvas, runs its own rAF loop while
+ * the host is on screen and the tab is visible, and returns the stop
+ * function React's effect cleanup calls.
  *
  * Many small dots that link to whatever is near them, herded by ONE cursor
  * travelling a figure-eight in bursts and pauses, alternating sides of the
@@ -10,8 +11,13 @@
  * hero — see organisms/Hero/hero-net.ts.)
  */
 
+import { createLinkBatches, runWhileSeen } from '@/utils/net';
+
 const TEXT_COLORS = ['#79796B', '#D8D8CA', '#B4B4A6'];
 const LINK_RGB = '216,216,202';
+const LINK_ALPHA = 0.16;
+// Alpha levels a link can take with its length.
+const LINK_LEVELS = 10;
 
 type Node = { x: number; y: number; ox: number; oy: number; vx: number; vy: number; color: string };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
@@ -54,7 +60,6 @@ export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): Stop
 
     let w = 0;
     let h = 0;
-    let frame = 0;
     // The cursor's own clock — it only advances while the cursor is moving,
     // which is what makes the pauses read as stillness rather than a stall.
     let t = 0;
@@ -162,8 +167,7 @@ export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): Stop
         return peak * (1 - (1 - (1 - u) ** 3));
     };
 
-    const updateCursor = () => {
-        const now = performance.now();
+    const updateCursor = (now: number) => {
         const dt = Math.min(0.05, (now - lastFrame) / 1000);
 
         lastFrame = now;
@@ -244,8 +248,8 @@ export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): Stop
 
     observer.observe(host);
 
-    const update = () => {
-        updateCursor();
+    const update = (now: number) => {
+        updateCursor(now);
 
         nodes.forEach((node) => {
             const dx = cursor.x - node.x;
@@ -270,6 +274,15 @@ export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): Stop
         });
     };
 
+    const linkBatches = createLinkBatches(LINK_RGB, LINK_ALPHA, LINK_LEVELS);
+    const linkDistSq = TEXT.linkDist * TEXT.linkDist;
+    // The dots are small and rarely touch, so they paint grouped by colour:
+    // one fillStyle per colour per frame.
+    const nodesByColor = TEXT_COLORS.map((color) => ({
+        color,
+        nodes: nodes.filter((node) => node.color === color),
+    }));
+
     const draw = () => {
         context.clearRect(0, 0, w, h);
         context.lineWidth = 0.5;
@@ -279,49 +292,53 @@ export const startTextNet = (host: HTMLElement, canvas: HTMLCanvasElement): Stop
             for (let j = i + 1; j < nodes.length; j += 1) {
                 const dx = nodes[i].x - nodes[j].x;
                 const dy = nodes[i].y - nodes[j].y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                const distSq = dx * dx + dy * dy;
 
-                if (dist >= TEXT.linkDist) {
+                if (distSq >= linkDistSq) {
                     continue;
                 }
 
-                context.strokeStyle = `rgba(${LINK_RGB},${(1 - dist / TEXT.linkDist) * 0.16})`;
-                context.beginPath();
-                context.moveTo(nodes[i].x, nodes[i].y);
-                context.lineTo(nodes[j].x, nodes[j].y);
-                context.stroke();
+                linkBatches.add(
+                    1 - Math.sqrt(distSq) / TEXT.linkDist,
+                    nodes[i].x,
+                    nodes[i].y,
+                    nodes[j].x,
+                    nodes[j].y,
+                );
             }
         }
+
+        linkBatches.stroke(context);
 
         // Dots that drift under the text column shrink, so the prose keeps
         // its contrast where the two overlap.
         const fadeFrom = w * 0.85;
         const fadeTo = fadeFrom + w * 0.04;
 
-        nodes.forEach((node) => {
-            const underText = node.x >= fadeFrom && node.y >= h * 0.0975 && node.y <= h * 0.9025;
-            const size = underText
-                ? TEXT.nodeSize *
-                  (node.x < fadeTo
-                      ? lerp(1, 0.72, (node.x - fadeFrom) / (fadeTo - fadeFrom))
-                      : 0.72)
-                : TEXT.nodeSize;
+        nodesByColor.forEach(({ color, nodes: group }) => {
+            context.fillStyle = color;
+            group.forEach((node) => {
+                const underText =
+                    node.x >= fadeFrom && node.y >= h * 0.0975 && node.y <= h * 0.9025;
+                const size = underText
+                    ? TEXT.nodeSize *
+                      (node.x < fadeTo
+                          ? lerp(1, 0.72, (node.x - fadeFrom) / (fadeTo - fadeFrom))
+                          : 0.72)
+                    : TEXT.nodeSize;
 
-            context.fillStyle = node.color;
-            context.fillRect(node.x - size * 0.5, node.y - size * 0.5, size, size);
+                context.fillRect(node.x - size * 0.5, node.y - size * 0.5, size, size);
+            });
         });
     };
 
-    const loop = () => {
-        update();
+    const stopLoop = runWhileSeen(host, (now) => {
+        update(now);
         draw();
-        frame = requestAnimationFrame(loop);
-    };
-
-    loop();
+    });
 
     return () => {
-        cancelAnimationFrame(frame);
+        stopLoop();
         observer.disconnect();
     };
 };
