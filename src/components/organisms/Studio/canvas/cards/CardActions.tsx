@@ -92,6 +92,12 @@ const DownloadMenu = ({
 // frame offers other units, title edit, live view switching and remove.
 // Downloads are the button beside the pin (DownloadMenu). (Reorder from the
 // mock has no API behind it — not shown.)
+//
+// Change unit opens its panel once the menu has gone. Opened from the row's
+// select, the panel mounts while the menu still holds focus, and at phone
+// width it mounts under the pointer: the pointer leaving the row hands focus
+// back to the menu, which the panel reads as focus outside and closes on.
+// The menu's close-focus event comes after its content has unmounted.
 const CardMenu = ({
     onOpenUnit,
     pinned,
@@ -108,88 +114,104 @@ const CardMenu = ({
     onNote,
     onRemoveNote,
     onView,
-}: CardExtras & { onOpenUnit: (() => void) | null }) => (
-    <DropdownMenu.Root modal={false}>
-        <DropdownMenu.Trigger asChild>
-            <button type="button" className={styles.menuBtn} aria-label="Card menu">
-                <Icon name="kebab" className={styles.actionIcon} />
-            </button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-            <DropdownMenu.Content
-                className={styles.cardMenu}
-                side="right"
-                align="start"
-                sideOffset={4}
-                collisionPadding={16}
-                onCloseAutoFocus={(event) => event.preventDefault()}
-            >
-                <div className={styles.cardMenuSection}>
-                    {/* First, and in the menu at all: the attribution line
+}: CardExtras & { onOpenUnit: (() => void) | null }) => {
+    const unitAfterClose = useRef(false);
+
+    return (
+        <DropdownMenu.Root modal={false}>
+            <DropdownMenu.Trigger asChild>
+                <button type="button" className={styles.menuBtn} aria-label="Card menu">
+                    <Icon name="kebab" className={styles.actionIcon} />
+                </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                    className={styles.cardMenu}
+                    side="right"
+                    align="start"
+                    sideOffset={4}
+                    collisionPadding={16}
+                    onCloseAutoFocus={(event) => {
+                        event.preventDefault();
+
+                        if (unitAfterClose.current) {
+                            unitAfterClose.current = false;
+                            onOpenUnit?.();
+                        }
+                    }}
+                >
+                    <div className={styles.cardMenuSection}>
+                        {/* First, and in the menu at all: the attribution line
                         was the only way in, and it reads as a caption rather
                         than a control (QA-21). */}
-                    {onInfo && (
-                        <MenuRow icon="info" onSelect={onInfo}>
-                            More Info
+                        {onInfo && (
+                            <MenuRow icon="info" onSelect={onInfo}>
+                                More Info
+                            </MenuRow>
+                        )}
+                        <MenuRow icon="pin" onSelect={onPin}>
+                            {pinned ? 'Unpin from Canvas' : 'Pin to Canvas'}
                         </MenuRow>
-                    )}
-                    <MenuRow icon="pin" onSelect={onPin}>
-                        {pinned ? 'Unpin from Canvas' : 'Pin to Canvas'}
-                    </MenuRow>
-                    {onShare && (
-                        <MenuRow icon="share" onSelect={onShare}>
-                            Share
+                        {onShare && (
+                            <MenuRow icon="share" onSelect={onShare}>
+                                Share
+                            </MenuRow>
+                        )}
+                        <MenuRow icon="ask" onSelect={onAsk}>
+                            Ask follow up
                         </MenuRow>
-                    )}
-                    <MenuRow icon="ask" onSelect={onAsk}>
-                        Ask follow up
-                    </MenuRow>
-                    {onOpenUnit && (
-                        <MenuRow icon="unit" onSelect={onOpenUnit}>
-                            Change unit
+                        {onOpenUnit && (
+                            <MenuRow
+                                icon="unit"
+                                onSelect={() => {
+                                    unitAfterClose.current = true;
+                                }}
+                            >
+                                Change unit
+                            </MenuRow>
+                        )}
+                        <MenuRow icon="edit" onSelect={onEdit}>
+                            {editLabel}
                         </MenuRow>
-                    )}
-                    <MenuRow icon="edit" onSelect={onEdit}>
-                        {editLabel}
-                    </MenuRow>
-                    {onNote && (
-                        <MenuRow icon="note" onSelect={onNote}>
-                            {note ? 'Edit Note' : 'Add Note'}
-                        </MenuRow>
-                    )}
-                    {note && onRemoveNote && (
-                        <MenuRow icon="note-remove" onSelect={onRemoveNote}>
-                            Remove Note
-                        </MenuRow>
-                    )}
-                </div>
-                {viewChoices.length > 0 && (
-                    <div className={classNames(styles.cardMenuSection, styles.cardMenuTypes)}>
-                        {viewChoices.map((type) => (
-                            <DropdownMenu.Item key={type} asChild onSelect={() => onView(type)}>
-                                <button
-                                    type="button"
-                                    aria-label={`View as ${type.replace('chart-', '')}`}
-                                    className={classNames(
-                                        styles.cardMenuType,
-                                        type === view && styles.cardMenuTypeActive,
-                                    )}
-                                >
-                                    <Icon name={type} className={styles.cardMenuIcon} />
-                                </button>
-                            </DropdownMenu.Item>
-                        ))}
+                        {onNote && (
+                            <MenuRow icon="note" onSelect={onNote}>
+                                {note ? 'Edit Note' : 'Add Note'}
+                            </MenuRow>
+                        )}
+                        {note && onRemoveNote && (
+                            <MenuRow icon="note-remove" onSelect={onRemoveNote}>
+                                Remove Note
+                            </MenuRow>
+                        )}
                     </div>
-                )}
-                <div className={styles.cardMenuSection}>
-                    <MenuRow icon="remove" onSelect={onRemove} danger>
-                        Remove
-                    </MenuRow>
-                </div>
-            </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-);
+                    {viewChoices.length > 0 && (
+                        <div className={classNames(styles.cardMenuSection, styles.cardMenuTypes)}>
+                            {viewChoices.map((type) => (
+                                <DropdownMenu.Item key={type} asChild onSelect={() => onView(type)}>
+                                    <button
+                                        type="button"
+                                        aria-label={`View as ${type.replace('chart-', '')}`}
+                                        className={classNames(
+                                            styles.cardMenuType,
+                                            type === view && styles.cardMenuTypeActive,
+                                        )}
+                                    >
+                                        <Icon name={type} className={styles.cardMenuIcon} />
+                                    </button>
+                                </DropdownMenu.Item>
+                            ))}
+                        </div>
+                    )}
+                    <div className={styles.cardMenuSection}>
+                        <MenuRow icon="remove" onSelect={onRemove} danger>
+                            Remove
+                        </MenuRow>
+                    </div>
+                </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+    );
+};
 
 // One menu row: icon + label (red for the destructive one).
 const MenuRow = ({
