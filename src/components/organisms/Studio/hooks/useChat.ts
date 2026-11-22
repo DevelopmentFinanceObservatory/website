@@ -11,6 +11,14 @@ import {
     type SavedActivityEntry,
 } from '@/lib/studio/activity';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
+import { createRemovalHold, placeCard, takenOver } from '@/lib/studio/cardReplace';
+import {
+    changeUnitText,
+    unitRefusalDetail,
+    unitRefusalStale,
+    withoutUnitChanges,
+    type CardUnitChange,
+} from '@/lib/studio/cardUnit';
 import {
     createStallWatch,
     createStepLine,
@@ -66,6 +74,7 @@ import {
     fetchComponentRevision,
     mutateComposition,
     runApplyChoice,
+    runApplyUnit,
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
@@ -125,13 +134,15 @@ export type CardTarget = {
 
 // A message sent while a request was in flight: it waits for the
 // conversation to be free and enters the transcript when it is sent. A
-// clicked `apply_choice` chip waits the same way, under its label.
+// clicked `apply_choice` chip waits the same way, under its label, and a
+// card's unit change under its bubble's words.
 export type QueuedMessage = {
     id: string;
     text: string;
     card?: CardTarget;
     seeds?: Seed[];
     chip?: ApplyChoiceSuggestion;
+    unit?: CardUnitChange;
 };
 
 export type ChatState = {
@@ -255,6 +266,11 @@ const buildRecap = (messages: ChatMessage[]): string | null => {
 const restoredMessages = (saved: ChatSnapshot): ChatMessage[] =>
     saved.sessionId ? saved.messages : withoutChips(saved.messages);
 
+// A saved canvas as the chat holds it. Without its harness session no card
+// can change its unit, so the offers go, as the chips do.
+const restoredWidgets = (saved: ChatSnapshot): TurnWidget[] =>
+    saved.sessionId ? saved.widgets : withoutUnitChanges(saved.widgets);
+
 /**
  * Drives one Studio conversation against the harness's `/api/studio/*`
  * frames. Pauses (`plan.proposed`, `elicitation.request`) END the stream and
@@ -263,12 +279,17 @@ const restoredMessages = (saved: ChatSnapshot): ChatMessage[] =>
  * mapped onto canvas widgets drawn from the component payload, and a stat
  * card upgrades in place with the statistics the datasets door measured.
  * `initial` seeds the hook from a saved conversation (a shared/forked copy)
- * instead of an empty chat.
+ * instead of an empty chat. `onCardReplaced` hears of a card the harness
+ * redrew under a new id (`replaces`), in the same update that swaps it, so
+ * the canvas moves the old card's settings across.
  */
-export const useChat = (initial?: ChatSnapshot) => {
+export const useChat = (
+    initial?: ChatSnapshot,
+    { onCardReplaced }: { onCardReplaced?: (from: string, to: string) => void } = {},
+) => {
     const [state, setState] = useState<ChatState>(() => ({
         messages: initial ? restoredMessages(initial) : [],
-        widgets: initial?.widgets ?? [],
+        widgets: initial ? restoredWidgets(initial) : [],
         queued: [],
         activity: restoreActivity(initial?.activity),
         ...NO_LINE,
@@ -314,6 +335,18 @@ export const useChat = (initial?: ChatSnapshot) => {
     // from its composition) rather than a component.revised, so the canvas has
     // to retire the original — otherwise an edit leaves two cards behind.
     const editingRef = useRef<string | null>(null);
+    // Whether this turn is a Change unit, whose replacement card keeps the
+    // old card's turn (see placeCard).
+    const unitTurnRef = useRef(false);
+    // The agent's removals, held while a turn streams: the manifest can drop
+    // a card before the frame of the card that replaces it arrives, and a
+    // replaced card lives on under its new id (see createRemovalHold).
+    const removalHoldRef = useRef(createRemovalHold());
+    const onCardReplacedRef = useRef(onCardReplaced);
+
+    useEffect(() => {
+        onCardReplacedRef.current = onCardReplaced;
+    }, [onCardReplaced]);
     // component_id → the revision we're currently holding. A card-scoped turn
     // has to address both (the contract rejects a stale revision). Frames
     // keep it current; a reopened conversation starts from its saved cards.
@@ -326,6 +359,12 @@ export const useChat = (initial?: ChatSnapshot) => {
     // manifests in one batch both count.
     const agentRemovedRef = useRef<string[]>([]);
     const [agentRemovals, setAgentRemovals] = useState(0);
+    const queueAgentRemoved = useCallback((removed: string[]) => {
+        if (removed.length > 0) {
+            agentRemovedRef.current.push(...removed);
+            setAgentRemovals((count) => count + 1);
+        }
+    }, []);
     // Every manifest goes through here: stream frames, `done`, and the
     // responses to the user's own edits. A late, older one is ignored.
     // Cards this page reported as hidden (see reportHidden), until a
@@ -333,24 +372,26 @@ export const useChat = (initial?: ChatSnapshot) => {
     const hiddenSentRef = useRef(new Set<string>());
     const [canvasVersion, setCanvasVersion] = useState(0);
     const canvasEditsRef = useRef<ReturnType<typeof createCanvasEdits> | null>(null);
-    const applyManifest = useCallback((manifest: CompositionManifest) => {
-        const taken = takeManifest(canvasRef.current, manifest);
+    const applyManifest = useCallback(
+        (manifest: CompositionManifest) => {
+            const taken = takeManifest(canvasRef.current, manifest);
 
-        if (!taken) {
-            return;
-        }
+            if (!taken) {
+                return;
+            }
 
-        canvasRef.current = taken.baseline;
-        taken.baseline.ids.forEach((id) => hiddenSentRef.current.delete(id));
-        setCanvasVersion((version) => version + 1);
+            canvasRef.current = taken.baseline;
+            taken.baseline.ids.forEach((id) => hiddenSentRef.current.delete(id));
+            setCanvasVersion((version) => version + 1);
 
-        const removed = taken.removed.filter((id) => !canvasEditsRef.current?.isOwnRemoval(id));
-
-        if (removed.length > 0) {
-            agentRemovedRef.current.push(...removed);
-            setAgentRemovals((count) => count + 1);
-        }
-    }, []);
+            queueAgentRemoved(
+                removalHoldRef.current.remove(
+                    taken.removed.filter((id) => !canvasEditsRef.current?.isOwnRemoval(id)),
+                ),
+            );
+        },
+        [queueAgentRemoved],
+    );
     const takeAgentRemoved = useCallback(() => agentRemovedRef.current.splice(0), []);
     // A canvas edit the user made (Remove, Pin, Add), sent to the harness so
     // the canvas the agent reads matches this one. Nothing to send before
@@ -587,39 +628,34 @@ export const useChat = (initial?: ChatSnapshot) => {
                             break;
                         }
 
-                        // The card this turn set out to edit, if the harness
-                        // answered with a replacement under a new id.
-                        const replacing =
-                            editingRef.current && editingRef.current !== widget.id
-                                ? editingRef.current
-                                : null;
+                        // A card that takes over another (the one its
+                        // frame `replaces`, else the card this edit turn
+                        // set out to edit) takes that card's slot, and on a
+                        // Change unit turn its turn (see placeCard). The
+                        // canvas moves the old card's settings to it, and
+                        // the agent's removal of the old card is dropped.
+                        const takeover = {
+                            replaces: frame.replaces ?? null,
+                            editing: editingRef.current,
+                        };
+                        const keepTurn = unitTurnRef.current;
+                        const from = takenOver(widget.id, takeover);
 
                         editingRef.current = null;
 
-                        // A re-used component id (a replacement card) UPDATES
-                        // the card in place and pulls it into this turn,
-                        // instead of being dropped as a duplicate. A new id
-                        // that replaces an edited card takes ITS slot, so the
-                        // card doesn't jump to the end of the canvas.
-                        setState((prev) => {
-                            if (replacing && prev.widgets.some((other) => other.id === replacing)) {
-                                return {
-                                    ...prev,
-                                    widgets: prev.widgets.map((other) =>
-                                        other.id === replacing ? { ...widget, turn } : other,
-                                    ),
-                                };
-                            }
+                        setState((prev) => ({
+                            ...prev,
+                            widgets: placeCard(
+                                prev.widgets,
+                                { ...widget, turn },
+                                { ...takeover, keepTurn },
+                            ),
+                        }));
 
-                            return {
-                                ...prev,
-                                widgets: prev.widgets.some((other) => other.id === widget.id)
-                                    ? prev.widgets.map((other) =>
-                                          other.id === widget.id ? { ...widget, turn } : other,
-                                      )
-                                    : [...prev.widgets, { ...widget, turn }],
-                            };
-                        });
+                        if (from) {
+                            removalHoldRef.current.replace(from);
+                            onCardReplacedRef.current?.(from, widget.id);
+                        }
 
                         break;
                     }
@@ -890,6 +926,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                     sent = true;
                     abortRef.current = controller;
                     haltRef.current = halt;
+                    removalHoldRef.current.begin();
                     stall.beat();
 
                     return start(
@@ -922,6 +959,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                         return;
                     }
 
+                    // The turn's stream is over: the agent's removals it
+                    // held go ahead, bar the cards a replacement took over.
+                    queueAgentRemoved(removalHoldRef.current.end());
                     finish();
 
                     inFlightRef.current -= 1;
@@ -934,7 +974,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
                 });
         },
-        [applyManifest, offerPlan, patchWidget],
+        [applyManifest, offerPlan, patchWidget, queueAgentRemoved],
     );
 
     // While a request is in flight a new turn waits its turn; the settle
@@ -971,6 +1011,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         editingRef.current = null;
+        unitTurnRef.current = false;
         setState((prev) => ({
             ...withLine(prev, line),
             messages: [...prev.messages, user, { role: 'bot', text: '' }],
@@ -1357,6 +1398,81 @@ export const useChat = (initial?: ChatSnapshot) => {
         [holdTurn, startTurn, stream],
     );
 
+    // A card's Change unit: a turn that moves the card to the picked unit
+    // with no message and no model reply. The transcript shows the unit under
+    // the card's tag. The harness redraws the card under a new id that
+    // `replaces` the old one, which keeps the old card's slot, turn and
+    // settings, so the answer's other cards stay on the canvas. A pick
+    // while a request is in flight waits in the queue. A change the harness
+    // refuses (the card moved on, or the unit is not offered) leaves the
+    // reply saying why.
+    const applyUnit = useCallback(
+        (change: CardUnitChange) => {
+            const text = changeUnitText(change);
+            const card = { title: change.title };
+
+            if (
+                holdTurn({
+                    text,
+                    card: { componentId: change.request.component_id, intent: 'edit', ...card },
+                    unit: change,
+                })
+            ) {
+                return;
+            }
+
+            const { turn, conversation } = startTurn(
+                { role: 'user', text, card },
+                `Switching to ${changeUnitText(change)}`,
+            );
+
+            editingRef.current = change.request.component_id;
+            unitTurnRef.current = true;
+
+            stream(
+                turn,
+                (handlers, signal) => runApplyUnit(conversation, change.request, handlers, signal),
+                {
+                    metered: true,
+                    onRefusal: (refusal) => {
+                        const detail = unitRefusalDetail(refusal);
+
+                        if (detail === null) {
+                            return false;
+                        }
+
+                        if (unitRefusalStale(refusal)) {
+                            patchWidget(change.request.component_id, (widget) =>
+                                widget.kind === 'text'
+                                    ? widget
+                                    : { ...widget, unitChange: undefined },
+                            );
+                        }
+
+                        setState((prev) => {
+                            const messages = prev.messages.slice();
+                            const last = messages.at(-1);
+
+                            if (last?.role === 'bot' && !last.text) {
+                                messages[messages.length - 1] = { ...last, text: `_${detail}_` };
+                            }
+
+                            return endTurn(
+                                { ...prev, messages },
+                                turn,
+                                'failed',
+                                hasAnswer(prev.messages),
+                            );
+                        });
+
+                        return true;
+                    },
+                },
+            );
+        },
+        [holdTurn, patchWidget, startTurn, stream],
+    );
+
     // The queue head goes next, unless a pause (plan or clarify) is waiting
     // on the user: a new turn would abandon it, so the answer goes first.
     useEffect(() => {
@@ -1378,11 +1494,13 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             if (next.chip) {
                 applyChoice(next.chip);
+            } else if (next.unit) {
+                applyUnit(next.unit);
             } else {
                 send(next.text, next.card, next.seeds);
             }
         };
-    }, [applyChoice, send]);
+    }, [applyChoice, applyUnit, send]);
 
     // The Stop control: end the running turn (see `halt` in stream()) and
     // ask the harness to cancel, once per stream whose request started. On a
@@ -1418,6 +1536,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         revisionsRef.current.clear();
         canvasRef.current = null;
         agentRemovedRef.current = [];
+        removalHoldRef.current.reset();
         hiddenSentRef.current.clear();
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
@@ -1454,13 +1573,14 @@ export const useChat = (initial?: ChatSnapshot) => {
         revisionsRef.current = restoreCardRevisions(saved);
         canvasRef.current = restoreCanvas(saved);
         agentRemovedRef.current = [];
+        removalHoldRef.current.reset();
         hiddenSentRef.current.clear();
         canvasEditsRef.current?.reset();
         recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
         turnCount.current = saved.turnCount;
         setState({
             messages: restoredMessages(saved),
-            widgets: saved.widgets,
+            widgets: restoredWidgets(saved),
             queued: [],
             activity: restoreActivity(saved.activity),
             ...NO_LINE,
@@ -1497,6 +1617,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         respondPlan,
         switchChoice,
         applyChoice,
+        applyUnit,
         stop,
         reset,
         hydrate,

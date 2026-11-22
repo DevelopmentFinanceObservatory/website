@@ -8,6 +8,7 @@ import type { TurnWidget } from './useChat';
 import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation, ShareMark } from '@/lib/chat/history';
 import type { TextWidget, Widget } from '@/lib/chat/widgets';
+import { renameId, renameKey } from '@/lib/studio/cardReplace';
 import { DEFAULT_THEME, type StudioTheme } from '@/lib/studio/theme';
 import { uuid } from '@/lib/uuid';
 
@@ -56,6 +57,9 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     );
     // Chat + Canvas share points (see ShareMark).
     const [shareMarks, setShareMarks] = useState<ShareMark[]>([]);
+    // Cards that replaced another in its slot, new id → old id: the canvas
+    // moves the old card's place and size to the new one.
+    const [replacedIds, setReplacedIds] = useState<Record<string, string>>({});
 
     // A fresh canvas (a new prompt from the landing).
     const reset = useCallback(() => {
@@ -70,6 +74,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         setTheme(DEFAULT_THEME);
         setConversationTitle(null);
         setShareMarks([]);
+        setReplacedIds({});
     }, []);
 
     // A saved conversation, exactly as it was left.
@@ -86,6 +91,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         // The saved title IS the display title (a rename or the first prompt).
         setConversationTitle(saved.title);
         setShareMarks(saved.shareMarks ?? []);
+        setReplacedIds({});
     }, []);
 
     // Unpinning puts the card on grace for the turn on screen (see above);
@@ -116,6 +122,23 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     const removeWidget = useCallback((id: string) => {
         setRemovedIds((prev) => [...prev, id]);
         setPinnedIds((prev) => prev.filter((other) => other !== id));
+    }, []);
+
+    // A card the harness redrew under a new id (see cardReplace): its pin,
+    // grace, removal, view, ratio, title and note move to the new id.
+    const renameWidget = useCallback((from: string, to: string) => {
+        setPinnedIds((prev) => renameId(prev, from, to));
+        setRemovedIds((prev) => renameId(prev, from, to));
+        setGrace((prev) => {
+            const ids = renameId(prev.ids, from, to);
+
+            return ids === prev.ids ? prev : { ...prev, ids };
+        });
+        setViews((prev) => renameKey(prev, from, to));
+        setRatios((prev) => renameKey(prev, from, to));
+        setTitles((prev) => renameKey(prev, from, to));
+        setNotes((prev) => renameKey(prev, from, to));
+        setReplacedIds((prev) => ({ ...prev, [to]: from }));
     }, []);
 
     // Chat chip → Add: put a card back on the canvas, unpinned. A removed
@@ -209,12 +232,14 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         theme,
         conversationTitle,
         shareMarks,
+        replacedIds,
         setTheme,
         setConversationTitle,
         reset,
         load,
         togglePin,
         removeWidget,
+        renameWidget,
         addWidget,
         upsertTextCard,
         setView,

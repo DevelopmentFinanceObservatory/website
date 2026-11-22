@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { clarifyFromFrame } from '../clarify.ts';
+import { clarifyFromFrame, multiAnswer } from '../clarify.ts';
 import type { ElicitationQuestion, ElicitationRequest, LegacyElicitationRequest } from '../wire.ts';
 
 /** A minimal well-formed question, overridden per test. */
@@ -153,6 +153,18 @@ test('showText follows input, free text and whether the question can be passed',
             true,
         ],
         [
+            'a multi-select question shows text even with allow_free_text false, so it has a Send',
+            frame(
+                {
+                    input: 'multi_select',
+                    options: [{ id: 'opt-a', label: 'A' }],
+                    allow_free_text: false,
+                },
+                { skippable: false },
+            ),
+            true,
+        ],
+        [
             'allow_free_text true always shows text',
             frame({ options: [{ id: 'opt-a', label: 'A' }], allow_free_text: true }),
             true,
@@ -184,6 +196,7 @@ test('a legacy frame reads as one question q1, marked legacy', () => {
                 options: [{ id: 'opt-a', label: 'A', description: null, recommended: true }],
                 allowFreeText: false,
                 skippable: false,
+                multi: false,
                 showText: false,
                 rationale: 'Because.',
             },
@@ -198,4 +211,44 @@ test('a legacy frame with no options and no skip falls back to text', () => {
     const clarify = clarifyFromFrame(legacy({ options: null, skippable: false }));
 
     assert.equal(clarify.questions[0]?.showText, true);
+});
+
+test('a legacy multi_select frame stays single-select', () => {
+    const [only] = clarifyFromFrame(
+        legacy({ input: 'multi_select', options: [{ id: 'opt-a', label: 'A' }] }),
+    ).questions;
+
+    assert.equal(only?.multi, false);
+    assert.equal(
+        clarifyFromFrame(frame({ input: 'multi_select', options: [{ id: 'opt-a', label: 'A' }] }))
+            .questions[0]?.multi,
+        true,
+    );
+});
+
+test('a multi-select Send folds ticks and typed text into one text answer', async (t) => {
+    const [multi] = clarifyFromFrame(
+        frame({
+            input: 'multi_select',
+            options: [
+                { id: 'a', label: 'A' },
+                { id: 'b', label: 'B' },
+            ],
+        }),
+    ).questions;
+
+    assert.ok(multi);
+
+    const cases: [string, string, string[], unknown][] = [
+        ['ticks alone', '', ['a', 'b'], { kind: 'options', option_ids: ['a', 'b'] }],
+        ['text alone', ' C ', [], { kind: 'text', text: 'C' }],
+        ['two ticks and text', 'C', ['a', 'b'], { kind: 'text', text: 'A; B; and C' }],
+        ['one tick and text', 'C', ['a'], { kind: 'text', text: 'A; and C' }],
+    ];
+
+    for (const [name, text, ticked, expected] of cases) {
+        await t.test(name, () => {
+            assert.deepEqual(multiAnswer(multi, text, ticked), expected);
+        });
+    }
 });

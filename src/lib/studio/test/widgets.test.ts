@@ -1029,3 +1029,69 @@ test('More Info: a revised payload brings its own citation and sources', () => {
         [['src_dc_base_worlddevelopmentindicators_9957fdf7', null, null]],
     );
 });
+
+test('unit change: the offer goes when the redrawn frame reads another spec than the offer', () => {
+    const offer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current' as const] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' as const },
+    };
+    const table = (spec_id: string) => ({
+        ...envelope({
+            type: 'table',
+            title,
+            columns: [{ key: 'period', label: 'Period' }],
+            rows: [{ series_id: 's_x', period: '2020', source_ref: SOURCE, value: 1 }],
+        }),
+        provenance: { inputs: [{ spec_id, content_version: 'cv_1' }] },
+    });
+    const drawn = asTable(
+        widgetFromComponent({
+            ...frame('table', table('spec_a')),
+            unit_change: { spec_id: 'spec_b', offer },
+        }),
+    );
+
+    assert.equal(
+        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_a')))).unitChange,
+        undefined,
+    );
+    assert.ok(asTable(reviseWidget(drawn, revisedFrame(2, table('spec_b')))).unitChange);
+});
+
+test('unit change: a created card keeps its offer while revisions read its frame', () => {
+    const offer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current' as const] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' as const },
+    };
+    const table = (spec_id: string) => ({
+        ...envelope({
+            type: 'table',
+            title,
+            columns: [{ key: 'period', label: 'Period' }],
+            rows: [{ series_id: 's_x', period: '2020', source_ref: SOURCE, value: 1 }],
+        }),
+        provenance: { inputs: [{ spec_id, content_version: 'cv_1' }] },
+    });
+    const drawn = asTable(
+        widgetFromComponent({
+            ...frame('table', table('spec_a')),
+            unit_change: { spec_id: 'spec_a', offer },
+        }),
+    );
+
+    assert.deepEqual(drawn.unitChange, { spec_id: 'spec_a', offer });
+    assert.equal(
+        asTable(widgetFromComponent(frame('table', table('spec_a')))).unitChange,
+        undefined,
+    );
+    assert.deepEqual(
+        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_a')))).unitChange,
+        drawn.unitChange,
+    );
+    assert.equal(
+        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_b')))).unitChange,
+        undefined,
+    );
+});

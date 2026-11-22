@@ -586,6 +586,7 @@ export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
         ...widget,
         frame: payloadFrameRef(frame.payload) ?? frame.provenance.inputs[0],
         info: infoOf(frame.fact_summary, provenanceOf(frame), description),
+        ...(frame.unit_change && { unitChange: frame.unit_change }),
     };
 };
 
@@ -672,6 +673,14 @@ export const reviseWidget = (
     }
 
     const provenance = payloadProvenance(payload);
+    const drawnFrom = payloadFrameRef(payload) ?? redrawn.frame;
+
+    // `component.revised` carries no unit offer. The created card's offer
+    // holds while the redrawn frame reads the spec the offer describes and
+    // goes when it reads another, whose units the offer does not describe.
+    if (redrawn.unitChange && drawnFrom?.spec_id !== redrawn.unitChange.spec_id) {
+        delete redrawn.unitChange;
+    }
 
     return {
         ...redrawn,
@@ -679,7 +688,7 @@ export const reviseWidget = (
             ? { unit: payloadUnitText(asUnit(frame.fact_summary.unit)) }
             : {}),
         ref: refOf(frame),
-        frame: payloadFrameRef(payload) ?? redrawn.frame,
+        frame: drawnFrom,
         source: frame.fact_summary.attribution.label,
         ...(provenance || read
             ? {
