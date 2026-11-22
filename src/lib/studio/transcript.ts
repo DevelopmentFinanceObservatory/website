@@ -139,6 +139,25 @@ export type RecordedPrompt = { turn_index: number; user_message: string };
 const recordsText = (recorded: string, text: string): boolean =>
     recorded === text || recorded.startsWith(`${text}\n(then: `);
 
+// The labels a chip prompt of `text` may name: a page shows a chip's prompt
+// as its action (chipAction) or, before chips were worded as actions, as the
+// option's bare label.
+const CHIP_ACTIONS = ['Count as ', 'Switch to '];
+
+const chipLabels = (text: string): string[] => [
+    text,
+    ...CHIP_ACTIONS.filter((action) => text.startsWith(action)).map((action) =>
+        text.slice(action.length),
+    ),
+];
+
+// Whether the harness recorded `recorded` for a page prompt of `text`: the
+// text as recordsText reads it, or a chip's turn, which the harness records
+// as `count {label}` for the option label the chip moved to.
+const recordsPrompt = (recorded: string, text: string): boolean =>
+    recordsText(recorded, text) ||
+    chipLabels(text).some((label) => recordsText(recorded, `count ${label}`));
+
 // The message after a recap, when `recorded` opens with one.
 const afterRecap = (recorded: string): string | null => {
     if (!recorded.startsWith(RECAP_HEAD)) {
@@ -156,7 +175,9 @@ const afterRecap = (recorded: string): string | null => {
  * A prompt takes a turn only where the match is unambiguous:
  *
  * - A turn whose recorded prompt matches one page prompt, and that prompt no
- *   other turn, pairs them, in order. A fork's first turn matches on its
+ *   other turn, pairs them, in order. A chip's turn, recorded as
+ *   `count {label}`, matches the prompt that shows the chip (recordsPrompt).
+ *   A fork's first turn matches on its
  *   recap: the recap of the messages before the prompt (forkRecap) followed
  *   by the prompt's text, else the text after the recap when only one prompt
  *   has it.
@@ -208,7 +229,7 @@ export const keyUnkeyedSave = (
         }
 
         return prompts.flatMap(([, message], k) =>
-            recordsText(turn.user_message, message.text) ? [k] : [],
+            recordsPrompt(turn.user_message, message.text) ? [k] : [],
         );
     });
 

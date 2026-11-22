@@ -8,6 +8,7 @@ import type { TurnWidget } from './useChat';
 import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation, ShareMark } from '@/lib/chat/history';
 import type { TextWidget, Widget } from '@/lib/chat/widgets';
+import { withHarnessPins } from '@/lib/studio/canvasEdits';
 import type { CanvasBaseline } from '@/lib/studio/composition';
 import { DEFAULT_THEME, type StudioTheme } from '@/lib/studio/theme';
 import { uuid } from '@/lib/uuid';
@@ -114,6 +115,14 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         });
     }, []);
 
+    // The harness cards' pins as the harness's manifest has them, with the
+    // pins of the cards only the page holds kept (withHarnessPins).
+    const takeHarnessPins = useCallback(
+        (pins: readonly string[], isHarness: (id: string) => boolean) =>
+            setPinnedIds((prev) => withHarnessPins(prev, pins, isHarness)),
+        [],
+    );
+
     const unpin = useCallback(
         (id: string) => setPinnedIds((prev) => prev.filter((other) => other !== id)),
         [],
@@ -217,6 +226,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         reset,
         load,
         togglePin,
+        takeHarnessPins,
         addLocalIds,
         unpin,
         removeWidget,

@@ -695,6 +695,35 @@ test('a turn another tab ran fills its gap in order', () => {
     );
 });
 
+test("an unkeyed save's chip prompts pair with the turns the harness recorded for them", () => {
+    // The harness records a chip's turn as `count {label}`. A page shows the
+    // chip's prompt as its bare label, or as its action.
+    const save = unkeyedPairs([
+        ['ODA to Kenya', 'a'],
+        ['Grant equivalent', 'b'],
+        ['Count as gross disbursements', 'c'],
+        ['Switch to bilateral', 'd'],
+    ]);
+    const turns = [
+        recorded(1, 'ODA to Kenya'),
+        recorded(2, 'count Grant equivalent'),
+        recorded(3, 'count gross disbursements'),
+        recorded(4, 'count bilateral\n(then: approve)'),
+    ];
+    const keyed = keyUnkeyedSave(save, turns);
+
+    assert.deepEqual(
+        [...promptTurns(keyed)],
+        [
+            [0, 1],
+            [2, 2],
+            [4, 3],
+            [6, 4],
+        ],
+    );
+    assert.deepEqual(mergeClosedTurns(keyed, turns).appended, []);
+});
+
 const RECORDED_READ = bodyOf('component_read.at_revision');
 const CARD = RECORDED_READ['component_id'] as string;
 

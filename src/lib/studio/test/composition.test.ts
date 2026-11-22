@@ -37,6 +37,7 @@ test('a newer manifest of the same composition becomes the baseline', () => {
         compositionId: 'cps_1',
         revision: 4,
         ids: [],
+        pinned: [],
     });
 });
 
@@ -112,6 +113,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     const legacy = createLegacyCanvas({
         ids: restored.ids,
         hidden,
+        pinned: save.pinnedIds,
         mutate: async (operations, expectedRevision) => {
             sent.push(operations);
             expected.push(expectedRevision);
@@ -134,8 +136,13 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
 
     await legacy.offer(held);
 
+    // Nine removes, and the pin the save showed.
     assert.equal(sent.length, 1);
-    assert.equal(sent[0]!.length, 9);
+    assert.equal(sent[0]!.filter((op) => op.op === 'remove').length, 9);
+    assert.deepEqual(
+        sent[0]!.filter((op) => op.op === 'pin'),
+        [{ op: 'pin', component_id: 'cmp_0' }],
+    );
     assert.deepEqual(expected, [5]);
     assert.deepEqual(
         taken.map((answer) => answer.blocks.map((block) => block.component_id)),
@@ -147,6 +154,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     const failing = createLegacyCanvas({
         ids: restored.ids,
         hidden,
+        pinned: save.pinnedIds,
         mutate: async () => null,
         onTake: (answer) => taken.push(answer),
         onLocal: () => assert.fail('a legacy canvas that stays legacy adopts no card'),
@@ -176,6 +184,7 @@ test('a legacy canvas keeps the inherited cards its session never held as local 
     const legacy = createLegacyCanvas({
         ids: restored.ids,
         hidden: legacyHiddenCards(save, restored, new Map()),
+        pinned: [],
         mutate: async () => assert.fail('the harness holds no card the page hides'),
         onTake: (answer) => {
             canvas = takeManifest(canvas, answer);
@@ -228,6 +237,7 @@ test('a legacy canvas removes only the cards its save hid, at the revision it hi
     const legacy = createLegacyCanvas({
         ids: restored.ids,
         hidden,
+        pinned: [],
         mutate: async (operations, expectedRevision) => {
             sent.push([operations, expectedRevision]);
 
@@ -265,6 +275,7 @@ test("a legacy fork's hidden inherited cards become local and stay off the canva
     const legacy = createLegacyCanvas({
         ids: restored.ids,
         hidden: legacyHiddenCards(save, restored, new Map([['cmp_old_hidden', 3]])),
+        pinned: save.pinnedIds,
         mutate: async () => assert.fail('the harness holds no card the page hides'),
         onTake: (answer) => {
             canvas = takeManifest(canvas, answer);
@@ -290,5 +301,80 @@ test("a legacy fork's hidden inherited cards become local and stay off the canva
     assert.deepEqual(
         canvasWidgetsOf({ ...save, canvas, localIds, removedIds: [] }).map((widget) => widget.id),
         ['cmp_old_hidden', 'cmp_old_pinned', 'cmp_own'],
+    );
+});
+
+test("a legacy canvas pins the harness cards its save showed pinned, against the manifest's revision", async () => {
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_hidden', title: '', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_pinned', title: '', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_latest', title: '', body: '', turn: 2 },
+        ],
+        pinnedIds: ['cmp_pinned'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const sent: [MutationOperation[], number][] = [];
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: legacyHiddenCards(save, restored, new Map([['cmp_hidden', 1]])),
+        pinned: save.pinnedIds,
+        mutate: async (operations, expectedRevision) => {
+            sent.push([operations, expectedRevision]);
+
+            return manifest(5, ['cmp_pinned', 'cmp_latest']);
+        },
+        onTake: () => {},
+        onLocal: () => {},
+        onChange: () => {},
+    });
+
+    await legacy.offer(manifest(4, ['cmp_hidden', 'cmp_pinned', 'cmp_latest']));
+
+    assert.deepEqual(sent, [
+        [
+            [
+                { op: 'remove', component_id: 'cmp_hidden' },
+                { op: 'pin', component_id: 'cmp_pinned' },
+            ],
+            4,
+        ],
+    ]);
+
+    // A manifest already holding the pin, and nothing to remove, sends nothing.
+    const settled = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: new Map(),
+        pinned: save.pinnedIds,
+        mutate: async () => assert.fail('nothing to bring to the harness'),
+        onTake: () => {},
+        onLocal: () => {},
+        onChange: () => {},
+    });
+    const held = manifest(4, ['cmp_pinned', 'cmp_latest']);
+
+    await settled.offer({
+        ...held,
+        blocks: held.blocks.map((block) => ({
+            ...block,
+            pinned: block.component_id === 'cmp_pinned',
+        })),
+    });
+});
+
+test('takeManifest keeps which harness cards the manifest pins', () => {
+    const held = manifest(4, ['cmp_a', 'cmp_b']);
+
+    assert.deepEqual(
+        takeManifest(null, {
+            ...held,
+            blocks: held.blocks.map((block) => ({
+                ...block,
+                pinned: block.component_id === 'cmp_b',
+            })),
+        })?.pinned,
+        ['cmp_b'],
     );
 });

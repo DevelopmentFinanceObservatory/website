@@ -3,11 +3,17 @@ import type { CompositionManifest, MutationOperation } from './wire';
 import { legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
 
 /** The harness canvas this page last saw: which composition, at which
- *  revision, holding which cards. A null `compositionId` marks a legacy
- *  canvas: the cards a save from before the page kept the manifest showed,
- *  which the harness's manifest has not yet been brought to
- *  (createLegacyCanvas). */
-export type CanvasBaseline = { compositionId: string | null; revision: number; ids: string[] };
+ *  revision, holding which cards, and which of them the manifest pins
+ *  (`pinned`, absent on a legacy canvas and on a baseline saved before the
+ *  page kept it). A null `compositionId` marks a legacy canvas: the cards a
+ *  save from before the page kept the manifest showed, which the harness's
+ *  manifest has not yet been brought to (createLegacyCanvas). */
+export type CanvasBaseline = {
+    compositionId: string | null;
+    revision: number;
+    ids: string[];
+    pinned?: string[];
+};
 
 /** The canvas a save reopens with: its saved baseline, else, for a save
  *  from before the page kept the manifest, a legacy canvas of the harness
@@ -63,6 +69,9 @@ export const takeManifest = (
               compositionId: manifest.composition_id,
               revision: manifest.revision,
               ids: manifest.blocks.map((block) => block.component_id),
+              pinned: manifest.blocks
+                  .filter((block) => block.pinned)
+                  .map((block) => block.component_id),
           };
 
 /**
@@ -98,7 +107,10 @@ export type LegacyLocal = { shown: string[]; hidden: string[] };
  * (`hidden`, legacyHiddenCards) that the manifest holds at no newer revision
  * than the save did, against the manifest's revision (`expected_revision`).
  * A card the save never held, such as one another tab's turn drew since, one
- * revised since the save, and one whose saved revision is unknown, stays. `onTake` hears the manifest that
+ * revised since the save, and one whose saved revision is unknown, stays.
+ * The same request sends a `pin` for each card the save showed pinned
+ * (`pinned`) that the manifest holds unpinned, since the page that saved it
+ * kept its pins to itself. `onTake` hears the manifest that
  * answers, then any later one offered meanwhile, as the canvas to take from
  * then on. Before it, `onLocal` hears the cards the save held that the
  * offered manifest lacks, cards the harness never held such as a fork's
@@ -113,6 +125,7 @@ export type LegacyLocal = { shown: string[]; hidden: string[] };
 export const createLegacyCanvas = ({
     ids,
     hidden,
+    pinned,
     mutate,
     onTake,
     onLocal,
@@ -120,6 +133,7 @@ export const createLegacyCanvas = ({
 }: {
     ids: readonly string[];
     hidden: ReadonlyMap<string, number | null>;
+    pinned: readonly string[];
     mutate: (
         operations: MutationOperation[],
         expectedRevision: number,
@@ -190,8 +204,20 @@ export const createLegacyCanvas = ({
                     );
                 })
                 .map((block) => block.component_id);
+            const pins = manifest.blocks
+                .filter(
+                    (block) =>
+                        !block.pinned &&
+                        pinned.includes(block.component_id) &&
+                        shown.has(block.component_id),
+                )
+                .map((block) => block.component_id);
+            const operations: MutationOperation[] = [
+                ...removed.map((id) => ({ op: 'remove' as const, component_id: id })),
+                ...pins.map((id) => ({ op: 'pin' as const, component_id: id })),
+            ];
 
-            if (removed.length === 0) {
+            if (operations.length === 0) {
                 take(manifest, local);
 
                 return;
@@ -199,10 +225,7 @@ export const createLegacyCanvas = ({
 
             state = 'sent';
 
-            const answer = await mutate(
-                removed.map((id) => ({ op: 'remove', component_id: id })),
-                manifest.revision,
-            ).catch((error: unknown) => {
+            const answer = await mutate(operations, manifest.revision).catch((error: unknown) => {
                 console.warn('Studio: a legacy canvas was not brought to the harness', error);
 
                 return null;

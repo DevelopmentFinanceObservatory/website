@@ -549,21 +549,40 @@ const Studio = ({
         addLocalIds(localCards.shown, localCards.hidden);
     }, [localCards, addLocalIds]);
 
-    // The card menu's Remove and Pin.
+    // A harness card's pin is the harness manifest's (chat.pins): the
+    // document takes it, keeping the pins of the cards only the page holds.
+    // A legacy canvas, whose manifest has not been taken, keeps the save's.
+    const { pins, widgets: chatWidgets } = chat;
+    const { takeHarnessPins, localIds } = doc;
+
+    useLayoutEffect(() => {
+        if (pins) {
+            takeHarnessPins(pins, (id) => isHarnessCard({ widgets: chatWidgets, localIds }, id));
+        }
+    }, [pins, chatWidgets, localIds, takeHarnessPins]);
+
+    // The card menu's Remove and Pin. A harness card's edit goes to the
+    // harness, whose answer settles it; a legacy canvas shows its pin here
+    // at once.
     const removeCard = (id: string) => {
         if (harnessCard(id)) {
-            doc.unpin(id);
             chat.syncCanvas([{ op: 'remove', component_id: id }]);
         } else {
             doc.removeWidget(id);
         }
     };
     const togglePin = (id: string) => {
-        doc.togglePin(id);
+        if (!harnessCard(id)) {
+            doc.togglePin(id);
 
-        if (harnessCard(id)) {
-            chat.syncCanvas([pinEdit(doc.pinnedIds, id)]);
+            return;
         }
+
+        if (!pins) {
+            doc.togglePin(id);
+        }
+
+        chat.syncCanvas([pinEdit(pins ?? doc.pinnedIds, id)]);
     };
 
     // Studio opens on the handed-over question instead of a blank canvas.

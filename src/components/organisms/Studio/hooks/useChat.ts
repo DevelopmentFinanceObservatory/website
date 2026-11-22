@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
     endTurnActivity,
@@ -20,7 +20,13 @@ import {
     stoppedReply,
     WORKING,
 } from '@/lib/studio/chatLine';
-import { createCanvasEdits } from '@/lib/studio/canvasEdits';
+import {
+    createCanvasEdits,
+    shownPins,
+    withPinsSent,
+    withPinsSettled,
+    type PendingPins,
+} from '@/lib/studio/canvasEdits';
 import {
     chipAction,
     chipLine,
@@ -433,6 +439,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             const legacy = createLegacyCanvas({
                 ids: baseline.ids,
                 hidden: legacyHiddenCards(saved, baseline, restoreCardRevisions(saved)),
+                pinned: (saved.pinnedIds ?? []).filter((id) => !saved.localIds?.includes(id)),
                 mutate: (operations, expectedRevision) =>
                     mutateComposition(session, operations, expectedRevision),
                 onTake: (manifest) => {
@@ -489,11 +496,15 @@ export const useChat = (initial?: ChatSnapshot) => {
         queueRef.current.unshift(queued);
         setState((prev) => ({ ...prev, queued: [queued, ...prev.queued] }));
     }, []);
+    // The pin and unpin edits the harness has not answered yet. Each shows
+    // at once, and once answered the manifest decides again: the answer's,
+    // or for a refused edit the one held before it (shownPins).
+    const [pendingPins, setPendingPins] = useState<PendingPins>(() => new Map());
     // A canvas edit the user made to a card the harness holds (Remove, Pin,
     // Add), sent to the harness, whose manifest then decides whether the
-    // card shows, so the canvas the agent reads matches this one. Nothing to
-    // send before the conversation has a session. A legacy canvas shows the
-    // edit at once.
+    // card shows and whether it is pinned, so the canvas the agent reads
+    // matches this one. Nothing to send before the conversation has a
+    // session. A legacy canvas shows the edit at once.
     // Edits go one after another, so a Remove then an Add land in order; a
     // response for a conversation since left is dropped.
     const syncCanvas = useCallback(
@@ -503,6 +514,10 @@ export const useChat = (initial?: ChatSnapshot) => {
             if (!session) {
                 return;
             }
+
+            const generation = generationRef.current;
+
+            setPendingPins((prev) => withPinsSent(prev, operations));
 
             for (const operation of operations) {
                 if (operation.op === 'add') {
@@ -523,10 +538,17 @@ export const useChat = (initial?: ChatSnapshot) => {
                     );
                 },
             });
-            void canvasEditsRef.current.enqueue(session, operations);
+            void canvasEditsRef.current.enqueue(session, operations).then(() => {
+                if (generationRef.current === generation) {
+                    setPendingPins((prev) => withPinsSettled(prev, operations));
+                }
+            });
         },
         [applyManifest],
     );
+    // The harness cards the page shows pinned, or null while the canvas
+    // holds no manifest's pins and the save's pins stand.
+    const pins = useMemo(() => shownPins(canvas, pendingPins), [canvas, pendingPins]);
     // Put a plan card up as the pending pause, whether from the stream or
     // from a refusal that answered a stale card with the current one.
     const offerPlan = useCallback((plan: PlanState) => {
@@ -1962,6 +1984,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         setCanvas(null);
         legacyRef.current = null;
         setLocalCards(NO_LOCAL);
+        setPendingPins(new Map());
         askedRef.current.clear();
         cardReadsRef.current.clear();
         canvasEditsRef.current?.reset();
@@ -2004,6 +2027,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             setCanvas(canvasRef.current ?? saved.canvas ?? null);
             startLegacy(saved, canvasRef.current);
             setLocalCards(NO_LOCAL);
+            setPendingPins(new Map());
             askedRef.current.clear();
             cardReadsRef.current.clear();
             canvasEditsRef.current?.reset();
@@ -2044,6 +2068,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         localCards,
         syncCanvas,
         canvas,
+        pins,
         send,
         unqueue,
         answerClarify,
