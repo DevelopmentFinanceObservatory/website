@@ -30,9 +30,9 @@
 }
 
 // Hero-only entrances: the same parse-time animations and parking as
-// everywhere (styles/_reveal.scss — so replays and the stagger indices stay
-// systemic), but the motion is bespoke — declared here, later in the cascade
-// than _reveal, so these override the stock rise at equal specificity. Each
+// everywhere (styles/_reveal.scss), so replays and the stagger indices stay
+// systemic, with bespoke motion. These rules come later in the cascade than
+// _reveal, so they override the stock rise at equal specificity. Each
 // `.hero[data-reveal-parked]` rule is the pose a replay starts from; the
 // keyframes below run from that pose to the element's own styles.
 
@@ -233,18 +233,22 @@ $hero-text-stagger: 0.09s;
     display: block;
 }
 
-// The phone's three-line split hides until its breakpoint.
+// The phone's three-line split hides until its breakpoint. Both splits stay
+// rendered and the idle one is taken out of flow and made invisible: a
+// display toggle would restart its entrance animation, replaying the tagline
+// whenever a resize or rotation crosses the breakpoint.
 .linePhone {
-    display: none;
+    position: absolute;
+    visibility: hidden;
 }
 
 // Header & body enter from behind a mask instead of the stock fade-rise:
 // each element starts a full height below its own box with a matching clip,
-// and both retreat on the same clock — so in screen space the mask line
-// (the element's final bottom edge) never moves while the words slide up
+// and both retreat on the same clock, so in screen space the mask line
+// (the element's final bottom edge) holds still while the words slide up
 // from under it. No opacity, no scale. The negative outsets keep ascenders
 // and descenders of the tight line-height out of the final clip.
-// The closing beat: the text rides its indices — only the clock starts
+// The closing beat: the text rides its indices, on a clock that starts
 // after the core. The Get Started cue keeps the stock fade-rise on this clock.
 $hero-text-at: calc(#{$hero-text-delay} + (var(--i, 5) - 5) * #{$hero-text-stagger});
 
@@ -524,13 +528,15 @@ $hero-signature-at: calc(#{$hero-wait} + var(--i, 0) * $reveal-stagger);
     }
 
     // Swap to the split that reads right at this width ("Development" /
-    // "Finance Data" / "Simplified.") — same spans, same reveal.
+    // "Finance Data" / "Simplified."): same spans, same reveal.
     .lineWide {
-        display: none;
+        position: absolute;
+        visibility: hidden;
     }
 
     .linePhone {
-        display: block;
+        position: static;
+        visibility: visible;
     }
 
     .description {

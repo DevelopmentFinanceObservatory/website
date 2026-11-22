@@ -56,14 +56,12 @@
     --reveal-from-scale: 0.985;
 }
 
-// Text never scales — it only fades and rises.
+// Text never scales; it only fades and rises.
 [data-reveal="text"] {
     --reveal-from-scale: 1;
 }
 
-// data-reveal="soft" was once the no-bounce sibling of the stock reveal; the
-// stock settle has no overshoot, so the value is stock and stays only so
-// existing markup keeps working.
+// data-reveal="soft" plays the stock entrance.
 
 @media (prefers-reduced-motion: reduce) {
     // Everything shows at once; the selectors repeat both lists above so they

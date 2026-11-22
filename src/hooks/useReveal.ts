@@ -16,8 +16,8 @@ export function useReveal<T extends HTMLElement>(margin = 12, deps: unknown[] = 
             return;
         }
 
-        // Groups ([data-reveal-group]) are observed as a single element — their inner
-        // [data-reveal] children ride on the group's parking instead of their own observer.
+        // Groups ([data-reveal-group]) are observed as a single element: their inner
+        // [data-reveal] children ride on the group's parking, with no observer of their own.
         const collect = () =>
             [
                 ...(el.matches('[data-reveal], [data-reveal-group]') ? [el] : []),
@@ -32,11 +32,11 @@ export function useReveal<T extends HTMLElement>(margin = 12, deps: unknown[] = 
         // is styled (styles/_reveal.scss); this hook only parks elements so they
         // replay on scroll. An element is parked (hidden, animation none) once it
         // has left the viewport entirely, and unparked when it enters the middle
-        // band — two observers, with hysteresis between them. One band for both
+        // band: two observers, with hysteresis between them. One band for both
         // used to loop: the hidden pose translates the element rem(16) down, so an
         // element resting on the band's top edge kept sliding in and out of it.
-        // Band-based (rootMargin) instead of ratio thresholds — immune to elements
-        // resting exactly on a viewport edge. The flag is an attribute, not a
+        // The bands are rootMargins, which elements resting exactly on a viewport
+        // edge cannot fool the way ratio thresholds can. The flag is an attribute, not a
         // class: React rewrites className wholesale on re-render (e.g. Button's
         // .swapping toggle), which would wipe an observer-added class. An element
         // off screen when first observed played its entrance unseen and is parked
