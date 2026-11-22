@@ -1459,6 +1459,36 @@ test(
 );
 
 test(
+    'a phase that fails marks its step failed and gives its error to the deadline report',
+    { timeout: 2_000 },
+    async () => {
+        const failure = new Error('event table check failed');
+        const logged: unknown[] = [];
+
+        await runAndExit(
+            (progress) =>
+                runExportJob({
+                    exportEvents: async () => {
+                        throw failure;
+                    },
+                    exportAccounts: hang,
+                    progress,
+                }),
+            { deadlineMs: 20, exit: () => undefined, logError: (error) => logged.push(error) },
+        );
+
+        const [error] = logged;
+
+        assert.ok(error instanceof ExportJobError);
+        assert.equal(error.cause, failure);
+        assert.deepEqual(
+            [error.events, error.accounts],
+            [`failed: ${failure.message}`, 'the start'],
+        );
+    },
+);
+
+test(
     'runAndExit stops a run hung past its deadline, names each phase and exits 1',
     { timeout: 5_000 },
     async (t) => {

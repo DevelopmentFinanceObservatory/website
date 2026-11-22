@@ -461,10 +461,12 @@ const DAY_MS = 86_400_000;
  * The statement bound of the event export's pool (exportPool): Postgres
  * stops each of its statements at it, and the Job stops waiting for one
  * QUERY_GRACE_MS later. Its longest statement is the day counts, one
- * `GROUP BY` over the whole `event` table, whose busiest day so far holds
- * 1,434 events. runExport logs how long the day counts took.
+ * `GROUP BY` over the whole `event` table. The bound is set wide, with no
+ * measurement behind it, since the event export runs beside the account
+ * export and no other time depends on it. runExport logs how long the day
+ * counts took, so the bound can follow the measured times.
  */
-export const EVENT_STATEMENT_MS = 90_000;
+export const EVENT_STATEMENT_MS = 5 * 60_000;
 
 /**
  * How long the page queries of one day may take together, from the day's
@@ -485,9 +487,9 @@ export const JOB_DEADLINE_MS = 28 * 60_000;
 /**
  * The most one day can take once runExport starts it: its pages, 90 s
  * (DAY_READ_MS), plus the last page, which starts before then and may wait
- * 30 s for a connection (CONNECTION_TIMEOUT_MS) and 95 s for its answer
+ * 30 s for a connection (CONNECTION_TIMEOUT_MS) and 305 s for its answer
  * (EVENT_STATEMENT_MS and the grace), then its load to a confirmed outcome,
- * 150 s (LOAD_SLOT_MS), 365 s.
+ * 150 s (LOAD_SLOT_MS), 575 s.
  */
 export const DAY_WORST_MS =
     DAY_READ_MS + CONNECTION_TIMEOUT_MS + EVENT_STATEMENT_MS + QUERY_GRACE_MS + LOAD_SLOT_MS;
@@ -713,8 +715,12 @@ const messageOf = (error: unknown): string =>
  * far.
  */
 export type JobProgress = {
+    /** The event export's step, `done`, or `failed: ` and its error's message. */
     events: string;
+    /** The account export's step, `done`, or `failed: ` and its error's message. */
     accounts: string;
+    /** The errors the phases that failed rejected with. */
+    failures: Error[];
     /** The loads in flight, each by its day or table. */
     loading: Set<string>;
     unstarted: readonly string[];
@@ -725,6 +731,7 @@ export type JobProgress = {
 export const jobProgress = (): JobProgress => ({
     events: 'the start',
     accounts: 'the start',
+    failures: [],
     loading: new Set(),
     unstarted: [],
     faults: () => [],
@@ -833,8 +840,7 @@ export const runExport = async ({
             const counted = events.get(day) ?? 0;
 
             try {
-                // Unlinked, so a load that ran past its timeout and still
-                // uploads keeps reading the day before's file.
+                // Emptied, since the day's pages are appended to it.
                 await fs.rm(scratchFile, { force: true });
                 progress.events = `the read of ${day}`;
 
@@ -915,9 +921,10 @@ export const runExport = async ({
  * The export Job's run (db/export-events.ts): the event export and the
  * account export at once, each on its own pool and scratch file, so neither
  * waits on the other and a call that stalls in one costs that one alone.
- * Each phase's step in `progress` turns `done` as it ends. Rejects once
- * both are done with the one that failed, or with both in one
- * AggregateError.
+ * Each phase's step in `progress` turns `done` as it succeeds, or `failed: `
+ * and its error's message as it rejects, its error joining
+ * `progress.failures`. Rejects once both are done with the one that failed,
+ * or with both in one AggregateError.
  */
 export const runExportJob = async ({
     exportAccounts,
@@ -928,21 +935,21 @@ export const runExportJob = async ({
     exportEvents: () => Promise<unknown>;
     progress?: JobProgress;
 }): Promise<void> => {
+    const run = async (phase: 'events' | 'accounts', work: () => Promise<unknown>) => {
+        try {
+            await work();
+            progress[phase] = 'done';
+        } catch (error) {
+            const failure = error instanceof Error ? error : new Error(messageOf(error));
+
+            progress[phase] = `failed: ${failure.message}`;
+            progress.failures.push(failure);
+            throw failure;
+        }
+    };
     const [events, accounts] = await Promise.allSettled([
-        (async () => {
-            try {
-                await exportEvents();
-            } finally {
-                progress.events = 'done';
-            }
-        })(),
-        (async () => {
-            try {
-                await exportAccounts();
-            } finally {
-                progress.accounts = 'done';
-            }
-        })(),
+        run('events', exportEvents),
+        run('accounts', exportAccounts),
     ]);
     const eventFailure =
         events.status === 'rejected'
@@ -972,7 +979,9 @@ export const runExportJob = async ({
 /**
  * What runAndExit logs for a run that failed or met its deadline: each
  * phase's step then, the loads it stopped, whose outcome is unknown, the
- * days not started, and the faults so far.
+ * days not started, and the faults so far. Its `cause` is what `main`
+ * rejected with, or at the deadline the error of the phase that had
+ * already failed.
  */
 export class ExportJobError extends Error {
     readonly events: string;
@@ -981,10 +990,17 @@ export class ExportJobError extends Error {
     readonly unstarted: string[];
     readonly faults: string[];
 
-    constructor(lead: string, progress: JobProgress, options?: ErrorOptions) {
+    constructor(lead: string, progress: JobProgress, { rejected }: { rejected?: unknown } = {}) {
         const unknown = [...progress.loading];
         const unstarted = [...progress.unstarted];
         const faults = [...progress.faults()];
+        const [failure, ...more] = progress.failures;
+        const cause =
+            rejected !== undefined
+                ? rejected
+                : more.length > 0
+                  ? new AggregateError(progress.failures)
+                  : failure;
 
         super(
             [
@@ -996,9 +1012,9 @@ export class ExportJobError extends Error {
                     : []),
                 ...(unstarted.length > 0 ? [`days not started: ${unstarted.join(', ')}`] : []),
                 // A rejection's own message already names its faults.
-                ...(options?.cause === undefined ? faults : []),
+                ...(rejected === undefined ? faults : []),
             ].join('; '),
-            options,
+            cause === undefined ? undefined : { cause },
         );
         this.name = 'ExportJobError';
         this.events = progress.events;
@@ -1012,9 +1028,8 @@ export class ExportJobError extends Error {
 /**
  * Runs the Job's `main` with the Job's deadline, `deadlineMs` from now on
  * Date.now's clock, then exits the process with 0, or with 1 after logging
- * one ExportJobError, so a socket left open, such as a load upload past its
- * timeout or the pools' own connections, cannot hold the Job to its task
- * timeout. A rejection is logged with each phase's step. A `main` still
+ * one ExportJobError, so a socket left open, such as one of the pools' own
+ * connections, cannot hold the Job to its task timeout. A rejection is logged with each phase's step. A `main` still
  * running at the deadline is stopped and logged with each phase's step, the
  * loads in flight, the days not started and the faults so far, after the
  * lines each finished day logged. Cloud Run's stdout and stderr are pipes,
@@ -1050,7 +1065,7 @@ export const runAndExit = async (
     } catch (error) {
         logError(
             new ExportJobError(`export Job failed: ${messageOf(error)}`, progress, {
-                cause: error,
+                rejected: error,
             }),
         );
         code = 1;

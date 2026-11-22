@@ -182,8 +182,17 @@ const httpStatus = (error: unknown): number | undefined =>
         ? error.code
         : undefined;
 
-/** The statuses of a job insert BigQuery answered and refused, creating no job. */
-const REFUSED = new Set([400, 401, 403, 404]);
+/**
+ * The statuses of a job insert BigQuery refused for its caller: a request
+ * it did not authenticate or authorise creates no job.
+ */
+const UNAUTHORISED = new Set([401, 403]);
+
+/**
+ * The statuses of a job insert BigQuery answered and refused, whose job id
+ * still has to read as unknown before the table counts as kept.
+ */
+const REFUSED = new Set([400, 404]);
 
 /**
  * One read of a job's state: DONE without an error (`replaced`) or with one
@@ -241,9 +250,18 @@ const finalState = async (
  * what BigQuery confirms the load left in the table (Load), read for that
  * job id in the table's location. It never rejects.
  *
+ * The job's insert and its file go in one request, which BigQuery acts on
+ * only once it has the whole body, and the body ends only once the file has
+ * been read to its end. So:
+ *
  * - A file that cannot be read sends no request: `kept`.
- * - A job insert BigQuery answered with a 400, 401, 403 or 404, whose job
- *   id then reads as unknown to BigQuery, created no job: `kept`, at once.
+ * - An upload that fails, or that BigQuery has not answered by `timeoutMs`,
+ *   before the file was read to its end is aborted and created no job:
+ *   `kept`, at once on a failure, after the cancel and confirm below at
+ *   `timeoutMs`.
+ * - A job insert BigQuery answered with a 401 or 403 created no job:
+ *   `kept`, at once. One answered with a 400 or 404 created none when its
+ *   job id then reads as unknown to BigQuery: `kept`, at once.
  * - Any other client error before `timeoutMs` is followed by reads of the
  *   job's state until `timeoutMs` from the start, since the job may still
  *   be running or not yet created.
@@ -251,12 +269,9 @@ const finalState = async (
  *   is still waiting or failed earlier, is cancelled, the cancel waited for
  *   at most `cancelTimeoutMs`, and the job's state read for at most
  *   `confirmTimeoutMs`, so no load is left running uncancelled. An upload
- *   BigQuery has not answered by `timeoutMs` is first aborted. The job's
- *   insert and its file go in one request, which BigQuery acts on only once
- *   it has the whole body, so an upload aborted before the file was read to
- *   its end, and the request's body ended, created no job: `kept`. An
- *   upload aborted later may have reached BigQuery whole, so with no job
- *   confirmed it stays `unknown`.
+ *   still unanswered then is aborted first. One aborted after its body
+ *   ended may have reached BigQuery whole, so with no job confirmed it
+ *   stays `unknown`.
  *
  * One call thus takes at most `timeoutMs + cancelTimeoutMs +
  * confirmTimeoutMs`, LOAD_SLOT_MS by default.
@@ -333,13 +348,18 @@ export const loadWithin = async ({
             }
         } catch (error) {
             failure = { error };
-            // The upload failed, so the rest of the file goes nowhere.
             source.destroy();
+            upload.destroy();
 
             const kept = (): Load => ({
                 outcome: 'kept',
                 error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
             });
+
+            // An incomplete request, or one refused for its caller, creates no job.
+            if (!inserted && (!sent || UNAUTHORISED.has(httpStatus(error) ?? 0))) {
+                return kept();
+            }
 
             if (
                 !inserted &&

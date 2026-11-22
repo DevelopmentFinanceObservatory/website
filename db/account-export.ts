@@ -173,10 +173,12 @@ export type AccountSnapshot = {
  * left in TOAST) joined to `user` with two SHA-256 digests a row for the
  * second. Postgres reads such rows at well over 100,000 a second, so even a
  * million conversations, far past what the accounts can have saved, read in
- * about 10 s, a third of the bound. runAccountExport logs each read's
- * duration, so the bound can follow the measured times.
+ * about 10 s. The bound is set wide, with no measurement behind it, since
+ * the account export runs beside the event export and no other time depends
+ * on it. runAccountExport logs each read's duration, so the bound can follow
+ * the measured times.
  */
-export const ACCOUNT_READ_MS = 30_000;
+export const ACCOUNT_READ_MS = 2 * 60_000;
 
 /**
  * Every row of `account_daily`, oldest day first, every row of

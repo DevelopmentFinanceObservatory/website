@@ -29,7 +29,8 @@ const NOT_FOUND = 'not found';
 const never = () => new Promise<never>(() => undefined);
 const reject = async () => Promise.reject(new Error('boom'));
 // BigQuery's answer to a job insert it refuses, as the client's ApiError.
-const refuse = async () => Promise.reject(Object.assign(new Error('Access Denied'), { code: 403 }));
+const refuse = (code: number) => async () =>
+    Promise.reject(Object.assign(new Error('Refused'), { code }));
 
 type Fake = {
     /**
@@ -39,6 +40,8 @@ type Fake = {
     upload?: () => Promise<unknown>;
     /** The upload takes no bytes, as over a stalled connection. */
     stall?: boolean;
+    /** The upload fails on its first bytes, as over a reset connection. */
+    failWrite?: boolean;
     /** The file the load sends, FILE unless given. */
     file?: string;
     /** The client's wait for the created job. */
@@ -59,6 +62,7 @@ type Fake = {
 const fakeTable = ({
     upload = async () => undefined,
     stall = false,
+    failWrite = false,
     promise = never,
     cancel = async () => [{}],
     states = [RUNNING],
@@ -105,7 +109,9 @@ const fakeTable = ({
 
             const stream: Writable = new Writable({
                 write: (_chunk, _encoding, done) => {
-                    if (!stall) {
+                    if (failWrite) {
+                        done(new Error('socket hang up'));
+                    } else if (!stall) {
                         done();
                     }
                 },
@@ -148,14 +154,18 @@ const count = (calls: string[], call: string) => calls.filter((made) => made ===
 const FILE = path.join(os.tmpdir(), `bounded-test-${randomBytes(4).toString('hex')}.ndjson`);
 // A file larger than a stalled upload's buffers, so it is never read to its end.
 const LARGE_FILE = `${FILE}.large`;
+// A path that stats but fails on its first read (EISDIR), so its read never ends.
+const UNREADABLE = `${FILE}.dir`;
 
 test.before(async () => {
     await fs.writeFile(FILE, '{}\n');
     await fs.writeFile(LARGE_FILE, '{}\n'.repeat(400_000));
+    await fs.mkdir(UNREADABLE);
 });
 test.after(async () => {
     await fs.rm(FILE, { force: true });
     await fs.rm(LARGE_FILE, { force: true });
+    await fs.rm(UNREADABLE, { recursive: true, force: true });
 });
 
 test(
@@ -212,8 +222,17 @@ test(
                 (calls) => assert.deepEqual(calls, ['load', 'state']),
             ],
             [
-                'a job insert BigQuery refuses, whose job id it does not know',
-                { upload: refuse, states: [NOT_FOUND] },
+                'a job insert BigQuery refuses as unauthorised',
+                { upload: refuse(403), states: [RUNNING] },
+                'kept',
+                (calls, ms) => {
+                    assert.deepEqual(calls, ['load']);
+                    assert.ok(ms < BOUNDS.timeoutMs);
+                },
+            ],
+            [
+                'a job insert BigQuery refuses as invalid, whose job id it does not know',
+                { upload: refuse(400), states: [NOT_FOUND] },
                 'kept',
                 (calls, ms) => {
                     assert.deepEqual(calls, ['load', 'state']);
@@ -221,8 +240,8 @@ test(
                 },
             ],
             [
-                'a job insert BigQuery refuses, whose job runs on past the load bound',
-                { upload: refuse, states: [RUNNING] },
+                'a job insert BigQuery refuses as invalid, whose job runs on past the load bound',
+                { upload: refuse(400), states: [RUNNING] },
                 'unknown',
                 (calls) => {
                     assert.equal(count(calls, 'cancel'), 1);
@@ -291,6 +310,24 @@ test(
                 { stall: true, file: LARGE_FILE, states: [NOT_FOUND] },
                 'kept',
                 (calls) => assert.deepEqual(calls.slice(0, 3), ['load', 'abort', 'cancel']),
+            ],
+            [
+                'a file whose read fails before its end',
+                { file: UNREADABLE, states: [RUNNING] },
+                'kept',
+                (calls, ms) => {
+                    assert.deepEqual(calls, ['load', 'abort']);
+                    assert.ok(ms < BOUNDS.timeoutMs);
+                },
+            ],
+            [
+                'an upload that fails before its file was read to its end',
+                { failWrite: true, file: LARGE_FILE, states: [RUNNING] },
+                'kept',
+                (calls, ms) => {
+                    assert.deepEqual(calls, ['load']);
+                    assert.ok(ms < BOUNDS.timeoutMs);
+                },
             ],
             [
                 'an upload stalled past the load bound after its body ended',
