@@ -19,8 +19,8 @@ import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './
  * account's through yesterday's. `account_organisation` holds one row per
  * account counted there, keyed by `user_hash`, the digest the event export
  * writes for the account's events, with its organisation and no creation
- * day. Both views leave out accounts being deleted. `conversation` holds one
- * row per saved conversation with a user: its id, its `agent_session_id`, the
+ * day. All three views leave out accounts being deleted. `conversation` holds
+ * one row per saved conversation of such an account: its id, its `agent_session_id`, the
  * user's `user_hash` and its creation time, and no title or content. No table holds an
  * email address or a user id.
  */
@@ -91,7 +91,7 @@ export type AccountOrganisationSource = {
 };
 
 /** One `conversation` row. */
-export type ConversationRow = {
+export type ConversationExportRow = {
     id: string;
     agent_session_id: string | null;
     // exportDigest of the user id under EXPORT_ID_HMAC_KEY, the events' `user_hash`
@@ -243,7 +243,7 @@ export const accountOrganisationRow = (
 export const conversationRow = (
     { id, agentSessionId, userId, createdAt }: ConversationSource,
     hmacKey: string,
-): ConversationRow => ({
+): ConversationExportRow => ({
     id,
     agent_session_id: agentSessionId,
     user_hash: exportDigest(userId, hmacKey),
@@ -281,19 +281,21 @@ export const bigQueryAccountTable =
 
 /**
  * One account export run. For `account_daily`, then `account_organisation`,
- * then `conversation`, writes every row to `scratchFile` and replaces the table with it, so a
- * failed `account_organisation` load leaves it as it was beside a new
- * `account_daily`. `account_daily` holds a row for every day from the first
+ * then `conversation`, writes every row to `scratchFile` and replaces the table with it,
+ * so a failed load leaves that table as it was. Each table loads on its own: a
+ * failed table does not stop the next, and the run rejects at the end naming
+ * every failed table. `account_daily` holds a row for every day from the first
  * account's through yesterday's while `webmail_domain` holds any domain,
  * so a read with no rows means one of two things. While `webmail_domain`
- * is empty, the run rejects with both tables kept. Otherwise the read
- * succeeded and the user table holds no account older than today, or none
- * at all, so both tables are replaced with no rows and an account deleted
- * since the last run, and the organisation it named, leave the export. A
- * failed or partial read throws in `read`, before any table is replaced.
- * `account_organisation` holds no rows exactly when `account_daily` holds
- * none, since both views read the same accounts. `conversation` is replaced
- * from whatever the read returned, an empty list included.
+ * is empty, `account_daily` and `account_organisation` fail with their
+ * tables kept. Otherwise the read succeeded and the user table holds no
+ * account older than today, or none at all, so both tables are replaced
+ * with no rows and an account deleted since the last run, and the
+ * organisation it named, leave the export. `account_organisation` holds no
+ * rows exactly when `account_daily` holds none, since both views read the
+ * same accounts. `conversation` does not depend on `webmail_domain` and is
+ * replaced from whatever the read returned, an empty list included. A failed
+ * or partial read throws in `read`, before any table is replaced.
  */
 export const runAccountExport = async ({
     read,
@@ -309,33 +311,40 @@ export const runAccountExport = async ({
     log: (line: string) => void;
 }): Promise<void> => {
     const { rows, organisations, conversations, webmailDomains } = await read();
+    const heldBack = rows.length === 0 && !webmailDomains;
 
-    if (rows.length === 0 && !webmailDomains) {
-        throw new Error(
-            'account export: account_daily read no rows, webmail_domain is empty, tables kept',
-        );
-    }
-
-    const tables: [AccountTable, object[]][] = [
-        ['account_daily', rows],
+    const tables: [AccountTable, object[], boolean][] = [
+        ['account_daily', rows, heldBack],
         [
             'account_organisation',
             organisations.map((source) => accountOrganisationRow(source, hmacKey)),
+            heldBack,
         ],
-        ['conversation', conversations.map((source) => conversationRow(source, hmacKey))],
+        ['conversation', conversations.map((source) => conversationRow(source, hmacKey)), false],
     ];
+    const failures: string[] = [];
 
-    for (const [table, tableRows] of tables) {
+    for (const [table, tableRows, kept] of tables) {
+        if (kept) {
+            failures.push(`${table}: read no rows, webmail_domain is empty, table kept`);
+            continue;
+        }
+
         try {
             await fs.writeFile(
                 scratchFile,
                 tableRows.map((row) => `${JSON.stringify(row)}\n`).join(''),
             );
             await replace(table, scratchFile);
+            log(`${table}: ${tableRows.length} rows loaded`);
+        } catch (error) {
+            failures.push(`${table}: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             await fs.rm(scratchFile, { force: true });
         }
+    }
 
-        log(`${table}: ${tableRows.length} rows loaded`);
+    if (failures.length > 0) {
+        throw new Error(`account export: ${failures.join('; ')}`);
     }
 };
