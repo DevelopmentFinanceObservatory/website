@@ -441,7 +441,7 @@
 }
 
 .pickerSkip {
-    align-self: flex-start;
+    align-self: flex-end;
 }
 
 // Several questions: the open one sits in a step, answered ones on a dot
@@ -569,7 +569,7 @@
 }
 
 .pickerSend {
-    align-self: flex-start;
+    align-self: flex-end;
 }
 
 @keyframes picker-step-in {
