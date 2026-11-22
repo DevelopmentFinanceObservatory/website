@@ -9,9 +9,11 @@ import test, { type TestContext } from 'node:test';
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
-import { takeManifest } from '../composition.ts';
+import { createLegacyCanvas, takeManifest } from '../composition.ts';
 import {
-    approvalRevisions,
+    approvalKeys,
+    cardTurns,
+    drawManifestCards,
     attachStep,
     cardsToRead,
     carryOnTurn,
@@ -35,6 +37,8 @@ import {
     readSince,
     withHarnessTurn,
     withInherited,
+    turnReplyAt,
+    withFollowup,
     withoutUnsentQuestion,
 } from '../transcript.ts';
 import {
@@ -366,8 +370,10 @@ test("owedNewQuestion sends a latest turn's new question once, while no turn fol
             harnessTurn: at + 1,
         }));
 
-    assert.deepEqual(owedNewQuestion(read, upTo(2)), { turnIndex: 3, text: 'ODA to Ghana' });
-    assert.deepEqual(owedNewQuestion(read, upTo(3)), { turnIndex: 3, text: 'ODA to Ghana' });
+    const owed = { turnIndex: 3, text: 'ODA to Ghana', tried: false };
+
+    assert.deepEqual(owedNewQuestion(read, upTo(2)), owed);
+    assert.deepEqual(owedNewQuestion(read, upTo(3)), owed);
     // The page holds a later turn, or the harness opened one.
     assert.equal(owedNewQuestion(read, upTo(4)), null);
     assert.equal(
@@ -376,16 +382,32 @@ test("owedNewQuestion sends a latest turn's new question once, while no turn fol
     );
     assert.equal(owedNewQuestion({ ...read, closed_since: [closed(3)] }, upTo(3)), null);
     // A send of it the harness refused, which the meter gave back, or one it
-    // never admitted, leaves it owed.
+    // never admitted, was tried: the page offers it rather than send it.
     for (const unsent of [
         { role: 'user', text: 'ODA to Ghana', refunded: true, fromNewQuestion: 3 },
         { role: 'user', text: 'ODA to Ghana', fromNewQuestion: 3 },
     ] satisfies ChatMessage[]) {
         assert.deepEqual(owedNewQuestion(read, [...upTo(3), unsent, { role: 'bot', text: '' }]), {
-            turnIndex: 3,
-            text: 'ODA to Ghana',
+            ...owed,
+            tried: true,
         });
     }
+
+    // Once offered on the turn's reply, it is the user's to send.
+    const offered: ChatMessage[] = [
+        { role: 'user', text: 'question 3', harnessTurn: 3 },
+        { role: 'bot', text: NEW_QUESTION_NOTE, followups: ['ODA to Ghana'] },
+    ];
+
+    assert.equal(owedNewQuestion(read, offered), null);
+    assert.deepEqual(
+        withFollowup(upTo(3).concat({ role: 'bot', text: '' }), 3, 'ODA to Ghana').at(-1),
+        {
+            role: 'bot',
+            text: '',
+            followups: ['ODA to Ghana'],
+        },
+    );
 });
 
 test('an owed question sent again replaces the send the harness never admitted', () => {
@@ -403,6 +425,21 @@ test('an owed question sent again replaces the send the harness never admitted',
     // The refused send stays, as the transcript showed it.
     assert.deepEqual(withoutUnsentQuestion(messages, 3), shown);
     assert.equal(withoutUnsentQuestion(shown, 3), shown);
+
+    // A send that never reached the harness goes with its reply, whatever
+    // the reply says, so turn 3's reply stays turn 3's.
+    for (const text of ['_The connection dropped._', '_Stopped._', '']) {
+        const unsent: ChatMessage[] = [
+            { role: 'user', text: 'question 3', harnessTurn: 3 },
+            { role: 'bot', text: NEW_QUESTION_NOTE },
+            { role: 'user', text: 'ODA to Ghana', fromNewQuestion: 3 },
+            { role: 'bot', text },
+        ];
+        const kept = withoutUnsentQuestion(unsent, 3);
+
+        assert.deepEqual(kept, unsent.slice(0, 2));
+        assert.equal(turnReplyAt(kept, 3), 1);
+    }
 });
 
 const BUSY: StreamRefusal = {
@@ -670,7 +707,11 @@ test("a fork owes its own turn's new question despite the source's", () => {
     const asked = { ...closed(2, ''), new_question: 'ODA to Kenya' };
     const read = readOf({ turn: turnState({ index: 2, status: 'done' }), closed_since: [asked] });
 
-    assert.deepEqual(owedNewQuestion(read, fork), { turnIndex: 2, text: 'ODA to Kenya' });
+    assert.deepEqual(owedNewQuestion(read, fork), {
+        turnIndex: 2,
+        text: 'ODA to Kenya',
+        tried: false,
+    });
 });
 
 test('a turn another tab ran fills its gap in order', () => {
@@ -811,13 +852,13 @@ test("a resume's repeated approvals leave the plan the page holds", () => {
         { role: 'user', text: 'question 2', harnessTurn: 2 },
         { role: 'bot', text: '', plan: approvedFromFrame(approvedOf('rev-b')) },
     ];
-    const held = approvalRevisions(messages);
+    const held = approvalKeys(messages);
     let shown = withTurnApprovals(messages, 2, [approvedOf('rev-a'), approvedOf('rev-b')], held);
 
     assert.equal(shown, messages);
 
     for (const frame of [approvedOf('rev-a'), approvedOf('rev-b')]) {
-        const plan = takeApproval(frame, held);
+        const plan = takeApproval(frame, 2, held);
 
         if (plan) {
             shown = withApprovedPlan(shown, plan);
@@ -829,8 +870,12 @@ test("a resume's repeated approvals leave the plan the page holds", () => {
     // A plan the page has not seen is taken once, and its repeat ignored.
     const later = approvedOf('rev-c');
 
-    assert.equal(takeApproval(later, held)?.revision, 'rev-c');
-    assert.equal(takeApproval(later, held), null);
+    assert.equal(takeApproval(later, 2, held)?.revision, 'rev-c');
+    assert.equal(takeApproval(later, 2, held), null);
+
+    // A later turn that approves a plan of the same content, and so the same
+    // revision, takes it.
+    assert.equal(takeApproval(approvedOf('rev-b'), 3, held)?.revision, 'rev-b');
 });
 
 test('a state read restores the approved plan of a turn whose stream the page lost', () => {
@@ -839,7 +884,7 @@ test('a state read restores the approved plan of a turn whose stream the page lo
         { role: 'user', text: 'question 2', harnessTurn: 2 },
         { role: 'bot', text: '' },
     ];
-    const held = approvalRevisions(messages);
+    const held = approvalKeys(messages);
     const restored = withTurnApprovals(
         messages,
         2,
@@ -850,10 +895,101 @@ test('a state read restores the approved plan of a turn whose stream the page lo
 
     assert.ok(reply?.role === 'bot');
     assert.equal(reply.plan?.revision, 'rev-b');
-    assert.deepEqual([...held], ['rev-a', 'rev-b']);
+    assert.deepEqual([...held], ['2:rev-a', '2:rev-b']);
+
+    // Turn 3 approving the same plan content gets its own approved plan.
+    const again = withTurnApprovals(
+        [
+            ...restored,
+            { role: 'user', text: 'question 3', harnessTurn: 3 },
+            { role: 'bot', text: '' },
+        ],
+        3,
+        [approvedOf('rev-b')],
+        held,
+    );
+    const third = again.at(-1);
+
+    assert.ok(third?.role === 'bot');
+    assert.equal(third.plan?.revision, 'rev-b');
 
     // Read again, or after the stream's own frame, nothing changes; nor for
     // a turn the page does not hold.
     assert.equal(withTurnApprovals(restored, 2, [approvedOf('rev-b')], held), restored);
     assert.equal(withTurnApprovals(messages, 5, [approvedOf('rev-z')], new Set()), messages);
+});
+
+test("a card a read's closed turn made is filed under that turn, held or appended", () => {
+    // The page holds turns 1 and 2, the read appends turn 3; turn 2's card
+    // landed after the page left, and turn 3's arrived with it.
+    const messages: ChatMessage[] = [...keyed([1, 2, 3])];
+    const turns = cardTurns(messages, 3, [
+        { ...closed(2), component_ids: ['cmp_late'] },
+        { ...closed(3), component_ids: ['cmp_new'] },
+    ]);
+
+    assert.deepEqual(
+        [...turns],
+        [
+            ['cmp_late', 2],
+            ['cmp_new', 3],
+        ],
+    );
+
+    // Display turns run past the harness's when the page ran turns that
+    // opened none (a refused prompt): they follow the transcript's prompts.
+    const refused: ChatMessage[] = [
+        { role: 'user', text: 'refused', refunded: true },
+        { role: 'bot', text: '_No._' },
+        ...keyed([1, 2]),
+    ];
+
+    assert.deepEqual(
+        [...cardTurns(refused, 3, [{ ...closed(2), component_ids: ['cmp_x'] }])],
+        [['cmp_x', 3]],
+    );
+});
+
+test('a card a state read draws during a failed legacy reconcile joins the legacy canvas', async () => {
+    // The legacy canvas shows cmp_1; removing the hidden cmp_old fails.
+    const legacy = createLegacyCanvas({
+        ids: ['cmp_1'],
+        hidden: new Map([['cmp_old', 1]]),
+        pinned: [],
+        mutate: async () => null,
+        onTake: () => assert.fail('the reconcile failed'),
+        onLocal: () => {},
+        onChange: () => {},
+    });
+    const manifest = manifestOf([
+        ['cmp_old', 1],
+        ['cmp_1', 1],
+        [CARD, 1],
+    ]);
+
+    await legacy.offer(manifest);
+
+    const drawn: string[] = [];
+
+    await drawManifestCards({
+        manifest,
+        held: new Map([['cmp_1', 1]]),
+        seen: new Set(['cmp_1', 'cmp_old']),
+        inFlight: new Set(),
+        isCurrent: () => true,
+        keep: legacy.keep,
+        onDrawn: (block) => drawn.push(block.component_id),
+        read: async (id, revision) => ({
+            component_id: id,
+            revision,
+            catalog_version: '',
+            payload: {},
+            fact_summary: { series: [], series_cut: 0, window: null, unit: null },
+        }),
+    });
+
+    assert.deepEqual(drawn, [CARD]);
+    // Saved now, the legacy canvas shows the card, so the next open does not
+    // take it for one the save hid.
+    assert.deepEqual(legacy.ids(), ['cmp_1', CARD]);
 });

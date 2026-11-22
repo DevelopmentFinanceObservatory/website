@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { SavedConversation } from '../../src/lib/chat/history.ts';
 import {
@@ -86,7 +87,7 @@ test('concurrent claims on a harness conversation agree on one owner', async (t)
     );
     const [owner] = answers[0] ?? [];
 
-    assert.ok(owner !== undefined && users.includes(owner));
+    assert.ok(typeof owner === 'string' && users.includes(owner));
     assert.deepEqual(
         answers,
         users.map(() => [owner]),
@@ -98,6 +99,33 @@ test('concurrent claims on a harness conversation agree on one owner', async (t)
     await saveConversation(db, other, saved('conv-other', 'harness-new'));
 
     assert.deepEqual(await sessionOwners(db, 'harness-new'), [owner]);
+});
+
+/**
+ * Deleting an account keeps its harness conversations' owner rows, with no
+ * owner, so no later caller can claim one.
+ */
+test("a deleted account's harness conversation stays owned by nobody", async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await applyMigrations(database.migratorPool(), {
+        migrationsFolder: MIGRATIONS_FOLDER,
+        runtimeDbUser: database.runtimeUser,
+        migratorDbUser: database.migratorUser,
+    });
+
+    const db = drizzle(database.runtimePool());
+
+    await db.insert(user).values([
+        { id: 'user-ana', name: 'Ana', email: 'ana@example.org' },
+        { id: 'user-ben', name: 'Ben', email: 'ben@example.org' },
+    ]);
+    await saveConversation(db, 'user-ana', saved('conv-ana', 'harness-1'));
+    await db.delete(user).where(eq(user.id, 'user-ana'));
+
+    assert.deepEqual(await sessionOwners(db, 'harness-1'), [null]);
+    assert.deepEqual(await claimSessionOwner(db, 'harness-1', 'user-ben'), [null]);
 });
 
 /**

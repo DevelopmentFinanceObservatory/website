@@ -15,9 +15,11 @@ const studioAccessRefusal = async (input: AccessInput) => (await studioAccess(in
 // A claim on a conversation no other account has claimed: the caller owns it.
 const unclaimed = async (_id: string, userId: string) => [userId];
 
-const OWNERS: Record<string, string[]> = {
+const OWNERS: Record<string, (string | null)[]> = {
     'conv-ana': ['user-ana'],
     'conv-guest': [],
+    // Its owner's account was deleted.
+    'conv-orphan': [null],
 };
 
 const check = (
@@ -41,6 +43,13 @@ test('studioAccessRefusal answers 404 for a conversation another account saved',
         assert.equal(await check(route, 'user-ben', 'conv-ana'), 'not_found', route);
         assert.equal(await check(route, null, 'conv-ana'), 'not_found', `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-ana'), null, `owner ${route}`);
+    }
+});
+
+test('a conversation whose owner deleted their account answers to nobody', async () => {
+    for (const route of ['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume']) {
+        assert.equal(await check(route, null, 'conv-orphan'), 'not_found', `guest ${route}`);
+        assert.equal(await check(route, 'user-ben', 'conv-orphan'), 'not_found', route);
     }
 });
 

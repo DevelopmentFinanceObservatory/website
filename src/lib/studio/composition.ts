@@ -115,7 +115,7 @@ export type LegacyLocal = { shown: string[]; hidden: string[] };
  * then on. Before it, `onLocal` hears the cards the save held that the
  * offered manifest lacks, cards the harness never held such as a fork's
  * inherited ones, which stay on the page as local cards, those the page hid
- * staying off the canvas.
+ * or the user took off (`drop`) staying off the canvas.
  * Until then the canvas shows `ids()`: the legacy cards plus the cards drawn
  * since (`keep`), less the ones the user took off (`drop`), and `onChange`
  * hears each change. A failed `remove`, a stale revision included, leaves
@@ -143,6 +143,10 @@ export const createLegacyCanvas = ({
     onChange: (ids: string[]) => void;
 }) => {
     const shown = new Set(ids);
+    // The cards the user took off before the manifest was taken. One the
+    // harness never held (a fork's inherited card) stays local and off the
+    // canvas.
+    const dropped = new Set<string>();
     let state: 'waiting' | 'sent' | 'failed' | 'taken' = 'waiting';
     // The newest manifest offered while the `remove` was in flight.
     let later: CompositionManifest | null = null;
@@ -167,12 +171,14 @@ export const createLegacyCanvas = ({
         ids: (): string[] => [...shown],
         keep: (id: string) => {
             if (state !== 'taken' && !shown.has(id)) {
+                dropped.delete(id);
                 shown.add(id);
                 onChange([...shown]);
             }
         },
         drop: (id: string) => {
             if (state !== 'taken' && shown.delete(id)) {
+                dropped.add(id);
                 onChange([...shown]);
             }
         },
@@ -190,7 +196,9 @@ export const createLegacyCanvas = ({
             const held = new Set(manifest.blocks.map((block) => block.component_id));
             const local = {
                 shown: [...shown].filter((id) => !held.has(id)),
-                hidden: [...hidden.keys()].filter((id) => !shown.has(id) && !held.has(id)),
+                hidden: [...new Set([...hidden.keys(), ...dropped])].filter(
+                    (id) => !shown.has(id) && !held.has(id),
+                ),
             };
             const removed = manifest.blocks
                 .filter((block) => {

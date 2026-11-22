@@ -378,3 +378,33 @@ test('takeManifest keeps which harness cards the manifest pins', () => {
         ['cmp_b'],
     );
 });
+
+test('an inherited card taken off a legacy fork before the manifest is taken stays local', async () => {
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_inherited', title: 'Old', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
+        ],
+        pinnedIds: ['cmp_inherited'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const local: LegacyLocal[] = [];
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: legacyHiddenCards(save, restored, new Map()),
+        pinned: [],
+        mutate: async () => assert.fail('the harness holds no card the page hides'),
+        onTake: () => {},
+        onLocal: (cards) => local.push(cards),
+        onChange: () => {},
+    });
+
+    // Removed before the first manifest arrived, so Remove went to the
+    // harness, which never held it.
+    legacy.drop('cmp_inherited');
+    await legacy.offer(manifest(3, ['cmp_own']));
+
+    assert.deepEqual(local, [{ shown: [], hidden: ['cmp_inherited'] }]);
+});

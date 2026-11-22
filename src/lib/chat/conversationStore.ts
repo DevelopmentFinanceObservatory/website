@@ -52,14 +52,17 @@ export const getConversation = async (
 };
 
 /** The account the harness conversation `agentSessionId` belongs to, as a
- *  list of none or one (src/lib/studio/studioAccess). */
-export const conversationOwners = (agentSessionId: string): Promise<string[]> =>
+ *  list of none or one, null for a deleted account
+ *  (src/lib/studio/studioAccess). */
+export const conversationOwners = (agentSessionId: string): Promise<(string | null)[]> =>
     sessionOwners(db, agentSessionId);
 
 /** Make `userId` the owner of a harness conversation no account owns, and
  *  answer its owner (claimSessionOwner). */
-export const claimConversationOwner = (agentSessionId: string, userId: string): Promise<string[]> =>
-    claimSessionOwner(db, agentSessionId, userId);
+export const claimConversationOwner = (
+    agentSessionId: string,
+    userId: string,
+): Promise<(string | null)[]> => claimSessionOwner(db, agentSessionId, userId);
 
 /** Insert or replace; see saveConversation for who a harness conversation
  *  belongs to. */

@@ -190,6 +190,13 @@
       "when": 1795334857873,
       "tag": "0027_studio_session_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795341978212,
+      "tag": "0028_studio_session_owner_outlives_account",
+      "breakpoints": true
     }
   ]
 }

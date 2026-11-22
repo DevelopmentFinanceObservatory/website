@@ -380,24 +380,28 @@ export const withAnswer = (messages: ChatMessage[], text: string): ChatMessage[]
 /**
  * The transcript without the prompts sent for harness turn `turnIndex`'s new
  * question that the harness never admitted (no `harnessTurn`) and the meter
- * did not give back, each with the empty reply that followed it: the send is
- * owed again, or another page sent it.
+ * did not give back, each with every message up to the next prompt: its
+ * reply, whatever it says (an error, a stopped note), stays with it, so the
+ * turn's own reply stays the turn's (turnReplyAt).
  */
 export const withoutUnsentQuestion = (
     messages: ChatMessage[],
     turnIndex: number,
 ): ChatMessage[] => {
-    const unsent = (message: ChatMessage | undefined) =>
-        message?.role === 'user' &&
+    const unsent = (message: ChatMessage) =>
+        message.role === 'user' &&
         message.fromNewQuestion === turnIndex &&
         message.harnessTurn === undefined &&
         !message.refunded &&
         !message.inherited;
-    const kept = messages.filter(
-        (message, at) =>
-            !unsent(message) &&
-            !(message.role === 'bot' && !message.text && unsent(messages[at - 1])),
-    );
+    let dropping = false;
+    const kept = messages.filter((message) => {
+        if (isPrompt(message)) {
+            dropping = unsent(message);
+        }
+
+        return !dropping;
+    });
 
     return kept.length === messages.length ? messages : kept;
 };

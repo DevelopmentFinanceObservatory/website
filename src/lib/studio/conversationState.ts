@@ -7,6 +7,7 @@ import {
     abortableSleep,
     busyRetryAfter,
     isTurnMoved,
+    readComponent,
     readState,
     runResume,
     type ComponentRead,
@@ -16,7 +17,7 @@ import {
 import { factsOf } from './liveCards.ts';
 import { approvedFromFrame, type ApprovedPlan } from './plan.ts';
 import { describedBy, payloadDescription } from './payload.ts';
-import { ensureTurn, NEW_QUESTION_NOTE, turnReplyAt } from './transcript.ts';
+import { ensureTurn, isPrompt, NEW_QUESTION_NOTE, promptTurns, turnReplyAt } from './transcript.ts';
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
 import type {
     ClosedTurn,
@@ -153,17 +154,20 @@ export const mergeClosedTurns = (
  * The question the harness's latest turn was ended by (a change to its plan
  * that asked something else), while the page still owes it as the next
  * turn. That holds while the latest turn the harness holds is the one that
- * asked it, and the page holds no prompt the harness admitted as a later
- * turn (`harnessTurn`). A prompt sent for it counts only once admitted: a
- * refused send, which the meter gave back, and a send that never reached the
- * harness leave it owed. A fork's inherited prompts answer another session's
- * turns. Returns the turn's index and the text, or null, and null also for
- * a read whose latest turn `closed_since` does not hold.
+ * asked it, the page holds no prompt the harness admitted as a later turn
+ * (`harnessTurn`), and the turn's reply does not already offer it as a
+ * follow-up (withFollowup). `tried` says the page sent it once and the
+ * harness never admitted it: a refused send, which the meter gave back, a
+ * send that never reached the harness, or one stopped while it waited. Such
+ * a question is offered for the user to send, never sent again on its own.
+ * A fork's inherited prompts answer another session's turns. Returns the
+ * turn's index and the text, or null, and null also for a read whose latest
+ * turn `closed_since` does not hold.
  */
 export const owedNewQuestion = (
     read: ConversationRead,
     messages: readonly ChatMessage[],
-): { turnIndex: number; text: string } | null => {
+): { turnIndex: number; text: string; tried: boolean } | null => {
     const latest = read.turn;
     const closed = latest && read.closed_since.find((turn) => turn.turn_index === latest.index);
 
@@ -171,16 +175,32 @@ export const owedNewQuestion = (
         return null;
     }
 
-    const later = messages.some(
+    const own = messages.filter(
+        (message): message is Extract<ChatMessage, { role: 'user' }> =>
+            message.role === 'user' && !message.inherited,
+    );
+    const later = own.some(
         (message) =>
-            message.role === 'user' &&
-            !message.inherited &&
             !message.refunded &&
             message.harnessTurn !== undefined &&
             message.harnessTurn > closed.turn_index,
     );
+    const reply = messages[turnReplyAt(messages, closed.turn_index)];
+    const offered = reply?.role === 'bot' && !!reply.followups?.includes(closed.new_question);
 
-    return later ? null : { turnIndex: closed.turn_index, text: closed.new_question };
+    if (later || offered) {
+        return null;
+    }
+
+    return {
+        turnIndex: closed.turn_index,
+        text: closed.new_question,
+        tried: own.some(
+            (message) =>
+                message.fromNewQuestion === closed.turn_index &&
+                (message.refunded || message.harnessTurn === undefined),
+        ),
+    };
 };
 
 // How long to wait before reading again when a live lease states no time.
@@ -247,31 +267,59 @@ export const sendNewQuestion = async ({
     }
 };
 
-/** The revisions of the approved plans the transcript holds, which a
- *  repeated `plan.approved` is told apart by. */
-export const approvalRevisions = (messages: readonly ChatMessage[]): Set<string> =>
-    new Set(
-        messages.flatMap((message) =>
-            message.role === 'bot' && message.plan?.revision ? [message.plan.revision] : [],
-        ),
+// An approval's key: its turn and its plan's revision. Two turns can approve
+// plans of the same content, and so the same revision.
+const approvalKey = (turnIndex: number | null, revision: string): string =>
+    `${turnIndex ?? '?'}:${revision}`;
+
+/** The keys of harness turn `turnIndex`'s approvals. */
+export const turnApprovalKeys = (
+    turnIndex: number,
+    approved: readonly PlanApproved[] | null | undefined,
+): string[] =>
+    (approved ?? []).flatMap((frame) =>
+        frame.revision ? [approvalKey(turnIndex, frame.revision)] : [],
     );
 
-/**
- * The plan a `plan.approved` frame brings, or null for one whose revision
- * the page already took (`held`, which then holds it): a resume, and an
- * `/interrupt` retry whose approval the run already took, open with the
- * frames of the plans the turn approved. A frame without a revision is
- * always taken.
- */
-export const takeApproval = (frame: PlanApproved, held: Set<string>): ApprovedPlan | null => {
-    const revision = frame.revision;
+/** The keys of the approved plans the transcript holds, each the turn whose
+ *  reply carries it and the plan's revision, which a repeated
+ *  `plan.approved` is told apart by. */
+export const approvalKeys = (messages: readonly ChatMessage[]): Set<string> => {
+    const turns = promptTurns(messages);
+    const keys = new Set<string>();
+    let turn: number | null = null;
 
-    if (revision) {
-        if (held.has(revision)) {
+    for (const [at, message] of messages.entries()) {
+        if (isPrompt(message)) {
+            turn = turns.get(at) ?? null;
+        } else if (message.role === 'bot' && message.plan?.revision) {
+            keys.add(approvalKey(turn, message.plan.revision));
+        }
+    }
+
+    return keys;
+};
+
+/**
+ * The plan a `plan.approved` frame of harness turn `turnIndex` brings, or
+ * null for one that turn's reply already took (`held`, which then holds it):
+ * a resume, and an `/interrupt` retry whose approval the run already took,
+ * open with the frames of the plans the turn approved. A frame without a
+ * revision is always taken.
+ */
+export const takeApproval = (
+    frame: PlanApproved,
+    turnIndex: number | null,
+    held: Set<string>,
+): ApprovedPlan | null => {
+    if (frame.revision) {
+        const key = approvalKey(turnIndex, frame.revision);
+
+        if (held.has(key)) {
             return null;
         }
 
-        held.add(revision);
+        held.add(key);
     }
 
     return approvedFromFrame(frame);
@@ -279,10 +327,10 @@ export const takeApproval = (frame: PlanApproved, held: Set<string>): ApprovedPl
 
 /**
  * The transcript with harness turn `turnIndex`'s approvals from a state read
- * (`turn.approved`, `closed_since[].approved`): the latest one the page does
- * not hold (`held`) rides on the turn's reply, as the stream's frame would
- * have put it. Every revision then counts as held. Unchanged when the page
- * holds them all, or holds no reply of that turn.
+ * (`turn.approved`, `closed_since[].approved`): the latest one the turn's
+ * reply does not hold (`held`) rides on that reply, as the stream's frame
+ * would have put it. Every one of the turn's approvals then counts as held.
+ * Unchanged when the page holds them all, or holds no reply of that turn.
  */
 export const withTurnApprovals = (
     messages: ChatMessage[],
@@ -298,11 +346,11 @@ export const withTurnApprovals = (
     }
 
     const latest = approved.at(-1)!;
-    const fresh = !latest.revision || !held.has(latest.revision);
+    const fresh = !latest.revision || !held.has(approvalKey(turnIndex, latest.revision));
 
     for (const frame of approved) {
         if (frame.revision) {
-            held.add(frame.revision);
+            held.add(approvalKey(turnIndex, frame.revision));
         }
     }
 
@@ -311,6 +359,101 @@ export const withTurnApprovals = (
               other === at ? { ...reply, plan: approvedFromFrame(latest) } : message,
           )
         : messages;
+};
+
+/**
+ * The display turn each card a read's closed turns made is filed under, by
+ * component id: the turn of the page's prompt that holds the harness turn
+ * (as messageTurns numbers it, `latestTurn` being the latest display turn),
+ * whether the page held that turn or the read appended it. A card of a turn
+ * the transcript does not hold is left out.
+ */
+export const cardTurns = (
+    messages: readonly ChatMessage[],
+    latestTurn: number,
+    closed: readonly ClosedTurn[],
+): Map<string, number> => {
+    const prompts = messages.filter(isPrompt).length;
+    const dropped = Math.max(0, latestTurn - prompts);
+    const turns = [...promptTurns(messages)];
+    const filed = new Map<string, number>();
+
+    for (const turn of closed) {
+        const at = turns.findLast(([, index]) => index === turn.turn_index)?.[0];
+
+        if (at === undefined) {
+            continue;
+        }
+
+        const display = dropped + messages.slice(0, at + 1).filter(isPrompt).length;
+
+        for (const id of turn.component_ids) {
+            filed.set(id, display);
+        }
+    }
+
+    return filed;
+};
+
+/**
+ * Draw the cards a state read's manifest names that the page lacks
+ * (cardsToRead): each is read (`read`), dropped when a newer revision
+ * arrived meanwhile (`held`) or the page moved on (`isCurrent`), and handed
+ * to `onDrawn`. A card the page never saw is also kept on a legacy canvas
+ * (`keep`), as a streamed card is, so a save made before the legacy canvas
+ * is taken holds it as shown, never as a card the save hid. `inFlight`
+ * holds the reads under way, by id and revision, so overlapping reads ask
+ * for each card once.
+ */
+export const drawManifestCards = async ({
+    manifest,
+    held,
+    seen,
+    inFlight,
+    isCurrent,
+    keep,
+    onDrawn,
+    read = readComponent,
+}: {
+    manifest: CompositionManifest;
+    held: Map<string, number>;
+    seen: ReadonlySet<string>;
+    inFlight: Set<string>;
+    isCurrent: () => boolean;
+    keep: (id: string) => void;
+    onDrawn: (block: CompositionBlock, read: ComponentRead) => void;
+    read?: (componentId: string, revision: number) => Promise<ComponentRead | null>;
+}): Promise<void> => {
+    await Promise.all(
+        cardsToRead(manifest, held, seen).map(async (block) => {
+            const id = block.component_id;
+            const key = `${id}@${block.revision}`;
+
+            if (inFlight.has(key)) {
+                return;
+            }
+
+            inFlight.add(key);
+
+            const answer = await read(id, block.revision);
+
+            inFlight.delete(key);
+
+            const current = held.get(id);
+
+            if (!answer || !isCurrent() || (current !== undefined && current > answer.revision)) {
+                return;
+            }
+
+            held.set(id, answer.revision);
+
+            if (!seen.has(id)) {
+                keep(id);
+            }
+
+            onDrawn(block, answer);
+        }),
+    );
 };
 
 /**

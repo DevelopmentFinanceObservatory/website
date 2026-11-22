@@ -66,8 +66,12 @@ export const saveConversation = async (
 };
 
 /** The account the harness conversation `agentSessionId` belongs to, as a
- *  list of none or one (src/lib/studio/studioAccess). */
-export const sessionOwners = async (db: SaveDb, agentSessionId: string): Promise<string[]> => {
+ *  list of none or one (src/lib/studio/studioAccess). A null owner is an
+ *  account since deleted: the conversation belongs to nobody. */
+export const sessionOwners = async (
+    db: SaveDb,
+    agentSessionId: string,
+): Promise<(string | null)[]> => {
     const rows = await db
         .select({ userId: studioSessionOwner.userId })
         .from(studioSessionOwner)
@@ -86,7 +90,7 @@ export const claimSessionOwner = async (
     db: SaveDb,
     agentSessionId: string,
     userId: string,
-): Promise<string[]> => {
+): Promise<(string | null)[]> => {
     await bindSessionOwner(db, agentSessionId, userId);
 
     return sessionOwners(db, agentSessionId);

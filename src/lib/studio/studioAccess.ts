@@ -88,14 +88,15 @@ export const canonicalStudioCall = (
 /**
  * Whether a call on `route` about a conversation may reach the harness, for
  * the signed-in `userId` (null for a guest), given `owners`, the account
- * that owns its harness conversation (none or one).
+ * that owns its harness conversation (none or one). A null owner is an
+ * account since deleted, and its conversation answers to nobody.
  */
 export const admitsStudioCall = (
     route: string,
     userId: string | null,
-    owners: readonly string[],
+    owners: readonly (string | null)[],
 ): boolean => {
-    if (owners.some((owner) => owner !== userId)) {
+    if (owners.some((owner) => owner === null || owner !== userId)) {
         return false;
     }
 
@@ -147,8 +148,8 @@ export const studioAccess = async ({
     search: URLSearchParams;
     readBody: () => Promise<string | null>;
     readUserId: () => Promise<string | null>;
-    ownersOf: (conversationId: string) => Promise<string[]>;
-    claimOwner: (conversationId: string, userId: string) => Promise<string[]>;
+    ownersOf: (conversationId: string) => Promise<(string | null)[]>;
+    claimOwner: (conversationId: string, userId: string) => Promise<(string | null)[]>;
     timeoutMs?: number;
 }): Promise<StudioAccess> => {
     if (method === 'OPTIONS') {
@@ -182,7 +183,7 @@ export const studioAccess = async ({
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
-        const read = async (): Promise<[string | null, string[]]> => {
+        const read = async (): Promise<[string | null, (string | null)[]]> => {
             const [userId, owners] = await Promise.all([readUserId(), ownersOf(conversationId)]);
 
             return owners.length === 0 && userId !== null && !OWNER_ROUTES.has(route)

@@ -53,13 +53,13 @@ export type ConversationRow = typeof conversation.$inferSelect;
  * save naming the harness conversation writes the row
  * (src/lib/chat/conversationSave), and no save changes it afterwards, so a
  * save by another account, or the owner's save naming a different harness
- * conversation, leaves the owner as it was.
+ * conversation, leaves the owner as it was. Deleting the account keeps the
+ * row with a null `userId`: the conversation then belongs to nobody, and the
+ * proxy refuses every call about it.
  */
 export const studioSessionOwner = pgTable('studio_session_owner', {
     agentSessionId: text('agent_session_id').primaryKey(),
-    userId: text('user_id')
-        .notNull()
-        .references(() => user.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

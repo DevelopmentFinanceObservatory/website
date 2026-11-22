@@ -1,0 +1,4 @@
+ALTER TABLE "studio_session_owner" DROP CONSTRAINT "studio_session_owner_user_id_user_id_fk";
+--> statement-breakpoint
+ALTER TABLE "studio_session_owner" ALTER COLUMN "user_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "studio_session_owner" ADD CONSTRAINT "studio_session_owner_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;
