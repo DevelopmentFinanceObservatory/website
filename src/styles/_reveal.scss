@@ -41,13 +41,17 @@
     }
 }
 
-[data-reveal][data-reveal-parked],
-[data-reveal-group]:not([data-reveal-group="trigger"])[data-reveal-parked],
-[data-reveal-group][data-reveal-parked] [data-reveal] {
-    opacity: 0;
-    translate: 0 rem(16);
-    scale: var(--reveal-from-scale, 0.985);
-    animation: none;
+@media (prefers-reduced-motion: no-preference) {
+    // Parked poses apply only where motion is allowed, so under reduced motion
+    // no leftover data-reveal-parked can hide an element.
+    [data-reveal][data-reveal-parked],
+    [data-reveal-group]:not([data-reveal-group="trigger"])[data-reveal-parked],
+    [data-reveal-group][data-reveal-parked] [data-reveal] {
+        opacity: 0;
+        translate: 0 rem(16);
+        scale: var(--reveal-from-scale, 0.985);
+        animation: none;
+    }
 }
 
 // Set on every element, so a box nested in a text reveal keeps its own scale.
@@ -64,13 +68,10 @@
 // data-reveal="soft" plays the stock entrance.
 
 @media (prefers-reduced-motion: reduce) {
-    // Everything shows at once; the selectors repeat both lists above so they
-    // win on specificity.
+    // Everything shows at once; the selectors repeat the entrance list above so
+    // they win on specificity.
     [data-reveal]:not([data-reveal-parked]),
-    [data-reveal-group]:not([data-reveal-group="trigger"], [data-reveal-parked]),
-    [data-reveal][data-reveal-parked],
-    [data-reveal-group]:not([data-reveal-group="trigger"])[data-reveal-parked],
-    [data-reveal-group][data-reveal-parked] [data-reveal] {
+    [data-reveal-group]:not([data-reveal-group="trigger"], [data-reveal-parked]) {
         opacity: 1;
         translate: 0 0;
         scale: 1;
