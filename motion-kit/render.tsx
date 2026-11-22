@@ -275,7 +275,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         thinking: false,
         clarify: null,
         plan: spec.plan ?? null,
-        localCards: [],
+        localCards: { shown: [], hidden: [] },
         syncCanvas: noop,
         canvas: null,
         send: noop,

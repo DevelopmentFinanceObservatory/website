@@ -97,16 +97,22 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         [],
     );
 
-    // Cards the harness turned out never to hold (useChat's localCards).
-    const addLocalIds = useCallback(
-        (ids: readonly string[]) =>
-            setLocalIds((prev) => {
-                const added = ids.filter((id) => !prev.includes(id));
+    // Cards the harness turned out never to hold (useChat's localCards):
+    // `shown` ones stay on the canvas and `hidden` ones go off it.
+    const addLocalIds = useCallback((shown: readonly string[], hidden: readonly string[] = []) => {
+        const ids = [...shown, ...hidden];
 
-                return added.length > 0 ? [...prev, ...added] : prev;
-            }),
-        [],
-    );
+        setLocalIds((prev) => {
+            const added = ids.filter((id) => !prev.includes(id));
+
+            return added.length > 0 ? [...prev, ...added] : prev;
+        });
+        setRemovedIds((prev) => {
+            const added = hidden.filter((id) => !prev.includes(id));
+
+            return added.length > 0 ? [...prev, ...added] : prev;
+        });
+    }, []);
 
     const unpin = useCallback(
         (id: string) => setPinnedIds((prev) => prev.filter((other) => other !== id)),

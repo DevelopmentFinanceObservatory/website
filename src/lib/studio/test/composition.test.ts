@@ -4,17 +4,29 @@ import test from 'node:test';
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import {
     createLegacyCanvas,
+    legacyHiddenCards,
     restoreCanvas,
     takeManifest,
     type CanvasBaseline,
+    type LegacyLocal,
 } from '../composition.ts';
 import type { CompositionManifest, MutationOperation } from '../wire.ts';
 
-const manifest = (revision: number, ids: string[], id = 'cps_1'): CompositionManifest => ({
+const manifest = (
+    revision: number,
+    ids: string[],
+    id = 'cps_1',
+    cardRevisions: Record<string, number> = {},
+): CompositionManifest => ({
     composition_id: id,
     revision,
     actor: 'model',
-    blocks: ids.map((cid) => ({ component_id: cid, revision: 1, type: 'line_chart', title: cid })),
+    blocks: ids.map((cid) => ({
+        component_id: cid,
+        revision: cardRevisions[cid] ?? 1,
+        type: 'line_chart',
+        title: cid,
+    })),
     counts: { all: ids.length, stats: 0, charts: ids.length, tables: 0, notes: 0 },
 });
 
@@ -93,12 +105,16 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     // The harness holds every card the conversation drew.
     let held = manifest(5, drawn);
     const sent: MutationOperation[][] = [];
+    const expected: number[] = [];
     const taken: CompositionManifest[] = [];
-    const local: string[] = [];
+    const local: LegacyLocal[] = [];
+    const hidden = legacyHiddenCards(save, restored, new Map(drawn.map((id) => [id, 1])));
     const legacy = createLegacyCanvas({
         ids: restored.ids,
-        mutate: async (operations) => {
+        hidden,
+        mutate: async (operations, expectedRevision) => {
             sent.push(operations);
+            expected.push(expectedRevision);
 
             const removed = new Set(
                 operations.flatMap((op) => (op.op === 'remove' ? [op.component_id] : [])),
@@ -112,7 +128,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
             return held;
         },
         onTake: (answer) => taken.push(answer),
-        onLocal: (ids) => local.push(...ids),
+        onLocal: (cards) => local.push(cards),
         onChange: () => {},
     });
 
@@ -120,6 +136,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
 
     assert.equal(sent.length, 1);
     assert.equal(sent[0]!.length, 9);
+    assert.deepEqual(expected, [5]);
     assert.deepEqual(
         taken.map((answer) => answer.blocks.map((block) => block.component_id)),
         [['cmp_0', 'cmp_10', 'cmp_11']],
@@ -129,6 +146,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     // A failed remove leaves the canvas legacy and sends nothing more.
     const failing = createLegacyCanvas({
         ids: restored.ids,
+        hidden,
         mutate: async () => null,
         onTake: (answer) => taken.push(answer),
         onLocal: () => assert.fail('a legacy canvas that stays legacy adopts no card'),
@@ -157,11 +175,12 @@ test('a legacy canvas keeps the inherited cards its session never held as local 
     let canvas: CanvasBaseline | null = restored;
     const legacy = createLegacyCanvas({
         ids: restored.ids,
+        hidden: legacyHiddenCards(save, restored, new Map()),
         mutate: async () => assert.fail('the harness holds no card the page hides'),
         onTake: (answer) => {
             canvas = takeManifest(canvas, answer);
         },
-        onLocal: (ids) => local.push(...ids),
+        onLocal: (cards) => local.push(...cards.shown),
         onChange: () => {},
     });
 
@@ -171,5 +190,105 @@ test('a legacy canvas keeps the inherited cards its session never held as local 
     assert.deepEqual(
         canvasWidgetsOf({ ...save, canvas, localIds: local }).map((widget) => widget.id),
         ['cmp_inherited', 'cmp_own'],
+    );
+});
+
+test('a legacy canvas removes only the cards its save hid, at the revision it hid them', async () => {
+    // Saved showing turn 2's card: turn 1's two cards were hidden at
+    // revision 1. Since the save, another tab revised one of them and drew a
+    // card of its own.
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_hidden', title: 'Hidden', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_revised', title: 'Revised', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_shown', title: 'Shown', body: '', turn: 2 },
+        ],
+        pinnedIds: [],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const hidden = legacyHiddenCards(
+        save,
+        restored,
+        new Map([
+            ['cmp_hidden', 1],
+            ['cmp_revised', 1],
+            ['cmp_shown', 1],
+        ]),
+    );
+    const offered = manifest(
+        7,
+        ['cmp_hidden', 'cmp_revised', 'cmp_shown', 'cmp_other_tab'],
+        'cps_1',
+        { cmp_revised: 2 },
+    );
+    const sent: [MutationOperation[], number][] = [];
+    const taken: string[][] = [];
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        hidden,
+        mutate: async (operations, expectedRevision) => {
+            sent.push([operations, expectedRevision]);
+
+            return manifest(8, ['cmp_revised', 'cmp_shown', 'cmp_other_tab'], 'cps_1', {
+                cmp_revised: 2,
+            });
+        },
+        onTake: (answer) => taken.push(answer.blocks.map((block) => block.component_id)),
+        onLocal: () => assert.fail('the harness holds every card of this save'),
+        onChange: () => {},
+    });
+
+    await legacy.offer(offered);
+
+    assert.deepEqual(sent, [[[{ op: 'remove', component_id: 'cmp_hidden' }], 7]]);
+    assert.deepEqual(taken, [['cmp_revised', 'cmp_shown', 'cmp_other_tab']]);
+});
+
+test("a legacy fork's hidden inherited cards become local and stay off the canvas", async () => {
+    // A fork saved before forks named their local cards: an inherited card
+    // the legacy rule hid, one it showed, and the fork's own.
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_old_hidden', title: 'Old', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_old_pinned', title: 'Old', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
+        ],
+        pinnedIds: ['cmp_old_pinned'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const local: LegacyLocal[] = [];
+    let canvas: CanvasBaseline | null = restored;
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: legacyHiddenCards(save, restored, new Map([['cmp_old_hidden', 3]])),
+        mutate: async () => assert.fail('the harness holds no card the page hides'),
+        onTake: (answer) => {
+            canvas = takeManifest(canvas, answer);
+        },
+        onLocal: (cards) => local.push(cards),
+        onChange: () => {},
+    });
+
+    await legacy.offer(manifest(3, ['cmp_own']));
+
+    assert.deepEqual(local, [{ shown: ['cmp_old_pinned'], hidden: ['cmp_old_hidden'] }]);
+
+    // The canvas document marks both local and the hidden one removed, so
+    // Add brings it back on the page alone.
+    const localIds = [...local[0]!.shown, ...local[0]!.hidden];
+
+    assert.deepEqual(
+        canvasWidgetsOf({ ...save, canvas, localIds, removedIds: local[0]!.hidden }).map(
+            (widget) => widget.id,
+        ),
+        ['cmp_old_pinned', 'cmp_own'],
+    );
+    assert.deepEqual(
+        canvasWidgetsOf({ ...save, canvas, localIds, removedIds: [] }).map((widget) => widget.id),
+        ['cmp_old_hidden', 'cmp_old_pinned', 'cmp_own'],
     );
 });

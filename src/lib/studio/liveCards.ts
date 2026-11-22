@@ -382,12 +382,15 @@ export const refreshLiveCards = async (
     );
 };
 
-// The card face and its More Info read the Studio stream's fact summary,
-// which carries an attribution that dfo-apis' closed summary does not. The
-// attribution is built from the envelope's sources and the summary's
-// StatVars. The summary's `unit` text is one of the shapes the Studio
-// summary's `unit` takes, so it passes through as dfo-apis gave it.
-const factsOf = (
+/**
+ * The Studio stream's fact summary of a card dfo-apis resolved. The card face
+ * and its More Info read the stream's summary, which carries an attribution
+ * that dfo-apis' closed summary does not. The attribution is built from the
+ * envelope's sources, or a described card's description, and the summary's
+ * StatVars. The summary's `unit` text is one of the shapes the Studio
+ * summary's `unit` takes, so it passes through as dfo-apis gave it.
+ */
+export const factsOf = (
     { component_id, revision, payload, fact_summary: facts }: LiveCard,
     description: Description | undefined,
 ): FactSummary => {

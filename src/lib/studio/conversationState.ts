@@ -1,16 +1,29 @@
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
+import type { Widget } from '@/lib/chat/widgets';
 
+import { asRecord } from '../asRecord.ts';
 import { STOPPED_NOTE } from './chatLine.ts';
 import {
     abortableSleep,
     busyRetryAfter,
     readState,
     runResume,
+    type ComponentRead,
     type StreamHandlers,
     type StreamRefusal,
 } from './studioClient.ts';
-import { ensureTurn, heldTurns, NEW_QUESTION_NOTE, turnReplyAt } from './transcript.ts';
-import type { ClosedTurn, ConversationRead, StudioFrame } from './wire.ts';
+import { factsOf } from './liveCards.ts';
+import { describedBy, payloadDescription } from './payload.ts';
+import { ensureTurn, NEW_QUESTION_NOTE, turnReplyAt } from './transcript.ts';
+import { reviseWidget, widgetFromComponent } from './widgets.ts';
+import type {
+    ClosedTurn,
+    CompositionBlock,
+    CompositionManifest,
+    ConversationRead,
+    Provenance,
+    StudioFrame,
+} from './wire.ts';
 
 /**
  * A reopened conversation against the harness's copy of it (GET
@@ -136,11 +149,13 @@ export const mergeClosedTurns = (
 /**
  * The question the harness's latest turn was ended by (a change to its plan
  * that asked something else), while the page still owes it as the next
- * turn. That holds when no prompt of its own was sent from it
- * (`fromNewQuestion`, and a fork's inherited prompts answer another session's
- * turns) and the page holds no turn after it. Returns the turn's index and
- * the text, or null, and null also for a read whose latest turn
- * `closed_since` does not hold.
+ * turn. That holds while the latest turn the harness holds is the one that
+ * asked it, and the page holds no prompt the harness admitted as a later
+ * turn (`harnessTurn`). A prompt sent for it counts only once admitted: a
+ * refused send, which the meter gave back, and a send that never reached the
+ * harness leave it owed. A fork's inherited prompts answer another session's
+ * turns. Returns the turn's index and the text, or null, and null also for
+ * a read whose latest turn `closed_since` does not hold.
  */
 export const owedNewQuestion = (
     read: ConversationRead,
@@ -149,18 +164,226 @@ export const owedNewQuestion = (
     const latest = read.turn;
     const closed = latest && read.closed_since.find((turn) => turn.turn_index === latest.index);
 
-    if (!closed?.new_question || heldTurns(messages) > closed.turn_index) {
+    if (!closed?.new_question) {
         return null;
     }
 
-    const sent = messages.some(
+    const later = messages.some(
         (message) =>
             message.role === 'user' &&
             !message.inherited &&
-            message.fromNewQuestion === closed.turn_index,
+            !message.refunded &&
+            message.harnessTurn !== undefined &&
+            message.harnessTurn > closed.turn_index,
     );
 
-    return sent ? null : { turnIndex: closed.turn_index, text: closed.new_question };
+    return later ? null : { turnIndex: closed.turn_index, text: closed.new_question };
+};
+
+// How long to wait before reading again when a live lease states no time.
+const DEFAULT_WAIT_SECONDS = 2;
+
+/**
+ * Whether harness turn `turnIndex`'s new question is still for this page to
+ * send, by a state read taken just before the send: `send` while that turn is
+ * the latest and closed, `wait` while it still runs (its stream has not let
+ * go), and `taken` once a later turn exists, which another tab or an earlier
+ * send of this page opened, or the turn paused again. `unknown` for a read
+ * that names no such turn.
+ */
+export const newQuestionState = (
+    read: ConversationRead,
+    turnIndex: number,
+): 'send' | 'wait' | 'taken' | 'unknown' => {
+    const latest = read.turn;
+
+    if (!latest || latest.index < turnIndex) {
+        return 'unknown';
+    }
+
+    if (latest.index > turnIndex || latest.status === 'paused') {
+        return 'taken';
+    }
+
+    return latest.status === 'running' ? 'wait' : 'send';
+};
+
+/** How a new question's send ended without a request: another tab or turn
+ *  took it (`taken`), or no read could tell and the send needed one
+ *  (`unverified`). */
+export type NewQuestionSkip = { kind: 'taken' } | { kind: 'unverified' };
+
+/**
+ * Send harness turn `turnIndex`'s new question with `run`, once a state read
+ * says it is still owed (newQuestionState), and read again before every
+ * retry: a request the harness answers busy waits the time it names, and a
+ * turn still open waits DEFAULT_WAIT_SECONDS. Two tabs that owe the same
+ * question therefore send it once: the second finds the first's turn. A read
+ * that fails sends anyway when `readRequired` is false, the case of a
+ * question this page's own stream was handed, which no other page has seen
+ * without a read; otherwise the send is skipped as `unverified`, as it is
+ * for a read that names no such turn. `onSkip`
+ * hears a send that ends without a request reaching the harness's turn.
+ */
+export const sendNewQuestion = async ({
+    conversationId,
+    turnIndex,
+    readRequired,
+    run,
+    handlers,
+    signal,
+    onWait,
+    onSkip,
+    read = readConversation,
+    sleep = abortableSleep,
+}: {
+    conversationId: string;
+    turnIndex: number;
+    readRequired: boolean;
+    run: (handlers: StreamHandlers) => Promise<void>;
+    handlers: StreamHandlers;
+    signal: AbortSignal;
+    onWait?: (seconds: number) => void;
+    onSkip: (skip: NewQuestionSkip) => void;
+    read?: (
+        conversationId: string,
+        since: number,
+        signal?: AbortSignal,
+    ) => Promise<ConversationRead | null>;
+    sleep?: typeof abortableSleep;
+}): Promise<void> => {
+    for (;;) {
+        const answer = await read(conversationId, turnIndex - 1, signal);
+        const known = answer ? newQuestionState(answer, turnIndex) : 'unknown';
+        const state = known === 'unknown' && !readRequired ? 'send' : known;
+
+        if (state === 'unknown') {
+            onSkip({ kind: 'unverified' });
+
+            return;
+        }
+
+        if (state === 'taken') {
+            onSkip({ kind: 'taken' });
+
+            return;
+        }
+
+        let wait = state === 'wait' ? DEFAULT_WAIT_SECONDS : (null as number | null);
+
+        if (state === 'send') {
+            await run({
+                ...handlers,
+                onRefusal: (refusal) => {
+                    wait = busyRetryAfter(refusal);
+
+                    return wait !== null || (handlers.onRefusal?.(refusal) ?? false);
+                },
+            });
+        }
+
+        if (wait === null) {
+            return;
+        }
+
+        onWait?.(wait);
+        await sleep(wait * 1000, signal);
+    }
+};
+
+/**
+ * The cards a canvas manifest names that the page must read to draw: one it
+ * never saw (`seen` lacks it), such as a card another tab's turn made, and
+ * one it holds at an older revision than the manifest's (`held`).
+ */
+export const cardsToRead = (
+    manifest: CompositionManifest,
+    held: ReadonlyMap<string, number>,
+    seen: ReadonlySet<string>,
+): CompositionBlock[] =>
+    manifest.blocks.filter((block) => {
+        if (!seen.has(block.component_id)) {
+            return true;
+        }
+
+        const revision = held.get(block.component_id);
+
+        return revision !== undefined && block.revision > revision;
+    });
+
+// A component read's provenance in the shape a created frame carries, from
+// the resolved payload's envelope. The card's info panel prefers the
+// envelope's own provenance where its sources name their graph refs.
+const provenanceOfRead = (read: ComponentRead): Provenance => {
+    const provenance = asRecord(read.payload['provenance']);
+    const list = (key: string) => {
+        const value = provenance?.[key];
+
+        return Array.isArray(value) ? value : [];
+    };
+    const freshness = asRecord(provenance?.['freshness']);
+    const text = (value: unknown) => (typeof value === 'string' ? value : '');
+
+    return {
+        inputs: list('inputs'),
+        sources: list('sources'),
+        freshness: {
+            data_through: text(freshness?.['data_through']),
+            last_refreshed: text(freshness?.['last_refreshed']),
+            partial_period: freshness?.['partial_period'] === true,
+        },
+        warnings: list('warnings'),
+        generated_at: text(provenance?.['generated_at']),
+        citation: text(provenance?.['citation']),
+    };
+};
+
+/**
+ * A manifest card drawn from its component read: a card the page never saw
+ * as the widget its `component.created` frame would have drawn, and a card
+ * the page holds (`held`) redrawn at the read's revision as a
+ * `component.revised` frame with its payload would. dfo-apis' fact summary
+ * becomes the stream's (factsOf). Null for a card of a type the canvas does
+ * not draw, or a read outside the platform's shape.
+ */
+export const widgetFromRead = (
+    block: CompositionBlock,
+    read: ComponentRead,
+    held?: Widget,
+): Widget | null => {
+    try {
+        const description = payloadDescription(read.payload);
+        const facts = factsOf(read, describedBy(description));
+
+        return held
+            ? reviseWidget(
+                  held,
+                  {
+                      event: 'component.revised',
+                      seq: -1,
+                      component_id: block.component_id,
+                      revision: read.revision,
+                      changed: [],
+                      fact_summary: facts,
+                      payload: read.payload,
+                  },
+                  description,
+              )
+            : widgetFromComponent({
+                  event: 'component.created',
+                  seq: -1,
+                  component_id: block.component_id,
+                  revision: read.revision,
+                  type: block.type,
+                  catalog_version: read.catalog_version,
+                  min_catalog_version: read.catalog_version,
+                  payload: read.payload,
+                  fact_summary: facts,
+                  provenance: provenanceOfRead(read),
+              });
+    } catch {
+        return null;
+    }
 };
 
 /**
@@ -175,9 +398,6 @@ export type AttachStep =
     | { kind: 'pause'; turnIndex: number; frames: StudioFrame[] }
     | { kind: 'resume'; turnIndex: number }
     | { kind: 'wait'; turnIndex: number; seconds: number };
-
-// How long to wait before reading again when a live lease states no time.
-const DEFAULT_WAIT_SECONDS = 2;
 
 export const attachStep = (read: ConversationRead): AttachStep => {
     const turn = read.turn;

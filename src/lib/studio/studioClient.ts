@@ -24,6 +24,9 @@ import type {
     TurnRequest,
 } from './wire';
 
+import { asRecord } from '../asRecord.ts';
+import type { LiveCard } from './liveBackend.ts';
+
 /**
  * How long the page waits on a stop: a cancelled stream may run on this long
  * before the client closes it, and the cancel request is dropped after the
@@ -469,13 +472,14 @@ export const cancelTurn = async (
     });
 };
 
-/**
- * The resolved payload of one component revision, read through the site's
- * proxy of the Presentation API's read route. A `component.revised` frame
- * may leave its payload out; the card then reads it by id. Null on any
- * failure, and the card keeps what it holds.
- */
-export const fetchComponentRevision = async (
+/** One component revision as the Presentation API's read route answers it:
+ *  the resolved payload (`payload`), dfo-apis' fact summary, and the
+ *  catalogue it minted under. */
+export type ComponentRead = LiveCard & { catalog_version: string };
+
+// One component revision's read body, through the site's proxy of the
+// Presentation API's read route. Null on any failure, logged with the ids.
+const readComponentBody = async (
     componentId: string,
     revision: number,
 ): Promise<Record<string, unknown> | null> => {
@@ -494,15 +498,46 @@ export const fetchComponentRevision = async (
             return null;
         }
 
-        const body = (await res.json()) as { resolved_payload?: unknown };
-        const payload = body.resolved_payload;
-
-        return payload !== null && typeof payload === 'object'
-            ? (payload as Record<string, unknown>)
-            : null;
+        return asRecord(await res.json()) ?? null;
     } catch (error) {
         console.warn('component revision read failed', { componentId, revision, error });
 
         return null;
     }
+};
+
+/** One component revision as the Presentation API reads it, enough to draw
+ *  a card the page never saw. Null on any failure, or for an answer without
+ *  a payload and fact summary. */
+export const readComponent = async (
+    componentId: string,
+    revision: number,
+): Promise<ComponentRead | null> => {
+    const body = await readComponentBody(componentId, revision);
+
+    const payload = asRecord(body?.['resolved_payload']);
+    const facts = asRecord(body?.['fact_summary']);
+    const catalog = body?.['catalog_version'];
+
+    return payload && facts && Array.isArray(facts['series'])
+        ? {
+              component_id: componentId,
+              revision,
+              catalog_version: typeof catalog === 'string' ? catalog : '',
+              payload,
+              fact_summary: facts as ComponentRead['fact_summary'],
+          }
+        : null;
+};
+
+/**
+ * The resolved payload of one component revision. A `component.revised`
+ * frame may leave its payload out; the card then reads it by id. Null on any
+ * failure, and the card keeps what it holds.
+ */
+export const fetchComponentRevision = async (
+    componentId: string,
+    revision: number,
+): Promise<Record<string, unknown> | null> => {
+    return asRecord((await readComponentBody(componentId, revision))?.['resolved_payload']) ?? null;
 };

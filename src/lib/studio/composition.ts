@@ -66,31 +66,66 @@ export const takeManifest = (
           };
 
 /**
+ * The cards a legacy save (see restoreCanvas) holds that its canvas hid, with
+ * the revision the save held each at (`revisions`, restoreCardRevisions), or
+ * null where the save does not know it: its widgets less the ones it showed
+ * and less a fork's named inherited cards.
+ */
+export const legacyHiddenCards = (
+    saved: { widgets: readonly { id: string }[]; localIds?: readonly string[] },
+    baseline: CanvasBaseline,
+    revisions: ReadonlyMap<string, number>,
+): Map<string, number | null> => {
+    const shown = new Set([...baseline.ids, ...(saved.localIds ?? [])]);
+
+    return new Map(
+        saved.widgets
+            .filter((widget) => !shown.has(widget.id))
+            .map((widget) => [widget.id, revisions.get(widget.id) ?? null] as const),
+    );
+};
+
+/** The cards a legacy canvas's save holds that the harness's manifest
+ *  lacks, so the harness never held them (a fork's inherited cards): the
+ *  ones the page showed, and the ones it hid, which stay off the canvas. */
+export type LegacyLocal = { shown: string[]; hidden: string[] };
+
+/**
  * A legacy canvas (see CanvasBaseline) while the harness's manifest is
- * brought to it. The harness holds every card such a conversation ever drew,
- * because the page that saved it never reported the cards its turn rule
- * hid. The first manifest `offer`ed sends one `remove` for each card on it
- * that the page does not show, and `onTake` hears the manifest that answers,
- * then any later one offered meanwhile, as the canvas to take from then on.
- * Before it, `onLocal` hears the cards the page shows that the answer lacks,
- * cards the harness never held such as a fork's inherited ones, which stay
- * on the page as local cards.
+ * brought to it. The harness holds every card such a conversation drew,
+ * because the page that saved it never reported the cards its turn rule hid.
+ * The first manifest `offer`ed sends one `remove` for each card the save hid
+ * (`hidden`, legacyHiddenCards) that the manifest holds at no newer revision
+ * than the save did, against the manifest's revision (`expected_revision`).
+ * A card the save never held, such as one another tab's turn drew since, one
+ * revised since the save, and one whose saved revision is unknown, stays. `onTake` hears the manifest that
+ * answers, then any later one offered meanwhile, as the canvas to take from
+ * then on. Before it, `onLocal` hears the cards the save held that the
+ * offered manifest lacks, cards the harness never held such as a fork's
+ * inherited ones, which stay on the page as local cards, those the page hid
+ * staying off the canvas.
  * Until then the canvas shows `ids()`: the legacy cards plus the cards drawn
- * since (`keep`), less the ones the user took off (`drop`), and
- * `onChange` hears each change. A failed `remove` leaves the canvas legacy,
- * so the save stays legacy and the next open tries again.
+ * since (`keep`), less the ones the user took off (`drop`), and `onChange`
+ * hears each change. A failed `remove`, a stale revision included, leaves
+ * the canvas legacy, so the save stays legacy and the next open tries again
+ * against the manifest it then reads.
  */
 export const createLegacyCanvas = ({
     ids,
+    hidden,
     mutate,
     onTake,
     onLocal,
     onChange,
 }: {
     ids: readonly string[];
-    mutate: (operations: MutationOperation[]) => Promise<CompositionManifest | null>;
+    hidden: ReadonlyMap<string, number | null>;
+    mutate: (
+        operations: MutationOperation[],
+        expectedRevision: number,
+    ) => Promise<CompositionManifest | null>;
     onTake: (manifest: CompositionManifest) => void;
-    onLocal: (ids: string[]) => void;
+    onLocal: (local: LegacyLocal) => void;
     onChange: (ids: string[]) => void;
 }) => {
     const shown = new Set(ids);
@@ -98,13 +133,10 @@ export const createLegacyCanvas = ({
     // The newest manifest offered while the `remove` was in flight.
     let later: CompositionManifest | null = null;
 
-    const take = (manifest: CompositionManifest) => {
-        const held = new Set(manifest.blocks.map((block) => block.component_id));
-        const local = [...shown].filter((id) => !held.has(id));
-
+    const take = (manifest: CompositionManifest, local: LegacyLocal) => {
         state = 'taken';
 
-        if (local.length > 0) {
+        if (local.shown.length > 0 || local.hidden.length > 0) {
             onLocal(local);
         }
 
@@ -141,12 +173,26 @@ export const createLegacyCanvas = ({
                 return;
             }
 
-            const hidden = manifest.blocks
-                .map((block) => block.component_id)
-                .filter((id) => !shown.has(id));
+            const held = new Set(manifest.blocks.map((block) => block.component_id));
+            const local = {
+                shown: [...shown].filter((id) => !held.has(id)),
+                hidden: [...hidden.keys()].filter((id) => !shown.has(id) && !held.has(id)),
+            };
+            const removed = manifest.blocks
+                .filter((block) => {
+                    const revision = hidden.get(block.component_id);
 
-            if (hidden.length === 0) {
-                take(manifest);
+                    return (
+                        revision !== undefined &&
+                        revision !== null &&
+                        block.revision <= revision &&
+                        !shown.has(block.component_id)
+                    );
+                })
+                .map((block) => block.component_id);
+
+            if (removed.length === 0) {
+                take(manifest, local);
 
                 return;
             }
@@ -154,7 +200,8 @@ export const createLegacyCanvas = ({
             state = 'sent';
 
             const answer = await mutate(
-                hidden.map((id) => ({ op: 'remove', component_id: id })),
+                removed.map((id) => ({ op: 'remove', component_id: id })),
+                manifest.revision,
             ).catch((error: unknown) => {
                 console.warn('Studio: a legacy canvas was not brought to the harness', error);
 
@@ -162,7 +209,7 @@ export const createLegacyCanvas = ({
             });
 
             if (answer) {
-                take(answer);
+                take(answer, local);
             } else {
                 state = 'failed';
                 later = null;

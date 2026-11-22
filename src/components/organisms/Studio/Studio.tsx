@@ -538,14 +538,15 @@ const Studio = ({
         }
     };
 
-    // The cards a legacy canvas showed that its harness session never held
-    // stay on the canvas as local cards, before the frame that takes the
-    // manifest is painted.
+    // The cards a legacy canvas's save held that its harness session never
+    // held become local cards, before the frame that takes the manifest is
+    // painted: the ones it showed stay on the canvas, and the ones it hid
+    // stay off it, so Add brings one back on the page alone.
     const { localCards } = conversation;
     const { addLocalIds } = doc;
 
     useLayoutEffect(() => {
-        addLocalIds(localCards);
+        addLocalIds(localCards.shown, localCards.hidden);
     }, [localCards, addLocalIds]);
 
     // The card menu's Remove and Pin.
