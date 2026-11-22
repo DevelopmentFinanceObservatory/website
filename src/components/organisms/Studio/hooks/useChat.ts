@@ -12,6 +12,13 @@ import {
 } from '@/lib/studio/activity';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
 import {
+    changeUnitText,
+    unitRefusalDetail,
+    unitRefusalStale,
+    withoutUnitChanges,
+    type CardUnitChange,
+} from '@/lib/studio/cardUnit';
+import {
     createStallWatch,
     createStepLine,
     createWorkingGrace,
@@ -66,6 +73,7 @@ import {
     fetchComponentRevision,
     mutateComposition,
     runApplyChoice,
+    runApplyUnit,
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
@@ -125,13 +133,15 @@ export type CardTarget = {
 
 // A message sent while a request was in flight: it waits for the
 // conversation to be free and enters the transcript when it is sent. A
-// clicked `apply_choice` chip waits the same way, under its label.
+// clicked `apply_choice` chip waits the same way, under its label, and a
+// card's unit change under its bubble's words.
 export type QueuedMessage = {
     id: string;
     text: string;
     card?: CardTarget;
     seeds?: Seed[];
     chip?: ApplyChoiceSuggestion;
+    unit?: CardUnitChange;
 };
 
 export type ChatState = {
@@ -255,6 +265,11 @@ const buildRecap = (messages: ChatMessage[]): string | null => {
 const restoredMessages = (saved: ChatSnapshot): ChatMessage[] =>
     saved.sessionId ? saved.messages : withoutChips(saved.messages);
 
+// A saved canvas as the chat holds it. Without its harness session no card
+// can change its unit, so the offers go, as the chips do.
+const restoredWidgets = (saved: ChatSnapshot): TurnWidget[] =>
+    saved.sessionId ? saved.widgets : withoutUnitChanges(saved.widgets);
+
 /**
  * Drives one Studio conversation against the harness's `/api/studio/*`
  * frames. Pauses (`plan.proposed`, `elicitation.request`) END the stream and
@@ -268,7 +283,7 @@ const restoredMessages = (saved: ChatSnapshot): ChatMessage[] =>
 export const useChat = (initial?: ChatSnapshot) => {
     const [state, setState] = useState<ChatState>(() => ({
         messages: initial ? restoredMessages(initial) : [],
-        widgets: initial?.widgets ?? [],
+        widgets: initial ? restoredWidgets(initial) : [],
         queued: [],
         activity: restoreActivity(initial?.activity),
         ...NO_LINE,
@@ -1357,6 +1372,78 @@ export const useChat = (initial?: ChatSnapshot) => {
         [holdTurn, startTurn, stream],
     );
 
+    // A card's Change unit: a turn that moves the card to the picked unit
+    // with no message and no model reply. The transcript shows the unit under
+    // the card's tag. The harness redraws the card, which takes its own
+    // slot as an edited card does. A pick while a request is in flight waits
+    // in the queue. A change the harness refuses (the card moved on, or the
+    // unit is not offered) leaves the reply saying why.
+    const applyUnit = useCallback(
+        (change: CardUnitChange) => {
+            const text = changeUnitText(change);
+            const card = { title: change.title };
+
+            if (
+                holdTurn({
+                    text,
+                    card: { componentId: change.request.component_id, intent: 'edit', ...card },
+                    unit: change,
+                })
+            ) {
+                return;
+            }
+
+            const { turn, conversation } = startTurn(
+                { role: 'user', text, card },
+                `Switching to ${changeUnitText(change)}`,
+            );
+
+            editingRef.current = change.request.component_id;
+
+            stream(
+                turn,
+                (handlers, signal) => runApplyUnit(conversation, change.request, handlers, signal),
+                {
+                    metered: true,
+                    onRefusal: (refusal) => {
+                        const detail = unitRefusalDetail(refusal);
+
+                        if (detail === null) {
+                            return false;
+                        }
+
+                        if (unitRefusalStale(refusal)) {
+                            patchWidget(change.request.component_id, (widget) =>
+                                widget.kind === 'text'
+                                    ? widget
+                                    : { ...widget, unitChange: undefined },
+                            );
+                        }
+
+                        setState((prev) => {
+                            const messages = prev.messages.slice();
+                            const last = messages.at(-1);
+
+                            if (last?.role === 'bot' && !last.text) {
+                                messages[messages.length - 1] = { ...last, text: `_${detail}_` };
+                            }
+
+                            return endTurn(
+                                { ...prev, messages },
+                                turn,
+                                'failed',
+                                hasAnswer(prev.messages),
+                            );
+                        });
+
+                        return true;
+                    },
+                },
+            );
+        },
+        [holdTurn, patchWidget, startTurn, stream],
+    );
+
     // The queue head goes next, unless a pause (plan or clarify) is waiting
     // on the user: a new turn would abandon it, so the answer goes first.
     useEffect(() => {
@@ -1378,11 +1465,13 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             if (next.chip) {
                 applyChoice(next.chip);
+            } else if (next.unit) {
+                applyUnit(next.unit);
             } else {
                 send(next.text, next.card, next.seeds);
             }
         };
-    }, [applyChoice, send]);
+    }, [applyChoice, applyUnit, send]);
 
     // The Stop control: end the running turn (see `halt` in stream()) and
     // ask the harness to cancel, once per stream whose request started. On a
@@ -1460,7 +1549,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         turnCount.current = saved.turnCount;
         setState({
             messages: restoredMessages(saved),
-            widgets: saved.widgets,
+            widgets: restoredWidgets(saved),
             queued: [],
             activity: restoreActivity(saved.activity),
             ...NO_LINE,
@@ -1497,6 +1586,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         respondPlan,
         switchChoice,
         applyChoice,
+        applyUnit,
         stop,
         reset,
         hydrate,

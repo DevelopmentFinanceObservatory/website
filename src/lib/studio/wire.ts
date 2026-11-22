@@ -221,12 +221,62 @@ export type ApplyChoice = {
     spec_id: string;
 };
 
+export type UnitPrices = 'current' | 'constant';
+
+/** One currency a unit offer lists. `name` is Search's noun ("US dollars"),
+ *  `prices` the bases it serves (at least one). The base-year bounds are set
+ *  together, and only when `constant` is among `prices`. */
+export type UnitCurrency = {
+    code: string;
+    name: string;
+    prices: UnitPrices[];
+    base_year_min?: number | null;
+    base_year_max?: number | null;
+};
+
+/** A chosen unit: a currency code, a price basis, and the base year when
+ *  the basis is constant (and only then). */
+export type UnitChoice = {
+    currency: string;
+    prices: UnitPrices;
+    base_year?: number | null;
+};
+
+/** The units a question or a card offers: every offered currency, the codes
+ *  listed before "Change to any currency" (`presets`), and the unit the
+ *  chips start on. */
+export type UnitOffer = {
+    currencies: UnitCurrency[];
+    presets: string[];
+    start: UnitChoice;
+};
+
+/** On a `component.created` frame whose card reads from one convertible
+ *  spec: that spec and the offer the card's unit can move within.
+ *  `offer.start` is the card's current unit. */
+export type UnitChange = {
+    spec_id: string;
+    offer: UnitOffer;
+};
+
+/** A card's unit change, with no message text: the conversation turn whose
+ *  answer drew the card (`turn`, from 1), the card, the reading it shows
+ *  (`spec_id`) and the unit it moves to. The harness refuses it 422
+ *  `scope_choice_stale` when the card is gone or reads another spec than
+ *  `spec_id`, and 422 `request_invalid` for a unit outside the offer. */
+export type ApplyUnit = {
+    component_id: string;
+    spec_id: string;
+    turn: number;
+    unit: UnitChoice;
+};
+
 export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
     conversation_id: string;
-    /** Absent only beside `apply_choice`. The harness reads an absent
-     *  message as "". */
+    /** Absent only beside `apply_choice` or `apply_unit`. The harness reads
+     *  an absent message as "". */
     message?: string;
     surface?: 'studio' | 'download' | 'embed';
     component_ref?: ComponentRef | null;
@@ -243,6 +293,9 @@ export type TurnRequest = {
      *  reading holds the choice, or `switch_option_unavailable`) and a
      *  `detail` to show. */
     apply_choice?: ApplyChoice | null;
+    /** A card's unit change. It comes alone, as `apply_choice` does, so a
+     *  request carries one of the two. */
+    apply_unit?: ApplyUnit | null;
 };
 
 export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
@@ -271,8 +324,18 @@ export type InterruptResponse = {
     plan_revision?: string;
 };
 
+/** The ticked options of a multi-select question: at least one, no repeats. */
+export type OptionsAnswer = { kind: 'options'; option_ids: string[] };
+
+/** The unit chosen for a unit question: a `UnitChoice` with a `kind`. */
+export type UnitAnswer = { kind: 'unit' } & UnitChoice;
+
 export type ElicitationAnswer =
-    { kind: 'option'; option_id: string } | { kind: 'text'; text: string } | { kind: 'skipped' };
+    | { kind: 'option'; option_id: string }
+    | OptionsAnswer
+    | UnitAnswer
+    | { kind: 'text'; text: string }
+    | { kind: 'skipped' };
 
 export type MutationOperation =
     | { op: 'add'; component_id: string }
@@ -486,6 +549,8 @@ export type ComponentCreated = {
     fact_summary: FactSummary;
     provenance: Provenance;
     created_from?: { step_id: string; message_seq?: number | null } | null;
+    // Set only when the card reads from one convertible spec.
+    unit_change?: UnitChange | null;
 };
 
 export type ComponentRevised = {
@@ -507,7 +572,7 @@ export type ElicitationOption = {
     recommended?: boolean;
 };
 
-export type ElicitationInput = 'single_select' | 'multi_select' | 'text';
+export type ElicitationInput = 'single_select' | 'multi_select' | 'text' | 'unit';
 
 export type ElicitationQuestion = {
     id: string;
@@ -519,6 +584,9 @@ export type ElicitationQuestion = {
     skippable?: boolean;
     // Why the `recommended` option (if any) is recommended.
     rationale?: string | null;
+    // The unit question's offer: set when `input` is `unit`, and only then.
+    // Such a question has no `options` and takes no free text.
+    unit?: UnitOffer | null;
 };
 
 export type ElicitationRequest = {

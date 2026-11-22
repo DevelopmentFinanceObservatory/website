@@ -1,12 +1,26 @@
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import * as Popover from '@radix-ui/react-popover';
 import classNames from 'classnames';
+import {
+    type RefObject,
+    type SyntheticEvent,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 
 import styles from './CardActions.module.scss';
 import type { CardExtras } from './types';
+import chatStyles from '../../workspace/ChatPanel.module.scss';
+import UnitChoice from '../../workspace/UnitChoice';
 
 import Icon, { type IconProps } from '@/components/atoms/Icon/Icon';
+import { useIsPhone } from '@/hooks/useMediaQuery';
+import type { UnitChoice as Unit, UnitOffer } from '@/lib/studio/wire';
 
 // A card carrying a user's note says so here, beside the pin. It is a mark,
 // not a control: the words come up on hovering the card (CardNote) and the
@@ -74,10 +88,12 @@ const DownloadMenu = ({
 
 // The ⋮ card menu, riding the house Radix popup like the search slot menus.
 // Every row is wired: More Info, pin/unpin, share (link/embed of this card),
-// a prefilled chat follow-up, title edit, live view switching and remove.
+// a prefilled chat follow-up, the unit panel (UnitPanel) on a card whose
+// frame offers other units, title edit, live view switching and remove.
 // Downloads are the button beside the pin (DownloadMenu). (Reorder from the
 // mock has no API behind it — not shown.)
 const CardMenu = ({
+    onOpenUnit,
     pinned,
     view,
     viewChoices,
@@ -92,7 +108,7 @@ const CardMenu = ({
     onNote,
     onRemoveNote,
     onView,
-}: CardExtras) => (
+}: CardExtras & { onOpenUnit: (() => void) | null }) => (
     <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
             <button type="button" className={styles.menuBtn} aria-label="Card menu">
@@ -128,6 +144,11 @@ const CardMenu = ({
                     <MenuRow icon="ask" onSelect={onAsk}>
                         Ask follow up
                     </MenuRow>
+                    {onOpenUnit && (
+                        <MenuRow icon="unit" onSelect={onOpenUnit}>
+                            Change unit
+                        </MenuRow>
+                    )}
                     <MenuRow icon="edit" onSelect={onEdit}>
                         {editLabel}
                     </MenuRow>
@@ -199,20 +220,143 @@ const MenuRow = ({
     </DropdownMenu.Item>
 );
 
+// The press events a portalled panel would otherwise hand up the React tree
+// to the card (its drag) and the board (its pan and its click ripple).
+const keepPress = (event: SyntheticEvent) => event.stopPropagation();
+
+// The card's Change unit panel: the unit chips, starting on the card's unit,
+// with Send dimmed until a chip moves and no Skip. It hangs beside the card,
+// or, on a phone, drops from the card's head over the card. Send, Escape, a
+// press outside (a card drag and a board pan start with one) and any scroll
+// of the board close it.
+const UnitPanel = ({
+    actionsRef,
+    offer,
+    onSend,
+    onClose,
+}: {
+    actionsRef: RefObject<HTMLDivElement | null>;
+    offer: UnitOffer;
+    onSend: (unit: Unit) => void;
+    onClose: () => void;
+}) => {
+    const isPhone = useIsPhone();
+    // Radix measures the anchor when it places the panel: the whole card on
+    // a wide screen, the head's buttons on a phone.
+    const anchor = useMemo(
+        () => ({
+            current: {
+                getBoundingClientRect: () => {
+                    const actions = actionsRef.current;
+                    const card = actions?.closest('[data-card-box]');
+
+                    return (
+                        (isPhone ? actions : (card ?? actions))?.getBoundingClientRect() ??
+                        new DOMRect()
+                    );
+                },
+            },
+        }),
+        [actionsRef, isPhone],
+    );
+
+    // A scroll of anything holding the card (the board's pan, the page)
+    // moves the card from under the panel. Scroll events do not bubble, so
+    // they are heard at capture; the chat's own scrolling leaves it open.
+    useEffect(() => {
+        const close = (event: Event) => {
+            const actions = actionsRef.current;
+
+            if (
+                event.target === document ||
+                (event.target instanceof Node && actions && event.target.contains(actions))
+            ) {
+                onClose();
+            }
+        };
+
+        document.addEventListener('scroll', close, { capture: true, passive: true });
+
+        return () => document.removeEventListener('scroll', close, { capture: true });
+    }, [actionsRef, onClose]);
+
+    return (
+        <>
+            <Popover.Anchor virtualRef={anchor} />
+            <Popover.Portal>
+                <Popover.Content
+                    className={classNames(chatStyles.picker, styles.unitPanel)}
+                    side={isPhone ? 'bottom' : 'right'}
+                    align={isPhone ? 'end' : 'start'}
+                    sideOffset={isPhone ? 4 : -4}
+                    alignOffset={isPhone ? 0 : 14}
+                    collisionPadding={16}
+                    aria-label="Change unit"
+                    onCloseAutoFocus={(event) => {
+                        // Focus goes back to the card menu that opened the panel.
+                        event.preventDefault();
+                        actionsRef.current
+                            ?.querySelector<HTMLElement>('[aria-label="Card menu"]')
+                            ?.focus({ preventScroll: true });
+                    }}
+                    onPointerDown={keepPress}
+                    onPointerMove={keepPress}
+                    onPointerUp={keepPress}
+                    onClick={keepPress}
+                >
+                    <div className={chatStyles.pickerHead}>
+                        <p className={chatStyles.pickerQuestion}>
+                            Which unit should this card use?
+                        </p>
+                    </div>
+                    <UnitChoice offer={offer} onSend={onSend} sendDisabledUntilChanged />
+                </Popover.Content>
+            </Popover.Portal>
+        </>
+    );
+};
+
 // Download + pin + kebab, 1px apart, top-right of every card (none on a
 // read-only sheet), with the note mark ahead of them when there is a note to
-// mark.
-const CardActions = (extras: CardExtras) =>
-    extras.readOnly ? null : (
-        // Out of the card's own picture (lib/studio/cardImage): the download
-        // button, the pin and the menu belong to the canvas, not to the
-        // card's content.
-        <div className={styles.cardActions} data-no-export="">
-            {extras.note && <NoteMark />}
-            <DownloadMenu onDownload={extras.onDownload} onDownloadImage={extras.onDownloadImage} />
-            <PinButton pinned={extras.pinned} onPin={extras.onPin} />
-            <CardMenu {...extras} />
-        </div>
+// mark. The card's unit panel opens from the menu and anchors here.
+const CardActions = (extras: CardExtras) => {
+    const [unitOpen, setUnitOpen] = useState(false);
+    const actionsRef = useRef<HTMLDivElement>(null);
+    const { unitOffer, onChangeUnit } = extras;
+    const unit = unitOffer && onChangeUnit ? { offer: unitOffer, send: onChangeUnit } : null;
+    const closeUnit = useCallback(() => setUnitOpen(false), []);
+
+    if (extras.readOnly) {
+        return null;
+    }
+
+    return (
+        <Popover.Root open={unitOpen && !!unit} onOpenChange={setUnitOpen}>
+            {/* Out of the card's own picture (lib/studio/cardImage): the
+                download button, the pin and the menu belong to the canvas,
+                not to the card's content. */}
+            <div ref={actionsRef} className={styles.cardActions} data-no-export="">
+                {extras.note && <NoteMark />}
+                <DownloadMenu
+                    onDownload={extras.onDownload}
+                    onDownloadImage={extras.onDownloadImage}
+                />
+                <PinButton pinned={extras.pinned} onPin={extras.onPin} />
+                <CardMenu {...extras} onOpenUnit={unit ? () => setUnitOpen(true) : null} />
+            </div>
+            {unit && unitOpen && (
+                <UnitPanel
+                    actionsRef={actionsRef}
+                    offer={unit.offer}
+                    onSend={(picked) => {
+                        setUnitOpen(false);
+                        unit.send(picked);
+                    }}
+                    onClose={closeUnit}
+                />
+            )}
+        </Popover.Root>
     );
+};
 
 export default CardActions;

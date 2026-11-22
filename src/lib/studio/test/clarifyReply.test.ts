@@ -10,6 +10,7 @@ import {
     type Clarify,
 } from '../clarify.ts';
 import { recordAnswer, startStepper, stepperAnswers } from '../clarifyStepper.ts';
+import { unitAnswer, withCurrency } from '../unitChoice.ts';
 import type { ElicitationRequest, InterruptResponse } from '../wire.ts';
 
 const options = [
@@ -211,4 +212,62 @@ test('the card answers the harness fixture frame with the fixture reply', () => 
         decision: request.decision,
         answers: request.answers,
     });
+});
+
+test('the unit card answers the harness unit frame with the fixture reply', () => {
+    const frame = fixture('event-18-elicitation-unit.json') as ElicitationRequest;
+    const request = fixture('request-15-interrupt-unit.json') as InterruptResponse;
+    const clarify = clarifyFromFrame(frame);
+    const [question] = clarify.questions;
+
+    assert.ok(question?.unit);
+    assert.equal(question.showText, false);
+
+    const answers = { q1: unitAnswer(withCurrency(question.unit, question.unit.start, 'EUR')) };
+
+    assert.deepEqual(clarifyReply(clarify, answers), {
+        decision: request.decision,
+        answers: request.answers,
+    });
+    assert.equal(clarifyAnswer(clarify, answers), 'Constant 2023 Euros');
+    assert.throws(() =>
+        clarifyReply(clarify, {
+            q1: { kind: 'unit', currency: 'KES', prices: 'constant', base_year: 2023 },
+        }),
+    );
+});
+
+test('the multi-select card answers the harness frame with the fixture reply', () => {
+    const frame = fixture('event-20-elicitation-multi-select.json') as ElicitationRequest;
+    const request = fixture('request-17-interrupt-options.json') as InterruptResponse;
+    const clarify = clarifyFromFrame(frame);
+    const [question] = clarify.questions;
+
+    assert.equal(question?.multi, true);
+    assert.equal(question.showText, true);
+    assert.equal(clarify.interruptId, request.interrupt_id);
+
+    const stepper = recordAnswer(clarify, startStepper(), {
+        kind: 'options',
+        option_ids: ['o1', 'o2'],
+    });
+    const answers = stepperAnswers(clarify, stepper);
+
+    assert.ok(answers);
+    assert.deepEqual(clarifyReply(clarify, answers), {
+        decision: request.decision,
+        answers: request.answers,
+    });
+    assert.equal(
+        clarifyAnswer(clarify, answers),
+        'You chose: Principal repayments, Interest payments',
+    );
+    assert.deepEqual(
+        recordAnswer(clarify, startStepper(), { kind: 'options', option_ids: [] }),
+        startStepper(),
+    );
+    assert.throws(() =>
+        clarifyReply(clarify, { q1: { kind: 'options', option_ids: ['o1', 'o1'] } }),
+    );
+    assert.throws(() => clarifyReply(clarify, { q1: { kind: 'options', option_ids: ['o9'] } }));
 });

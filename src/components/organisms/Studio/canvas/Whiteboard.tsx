@@ -37,8 +37,10 @@ import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { cardRefOf } from '@/lib/studio/cardDownload';
 import { cardImageName, cardNode, downloadCardImage } from '@/lib/studio/cardImage';
+import { cardUnitOffer } from '@/lib/studio/cardUnit';
 import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
+import type { UnitChoice } from '@/lib/studio/wire';
 
 // A card's note outlives the pointer leaving by enough to cross the few px
 // down to it, where its remove button is (CardNote).
@@ -56,6 +58,9 @@ export type WhiteboardProps = {
     onTogglePin: (id: string) => void;
     onRemove: (id: string) => void;
     onAskFollowUp: (id: string, title: string) => void;
+    // Card menu → Change unit → Send, on a card whose frame offers other
+    // units. Absent on a sheet where no turn can run.
+    onChangeUnit?: (id: string, unit: UnitChoice) => void;
     // Opens one card's More Info panel.
     onCardInfo: (id: string) => void;
     // The card whose panel is open: it floats centred over the dimmed page.
@@ -125,6 +130,7 @@ const Whiteboard = ({
     onTogglePin,
     onRemove,
     onAskFollowUp,
+    onChangeUnit,
     onCardInfo,
     focusedId,
     onEditText,
@@ -445,6 +451,8 @@ const Whiteboard = ({
                     heightIsDerived(widget, cardView) && !heightIsFree(cardView, chartSource);
                 const hRange = heightRange(widget, cardView);
                 const dimmed = !!dimKind && effectiveKind(widget, views[widget.id]) !== dimKind;
+                const unitOffer =
+                    onChangeUnit && !readOnly && !isLeaving ? cardUnitOffer(widget) : null;
                 const extras: CardExtras = {
                     pinned: pinnedIds.includes(widget.id),
                     title,
@@ -453,6 +461,9 @@ const Whiteboard = ({
                     onPin: () => onTogglePin(widget.id),
                     onRemove: () => onRemove(widget.id),
                     onAsk: () => onAskFollowUp(widget.id, title),
+                    unitOffer,
+                    onChangeUnit:
+                        unitOffer && onChangeUnit ? (unit) => onChangeUnit(widget.id, unit) : null,
                     onInfo: isText ? null : () => onCardInfo(widget.id),
                     onDownload:
                         onDownload && cardRefOf(widget) ? () => onDownload(widget.id) : null,

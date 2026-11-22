@@ -11,6 +11,7 @@
 
 import type {
     ApplyChoice,
+    ApplyUnit,
     CancelRequest,
     CompositionManifest,
     CompositionMutation,
@@ -249,6 +250,26 @@ export const runApplyChoice = (
             schema_version: 1,
             conversation_id: conversationId,
             apply_choice: { choice_id, option_id, turn, spec_id },
+        },
+        handlers,
+        signal,
+    );
+
+/** Run a turn that moves a card to another unit: the card, the reading it
+ *  shows, the turn that drew it and the unit, and no message. */
+export const runApplyUnit = (
+    conversationId: string,
+    { component_id, spec_id, turn, unit }: ApplyUnit,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_unit: { component_id, spec_id, turn, unit },
         },
         handlers,
         signal,
