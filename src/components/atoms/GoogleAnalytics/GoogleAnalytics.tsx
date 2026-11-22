@@ -11,13 +11,25 @@ const MEASUREMENT_ID = 'G-NCWQ8XTXG1';
 // vars. The host name tells them apart.
 const PRODUCTION_HOSTS = ['developmentfinance.org', 'www.developmentfinance.org'];
 
+declare global {
+    interface Window {
+        gtag?: (...args: unknown[]) => void;
+    }
+}
+
 const noSubscribe = () => () => {};
 const isEnabled = () =>
-    PRODUCTION_HOSTS.includes(window.location.hostname) && !isEmbedPath(window.location.pathname);
+    PRODUCTION_HOSTS.includes(window.location.hostname) &&
+    !isEmbedPath(window.location.pathname) &&
+    typeof window.gtag === 'function';
 
 // GA4 on the production hosts, except in embeds, which run inside other
-// sites and load no consent manager. The root layout sets the consent defaults
-// (all denied) before Usercentrics loads, and Usercentrics sends the updates.
+// sites and load no consent manager. The root layout's inline script defines
+// gtag and sets the consent defaults (all denied) before Usercentrics loads,
+// and Usercentrics sends the updates. When React renders the root layout on the
+// client (an error shell, a hydration recovery), the inline scripts it inserts
+// do not run, so gtag is missing and GA4 stays off: it never loads without
+// the defaults.
 // Enhanced measurement records App Router navigations, so this sends only the
 // config call.
 const GoogleAnalytics = () => {
