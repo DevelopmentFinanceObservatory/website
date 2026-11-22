@@ -36,11 +36,13 @@ const About = () => {
             return;
         }
 
-        if (!textHostRef.current || !textCanvasRef.current) {
+        if (!textHostRef.current || !textCanvasRef.current || !bodyRef.current) {
             return;
         }
 
-        return startTextNet(textHostRef.current, textCanvasRef.current);
+        // The web shows only while the prose is on screen (trackScroll hides it
+        // once the prose has passed), so the prose is what the loop watches.
+        return startTextNet(textHostRef.current, textCanvasRef.current, bodyRef.current);
     }, [reducedMotion]);
 
     /**
