@@ -13,7 +13,7 @@ import { decodeEntities } from './html.mts';
 
 const DIST = path.join(import.meta.dirname, '..', 'dist');
 const BASE = '/prototypes/';
-// The ids of the Analytics component's beforeInteractive scripts.
+// The ids of the Analytics component's inline consent scripts.
 const CONSENT_SCRIPTS = ['consent-defaults', 'usercentrics-cmp-loader'];
 
 const HTML_TAG = /<[a-z][\w-]*\b[^>]*>/gi;
