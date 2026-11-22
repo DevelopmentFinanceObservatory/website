@@ -6,7 +6,6 @@
     "note": "Identities with the provider role and the unit left for the page to bind."
   },
   "data": {
-    "resolve": "/api/v1/search/resolve",
     "maxEntries": 6,
     "identities": [
       {

@@ -1,6 +1,6 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.4.2",
+  "sdk": "development-finance==0.6.0",
   "query": "The six largest providers of gross ODA disbursements in 2024 (OECD CRS) to the OECD's 62 fragile contexts in 2026, to the 20 in extreme fragility and to the 42 in high fragility, with each provider's change in total ODA from 2024 to 2025 (OECD DAC1)",
   "retrieved": "2026-11-19T22:44:40.999Z",
   "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory; OECD DAC1 (2026), via the Development Finance Observatory",

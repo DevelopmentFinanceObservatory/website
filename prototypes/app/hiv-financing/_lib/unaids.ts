@@ -3,6 +3,8 @@
 // it against the rows and figures the step writes to _data/unaids-fixture.json.
 import type { Country, UnaidsFigures } from '../_data/types.ts';
 
+import { pythonRound } from '#lib/round.ts';
+
 /** A country with its UNAIDS figures joined on. */
 export type UnaidsCountry = Country & UnaidsFigures;
 
@@ -20,32 +22,6 @@ export type UnaidsRows = {
 };
 
 const COUNTRY = 'country/';
-
-/**
- * Rounds as Python's `round(value, digits)` does: to the nearest, with an exact half going to
- * the even digit. An exact half at `digits` places is an odd multiple of 2^-(digits + 1), so
- * the test for one is exact in binary. Every other value rounds as `toFixed` does, from its
- * exact binary value.
- */
-export const pythonRound = (value: number, digits = 0): number => {
-    if (!Number.isFinite(value)) {
-        throw new Error(`cannot round ${value}`);
-    }
-
-    const sign = value < 0 ? -1 : 1;
-    const magnitude = Math.abs(value);
-    const halves = magnitude * 2 ** (digits + 1);
-    // toFixed takes the larger of two equally near numbers.
-    const up = Number(magnitude.toFixed(digits));
-
-    if (!Number.isInteger(halves) || halves % 2 === 0) {
-        return sign * up;
-    }
-
-    const lastDigit = Math.round(up * 10 ** digits) % 10;
-
-    return sign * (lastDigit % 2 === 0 ? up : Number((up - 10 ** -digits).toFixed(digits)));
-};
 
 /** Why the rows of a read gave no figures: a second row for one place and year, or a row whose
  *  year or value is neither a number nor, for the value, null. */
@@ -96,6 +72,18 @@ const yearly = (rows: readonly UnaidsRow[], place: string): Map<number, number> 
     }
 
     return values;
+};
+
+/** The countries a UNAIDS reading is for, in code order, and the key it is shared and re-run
+ *  under. The same countries in another order, as a live aid read can give them, make the
+ *  same key, so they reuse the reading. */
+export const readingOf = (
+    iso3s: readonly string[],
+    years: readonly number[],
+): { iso3s: string[]; key: string } => {
+    const sorted = iso3s.toSorted();
+
+    return { iso3s: sorted, key: `${sorted.join(',')}|${years.join(',')}` };
 };
 
 /**

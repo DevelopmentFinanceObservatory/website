@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { readFileSync } from 'node:fs';
+
+import type { HivData } from '../_data/types.ts';
+
 import {
+    AID_CITED,
+    AID_TEXT,
+    aidSections,
     allSentence,
     codeChangeSentence,
     flagLegend,
@@ -239,11 +246,11 @@ test('a small share is named as the table prints it', () => {
     );
 });
 
-test('the lede throws when the two providers no longer disburse almost all', () => {
-    assert.doesNotThrow(() => ledeSentence(DATA));
-    assert.throws(() =>
-        ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
-    );
+test("the lede gives the two providers' share when they no longer disburse almost all", () => {
+    const lede = ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } });
+
+    assert.match(lede, /the Global Fund disbursed \d+% of HIV aid recorded for countries\./);
+    assert.doesNotMatch(lede, /almost all/);
 });
 
 test('the fall sentence drops its share when the named falls exceed the net fall', () => {
@@ -337,4 +344,28 @@ test('other measures: the Global Fund share against countries and against the wi
     );
     // Nothing elsewhere: no wider-total sentence.
     assert.doesNotMatch(otherMeasures({ ...data, unallocated: series(0, 0, 0) }).text, /Including/);
+});
+
+test("the prose outside the island follows the figures it is given, the island's", () => {
+    const hiv = (
+        JSON.parse(readFileSync(new URL('../_data/hiv.json', import.meta.url), 'utf8')) as {
+            data: HivData;
+        }
+    ).data;
+    // Live figures a year on, with twice the loans and one country fewer.
+    const live: HivData = {
+        ...hiv,
+        years: hiv.years.map((year) => year + 1),
+        loans: {
+            total: hiv.loans.total * 2,
+            lenders: hiv.loans.lenders.map((lender) => ({ ...lender, value: lender.value * 2 })),
+        },
+        countries: hiv.countries.slice(1),
+    };
+
+    for (const [part, text] of Object.entries({ ...AID_TEXT, ...AID_CITED })) {
+        assert.notDeepEqual(text(live), text(hiv), part);
+    }
+    assert.equal(AID_TEXT.lastYear(live), String(hiv.years.at(-1)! + 1));
+    assert.notDeepEqual(aidSections(live), aidSections(hiv));
 });
