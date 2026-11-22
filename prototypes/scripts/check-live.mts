@@ -1,16 +1,21 @@
-// `pnpm check:live <base-url>` loads each live prototype page in Chromium, waits for its island's
-// `data-read-tier` to leave `loading`, and checks the tier against the island's own
-// `data-read-live`, which each island renders from its read switch. The tier is `stored` with the
-// switch on and `committed` with it off. The served page states its switch, so an edge copy of an
-// older build is checked against that build's switch. oda-counts' island and debt-thresholds'
-// transfers section have no switch, so their reads are always on.
+// `pnpm check:live <base-url> --commit <id>` loads each live prototype page in Chromium, waits for
+// its island's `data-read-tier` to leave `loading`, and checks two things. The page must carry
+// the commit it was asked for, in `<meta name="dfo-build">`, which the build writes from
+// DEPLOY_COMMIT. Then the tier must match the island's `data-read-live`, which each island renders
+// from its read switch: `stored` with the switch on, `committed` with it off. oda-counts' island
+// and debt-thresholds' transfers section have no switch, so their reads are always on.
 //
-// After a deploy the edge can serve the previous build for a while, so a failing run is tried
-// again, ATTEMPTS times in all, RETRY_DELAY_MS apart. Exits 1 when the last attempt finds a page
-// that does not load, carries no island, never settles, settles on the wrong tier, or throws.
+// After a deploy the edge can serve the previous build for a while, and that build passes its own
+// tier check, so only the expected commit counts. A run that finds another commit, or none, is
+// tried again, ATTEMPTS times in all, RETRY_DELAY_MS apart. Exits 1 when the last attempt finds a
+// page that does not load, carries no island, never settles, serves another commit, settles on
+// the wrong tier, or throws. Exits 2 when no expected commit is given.
 //
-//   pnpm check:live https://developmentfinance.org/prototypes/
-//   pnpm check:live http://localhost:8123/prototypes/ --insecure-local
+// The commit comes from `--commit <id>` or the EXPECTED_COMMIT environment variable. A local
+// build without DEPLOY_COMMIT stamps `local`.
+//
+//   pnpm check:live https://developmentfinance.org/prototypes/ --commit "$GITHUB_SHA"
+//   pnpm check:live http://localhost:8123/prototypes/ --insecure-local --commit local
 //
 // `--insecure-local` runs Chromium with web security off, so a page served from localhost can read
 // DFO's API across origins. It is refused for any host but localhost.
@@ -27,6 +32,7 @@ export const ATTEMPTS = 4;
 export const RETRY_DELAY_MS = 20_000;
 
 const ISLAND = '[data-read-tier]';
+const BUILD_MARKER = 'meta[name="dfo-build"]';
 const SETTLED = '[data-read-tier]:not([data-read-tier="loading"])';
 
 /** The live prototype pages, by slug. */
@@ -54,6 +60,10 @@ export type Result = {
     slug: string;
     /** the island's `data-read-live`, or null when it carries none or the page gave no island */
     live: boolean | null;
+    /** the commit the page was asked to serve */
+    expectedCommit: string;
+    /** the commit the page serves, or null when it carries no marker */
+    commit: string | null;
     /** the settled `data-read-tier`, or null when the page gave none */
     tier: string | null;
     ms: number;
@@ -74,6 +84,15 @@ export const problems = (result: Result): string[] => {
 
     if (result.failure !== null) {
         return [FAILURES[result.failure], ...errors];
+    }
+
+    if (result.commit !== result.expectedCommit) {
+        return [
+            result.commit === null
+                ? 'the page carries no build commit marker'
+                : `serves commit \`${result.commit}\`, expected \`${result.expectedCommit}\``,
+            ...errors,
+        ];
     }
 
     if (result.live === null) {
@@ -109,6 +128,7 @@ export const checkPage = async (
     page: PageLike,
     url: string,
     slug: string,
+    expectedCommit: string,
     { navigation = NAVIGATION_TIMEOUT_MS, settle = SETTLE_TIMEOUT_MS } = {},
 ): Promise<Result> => {
     const errors: string[] = [];
@@ -119,9 +139,11 @@ export const checkPage = async (
     const result = (over: Partial<Result>): Result => ({
         slug,
         live: null,
+        commit: null,
         tier: null,
         failure: null,
         ...over,
+        expectedCommit,
         ms: Math.round(performance.now() - start),
         errors,
     });
@@ -153,6 +175,7 @@ export const checkPage = async (
     }
 
     return result({
+        commit: await page.getAttribute(BUILD_MARKER, 'content'),
         tier: await page.getAttribute(ISLAND, 'data-read-tier'),
         live: liveSwitch(await page.getAttribute(ISLAND, 'data-read-live')),
     });
@@ -193,8 +216,8 @@ const report = (result: Result): string[] => {
     const expected = result.live === null ? 'none' : expectedTier(result.live);
 
     return [
-        `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: tier ${result.tier ?? 'none'} ` +
-            `(data-read-live ${result.live ?? 'none'}, expected ${expected}) in ${result.ms} ms`,
+        `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: commit ${result.commit ?? 'none'}, ` +
+            `tier ${result.tier ?? 'none'} (data-read-live ${result.live ?? 'none'}, expected ${expected}) in ${result.ms} ms`,
         ...found.map((problem) => `     ${problem}`),
     ];
 };
@@ -202,10 +225,15 @@ const report = (result: Result): string[] => {
 const main = async () => {
     const args = process.argv.slice(2);
     const insecure = args.includes('--insecure-local');
-    const base = args.find((arg) => !arg.startsWith('--'));
+    const flag = args.indexOf('--commit');
+    const expectedCommit = (flag === -1 ? undefined : args[flag + 1]) || process.env.EXPECTED_COMMIT;
+    const base = args.find((arg, index) => !arg.startsWith('--') && index !== flag + 1);
 
-    if (base === undefined) {
-        console.error('Usage: check-live.mts <base-url> [--insecure-local]');
+    if (base === undefined || !expectedCommit) {
+        console.error(
+            'Usage: check-live.mts <base-url> --commit <id> [--insecure-local]\n' +
+                'The commit may also come from EXPECTED_COMMIT.',
+        );
         process.exit(2);
     }
 
@@ -228,7 +256,7 @@ const main = async () => {
             const page = await browser.newPage();
 
             results.push(
-                await checkPage(page as unknown as PageLike, new URL(`${slug}/`, root).href, slug),
+                await checkPage(page as unknown as PageLike, new URL(`${slug}/`, root).href, slug, expectedCommit),
             );
             await page.close();
         }

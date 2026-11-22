@@ -13,9 +13,14 @@ import {
     type Result,
 } from './check-live.mts';
 
+const NEW = 'new-sha';
+const OLD = 'old-sha';
+
 const result = (over: Partial<Result> = {}): Result => ({
     slug: 'p',
     live: false,
+    expectedCommit: NEW,
+    commit: NEW,
     tier: 'committed',
     ms: 10,
     failure: null,
@@ -30,6 +35,7 @@ const fakePage = (
     options: {
         tier?: string;
         live?: string | null;
+        commit?: string | null;
         island?: boolean;
         navigation?: Error;
         hangs?: boolean;
@@ -40,6 +46,7 @@ const fakePage = (
     const attributes: Record<string, string | null> = {
         'data-read-tier': options.tier ?? 'committed',
         'data-read-live': options.live === undefined ? 'false' : options.live,
+        content: options.commit === undefined ? NEW : options.commit,
     };
 
     return {
@@ -87,26 +94,68 @@ test('a run passes only when every page settles on the tier its island states, w
 
 test('checkPage checks the settled tier against the served switch, and reports a page error', async () => {
     assert.deepEqual(
-        problems(await checkPage(fakePage({ tier: 'stored', live: 'true' }), 'u', 'p')),
+        problems(await checkPage(fakePage({ tier: 'stored', live: 'true' }), 'u', 'p', NEW)),
         [],
     );
-    assert.deepEqual(problems(await checkPage(fakePage(), 'u', 'p')), []);
+    assert.deepEqual(problems(await checkPage(fakePage(), 'u', 'p', NEW)), []);
 
     // A served switch that is on, with the island on committed figures.
-    const wrong = await checkPage(fakePage({ tier: 'committed', live: 'true' }), 'u', 'p');
+    const wrong = await checkPage(fakePage({ tier: 'committed', live: 'true' }), 'u', 'p', NEW);
 
     assert.equal(wrong.failure, null);
     assert.equal(problems(wrong).length, 1);
 
-    const unstated = await checkPage(fakePage({ live: null }), 'u', 'p');
+    const unstated = await checkPage(fakePage({ live: null }), 'u', 'p', NEW);
 
     assert.equal(unstated.live, null);
     assert.equal(exitCode([unstated]), 1);
 
-    const errored = await checkPage(fakePage({ pageError: 'boom' }), 'u', 'p');
+    const errored = await checkPage(fakePage({ pageError: 'boom' }), 'u', 'p', NEW);
 
     assert.deepEqual(errored.errors, ['boom']);
     assert.equal(exitCode([errored]), 1);
+});
+
+test('a page serving another commit, or none, fails even when its own tier is consistent', async () => {
+    // The previous build: its switch is off and it settles on committed, which passes alone.
+    const old = await checkPage(fakePage({ commit: OLD }), 'u', 'p', NEW);
+
+    assert.equal(old.commit, OLD);
+    assert.equal(exitCode([old]), 1);
+    assert.match(problems(old)[0] ?? '', /old-sha/);
+    assert.equal(exitCode([await checkPage(fakePage(), 'u', 'p', NEW)]), 0);
+
+    const unmarked = await checkPage(fakePage({ commit: null }), 'u', 'p', NEW);
+
+    assert.equal(unmarked.commit, null);
+    assert.equal(exitCode([unmarked]), 1);
+});
+
+test('withRetries keeps trying while a page serves the old commit, then passes on the new one', async () => {
+    const pages = [OLD, OLD, NEW];
+    let made = 0;
+    const results = await withRetries(
+        async () => [await checkPage(fakePage({ commit: pages[made++] }), 'u', 'p', NEW)],
+        { attempts: 4, delayMs: 0, sleep: async () => {} },
+    );
+
+    assert.equal(made, 3);
+    assert.equal(exitCode(results), 0);
+
+    made = 0;
+    const never = await withRetries(
+        async () => [await checkPage(fakePage({ commit: null }), 'u', 'p', NEW)],
+        {
+            attempts: 3,
+            delayMs: 0,
+            sleep: async () => {
+                made += 1;
+            },
+        },
+    );
+
+    assert.equal(made, 2);
+    assert.equal(exitCode(never), 1);
 });
 
 test('checkPage names a navigation timeout, a failed load, a missing island and an unsettled one apart', async () => {
@@ -118,7 +167,7 @@ test('checkPage names a navigation timeout, a failed load, a missing island and 
     ];
 
     for (const [page, failure] of cases) {
-        const checked = await checkPage(page, 'u', 'p');
+        const checked = await checkPage(page, 'u', 'p', NEW);
 
         assert.equal(checked.failure, failure);
         assert.equal(checked.tier, null);
@@ -135,7 +184,7 @@ test('a page with no island fails at once, without waiting for it to settle', as
         },
     };
 
-    assert.equal((await checkPage(page, 'u', 'p')).failure, 'no_island');
+    assert.equal((await checkPage(page, 'u', 'p', NEW)).failure, 'no_island');
     assert.equal(waited, false);
 });
 

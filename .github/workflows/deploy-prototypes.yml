@@ -89,8 +89,12 @@ jobs:
       - run: pnpm typecheck
         working-directory: prototypes
 
+      # DEPLOY_COMMIT is written into every page as <meta name="dfo-build">,
+      # which the live read check matches against the commit it expects.
       - run: pnpm build
         working-directory: prototypes
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
 
       - run: pnpm check:dist
         working-directory: prototypes
@@ -226,14 +230,15 @@ jobs:
             exit 1
           fi
 
-      # Loads each live page in Chromium and checks its settled tier against
-      # the switch the served island states (committed off, stored on), so a
-      # switch change that breaks the live read shows here. A failing run is
-      # tried again for about a minute while the edge takes the new build.
+      # Loads each live page in Chromium, waits until it serves this commit,
+      # and checks its settled tier against the switch the served island
+      # states (committed off, stored on), so a switch change that breaks the
+      # live read shows here. A page from the previous build fails and is
+      # tried again for about a minute while the edge takes the new one.
       # playwright-core is a root dependency, and the headless shell is the
       # smallest Chromium it can drive.
       - name: Live read check
         run: |
           pnpm install --frozen-lockfile
           pnpm exec playwright-core install --with-deps chromium-headless-shell
-          pnpm --dir prototypes check:live https://developmentfinance.org/prototypes/
+          pnpm --dir prototypes check:live https://developmentfinance.org/prototypes/ --commit "$GITHUB_SHA"
