@@ -23,7 +23,7 @@ import {
 // The event export Job's command (`node dist/export-events.cjs`, see
 // deploy/Dockerfile). It reads the database as the runtime does, through
 // WEBSITE_DB_* over the Cloud SQL connector, or DATABASE_URL locally, and
-// runs the account export, then the event export (runExportJob), under
+// runs the event export (runExportJob), then the account export, under
 // runAndExit's deadline, which names the phase in `progress` if it fires.
 async function main(progress: JobProgress): Promise<void> {
     const settings = readExportEnv();

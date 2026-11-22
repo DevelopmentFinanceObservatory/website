@@ -171,6 +171,19 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
     const day = (back: number) =>
         new Date(Date.parse(today) - back * 86_400_000).toISOString().slice(0, 10);
 
+    await database.runtimePool().query(
+        `insert into "user" (id, name, email, deleting_at)
+         values ('id-gone', 'Name', 'gone@one.org', now())`,
+    );
+    await database.runtimePool().query(
+        `insert into conversation (id, user_id, title, agent_session_id, data, created_at)
+         values ('conv-raw-1', $1, 'A private title', 'session-raw-1', '{"secret":1}',
+                 '2026-10-20T09:30:00.123456Z'),
+                ('conv-raw-2', $1, 'Another', null, '{}', '2026-10-21T00:00:00Z'),
+                ('conv-raw-3', 'id-gone', 'Leaving', null, '{}', '2026-10-21T00:00:00Z')`,
+        [idOf('a@one.org')],
+    );
+
     readerPool = new Pool({
         host: process.env.PGHOST ?? 'localhost',
         port: Number(process.env.PGPORT ?? 5433),
@@ -201,6 +214,21 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
             { day: day(1), organisation: 'one.org', accounts: 1 },
         ]),
     );
+
+    assert.deepEqual(read.conversations, [
+        {
+            idSha256: sha256Hex('conv-raw-1'),
+            agentSessionSha256: sha256Hex('session-raw-1'),
+            userId: idOf('a@one.org'),
+            createdAt: '2026-10-20T09:30:00.123456Z',
+        },
+        {
+            idSha256: sha256Hex('conv-raw-2'),
+            agentSessionSha256: null,
+            userId: idOf('a@one.org'),
+            createdAt: '2026-10-21T00:00:00.000000Z',
+        },
+    ].toSorted((a, b) => a.idSha256.localeCompare(b.idSha256)));
 
     // Each account created before today, with the label its domain has in
     // account_daily, keyed by the digest its events carry.
@@ -258,8 +286,20 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
         assert.ok(!text.includes(`"${idOf(email)}"`), idOf(email));
     }
 
+    assert.doesNotMatch(text, /conv-raw|session-raw|private title|secret|id-gone/);
+    assert.deepEqual(
+        (exported('conversation') as ConversationExportRow[]).map((row) => row.user_hash),
+        read.conversations.map(() => eventUserHash(idOf('a@one.org'))),
+    );
+
     await assert.rejects(readerPool.query('select 1 from "user"'), /permission denied/);
     await assert.rejects(readerPool.query('select 1 from webmail_domain'), /permission denied/);
+    await assert.rejects(readerPool.query('select 1 from conversation'), /permission denied/);
+    await assert.rejects(readerPool.query('select id from conversation_export'), /does not exist/);
+    await assert.rejects(
+        readerPool.query('select agent_session_id from conversation_export'),
+        /does not exist/,
+    );
 });
 
 test('account_daily and account_organisation name a domain only once it holds 3 accounts before today', async (t) => {
@@ -318,90 +358,6 @@ test('account_daily and account_organisation leave out an account being deleted'
         'b@three.org',
         'c@three.org',
     ]);
-});
-
-test('the export reader reads each conversation of an account not being deleted, and no title or content', async (t) => {
-    const database = await createTestDatabase();
-    const admin = database.adminPool();
-    const reader = `test_export_${randomBytes(4).toString('hex')}`;
-    const password = randomBytes(16).toString('hex');
-    let readerPool: Pool | null = null;
-
-    t.after(async () => {
-        await readerPool?.end();
-        await admin.query(`drop role if exists "${reader}"`);
-        await database.teardown();
-    });
-
-    await migrate(database);
-    await admin.query(
-        `create role "${reader}" login password '${password}' in role ${EXPORT_READER_ROLE}`,
-    );
-    await database.runtimePool().query(
-        `insert into "user" (id, name, email, deleting_at)
-             values ('u-1', 'Name', 'a@one.org', null), ('u-gone', 'Name', 'b@one.org', now())`,
-    );
-    await database.runtimePool().query(
-        `insert into conversation (id, user_id, title, agent_session_id, data, created_at)
-         values ('c-1', 'u-1', 'A private title', 'session-1', '{"secret":1}',
-                 '2026-10-20T09:30:00.123456Z'),
-                ('c-2', 'u-1', 'Another', null, '{}', '2026-10-21T00:00:00Z'),
-                ('c-3', 'u-gone', 'Leaving', null, '{}', '2026-10-21T00:00:00Z')`,
-    );
-
-    readerPool = new Pool({
-        host: process.env.PGHOST ?? 'localhost',
-        port: Number(process.env.PGPORT ?? 5433),
-        user: reader,
-        password,
-        database: database.databaseName,
-        max: 1,
-    });
-
-    const read = await readAccounts(readerPool);
-    const { loaded, replace, rows } = capture();
-
-    assert.deepEqual(read.conversations, [
-        {
-            id: 'c-1',
-            agentSessionId: 'session-1',
-            userId: 'u-1',
-            createdAt: '2026-10-20T09:30:00.123456Z',
-        },
-        {
-            id: 'c-2',
-            agentSessionId: null,
-            userId: 'u-1',
-            createdAt: '2026-10-21T00:00:00.000000Z',
-        },
-    ]);
-
-    await runAccountExport({
-        read: async () => read,
-        replace,
-        hmacKey: HMAC_KEY,
-        scratchFile: scratchFile(),
-        log: () => {},
-    });
-
-    assert.deepEqual(
-        (rows('conversation') as ConversationExportRow[]).map(
-            ({ id_sha256, agent_session_sha256, user_hash }) => [
-                id_sha256,
-                agent_session_sha256,
-                user_hash,
-            ],
-        ),
-        [
-            [sha256Hex('c-1'), sha256Hex('session-1'), eventUserHash('u-1')],
-            [sha256Hex('c-2'), null, eventUserHash('u-1')],
-        ],
-    );
-
-    const text = loaded.map((load) => load.text).join('');
-
-    assert.doesNotMatch(text, /u-1|u-gone|private title|secret|c-3|c-1|c-2|session-1/);
-    await assert.rejects(readerPool.query('select 1 from conversation'), /permission denied/);
 });
 
 test('account_daily holds no rows while webmail_domain is empty, and the export fails naming both account tables after loading conversation', async (t) => {
@@ -562,12 +518,17 @@ const ROWS: AccountRow[] = [
 
 const CONVERSATIONS: AccountRead['conversations'] = [
     {
-        id: 'c-1',
-        agentSessionId: 'session-1',
+        idSha256: sha256Hex('c-1'),
+        agentSessionSha256: sha256Hex('session-1'),
         userId: 'user-1',
         createdAt: '2026-10-20T09:30:00.123456Z',
     },
-    { id: 'c-2', agentSessionId: null, userId: 'user-2', createdAt: '2026-10-21T00:00:00.000000Z' },
+    {
+        idSha256: sha256Hex('c-2'),
+        agentSessionSha256: null,
+        userId: 'user-2',
+        createdAt: '2026-10-21T00:00:00.000000Z',
+    },
 ];
 
 const ORGANISATIONS: AccountRead['organisations'] = [

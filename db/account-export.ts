@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 
 import type { BigQuery, TableField } from '@google-cloud/bigquery';
@@ -96,9 +95,9 @@ export type AccountOrganisationSource = {
 
 /** One `conversation` row. */
 export type ConversationExportRow = {
-    // sha256Hex of the conversation id
+    // lower-case hex SHA-256 of the conversation id, computed by the view
     id_sha256: string;
-    // sha256Hex of the agent session id, null before the conversation's first turn
+    // lower-case hex SHA-256 of the agent session id, null before the conversation's first turn
     agent_session_sha256: string | null;
     // exportDigest of the user id under EXPORT_ID_HMAC_KEY, the events' `user_hash`
     user_hash: string;
@@ -140,8 +139,8 @@ export const CONVERSATION_SCHEMA: TableField[] = [
 
 /** One row of the view `conversation_export`, as the Job reads it. */
 export type ConversationSource = {
-    id: string;
-    agentSessionId: string | null;
+    idSha256: string;
+    agentSessionSha256: string | null;
     userId: string;
     createdAt: string;
 };
@@ -182,11 +181,12 @@ const readInTransaction = async (client: PoolClient): Promise<AccountRead> => {
     );
 
     const { rows: conversations } = await client.query<ConversationSource>(
-        `SELECT "id", agent_session_id AS "agentSessionId", user_id AS "userId",
+        `SELECT id_sha256 AS "idSha256", agent_session_sha256 AS "agentSessionSha256",
+                user_id AS "userId",
                 to_char("created_at" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
                     AS "createdAt"
          FROM conversation_export
-         ORDER BY "id"`,
+         ORDER BY id_sha256`,
     );
 
     await client.query('COMMIT');
@@ -244,20 +244,19 @@ export const accountOrganisationRow = (
     organisation,
 });
 
-const sha256Hex = (text: string): string => createHash('sha256').update(text).digest('hex');
-
 /**
- * The `conversation` row for one saved conversation. The conversation id and
- * the agent session id become unkeyed SHA-256 digests, so no raw id reaches
- * BigQuery and the session digest joins Langfuse's session id. The user id
- * becomes exportDigest under `hmacKey`, as in accountOrganisationRow.
+ * The `conversation` row for one saved conversation. The view
+ * `conversation_export` has already digested the conversation id and the agent
+ * session id (unkeyed SHA-256, so the session digest joins Langfuse's session
+ * id), so no raw id reaches the Job. The user id becomes exportDigest under
+ * `hmacKey`, as in accountOrganisationRow.
  */
 export const conversationRow = (
-    { id, agentSessionId, userId, createdAt }: ConversationSource,
+    { idSha256, agentSessionSha256, userId, createdAt }: ConversationSource,
     hmacKey: string,
 ): ConversationExportRow => ({
-    id_sha256: sha256Hex(id),
-    agent_session_sha256: agentSessionId === null ? null : sha256Hex(agentSessionId),
+    id_sha256: idSha256,
+    agent_session_sha256: agentSessionSha256,
     user_hash: exportDigest(userId, hmacKey),
     created_at: createdAt,
 });
@@ -371,8 +370,12 @@ export const runAccountExport = async ({
                     { cause: error },
                 ),
             );
-        } finally {
+        }
+
+        try {
             await fs.rm(scratchFile, { force: true });
+        } catch (error) {
+            errors.push(error instanceof Error ? error : new Error(String(error)));
         }
     }
 
