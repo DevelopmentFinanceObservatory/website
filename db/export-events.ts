@@ -47,7 +47,8 @@ async function main(progress: JobProgress, deadlineAt: number): Promise<void> {
 
     const events = exportDb(exportPool(process.env, { statementMs: EVENT_STATEMENT_MS }));
     const accounts = exportDb(exportPool(process.env, { statementMs: ACCOUNT_READ_MS }));
-    const bigquery = exportBigQuery(settings);
+    // Read once, before both phases, when EXPORT_BQ_LOCATION leaves the location unset.
+    const bigquery = await exportBigQuery(settings);
     const log = (line: string) => console.log(line);
 
     await runExportJob({

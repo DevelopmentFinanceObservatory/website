@@ -1063,11 +1063,13 @@ export const runAndExit = async (
             code = 1;
         }
     } catch (error) {
-        logError(
-            new ExportJobError(`export Job failed: ${messageOf(error)}`, progress, {
-                rejected: error,
-            }),
-        );
+        // A phase that failed names its error in its own line.
+        const lead =
+            progress.failures.length > 0
+                ? 'export Job failed'
+                : `export Job failed: ${messageOf(error)}`;
+
+        logError(new ExportJobError(lead, progress, { rejected: error }));
         code = 1;
     }
 
@@ -1079,7 +1081,8 @@ export const readExportEnv = () => ({
     projectId: requiredEnv('EXPORT_BQ_PROJECT'),
     datasetId: requiredEnv('EXPORT_BQ_DATASET'),
     // The dataset's location, which every load job runs in and is read back
-    // from (loadWithin): a job looked up elsewhere reads as unknown.
-    location: requiredEnv('EXPORT_BQ_LOCATION'),
+    // from (loadWithin): a job looked up elsewhere reads as unknown. Unset,
+    // exportBigQuery reads it from the dataset.
+    location: process.env.EXPORT_BQ_LOCATION || undefined,
     hmacKey: requiredEnv('EXPORT_ID_HMAC_KEY'),
 });

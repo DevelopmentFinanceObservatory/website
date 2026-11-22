@@ -309,7 +309,7 @@ test(
                 'an upload stalled past the load bound before its file was read to its end',
                 { stall: true, file: LARGE_FILE, states: [NOT_FOUND] },
                 'kept',
-                (calls) => assert.deepEqual(calls.slice(0, 3), ['load', 'abort', 'cancel']),
+                (calls) => assert.deepEqual(calls, ['load', 'abort']),
             ],
             [
                 'a file whose read fails before its end',
@@ -388,7 +388,7 @@ test(
             query: never,
         } as unknown as BigQuery;
         const callMs = 20;
-        const dataset = exportBigQuery({
+        const dataset = await exportBigQuery({
             projectId: 'p',
             datasetId: 'd',
             location: 'EU',
@@ -412,6 +412,69 @@ test(
         }
     },
 );
+
+test('exportBigQuery runs in the location it is given, else in the one the dataset names', async (t) => {
+    /** A client whose dataset names `named`, and the calls it gets. */
+    const client = (named?: string) => {
+        const calls: unknown[] = [];
+        const bigquery = {
+            dataset: (id: string, options?: { location?: string }) => {
+                calls.push(['dataset', id, options?.location]);
+                return {
+                    getMetadata: async () => {
+                        calls.push(['getMetadata']);
+                        return [{ location: named }];
+                    },
+                };
+            },
+            query: async ({ location }: { location?: string }) => {
+                calls.push(['query', location]);
+                return [[]];
+            },
+        } as unknown as BigQuery;
+
+        return { bigquery, calls };
+    };
+    const cases: [string, string | undefined, string | undefined, unknown[]][] = [
+        [
+            'a location given',
+            'EU',
+            'US',
+            [
+                ['dataset', 'd', 'EU'],
+                ['query', 'EU'],
+            ],
+        ],
+        [
+            'no location given',
+            undefined,
+            'EU',
+            [['dataset', 'd', undefined], ['getMetadata'], ['dataset', 'd', 'EU'], ['query', 'EU']],
+        ],
+    ];
+
+    for (const [label, location, named, expected] of cases) {
+        await t.test(label, async () => {
+            const { bigquery, calls } = client(named);
+            const dataset = await exportBigQuery({
+                projectId: 'p',
+                datasetId: 'd',
+                location,
+                bigquery,
+            });
+
+            await dataset.query('SELECT 1');
+            assert.equal(dataset.location, 'EU');
+            assert.deepEqual(calls, expected);
+        });
+    }
+
+    await t.test('no location given or named', async () => {
+        const { bigquery } = client(undefined);
+
+        await assert.rejects(exportBigQuery({ projectId: 'p', datasetId: 'd', bigquery }));
+    });
+});
 
 /**
  * A TCP proxy to the test Postgres that forwards until told to stall, then

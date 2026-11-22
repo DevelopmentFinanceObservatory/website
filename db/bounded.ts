@@ -257,8 +257,7 @@ const finalState = async (
  * - A file that cannot be read sends no request: `kept`.
  * - An upload that fails, or that BigQuery has not answered by `timeoutMs`,
  *   before the file was read to its end is aborted and created no job:
- *   `kept`, at once on a failure, after the cancel and confirm below at
- *   `timeoutMs`.
+ *   `kept`, at once, with no cancel.
  * - A job insert BigQuery answered with a 401 or 403 created no job:
  *   `kept`, at once. One answered with a 400 or 404 created none when its
  *   job id then reads as unknown to BigQuery: `kept`, at once.
@@ -333,7 +332,7 @@ export const loadWithin = async ({
         load.catch(() => undefined);
 
         let failure: { error: unknown } | undefined;
-        // An upload aborted at the timeout, and whether its body had ended.
+        // An upload aborted at the timeout after its body ended.
         let aborted: { sent: boolean } | undefined;
 
         try {
@@ -345,6 +344,16 @@ export const loadWithin = async ({
                 aborted = { sent };
                 source.destroy();
                 upload.destroy();
+
+                // An incomplete request creates no job, so there is none to cancel.
+                if (!sent) {
+                    return {
+                        outcome: 'kept',
+                        error: new Error(
+                            `upload ran past ${timeoutMs / 1000} s and was aborted before its body ended`,
+                        ),
+                    };
+                }
             }
         } catch (error) {
             failure = { error };
@@ -395,7 +404,7 @@ export const loadWithin = async ({
 
         const ended =
             aborted !== undefined
-                ? `upload ran past ${timeoutMs / 1000} s and was aborted ${aborted.sent ? 'after' : 'before'} its body ended`
+                ? `upload ran past ${timeoutMs / 1000} s and was aborted after its body ended`
                 : failure === undefined
                   ? `load ran past ${timeoutMs / 1000} s`
                   : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
@@ -403,8 +412,7 @@ export const loadWithin = async ({
             cancel === TIMED_OUT ? `cancel unanswered after ${cancelTimeoutMs / 1000} s` : cancel;
 
         return {
-            // An incomplete request creates no job.
-            outcome: aborted?.sent === false ? 'kept' : outcome,
+            outcome,
             error: new Error(`${ended}, ${cancelled}`, { cause: failure?.error }),
         };
     } catch (error) {
@@ -433,6 +441,8 @@ export const settleLoad = async (load: () => Promise<Load>): Promise<Load> => {
 
 /** The export's BigQuery dataset, each call bounded in time. */
 export type ExportBigQuery = {
+    /** The dataset's location, where every query and load job runs and is read back. */
+    location: string;
     tableExists(table: string): Promise<boolean>;
     createTable(table: string, options: TableMetadata): Promise<void>;
     /** The table's schema fields, none for a table without a schema. */
@@ -444,25 +454,24 @@ export type ExportBigQuery = {
 };
 
 /**
- * The ExportBigQuery over the dataset `datasetId`, in `location`, where
- * each load runs and is read back. Every call but `load` throws once
- * `callMs` pass with it unanswered.
+ * The ExportBigQuery over the dataset `datasetId` in `location`, where each
+ * query and load runs and is read back. Without `location` it reads the
+ * dataset's own once, in one bounded call, and throws when that gives none.
+ * Every call but `load` throws once `callMs` pass with it unanswered.
  */
-export const exportBigQuery = ({
+export const exportBigQuery = async ({
     projectId,
     datasetId,
     location,
-    bigquery = new BigQuery({ projectId, location }),
+    bigquery = new BigQuery({ projectId }),
     callMs = BIGQUERY_CALL_MS,
 }: {
     projectId: string;
     datasetId: string;
-    location: string;
+    location?: string;
     bigquery?: BigQuery;
     callMs?: number;
-}): ExportBigQuery => {
-    const dataset = bigquery.dataset(datasetId);
-
+}): Promise<ExportBigQuery> => {
     const call = async <T>(work: Promise<T>): Promise<T> => {
         const result = await within(work, callMs);
 
@@ -473,7 +482,20 @@ export const exportBigQuery = ({
         return result;
     };
 
+    const datasetLocation =
+        location ?? (await call(bigquery.dataset(datasetId).getMetadata()))[0].location;
+
+    if (!datasetLocation) {
+        throw new Error(
+            `no location for the dataset ${datasetId}: EXPORT_BQ_LOCATION is unset and the dataset names none`,
+        );
+    }
+
+    // Each table of the dataset takes its location, and each load with it.
+    const dataset = bigquery.dataset(datasetId, { location: datasetLocation });
+
     return {
+        location: datasetLocation,
         async tableExists(table) {
             const [exists] = await call(dataset.table(table).exists());
 
@@ -494,6 +516,7 @@ export const exportBigQuery = ({
                     params,
                     maximumBytesBilled: String(MAX_BYTES_BILLED),
                     jobTimeoutMs: BIGQUERY_TIMEOUT_MS,
+                    location: datasetLocation,
                 }),
             );
 

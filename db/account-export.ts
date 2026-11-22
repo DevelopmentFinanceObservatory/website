@@ -363,11 +363,15 @@ export const runAccountExport = async ({
         log(`${table}: ${message}, table ${outcome}`);
     };
 
-    const write = async (table: AccountTable, rows: object[]) => {
+    // `build` makes the table's rows, so a row it cannot make fails that table alone.
+    const write = async (table: AccountTable, build: () => object[]) => {
+        let rows: object[];
+
         try {
+            rows = build();
             await fs.writeFile(scratchFile, rows.map((row) => `${JSON.stringify(row)}\n`).join(''));
         } catch (error) {
-            fail(table, `scratch file not written, ${messageOf(error)}`, 'kept', error);
+            fail(table, `rows not written, ${messageOf(error)}`, 'kept', error);
             return;
         }
 
@@ -393,11 +397,11 @@ export const runAccountExport = async ({
         );
     };
 
-    const load = async (table: AccountTable, rows: object[]) => {
+    const load = async (table: AccountTable, build: () => object[]) => {
         progress.accounts = `the load of ${table}`;
 
         try {
-            await write(table, rows);
+            await write(table, build);
         } finally {
             try {
                 await fs.rm(scratchFile, { force: true });
@@ -436,9 +440,8 @@ export const runAccountExport = async ({
             fail('account_daily', 'read no rows, webmail_domain is empty', 'kept');
             fail('account_organisation', 'read no rows, webmail_domain is empty', 'kept');
         } else {
-            await load('account_daily', rows);
-            await load(
-                'account_organisation',
+            await load('account_daily', () => rows);
+            await load('account_organisation', () =>
                 organisations.map((source) => accountOrganisationRow(source, hmacKey)),
             );
         }
@@ -453,8 +456,7 @@ export const runAccountExport = async ({
     }
 
     if (conversations !== undefined) {
-        await load(
-            'conversation',
+        await load('conversation', () =>
             conversations.map((source) => conversationRow(source, hmacKey)),
         );
     }

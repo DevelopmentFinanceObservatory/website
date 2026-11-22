@@ -24,8 +24,8 @@ const eslintConfig = defineConfig([
     "prototypes/node_modules/**",
   ]),
   // The export Job reaches Postgres and BigQuery only through db/bounded.ts,
-  // whose clients bound every call in time. It still imports the Cloud SQL
-  // connector's setup from db/connection.ts, but none of its pool builders.
+  // whose clients bound every call in time. It imports the Cloud SQL
+  // connector's setup from db/connection.ts and none of its pool builders.
   {
     files: ["db/event-export.ts", "db/account-export.ts", "db/export-events.ts"],
     rules: {

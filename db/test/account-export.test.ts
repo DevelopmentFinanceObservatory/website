@@ -636,6 +636,40 @@ test('runAccountExport loads the later tables after a failed load, then rejects 
     }
 });
 
+test('runAccountExport fails a table whose rows it cannot make and loads the others', async () => {
+    const { loaded, replace } = capture();
+
+    await assert.rejects(
+        runAccountExport({
+            readAccounts: async () => ({
+                rows: ROWS,
+                // A user id the view should never hold, so its digest cannot be made.
+                organisations: [
+                    ...ORGANISATIONS,
+                    { userId: null as unknown as string, organisation: 'one.org' },
+                ],
+                webmailDomains: true,
+            }),
+            readConversations: async () => CONVERSATIONS,
+            replace,
+            hmacKey: HMAC_KEY,
+            scratchFile: scratchFile(),
+            log: () => {},
+        }),
+        (error) => {
+            assert.ok(error instanceof AccountExportError);
+            assert.deepEqual(error.failedTables, [
+                { table: 'account_organisation', outcome: 'kept' },
+            ]);
+            return true;
+        },
+    );
+    assert.deepEqual(
+        loaded.map(({ table }) => table),
+        ['account_daily', 'conversation'],
+    );
+});
+
 test('runAccountExport loads one read group when the other read fails', async (t) => {
     const failure = new Error('read boom');
     const cases: [string, boolean, boolean, AccountTable[], AccountTable[]][] = [

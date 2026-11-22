@@ -1569,6 +1569,30 @@ test(
     },
 );
 
+test("runAndExit names a failed phase's error once, in that phase's line", async () => {
+    const failure = new Error('event table check failed');
+    const logged: unknown[] = [];
+
+    await runAndExit(
+        (progress) =>
+            runExportJob({
+                exportEvents: async () => {
+                    throw failure;
+                },
+                exportAccounts: async () => undefined,
+                progress,
+            }),
+        { exit: () => undefined, logError: (error) => logged.push(error) },
+    );
+
+    const [error] = logged;
+
+    assert.ok(error instanceof ExportJobError);
+    assert.equal(error.cause, failure);
+    assert.equal(error.events, `failed: ${failure.message}`);
+    assert.equal(error.message.split(failure.message).length - 1, 1);
+});
+
 test('runAndExit exits with 0 after main resolves, and with 1 after one error naming each phase when it rejects', async (t) => {
     const failure = new Error('table check failed');
     const cases: [string, Parameters<typeof runAndExit>[0], number, [string, string][]][] = [
