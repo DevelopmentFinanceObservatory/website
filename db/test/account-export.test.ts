@@ -4,7 +4,6 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { BigQuery } from '@google-cloud/bigquery';
 import freeEmailDomains from 'free-email-domains';
 import { Pool } from 'pg';
 import {
@@ -24,7 +23,7 @@ import {
     readConversations,
     runAccountExport,
 } from '../account-export.ts';
-import { LoadError } from '../bounded.ts';
+import { type ExportBigQuery, exportDb, type Load } from '../bounded.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { exportRow, exportRules } from '../event-export.ts';
 import { EXPORT_READER_ROLE } from '../local-roles.ts';
@@ -68,11 +67,14 @@ const eventUserHash = (userId: string) =>
         exportRules(HMAC_KEY),
     ).user_hash;
 
+const REPLACED: Load = { outcome: 'replaced', late: null };
+
 /** A `replace` that keeps each table's loaded rows, parsed. */
 const capture = () => {
     const loaded: { table: AccountTable; text: string }[] = [];
-    const replace = async (table: AccountTable, file: string) => {
+    const replace = async (table: AccountTable, file: string): Promise<Load> => {
         loaded.push({ table, text: await fs.readFile(file, 'utf8') });
+        return REPLACED;
     };
     const rows = (table: AccountTable): unknown[] =>
         loaded
@@ -199,8 +201,8 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
         options: `-c TimeZone=${hour >= 12 ? 'Etc/GMT-14' : 'Etc/GMT+12'}`,
     });
 
-    const read = await readAccounts(readerPool);
-    const conversations = await readConversations(readerPool);
+    const read = await readAccounts(exportDb(readerPool));
+    const conversations = await readConversations(exportDb(readerPool));
     const { rows, webmailDomains } = read;
 
     assert.equal(webmailDomains, true);
@@ -322,7 +324,7 @@ test('account_daily and account_organisation name a domain only once it holds 3 
               as seed (email, back)`,
     );
 
-    const { rows, organisations } = await readAccounts(database.adminPool());
+    const { rows, organisations } = await readAccounts(exportDb(database.adminPool()));
 
     assert.deepEqual(
         rows.map(({ organisation, accounts }) => [organisation, accounts]),
@@ -353,7 +355,7 @@ test('account_daily and account_organisation leave out an account being deleted'
          from unnest(array['a@three.org', 'b@three.org', 'c@three.org', 'gone@three.org']) as seed (email)`,
     );
 
-    const { rows, organisations } = await readAccounts(database.adminPool());
+    const { rows, organisations } = await readAccounts(exportDb(database.adminPool()));
 
     assert.deepEqual(
         rows
@@ -389,14 +391,15 @@ test('account_daily holds no rows while webmail_domain is empty, and the export 
     await assert.rejects(
         runAccountExport({
             readAccounts: async () => {
-                const read = await readAccounts(database.adminPool());
+                const read = await readAccounts(exportDb(database.adminPool()));
 
                 assert.deepEqual(read.organisations, []);
                 return read;
             },
-            readConversations: () => readConversations(database.adminPool()),
+            readConversations: () => readConversations(exportDb(database.adminPool())),
             replace: async (table) => {
                 replaced.push(table);
+                return REPLACED;
             },
             hmacKey: HMAC_KEY,
             scratchFile: scratchFile(),
@@ -421,12 +424,12 @@ test('readAccounts reads no rows from an empty user table', async (t) => {
 
     await migrate(database);
 
-    assert.deepEqual(await readAccounts(database.adminPool()), {
+    assert.deepEqual(await readAccounts(exportDb(database.adminPool())), {
         rows: [],
         organisations: [],
         webmailDomains: true,
     });
-    assert.deepEqual(await readConversations(database.adminPool()), []);
+    assert.deepEqual(await readConversations(exportDb(database.adminPool())), []);
 });
 
 test('syncWebmailDomains rewrites webmail_domain to the package list', async (t) => {
@@ -447,27 +450,6 @@ test('syncWebmailDomains rewrites webmail_domain to the package list', async (t)
     );
 });
 
-const fakeBigQuery = () => {
-    const loads: { table: string; file: string; metadata: Record<string, unknown> }[] = [];
-    const bigquery = {
-        dataset: (dataset: string) => ({
-            table: (table: string) => ({
-                bigQuery: { job: () => ({}) },
-                createLoadJob: async (
-                    file: string,
-                    { jobId, ...metadata }: Record<string, unknown>,
-                ) => {
-                    assert.equal(typeof jobId, 'string');
-                    loads.push({ table: `${dataset}.${table}`, file, metadata });
-                    return [{ promise: async () => [{}] }];
-                },
-            }),
-        }),
-    } as unknown as BigQuery;
-
-    return { bigquery, loads };
-};
-
 test('bigQueryAccountTable replaces the whole table in one load', async (t) => {
     const cases: [AccountTable, typeof ACCOUNT_SCHEMA][] = [
         ['account_daily', ACCOUNT_SCHEMA],
@@ -482,83 +464,33 @@ test('bigQueryAccountTable replaces the whole table in one load', async (t) => {
 
     for (const [table, fields] of cases) {
         await t.test(table, async () => {
-            const { bigquery, loads } = fakeBigQuery();
+            const loads: unknown[] = [];
+            const bigquery = {
+                load: async (...load: unknown[]) => {
+                    loads.push(load);
+                    return REPLACED;
+                },
+            } as unknown as ExportBigQuery;
 
-            await bigQueryAccountTable({ datasetId: 'd', bigquery })(table, '/tmp/accounts.ndjson');
-
+            assert.deepEqual(
+                await bigQueryAccountTable(bigquery)(table, '/tmp/accounts.ndjson'),
+                REPLACED,
+            );
             assert.deepEqual(loads, [
-                {
-                    table: `d.${table}`,
-                    file: '/tmp/accounts.ndjson',
-                    metadata: {
+                [
+                    table,
+                    '/tmp/accounts.ndjson',
+                    {
                         sourceFormat: 'NEWLINE_DELIMITED_JSON',
                         writeDisposition: 'WRITE_TRUNCATE',
                         schema: { fields },
                     },
-                },
+                ],
             ]);
             assert.ok(fields.every((field) => field.description));
         });
     }
 });
-
-test(
-    'each account read fails past its bound and destroys its client',
-    { timeout: 5_000 },
-    async (t) => {
-        const cases: [string, (pool: Pool) => Promise<unknown>][] = [
-            ['readAccounts', (pool) => readAccounts(pool, { timeoutMs: 20, graceMs: 0 })],
-            ['readConversations', (pool) => readConversations(pool, { timeoutMs: 20, graceMs: 0 })],
-        ];
-
-        for (const [label, read] of cases) {
-            await t.test(label, async () => {
-                const queries: string[] = [];
-                const released: unknown[] = [];
-                const pool = {
-                    connect: async () => ({
-                        // BEGIN answers, and the view's read never does, as over a stalled tunnel.
-                        query: (text: string) => {
-                            queries.push(text.trim().split(/\s/, 1)[0]!);
-                            return text.startsWith('BEGIN')
-                                ? Promise.resolve({ rows: [] })
-                                : new Promise(() => undefined);
-                        },
-                        release: (error?: unknown) => released.push(error),
-                    }),
-                } as unknown as Pool;
-
-                await assert.rejects(read(pool));
-                assert.deepEqual(queries, ['BEGIN', 'SELECT']);
-                assert.equal(released.length, 1);
-                assert.ok(released[0] instanceof Error);
-            });
-        }
-    },
-);
-
-test(
-    'an account read whose connection comes after its bound destroys that connection',
-    { timeout: 5_000 },
-    async () => {
-        const released: unknown[] = [];
-        let arrive: (client: unknown) => void = () => undefined;
-        const pool = {
-            connect: () =>
-                new Promise((resolve) => {
-                    arrive = resolve;
-                }),
-        } as unknown as Pool;
-
-        await assert.rejects(readAccounts(pool, { timeoutMs: 20, graceMs: 0 }));
-        arrive({
-            query: async () => ({ rows: [] }),
-            release: (error?: unknown) => released.push(error),
-        });
-        await new Promise((resolve) => setImmediate(resolve));
-        assert.deepEqual(released, [true]);
-    },
-);
 
 const ROWS: AccountRow[] = [
     { day: '2026-10-20', organisation: 'Personal email', accounts: 4 },
@@ -656,13 +588,10 @@ test('runAccountExport empties every table on an empty read', async () => {
 
 test('runAccountExport loads the later tables after a failed load, then rejects naming each failure', async () => {
     const { loaded, replace } = capture();
-    const failing = async (table: AccountTable, file: string) => {
-        if (table === 'account_daily') {
-            throw new Error('load boom');
-        }
-
-        await replace(table, file);
-    };
+    const failing = async (table: AccountTable, file: string): Promise<Load> =>
+        table === 'account_daily'
+            ? { outcome: 'kept', error: new Error('load boom') }
+            : replace(table, file);
 
     await assert.rejects(
         runAccountExport({
@@ -763,16 +692,16 @@ test('runAccountExport fails a load BigQuery left kept or unknown, and counts a 
                 webmailDomains: true,
             }),
             readConversations: async () => CONVERSATIONS,
-            replace: async (table) => {
+            replace: async (table): Promise<Load> => {
                 if (table === 'account_organisation') {
                     replaced.push(table);
-                    return { late: 'timeout' };
+                    return { outcome: 'replaced', late: 'timeout' };
                 }
 
-                throw new LoadError(
-                    'load ran past 120 s, cancel failed',
-                    table === 'account_daily' ? 'unknown' : 'kept',
-                );
+                return {
+                    outcome: table === 'account_daily' ? 'unknown' : 'kept',
+                    error: new Error('load ran past 120 s, cancel failed'),
+                };
             },
             hmacKey: HMAC_KEY,
             scratchFile: scratchFile(),

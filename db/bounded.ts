@@ -1,24 +1,114 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import type { Job, JobLoadMetadata, Table } from '@google-cloud/bigquery';
+import {
+    BigQuery,
+    type Job,
+    type JobLoadMetadata,
+    type Table,
+    type TableField,
+    type TableMetadata,
+} from '@google-cloud/bigquery';
+import type { Pool } from 'pg';
+
+import { buildRuntimePool } from './connection.ts';
 
 /**
- * Time bounds for the export Job's calls (db/export-events.ts) whose
- * clients take none: a database query over a connection that stalls past
- * Postgres's own timeout, a BigQuery call, and a BigQuery load of a local
- * file and its cancel.
+ * The export Job's clients (db/export-events.ts), every call on them bounded
+ * in time: ExportDb for Postgres, whose pool bounds each statement, and
+ * ExportBigQuery for BigQuery, which bounds each call and load itself. The
+ * export modules reach Postgres and BigQuery only through these, as
+ * eslint.config.mjs enforces.
  */
 
-/** The `statement_timeout` of the export Job's pool. */
-export const STATEMENT_TIMEOUT_MS = 5 * 60_000;
+export type { TableField };
 
 /**
- * How long past its server-side bound a query may run before the Job stops
- * waiting for it, for a connection that stalls where the server's timeout
- * cannot reach it.
+ * How long past its server-side bound a statement or a BigQuery query may
+ * run before the Job stops waiting for it, for a connection that stalls
+ * where the server's timeout cannot reach it.
  */
 export const QUERY_GRACE_MS = 5_000;
+
+/** How long an export pool waits for a connection, its checkout included. */
+export const CONNECTION_TIMEOUT_MS = 30_000;
+
+/**
+ * A pool of one connection for one export phase. Postgres stops each of its
+ * statements at `statementMs` (`statement_timeout`), and the Job stops
+ * waiting for any of them, a BEGIN or COMMIT included, `graceMs` later
+ * (`query_timeout`), whether or not the server can still answer. A
+ * connection not made in `connectionMs` fails the call that asked for it.
+ */
+export const exportPool = (
+    env: Record<string, string | undefined>,
+    {
+        statementMs,
+        graceMs = QUERY_GRACE_MS,
+        connectionMs = CONNECTION_TIMEOUT_MS,
+    }: { statementMs: number; graceMs?: number; connectionMs?: number },
+): Pool =>
+    buildRuntimePool(env, {
+        max: 1,
+        statement_timeout: statementMs,
+        query_timeout: statementMs + graceMs,
+        connectionTimeoutMillis: connectionMs,
+    });
+
+/** An export phase's database, each statement bounded by its pool (exportPool). */
+export type ExportDb = {
+    /** One statement on a pooled connection. */
+    query<T>(sql: string, params?: unknown[]): Promise<T[]>;
+    /** `read`'s statements in one REPEATABLE READ READ ONLY transaction. */
+    snapshot<T>(read: (query: ExportDb['query']) => Promise<T>): Promise<T>;
+};
+
+/**
+ * The ExportDb over `pool`. A call that fails returns its connection with
+ * the error, which destroys it: a statement the Job stopped waiting for is
+ * still in flight on it, and a failed snapshot leaves its transaction open.
+ * The next call opens a new connection.
+ */
+export const exportDb = (pool: Pool): ExportDb => ({
+    async query(sql, params) {
+        // pool.query returns its client with any error.
+        const { rows } = await pool.query(sql, params);
+
+        return rows;
+    },
+    async snapshot(read) {
+        const client = await pool.connect();
+
+        try {
+            await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+
+            const value = await read(async (sql, params) => (await client.query(sql, params)).rows);
+
+            await client.query('COMMIT');
+            client.release();
+
+            return value;
+        } catch (error) {
+            client.release(error instanceof Error ? error : true);
+            throw error;
+        }
+    },
+});
+
+/** How long one BigQuery query may run on the server (`jobTimeoutMs`). */
+const BIGQUERY_TIMEOUT_MS = 2 * 60_000;
+
+/**
+ * How long the Job waits for one BigQuery call, a query or a table read or
+ * create, before it gives up on it: BIGQUERY_TIMEOUT_MS plus the grace.
+ * The client bounds each HTTP attempt, retries it, and polls a query until
+ * its job ends, so nothing bounds a call as a whole.
+ */
+const BIGQUERY_CALL_MS = BIGQUERY_TIMEOUT_MS + QUERY_GRACE_MS;
+
+/** The most one BigQuery query may bill (`maximumBytesBilled`). */
+export const MAX_BYTES_BILLED = 1e9;
 
 /** How long one BigQuery load may run, upload included. */
 export const LOAD_TIMEOUT_MS = 2 * 60_000;
@@ -44,45 +134,21 @@ const CONFIRM_POLL_MS = 2_000;
 export const LOAD_SLOT_MS = LOAD_TIMEOUT_MS + CANCEL_TIMEOUT_MS + CONFIRM_TIMEOUT_MS;
 
 /**
- * What a load left in its table, as far as BigQuery confirms it: the
- * file's rows when its job is DONE without an error (`replaced`), the
- * table as it was when its job is DONE with one (`kept`), and either in
- * every other case (`unknown`): a job still pending or running, a job id
- * BigQuery does not know, which an upload still in flight can yet create,
- * or a state that cannot be read.
+ * What a load left in its table, as far as BigQuery confirms it.
+ * `replaced`: the job is DONE without an error, and `late` says when that
+ * was confirmed: null when the client reported it in time, `failure` after
+ * the client reported a failure, `timeout` after the load's timeout and its
+ * cancel. `kept`: no request was sent, the job is DONE with an error, or
+ * BigQuery refused the job's insert and knows no job of its id. `unknown`:
+ * anything else, such as a job still running, a job id BigQuery does not
+ * know after a request that got no answer, or a state that cannot be read.
  */
-type LoadOutcome = 'kept' | 'replaced' | 'unknown';
+export type Load =
+    | { outcome: 'replaced'; late: null | 'timeout' | 'failure' }
+    | { outcome: 'kept' | 'unknown'; error: Error };
 
-/** What a failed load left in its table. Only these outcomes are failures. */
-export type FailedOutcome = Exclude<LoadOutcome, 'replaced'>;
-
-/**
- * What a load that replaced its table resolves to. `late` is null for a
- * load whose client reported success in time. Otherwise the client did not
- * report it, and BigQuery confirmed the job DONE without an error: within
- * the load's budget after the client reported a failure (`failure`), or
- * after the budget ended and the job was cancelled (`timeout`).
- */
-export type LoadResult = { late: null | 'timeout' | 'failure' };
-
-/** What loadWithin throws: the failure and the outcome BigQuery confirmed. */
-export class LoadError extends Error {
-    readonly outcome: FailedOutcome;
-
-    constructor(message: string, outcome: FailedOutcome, options?: ErrorOptions) {
-        super(message, options);
-        this.name = 'LoadError';
-        this.outcome = outcome;
-    }
-}
-
-/**
- * What a failed load left in its table. Any error but a LoadError comes
- * from before loadWithin was called, so no request reached BigQuery and
- * the table is `kept`.
- */
-export const loadOutcome = (error: unknown): FailedOutcome =>
-    error instanceof LoadError ? error.outcome : 'kept';
+/** A load that did not replace its table. */
+export type FailedLoad = Extract<Load, { error: Error }>;
 
 /** What `within` resolves to when `work` is still running at `ms`. */
 export const TIMED_OUT = Symbol('timed out');
@@ -106,23 +172,38 @@ export const within = async <T>(work: Promise<T>, ms: number): Promise<T | typeo
     }
 };
 
-/** `call`'s result, or a throw of `timedOut()` once `ms` pass with it still running. */
-export const callWithin = async <T>(
-    call: Promise<T>,
-    ms: number,
-    timedOut: () => Error,
-): Promise<T> => {
-    const result = await within(call, ms);
-
-    if (result === TIMED_OUT) {
-        throw timedOut();
-    }
-
-    return result;
-};
-
 const messageOf = (error: unknown): string =>
     error instanceof Error ? error.message : String(error);
+
+/** The HTTP status a client error carries, as the BigQuery client's ApiError `code`. */
+const httpStatus = (error: unknown): number | undefined =>
+    typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'number'
+        ? error.code
+        : undefined;
+
+/** The statuses of a job insert BigQuery answered and refused, creating no job. */
+const REFUSED = new Set([400, 401, 403, 404]);
+
+/**
+ * One read of a job's state: DONE without an error (`replaced`) or with one
+ * (`kept`), not yet DONE (`running`), an id BigQuery does not know
+ * (`absent`), or a read that failed otherwise (`unreadable`).
+ */
+const readState = async (
+    job: Job,
+): Promise<'replaced' | 'kept' | 'running' | 'absent' | 'unreadable'> => {
+    try {
+        const [metadata] = await job.getMetadata();
+
+        if (metadata.status?.state !== 'DONE') {
+            return 'running';
+        }
+
+        return metadata.status.errorResult ? 'kept' : 'replaced';
+    } catch (error) {
+        return httpStatus(error) === 404 ? 'absent' : 'unreadable';
+    }
+};
 
 /**
  * The job's final state, read every `pollMs` until it is DONE or `ms`
@@ -130,25 +211,17 @@ const messageOf = (error: unknown): string =>
  * leaves its table as it was, `replaced` when it succeeded, and `unknown`
  * when no read by `ms` found it DONE.
  */
-const finalState = async (job: Job, ms: number, pollMs: number): Promise<LoadOutcome> => {
+const finalState = async (
+    job: Job,
+    ms: number,
+    pollMs: number,
+): Promise<'replaced' | 'kept' | 'unknown'> => {
     const until = Date.now() + ms;
-    const read = async (): Promise<LoadOutcome | null> => {
-        const [metadata] = await job.getMetadata();
-
-        if (metadata.status?.state !== 'DONE') {
-            return null;
-        }
-
-        return metadata.status.errorResult ? 'kept' : 'replaced';
-    };
 
     for (;;) {
-        const state = await within(
-            read().catch(() => null),
-            Math.max(0, until - Date.now()),
-        );
+        const state = await within(readState(job), Math.max(0, until - Date.now()));
 
-        if (state !== TIMED_OUT && state !== null) {
+        if (state === 'replaced' || state === 'kept') {
             return state;
         }
 
@@ -163,24 +236,22 @@ const finalState = async (job: Job, ms: number, pollMs: number): Promise<LoadOut
 };
 
 /**
- * Loads `file` into `table` under a job id of its own, and resolves once
- * the upload is done and the client reports the job finished. The outcome
- * of any other load is what BigQuery confirms for that job id, read in the
- * table's location:
+ * Loads `file` into `table` under a job id of its own, and resolves with
+ * what BigQuery confirms the load left in the table (Load), read for that
+ * job id in the table's location. It never rejects.
  *
- * - a client error before `timeoutMs` is followed by reads of the job's
- *   state until `timeoutMs` from the start, since the job may still be
- *   running or not yet created;
- * - a load with no confirmed final state at `timeoutMs`, whether its client
+ * - A file that cannot be read sends no request: `kept`.
+ * - A job insert BigQuery answered with a 400, 401, 403 or 404, whose job
+ *   id then reads as unknown to BigQuery, created no job: `kept`, at once.
+ * - Any other client error before `timeoutMs` is followed by reads of the
+ *   job's state until `timeoutMs` from the start, since the job may still
+ *   be running or not yet created.
+ * - A load with no confirmed final state at `timeoutMs`, whether its client
  *   is still waiting or failed earlier, is cancelled, the cancel waited for
  *   at most `cancelTimeoutMs`, and the job's state read for at most
  *   `confirmTimeoutMs`, so no load is left running uncancelled.
  *
- * A job DONE without an error replaced the table, so the call resolves
- * with `late`. Any other state throws a LoadError whose `outcome` says what
- * the table holds (LoadOutcome). No point in the client's upload proves
- * that no request reached BigQuery, so a failure before the job exists is
- * `unknown`. One call thus takes at most `timeoutMs + cancelTimeoutMs +
+ * One call thus takes at most `timeoutMs + cancelTimeoutMs +
  * confirmTimeoutMs`, LOAD_SLOT_MS by default.
  */
 export const loadWithin = async ({
@@ -199,61 +270,165 @@ export const loadWithin = async ({
     cancelTimeoutMs?: number;
     confirmTimeoutMs?: number;
     pollMs?: number;
-}): Promise<LoadResult> => {
-    const jobId = `website_export_${randomUUID()}`;
-    const job = table.bigQuery.job(jobId, { location: table.location });
-    const deadline = Date.now() + timeoutMs;
-    // The client deletes `jobId` from the metadata it is given.
-    const load = table
-        .createLoadJob(file, { ...metadata, jobId })
-        .then(([created]) => created.promise());
-
-    // A load left running past its timeout settles unobserved.
-    load.catch(() => undefined);
-
-    let failure: { error: unknown } | undefined;
+}): Promise<Load> => {
+    try {
+        await fs.stat(file);
+    } catch (error) {
+        return {
+            outcome: 'kept',
+            error: new Error(`load not sent: ${messageOf(error)}`, { cause: error }),
+        };
+    }
 
     try {
-        if ((await within(load, timeoutMs)) !== TIMED_OUT) {
-            return { late: null };
-        }
-    } catch (error) {
-        failure = { error };
+        const jobId = `website_export_${randomUUID()}`;
+        const job = table.bigQuery.job(jobId, { location: table.location });
+        const deadline = Date.now() + timeoutMs;
+        let inserted = false;
+        // The client deletes `jobId` from the metadata it is given.
+        const load = table.createLoadJob(file, { ...metadata, jobId }).then(([created]) => {
+            inserted = true;
+            return created.promise();
+        });
 
-        const outcome = await finalState(job, Math.max(0, deadline - Date.now()), pollMs);
+        // A load left running past its timeout settles unobserved.
+        load.catch(() => undefined);
+
+        let failure: { error: unknown } | undefined;
+
+        try {
+            if ((await within(load, timeoutMs)) !== TIMED_OUT) {
+                return { outcome: 'replaced', late: null };
+            }
+        } catch (error) {
+            failure = { error };
+
+            const kept = (): Load => ({
+                outcome: 'kept',
+                error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
+            });
+
+            if (
+                !inserted &&
+                REFUSED.has(httpStatus(error) ?? 0) &&
+                (await within(readState(job), Math.max(0, deadline - Date.now()))) === 'absent'
+            ) {
+                return kept();
+            }
+
+            const outcome = await finalState(job, Math.max(0, deadline - Date.now()), pollMs);
+
+            if (outcome === 'replaced') {
+                return { outcome: 'replaced', late: 'failure' };
+            }
+
+            if (outcome === 'kept') {
+                return kept();
+            }
+        }
+
+        const cancel = await within(
+            job.cancel().then(
+                () => 'cancel accepted',
+                (error: unknown) => `cancel refused: ${messageOf(error)}`,
+            ),
+            cancelTimeoutMs,
+        );
+        const outcome = await finalState(job, confirmTimeoutMs, pollMs);
 
         if (outcome === 'replaced') {
-            return { late: 'failure' };
+            return { outcome: 'replaced', late: 'timeout' };
         }
 
-        if (outcome === 'kept') {
-            throw new LoadError(`load failed: ${messageOf(error)}`, outcome, { cause: error });
+        const ended =
+            failure === undefined
+                ? `load ran past ${timeoutMs / 1000} s`
+                : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
+        const cancelled =
+            cancel === TIMED_OUT ? `cancel unanswered after ${cancelTimeoutMs / 1000} s` : cancel;
+
+        return {
+            outcome,
+            error: new Error(`${ended}, ${cancelled}`, { cause: failure?.error }),
+        };
+    } catch (error) {
+        // A fault once the request may have started, which can have created the job.
+        return {
+            outcome: 'unknown',
+            error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
+        };
+    }
+};
+
+/** The export's BigQuery dataset, each call bounded in time. */
+export type ExportBigQuery = {
+    tableExists(table: string): Promise<boolean>;
+    createTable(table: string, options: TableMetadata): Promise<void>;
+    /** The table's schema fields, none for a table without a schema. */
+    tableFields(table: string): Promise<TableField[]>;
+    /** A query's rows. Its job stops on the server past 2 minutes or MAX_BYTES_BILLED. */
+    query<T>(sql: string, params?: Record<string, string>): Promise<T[]>;
+    /** Loads `file` into `table` (loadWithin). Never rejects. */
+    load(table: string, file: string, metadata: JobLoadMetadata): Promise<Load>;
+};
+
+/**
+ * The ExportBigQuery over the dataset `datasetId`, in `location`, where
+ * each load runs and is read back. Every call but `load` throws once
+ * `callMs` pass with it unanswered.
+ */
+export const exportBigQuery = ({
+    projectId,
+    datasetId,
+    location,
+    bigquery = new BigQuery({ projectId, location }),
+    callMs = BIGQUERY_CALL_MS,
+}: {
+    projectId: string;
+    datasetId: string;
+    location: string;
+    bigquery?: BigQuery;
+    callMs?: number;
+}): ExportBigQuery => {
+    const dataset = bigquery.dataset(datasetId);
+
+    const call = async <T>(work: Promise<T>): Promise<T> => {
+        const result = await within(work, callMs);
+
+        if (result === TIMED_OUT) {
+            throw new Error(`a BigQuery call ran past ${callMs / 1000} s`);
         }
-    }
 
-    const cancel = await within(
-        job.cancel().then(
-            () => 'cancel accepted',
-            (error: unknown) => `cancel refused: ${messageOf(error)}`,
-        ),
-        cancelTimeoutMs,
-    );
-    const outcome = await finalState(job, confirmTimeoutMs, pollMs);
+        return result;
+    };
 
-    if (outcome === 'replaced') {
-        return { late: 'timeout' };
-    }
+    return {
+        async tableExists(table) {
+            const [exists] = await call(dataset.table(table).exists());
 
-    const ended =
-        failure === undefined
-            ? `load ran past ${timeoutMs / 1000} s`
-            : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
+            return exists;
+        },
+        async createTable(table, options) {
+            await call(dataset.createTable(table, options));
+        },
+        async tableFields(table) {
+            const [metadata] = await call(dataset.table(table).getMetadata());
 
-    throw new LoadError(
-        `${ended}, ${
-            cancel === TIMED_OUT ? `cancel unanswered after ${cancelTimeoutMs / 1000} s` : cancel
-        }`,
-        outcome,
-        { cause: failure?.error },
-    );
+            return metadata.schema?.fields ?? [];
+        },
+        async query(sql, params) {
+            const [rows] = await call(
+                bigquery.query({
+                    query: sql,
+                    params,
+                    maximumBytesBilled: String(MAX_BYTES_BILLED),
+                    jobTimeoutMs: BIGQUERY_TIMEOUT_MS,
+                }),
+            );
+
+            return rows;
+        },
+        load: (table, file, metadata) =>
+            loadWithin({ table: dataset.table(table), file, metadata }),
+    };
 };

@@ -23,6 +23,22 @@ const eslintConfig = defineConfig([
     "prototypes/dist/**",
     "prototypes/node_modules/**",
   ]),
+  // The export Job reaches Postgres and BigQuery only through db/bounded.ts,
+  // whose clients bound every call in time.
+  {
+    files: ["db/event-export.ts", "db/account-export.ts", "db/export-events.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["pg", "@google-cloud/bigquery"].map((name) => ({
+            name,
+            message: "Use the bounded clients in db/bounded.ts.",
+          })),
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;
