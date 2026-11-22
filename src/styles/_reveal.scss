@@ -68,8 +68,8 @@
 // data-reveal="soft" plays the stock entrance.
 
 @media (prefers-reduced-motion: reduce) {
-    // Everything shows at once; the selectors repeat the entrance list above so
-    // they win on specificity.
+    // Everything shows at once; the selectors repeat the entrance selectors above
+    // at equal specificity and win because they are declared later.
     [data-reveal]:not([data-reveal-parked]),
     [data-reveal-group]:not([data-reveal-group="trigger"], [data-reveal-parked]) {
         opacity: 1;
