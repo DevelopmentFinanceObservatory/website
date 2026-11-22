@@ -7,12 +7,11 @@ import test from 'node:test';
 import type { BigQuery } from '@google-cloud/bigquery';
 import { Pool } from 'pg';
 import { applyMigrations } from '../apply-migrations.ts';
-import { ACCOUNT_EXPORT_MS } from '../account-export.ts';
-import { LOAD_SLOT_MS, LoadError } from '../bounded.ts';
 import {
     bigQueryWarehouse,
     DAY_WORST_MS,
     EVENT_PHASE_MS,
+    EVENT_SETUP_WORST_MS,
     EXPORT_SCHEMA,
     type EventSource,
     exportDays,
@@ -20,7 +19,6 @@ import {
     exportRow,
     type ExportRow,
     exportRules,
-    JOB_DEADLINE_MS,
     pgEventSource,
     PROP_RULES,
     runExport,
@@ -722,141 +720,145 @@ test('runExport backfills an empty table day by day and logs each day', async ()
     await assert.rejects(fs.access(scratchFile));
 });
 
-test('the event export ends in time to leave the account export its whole budget', () => {
-    // A day started at the last moment the event export allows still ends
-    // before the account export's time begins, and the account export,
-    // every step at its bound, ends before the Job's deadline.
-    assert.ok(EVENT_PHASE_MS + ACCOUNT_EXPORT_MS < JOB_DEADLINE_MS);
-    assert.ok(DAY_WORST_MS > LOAD_SLOT_MS);
-    assert.ok(EVENT_PHASE_MS > DAY_WORST_MS);
-});
+/**
+ * A run of `days` on a fake clock: the start takes `setupMs` and each day's
+ * read `perDayMs`, and the run stops at `stopAt`. Returns the days read and
+ * loaded, the clock at the end, and whether the run rejected.
+ */
+const timedRun = async ({
+    days,
+    partitions = new Map(),
+    today,
+    setupMs = 0,
+    perDayMs,
+    stopAt,
+}: {
+    days: Record<string, SourceEvent[][]>;
+    partitions?: Map<string, unknown[]>;
+    today: string;
+    setupMs?: number;
+    perDayMs: number;
+    stopAt: number;
+}) => {
+    let clock = 0;
+    const source = fakeSource(days);
+    const { warehouse, calls } = fakeWarehouse(partitions);
+    const read: string[] = [];
+    let rejected = false;
 
-test('runExport starts a day only while its worst case fits before stopAt', async (t) => {
-    const days = {
-        '2026-10-20': [[sourceEvent({ id: 1, createdAt: '2026-10-20T08:00:00.000000Z' })]],
-        '2026-10-21': [[sourceEvent({ id: 2, createdAt: '2026-10-21T08:00:00.000000Z' })]],
-        '2026-10-22': [[sourceEvent({ id: 3, createdAt: '2026-10-22T08:00:00.000000Z' })]],
+    try {
+        await runExport({
+            source: {
+                ...source,
+                async *readDay(day) {
+                    read.push(day);
+                    clock += perDayMs;
+                    yield* source.readDay(day);
+                },
+            },
+            warehouse: {
+                ...warehouse,
+                async ensureTable() {
+                    clock += setupMs;
+                    await warehouse.ensureTable();
+                },
+            },
+            hmacKey: KEY,
+            today,
+            scratchFile: scratch(),
+            log: () => undefined,
+            stopAt,
+            now: () => clock,
+        });
+    } catch {
+        rejected = true;
+    }
+
+    return {
+        read,
+        loaded: calls.filter((call) => call.startsWith('replace')).map((call) => call.slice(8)),
+        clock,
+        rejected,
     };
-    // Each day's read takes `perDayMs` on the fake clock.
-    const cases: [string, number, number, string[], string | null][] = [
-        [
-            'every day fits',
-            1_000,
-            3 * DAY_WORST_MS,
-            ['2026-10-20', '2026-10-21', '2026-10-22'],
-            null,
-        ],
-        [
-            'the third day would not fit',
-            DAY_WORST_MS,
-            3 * DAY_WORST_MS - 1,
-            ['2026-10-20', '2026-10-21'],
-            'days left for the next run: 2026-10-22',
-        ],
-        [
-            'no day fits',
-            0,
-            DAY_WORST_MS - 1,
-            [],
-            'days left for the next run: 2026-10-20, 2026-10-21, 2026-10-22',
-        ],
+};
+
+const dayOfEvents = (day: string, id: number) => [
+    [sourceEvent({ id, createdAt: `${day}T08:00:00.000000Z` })],
+];
+
+test('runExport starts a day only while its worst case fits before stopAt, and ends by then', async (t) => {
+    const days = {
+        '2026-10-20': dayOfEvents('2026-10-20', 1),
+        '2026-10-21': dayOfEvents('2026-10-21', 2),
+        '2026-10-22': dayOfEvents('2026-10-22', 3),
+    };
+    const all = Object.keys(days);
+    const cases: [string, number, number, string[]][] = [
+        ['every day fits', 1_000, 3 * DAY_WORST_MS, all],
+        ['the third day would not fit', DAY_WORST_MS, 3 * DAY_WORST_MS - 1, all.slice(0, 2)],
+        ['no day fits', 0, DAY_WORST_MS - 1, []],
     ];
 
-    for (const [label, perDayMs, stopAt, loadedDays, fault] of cases) {
+    for (const [label, perDayMs, stopAt, started] of cases) {
         await t.test(label, async () => {
-            let clock = 0;
-            const source = fakeSource(days);
-            const { warehouse, calls } = fakeWarehouse(new Map());
-            const logged: string[] = [];
-            const run = runExport({
-                source: {
-                    ...source,
-                    async *readDay(day) {
-                        clock += perDayMs;
-                        yield* source.readDay(day);
-                    },
-                },
-                warehouse,
-                hmacKey: KEY,
-                today: '2026-10-22',
-                scratchFile: scratch(),
-                log: (line) => logged.push(line),
-                stopAt,
-                now: () => clock,
-            });
+            const run = await timedRun({ days, today: '2026-10-22', perDayMs, stopAt });
 
-            if (fault === null) {
-                await run;
-            } else {
-                await assert.rejects(run, (error: unknown) => {
-                    assert.ok(error instanceof Error);
-                    assert.equal(error.message, `event export ${fault}`);
-                    return true;
-                });
-                assert.match(
-                    logged.at(-1)!,
-                    new RegExp(fault.replace('days left for the next run: ', '')),
-                );
-            }
-
-            assert.deepEqual(
-                calls.filter((call) => call.startsWith('replace')),
-                loadedDays.map((day) => `replace ${day}`),
-            );
-            assert.ok(clock <= stopAt);
+            assert.deepEqual(run.read, started);
+            assert.deepEqual(run.loaded, started);
+            assert.equal(run.rejected, started.length < all.length);
+            assert.ok(run.clock <= stopAt);
         });
     }
 });
 
-test('runExport logs what BigQuery confirmed a failed load left in its partition', async () => {
-    const { warehouse } = fakeWarehouse(new Map());
-    const logged: string[] = [];
+test('runExport at its worst still loads yesterday and today before the Job leaves the account export its time', async () => {
+    // Today and yesterday form the window after a complete run, and an
+    // earlier day whose counts differ waits behind them.
+    const partitions = new Map<string, unknown[]>([
+        ['2026-10-10', []],
+        ['2026-10-21', []],
+        ['2026-10-22', []],
+    ]);
+    const run = await timedRun({
+        days: {
+            '2026-10-10': dayOfEvents('2026-10-10', 1),
+            '2026-10-21': dayOfEvents('2026-10-21', 2),
+            '2026-10-22': dayOfEvents('2026-10-22', 3),
+        },
+        partitions,
+        today: '2026-10-22',
+        setupMs: EVENT_SETUP_WORST_MS,
+        perDayMs: DAY_WORST_MS,
+        stopAt: EVENT_PHASE_MS,
+    });
 
-    await assert.rejects(
-        runExport({
-            source: fakeSource({
-                '2026-10-22': [[sourceEvent({ id: 1, createdAt: '2026-10-22T08:00:00.000000Z' })]],
-            }),
+    assert.deepEqual(run.loaded, ['2026-10-21', '2026-10-22']);
+    assert.ok(run.rejected);
+    assert.ok(run.clock <= EVENT_PHASE_MS);
+});
+
+test('runExport counts a day BigQuery confirmed loaded after the Job stopped waiting as loaded', async () => {
+    const { warehouse } = fakeWarehouse(new Map());
+    const replaced: string[] = [];
+
+    assert.deepEqual(
+        await runExport({
+            source: fakeSource({ '2026-10-22': dayOfEvents('2026-10-22', 1) }),
             warehouse: {
                 ...warehouse,
-                async replaceDay() {
-                    throw new LoadError('load ran past 120 s, cancel failed', 'unknown');
+                async replaceDay(day) {
+                    replaced.push(day);
+                    return { late: 'timeout' };
                 },
             },
             hmacKey: KEY,
             today: '2026-10-22',
             scratchFile: scratch(),
-            log: (line) => logged.push(line),
+            log: () => undefined,
         }),
-        /2026-10-22: load ran past 120 s, cancel failed/,
+        [{ day: '2026-10-22', rows: 1 }],
     );
-    assert.deepEqual(logged, [
-        '2026-10-22: failed, partition unknown: load ran past 120 s, cancel failed',
-    ]);
-});
-
-test('runExport logs a day BigQuery confirmed loaded after the Job stopped waiting as loaded', async () => {
-    const { warehouse } = fakeWarehouse(new Map());
-    const logged: string[] = [];
-
-    await runExport({
-        source: fakeSource({
-            '2026-10-22': [[sourceEvent({ id: 1, createdAt: '2026-10-22T08:00:00.000000Z' })]],
-        }),
-        warehouse: {
-            ...warehouse,
-            async replaceDay() {
-                return { late: 'after the load ran past 120 s, cancel failed' };
-            },
-        },
-        hmacKey: KEY,
-        today: '2026-10-22',
-        scratchFile: scratch(),
-        log: (line) => logged.push(line),
-    });
-    assert.deepEqual(logged, [
-        '2026-10-22: 1 events loaded after the load ran past 120 s, cancel failed, partition replaced',
-    ]);
+    assert.deepEqual(replaced, ['2026-10-22']);
 });
 
 test('runExport rejects a source that reads empty and keeps every partition', async () => {

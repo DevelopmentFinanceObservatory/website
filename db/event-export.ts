@@ -474,9 +474,11 @@ export const CONNECTION_TIMEOUT_MS = 30_000;
 /**
  * How long the page queries of one day may take together, from the day's
  * start, so the wait for its connection counts too. A read past it fails
- * its day (pgEventSource).
+ * its day (pgEventSource). The busiest day so far holds 1,434 events, one
+ * page of an index range scan on `created_at`, so 90 s leaves room for
+ * days a hundred times busier.
  */
-const DAY_READ_MS = 5 * 60_000;
+const DAY_READ_MS = 90_000;
 
 /**
  * When runAndExit stops a Job run, 28 minutes from its start, two before
@@ -487,10 +489,21 @@ export const JOB_DEADLINE_MS = 28 * 60_000;
 
 /**
  * The most one day can take once runExport starts it: its pages, its
- * connection included, 305 s (DAY_READ_MS and the grace), then its load to
- * a confirmed outcome, 150 s (LOAD_SLOT_MS), 455 s.
+ * connection included, 95 s (DAY_READ_MS and the grace), then its load to
+ * a confirmed outcome, 150 s (LOAD_SLOT_MS), 245 s.
  */
 export const DAY_WORST_MS = DAY_READ_MS + QUERY_GRACE_MS + LOAD_SLOT_MS;
+
+/**
+ * The most runExport's start can take before its first day: the table
+ * check and its create, 125 s each (BIGQUERY_CALL_MS), then the day counts
+ * in Postgres, 335 s with the connection (CONNECTION_TIMEOUT_MS), the
+ * statement timeout and the grace, beside two BigQuery calls of 125 s,
+ * 585 s.
+ */
+export const EVENT_SETUP_WORST_MS =
+    2 * BIGQUERY_CALL_MS +
+    Math.max(CONNECTION_TIMEOUT_MS + STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS, 2 * BIGQUERY_CALL_MS);
 
 /**
  * Margin for the Job's work outside any bounded call: the Cloud SQL
@@ -504,16 +517,16 @@ const UNBOUNDED_WORK_MS = 60_000;
  * runAndExit stops the run at JOB_DEADLINE_MS:
  *
  *   1680 s (JOB_DEADLINE_MS)
- *   - 580 s (ACCOUNT_EXPORT_MS: two reads of 65 s, three loads of 150 s)
+ *   - 520 s (ACCOUNT_EXPORT_MS: two reads of 35 s, three loads of 150 s)
  *   - 60 s (UNBOUNDED_WORK_MS)
- *   = 1040 s.
+ *   = 1100 s.
  *
- * The event export's start takes at most 585 s: the table check and its
- * create, 125 s each (BIGQUERY_CALL_MS), then the day counts in Postgres,
- * 335 s with the connection and grace, beside two BigQuery calls of 125 s.
- * runExport then starts a day only while DAY_WORST_MS (455 s) still fits
- * before this bound, so the event export ends by it, and the days it did
- * not start wait for the next hourly run.
+ * runExport starts a day only while DAY_WORST_MS (245 s) still fits before
+ * this bound, so the event export ends by it, and the days it did not
+ * start wait for the next hourly run. Its start takes at most
+ * EVENT_SETUP_WORST_MS (585 s), and two days at their worst take 490 s,
+ * 1075 s together, so the first two days of the window always load. Those
+ * are yesterday and today in every run that follows a complete one.
  */
 export const EVENT_PHASE_MS = JOB_DEADLINE_MS - ACCOUNT_EXPORT_MS - UNBOUNDED_WORK_MS;
 
@@ -885,7 +898,7 @@ export const runExport = async ({
 
             progress.unstarted = days.slice(index + 1);
             let rows = 0;
-            let late: string | null = null;
+            let late: LoadResult['late'] = null;
             const held = partitions.get(day) ?? 0;
             const counted = events.get(day) ?? 0;
 
@@ -923,7 +936,7 @@ export const runExport = async ({
                 short.push(`${day} read ${rows} of ${held} in BigQuery`);
             } else {
                 log(
-                    `${rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`}${late ? ` ${late}, partition replaced` : ''}${belowSource}`,
+                    `${rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`}${late ? `, confirmed after the load's ${late}, partition replaced` : ''}${belowSource}`,
                 );
             }
 

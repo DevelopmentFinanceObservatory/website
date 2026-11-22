@@ -170,19 +170,30 @@ export type AccountSnapshot = {
  * How long one of the account export's two reads may take, its connection
  * included. The server stops each of its statements at the same bound, and
  * the Job stops waiting QUERY_GRACE_MS later, for a connection that stalls
- * where the server's timeout cannot reach it.
+ * where the server's timeout cannot reach it. Each read scans its tables
+ * once: `user` (one row an account) with `webmail_domain` (about 31,000
+ * domains, hashed once) for the first, and `conversation` (one row a saved
+ * conversation, its content left in TOAST) joined to `user` with two
+ * SHA-256 digests a row for the second. Postgres reads such rows at well
+ * over 100,000 a second, so even a million conversations, far past what
+ * the accounts can have saved, read in about 10 s, a third of the bound.
+ * runAccountExport logs each read's duration, so the bound can follow the
+ * measured times.
  */
-export const ACCOUNT_READ_MS = 60_000;
+export const ACCOUNT_READ_MS = 30_000;
 
 /**
  * The most the account export can take from its start: its two reads,
- * 65 s each with the grace, then a load for each of its three tables,
- * LOAD_SLOT_MS (150 s) each, 580 s. Each step has its own bound, so a slow
+ * 35 s each with the grace, then a load for each of its three tables,
+ * LOAD_SLOT_MS (150 s) each, 520 s. Each step has its own bound, so a slow
  * read or load cannot take a later one's time. The event export stops in
  * time to leave the account export this much before the Job's deadline
  * (EVENT_PHASE_MS in db/event-export.ts).
  */
 export const ACCOUNT_EXPORT_MS = 2 * (ACCOUNT_READ_MS + QUERY_GRACE_MS) + 3 * LOAD_SLOT_MS;
+
+/** An account read's bound, and how long past it the Job waits for a stalled connection. */
+type ReadBounds = { timeoutMs: number; graceMs: number };
 
 /**
  * `read`'s result from one read-only REPEATABLE READ transaction over a
@@ -193,9 +204,6 @@ export const ACCOUNT_EXPORT_MS = 2 * (ACCOUNT_READ_MS + QUERY_GRACE_MS) + 3 * LO
  * open, or a query in flight, and a release with the error discards the
  * connection with it.
  */
-/** An account read's bound, and how long past it the Job waits for a stalled connection. */
-type ReadBounds = { timeoutMs: number; graceMs: number };
-
 const readInTransaction = async <T>(
     pool: Pool,
     { timeoutMs, graceMs }: ReadBounds,
@@ -282,7 +290,7 @@ export const readAccounts = async (
 
             return { rows, organisations, ...source[0]! };
         },
-        () => new Error(`account read ran past ${timeoutMs / 1000} s`),
+        () => new Error(`account read ran past ${(timeoutMs + graceMs) / 1000} s`),
     );
 
 /**
@@ -309,7 +317,7 @@ export const readConversations = async (
 
             return rows;
         },
-        () => new Error(`conversation read ran past ${timeoutMs / 1000} s`),
+        () => new Error(`conversation read ran past ${(timeoutMs + graceMs) / 1000} s`),
     );
 
 /**
@@ -448,7 +456,7 @@ export const runAccountExport = async ({
 
             log(
                 late
-                    ? `${table}: ${rows.length} rows loaded ${late}, table replaced`
+                    ? `${table}: ${rows.length} rows loaded, confirmed after the load's ${late}, table replaced`
                     : `${table}: ${rows.length} rows loaded`,
             );
         } catch (error) {
@@ -462,10 +470,21 @@ export const runAccountExport = async ({
         }
     };
 
+    // Logged on every run, so ACCOUNT_READ_MS can follow the measured times.
+    const timed = async <T>(label: string, read: () => Promise<T>): Promise<T> => {
+        const started = performance.now();
+
+        try {
+            return await read();
+        } finally {
+            log(`${label} took ${Math.round(performance.now() - started)} ms`);
+        }
+    };
+
     let snapshot: AccountSnapshot | undefined;
 
     try {
-        snapshot = await readAccounts();
+        snapshot = await timed('account read', readAccounts);
     } catch (error) {
         fail('account_daily', `read failed, ${messageOf(error)}`, 'kept', error);
         fail('account_organisation', `read failed, ${messageOf(error)}`, 'kept', error);
@@ -489,7 +508,7 @@ export const runAccountExport = async ({
     let conversations: ConversationSource[] | undefined;
 
     try {
-        conversations = await readConversations();
+        conversations = await timed('conversation read', readConversations);
     } catch (error) {
         fail('conversation', `read failed, ${messageOf(error)}`, 'kept', error);
     }
