@@ -6,7 +6,9 @@ import type {
     InterruptResponse,
     LegacyElicitationRequest,
     StepProgress,
+    UnitOffer,
 } from './wire';
+import { servesUnit, unitText } from './unitChoice.ts';
 
 /**
  * One elicitation option, normalized for rendering. `recommended` is always
@@ -24,7 +26,8 @@ export type ClarifyOption = {
  * question's `input` (`text` renders the free-text field), `allowFreeText`
  * and whether the question can be passed by a skip (its own or the whole
  * pause's), so the card always has a way past the question, even when it
- * offers no options.
+ * offers no options. A unit question carries its offer as `unit` and is
+ * answered with the unit chips alone.
  */
 export type ClarifyQuestion = {
     id: string;
@@ -32,8 +35,11 @@ export type ClarifyQuestion = {
     options: ClarifyOption[];
     allowFreeText: boolean;
     skippable: boolean;
+    // A `multi_select` question: its options are ticked, then sent together.
+    multi: boolean;
     showText: boolean;
     rationale: string | null;
+    unit?: UnitOffer;
 };
 
 /**
@@ -48,6 +54,36 @@ export type Clarify = {
     skippable: boolean;
     progress: StepProgress | null;
     legacy: boolean;
+};
+
+/**
+ * The answer of a multi-select Send: the ticked option ids, or, when the box
+ * holds text, one text answer that folds the ticked labels and the text into
+ * a list ("A; B; and C"), since the wire carries no answer of both kinds.
+ */
+export const multiAnswer = (
+    question: ClarifyQuestion,
+    text: string,
+    ticked: string[],
+): ElicitationAnswer => {
+    const typed = text.trim();
+
+    if (!typed) {
+        return { kind: 'options', option_ids: ticked };
+    }
+
+    const items = [
+        ...ticked.map((id) => question.options.find((option) => option.id === id)?.label ?? id),
+        typed,
+    ];
+
+    return {
+        kind: 'text',
+        text:
+            items.length === 1
+                ? typed
+                : `${items.slice(0, -1).join('; ')}; and ${items[items.length - 1]}`,
+    };
 };
 
 /** The collected answers, keyed by question id. */
@@ -70,11 +106,14 @@ const clarifyOption = (option: ElicitationOption): ClarifyOption => ({
 const clarifyQuestion = (
     question: ElicitationQuestion,
     pauseSkippable: boolean,
+    legacy = false,
 ): ClarifyQuestion => {
     const options = (question.options ?? []).map(clarifyOption);
     const allowFreeText = question.allow_free_text ?? false;
     const skippable = question.skippable ?? false;
     const passable = skippable || pauseSkippable;
+    const unit = question.input === 'unit' ? question.unit : null;
+    const multi = !legacy && question.input === 'multi_select' && options.length > 0;
 
     return {
         id: question.id,
@@ -82,8 +121,17 @@ const clarifyQuestion = (
         options,
         allowFreeText,
         skippable,
-        showText: allowFreeText || question.input === 'text' || (options.length === 0 && !passable),
+        // A legacy frame answers with one option id, so its options stay
+        // single-select.
+        multi,
+        showText:
+            !unit &&
+            (allowFreeText ||
+                multi ||
+                question.input === 'text' ||
+                (options.length === 0 && !passable)),
         rationale: question.rationale ?? null,
+        ...(unit ? { unit } : {}),
     };
 };
 
@@ -111,7 +159,7 @@ export const clarifyFromFrame = (frame: ElicitationRequest | LegacyElicitationRe
 
     return {
         interruptId: frame.interrupt_id,
-        questions: [clarifyQuestion(question, frame.skippable)],
+        questions: [clarifyQuestion(question, frame.skippable, true)],
         skippable: frame.skippable,
         progress: frame.progress ?? null,
         legacy: true,
@@ -132,8 +180,33 @@ const checkedAnswer = (
             }
 
             return answer;
+        case 'options':
+            if (
+                answer.option_ids.length === 0 ||
+                new Set(answer.option_ids).size !== answer.option_ids.length
+            ) {
+                throw new Error(`question ${question.id} needs distinct options`);
+            }
+
+            for (const id of answer.option_ids) {
+                if (!question.options.some((option) => option.id === id)) {
+                    throw new Error(`question ${question.id} offers no option ${id}`);
+                }
+            }
+
+            return answer;
+        case 'unit':
+            if (!question.unit || !servesUnit(question.unit, answer)) {
+                throw new Error(`question ${question.id} does not offer that unit`);
+            }
+
+            return answer;
         case 'text': {
             const text = answer.text.trim();
+
+            if (question.unit) {
+                throw new Error(`unit question ${question.id} takes no text`);
+            }
 
             if (!text) {
                 throw new Error(`empty text answer for question ${question.id}`);
@@ -194,7 +267,8 @@ export const clarifyReply = (clarify: Clarify, answers: ClarifyAnswers): Clarify
  * The status-line note for a sent reply: the chosen option labels or typed
  * text of the answered questions in question order, or `Left to DFO` when
  * every question was skipped. A one-question pause answered in the user's
- * own words shows those words alone.
+ * own words or with a unit shows those words alone ("Constant 2023 US
+ * dollars").
  */
 export const clarifyNote = (clarify: Clarify, answers: ClarifyAnswers): string => {
     const [only] = clarify.questions;
@@ -202,6 +276,10 @@ export const clarifyNote = (clarify: Clarify, answers: ClarifyAnswers): string =
 
     if (onlyAnswer?.kind === 'text') {
         return onlyAnswer.text.trim();
+    }
+
+    if (onlyAnswer?.kind === 'unit' && only?.unit) {
+        return unitText(only.unit, onlyAnswer);
     }
 
     const chosen = clarify.questions.flatMap((question) => {
@@ -213,6 +291,12 @@ export const clarifyNote = (clarify: Clarify, answers: ClarifyAnswers): string =
                     question.options.find((option) => option.id === answer.option_id)?.label ??
                         answer.option_id,
                 ];
+            case 'options':
+                return answer.option_ids.map(
+                    (id) => question.options.find((option) => option.id === id)?.label ?? id,
+                );
+            case 'unit':
+                return [question.unit ? unitText(question.unit, answer) : answer.currency];
             case 'text':
                 return [answer.text.trim()];
             default:

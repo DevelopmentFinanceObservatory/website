@@ -11,7 +11,9 @@
 
 import type {
     ApplyChoice,
+    ApplyUnit,
     CancelRequest,
+    ClientFeature,
     CompositionManifest,
     CompositionMutation,
     InterruptResponse,
@@ -213,6 +215,9 @@ const streamStudio = async (
     }
 };
 
+/** The question forms the Studio renders, sent on every turn and answer. */
+export const CLIENT_FEATURES: ClientFeature[] = ['unit_question', 'multi_select'];
+
 /** Start (or continue) a turn. */
 export const runTurn = (
     conversationId: string,
@@ -229,6 +234,7 @@ export const runTurn = (
             conversation_id: conversationId,
             message,
             ...extras,
+            client_features: CLIENT_FEATURES,
         },
         handlers,
         signal,
@@ -249,6 +255,28 @@ export const runApplyChoice = (
             schema_version: 1,
             conversation_id: conversationId,
             apply_choice: { choice_id, option_id, turn, spec_id },
+            client_features: CLIENT_FEATURES,
+        },
+        handlers,
+        signal,
+    );
+
+/** Run a turn that moves a card to another unit: the card, the reading it
+ *  shows, the turn that drew it and the unit, and no message. */
+export const runApplyUnit = (
+    conversationId: string,
+    { component_id, spec_id, turn, unit }: ApplyUnit,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_unit: { component_id, spec_id, turn, unit },
+            client_features: CLIENT_FEATURES,
         },
         handlers,
         signal,
@@ -273,6 +301,7 @@ export const runInterrupt = (
             conversation_id: conversationId,
             interrupt_id: interruptId,
             ...reply,
+            client_features: CLIENT_FEATURES,
         },
         handlers,
         signal,
