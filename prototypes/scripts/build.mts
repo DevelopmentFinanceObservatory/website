@@ -1,7 +1,8 @@
 // `pnpm build`: the static export, assembled as the Worker's assets directory.
-// next build writes out/; out/ moves to dist/prototypes/, because the Worker
-// route keeps /prototypes in the request path, and edge/ (_headers,
-// _redirects) copies to the root of dist/ when it exists.
+// scripts/read.mts first reads every build-read page's DFO data to .build-data/
+// and stops the build on a failed read. next build then writes out/. out/ moves to
+// dist/prototypes/, because the Worker route keeps /prototypes in the request path, and edge/
+// (_headers, _redirects) copies to the root of dist/ when it exists.
 //
 // It runs the root install's next, so `pnpm install` must have run at the
 // repository root first (prototypes/package.json lists no next or react).
@@ -23,11 +24,23 @@ if (!existsSync(NEXT_BIN)) {
 rmSync(OUT, { recursive: true, force: true });
 rmSync(DIST, { recursive: true, force: true });
 
-const build = spawnSync(process.execPath, [NEXT_BIN, 'build'], { cwd: APP, stdio: 'inherit' });
+const READ = path.join(APP, 'scripts', 'read.mts');
 
-if (build.status !== 0) {
-    process.exit(build.status ?? 1);
-}
+/** Runs `args` under this Node in APP, exits with its status on a failure, and returns how long
+ *  it took as text, such as `3.2 s`. */
+const run = (args: string[]): string => {
+    const started = Date.now();
+    const child = spawnSync(process.execPath, args, { cwd: APP, stdio: 'inherit' });
+
+    if (child.status !== 0) {
+        process.exit(child.status ?? 1);
+    }
+
+    return `${((Date.now() - started) / 1000).toFixed(1)} s`;
+};
+
+const read = run(['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', READ]);
+const build = run([NEXT_BIN, 'build']);
 
 mkdirSync(DIST);
 renameSync(OUT, path.join(DIST, 'prototypes'));
@@ -37,5 +50,5 @@ if (existsSync(EDGE)) {
 }
 
 console.log(
-    `Assembled ${path.relative(APP, DIST)}/ (export under prototypes/${existsSync(EDGE) ? ', edge/ at the root' : ''}).`,
+    `Assembled ${path.relative(APP, DIST)}/ (export under prototypes/${existsSync(EDGE) ? ', edge/ at the root' : ''}): reads ${read}, next build ${build}.`,
 );

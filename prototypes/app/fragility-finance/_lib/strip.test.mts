@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { context, flow, PROFILES } from './fixture.mts';
+import { context, flow, MANY, SAMPLE } from './fixture.mts';
 import { buildStrip, dodge, median, scalePosition, STRIPS, stripMedian } from './strip.ts';
 import { groupContexts } from './scope.ts';
 
@@ -40,13 +40,13 @@ test('dodge stacks coincident dots in lanes 0, 1, −1, 2 regardless of input or
     );
 });
 
-test('every strip over the 62 is deterministic and has no overlapping dots', () => {
+test('every strip over 62 contexts is deterministic and has no overlapping dots', () => {
     for (const key of Object.keys(STRIPS) as (keyof typeof STRIPS)[]) {
         for (const radius of [0.004, 0.008, 0.02]) {
-            const strip = buildStrip(PROFILES, key, radius);
+            const strip = buildStrip(MANY, key, radius);
 
             assert.deepEqual(
-                buildStrip(PROFILES.toReversed(), key, radius).dots.toSorted((a, b) =>
+                buildStrip(MANY.toReversed(), key, radius).dots.toSorted((a, b) =>
                     a.iso3.localeCompare(b.iso3),
                 ),
                 strip.dots.toSorted((a, b) => a.iso3.localeCompare(b.iso3)),
@@ -73,7 +73,9 @@ test('strips leave contexts without a value out and list them as missing', () =>
         [['AAA', 37, 2024]],
     );
     assert.deepEqual(stripMedian(contexts, 'water'), { value: null, count: 0 });
-    assert.equal(buildStrip(PROFILES, 'odaShare', RADIUS).dots.length, 49);
+    // Equatorial Guinea holds no remittances.
+    assert.deepEqual(buildStrip(SAMPLE, 'odaShare', RADIUS).missing, ['GNQ']);
+    assert.equal(buildStrip(SAMPLE, 'odaShare', RADIUS).dots.length, 4);
 });
 
 test('the debt strip is logarithmic with $1 in the middle and clips the ends', () => {
@@ -90,9 +92,9 @@ test('the median follows the group while the dots stay put', () => {
     assert.equal(median([4, 1, 2, 3]), 2.5);
     assert.equal(median([]), null);
 
-    const extreme = stripMedian(groupContexts(PROFILES, 'extreme'), 'stunting');
-    const all = stripMedian(PROFILES, 'stunting');
+    const extreme = stripMedian(groupContexts(SAMPLE, 'extreme'), 'stunting');
+    const all = stripMedian(SAMPLE, 'stunting');
 
-    assert.equal(all.count, 61);
-    assert.notEqual(extreme.value, all.value);
+    assert.deepEqual(extreme, { value: 35, count: 2 });
+    assert.deepEqual(all, { value: 27.5, count: 4 });
 });

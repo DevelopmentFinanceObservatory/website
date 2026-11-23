@@ -11,7 +11,7 @@ import {
     SOURCES,
     stripSummary,
 } from './copy.ts';
-import { context, flow, PROFILES } from './fixture.mts';
+import { context, flow, SAMPLE } from './fixture.mts';
 import { scopeDebt, scopeFlows } from './groups.ts';
 import { inIds } from './profile.ts';
 import { findContext, groupContexts, type Scope } from './scope.ts';
@@ -21,28 +21,24 @@ const figures = (text: string): string[] =>
     text.match(/\$[\d.]+(?:bn|m|k)?|\d+(?:st|nd|rd|th)|\d[\d.]*bn/g) ?? [];
 
 test("the group headline reads the money chart's summed series in 2024", () => {
-    const flows = scopeFlows(PROFILES, { kind: 'group', key: 'all' });
-
-    // Remittances sum the 48 contexts holding all ten years: $183bn, against $185bn for
-    // the 51 that hold 2024.
-    assert.equal(flows.remittances.counts.at(-1), 48);
-    assert.deepEqual(figures(groupHeadline(PROFILES, 'all')), [
-        '2.05bn',
-        '$106bn',
-        '$17bn',
-        '$183bn',
-        '$51bn',
-        '$64bn',
+    assert.deepEqual(figures(groupHeadline(SAMPLE, 'all')), [
+        '$7.5bn',
+        '$38m',
+        '$5.3bn',
+        '$4.4bn',
+        '$4.9bn',
     ]);
+    assert.match(groupHeadline(SAMPLE, 'all'), /^In 2024 the 5 contexts, home to 109m people, /);
     // A figure over fewer contexts than the group says how many.
     for (const [key, text] of [
-        ['all', '$183bn in remittances (48 of the 62)'],
-        ['extreme', '(15 of the 20)'],
-        ['high', '(35 of the 42)'],
+        ['all', '$5.3bn in remittances (3 of the 5)'],
+        ['all', '$4.9bn in public external debt service (4 of the 5)'],
+        ['high', 'in remittances (1 of the 3)'],
     ] as const) {
-        assert.ok(groupHeadline(PROFILES, key).includes(text));
+        assert.ok(groupHeadline(SAMPLE, key).includes(text), text);
     }
-    assert.doesNotMatch(groupHeadline(PROFILES, 'all'), /in ODA \(/);
+    assert.doesNotMatch(groupHeadline(SAMPLE, 'all'), /in ODA \(/);
+    assert.doesNotMatch(groupHeadline(SAMPLE, 'extreme'), /\(\d+ of the/);
 });
 
 test('a dot off the axis reads as under the minimum or over the maximum', () => {
@@ -50,7 +46,7 @@ test('a dot off the axis reads as under the minimum or over the maximum', () => 
         const { x, clipped } = scalePosition(STRIPS.debtPerOda.scale, value);
 
         return {
-            ...buildStrip(PROFILES, 'debtPerOda', 0.01).dots[0],
+            ...buildStrip(SAMPLE, 'debtPerOda', 0.01).dots[0],
             value,
             x,
             clipped,
@@ -64,14 +60,14 @@ test('a dot off the axis reads as under the minimum or over the maximum', () => 
 });
 
 test("the ODA note's total comes from the data", () => {
-    const text = (sample: typeof PROFILES) =>
+    const text = (sample: typeof SAMPLE) =>
         odaNote(sample)
             .map((part) => (typeof part === 'string' ? part : part.name))
             .join('');
 
-    assert.match(text(PROFILES), /came to \$106bn in 2024\. .*\$44\.5bn/);
+    assert.match(text(SAMPLE), /came to \$7\.5bn in 2024\. .*\$44\.5bn/);
 
-    const halved = PROFILES.map((item) => ({
+    const halved = SAMPLE.map((item) => ({
         ...item,
         flows: item.flows.map((year) => ({
             ...year,
@@ -79,16 +75,16 @@ test("the ODA note's total comes from the data", () => {
         })),
     }));
 
-    assert.match(text(halved), /came to \$53bn in 2024/);
+    assert.match(text(halved), /came to \$3\.8bn in 2024/);
 });
 
 test("a context's strip summary names its tier's median and its own value", () => {
-    const moz = findContext(PROFILES, 'MOZ');
+    const moz = findContext(SAMPLE, 'MOZ');
 
     assert.ok(moz);
 
-    const strip = buildStrip(PROFILES, 'odaShare', 0.01);
-    const median = stripMedian(groupContexts(PROFILES, moz.tier), 'odaShare');
+    const strip = buildStrip(SAMPLE, 'odaShare', 0.01);
+    const median = stripMedian(groupContexts(SAMPLE, moz.tier), 'odaShare');
     const dot = strip.dots.find((item) => item.iso3 === 'MOZ') ?? null;
     const summary = stripSummary({
         spec: STRIPS.odaShare,
@@ -112,11 +108,15 @@ test("a context's strip summary names its tier's median and its own value", () =
 });
 
 test('the context headline carries rank and the figures held', () => {
-    const moz = findContext(PROFILES, 'MOZ');
+    const moz = findContext(SAMPLE, 'MOZ');
 
     assert.ok(moz);
-    assert.deepEqual(figures(contextHeadline(moz, 62)), [
-        '19th',
+    assert.match(
+        contextHeadline(moz, 5),
+        /^Mozambique is the 2nd most fragile of 5, in extreme fragility since the 2026 update, /,
+    );
+    assert.deepEqual(figures(contextHeadline(moz, 5)), [
+        '2nd',
         '$3.0bn',
         '$23m',
         '$267m',
@@ -136,12 +136,12 @@ test('the context headline carries rank and the figures held', () => {
 
 test('the debt title names the set a group sum covers', () => {
     const years = { first: 2015, last: 2033 };
-    const title = (scope: Scope) => debtTitle(PROFILES, scope, scopeDebt(PROFILES, scope), years);
+    const title = (scope: Scope) => debtTitle(SAMPLE, scope, scopeDebt(SAMPLE, scope), years);
 
-    assert.match(title({ kind: 'group', key: 'all' }), /^53 of the 62 contexts, 2015 to 2033, /);
+    assert.match(title({ kind: 'group', key: 'all' }), /^2 of the 5 contexts, 2015 to 2033, /);
     assert.match(
         title({ kind: 'group', key: 'extreme' }),
-        /^15 of the 20 contexts in extreme fragility, /,
+        /^1 of the 2 contexts in extreme fragility, /,
     );
     assert.match(title({ kind: 'context', iso3: 'MOZ' }), /^Mozambique, /);
 });
@@ -152,9 +152,9 @@ test('every source links over https, the fragility list to the 2026 update', () 
 });
 
 test("the prose outside the island follows the figures it is given, the island's", () => {
-    // Live figures with half the ODA, and one context outside IDS dropped.
-    const dropped = PROFILES.find((each) => !inIds(each))?.iso3;
-    const live = PROFILES.filter((each) => each.iso3 !== dropped).map((each) => ({
+    // Figures with half the ODA, and the context outside IDS dropped.
+    const dropped = SAMPLE.find((each) => !inIds(each))?.iso3;
+    const other = SAMPLE.filter((each) => each.iso3 !== dropped).map((each) => ({
         ...each,
         flows: each.flows.map((year) => ({
             ...year,
@@ -163,11 +163,13 @@ test("the prose outside the island follows the figures it is given, the island's
     }));
 
     for (const [part, text] of Object.entries(PROSE_FIGURES)) {
-        assert.notEqual(text(live), text(PROFILES), part);
+        assert.notEqual(text(other), text(SAMPLE), part);
     }
-    assert.equal(PROSE_FIGURES.contextCount(live), String(PROFILES.length - 1));
-    assert.ok(
-        Number(PROSE_FIGURES.debtAboveOda(live)) > Number(PROSE_FIGURES.debtAboveOda(PROFILES)),
+    assert.equal(PROSE_FIGURES.contextCount(other), String(SAMPLE.length - 1));
+    assert.deepEqual(
+        [PROSE_FIGURES.debtAboveOda(SAMPLE), PROSE_FIGURES.debtAboveOda(other)],
+        ['2', '3'],
     );
-    assert.notDeepEqual(odaNote(live), odaNote(PROFILES));
+    assert.equal(PROSE_FIGURES.withoutIds(SAMPLE), 'South Sudan');
+    assert.notDeepEqual(odaNote(other), odaNote(SAMPLE));
 });

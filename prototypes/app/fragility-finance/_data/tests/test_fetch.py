@@ -1,4 +1,4 @@
-"""The step's guard on the pillars' purpose labels and its joins of DFO's results.
+"""The step's split of the recipients into CRS reads and its guard on a read's facets.
 
 Run from `_data/` with `uv run --with development-finance==0.6.0 --with pytest pytest tests`.
 """
@@ -12,73 +12,66 @@ import fetch
 
 
 @dataclass(frozen=True)
-class FakeRead:
-    """What the guard reads of a `dfo.Dataset`: its purpose codes and their labels."""
+class FakeData:
+    """What `Reads.read` reads of a `dfo.Dataset`: its rows and its sentence."""
 
-    purposes: tuple[tuple[str, str], ...]
+    table: pa.Table
+    sentence: str = "a read"
 
     def to_arrow(self) -> pa.Table:
-        codes, labels = zip(*self.purposes, strict=True)
-        return pa.table({"crsPurpose": list(codes), "crsPurpose_label": list(labels)})
+        return self.table
+
+    def __len__(self) -> int:
+        return self.table.num_rows
 
 
-RELIEF = ("CRSPurposeCode72010", "material relief assistance and service")
-FOOD = ("CRSPurposeCode72040", "emergency food assistance")
-COURTS = ("CRSPurposeCode15130", "legal and judicial development")
-SCHOOLS = ("CRSPurposeCode11220", "primary education")
+@dataclass(frozen=True)
+class FakeAnswer:
+    data: FakeData
+
+    def fetch(self, **_options) -> FakeData:
+        return self.data
 
 
-def test_pillar_purposes_lists_each_pillars_labels_across_reads():
-    reads = [FakeRead((RELIEF, COURTS, SCHOOLS)), FakeRead((FOOD, RELIEF))]
+def test_read_places_lists_the_62_contexts_most_fragile_first():
+    places = fetch.read_places()
 
-    assert fetch.pillar_purposes(reads) == {
-        "humanitarian": [FOOD[1], RELIEF[1]],
-        "peace": [COURTS[1]],
-    }
-
-
-@pytest.mark.parametrize(
-    "reads",
-    [
-        # A humanitarian label that also names a development code would move that code's aid.
-        [FakeRead((RELIEF, COURTS)), FakeRead((("CRSPurposeCode11220", RELIEF[1]),))],
-        # A pillar the reads hold no code of would filter to nothing.
-        [FakeRead((RELIEF, SCHOOLS))],
-    ],
-    ids=["label-names-two-codes", "pillar-without-labels"],
-)
-def test_pillar_purposes_refuses_a_label_that_names_no_single_pillar_code(reads):
-    with pytest.raises(SystemExit):
-        fetch.pillar_purposes(reads)
+    assert len(places) == fetch.CONTEXTS
+    assert len(set(places)) == fetch.CONTEXTS
+    assert places[0] == "country/TCD"
 
 
-def test_by_place_sums_each_year_and_skips_missing_values():
-    rows = [
-        {"financingRecipient": "country/KEN", "time_period": "2024", "value": 2.0},
-        {"financingRecipient": "country/KEN", "time_period": "2024", "value": 3.0},
-        {"financingRecipient": "country/KEN", "time_period": "2023", "value": None},
-        {"financingRecipient": "country/UGA", "time_period": 2023, "value": float("nan")},
-    ]
+def test_read_places_refuses_a_file_of_other_than_62_contexts(tmp_path):
+    lines = fetch.CLASSIFICATION.read_text().splitlines()
+    short = tmp_path / "short.tsv"
+    short.write_text("\n".join(lines[:-1]) + "\n")
 
-    assert fetch.by_place(rows, fetch.RECIPIENT) == {"KEN": {2024: 5.0}}
+    with pytest.raises(SystemExit, match="expected 62 contexts, found 61"):
+        fetch.read_places(short)
 
 
-def test_joined_refuses_a_recipient_in_two_reads():
-    with pytest.raises(SystemExit, match="KEN"):
-        fetch.joined([{"KEN": {2024: 1.0}}, {"KEN": {2024: 2.0}}])
+def test_crs_groups_splits_the_62_into_four_reads():
+    places = [f"country/C{index:02}" for index in range(62)]
+    groups = fetch.crs_groups(places)
+
+    assert [len(group) for group in groups] == [16, 16, 16, 14]
+    assert [place for group in groups for place in group] == places
+
+    with pytest.raises(SystemExit, match="5 groups of recipients"):
+        fetch.crs_groups([*places, *places[:4]])
 
 
-def test_donor_change_leaves_out_a_change_that_is_not_finite():
-    results = {
-        "donors2025/change": [
-            {"financingProvider": "country/DEU", "value": -0.11},
-            {"financingProvider": "country/FRA", "value": float("inf")},
-            {"financingProvider": "country/ITA", "value": float("nan")},
-            {"financingProvider": "country/ESP", "value": None},
-        ],
-        "donors2025-eu/change": [
-            {"financingProvider": fetch.EU_INSTITUTIONS, "value": float("-inf")}
-        ],
-    }
+def test_a_search_read_refuses_a_facet_value_it_did_not_ask_for():
+    method = "measurementMethod"
+    wanted = fetch.CLIMATE_METHOD[method]
+    good = FakeData(pa.table({method: [wanted, None]}))
+    bad = FakeData(pa.table({method: [wanted, "OECDFullValue"]}))
+    reads = fetch.Reads("search")
 
-    assert fetch.donor_change(results) == {"country/DEU": -0.11}
+    assert reads.read("good", lambda: FakeAnswer(good), facets=fetch.CLIMATE_METHOD) is good
+
+    with pytest.raises(SystemExit, match="bad: expected measurementMethod"):
+        reads.read("bad", lambda: FakeAnswer(bad), facets=fetch.CLIMATE_METHOD)
+
+    with pytest.raises(SystemExit, match="good: read twice"):
+        reads.read("good", lambda: FakeAnswer(good))

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { flowLayers, pillarLayers, readingAt, stackExtent, valueTicks } from './chart.ts';
-import { context, flow, PROFILES } from './fixture.mts';
+import { context, flow, SAMPLE } from './fixture.mts';
 import { formatMoney } from './format.ts';
 import {
     BALANCED_PANEL_MAX_LOSS,
@@ -19,50 +19,47 @@ import { flowAt } from './profile.ts';
 
 const ALL = { kind: 'group', key: 'all' } as const;
 
-test('flows across the 62 sum to the headline figures, remittances over a balanced panel', () => {
-    const flows = scopeFlows(PROFILES, ALL);
+test("a group's flows sum each series in 2024, remittances over a balanced panel", () => {
+    const flows = scopeFlows(SAMPLE, ALL);
 
     assert.deepEqual(
         Object.values(flows).map((series) => formatMoney(series.values.at(-1) ?? 0)),
-        ['$106bn', '$17bn', '$183bn', '$51bn', '$64bn'],
+        ['$7.5bn', '$38m', '$5.3bn', '$4.4bn', '$4.9bn'],
     );
-    assert.equal(Math.round((totalPopulation(PROFILES, 2024).value ?? 0) / 1e7), 205);
+    assert.deepEqual(totalPopulation(SAMPLE, 2024), { value: 108.7e6, count: 5 });
 });
 
 test('OOF is summed for each group, with every year held and zero where none is recorded', () => {
-    const oof = (key: 'all' | 'extreme' | 'high') =>
-        scopeFlows(PROFILES, { kind: 'group', key }).oof;
+    const oof = (key: 'all' | 'extreme' | 'high') => scopeFlows(SAMPLE, { kind: 'group', key }).oof;
     const [all, extreme, high] = [oof('all'), oof('extreme'), oof('high')];
 
     assert.equal(all.coverage, 'balanced');
-    assert.deepEqual(all.counts, Array(10).fill(62));
+    assert.deepEqual(all.counts, Array(10).fill(5));
     assert.deepEqual(
         [all, extreme, high].map((series) => formatMoney(series.values.at(-1) ?? 0)),
-        ['$17bn', '$2.3bn', '$15bn'],
+        ['$38m', '$23m', '$15m'],
     );
     assert.equal((extreme.values.at(-1) ?? 0) + (high.values.at(-1) ?? 0), all.values.at(-1));
-    assert.ok(PROFILES.every((item) => item.flows.every((year) => year.oof !== null)));
-    assert.equal(PROFILES.filter((item) => (flowAt(item, 2024)?.oof ?? 0) > 0).length, 55);
 });
 
 test('the coverage of each group series is chosen from the data', () => {
-    for (const series of [
-        ...Object.values(scopeFlows(PROFILES, ALL)),
-        scopePillars(PROFILES, ALL),
-    ]) {
+    for (const series of [...Object.values(scopeFlows(SAMPLE, ALL)), scopePillars(SAMPLE, ALL)]) {
         assert.equal(
             series.coverage,
             series.balancedLoss < BALANCED_PANEL_MAX_LOSS ? 'balanced' : 'held',
         );
     }
 
-    const flows = scopeFlows(PROFILES, ALL);
+    const flows = scopeFlows(SAMPLE, ALL);
 
-    // Remittances: 48 contexts hold all ten years and carry 98.8% of the 51-context total.
+    // Remittances: three contexts hold all ten years and carry 99.6% of the 2024 total.
     assert.equal(flows.remittances.coverage, 'balanced');
-    assert.ok(Math.abs(flows.remittances.balancedLoss - 0.0122) < 0.0005);
-    assert.ok(flows.remittances.counts.every((count) => count === 48));
+    assert.ok(Math.abs(flows.remittances.balancedLoss - 0.0038) < 0.0001);
+    assert.ok(flows.remittances.counts.every((count) => count === 3));
     assert.equal(flows.oda.balancedLoss, 0);
+    // Debt service: Equatorial Guinea, from 2018, carries 8% of 2024, so every figure counts.
+    assert.equal(flows.debtService.coverage, 'held');
+    assert.deepEqual(flows.debtService.counts, [3, 3, 3, 4, 4, 4, 4, 4, 4, 4]);
 });
 
 test('a group falls back to every figure held when the balanced panel loses 5% or more', () => {
@@ -87,25 +84,26 @@ test('a group falls back to every figure held when the balanced panel loses 5% o
 });
 
 test('the group debt view sums a balanced panel of the IDS contexts not in arrears', () => {
-    const members = debtContexts(PROFILES, 'all');
-    const allIso3s = members.map((c) => c.iso3);
+    const members = debtContexts(SAMPLE, 'all');
 
-    assert.equal(members.length, 54);
-    assert.ok(['SDN', 'YEM', 'SYR', 'SSD', 'PRK'].every((iso3) => !allIso3s.includes(iso3)));
+    // Sudan is in arrears and South Sudan outside IDS.
+    assert.deepEqual(
+        members.map((c) => c.iso3),
+        ['MOZ', 'GNQ', 'HTI'],
+    );
 
-    const view = scopeDebt(PROFILES, ALL);
-    const panel = members.filter((c) => view.iso3s.includes(c.iso3));
+    const view = scopeDebt(SAMPLE, ALL);
     const at2024 = view.points.find((point) => point.year === 2024);
-    const oda2024 = panel.reduce((sum, c) => sum + (flowAt(c, 2024)?.oda ?? 0), 0);
 
     // Equatorial Guinea enters IDS after 2015, so the panel leaves it out.
-    assert.ok(panel.length < members.length && !view.iso3s.includes('GNQ'));
-    assert.equal(at2024?.oda, oda2024);
+    assert.deepEqual(view.iso3s, ['MOZ', 'HTI']);
+    assert.equal(at2024?.oda, 4e9);
+    assert.equal(at2024?.debt, 1.517e9);
     assert.equal(view.points.find((point) => point.year === 2030)?.oda, null);
 });
 
 test('a context outside IDS keeps its ODA line and has no debt figures', () => {
-    const view = scopeDebt(PROFILES, { kind: 'context', iso3: 'SSD' });
+    const view = scopeDebt(SAMPLE, { kind: 'context', iso3: 'SSD' });
 
     assert.equal(view.covered, false);
     assert.ok(view.points.every((point) => point.debt === null));
@@ -185,7 +183,7 @@ test('readingAt carries the last figure forward and marks gaps', () => {
     assert.deepEqual(readingAt([], 2020), { kind: 'before' });
 });
 
-test('the donor list fills six slots from groups.json or the context', () => {
+test("the donor list fills six slots from the group's donors or the context", () => {
     const donor = (name: string) => ({ name, value: 1, change2025: null });
     const groups = {
         all: { donors: ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map(donor) },

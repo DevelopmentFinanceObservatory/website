@@ -34,7 +34,7 @@ def run(monkeypatch, tmp_path: Path) -> SimpleNamespace:
     afresh over a stub and dropped again after the test. Its `outcome` sets the
     checks' result.
     """
-    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(Client=object))
     monkeypatch.delitem(sys.modules, "pipeline.run", raising=False)
     module = importlib.import_module("pipeline.run")
     monkeypatch.setitem(sys.modules, "pipeline.run", module)
@@ -54,10 +54,10 @@ def run(monkeypatch, tmp_path: Path) -> SimpleNamespace:
         "dfo": SimpleNamespace(Client=lambda **_: nullcontext(object()), __version__="0.4.1"),
         "httpx": SimpleNamespace(Client=lambda: nullcontext(object())),
         "Reads": Reads,
-        "ids_release": lambda: "November 2026",
+        "ids_release": lambda client: "November 2026",
         "view_snapshots": lambda *_, **__: {},
         "build_thresholds": build_thresholds,
-        "build_transfer_file": lambda *_, **__: events.append("transfers"),
+        "build_transfer_fixture": lambda *_, **__: events.append("transfers"),
         "write_refs": write_refs,
     }
     for name, stub in stubs.items():

@@ -13,6 +13,7 @@ TOLERANCE = 0.01
 MAX_MISSING = 6
 GROUPS = ("multilateral", "imf", "bilateral", "china", "private")
 CORE = ("debt stock", "debt service", "GDP", "revenue")
+CURRENT_BASE = 2025  # the base year of the view on current data
 
 
 @dataclass(frozen=True)
@@ -38,12 +39,14 @@ class View:
         return self.ids_dir is None
 
 
-def views(today: date, *, current_ids: str) -> tuple[View, View]:
+def views(capacity_as_of: date, *, current_ids: str) -> tuple[View, View]:
     """The 2024 view on the archived releases and the 2025 view on current data.
 
-    `today` stamps the current view's capacity vintage, so the clock is read by
-    the caller and not at import. `current_ids` names the IDS release the DFO
-    holds (`sources.dfo_api.ids_release`), so the label follows the data.
+    `capacity_as_of` stamps the current view's capacity vintage: the data step
+    passes the day it reads the reference data, and the page's build the day
+    reference.json records for the view, so neither stamps the build day.
+    `current_ids` names the IDS release the DFO holds
+    (`sources.dfo_api.ids_release`), so the label follows the data.
     """
     return (
         View(
@@ -55,12 +58,12 @@ def views(today: date, *, current_ids: str) -> tuple[View, View]:
             capacity_as_of="2026-03-14",
         ),
         View(
-            base=2025,
+            base=CURRENT_BASE,
             ids=current_ids,
             ids_dir=None,
             archived=False,
             weo=("October", 2026),
-            capacity_as_of=today.isoformat(),
+            capacity_as_of=capacity_as_of.isoformat(),
         ),
     )
 

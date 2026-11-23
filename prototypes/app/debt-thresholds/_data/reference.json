@@ -1,11 +1,40 @@
 {
   "provenance": {
     "sdk": "development-finance==0.4.1",
-    "query": "debt-thresholds reference reads: the IDS release the DFO holds, and FRED GS10 and World Bank lending categories by base year",
-    "retrieved": "2026-11-19T22:29:24.758Z"
+    "query": "debt-thresholds reference reads: FRED GS10 and World Bank lending categories by base year",
+    "retrieved": "2026-11-19T22:29:24.758Z",
+    "outside": [
+      "US 10-year Treasury constant-maturity yield (FRED GS10), annual average of monthly values",
+      "World Bank lending category (IDA, blend, IBRD)"
+    ],
+    "preloads": [
+      {
+        "name": "US 10-year Treasury constant-maturity yield (FRED GS10), annual average of monthly values",
+        "baseYear": 2024,
+        "vintage": "read 2026-11-19",
+        "source": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GS10"
+      },
+      {
+        "name": "World Bank lending category (IDA, blend, IBRD)",
+        "baseYear": 2024,
+        "vintage": "read 2026-11-19",
+        "source": "https://api.worldbank.org/v2/country?format=json&per_page=400"
+      },
+      {
+        "name": "US 10-year Treasury constant-maturity yield (FRED GS10), annual average of monthly values",
+        "baseYear": 2025,
+        "vintage": "read 2026-11-19",
+        "source": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GS10"
+      },
+      {
+        "name": "World Bank lending category (IDA, blend, IBRD)",
+        "baseYear": 2025,
+        "vintage": "read 2026-11-19",
+        "source": "https://api.worldbank.org/v2/country?format=json&per_page=400"
+      }
+    ]
   },
   "data": {
-    "idsRelease": "November 2026",
     "views": {
       "2024": {
         "read": "2026-11-19",

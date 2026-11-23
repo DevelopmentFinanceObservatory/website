@@ -25,13 +25,7 @@ import {
     possessive,
     priceDefinition,
 } from '../_lib/counts.ts';
-import {
-    COMMITTED_CURRENCY,
-    currencyNoun,
-    unitPhrase,
-    unitTitle,
-    type Unit,
-} from '../_lib/live.ts';
+import { BUILT_CURRENCY, currencyNoun, unitPhrase, unitTitle, type Unit } from '../_lib/live.ts';
 
 /** The plot's inner margin, so a dot at either end of the axis is drawn whole. */
 const PAD = 12;
@@ -339,7 +333,7 @@ export const CountDots = ({
                             <p>
                                 <Quote part={price} bare />
                             </p>
-                            {currency !== COMMITTED_CURRENCY && (
+                            {currency !== BUILT_CURRENCY && (
                                 <p>
                                     {prices === 'constant'
                                         ? `Figures in constant ${unit.baseYear} ${currencyNoun(offer, currency)} convert each year's US-dollar figure to the donor's own currency at that year's exchange rate, deflate it to ${unit.baseYear} prices with the donor's price deflator, and convert it to ${currencyNoun(offer, currency)} at the ${unit.baseYear} exchange rate.`

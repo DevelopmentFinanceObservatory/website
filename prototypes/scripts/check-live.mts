@@ -1,20 +1,24 @@
-// `pnpm check:live <base-url> --commit <id>` loads each live prototype page in Chromium, waits for
-// its island's `data-read-tier` to leave `loading`, and checks two things. The page must carry
-// the commit it was asked for, in `<meta name="dfo-build">`, which the build writes from
-// DEPLOY_COMMIT. Then the tier must match the island's `data-read-live`, which each island renders
-// from its read switch: `stored` with the switch on, `committed` with it off. oda-counts' island
-// and debt-thresholds' transfers section have no switch, so their reads are always on.
+// `pnpm check:live <base-url> --commit <id> [--run <id>]` loads each live prototype page in
+// Chromium, waits for its island's `data-read-tier` to leave `loading`, and checks two things. The
+// page must carry the build it was asked for, in `<meta name="dfo-build">`, which the build stamps
+// from DEPLOY_COMMIT and, in CI, GITHUB_RUN_ID (lib/buildStamp.ts). Then the tier must match the
+// island's `data-read-live`, which each island renders from its read switch: `stored` with the
+// switch on, `committed` with it off, and `built` for figures the build read from DFO.
+// Every page in PAGES renders `built`: the build reads its figures (lib/buildRead.ts) and the
+// browser reads nothing.
 //
 // After a deploy the edge can serve the previous build for a while, and that build passes its own
-// tier check, so only the expected commit counts. A run that finds another commit, or none, is
-// tried again, ATTEMPTS times in all, RETRY_DELAY_MS apart. Exits 1 when the last attempt finds a
-// page that does not load, carries no island, never settles, serves another commit, settles on
-// the wrong tier, or throws. Exits 2 when no expected commit is given.
+// tier check, so only the expected build counts. A scheduled rebuild of an unchanged commit
+// differs from the previous deploy only in its run, so CI passes both. A run that finds another
+// build, or none, is tried again, ATTEMPTS times in all, RETRY_DELAY_MS apart. Exits 1 when the
+// last attempt finds a page that does not load, carries no island, never settles, serves another
+// build, settles on the wrong tier, or throws. Exits 2 when no expected commit is given.
 //
-// The commit comes from `--commit <id>` or the EXPECTED_COMMIT environment variable. A local
-// build without DEPLOY_COMMIT stamps `local`.
+// The commit comes from `--commit <id>` or the EXPECTED_COMMIT environment variable, and the run
+// from `--run <id>` or EXPECTED_RUN. Without a run, any build of the commit passes. A local build
+// without DEPLOY_COMMIT stamps `local`.
 //
-//   pnpm check:live https://developmentfinance.org/prototypes/ --commit "$GITHUB_SHA"
+//   pnpm check:live https://developmentfinance.org/prototypes/ --commit "$GITHUB_SHA" --run "$GITHUB_RUN_ID"
 //   pnpm check:live http://localhost:8123/prototypes/ --insecure-local --commit local
 //
 // `--insecure-local` runs Chromium with web security off, so a page served from localhost can read
@@ -22,6 +26,8 @@
 //
 // It needs playwright-core (a root dependency) and a Chromium: `pnpm exec playwright-core install
 // chromium-headless-shell` at the repository root.
+
+import { matchesBuild } from '../lib/buildStamp.ts';
 
 /** How long a page may take to load. */
 const NAVIGATION_TIMEOUT_MS = 30_000;
@@ -38,13 +44,24 @@ const SETTLED = '[data-read-tier]:not([data-read-tier="loading"])';
 /** The live prototype pages, by slug. */
 export const PAGES = ['oda-counts', 'fragility-finance', 'hiv-financing', 'debt-thresholds'];
 
-/** The tier a page's switch implies: `stored` when it reads live, else `committed`. */
-export const expectedTier = (live: boolean): 'stored' | 'committed' =>
-    live ? 'stored' : 'committed';
+/** An island's `data-read-live`: true when it reads in the browser, false when it shows its
+ *  committed figures, and `built` when its figures come from the build's read of DFO. */
+export type LiveSwitch = boolean | 'built';
+
+/** The tier a page's switch implies: `stored` when it reads live, `built` when the build read
+ *  its figures, else `committed`. */
+export const expectedTier = (live: LiveSwitch): 'stored' | 'committed' | 'built' =>
+    live === 'built' ? 'built' : live ? 'stored' : 'committed';
 
 /** An island's `data-read-live` as a switch, or null when it carries none or another value. */
-export const liveSwitch = (attribute: string | null): boolean | null =>
-    attribute === 'true' ? true : attribute === 'false' ? false : null;
+export const liveSwitch = (attribute: string | null): LiveSwitch | null =>
+    attribute === 'true'
+        ? true
+        : attribute === 'false'
+          ? false
+          : attribute === 'built'
+            ? 'built'
+            : null;
 
 /**
  * Why a page gave no settled tier:
@@ -59,11 +76,11 @@ export type Failure = 'navigation_timeout' | 'navigation_failed' | 'no_island' |
 export type Result = {
     slug: string;
     /** the island's `data-read-live`, or null when it carries none or the page gave no island */
-    live: boolean | null;
-    /** the commit the page was asked to serve */
-    expectedCommit: string;
-    /** the commit the page serves, or null when it carries no marker */
-    commit: string | null;
+    live: LiveSwitch | null;
+    /** the build the page was asked to serve: its commit, and its run or null for any run */
+    expected: { commit: string; run: string | null };
+    /** the build stamp the page serves, or null when it carries no marker */
+    build: string | null;
     /** the settled `data-read-tier`, or null when the page gave none */
     tier: string | null;
     ms: number;
@@ -86,17 +103,19 @@ export const problems = (result: Result): string[] => {
         return [FAILURES[result.failure], ...errors];
     }
 
-    if (result.commit !== result.expectedCommit) {
+    if (!matchesBuild(result.build, result.expected)) {
+        const { commit, run } = result.expected;
+
         return [
-            result.commit === null
-                ? 'the page carries no build commit marker'
-                : `serves commit \`${result.commit}\`, expected \`${result.expectedCommit}\``,
+            result.build === null
+                ? 'the page carries no build marker'
+                : `serves build \`${result.build}\`, expected \`${commit}${run === null ? '' : `+${run}`}\``,
             ...errors,
         ];
     }
 
     if (result.live === null) {
-        return ['the island carries no data-read-live="true|false"', ...errors];
+        return ['the island carries no data-read-live="true|false|built"', ...errors];
     }
 
     const expected = expectedTier(result.live);
@@ -128,7 +147,7 @@ export const checkPage = async (
     page: PageLike,
     url: string,
     slug: string,
-    expectedCommit: string,
+    expected: { commit: string; run: string | null },
     { navigation = NAVIGATION_TIMEOUT_MS, settle = SETTLE_TIMEOUT_MS } = {},
 ): Promise<Result> => {
     const errors: string[] = [];
@@ -139,11 +158,11 @@ export const checkPage = async (
     const result = (over: Partial<Result>): Result => ({
         slug,
         live: null,
-        commit: null,
+        build: null,
         tier: null,
         failure: null,
         ...over,
-        expectedCommit,
+        expected,
         ms: Math.round(performance.now() - start),
         errors,
     });
@@ -175,7 +194,7 @@ export const checkPage = async (
     }
 
     return result({
-        commit: await page.getAttribute(BUILD_MARKER, 'content'),
+        build: await page.getAttribute(BUILD_MARKER, 'content'),
         tier: await page.getAttribute(ISLAND, 'data-read-tier'),
         live: liveSwitch(await page.getAttribute(ISLAND, 'data-read-live')),
     });
@@ -216,7 +235,7 @@ const report = (result: Result): string[] => {
     const expected = result.live === null ? 'none' : expectedTier(result.live);
 
     return [
-        `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: commit ${result.commit ?? 'none'}, ` +
+        `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: build ${result.build ?? 'none'}, ` +
             `tier ${result.tier ?? 'none'} (data-read-live ${result.live ?? 'none'}, expected ${expected}) in ${result.ms} ms`,
         ...found.map((problem) => `     ${problem}`),
     ];
@@ -226,16 +245,23 @@ const main = async () => {
     const args = process.argv.slice(2);
     const insecure = args.includes('--insecure-local');
     const flag = args.indexOf('--commit');
-    const expectedCommit = (flag === -1 ? undefined : args[flag + 1]) || process.env.EXPECTED_COMMIT;
-    const base = args.find((arg, index) => !arg.startsWith('--') && index !== flag + 1);
+    const runFlag = args.indexOf('--run');
+    const expectedCommit =
+        (flag === -1 ? undefined : args[flag + 1]) || process.env.EXPECTED_COMMIT;
+    const expectedRun =
+        (runFlag === -1 ? undefined : args[runFlag + 1]) || process.env.EXPECTED_RUN;
+    const values = [flag, runFlag].filter((at) => at !== -1).map((at) => at + 1);
+    const base = args.find((arg, index) => !arg.startsWith('--') && !values.includes(index));
 
     if (base === undefined || !expectedCommit) {
         console.error(
-            'Usage: check-live.mts <base-url> --commit <id> [--insecure-local]\n' +
-                'The commit may also come from EXPECTED_COMMIT.',
+            'Usage: check-live.mts <base-url> --commit <id> [--run <id>] [--insecure-local]\n' +
+                'The commit may also come from EXPECTED_COMMIT and the run from EXPECTED_RUN.',
         );
         process.exit(2);
     }
+
+    const expected = { commit: expectedCommit, run: expectedRun || null };
 
     const root = new URL(base.endsWith('/') ? base : `${base}/`);
 
@@ -256,7 +282,12 @@ const main = async () => {
             const page = await browser.newPage();
 
             results.push(
-                await checkPage(page as unknown as PageLike, new URL(`${slug}/`, root).href, slug, expectedCommit),
+                await checkPage(
+                    page as unknown as PageLike,
+                    new URL(`${slug}/`, root).href,
+                    slug,
+                    expected,
+                ),
             );
             await page.close();
         }

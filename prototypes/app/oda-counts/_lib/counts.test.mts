@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { CountsData, Definition, Donor } from '../_data/types.ts';
+import type { Definition, Donor } from '../_data/types.ts';
 
 import {
     bridge,
@@ -38,11 +37,7 @@ import {
     valueTicks,
 } from './counts.ts';
 
-const read = <T,>(name: string): T =>
-    JSON.parse(readFileSync(new URL(`../_data/${name}`, import.meta.url), 'utf8')).data as T;
-
-const counts = read<CountsData>('counts.json');
-const definitions = read<Definition[]>('definitions.json');
+import { COUNTS as counts, DEFINITIONS as definitions } from './testFixture.ts';
 
 const donorById = (id: string): Donor => {
     const donor = findDonor(counts, id);

@@ -1,9 +1,10 @@
 """The coverage report: which series each country has in each base year.
 
-`coverage.md` lists the 58 countries by series for both base years, then the
-creditor-group guard and the lending-terms fallback. The run fails when more than
-`MAX_MISSING` countries lack a core series (debt stock, debt service, GDP,
-revenue) in the default year.
+`coverage.md` lists the 58 countries by series for each base year the data step
+commits, then the creditor-group guard and the lending-terms fallback. The step
+fails when more than `MAX_MISSING` countries lack a core series (debt stock, debt
+service, GDP, revenue) in one of them. The page's build makes the base year it
+reads from DFO and checks its coverage itself (`pipeline.stored`).
 """
 
 from collections.abc import Mapping, Sequence
@@ -39,7 +40,6 @@ def render_coverage(
     missing: Mapping[int, list[str]],
     *,
     checks: Mapping[int, dict],
-    default_year: int,
     notes: Sequence[str],
     views: Sequence[View],
     today: date,
@@ -56,8 +56,7 @@ def render_coverage(
         (
             f"Written by `fetch.py` on {today.isoformat()}. Core series are debt "
             "stock, debt service, GDP and revenue in the base year. The step fails when "
-            f"more than {MAX_MISSING} countries lack one in the default year, "
-            f"{default_year}."
+            f"more than {MAX_MISSING} countries lack one in a base year it writes."
         ),
         "",
     ]

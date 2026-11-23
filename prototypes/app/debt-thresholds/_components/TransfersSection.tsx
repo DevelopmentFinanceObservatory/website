@@ -1,24 +1,20 @@
-'use client';
-
 import styles from './DebtThresholds.module.scss';
 import { NetTransfers } from './NetTransfers';
-import { useTransfers } from './useTransfers';
 
-import { readErrorCode } from '../_lib/readError.ts';
 import type { Group } from '../_lib/thresholds.ts';
 import {
     groupTransfers,
     transfersHeading,
     type LineKey,
     type TransfersData,
-    type TransfersMembers,
 } from '../_lib/transfers.ts';
 
-import { tierAttribute } from '#lib/liveRead.ts';
-
-const QUESTION = 'How much do these countries borrow, net of what they repay?';
-
-const Ready = ({
+/**
+ * The net-transfers section, drawn from the net transfers the build read from DFO
+ * (_lib/build.ts), so the browser reads nothing. Its heading states the swing of the grouping
+ * on screen.
+ */
+export const TransfersSection = ({
     data,
     groupOf,
     groupSource,
@@ -32,7 +28,12 @@ const Ready = ({
     const { lines } = groupTransfers(data, groupOf);
 
     return (
-        <>
+        <section
+            className={styles.transfers}
+            aria-labelledby="net-transfers"
+            data-read-tier="built"
+            data-read-live="built"
+        >
             <h2 id="net-transfers" className={styles.sectionHeading}>
                 {transfersHeading(lines, data.years)}
             </h2>
@@ -48,60 +49,6 @@ const Ready = ({
                 groupSource={groupSource}
                 highlight={highlight}
             />
-        </>
-    );
-};
-
-/**
- * The net-transfers section. The rows come from the transfers ref in the browser, so the
- * section shows a loading line, then the chart, or a short failure line with the error's
- * code when the read fails; `useTransfers` logs the full error.
- */
-export const TransfersSection = ({
-    members,
-    groupOf,
-    groupSource,
-    highlight,
-}: {
-    members: TransfersMembers;
-    groupOf: (iso3: string) => Group | null;
-    groupSource: string;
-    highlight: LineKey | null;
-}) => {
-    const state = useTransfers(members);
-
-    return (
-        <section
-            className={styles.transfers}
-            aria-labelledby="net-transfers"
-            data-read-tier={tierAttribute(state)}
-            // The section has no switch, so its read is always on.
-            data-read-live="true"
-        >
-            {state.status === 'ready' ? (
-                <Ready
-                    data={state.data}
-                    groupOf={groupOf}
-                    groupSource={groupSource}
-                    highlight={highlight}
-                />
-            ) : (
-                <>
-                    <h2 id="net-transfers" className={styles.sectionHeading}>
-                        {QUESTION}
-                    </h2>
-                    {state.status === 'loading' ? (
-                        <p className={styles.sectionLede} role="status">
-                            Loading net transfers from the Development Finance Observatory.
-                        </p>
-                    ) : (
-                        <p className={styles.sectionLede} role="alert">
-                            Net transfers did not load. Reload the page to try again.{' '}
-                            <small className={styles.errorCode}>{readErrorCode(state.error)}</small>
-                        </p>
-                    )}
-                </>
-            )}
         </section>
     );
 };

@@ -276,7 +276,7 @@ export const climateBars = (contexts: readonly Context[], scope: Scope): Climate
 export const DONOR_SLOTS = 6;
 
 /**
- * The six largest providers of ODA to the scope in 2024, largest first, from groups.json for
+ * The six largest providers of ODA to the scope in 2024, largest first, from the group's donors for
  * a group and from the context's own donors otherwise. Empty slots are null.
  */
 export const scopeDonors = (

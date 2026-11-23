@@ -1,15 +1,23 @@
 // The live half of the page: the unit a reader picks, the Search requests that fetch one
-// donor in it, the reading of their responses into the page's series, and the picker's offer.
+// donor in it, the reading of their responses into the page's series, and the picker's offer,
+// which the build reads from Search with the same requests, every provider open.
 // Only type imports and web APIs Node also has, so `node --test` loads the module.
-import type { BaseIdentity, IdentityUnitRequest } from '@developmentfinance/client/wire';
+import type {
+    BaseIdentity,
+    ConversionCurrency,
+    IdentityUnitRequest,
+} from '@developmentfinance/client/wire';
 
 import type { Lane } from '#lib/pacing.ts';
+
+import { MONETARY } from './derive.ts';
 
 import type {
     ByYear,
     CountsData,
     Donor,
     LiveData,
+    LiveIdentity,
     Offer,
     Prices,
     SeriesKey,
@@ -18,19 +26,20 @@ import type {
 /** A currency and price basis, with the base year constant prices are in. */
 export type Unit = { currency: string; prices: Prices; baseYear: number };
 
-/** The currency counts.json holds, at current prices and constant prices of its base year. */
-export const COMMITTED_CURRENCY = 'USD';
+/** The currency the built figures are in, at current prices and constant prices of their base
+ *  year. */
+export const BUILT_CURRENCY = 'USD';
 
 /** The unit the page opens in. */
-export const committedUnit = (data: CountsData): Unit => ({
-    currency: COMMITTED_CURRENCY,
+export const builtUnit = (data: CountsData): Unit => ({
+    currency: BUILT_CURRENCY,
     prices: 'current',
     baseYear: data.baseYear,
 });
 
-/** Whether counts.json holds `unit`'s figures, so the page needs no request for them. */
-export const isCommitted = (unit: Unit, data: CountsData): boolean =>
-    unit.currency === COMMITTED_CURRENCY &&
+/** Whether the built figures hold `unit`'s, so the page needs no request for them. */
+export const isBuilt = (unit: Unit, data: CountsData): boolean =>
+    unit.currency === BUILT_CURRENCY &&
     (unit.prices === 'current' || unit.baseYear === data.baseYear);
 
 /** One price basis of a unit's pair: the unit's own, or the other one at the same base year. */
@@ -55,8 +64,51 @@ const boundIdentity = (identity: BaseIdentity, donorId: string, unit: Unit): Bas
     facets: { ...identity.facets, unit: { state: 'value', request: unitRequest(unit) } },
 });
 
+/** The most entries one resolve request takes. */
+export const MAX_ENTRIES = 6;
+
 /** One resolve request: the series keys its entries are, in order, and its body. */
 export type ResolveRequest = { keys: SeriesKey[]; body: unknown };
+
+/** Resolve requests for `identities`, `perRequest` entries each, at most `maxEntries`, each entry
+ *  the identity `bind` makes of a series'. */
+const batchedRequests = (
+    identities: readonly LiveIdentity[],
+    {
+        maxEntries,
+        perRequest,
+        observations,
+    }: { maxEntries: number; perRequest: number; observations: boolean },
+    bind: (identity: BaseIdentity) => unknown,
+): ResolveRequest[] => {
+    const size = Math.max(1, Math.min(perRequest, maxEntries));
+    const requests: ResolveRequest[] = [];
+
+    for (let start = 0; start < identities.length; start += size) {
+        const batch = identities.slice(start, start + size);
+
+        requests.push({
+            keys: batch.map(({ key }) => key),
+            body: {
+                schema_version: 1,
+                input: {
+                    kind: 'dataset_resubmit',
+                    entries: batch.map(({ sentence, identity }) => ({
+                        entry_kind: 'identity',
+                        variable_text: sentence,
+                        identity: bind(identity),
+                    })),
+                },
+                response_options: {
+                    include_option_coverage: false,
+                    include_observations: observations,
+                },
+            },
+        });
+    }
+
+    return requests;
+};
 
 /**
  * The resolve requests that fetch every monetary series for one donor in one unit, each
@@ -70,32 +122,27 @@ export const resolveRequests = (
     donorId: string,
     unit: Unit,
     perRequest = live.maxEntries,
-): ResolveRequest[] => {
-    const size = Math.max(1, Math.min(perRequest, live.maxEntries));
-    const requests: ResolveRequest[] = [];
+): ResolveRequest[] =>
+    batchedRequests(
+        live.identities,
+        { maxEntries: live.maxEntries, perRequest, observations: true },
+        (identity) => boundIdentity(identity, donorId, unit),
+    );
 
-    for (let start = 0; start < live.identities.length; start += size) {
-        const batch = live.identities.slice(start, start + size);
-
-        requests.push({
-            keys: batch.map(({ key }) => key),
-            body: {
-                schema_version: 1,
-                input: {
-                    kind: 'dataset_resubmit',
-                    entries: batch.map(({ sentence, identity }) => ({
-                        entry_kind: 'identity',
-                        variable_text: sentence,
-                        identity: boundIdentity(identity, donorId, unit),
-                    })),
-                },
-                response_options: { include_option_coverage: false, include_observations: true },
-            },
-        });
-    }
-
-    return requests;
-};
+/**
+ * The resolve requests the build reads the offer with: every monetary series with the provider
+ * role open, so the offer covers each currency any provider converts to, `maxEntries` entries a
+ * request and no observations.
+ */
+export const offerRequests = (
+    identities: readonly LiveIdentity[],
+    maxEntries = MAX_ENTRIES,
+): ResolveRequest[] =>
+    batchedRequests(
+        identities,
+        { maxEntries, perRequest: maxEntries, observations: false },
+        (identity) => ({ ...identity, open_roles: ['origin'] }),
+    );
 
 /**
  * Why the page refused a resolve answer:
@@ -358,14 +405,14 @@ export const fetchBasis = async ({
 /** A donor's live series at one price basis, each by year. */
 export type LiveBasis = Record<SeriesKey, ByYear>;
 
-/** `live` with null wherever `committed` is null, so a converted figure never appears for a
- * donor-year counts.json leaves blank, such as a group total that sums only some members. */
-export const maskTo = (committed: ByYear, live: ByYear): ByYear =>
-    committed.map((value, index) => (value === null ? null : (live[index] ?? null)));
+/** `live` with null wherever `built` is null, so a converted figure never appears for a
+ * donor-year the built figures leave blank, such as a group total that sums only some members. */
+export const maskTo = (built: ByYear, live: ByYear): ByYear =>
+    built.map((value, index) => (value === null ? null : (live[index] ?? null)));
 
 /**
  * `donor` in a live unit: each series at each price basis from `bases`, masked to the
- * committed figures at that basis. A basis not yet fetched is null in every year.
+ * built figures at that basis. A basis not yet fetched is null in every year.
  */
 export const liveDonor = (donor: Donor, bases: Partial<Record<Prices, LiveBasis>>): Donor => {
     const series = Object.fromEntries(
@@ -385,6 +432,115 @@ export const liveDonor = (donor: Donor, bases: Partial<Record<Prices, LiveBasis>
     ) as Donor['series'];
 
     return { ...donor, series };
+};
+
+/** The currencies of the 32 DAC members, the only currencies the page converts to. DAC1
+ *  publishes their exchange rates itself. ONE's tables take every other rate from the IMF. */
+export const DAC_CURRENCIES: readonly string[] = [
+    'USD', // United States
+    'EUR', // 20 members, among them the EU institutions
+    'GBP', // United Kingdom
+    'JPY', // Japan
+    'CAD', // Canada
+    'AUD', // Australia
+    'NZD', // New Zealand
+    'CHF', // Switzerland
+    'NOK', // Norway
+    'SEK', // Sweden
+    'DKK', // Denmark
+    'ISK', // Iceland
+    'KRW', // Korea
+    'CZK', // Czechia
+    'HUF', // Hungary
+    'PLN', // Poland
+];
+
+/**
+ * Each monetary series' Search identity, with no provider and no unit bound, from the spec of its
+ * current-price ref in `refs` (live-refs.json's `data`): the spec's identity less its open
+ * provider role, and the member's sentence.
+ *
+ * @throws A ref that is missing or does not hold one member with a spec identity.
+ */
+export const identitiesFromRefs = (refs: Readonly<Record<string, unknown>>): LiveIdentity[] =>
+    MONETARY.map((key) => {
+        const members = listAt(refs[`${key}/current`], 'members');
+        const member = members[0];
+        const identity = recordAt(member, 'spec', 'definition', 'identity');
+        const sentence = recordAt(member)?.sentence;
+
+        if (members.length !== 1 || identity === null || typeof sentence !== 'string') {
+            throw new Error(`live-refs.json: ${key}/current holds no one member with an identity.`);
+        }
+
+        const { open_roles: _open, ...base } = identity;
+
+        // A spec's identity is a BaseIdentity with its open roles added.
+        return { key, sentence, identity: base as BaseIdentity };
+    });
+
+/**
+ * The offer every monetary series shares, from the answers to `offerRequests`, cut to the DAC
+ * members' currencies.
+ *
+ * @throws An answer whose part is not definite or has no conversion, offers that differ between
+ *   series, or an offer that lacks a DAC currency.
+ */
+export const offerFromResponses = (
+    answers: readonly { keys: readonly SeriesKey[]; body: unknown }[],
+): Offer => {
+    const offers = answers.flatMap(({ keys, body }) => {
+        const parts = listAt(body, 'parts');
+
+        if (parts.length !== keys.length) {
+            throw new Error(`Search answered ${parts.length} parts for ${keys.length} series.`);
+        }
+
+        return keys.map((key, index) => {
+            const part = recordAt(parts[index]);
+            const conversion = recordAt(part, 'spec', 'resolved', 'unit_conversion');
+
+            if (part?.status !== 'definite' || conversion === null) {
+                throw new Error(
+                    `Search answered ${key} ${String(part?.status)}, with no conversion.`,
+                );
+            }
+
+            return {
+                key,
+                offer: {
+                    defaultBaseYear: Number(conversion.default_base_year),
+                    // The wire's ConversionCurrency list, which the answer holds as sent.
+                    currencies: listAt(conversion, 'currencies') as ConversionCurrency[],
+                },
+            };
+        });
+    });
+    const [first] = offers;
+
+    if (first === undefined || first.offer.currencies.length === 0) {
+        throw new Error('Search offers no currency to convert the series to.');
+    }
+
+    const differ = offers
+        .filter(({ offer }) => JSON.stringify(offer) !== JSON.stringify(first.offer))
+        .map(({ key }) => key);
+
+    if (differ.length > 0) {
+        throw new Error(`The offers of ${differ.join(', ')} differ from ${first.key}'s.`);
+    }
+
+    const held = new Set(first.offer.currencies.map(({ code }) => code));
+    const missing = DAC_CURRENCIES.filter((code) => !held.has(code));
+
+    if (missing.length > 0) {
+        throw new Error(`Search offers no conversion to ${missing.join(', ')}.`);
+    }
+
+    return {
+        ...first.offer,
+        currencies: first.offer.currencies.filter(({ code }) => DAC_CURRENCIES.includes(code)),
+    };
 };
 
 /** The price bases a currency converts the series at, and its run of base years. */

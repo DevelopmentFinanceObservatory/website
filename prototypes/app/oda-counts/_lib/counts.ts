@@ -1,4 +1,4 @@
-// Pure functions over _data/counts.json and _data/definitions.json, so the controls,
+// Pure functions over the built figures and definitions (_lib/build.ts), so the controls,
 // the headline sentence, the bars, the bridge and the tests read the same numbers.
 // Only type imports, which keeps the module loadable by `node --test`.
 import type { CountKey, CountsData, Definition, Donor, Prices, SeriesKey } from '../_data/types.ts';
@@ -390,7 +390,7 @@ const definitionOf = (id: string, definitions: Definition[]): Definition => {
     const found = definitions.find((definition) => definition.id === id);
 
     if (!found) {
-        throw new Error(`definitions.json has no entry for "${id}"`);
+        throw new Error(`The definitions have no entry for "${id}"`);
     }
 
     return found;
@@ -852,8 +852,8 @@ const DOT_INTERVALS = 5;
  * Axis ticks for the dot plot of a donor's counts in a year, over both price bases, so
  * switching prices never rescales it. Dots encode position, so the axis need not start
  * at zero. It starts at a tick at or below the smaller of half the OECD headline (half
- * gross disbursements where the headline is missing) and the smallest count, never
- * below zero unless a count is, and ends at a tick at or above the largest count. With
+ * gross disbursements where the headline is missing) and the smallest count, and
+ * goes below zero only if a count does. It ends at a tick at or above the largest count. With
  * no count published that year, the axis spans the donor's counts over every year. With
  * a `lead` basis, the ticks hold to it as `heldTicks` has it.
  */

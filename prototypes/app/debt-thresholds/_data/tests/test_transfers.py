@@ -1,4 +1,4 @@
-"""Tests for transfers.json, the page's series and the parity fixture."""
+"""Tests for the page's net-transfers series and the parity fixture."""
 
 import pytest
 
@@ -6,13 +6,10 @@ from pipeline.errors import DataError
 from pipeline.transfers import (
     FIRST_YEAR,
     FIXTURE_ISO3,
-    INDICATOR,
-    build_transfers,
     countries_without_values,
     parity_fixture,
     parse_groups,
     transfers_by_country,
-    transfers_provenance,
     values_by_country,
 )
 
@@ -75,13 +72,6 @@ def test_transfers_by_country_rejects_an_empty_fetch() -> None:
         transfers_by_country([row("AAA", 2005, 1.0)], MEMBERS)
 
 
-def test_build_transfers_keeps_the_release_and_members_only() -> None:
-    assert build_transfers(MEMBERS, release="November 2026") == {
-        "release": "November 2026",
-        "countries": MEMBERS,
-    }
-
-
 def test_parity_fixture_keeps_its_countries_rows_and_the_output_for_them() -> None:
     kept, other = FIXTURE_ISO3[0], "AAA"
     members = [{"iso3": kept, "name": "K", "group": "insolvent"}, *MEMBERS]
@@ -105,30 +95,6 @@ def test_parse_groups_skips_comments_and_rejects_unknown() -> None:
     assert rows == [{"iso3": "AAA", "name": "Alpha", "group": "lower-risk"}]
     with pytest.raises(DataError, match="unknown groups"):
         parse_groups(["iso3,name,group\n", "AAA,Alpha,nope\n"])
-
-
-def test_transfers_provenance_key_order() -> None:
-    provenance = transfers_provenance(
-        sdk_version="0.4.1",
-        retrieved="2026-11-16T18:24:49.132Z",
-        release="November 2026",
-        sentence="s",
-        citation="c",
-        version="cv_1",
-    )
-    assert list(provenance) == [
-        "sdk",
-        "query",
-        "retrieved",
-        "ids",
-        "indicator",
-        "sentence",
-        "citation",
-        "version",
-    ]
-    assert provenance["retrieved"] == "2026-11-16T18:24:49.132Z"
-    assert provenance["indicator"] == INDICATOR
-    assert provenance["sdk"] == "development-finance==0.4.1"
 
 
 def test_values_by_country_reads_a_missing_country_as_empty() -> None:

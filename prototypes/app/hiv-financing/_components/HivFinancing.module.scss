@@ -113,19 +113,4 @@
     margin-top: 18px;
     padding-top: 14px;
     border-top: 1px solid #ececdb;
-
-    // While the UNAIDS reads run or after they fail, the status line keeps the strip's room,
-    // so the table below stays put when the strip lands. The heights are the strip's on the
-    // committed data at each width; its lanes of dots set them.
-    &[data-waiting="true"] {
-        min-height: 164px;
-
-        @media (min-width: 1400px) {
-            min-height: 154px;
-        }
-
-        @media (max-width: 600px) {
-            min-height: 228px;
-        }
-    }
 }

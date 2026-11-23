@@ -1,14 +1,16 @@
 // How a page's requests to DFO share one pace: a bound on the reads in flight, and the
-// allowance the website's gateway reports. The gateway counts every request that reaches it
-// against one allowance per address, 120 a minute on /api/v1 (src/lib/proxy/rateLimit.ts at the
-// repository root), and reports what is left on each response as `x-ratelimit-remaining`, with
-// `x-ratelimit-reset` the seconds until the count starts again. A response it served while its
-// counter was down carries neither, and leaves the last reading in place.
+// allowances the website's gateway reports. The gateway counts every request that reaches it
+// against an allowance per address and surface (src/lib/proxy/rateLimit.ts at the repository
+// root): `datasets`, 300 a minute, for the Datasets API below /api/v1/datasets/, and `api`, 120 a
+// minute, for every other /api route, Search resolve among them. Each response reports what is
+// left of its own surface's allowance as `x-ratelimit-remaining`, with `x-ratelimit-reset` the
+// seconds until that count starts again. A response the gateway served while its counter was down
+// carries neither, and leaves the last reading in place.
 //
 // `readLive`'s reads run in the `pacer`'s lane and oda-counts' Search resolve requests in
 // `pickLane`, so a reader's pick does not wait behind stored reads. Both go out through
-// `liveClient`, whose every request, retries included, passes the pacer's `fetch`, so the
-// allowance a page sees counts both.
+// `liveClient`, whose every request, retries included, passes the pacer's `fetch`, so the pacer
+// reads both surfaces' allowances.
 import { Client } from '@developmentfinance/client';
 
 /**
@@ -25,9 +27,23 @@ export const READ_CONCURRENCY = 4;
  */
 export const PICK_CONCURRENCY = 9;
 
-/** What the gateway last said is left of the address's allowance, and until when, in
- *  milliseconds since the epoch. */
+/** What the gateway last said is left of the address's allowance on one surface, and until
+ *  when, in milliseconds since the epoch. */
 export type Allowance = { remaining: number; until: number };
+
+/** The gateway's allowances: `datasets` for the Datasets API, `api` for every other /api route. */
+export type Surface = 'datasets' | 'api';
+
+/** A path below /api/v1/datasets/ or /api/datasets/, with at least one segment after it. */
+const DATASETS_PATH = /^\/api(?:\/v1)?\/datasets\/[^/]+/;
+
+/** The surface whose allowance a request to `input` counts against, by its URL's path. */
+export const surfaceOf = (input: RequestInfo | URL): Surface => {
+    const href = input instanceof Request ? input.url : String(input);
+    const { pathname } = new URL(href, 'https://developmentfinance.org');
+
+    return DATASETS_PATH.test(pathname) ? 'datasets' : 'api';
+};
 
 /** A bound on the tasks that run at once. */
 export type Lane = {
@@ -105,15 +121,16 @@ export const createLane = (limit: number): Lane => {
 export type Pacer = Lane & {
     /** The platform's `fetch`, reading the allowance off each response, as a client's `fetch`. */
     fetch: typeof globalThis.fetch;
-    /** The allowance the gateway last reported, or null before any report or once its window
-     *  has passed. */
-    allowance: () => Allowance | null;
+    /** The allowance the gateway last reported for `surface`, or null before any report on it
+     *  or once its window has passed. */
+    allowance: (surface: Surface) => Allowance | null;
 };
 
 /**
  * A pacer whose lane runs at most `limit` tasks at once and which reads the gateway's allowance
- * off every response its `fetch` receives. `fetch` and `now` stand in for the platform's, as a
- * test does. The platform's `fetch` is looked up on each request.
+ * off every response its `fetch` receives, one reading per surface (`surfaceOf` the request).
+ * `fetch` and `now` stand in for the platform's, as a test does. The platform's `fetch` is looked
+ * up on each request.
  */
 export const createPacer = ({
     limit,
@@ -124,9 +141,10 @@ export const createPacer = ({
     fetch?: typeof globalThis.fetch;
     now?: () => number;
 }): Pacer => {
-    let last: Allowance | null = null;
+    const last: Record<Surface, Allowance | null> = { datasets: null, api: null };
 
     const paced: typeof globalThis.fetch = async (input, init) => {
+        const surface = surfaceOf(input);
         const response = await fetch(input, init);
         const remaining = response.headers.get('x-ratelimit-remaining');
         const reset = response.headers.get('x-ratelimit-reset');
@@ -142,8 +160,10 @@ export const createPacer = ({
         ) {
             // Responses to requests sent together arrive in any order, so within one window
             // the lowest count stands.
-            if (last === null || last.until <= now() || next.remaining < last.remaining) {
-                last = next;
+            const held = last[surface];
+
+            if (held === null || held.until <= now() || next.remaining < held.remaining) {
+                last[surface] = next;
             }
         }
 
@@ -153,14 +173,18 @@ export const createPacer = ({
     return {
         ...createLane(limit),
         fetch: paced,
-        allowance: () => (last !== null && last.until > now() ? last : null),
+        allowance: (surface) => {
+            const held = last[surface];
+
+            return held !== null && held.until > now() ? held : null;
+        },
     };
 };
 
 /** The page's one pacer, whose lane `readLive` runs in and whose `fetch` every request takes. */
 export const pacer = createPacer({ limit: READ_CONCURRENCY });
 
-/** oda-counts' lane for its resolve requests, whose allowance `pacer` reads. */
+/** oda-counts' lane for its resolve requests, whose `api` allowance `pacer` reads. */
 export const pickLane = createLane(PICK_CONCURRENCY);
 
 let client: Client | undefined;

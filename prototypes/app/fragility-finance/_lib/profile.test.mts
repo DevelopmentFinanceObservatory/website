@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { context, flow, PROFILES } from './fixture.mts';
+import { context, flow, SAMPLE } from './fixture.mts';
 import {
     debtAboveOdaCount,
     debtPerOda,
@@ -50,7 +50,8 @@ test('debtPerOda and the count of contexts paying more than they receive', () =>
     assert.equal(debtPerOda(noIds.flows[0]), null);
     assert.equal(debtPerOda(flow(2024, { oda: 0 })), null);
     assert.equal(debtAboveOdaCount([context(), above, noIds]), 1);
-    assert.equal(debtAboveOdaCount(PROFILES), 13);
+    // Sudan and Equatorial Guinea.
+    assert.equal(debtAboveOdaCount(SAMPLE), 2);
 });
 
 test('humanitarianShare is null without aid that year', () => {

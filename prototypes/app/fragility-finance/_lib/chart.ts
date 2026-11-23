@@ -25,7 +25,7 @@ export const PILLAR_COLOURS = {
 
 /**
  * The money chart's layers: ODA, OOF, remittances and FDI inflows stacked up, debt service and
- * net FDI outflows stacked down. A missing figure is null, never zero.
+ * net FDI outflows stacked down. A missing figure is null.
  */
 export const flowLayers = (flows: Record<FlowKey, SummedSeries>): Layer[] => {
     const fdi = flows.fdi.values;

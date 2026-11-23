@@ -17,11 +17,12 @@ export const pythonRound = (value: number, digits = 0): number => {
     // toFixed takes the larger of two equally near numbers.
     const up = Number(magnitude.toFixed(digits));
 
+    // + 0 turns -0, from a small negative value, into 0, which JSON cannot carry.
     if (!Number.isInteger(halves) || halves % 2 === 0) {
-        return sign * up;
+        return sign * up + 0;
     }
 
     const lastDigit = Math.round(up * 10 ** digits) % 10;
 
-    return sign * (lastDigit % 2 === 0 ? up : Number((up - 10 ** -digits).toFixed(digits)));
+    return sign * (lastDigit % 2 === 0 ? up : Number((up - 10 ** -digits).toFixed(digits))) + 0;
 };

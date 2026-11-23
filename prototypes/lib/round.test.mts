@@ -22,3 +22,14 @@ test('pythonRound rounds an exact half to even, as Python round does', () => {
         assert.equal(pythonRound(value, digits), expected, `round(${value}, ${digits})`);
     }
 });
+
+test('pythonRound gives 0, not -0, for a small negative value', () => {
+    // JSON.stringify(-0) is "0", so -0 would fail the build's round-trip check.
+    for (const [value, digits] of [
+        [-0.001, 2],
+        [-0.4, 0],
+        [-0.5, 0],
+    ] as const) {
+        assert.ok(Object.is(pythonRound(value, digits), 0), `round(${value}, ${digits})`);
+    }
+});

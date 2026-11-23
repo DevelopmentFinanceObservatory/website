@@ -1,6 +1,6 @@
-// The shape of the `data` of _data/counts.json, _data/definitions.json and _data/live.json,
-// written by _data/fetch.py and read by _lib and the page's components. Both import it
-// with `import type`, so it never reaches the bundle.
+// The shape of what the build reads from DFO (_lib/build.ts): the figures, the definitions and
+// the reader's currency offer, read by _lib and the page's components. Both import it with
+// `import type`, so it never reaches the bundle.
 import type { BaseIdentity, ConversionCurrency } from '@developmentfinance/client/wire';
 
 /** The OECD counts of a donor's ODA the page sets side by side. */
@@ -20,7 +20,7 @@ export type Donor = {
     /** the DFO provider id, such as `country/FRA` or `DACCountriesTotal` */
     id: string;
     name: string;
-    /** a DAC group total, such as DAC countries, rather than one donor */
+    /** a DAC group total, such as DAC countries, covering several donors */
     isGroup: boolean;
     /**
      * Each series in millions of US dollars, at current prices and at constant

@@ -1,7 +1,5 @@
 import { prototype, prototypeMetadata } from '../../registry';
 
-import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
-
 import {
     ArrearsNote,
     ContextCount,
@@ -10,36 +8,32 @@ import {
     SourceList,
     WithoutIds,
 } from './_components/Counts';
-import { FiguresProvider } from './_components/Figures';
 import { FragilityFinance } from './_components/FragilityFinance';
+import { FragilityPage, Retrieved } from './_components/FragilityPage';
 import { SECTION_TITLES } from './_lib/copy';
-import groups from './_data/groups.json';
-import profiles from './_data/profiles.json';
 
 export const entry = prototype('fragility-finance');
 
 export const metadata = prototypeMetadata(entry);
 
 export default ({ children }) => (
-    <FiguresProvider contexts={profiles.data} groups={groups.data}>
-        <PrototypePage
-            title={entry.title}
-            sections={[
-                ...Object.entries(SECTION_TITLES).map(([id, title]) => ({ id, title })),
-                { id: 'how-to-interpret', title: 'How to interpret' },
-                { id: 'notes', title: 'Notes' },
-                { id: 'sources', title: 'Sources' },
-            ]}
-            lede={
-                <>
-                    In 2024, <DebtAboveOda /> of the OECD&rsquo;s <ContextCount /> fragile contexts
-                    paid more in debt service than they received in ODA from all providers.
-                </>
-            }
-        >
-            {children}
-        </PrototypePage>
-    </FiguresProvider>
+    <FragilityPage
+        title={entry.title}
+        sections={[
+            ...Object.entries(SECTION_TITLES).map(([id, title]) => ({ id, title })),
+            { id: 'how-to-interpret', title: 'How to interpret' },
+            { id: 'notes', title: 'Notes' },
+            { id: 'sources', title: 'Sources' },
+        ]}
+        lede={
+            <>
+                In 2024, <DebtAboveOda /> of the OECD&rsquo;s <ContextCount /> fragile contexts paid
+                more in debt service than they received in ODA from all providers.
+            </>
+        }
+    >
+        {children}
+    </FragilityPage>
 );
 
 <FragilityFinance />
@@ -67,4 +61,4 @@ A group's series sums the contexts that hold all ten years, unless that leaves o
 
 <SourceList />
 
-Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {profiles.provenance.retrieved.slice(0, 10)}.
+Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on <Retrieved />.

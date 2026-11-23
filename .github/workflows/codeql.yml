@@ -1,0 +1,57 @@
+name: CodeQL
+
+# Code scanning for the site and the prototypes. Python lives only on the
+# `prototypes` branch (the prototypes' fetch.py scripts), so its analysis runs
+# for that branch and pull requests into it. dev and main hold no Python, and
+# CodeQL fails a language with no source. The weekly run scans dev, the default
+# branch. This file is identical on dev and `prototypes`; it replaces the
+# repository's CodeQL default setup, which must stay off for these uploads.
+
+on:
+    push:
+        branches: [dev, main, prototypes]
+    pull_request:
+        branches: [dev, main, prototypes]
+    schedule:
+        - cron: '23 4 * * 1'
+
+permissions:
+    contents: read
+
+jobs:
+    analyze:
+        name: Analyze (${{ matrix.language }})
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            security-events: write
+        strategy:
+            fail-fast: false
+            matrix:
+                language: [actions, javascript-typescript]
+        steps:
+            - uses: actions/checkout@v6
+            - uses: github/codeql-action/init@v4
+              with:
+                  languages: ${{ matrix.language }}
+                  build-mode: none
+            - uses: github/codeql-action/analyze@v4
+              with:
+                  category: /language:${{ matrix.language }}
+
+    analyze-python:
+        name: Analyze (python)
+        if: github.ref == 'refs/heads/prototypes' || github.base_ref == 'prototypes'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            security-events: write
+        steps:
+            - uses: actions/checkout@v6
+            - uses: github/codeql-action/init@v4
+              with:
+                  languages: python
+                  build-mode: none
+            - uses: github/codeql-action/analyze@v4
+              with:
+                  category: /language:python

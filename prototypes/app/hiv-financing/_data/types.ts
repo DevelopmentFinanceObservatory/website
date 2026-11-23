@@ -1,5 +1,5 @@
-// The shape of _data/hiv.json's `data`, written by fetch.py and read by the page's
-// components with `import type`. Money is gross ODA disbursements from the OECD CRS
+// The shape of the page's figures, which the build derives from DFO's reads (_lib/figures.ts)
+// and the page's components take as props. Money is gross ODA disbursements from the OECD CRS
 // under purpose code 13040, in constant US dollars of `HivData.priceBase` at donor prices,
 // rounded to the dollar.
 
@@ -22,9 +22,7 @@ export type Country = {
     globalFundMulti: number[];
 };
 
-/** A country's UNAIDS figures. They are not in hiv.json: the page derives them in the browser
- *  from the refs in _data/live-refs.json, as `unaids_by_country` in fetch.py does, and
- *  _data/unaids-fixture.json holds real rows with the figures fetch.py gives for them. */
+/** A country's UNAIDS figures, from the UNAIDS reads in _data/live-refs.json. */
 export type UnaidsFigures = {
     /** UNAIDS estimate of people living with HIV in the last year; null where none is held */
     plhiv: number | null;

@@ -1,28 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { UnaidsFigures } from '../_data/types.ts';
-
-import { readingOf, unaidsByCountry, type UnaidsRows } from './unaids.ts';
-
-// Real rows from the pinned reads, with the figures `unaids_by_country` in fetch.py gives for
-// them. The step rewrites the file on every run.
-const fixture = JSON.parse(
-    readFileSync(new URL('../_data/unaids-fixture.json', import.meta.url), 'utf8'),
-).data as {
-    years: number[];
-    countries: string[];
-    rows: UnaidsRows;
-    expected: Record<string, UnaidsFigures>;
-};
-
-test('unaidsByCountry gives what fetch.py gives for the fixture rows', () => {
-    assert.deepEqual(
-        unaidsByCountry(fixture.countries, fixture.rows, fixture.years),
-        fixture.expected,
-    );
-});
+import { unaidsByCountry, type UnaidsRows } from './unaids.ts';
 
 test('unaidsByCountry matches places exactly and leaves a country without rows all null', () => {
     const rows: UnaidsRows = {
@@ -40,9 +19,7 @@ test('unaidsByCountry matches places exactly and leaves a country without rows a
     });
 });
 
-test('unaidsByCountry reads a row with a null value as no figure, as fetch.py does', () => {
-    // The same case as test_unaids_by_country_reads_a_row_with_no_value_as_no_figure in
-    // _data/tests/test_fetch.py.
+test('unaidsByCountry reads a row with a null value as no figure', () => {
     const rows = [
         { observationAbout: 'country/KEN', time_period: 2015, value: 2.5 },
         { observationAbout: 'country/KEN', time_period: 2024, value: null },
@@ -77,12 +54,4 @@ test('unaidsByCountry refuses two rows for one year and a row it cannot read', (
             { code: 'unaids_unreadable_row' },
         );
     }
-});
-
-test('the same countries in another order share one UNAIDS reading', () => {
-    const years = [2015, 2024];
-
-    assert.equal(readingOf(['UGA', 'KEN'], years).key, readingOf(['KEN', 'UGA'], years).key);
-    assert.notEqual(readingOf(['KEN'], years).key, readingOf(['KEN', 'UGA'], years).key);
-    assert.deepEqual(readingOf(['UGA', 'KEN'], years).iso3s, ['KEN', 'UGA']);
 });

@@ -213,7 +213,7 @@ const ALMOST_ALL = 0.95;
 /**
  * The lede: how much of the last year's HIV aid to countries the United States and the Global
  * Fund disbursed, "almost all" from ALMOST_ALL up and the share itself below it, and how many
- * countries over $1m each led. It holds for any figures, since it renders with a live read's.
+ * countries over $1m each led. It holds for any figures, since it renders with each build's.
  */
 export const ledeSentence = (data: HivData): string => {
     const { usGfShare, over1m, gfMajority, usMajority } = ledeFigures(data);

@@ -33,6 +33,9 @@ npm-debug.log*
 # wrangler dev state (prototypes/)
 .wrangler/
 
+# the prototypes build's DFO reads (prototypes/scripts/read.mts)
+.build-data/
+
 # python
 __pycache__/
 .pytest_cache/

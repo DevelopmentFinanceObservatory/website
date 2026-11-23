@@ -1,6 +1,6 @@
 // The 62-dot strips: one value per context on a fixed scale, the median of a group, and a
 // deterministic dodge so dots that would overlap stack instead. Dot positions depend only
-// on the data, never on the scope, so nothing moves when the reader picks a context.
+// on the data, so nothing moves when the reader picks a context.
 import type { Context, IndicatorKey, Tier } from '../_data/types.ts';
 
 import { formatPercent, formatPerDollar, formatShare } from './format.ts';
