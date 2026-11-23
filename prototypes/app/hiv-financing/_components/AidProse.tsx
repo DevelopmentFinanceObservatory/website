@@ -5,15 +5,14 @@ import { createContext, use, type ReactNode } from 'react';
 import { SectionRail, type RailSection } from '../../../components/SectionRail/SectionRail';
 
 import { CitedText } from './SourceLink';
-import { useAid, type Aid } from './useAid';
 
-import type { HivData } from '../_data/types.ts';
 import { AID_CITED, AID_TEXT, aidSections } from '../_lib/copy.ts';
+import type { HivFigures } from '../_lib/figures.ts';
 
-const Context = createContext<Aid | null>(null);
+const Context = createContext<HivFigures | null>(null);
 
-/** The page's aid figures, for every component under `AidProvider`. */
-export const useAidFigures = (): Aid => {
+/** The page's figures, for every component under `AidProvider`. */
+export const useAidFigures = (): HivFigures => {
     const value = use(Context);
 
     if (value === null) {
@@ -23,14 +22,15 @@ export const useAidFigures = (): Aid => {
     return value;
 };
 
-/**
- * Holds the page's aid figures (`useAid`) for the island and the prose around it, so both
- * print the same ones. These are hiv.json's in the static HTML and until a live read
- * settles, and the read's after.
- */
-export const AidProvider = ({ data, children }: { data: HivData; children: ReactNode }) => (
-    <Context value={useAid(data)}>{children}</Context>
-);
+/** Holds the figures the build read for the island and the prose around it, so both print the
+ *  same ones. */
+export const AidProvider = ({
+    figures,
+    children,
+}: {
+    figures: HivFigures;
+    children: ReactNode;
+}) => <Context value={figures}>{children}</Context>;
 
 /** A sentence or figure of the prose outside the island, from the aid figures. */
 export const AidText = ({ part }: { part: keyof typeof AID_TEXT }) => (

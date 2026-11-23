@@ -1,7 +1,6 @@
-// The aid figures from DFO's analysis: the recipes the page runs on the aid reads, and the
-// derivation of hiv.json's data from their rows. A port of `aid_recipes` and `aid_from_rows` in
-// _data/fetch.py. aid.test.mts checks both against the trees and rows the step writes to
-// _data/aid-fixture.json and the figures it writes to _data/hiv.json.
+// The aid figures from DFO's analysis: the recipes the page runs on the aid reads, the names it
+// prints from the aid read's labels, and the derivation of the figures from the recipes' rows.
+// The build runs them (./figures.ts), and fails when the rows break what they assume.
 import { DatasetRef, recipe } from '@developmentfinance/client';
 
 import type {
@@ -12,13 +11,7 @@ import type {
     ProviderSeries,
 } from '../_data/types.ts';
 
-import {
-    type LiveRead,
-    readLive,
-    type ReadTier,
-    type ReadTierAttribute,
-    type Recipe,
-} from '#lib/liveRead.ts';
+import type { Recipe } from '#lib/liveRead.ts';
 import { recordOf } from '#lib/record.ts';
 import { pythonRound } from '#lib/round.ts';
 
@@ -29,6 +22,23 @@ const PROVIDER = 'financingProvider';
 const RECIPIENT = 'financingRecipient';
 const PROVIDER_KEYS: readonly ProviderKey[] = ['us', 'globalFund', 'other'];
 const MIN_AID = 1_000_000;
+
+/** The years every series covers. */
+export const YEARS: readonly number[] = Array.from({ length: 10 }, (_, index) => 2015 + index);
+
+/** The base year of the constant US dollars the aid reads are in. */
+export const PRICE_BASE = 2024;
+
+/** The names the page prints for these recipient countries, by ISO code, where the aid read's
+ *  label is dated or clumsy. */
+export const NAME_OVERRIDES: Readonly<Record<string, string>> = {
+    CHN: 'China',
+    CIV: "Côte d'Ivoire",
+    COD: 'DR Congo',
+    MMR: 'Myanmar',
+    SWZ: 'Eswatini',
+    TUR: 'Türkiye',
+};
 /** The lede says the United States and the Global Fund disbursed almost all HIV aid recorded
  *  for countries in the last year. */
 const ALMOST_ALL = 0.95;
@@ -74,13 +84,14 @@ export const RECIPE_KEYS = AID_KEYS.filter(
 /** One row of a recipe or read, as `Dataset.toRows()` gives it. */
 export type AidRow = Readonly<Record<string, unknown>>;
 
-/** The names the page prints, by code: each provider's, and each recipient country's. */
+/** The names the page prints, by code: each provider's, and each recipient country's
+ *  (`aidNames`). */
 export type AidNames = {
     providers: Readonly<Record<string, string>>;
     recipients: Readonly<Record<string, string>>;
 };
 
-/** The aid reads the recipes start from, keyed as in live-refs.json. */
+/** The aid reads the recipes start from, keyed as in _data/live-refs.json. */
 export type AidRefs = Record<'aid' | (typeof GF_KEYS)[number], DatasetRef>;
 
 /** Why the rows gave no figures. */
@@ -90,10 +101,12 @@ export type AidRowsErrorCode =
     | 'aid_wrong_unit'
     | 'aid_not_a_country'
     | 'aid_unnamed'
+    | 'aid_unlabelled'
+    | 'aid_two_labels'
     | 'aid_checks_failed';
 
 /**
- * A rule of fetch.py's `check` and `check_allocation` that the figures break:
+ * A rule the figures break:
  *
  * - `aid_countries_off_allocated`: in the last year, the countries of a provider key sum to
  *   more than a dollar per country away from its allocated total;
@@ -104,7 +117,7 @@ export type AidRowsErrorCode =
  *   How to interpret;
  * - `aid_no_other_providers`: no other provider gives $1m in the first or last year;
  * - `aid_countries_not_recipients`: the countries kept differ in number from the recipients;
- * - `aid_parties_not_countries`: DFO's recipient parties are not names.json's recipient
+ * - `aid_parties_not_countries`: DFO's recipient parties are not the aid read's recipient
  *   countries, as when a country recipient is marked residual and its money counted as
  *   unallocated.
  */
@@ -117,8 +130,8 @@ export type AidCheck =
     | 'aid_countries_not_recipients'
     | 'aid_parties_not_countries';
 
-/** The rows break what `aidFromRows` assumes, so the page keeps its committed figures. With
- *  the code `aid_checks_failed`, `checks` names each rule the figures break. */
+/** The rows break what `aidNames` or `aidFromRows` assumes, so the build stops. With the code
+ *  `aid_checks_failed`, `checks` names each rule the figures break. */
 export class AidRowsError extends Error {
     readonly code: AidRowsErrorCode;
     readonly checks: readonly AidCheck[];
@@ -246,7 +259,7 @@ const nameOf = (names: Readonly<Record<string, string>>, code: string): string =
     const name = names[code];
 
     if (name === undefined) {
-        throw new AidRowsError('aid_unnamed', `names.json has no name for ${code}`);
+        throw new AidRowsError('aid_unnamed', `the aid read names no ${code}`);
     }
 
     return name;
@@ -316,8 +329,7 @@ const loans = (
 const same = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
     a.size === b.size && [...a].every((code) => b.has(code));
 
-/** Each rule of `AidCheck` that `data` breaks, as fetch.py's `check` and `check_allocation`
- *  test them; empty when all hold. */
+/** Each rule of `AidCheck` that `data` breaks; empty when all hold. */
 const aidProblems = (
     data: HivData,
     {
@@ -369,12 +381,78 @@ const aidProblems = (
     return problems.filter(([, broken]) => broken).map(([check]) => check);
 };
 
+/** Each code of `column` in the aid read's rows with its label, refusing a code whose label
+ *  is missing, where `labelled` says it needs one, or that has two labels. */
+const labelsOf = (
+    rows: readonly AidRow[],
+    column: typeof PROVIDER | typeof RECIPIENT,
+    labelled: (code: string) => boolean,
+): Map<string, string> => {
+    const found = new Map<string, string>();
+
+    for (const row of rows) {
+        const code = row[column];
+
+        if (code === null || code === undefined) {
+            continue;
+        }
+
+        const label = row[`${column}_label`];
+
+        if (typeof label !== 'string' || label === '') {
+            if (labelled(String(code))) {
+                throw new AidRowsError('aid_unlabelled', `${column} ${String(code)} has no label`);
+            }
+
+            continue;
+        }
+
+        const held = found.get(String(code));
+
+        if (held !== undefined && held !== label) {
+            throw new AidRowsError(
+                'aid_two_labels',
+                `${column} ${String(code)} has two labels, ${held} and ${label}`,
+            );
+        }
+
+        found.set(String(code), label);
+    }
+
+    return found;
+};
+
 /**
- * hiv.json's data from the rows of the aid recipes and the Global Fund reads, as `aid_from_rows`
- * in fetch.py gives it. Each provider counts as the United States, the Global Fund or other by
+ * The names the page prints, from the rows of the aid read: each provider's label, and each
+ * recipient country's label or its name in `NAME_OVERRIDES`. Regions and other recipients that
+ * are not countries are left out. Codes come in code-point order.
+ *
+ * @throws {AidRowsError} A provider or recipient country without a label (`aid_unlabelled`),
+ *   or a code with two labels (`aid_two_labels`).
+ */
+export const aidNames = (rows: readonly AidRow[]): AidNames => {
+    const isCountry = (code: string) => code.startsWith(COUNTRY);
+    const sorted = (labels: Map<string, string>) =>
+        [...labels].sort(([a], [b]) => byCodePoint(a, b));
+
+    return {
+        providers: Object.fromEntries(sorted(labelsOf(rows, PROVIDER, () => true))),
+        recipients: Object.fromEntries(
+            sorted(labelsOf(rows, RECIPIENT, isCountry))
+                .filter(([code]) => isCountry(code))
+                .map(([code, label]) => [
+                    code,
+                    NAME_OVERRIDES[code.slice(COUNTRY.length)] ?? label,
+                ]),
+        ),
+    };
+};
+
+/**
+ * The aid figures from the rows of the aid recipes and the Global Fund reads. Each provider counts as the United States, the Global Fund or other by
  * its code. A country is kept when its last-year aid rounds above zero. Countries come in
- * descending order of last-year aid, a tie in code order. The figures must pass the step's
- * checks (`AidCheck`).
+ * descending order of last-year aid, a tie in code order. The figures must pass every
+ * `AidCheck`.
  *
  * @throws {AidRowsError} A row in another unit, a second row for a member and year, a row it
  *   cannot read, a recipient that is not a country, a printed name `names` lacks, or figures
@@ -472,7 +550,7 @@ export const aidFromRows = (
     if (broken.length > 0) {
         throw new AidRowsError(
             'aid_checks_failed',
-            `The figures break the step's checks: ${broken.join(', ')}`,
+            `The figures break the page's checks: ${broken.join(', ')}`,
             broken,
         );
     }
@@ -499,52 +577,4 @@ export const aidSources = (
         'gf-12250': { ref: refs['gf-12250'] },
         'gf-12110': { ref: refs['gf-12110'] },
     };
-};
-
-/**
- * The aid figures from the newest stored versions of the reads `refs` name, or `committed`
- * with the tier `committed` when a stored read fails or `aidFromRows` refuses its rows. An
- * async function, so a ref the client cannot read rejects the promise, which the caller's
- * effect handles.
- */
-export const readAid = async (
-    committed: HivData,
-    {
-        refs,
-        names,
-        signal,
-    }: {
-        refs: Record<'aid' | (typeof GF_KEYS)[number], unknown>;
-        names: AidNames;
-        signal?: AbortSignal;
-    },
-): Promise<LiveRead<AidKey, HivData>> =>
-    readLive(
-        aidSources(refs, [committed.years[0]!, committed.years.at(-1)!]),
-        (rows) =>
-            aidFromRows(rows, { years: committed.years, priceBase: committed.priceBase, names }),
-        { fallback: { tier: 'committed', value: committed }, signal },
-    );
-
-const RANK: Record<ReadTier, number> = { committed: 0, pinned: 1, built: 2, stored: 3 };
-
-/**
- * The island's `data-read-tier`, the oldest tier of the two reads its figures come from: the
- * aid's (`committed` while the page does not read it live) and the UNAIDS read's. It is
- * `failed` when the UNAIDS read failed and `loading` while either read loads, so `stored`
- * means every figure in the island came from DFO's newest stored data.
- */
-export const islandTier = (
-    aid: ReadTier | 'loading',
-    unaids: ReadTierAttribute,
-): ReadTierAttribute => {
-    if (unaids === 'failed' || unaids === 'loading') {
-        return unaids;
-    }
-
-    if (aid === 'loading') {
-        return 'loading';
-    }
-
-    return RANK[aid] < RANK[unaids] ? aid : unaids;
 };

@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { readFileSync } from 'node:fs';
-
 import type { HivData } from '../_data/types.ts';
 
 import {
@@ -39,6 +37,7 @@ import {
     UKRAINE,
     YEARS,
 } from './fixture.mts';
+import { AID_DATA } from './rowsFixture.mts';
 
 test('the lede names the two providers and the majority split; the share note carries the share', () => {
     assert.equal(
@@ -347,11 +346,20 @@ test('other measures: the Global Fund share against countries and against the wi
 });
 
 test("the prose outside the island follows the figures it is given, the island's", () => {
-    const hiv = (
-        JSON.parse(readFileSync(new URL('../_data/hiv.json', import.meta.url), 'utf8')) as {
-            data: HivData;
-        }
-    ).data;
+    // A US dip in 2019 and a Global Fund rise from 2020, so the swing and code-change sentences
+    // print.
+    const hiv: HivData = {
+        ...AID_DATA,
+        allocated: {
+            ...AID_DATA.allocated,
+            us: AID_DATA.allocated.us.map((value, index) =>
+                AID_DATA.years[index] === 2019 ? value / 2 : value,
+            ),
+            globalFund: AID_DATA.allocated.globalFund.map((value, index) =>
+                AID_DATA.years[index]! >= 2020 ? value * 2 : value,
+            ),
+        },
+    };
     // Live figures a year on, with twice the loans and one country fewer.
     const live: HivData = {
         ...hiv,

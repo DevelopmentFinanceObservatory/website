@@ -4,16 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAidFigures } from './AidProse';
 import { CountrySearch } from './CountrySearch';
-import { CountryTable, FAILED } from './CountryTable';
+import { CountryTable } from './CountryTable';
 import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
-import { UnaidsStatus } from './UnaidsStatus';
-import { READ_AID_LIVE } from './useAid';
-import { useUnaids } from './useUnaids';
 
-import type { HivData, UnaidsFigures } from '../_data/types.ts';
+import type { HivData } from '../_data/types.ts';
 import {
     aidSections,
     allSentence,
@@ -23,27 +20,10 @@ import {
     tableRule,
     unallocatedCaption,
 } from '../_lib/copy.ts';
-import { islandTier } from '../_lib/aid.ts';
-import { lastYear, PER_PERSON_MIN_PLHIV, scopeMulti, scopeSeries } from '../_lib/summary.ts';
+import { lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
-import { tierAttribute } from '#lib/liveRead.ts';
-
 const ALL_COUNTRIES = 'All countries';
-
-/**
- * Stand-in UNAIDS figures that print each clause of a country's sentence in its longest form:
- * treatment coverage, deaths over 100,000, and a head count in millions. The opening's ratio
- * is longest at the fewest people the page gives a ratio for, so a second stand-in takes that
- * head count. The sentence reserves their room before the reads land, so the page below stays
- * put when the figures arrive.
- */
-const standIns = (years: readonly number[]): UnaidsFigures[] =>
-    [8_888_888, PER_PERSON_MIN_PLHIV].map((plhiv) => ({
-        plhiv,
-        art: 100,
-        deaths: years.map((_, index) => (index === 0 ? 888_888 : 999_888)),
-    }));
 
 const chartTitle = (name: string, data: HivData) =>
     `${name}, ${data.years[0]} to ${data.years.at(-1)}, constant ${data.priceBase} US dollars`;
@@ -59,29 +39,16 @@ const scrollBehaviour = (): ScrollBehavior =>
  * per-person strip, and the country table. Choosing the selected country again from a dot
  * or a row returns to all countries; choosing it in the search keeps it.
  *
- * The aid figures are hiv.json's, or DFO's newest stored ones when the page reads them live
- * (useAid, held by AidProvider for the island and the prose around it). The UNAIDS figures
- * come from the browser reads (useUnaids). Until they arrive, or when they fail, a country's
- * sentence leaves out its per-person, treatment and deaths clauses, the strip gives way to a
- * status line in the strip's room, and the table's UNAIDS columns wait. The sentence reserves room for those clauses from the first paint.
+ * The aid and UNAIDS figures are the ones the build read from DFO, held by AidProvider for the
+ * island and the prose around it.
  */
 export const HivFinancing = () => {
     const [selected, setSelected] = useState<string | null>(null);
     const islandRef = useRef<HTMLDivElement>(null);
     const topRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLElement>(null);
-    const aid = useAidFigures();
-    const { data } = aid;
-    const unaids = useUnaids(data.countries, data.years);
-    const countries = useMemo(
-        () =>
-            joinUnaids(
-                data.countries,
-                unaids.status === 'ready' ? unaids.figures : null,
-                data.years,
-            ),
-        [data, unaids],
-    );
+    const { data, unaids } = useAidFigures();
+    const countries = useMemo(() => joinUnaids(data.countries, unaids, data.years), [data, unaids]);
     const chosen =
         selected === null ? undefined : countries.find((country) => country.iso3 === selected);
     const [chartSection, tableSection] = aidSections(data);
@@ -96,11 +63,6 @@ export const HivFinancing = () => {
             sentences: [
                 allSentence(data),
                 ...countries.map((country) => countrySentence(country, data.years)),
-                ...standIns(data.years).flatMap((figures) =>
-                    data.countries.map((country) =>
-                        countrySentence({ ...country, ...figures }, data.years),
-                    ),
-                ),
             ],
             titles: [ALL_COUNTRIES, ...countries.map((country) => country.name)].map((name) =>
                 chartTitle(name, data),
@@ -139,8 +101,8 @@ export const HivFinancing = () => {
         <div
             ref={islandRef}
             className={styles.island}
-            data-read-tier={islandTier(aid.tier, tierAttribute(unaids))}
-            data-read-live={String(READ_AID_LIVE)}
+            data-read-tier="built"
+            data-read-live="built"
         >
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>
@@ -179,18 +141,14 @@ export const HivFinancing = () => {
                     scope={selected ?? ALL_COUNTRIES}
                 />
                 <p className={styles.note}>{unallocatedCaption(data)}</p>
-                <div className={styles.below} data-waiting={unaids.status !== 'ready'}>
-                    {unaids.status === 'ready' ? (
-                        <PerPersonStrip
-                            countries={countries}
-                            year={year}
-                            caption={stripCaption(countries, year)}
-                            selected={selected}
-                            onSelect={toggle}
-                        />
-                    ) : (
-                        <UnaidsStatus state={unaids} what="the strip of aid per person" />
-                    )}
+                <div className={styles.below}>
+                    <PerPersonStrip
+                        countries={countries}
+                        year={year}
+                        caption={stripCaption(countries, year)}
+                        selected={selected}
+                        onSelect={toggle}
+                    />
                 </div>
             </section>
 
@@ -203,15 +161,8 @@ export const HivFinancing = () => {
                     {tableSection.title}
                 </h2>
                 <p className={styles.rule}>{tableRule(data)}</p>
-                <UnaidsStatus
-                    state={unaids}
-                    what="the UNAIDS columns"
-                    announce
-                    failed={`The table marks their figures "${FAILED}".`}
-                />
                 <CountryTable
                     countries={countries}
-                    unaids={unaids.status}
                     year={year}
                     legend={flagLegend(data)}
                     selected={selected}

@@ -1,10 +1,10 @@
 import { prototype, prototypeMetadata } from '../../registry';
 
-import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
 import prose from '../../components/Prose/Prose.module.scss';
 
-import { AidCited, AidProvider, AidRail, AidText } from './_components/AidProse';
+import { AidCited, AidText } from './_components/AidProse';
 import { HivFinancing } from './_components/HivFinancing';
+import { HivPage, Retrieved } from './_components/HivPage';
 import { CitedText, SourceEntry } from './_components/SourceLink';
 import { UnaidsNotes } from './_components/UnaidsNotes';
 import {
@@ -15,31 +15,13 @@ import {
     SCOPE_NOTE,
     SOURCES,
 } from './_lib/copy';
-import hiv from './_data/hiv.json';
+import { PRICE_BASE } from './_lib/aid';
 
 export const entry = prototype('hiv-financing');
 
 export const metadata = prototypeMetadata(entry);
 
-export default ({ children }) => (
-    <AidProvider data={hiv.data}>
-        <PrototypePage
-            title={entry.title}
-            rail={
-                <AidRail
-                    after={[
-                        { id: 'how-to-interpret', title: 'How to interpret' },
-                        { id: 'notes', title: 'Notes' },
-                        { id: 'sources', title: 'Sources' },
-                    ]}
-                />
-            }
-            lede={<AidText part="lede" />}
-        >
-            {children}
-        </PrototypePage>
-    </AidProvider>
-);
+export default ({ children }) => <HivPage title={entry.title}>{children}</HivPage>;
 
 <HivFinancing />
 
@@ -57,11 +39,11 @@ export default ({ children }) => (
     <AidCited part="otherMeasures" className={prose.a} />
 </p>
 
-HIV aid here is gross ODA disbursements under CRS code 13040 (STD control including HIV/AIDS) in constant {hiv.data.priceBase} US dollars. <AidText part="loans" /> Totals exclude HIV work under other codes, such as social mitigation of HIV/AIDS (16064), health systems, or reproductive health.
+HIV aid here is gross ODA disbursements under CRS code 13040 (STD control including HIV/AIDS) in constant {PRICE_BASE} US dollars. <AidText part="loans" /> Totals exclude HIV work under other codes, such as social mitigation of HIV/AIDS (16064), health systems, or reproductive health.
 
 The Global Fund also records combined HIV and tuberculosis grants mostly under code 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Because these grants are only partly for HIV, the chart shows them hatched, outside the totals, and the table marks the countries that received them in <AidText part="lastYear" />. <AidText part="codeChange" />
 
-Constant {hiv.data.priceBase} US dollars use OECD donor-price deflators, with the Global Fund's deflator for multi-disease grants. Disbursements appear in the year reported, so single-year swings can reflect reporting timing. <AidText part="usSwing" />
+Constant {PRICE_BASE} US dollars use OECD donor-price deflators, with the Global Fund's deflator for multi-disease grants. Disbursements appear in the year reported, so single-year swings can reflect reporting timing. <AidText part="usSwing" />
 
 The data cover official external aid only and exclude private foundations, such as the Gates Foundation.
 
@@ -97,4 +79,4 @@ People living with HIV, antiretroviral therapy coverage, and AIDS-related deaths
     ))}
 </ul>
 
-Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {hiv.provenance.retrieved.slice(0, 10)}.
+Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on <Retrieved />.

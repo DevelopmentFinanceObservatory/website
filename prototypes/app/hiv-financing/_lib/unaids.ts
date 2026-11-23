@@ -1,6 +1,5 @@
-// The UNAIDS figures by country, derived in the browser from the rows of the reads in
-// _data/live-refs.json. A port of `unaids_by_country` in _data/fetch.py; unaids.test.mts checks
-// it against the rows and figures the step writes to _data/unaids-fixture.json.
+// The UNAIDS figures by country, derived at build time from the rows of the reads in
+// _data/live-refs.json (./figures.ts).
 import type { Country, UnaidsFigures } from '../_data/types.ts';
 
 import { pythonRound } from '#lib/round.ts';
@@ -38,8 +37,7 @@ export class UnaidsRowsError extends Error {
     }
 }
 
-/** A read's values by year for one place. A row with a null or NaN value counts as no figure,
- *  as `yearly` in fetch.py reads it. */
+/** A read's values by year for one place. A row with a null or NaN value counts as no figure. */
 const yearly = (rows: readonly UnaidsRow[], place: string): Map<number, number> => {
     const values = new Map<number, number>();
 
@@ -72,18 +70,6 @@ const yearly = (rows: readonly UnaidsRow[], place: string): Map<number, number> 
     }
 
     return values;
-};
-
-/** The countries a UNAIDS reading is for, in code order, and the key it is shared and re-run
- *  under. The same countries in another order, as a live aid read can give them, make the
- *  same key, so they reuse the reading. */
-export const readingOf = (
-    iso3s: readonly string[],
-    years: readonly number[],
-): { iso3s: string[]; key: string } => {
-    const sorted = iso3s.toSorted();
-
-    return { iso3s: sorted, key: `${sorted.join(',')}|${years.join(',')}` };
 };
 
 /**
@@ -130,16 +116,15 @@ export const unaidsByCountry = (
     );
 };
 
-/** Each country with its figures, or with every figure null where `figures` is null (before
- *  the reads arrive, or after they fail) or lacks the country. */
+/** Each country with its figures, or with every figure null where `figures` lacks it. */
 export const joinUnaids = <TCountry extends Pick<Country, 'iso3'>>(
     countries: readonly TCountry[],
-    figures: Readonly<Record<string, UnaidsFigures>> | null,
+    figures: Readonly<Record<string, UnaidsFigures>>,
     years: readonly number[],
 ): (TCountry & UnaidsFigures)[] =>
     countries.map((country) => ({
         ...country,
-        ...(figures?.[country.iso3] ?? {
+        ...(figures[country.iso3] ?? {
             plhiv: null,
             art: null,
             deaths: years.map(() => null),

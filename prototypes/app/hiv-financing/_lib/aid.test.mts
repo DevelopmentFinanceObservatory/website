@@ -1,96 +1,80 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { DatasetRef } from '@developmentfinance/client';
-
-import type { HivData } from '../_data/types.ts';
-
 import {
-    AID_KEYS,
     aidFromRows,
-    aidRecipes,
+    aidNames,
     AidRowsError,
-    islandTier,
-    readAid,
+    PRICE_BASE,
+    YEARS,
     type AidCheck,
     type AidKey,
     type AidNames,
     type AidRow,
-    RECIPE_KEYS,
 } from './aid.ts';
+import { AID_DATA, AID_READ_ROWS, aidRows } from './rowsFixture.mts';
 
-import { recordOf } from '#lib/record.ts';
+const names = aidNames(AID_READ_ROWS);
+const scope = { years: YEARS, priceBase: PRICE_BASE, names };
 
-const load = <T,>(name: string): T =>
-    (JSON.parse(readFileSync(new URL(`../_data/${name}`, import.meta.url), 'utf8')) as { data: T })
-        .data;
-
-// The trees and rows of the pinned reads, as fetch.py wrote them, and the figures it derived.
-const fixture = load<{
-    recipes: Record<string, unknown>;
-    rows: Record<
-        AidKey,
-        {
-            unit: Record<string, unknown>;
-            rows: [member: string | null, period: string | number, value: number][];
-        }
-    >;
-}>('aid-fixture.json');
-const hiv = load<HivData>('hiv.json');
-const names = load<AidNames>('names.json');
-const liveRefs = load<Record<string, unknown>>('live-refs.json');
-const MEMBER: Record<AidKey, string | null> = {
-    allocatedByProvider: 'financingProvider',
-    unallocatedByProvider: 'financingProvider',
-    allocatedByRecipient: 'financingRecipient',
-    usByRecipient: 'financingRecipient',
-    globalFundByRecipient: 'financingRecipient',
-    loans: 'financingProvider',
-    gf12250Total: null,
-    gf12110Total: null,
-    'gf-12250': 'financingRecipient',
-    'gf-12110': 'financingRecipient',
-};
-
-/** Each recipe's and read's rows, as `Dataset.toRows()` gives them. */
-const pinnedRows = (): Record<AidKey, AidRow[]> =>
-    recordOf(AID_KEYS, (key) => {
-        const { unit, rows } = fixture.rows[key];
-        const column = MEMBER[key];
-
-        return rows.map(([member, period, value]) => ({
-            ...(column === null ? {} : { [column]: member }),
-            time_period: period,
-            value,
-            ...unit,
-        }));
-    });
-
-const scope = { years: hiv.years, priceBase: hiv.priceBase, names };
-
-test('the recipes send the trees fetch.py sent', () => {
-    const recipes = aidRecipes(
-        {
-            aid: DatasetRef.fromJSON(liveRefs.aid),
-            'gf-12250': DatasetRef.fromJSON(liveRefs['gf-12250']),
-            'gf-12110': DatasetRef.fromJSON(liveRefs['gf-12110']),
-        },
-        [hiv.years[0]!, hiv.years.at(-1)!],
-    );
-
-    assert.deepStrictEqual(
-        recordOf(RECIPE_KEYS, (key) => recipes[key].tree()),
-        fixture.recipes,
-    );
+test('the rows give the figures, every check passing', () => {
+    assert.deepStrictEqual(aidFromRows(aidRows(), scope), AID_DATA);
 });
 
-test('the pinned rows give hiv.json exactly', () => {
-    assert.deepStrictEqual(aidFromRows(pinnedRows(), scope), hiv);
+test("the names are the aid read's labels, with the overrides, for countries only", () => {
+    assert.deepStrictEqual(names, {
+        providers: {
+            GlobalFund: 'Global Fund',
+            InternationalDevelopmentAssociation: 'International Development Association',
+            'country/GBR': 'United Kingdom',
+            'country/USA': 'United States',
+        },
+        recipients: { 'country/CIV': "Côte d'Ivoire", 'country/KEN': 'Kenya' },
+    });
+});
+
+const labelRefusal = (change: (row: AidRow) => AidRow | null, code: string) => {
+    const rows = AID_READ_ROWS.flatMap((row, index) => {
+        const changed = index === 0 ? change(row) : row;
+
+        return changed === null ? [row] : [row, changed];
+    });
+
+    assert.throws(
+        () => aidNames(rows),
+        (error) => error instanceof AidRowsError && error.code === code,
+    );
+};
+
+test('a missing or second label for a code the page may print fails the names', () => {
+    labelRefusal(
+        (row) => ({ ...row, financingProvider: 'NewDonor', financingProvider_label: null }),
+        'aid_unlabelled',
+    );
+    labelRefusal(
+        (row) => ({ ...row, financingRecipient: 'country/UGA', financingRecipient_label: '' }),
+        'aid_unlabelled',
+    );
+    labelRefusal((row) => ({ ...row, financingProvider_label: 'USA' }), 'aid_two_labels');
+    labelRefusal(
+        (row) => ({ ...row, financingRecipient_label: 'Kenya, Republic of' }),
+        'aid_two_labels',
+    );
+    // A region the page never prints may lack a label.
+    assert.doesNotThrow(() =>
+        aidNames([
+            ...AID_READ_ROWS,
+            {
+                ...AID_READ_ROWS[0]!,
+                financingRecipient: 'Bilateral',
+                financingRecipient_label: null,
+            },
+        ]),
+    );
 });
 
 test('a provider counts by its code, whatever its label', () => {
-    const rows = pinnedRows();
+    const rows = aidRows();
     const renamed = {
         ...names,
         providers: { ...names.providers, 'country/USA': 'United States Agency' },
@@ -98,12 +82,12 @@ test('a provider counts by its code, whatever its label', () => {
 
     assert.deepStrictEqual(
         aidFromRows(rows, { ...scope, names: renamed }).allocated,
-        hiv.allocated,
+        AID_DATA.allocated,
     );
 });
 
 const refusal = (change: (rows: Record<AidKey, AidRow[]>) => void, code: string) => {
-    const rows = pinnedRows();
+    const rows = aidRows();
 
     change(rows);
     assert.throws(
@@ -137,17 +121,17 @@ test('rows the derivation cannot trust are refused', () => {
 });
 
 test('a provider without a name is fine where the page prints none', () => {
-    const rows = pinnedRows();
+    const rows = aidRows();
 
     rows.allocatedByProvider.push({
         ...rows.allocatedByProvider[0]!,
         financingProvider: 'SmallDonor',
         value: 10,
     });
-    assert.deepStrictEqual(aidFromRows(rows, scope).otherProviders, hiv.otherProviders);
+    assert.deepStrictEqual(aidFromRows(rows, scope).otherProviders, AID_DATA.otherProviders);
 });
 
-const LAST = String(hiv.years.at(-1));
+const LAST = String(YEARS.at(-1));
 const US = 'country/USA';
 const GLOBAL_FUND = 'GlobalFund';
 
@@ -158,7 +142,7 @@ const broken = (
     change: (rows: Record<AidKey, AidRow[]>) => void,
     names: AidNames = scope.names,
 ): readonly AidCheck[] => {
-    const rows = pinnedRows();
+    const rows = aidRows();
 
     change(rows);
 
@@ -175,7 +159,7 @@ const broken = (
     return [];
 };
 
-test("figures that break the step's checks are refused, each check by its code", () => {
+test("figures that break the page's checks are refused, each check by its code", () => {
     assert.deepEqual(
         broken(() => {}),
         [],
@@ -285,25 +269,4 @@ test("figures that break the step's checks are refused, each check by its code",
         }),
         ['aid_parties_not_countries'],
     );
-});
-
-test('a ref the client cannot read rejects the read, and does not throw', async () => {
-    let read: Promise<unknown> | undefined;
-
-    assert.doesNotThrow(() => {
-        read = readAid(hiv, {
-            refs: { aid: {}, 'gf-12250': {}, 'gf-12110': {} },
-            names,
-        });
-    });
-    await assert.rejects(read!);
-});
-
-test("the island's tier is the older of the aid's and the UNAIDS read's", () => {
-    // Aid read from hiv.json, as while the page does not read it live.
-    assert.equal(islandTier('committed', 'stored'), 'committed');
-    assert.equal(islandTier('stored', 'pinned'), 'pinned');
-    assert.equal(islandTier('stored', 'stored'), 'stored');
-    assert.equal(islandTier('loading', 'stored'), 'loading');
-    assert.equal(islandTier('committed', 'failed'), 'failed');
 });
