@@ -250,14 +250,14 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
                 {list()}
             </div>
             <div className={styles.foot}>
-                <Button variant="dark" disabled={!live} onClick={() => onSend(unit)}>
-                    Send
-                </Button>
                 {onSkip && (
                     <Button variant="bordered" onClick={onSkip}>
                         Skip
                     </Button>
                 )}
+                <Button variant="dark" disabled={!live} onClick={() => onSend(unit)}>
+                    Send
+                </Button>
             </div>
         </div>
     );

@@ -1,10 +1,11 @@
 @use "variables" as *;
 @use "mixins" as *;
 
-// The unit choice: chips, the open chip's list under them, then Send and
-// Skip. The list is the plan ledger's radio list (PlanLedger.module.scss
-// `.options`); the chips are the follow-up chip (ChatPanel.module.scss
-// `.followupChip`) in charcoal with a chevron.
+// The unit choice: chips, the open chip's list under them, then Skip and
+// Send at the right, as on the plan card's approve bar. The list is the
+// plan ledger's radio list (PlanLedger.module.scss `.options`); the chips
+// are the follow-up chip (ChatPanel.module.scss `.followupChip`) in
+// charcoal with a chevron.
 .choice {
     @include flex(column, flex-start, stretch);
 
@@ -126,7 +127,7 @@
 }
 
 .foot {
-    @include flex(row, flex-start, center);
+    @include flex(row, flex-end, center);
 
     gap: rem(10);
 }
