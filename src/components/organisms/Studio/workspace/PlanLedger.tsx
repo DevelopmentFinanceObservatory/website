@@ -14,6 +14,7 @@ import {
     stepCount,
     switchPendingText,
     switchReply,
+    unitFromOptionId,
     unitOptionId,
     yearsText,
     type PlanChoiceView,
@@ -202,6 +203,9 @@ const ChoiceRow = ({
                         // over on it.
                         key={unitOptionId(decision.unit.start)}
                         offer={decision.unit}
+                        // Reopened while a switch runs or after it failed,
+                        // the chips show the unit that switch names.
+                        initial={unitFromOptionId(decision.unit, pending ?? failedOption ?? '')}
                         sendDisabledUntilChanged
                         busy={busy}
                         pendingText={pending ? switchPendingText(choice.planner) : null}

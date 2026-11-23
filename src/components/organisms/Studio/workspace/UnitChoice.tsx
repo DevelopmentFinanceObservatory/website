@@ -26,6 +26,9 @@ import Icon from '@/components/atoms/Icon/Icon';
 
 type UnitChoiceProps = {
     offer: UnitOffer;
+    // The unit the chips open on, `offer.start` when not given: on the plan
+    // card, the unit a switch in flight or its failure names.
+    initial?: Unit | null;
     onSend: (unit: Unit) => void;
     // Skip renders only when given.
     onSkip?: () => void;
@@ -123,13 +126,14 @@ const UnitList = <TValue extends string | number>({
 // optional Skip. The pure rules live in lib/studio/unitChoice.ts.
 const UnitChoice = ({
     offer,
+    initial,
     onSend,
     onSkip,
     sendDisabledUntilChanged,
     busy,
     pendingText,
 }: UnitChoiceProps) => {
-    const [unit, setUnit] = useState<Unit>(offer.start);
+    const [unit, setUnit] = useState<Unit>(initial ?? offer.start);
     const [open, setOpen] = useState<UnitChipKey | null>(null);
     const [all, setAll] = useState(false);
     const [query, setQuery] = useState('');
