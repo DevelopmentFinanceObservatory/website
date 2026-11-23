@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    CHECK_USER_AGENT_TOKEN,
     checkPage,
+    checkUserAgent,
     exitCode,
     expectedTier,
     liveSwitch,
@@ -246,4 +248,11 @@ test('withRetries runs again after a failing run, up to its attempts, and stops 
 
     assert.equal(exitCode(failed), 1);
     assert.equal(made, 2);
+});
+
+test('the check appends its product token to the browser User-Agent', () => {
+    const sent = checkUserAgent('Mozilla/5.0 HeadlessChrome/130.0 Safari/537.36');
+
+    assert.equal(CHECK_USER_AGENT_TOKEN, 'dfo-prototypes-check/1');
+    assert.equal(sent, 'Mozilla/5.0 HeadlessChrome/130.0 Safari/537.36 dfo-prototypes-check/1');
 });

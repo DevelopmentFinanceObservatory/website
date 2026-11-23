@@ -55,6 +55,10 @@ log = logging.getLogger("pipeline")
 # build's own reads may (BUILD_TIMEOUT_MS in lib/buildRead.ts).
 CALL_TIMEOUT_S = 300.0
 
+# The User-Agent of every client the build creates, so DFO's analytics counts the
+# build's reads as internal traffic (BUILD_USER_AGENT in lib/buildRead.ts).
+BUILD_USER_AGENT = "dfo-prototypes-build/1"
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Build the 2025 view from DFO's newest stored data and print it; return the exit code."""
@@ -79,7 +83,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if snapshot is None:
             raise DataError(f"reference.json has no {CURRENT_BASE} view; run the data step.")
         us_rate, ida = snapshot_values(snapshot)
-        with dfo.Client(api_key=False, timeout=CALL_TIMEOUT_S, max_retries=3) as client:
+        with dfo.Client(
+            api_key=False,
+            timeout=CALL_TIMEOUT_S,
+            max_retries=3,
+            headers={"User-Agent": BUILD_USER_AGENT},
+        ) as client:
             reads = Reads(client, mode=Mode.STORED, committed=committed)
             release = ids_release(client)
             archived, current = views(date.fromisoformat(snapshot["read"]), current_ids=release)
