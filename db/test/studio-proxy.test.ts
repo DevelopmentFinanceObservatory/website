@@ -16,7 +16,7 @@ const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
  * The Studio proxy (src/lib/studio/studioProxy) counts each call against the
  * per-address rate limit once, before it reads the body, and checks who owns
  * a conversation only for a call the limit lets through, so a rate-limited
- * turn claims no conversation and a body the proxy refuses still counts. Runs on a migrated database as
+ * turn claims no conversation and a body the proxy refuses counts too. Runs on a migrated database as
  * the runtime role, since the rate limit and the owner rows both live there.
  */
 test('a Studio call counts once and a rate-limited turn writes no owner row', async (t) => {
@@ -120,7 +120,32 @@ test('a Studio call counts once and a rate-limited turn writes no owner row', as
     ] as const) {
         await admin.query('delete from limit_counter');
 
-        assert.equal((await post(body)).status, status);
+        const refused = await post(body);
+
+        assert.equal(refused.status, status);
+        assert.equal(refused.headers.get('x-ratelimit-limit'), '1');
         assert.deepEqual(await counted(), [1]);
     }
+
+    // A body that fails to read for any reason but a dropped client is the
+    // server's fault: a retryable 503 that still carries the rate headers.
+    await admin.query('delete from limit_counter');
+
+    const failing = await proxy(
+        new NextRequest('http://site.test/api/v1/studio/turn', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: new ReadableStream({
+                pull: (controller) => controller.error(new Error('read failed')),
+            }),
+            duplex: 'half',
+        } as ConstructorParameters<typeof NextRequest>[1]),
+        { params: Promise.resolve({ path: ['turn'] }) },
+    );
+    const failure = await failing.json();
+
+    assert.equal(failing.status, 503);
+    assert.equal(failure.code, 'transient_unavailable');
+    assert.equal(failure.retryable, true);
+    assert.equal(failing.headers.get('x-ratelimit-limit'), '1');
 });

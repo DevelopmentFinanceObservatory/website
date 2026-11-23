@@ -55,12 +55,13 @@ export type ConversationRow = typeof conversation.$inferSelect;
  * The account a harness conversation (`agentSessionId`) belongs to, which the
  * Studio proxy (src/lib/studio/studioProxy) reads in its `admit` hook, after
  * the rate limit, on each call that names a conversation
- * (src/lib/studio/studioAccess). Three writers insert the row, each only when
- * none exists and no two accounts' saved conversations name the harness
- * conversation (src/lib/chat/conversationSave): a signed-in turn naming it, a
- * save naming it, and a read that finds no row while every saved
- * conversation naming it belongs to one account. Once
- * written, the owner stays, so a save by another account, or the owner's save
+ * (src/lib/studio/studioAccess). A signed-in turn naming it, a save naming
+ * it, or a read finding no row inserts the row when none exists
+ * (src/lib/chat/conversationSave). The owner is the account behind the
+ * oldest saved conversation naming the harness conversation, by
+ * `conversation.created_at`, then `id`, and with no such save, the account
+ * whose turn or save made the claim. A read with no save writes nothing.
+ * Once written, the owner stays, so a save by another account, or the owner's save
  * naming a different harness conversation, leaves it as it was. Deleting the
  * account sets `userId` to null and keeps the row, so the conversation
  * belongs to nobody and the proxy refuses every call about it.

@@ -78,7 +78,7 @@ export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
     // The verdict of a call the caller has already counted against `surface`
-    // (the Studio proxy counts before it reads a body); forward() then counts
+    // (the Studio proxy counts before it reads a body), so forward() counts
     // nothing more.
     counted?: RateVerdict;
     // The upstream URL to hit (path + query already resolved).

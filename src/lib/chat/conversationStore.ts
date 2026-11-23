@@ -5,7 +5,12 @@ import {
     searchConversations as searchIn,
     type ConversationMeta,
 } from './conversationSearch';
-import { claimSessionOwner, saveConversation, sessionOwners } from './conversationSave';
+import {
+    claimSessionOwner,
+    readSavedConversation,
+    saveConversation,
+    sessionOwners,
+} from './conversationSave';
 import type { SavedConversation } from './history';
 
 import { db } from '@/lib/db';
@@ -48,18 +53,18 @@ export const getConversation = async (
         .where(and(eq(conversation.userId, userId), eq(conversation.id, id)))
         .limit(1);
 
-    return row ? (row.data as SavedConversation) : null;
+    return row ? readSavedConversation(row.data as SavedConversation) : null;
 };
 
 /** The account the harness conversation `agentSessionId` belongs to, as a
  *  list of none or one, null for a deleted account
  *  (src/lib/studio/studioAccess). A conversation with no owner row goes to
- *  the account behind its saves when they agree on one (sessionOwners). */
+ *  the account behind the oldest save naming it (sessionOwners). */
 export const conversationOwners = (agentSessionId: string): Promise<(string | null)[]> =>
     sessionOwners(db, agentSessionId);
 
-/** Make `userId` the owner of a harness conversation no account owns, and
- *  answer its owner (claimSessionOwner). */
+/** Give a harness conversation no account owns to its oldest saver, or to
+ *  `userId` when no save names it, and answer its owner (claimSessionOwner). */
 export const claimConversationOwner = (
     agentSessionId: string,
     userId: string,
