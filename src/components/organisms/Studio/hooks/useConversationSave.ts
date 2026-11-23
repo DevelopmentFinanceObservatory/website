@@ -114,6 +114,8 @@ export const useConversationSave = ({
             void pushConversation(saved).then((ok) => {
                 if (ok) {
                     waiters.saved(saved.id);
+                } else {
+                    waiters.failed(saved.id);
                 }
             });
         }
@@ -279,8 +281,8 @@ export const useConversationSave = ({
         handleLayoutChange,
         createShare,
         track,
-        // Resolves true once a save of conversation `id` lands, false if the
-        // page tracks another conversation first.
+        // Resolves true once a save of conversation `id` lands, false if a
+        // save of it fails or the page tracks another conversation first.
         whenSaved: waiters.wait,
         conversationId: () => conversationIdRef.current,
     };

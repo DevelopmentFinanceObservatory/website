@@ -26,6 +26,10 @@
 // The routes that need the caller's own saved copy of the conversation.
 const OWNER_ROUTES: ReadonlySet<string> = new Set(['state', 'resume']);
 
+// The routes that drive a turn. Each names the conversation it acts on, so a
+// call without one is refused here.
+const DRIVE_ROUTES: ReadonlySet<string> = new Set(['turn', 'interrupt', 'cancel', 'composition']);
+
 // The route that drives a turn, and so the only one whose call claims a
 // conversation no account owns for the signed-in caller.
 const CLAIM_ROUTE = 'turn';
@@ -99,8 +103,12 @@ export const canonicalStudioCall = (
 
     const id = members.conversation_id;
 
+    if (id !== undefined && typeof id !== 'string') {
+        return null;
+    }
+
     return {
-        conversationId: typeof id === 'string' ? id : null,
+        conversationId: id ?? null,
         search: new URLSearchParams(),
         body: JSON.stringify(members),
     };
@@ -115,7 +123,8 @@ export type StudioCallRead =
  * The call the proxy forwards (canonicalStudioCall), or why it cannot build
  * one. `readBody` reads the request body, null when it is over
  * MAX_STUDIO_BODY_BYTES. A call that cannot name one conversation
- * unambiguously is `malformed`. An OPTIONS call reads nothing and goes on
+ * unambiguously is `malformed`, as is a body whose `conversation_id` is not a
+ * string. An OPTIONS call reads nothing and goes on
  * with no query and no body (`call` null).
  */
 export const readStudioCall = async ({
@@ -191,8 +200,8 @@ export const OWNERSHIP_RETRY_SECONDS = 5;
  * owner either way: of two accounts racing on a new conversation, one owns it
  * and the other is refused. A call that names no conversation goes on to the
  * harness, which refuses it, except on a route that needs the caller's own
- * copy. A check whose reads fail, or have not answered within `timeoutMs`,
- * refuses the call as `unavailable`, since forwarding it unchecked would open
+ * copy, and on a route that drives a turn, which always names one. A check
+ * whose reads fail, or have not answered within `timeoutMs`, refuses the call as `unavailable`, since forwarding it unchecked would open
  * a saved conversation to anyone.
  */
 export const checkStudioOwner = async ({
@@ -211,7 +220,7 @@ export const checkStudioOwner = async ({
     timeoutMs?: number;
 }): Promise<StudioOwnerRefusal | null> => {
     if (conversationId === null) {
-        return OWNER_ROUTES.has(route) ? 'not_found' : null;
+        return OWNER_ROUTES.has(route) || DRIVE_ROUTES.has(route) ? 'not_found' : null;
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;

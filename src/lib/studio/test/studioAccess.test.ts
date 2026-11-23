@@ -127,10 +127,13 @@ test('canonicalStudioCall reads the query of a GET and the JSON body otherwise',
         canonicalStudioCall('POST', search, '{"conversation_id":"from-body"}')?.conversationId,
         'from-body',
     );
-    assert.equal(
-        canonicalStudioCall('POST', search, '{"conversation_id":7}')?.conversationId,
-        null,
-    );
+    for (const id of ['7', 'null', '["a"]', '{}', 'true']) {
+        assert.equal(
+            canonicalStudioCall('POST', search, `{"conversation_id":${id}}`),
+            null,
+            `conversation_id ${id}`,
+        );
+    }
     assert.equal(canonicalStudioCall('POST', search, '{"message":"hi"}')?.conversationId, null);
 });
 
@@ -203,8 +206,8 @@ test('studioAccess forwards only the conversation it checked', async () => {
         '{"session_id":"conv-ana","message":"hi"}',
     );
 
-    assert.equal(alias.refusal, null);
-    assert.deepEqual(JSON.parse(alias.call?.body ?? ''), { message: 'hi' });
+    // The alias is dropped, so the turn names no conversation and is refused.
+    assert.equal(alias.refusal, 'not_found');
 
     const duplicate = await asBen(
         'turn',
@@ -299,4 +302,22 @@ test('studioAccessRefusal refuses as unavailable when the owners cannot be read'
 
     assert.equal(await claimRefusal(() => new Promise<string[]>(() => {})), 'unavailable');
     assert.equal(await claimRefusal(() => Promise.reject(new Error('db down'))), 'unavailable');
+});
+
+test('a call to a route that drives a turn must name a conversation', async () => {
+    for (const route of ['turn', 'interrupt', 'cancel', 'composition']) {
+        for (const userId of [null, 'user-ana']) {
+            assert.equal(
+                await checkStudioOwner({
+                    route,
+                    conversationId: null,
+                    readUserId: async () => userId,
+                    ownersOf: async () => [],
+                    claimOwner: unclaimed,
+                }),
+                'not_found',
+                `${userId} ${route}`,
+            );
+        }
+    }
 });

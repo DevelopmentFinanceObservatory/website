@@ -183,10 +183,14 @@ const Studio = ({
     const leaveTimer = useRef(0);
 
     const doc = useCanvasDocument(sharedSaved);
+    // The guest canvas restored after sign-in whose first save has not landed.
+    // The harness state read answers 404 until it does, so the page reads no
+    // state meanwhile.
+    const [unsavedGuestId, setUnsavedGuestId] = useState<string | null>(null);
     // A card the harness redrew under a new id keeps the old card's settings.
     const conversation = useChat(sharedSaved, {
         onCardReplaced: doc.renameWidget,
-        readsState: account,
+        readsState: account && unsavedGuestId === null,
     });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
@@ -417,11 +421,27 @@ const Studio = ({
         if (account && fromGuest) {
             const { reattach } = chat;
 
-            void save.whenSaved(saved.id).then((landed) => {
-                if (landed) {
-                    reattach();
-                }
-            });
+            // A failed save leaves the wait open for the next save of this
+            // conversation; the page leaving it ends the wait.
+            const awaitLanding = () => {
+                void save.whenSaved(saved.id).then((landed) => {
+                    if (landed) {
+                        setUnsavedGuestId((id) => (id === saved.id ? null : id));
+                        reattach();
+                    } else if (save.conversationId() === saved.id) {
+                        console.warn(
+                            'studio: the restored guest conversation did not save; the harness state is not read yet',
+                            saved.id,
+                        );
+                        awaitLanding();
+                    } else {
+                        setUnsavedGuestId((id) => (id === saved.id ? null : id));
+                    }
+                });
+            };
+
+            setUnsavedGuestId(saved.id);
+            awaitLanding();
         } else if (account) {
             chat.reattach();
         }

@@ -24,3 +24,14 @@ test('a waiter hears its conversation saved, and false once the page tracks anot
         ['restored', true],
     ]);
 });
+
+test('a failed save settles the waiters of its conversation false and no others', async () => {
+    const waiters = createSaveWaiters();
+    const heard: [string, boolean][] = [];
+    const failing = waiters.wait('conv_failing').then((saved) => heard.push(['failing', saved]));
+    void waiters.wait('conv_other').then((saved) => heard.push(['other', saved]));
+
+    waiters.failed('conv_failing');
+    await failing;
+    assert.deepEqual(heard, [['failing', false]]);
+});
