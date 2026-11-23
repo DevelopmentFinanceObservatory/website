@@ -75,11 +75,20 @@ export const versionsOf = (dataset: Dataset): StoredVersion[] => {
     return [...seen.values()];
 };
 
+/**
+ * The platform's `fetch` with `cache: 'no-store'`. Under `next build` a server component's
+ * `fetch` goes through Next's data cache, which keeps a response for a year, so every read
+ * again would get the first answer back and later builds would serve old figures.
+ */
+export const buildFetch: typeof globalThis.fetch = (input, init) =>
+    globalThis.fetch(input, { ...init, cache: 'no-store' });
+
 let client: Client | undefined;
 
-/** The build's anonymous client on the production API. Built on first use. */
+/** The build's anonymous client on the production API, reading past Next's data cache. Built
+ *  on first use. */
 const buildClient = (): Client => {
-    client ??= new Client({ apiKey: false });
+    client ??= new Client({ apiKey: false, fetch: buildFetch });
 
     return client;
 };

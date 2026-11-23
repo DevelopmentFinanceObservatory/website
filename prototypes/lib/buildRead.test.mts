@@ -5,6 +5,7 @@ import { DatasetRef, recipe } from '@developmentfinance/client';
 
 import {
     BUILD_TIMEOUT_MS,
+    buildFetch,
     PENDING_BOUND_MS,
     PENDING_RETRY_MS,
     readAtBuild,
@@ -255,4 +256,23 @@ test('readAtBuild reads a page once per process, and again after a failure', asy
     assert.deepEqual(first.value, [5]);
     assert.equal(second, first);
     assert.equal(calls.length, 1);
+});
+
+test("the build's fetch asks for no cached response, keeping the caller's options", async () => {
+    const real = globalThis.fetch;
+    const seen: RequestInit[] = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        seen.push(init ?? {});
+
+        return new Response('{}');
+    }) as typeof fetch;
+
+    try {
+        await buildFetch('https://developmentfinance.org/api/v1/datasets/x', { method: 'POST' });
+    } finally {
+        globalThis.fetch = real;
+    }
+
+    assert.equal(seen[0]?.cache, 'no-store');
+    assert.equal(seen[0]?.method, 'POST');
 });
