@@ -19,6 +19,7 @@ import {
     carryOnTurn,
     mergeClosedTurns,
     owedNewQuestion,
+    producedCards,
     readConversation,
     sendNewQuestion,
     takeApproval,
@@ -39,6 +40,7 @@ import {
     readSince,
     withHarnessTurn,
     withInherited,
+    withSessionLeft,
     offeredQuestionTurn,
     turnReplyAt,
     withFollowup,
@@ -46,6 +48,7 @@ import {
     withoutUnsentQuestion,
 } from '../transcript.ts';
 import {
+    isStateRefusal,
     readComponent,
     runTurn,
     type StreamHandlers,
@@ -234,6 +237,62 @@ test('a stream keys the prompt it was opened for, and never moves a confirmed tu
     assert.equal(withHarnessTurn(keyed, 2, 5), keyed);
 });
 
+test('a new turn the harness numbers from 1 again keys its prompt once the page leaves the old session', () => {
+    // The harness lost the session, and `/turn` began a new conversation
+    // under the same id, whose first turn is 1 again.
+    const messages: ChatMessage[] = [
+        { role: 'user', text: 'first', harnessTurn: 1, turn: 1 },
+        { role: 'bot', text: 'answer 1' },
+        { role: 'user', text: 'second', harnessTurn: 2, turn: 2 },
+        { role: 'bot', text: 'answer 2' },
+        { role: 'user', text: 'third', turn: 3 },
+        { role: 'bot', text: '' },
+    ];
+
+    const keyed = withHarnessTurn(withSessionLeft(messages, 3), 3, 1);
+
+    assert.deepEqual([...promptTurns(keyed)], [[4, 1]]);
+    assert.ok(keyed.slice(0, 4).every((message) => message.inherited));
+    assert.equal(keyed[4]?.inherited, undefined);
+    // The new session's turn 2 is held by no prompt, so a state read's
+    // closed turn 2 is not taken for the old turn 2.
+    assert.equal(turnReplyAt(keyed, 2), -1);
+
+    // Left with no turn of its own, the whole transcript is inherited.
+    assert.equal(heldTurns(withSessionLeft(messages)), 0);
+});
+
+test('the cards a legacy canvas counts as drawn: every closed turn, and an open turn the page holds', () => {
+    const closedTurns = [
+        { ...closed(1), component_ids: ['cmp_a'] },
+        { ...closed(2), component_ids: ['cmp_b', 'cmp_c'] },
+    ];
+
+    for (const [status, drawn] of [
+        ['paused', ['cmp_a', 'cmp_b', 'cmp_c', 'cmp_open']],
+        ['running', ['cmp_a', 'cmp_b', 'cmp_c', 'cmp_open']],
+        ['done', ['cmp_a', 'cmp_b', 'cmp_c']],
+    ] as const) {
+        const read = readOf({
+            turn: turnState({ index: 3, status }),
+            closed_since: closedTurns,
+        });
+
+        assert.deepEqual([...producedCards(read, ['cmp_open'])].sort(), drawn, status);
+    }
+});
+
+test('a state read refused on a later page is the answer', async () => {
+    const answers = [
+        readOf({ closed_since: [closed(1), closed(2), closed(3)], closed_total: 5 }),
+        { refusal: 'session_gone' as const },
+    ];
+
+    assert.deepEqual(await readConversation('conv', 0, undefined, async () => answers.shift()!), {
+        refusal: 'session_gone',
+    });
+});
+
 test('a reload that missed five turns pages the read and appends five keyed pairs in order', async () => {
     const saved: ChatMessage[] = [
         { role: 'user', text: 'question 1', harnessTurn: 1 },
@@ -252,8 +311,9 @@ test('a reload that missed five turns pages the read and appends five keyed pair
     });
 
     assert.deepEqual(calls, [0, 3]);
+    assert.ok(read && !isStateRefusal(read));
 
-    const { messages } = mergeClosedTurns(saved, read!.closed_since, 2);
+    const { messages } = mergeClosedTurns(saved, read.closed_since, 2);
 
     assert.deepEqual(messages.slice(2), [
         ...[2, 3, 4, 5, 6].flatMap((index): ChatMessage[] => [
@@ -1022,7 +1082,7 @@ test("a state read draws the card another tab made, and a held card's newer revi
             widgets: [held, { ...drawn!, turn: 2 }],
             pinnedIds: [],
             removedIds: [],
-            canvas: takeManifest(null, manifest),
+            canvas: takeManifest(null, manifest)?.baseline,
         }).map((widget) => widget.id),
         ['cmp_held', CARD],
     );
@@ -1212,6 +1272,7 @@ test('a card a state read draws during a failed legacy reconcile joins the legac
         ids: ['cmp_1'],
         hidden: new Map([['cmp_old', 1]]),
         pinned: [],
+        produced: Promise.resolve(new Set<string>()),
         mutate: async () => null,
         onTake: () => assert.fail('the reconcile failed'),
         onLocal: () => {},
@@ -1292,6 +1353,7 @@ test('a card a missed turn revised is kept on a legacy canvas the save hid it fr
             ['cmp_old', 1],
         ]),
         pinned: [],
+        produced: Promise.resolve(new Set<string>()),
         mutate: async () => null,
         onTake: () => assert.fail('the reconcile failed'),
         onLocal: () => {},

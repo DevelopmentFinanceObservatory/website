@@ -8,11 +8,16 @@ import test from 'node:test';
 
 import {
     cancelTurn,
+    CompositionRefusal,
     fetchComponentRevision,
+    isNoBlock,
+    mutateComposition,
+    readState,
     runApplyChoice,
     runApplyUnit,
     runInterrupt,
     runTurn,
+    STATE_READ_ATTEMPTS,
     whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
@@ -472,4 +477,129 @@ test('whileBusy: any other refusal reaches onRefusal once and is not retried', a
 
     assert.equal(fetch.mock.callCount(), 1);
     assert.deepEqual(statuses, [409]);
+});
+
+// The harness's answer for a conversation id its store does not hold
+// (`_unknown_conversation_response`), and the proxy's own problem documents.
+const unknownConversation = {
+    error: 'not_found',
+    retry: 'do_not_retry',
+    detail: "no conversation 'conv'",
+    pointer: '/conversation_id',
+};
+const proxyProblem = (status: number, code: string, headers: Record<string, string> = {}) =>
+    Response.json(
+        { status, code, detail: 'proxy text', retryable: false },
+        { status, headers: { 'Content-Type': 'application/problem+json', ...headers } },
+    );
+const harnessBusy = (seconds: number) =>
+    Response.json(
+        {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'busy',
+            retry_after_seconds: seconds,
+        },
+        { status: 503 },
+    );
+const stateRead = { conversation_id: 'conv', closed_since: [], closed_total: 0 };
+
+test('readState: a refusal the page acts on is named, any other is null', async (t) => {
+    const cases: [string, () => Response, unknown][] = [
+        [
+            'the harness holds no such conversation',
+            () => Response.json(unknownConversation, { status: 404 }),
+            { refusal: 'session_gone' },
+        ],
+        [
+            'a guest on a conversation an account owns',
+            () => proxyProblem(401, 'sign_in_required'),
+            { refusal: 'sign_in_required' },
+        ],
+        [
+            "the proxy's 404 for another account's conversation",
+            () => proxyProblem(404, 'not_found'),
+            null,
+        ],
+        [
+            'a card the harness holds no block for',
+            () =>
+                Response.json(
+                    { ...unknownConversation, pointer: '/operations/component_id' },
+                    { status: 404 },
+                ),
+            null,
+        ],
+        ['a read', () => Response.json(stateRead), stateRead],
+    ];
+
+    for (const [name, respond, expected] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', async () => respond());
+
+            assert.deepEqual(
+                await readState('conv', 0, undefined, async () => assert.fail('no wait')),
+                expected,
+            );
+        });
+    }
+});
+
+test('readState: a 503 transient_unavailable is asked again after its wait, a bounded number of times', async (t) => {
+    await t.test('the harness, then a read', async (t) => {
+        const answers = [
+            harnessBusy(2),
+            proxyProblem(503, 'transient_unavailable', { 'Retry-After': '5' }),
+            Response.json(stateRead),
+        ];
+        const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+        const waits: number[] = [];
+
+        assert.deepEqual(
+            await readState('conv', 0, undefined, async (ms) => {
+                waits.push(ms);
+            }),
+            stateRead,
+        );
+        assert.equal(fetch.mock.callCount(), 3);
+        assert.deepEqual(waits, [2000, 5000]);
+    });
+
+    await t.test('busy on every attempt', async (t) => {
+        const fetch = t.mock.method(globalThis, 'fetch', async () => harnessBusy(1));
+
+        assert.equal(await readState('conv', 0, undefined, async () => {}), null);
+        assert.equal(fetch.mock.callCount(), STATE_READ_ATTEMPTS);
+    });
+});
+
+test('mutateComposition: a refusal rejects with a CompositionRefusal, and a no-block one says so', async (t) => {
+    const noBlock = {
+        error: 'not_found',
+        retry: 'refresh_then_retry',
+        detail: "no block 'cmp_1' in the composition",
+        pointer: '/operations/component_id',
+    };
+    const cases: [string, Response, boolean][] = [
+        ['no block', Response.json(noBlock, { status: 404 }), true],
+        ['no conversation', Response.json(unknownConversation, { status: 404 }), false],
+        ["the proxy's 404", proxyProblem(404, 'not_found'), false],
+    ];
+
+    for (const [name, response, refusedBlock] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', async () => response);
+
+            const refusal = await mutateComposition('conv', [
+                { op: 'remove', component_id: 'cmp_1' },
+            ]).then(
+                () => assert.fail('the edit was refused'),
+                (error: unknown) => error,
+            );
+
+            assert.ok(refusal instanceof CompositionRefusal);
+            assert.equal(refusal.status, 404);
+            assert.equal(isNoBlock(refusal), refusedBlock);
+        });
+    }
 });

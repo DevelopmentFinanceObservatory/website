@@ -58,6 +58,7 @@ import {
     legacyHiddenCards,
     restoreCanvas,
     takeManifest,
+    withoutRemovedCards,
     type CanvasBaseline,
     type LegacyCanvas,
     type LegacyLocal,
@@ -69,6 +70,7 @@ import {
     carryOnTurn,
     mergeClosedTurns,
     owedNewQuestion,
+    producedCards,
     readConversation,
     drawManifestCards,
     sendNewQuestion,
@@ -117,10 +119,16 @@ import {
     withoutUnsentQuestion,
     withReadPrompts,
     withRefundedPrompt,
+    withSessionLeft,
 } from '@/lib/studio/transcript';
 import {
     cancelTurn,
+    CompositionRefusal,
     fetchComponentRevision,
+    isNoBlock,
+    isSessionGone,
+    isSignInRequired,
+    isStateRefusal,
     mutateComposition,
     runApplyChoice,
     runApplyUnit,
@@ -277,6 +285,15 @@ export type ChatSnapshot = {
 };
 
 const NO_LOCAL: LegacyLocal = { shown: [], hidden: [] };
+
+// The reply of a turn the proxy refused because a guest asked about a
+// conversation an account owns (isSignInRequired).
+const SIGN_IN_NOTE = '_Sign in to the account that owns this conversation to continue it._';
+
+// The reply of a turn the harness refused because it no longer holds the
+// conversation (isSessionGone). The next turn starts afresh with a recap.
+const SESSION_GONE_NOTE =
+    '_The server no longer holds this conversation. Send your message again to continue it._';
 
 const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
 
@@ -464,10 +481,21 @@ export const useChat = (
     // manifest goes to it first.
     const canvasEditsRef = useRef<ReturnType<typeof createCanvasEdits> | null>(null);
     const legacyRef = useRef<LegacyCanvas | null>(null);
+    // Why each canvas edit the harness did not answer failed, by its
+    // operations, for syncCanvas to read once the edit settles.
+    const editFailuresRef = useRef(new WeakMap<MutationOperation[], unknown>());
+    // Bumped each time the page leaves a harness session (leaveSession), so
+    // an answer to a canvas edit sent to the old session acts on nothing.
+    const sessionLeftRef = useRef(0);
     // The cards a legacy canvas's save held that its harness session never
     // held (a fork's inherited cards), for the canvas document to keep as
     // local, the ones the legacy canvas hid staying off the canvas.
     const [localCards, setLocalCards] = useState<LegacyLocal>(NO_LOCAL);
+    // Settles the `produced` read of the legacy canvas startLegacy began:
+    // reattach's state read, from turn 0, resolves it with the cards the
+    // harness session's turns drew (producedCards), or null when the read
+    // failed. A legacy canvas takes no manifest before it settles.
+    const producedRef = useRef<((cards: ReadonlySet<string> | null) => void) | null>(null);
     const applyManifest = useCallback((manifest: CompositionManifest) => {
         if (legacyRef.current) {
             void legacyRef.current.offer(manifest);
@@ -478,18 +506,26 @@ export const useChat = (
         const taken = takeManifest(canvasRef.current, manifest);
 
         if (taken) {
-            canvasRef.current = taken;
-            setCanvas(taken);
+            canvasRef.current = taken.baseline;
+            setCanvas(taken.baseline);
+
+            if (taken.local.length > 0) {
+                setLocalCards({ shown: taken.local, hidden: [] });
+            }
         }
     }, []);
     // A legacy canvas a reopened conversation (hydrate) restored for
     // `saved`'s session is brought to the harness's manifest once one
-    // arrives, by removing the cards the save hid (legacyHiddenCards). Until
-    // then it shows the legacy cards and the cards drawn since. A share's
-    // copy (`initial`) runs no turn and edits nothing, so it starts none.
+    // arrives and reattach has read the cards the session's turns drew
+    // (producedRef), by removing the cards the save hid (legacyHiddenCards).
+    // Until then it shows the legacy cards and the cards drawn since. A
+    // share's copy (`initial`) runs no turn and edits nothing, so it starts
+    // none.
     const startLegacy = useCallback(
         (saved: ChatSnapshot, baseline: CanvasBaseline | null) => {
             const session = saved.sessionId;
+
+            producedRef.current = null;
 
             if (!session || baseline?.compositionId !== null) {
                 legacyRef.current = null;
@@ -498,10 +534,14 @@ export const useChat = (
             }
 
             const generation = generationRef.current;
+            const produced = new Promise<ReadonlySet<string> | null>((resolve) => {
+                producedRef.current = resolve;
+            });
             const legacy = createLegacyCanvas({
                 ids: baseline.ids,
                 hidden: legacyHiddenCards(saved, baseline, restoreCardRevisions(saved)),
                 pinned: (saved.pinnedIds ?? []).filter((id) => !saved.localIds?.includes(id)),
+                produced,
                 mutate: (operations, expectedRevision) =>
                     mutateComposition(session, operations, expectedRevision),
                 onTake: (manifest) => {
@@ -556,6 +596,52 @@ export const useChat = (
     // at once, and once answered the manifest decides again: the answer's,
     // or for a refused edit the one held before it (shownPins).
     const [pendingPins, setPendingPins] = useState<PendingPins>(() => new Map());
+    // The page learnt that the harness no longer holds this conversation's
+    // session: a state read or a request answered that the harness holds no
+    // conversation under its id (isSessionGone), or a new turn was admitted
+    // at an index a prompt holds, since `/turn` begins a new conversation
+    // under an id the harness lacks and numbers its turns from 1 again. The
+    // page leaves the session as a fork leaves the one it copies: the
+    // transcript is inherited (withSessionLeft), the answers' chips and unit
+    // offers go, the harness's cards become local cards, and answers to
+    // canvas edits sent to the old session are dropped. With `turn`, the
+    // page turn of the prompt the new session admitted, that turn stays the
+    // session's own and the id stays. Without it the next turn opens a new id
+    // with a recap of the transcript (forkRecap).
+    const leaveSession = useCallback((turn?: number) => {
+        const cards = canvasRef.current?.ids ?? [];
+        const left = (messages: ChatMessage[]) => withoutChips(withSessionLeft(messages, turn));
+
+        sessionLeftRef.current += 1;
+
+        messagesRef.current = left(messagesRef.current);
+        widgetsRef.current = withoutUnitChanges(widgetsRef.current);
+
+        if (turn === undefined) {
+            sessionRef.current = null;
+            recapRef.current = forkRecap(messagesRef.current);
+        }
+
+        approvalsRef.current = approvalKeys(messagesRef.current);
+        askedRef.current.clear();
+        canvasRef.current = null;
+        setCanvas(null);
+        legacyRef.current = null;
+        producedRef.current?.(null);
+        producedRef.current = null;
+        canvasEditsRef.current?.reset();
+        setPendingPins(new Map());
+
+        if (cards.length > 0) {
+            setLocalCards({ shown: [...cards], hidden: [] });
+        }
+
+        setState((prev) => ({
+            ...prev,
+            messages: left(prev.messages),
+            widgets: withoutUnitChanges(prev.widgets),
+        }));
+    }, []);
     // A new question the page sent once and the harness never admitted
     // (refused, never reached, stopped, or taken out of the queue) is offered
     // on the reply of the turn that asked it, for the user to send, and is
@@ -598,35 +684,70 @@ export const useChat = (
                 mutate: mutateComposition,
                 onManifest: applyManifest,
                 onFailure: (failedOperations, error) => {
-                    console.warn(
-                        'Studio: this canvas edit did not reach the harness',
-                        failedOperations,
-                        error,
-                    );
+                    editFailuresRef.current.set(failedOperations, error);
                 },
             });
-            // A legacy canvas learns which removes the harness refused: a card
-            // it never held, such as a fork's inherited card, then stays on
-            // the page as a local card (createLegacyCanvas's `unheld`).
+
             const legacy = legacyRef.current;
+            const sessionLeft = sessionLeftRef.current;
 
             void canvasEditsRef.current.enqueue(session, operations).then((answered) => {
-                if (generationRef.current !== generation) {
+                if (
+                    generationRef.current !== generation ||
+                    sessionLeftRef.current !== sessionLeft
+                ) {
                     return;
                 }
 
                 setPendingPins((prev) => withPinsSettled(prev, operations));
 
-                if (!answered) {
-                    for (const operation of operations) {
-                        if (operation.op === 'remove') {
-                            legacy?.unheld(operation.component_id);
-                        }
+                if (answered) {
+                    return;
+                }
+
+                const error = editFailuresRef.current.get(operations);
+                const refusal = error instanceof CompositionRefusal ? error : null;
+
+                if (refusal && isSessionGone(refusal)) {
+                    leaveSession();
+
+                    return;
+                }
+
+                const removed = operations
+                    .filter((operation) => operation.op === 'remove')
+                    .map((operation) => operation.component_id);
+
+                // A remove refused for a card the manifest held: the harness
+                // has taken it off already, so it goes from the baseline and
+                // the next manifest is taken.
+                if (refusal && isNoBlock(refusal)) {
+                    const next = withoutRemovedCards(canvasRef.current, removed);
+
+                    if (next) {
+                        canvasRef.current = next;
+                        setCanvas(next);
+
+                        return;
                     }
+                } else {
+                    console.warn(
+                        'Studio: this canvas edit did not reach the harness',
+                        operations,
+                        error,
+                    );
+                }
+
+                // A legacy canvas learns which removes the harness refused: a
+                // card it never held, such as a fork's inherited card, then
+                // stays on the page as a local card (createLegacyCanvas's
+                // `unheld`).
+                for (const id of removed) {
+                    legacy?.unheld(id);
                 }
             });
         },
-        [applyManifest],
+        [applyManifest, leaveSession],
     );
     // The harness cards the page shows pinned, or null while the canvas
     // holds no manifest's pins and the save's pins stand.
@@ -749,12 +870,19 @@ export const useChat = (
             // The harness's index of the turn this stream carries, from its
             // x-dfo-turn-index header. The prompt of page turn `turn` takes
             // it, unless a prompt holds it already, so the prompt and its
-            // reply are keyed on the harness's turn.
+            // reply are keyed on the harness's turn. A new turn admitted at
+            // an index a prompt holds opened a new harness conversation
+            // under the same id, so the page leaves the old session first
+            // (leaveSession).
             let turnIndex: number | null = null;
 
             const keyTurn = (index: number) => {
                 if (generationRef.current !== generation) {
                     return;
+                }
+
+                if (metered && index <= heldTurns(messagesRef.current)) {
+                    leaveSession(turn);
                 }
 
                 turnIndex = index;
@@ -1130,6 +1258,10 @@ export const useChat = (
             // handle() drops frames. A switch the user stopped then ends as
             // stopped (its `onEnd`), not on a live card whose buttons the
             // cancel has made useless.
+            // A refusal saying the harness holds no conversation under the
+            // id leaves the session (leaveSession). That one, and a guest's
+            // refusal on a conversation an account owns, end a turn the
+            // stream ends (no `onEnd`) with a note saying what to do.
             const refuse = (refusal: StreamRefusal): boolean => {
                 if (generationRef.current !== generation) {
                     return true;
@@ -1139,7 +1271,38 @@ export const useChat = (
                     setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
                 }
 
-                return muted || stopped || (onRefusal?.(refusal) ?? false);
+                const gone = isSessionGone(refusal);
+
+                if (gone) {
+                    leaveSession();
+                }
+
+                if (muted || stopped) {
+                    return true;
+                }
+
+                const note = gone
+                    ? SESSION_GONE_NOTE
+                    : isSignInRequired(refusal)
+                      ? SIGN_IN_NOTE
+                      : null;
+
+                if (note === null || onEnd) {
+                    return onRefusal?.(refusal) ?? false;
+                }
+
+                setState((prev) => {
+                    const messages = prev.messages.slice();
+                    const last = messages.at(-1);
+
+                    if (last?.role === 'bot' && !last.text) {
+                        messages[messages.length - 1] = { ...last, text: note };
+                    }
+
+                    return endTurn({ ...prev, messages }, turn, 'failed', hasAnswer(prev.messages));
+                });
+
+                return true;
             };
             const unreachable = (): boolean =>
                 generationRef.current !== generation ||
@@ -1214,7 +1377,7 @@ export const useChat = (
                     }
                 });
         },
-        [applyManifest, askNewQuestion, offerPlan, patchWidget],
+        [applyManifest, askNewQuestion, leaveSession, offerPlan, patchWidget],
     );
 
     // While a request is in flight a new turn waits its turn; the settle
@@ -2061,6 +2224,20 @@ export const useChat = (
     // signed-in user's own conversation. The proxy answers 404 for anyone
     // else, and the page then keeps its snapshot.
     const reattach = useCallback(() => {
+        // The cards the page holds from the read's open turn: those of the
+        // page turn whose prompt holds it.
+        const openTurnCards = (answer: ConversationRead): string[] => {
+            const messages = messagesRef.current;
+            const at = [...promptTurns(messages)].find(
+                ([, index]) => index === answer.turn?.index,
+            )?.[0];
+            const prompt = at === undefined ? undefined : messages[at];
+            const turn = prompt?.role === 'user' ? prompt.turn : undefined;
+
+            return widgetsRef.current
+                .filter((widget) => turn !== undefined && widget.turn === turn)
+                .map((widget) => widget.id);
+        };
         const conversation = sessionRef.current;
 
         if (!conversation) {
@@ -2069,16 +2246,34 @@ export const useChat = (
 
         const generation = generationRef.current;
         const unkeyed = isUnkeyedSave(messagesRef.current);
+        // A legacy canvas waits for the cards every turn of the session drew,
+        // so its read starts at turn 0.
+        const produced = producedRef.current;
         let read: ConversationRead | null = null;
 
+        producedRef.current = null;
         inFlightRef.current += 1;
-        void readConversation(conversation, unkeyed ? 0 : readSince(messagesRef.current))
+        void readConversation(
+            conversation,
+            unkeyed || produced ? 0 : readSince(messagesRef.current),
+        )
             .then((answer) => {
-                read = answer;
-
-                if (!answer || generationRef.current !== generation) {
+                if (generationRef.current !== generation) {
                     return;
                 }
+
+                if (!answer || isStateRefusal(answer)) {
+                    produced?.(null);
+
+                    // A 401 keeps the conversation the page holds.
+                    if (answer?.refusal === 'session_gone') {
+                        leaveSession();
+                    }
+
+                    return;
+                }
+
+                read = answer;
 
                 const open = answer.turn;
 
@@ -2095,6 +2290,7 @@ export const useChat = (
                         ...prev,
                         messages: withReadPrompts(prev.messages, latest),
                     }));
+                    produced?.(producedCards(answer, openTurnCards(answer)));
 
                     return;
                 }
@@ -2113,6 +2309,7 @@ export const useChat = (
                     ...prev,
                     messages: keyUnkeyedSave(prev.messages, recorded),
                 }));
+                produced?.(producedCards(answer, openTurnCards(answer)));
             })
             .finally(() => {
                 if (generationRef.current !== generation) {
@@ -2194,7 +2391,7 @@ export const useChat = (
 
                 drainRef.current();
             });
-    }, [stream, takeRead]);
+    }, [leaveSession, stream, takeRead]);
 
     useEffect(() => {
         reattachRef.current = reattach;

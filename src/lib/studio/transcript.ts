@@ -90,6 +90,30 @@ export const withInherited = (messages: ChatMessage[]): ChatMessage[] =>
         ? messages
         : messages.map((message) => ({ ...message, inherited: true }));
 
+/**
+ * The transcript once the harness session its turns were keyed to is gone,
+ * as a fork inherits it: every message marked `inherited`, so a session that
+ * numbers its turns from 1 again under a new or the same id finds none of
+ * them holding its turns. With `turn`, the page turn of a prompt the new
+ * session has just admitted, that prompt and what follows it stay its own.
+ */
+export const withSessionLeft = (messages: ChatMessage[], turn?: number): ChatMessage[] => {
+    const until =
+        turn === undefined
+            ? messages.length
+            : messages.findLastIndex(
+                  (message) => message.role === 'user' && !message.answer && message.turn === turn,
+              );
+
+    if (until < 0) {
+        return messages;
+    }
+
+    const left = withInherited(messages.slice(0, until));
+
+    return [...left, ...messages.slice(until)];
+};
+
 // A fork's first turn, before forks marked their inherited messages, was
 // sent as a recap of the copied transcript followed by the user's message
 // (forkRecap). The harness records that whole text as the turn's prompt.

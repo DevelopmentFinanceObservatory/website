@@ -27,6 +27,7 @@ import type {
 } from './wire';
 
 import { asRecord } from '../asRecord.ts';
+import { SIGN_IN_REQUIRED } from './studioAccess.ts';
 import type { LiveCard } from './liveBackend.ts';
 
 /**
@@ -430,37 +431,142 @@ export const whileBusy = async (
     }
 };
 
+/** A refusal's body: the harness's ToolError when it is one, and the proxy's
+ *  problem document when the site proxy refused the request itself. */
+const readRefusal = async (
+    res: Response,
+): Promise<{ error: PlanRevisionStaleError | null; proxy: ProxyProblem | null }> => {
+    try {
+        const parsed: unknown = await res.json();
+
+        return { error: asToolError(parsed), proxy: asProxyProblem(parsed, res.headers) };
+    } catch {
+        return { error: null, proxy: null };
+    }
+};
+
+/** Whether a refusal says the harness holds no conversation under the id it
+ *  names (404 `not_found` at `/conversation_id`): the harness session behind
+ *  the page is gone. The proxy's own 404 carries no pointer. */
+export const isSessionGone = ({
+    status,
+    error,
+}: {
+    status: number;
+    error: ToolError | null;
+}): boolean =>
+    status === 404 && error?.error === 'not_found' && error.pointer === '/conversation_id';
+
+/** Whether the proxy refused a guest's call about a conversation an account
+ *  owns (401 SIGN_IN_REQUIRED). */
+export const isSignInRequired = ({
+    status,
+    proxy,
+}: {
+    status: number;
+    proxy?: ProxyProblem | null;
+}): boolean => status === 401 && proxy?.code === SIGN_IN_REQUIRED;
+
+/** A state read the harness or the proxy refused for a reason the page acts
+ *  on: the harness holds no such conversation (`session_gone`), or the
+ *  conversation is an account's and the caller is a guest
+ *  (`sign_in_required`). */
+export type StateRefusal = { refusal: 'session_gone' | 'sign_in_required' };
+
+export const isStateRefusal = (answer: ConversationRead | StateRefusal): answer is StateRefusal =>
+    'refusal' in answer;
+
+/** How many times readState asks while the answer is 503
+ *  `transient_unavailable`. */
+export const STATE_READ_ATTEMPTS = 3;
+
 /**
  * The conversation as the harness holds it, with the closed turns after
- * `since`. Null on any failure, a 404 included, which the proxy answers for a
- * conversation that is not the signed-in user's.
+ * `since`. A 503 `transient_unavailable`, from the harness or the proxy, is
+ * asked again after the seconds it names, up to STATE_READ_ATTEMPTS times in
+ * all. A refusal the page acts on is a StateRefusal. Null on any other
+ * failure, the proxy's 404 for a conversation another account owns included.
  */
 export const readState = async (
     conversationId: string,
     since: number,
     signal?: AbortSignal,
-): Promise<ConversationRead | null> => {
+    sleep: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
+): Promise<ConversationRead | StateRefusal | null> => {
     const query = new URLSearchParams({ conversation_id: conversationId, since: String(since) });
 
-    try {
-        const res = await fetch(`/api/studio/state?${query}`, { signal });
+    for (let attempt = 1; ; attempt += 1) {
+        let res: Response;
 
-        return res.ok ? ((await res.json()) as ConversationRead) : null;
-    } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-            throw error;
+        try {
+            res = await fetch(`/api/studio/state?${query}`, { signal });
+
+            if (res.ok) {
+                return (await res.json()) as ConversationRead;
+            }
+        } catch (error) {
+            if ((error as Error).name === 'AbortError') {
+                throw error;
+            }
+
+            return null;
         }
 
-        return null;
+        const { error, proxy } = await readRefusal(res);
+
+        if (isSessionGone({ status: res.status, error })) {
+            return { refusal: 'session_gone' };
+        }
+
+        if (isSignInRequired({ status: res.status, proxy })) {
+            return { refusal: 'sign_in_required' };
+        }
+
+        const transient =
+            res.status === 503 &&
+            (error?.error === 'transient_unavailable' || proxy?.code === 'transient_unavailable');
+
+        if (!transient || attempt >= STATE_READ_ATTEMPTS) {
+            return null;
+        }
+
+        const seconds = error?.retry_after_seconds ?? proxy?.retryAfterSeconds ?? 1;
+
+        await sleep(Math.max(1, seconds) * 1000, signal);
     }
 };
 
-/** Mutate the canvas; resolves with the new (or unchanged) manifest. */
+/** A canvas edit the harness or the proxy refused: the response's status,
+ *  and its body as readRefusal reads it. */
+export class CompositionRefusal extends Error {
+    readonly status: number;
+    readonly error: ToolError | null;
+    readonly proxy: ProxyProblem | null;
+
+    constructor(status: number, error: ToolError | null, proxy: ProxyProblem | null) {
+        super(error?.detail ?? `the canvas edit was refused: HTTP ${status}`);
+        this.name = 'CompositionRefusal';
+        this.status = status;
+        this.error = error;
+        this.proxy = proxy;
+    }
+}
+
+/** Whether a refused canvas edit names a card the composition holds no block
+ *  for (404 `not_found` at `/operations/component_id`). For a `remove`, the
+ *  harness has taken the card off already, or never held it. */
+export const isNoBlock = (refusal: CompositionRefusal): boolean =>
+    refusal.status === 404 &&
+    refusal.error?.error === 'not_found' &&
+    refusal.error.pointer === '/operations/component_id';
+
+/** Mutate the canvas; resolves with the new (or unchanged) manifest, and
+ *  rejects with a CompositionRefusal when the request is refused. */
 export const mutateComposition = async (
     conversationId: string,
     operations: MutationOperation[],
     expectedRevision?: number,
-): Promise<CompositionManifest | null> => {
+): Promise<CompositionManifest> => {
     const body: CompositionMutation = {
         kind: 'composition.mutate',
         schema_version: 1,
@@ -476,7 +582,9 @@ export const mutateComposition = async (
     });
 
     if (!res.ok) {
-        return null;
+        const { error, proxy } = await readRefusal(res);
+
+        throw new CompositionRefusal(res.status, error, proxy);
     }
 
     return (await res.json()) as CompositionManifest;

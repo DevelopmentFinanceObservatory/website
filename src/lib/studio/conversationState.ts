@@ -6,11 +6,13 @@ import { STOPPED_NOTE } from './chatLine.ts';
 import {
     abortableSleep,
     busyRetryAfter,
+    isStateRefusal,
     isTurnMoved,
     readComponent,
     readState,
     runResume,
     type ComponentRead,
+    type StateRefusal,
     type StreamHandlers,
     type StreamRefusal,
 } from './studioClient.ts';
@@ -42,18 +44,18 @@ import type {
  * The state read after `since` with every closed turn up to `closed_total`.
  * Each read returns at most 3, so it reads again from the last one it got
  * until it holds them all. The turn, pause and manifest are the last read's.
- * Null when a read fails.
+ * A read's StateRefusal is the answer, and any other failed read is null.
  */
 export const readConversation = async (
     conversationId: string,
     since: number,
     signal?: AbortSignal,
     read: typeof readState = readState,
-): Promise<ConversationRead | null> => {
+): Promise<ConversationRead | StateRefusal | null> => {
     let answer = await read(conversationId, since, signal);
 
-    if (!answer) {
-        return null;
+    if (!answer || isStateRefusal(answer)) {
+        return answer;
     }
 
     const closed = [...answer.closed_since];
@@ -67,8 +69,8 @@ export const readConversation = async (
 
         const next = await read(conversationId, last, signal);
 
-        if (!next) {
-            return null;
+        if (!next || isStateRefusal(next)) {
+            return next;
         }
 
         const fresh = next.closed_since.filter((turn) => turn.turn_index > last);
@@ -85,6 +87,21 @@ export const readConversation = async (
     }
 
     return { ...answer, closed_since: closed };
+};
+
+/**
+ * The cards the harness session's turns drew, from a state read of every
+ * closed turn since turn 0: each closed turn's `component_ids`, and while
+ * the latest turn is paused or running, `openCards`, the cards the page
+ * holds from that turn, since a read lists no open turn's cards.
+ */
+export const producedCards = (read: ConversationRead, openCards: Iterable<string>): Set<string> => {
+    const open = read.turn?.status === 'paused' || read.turn?.status === 'running';
+
+    return new Set([
+        ...read.closed_since.flatMap((turn) => turn.component_ids),
+        ...(open ? openCards : []),
+    ]);
 };
 
 const CLOSED_NOTES: Record<string, string> = {
@@ -627,7 +644,7 @@ export const carryOnTurn = async ({
         conversationId: string,
         since: number,
         signal?: AbortSignal,
-    ) => Promise<ConversationRead | null>;
+    ) => Promise<ConversationRead | StateRefusal | null>;
     sleep?: typeof abortableSleep;
 }): Promise<void> => {
     for (let step = first; ;) {
@@ -676,7 +693,7 @@ export const carryOnTurn = async ({
 
         const answer = await read(conversationId, since(), signal);
 
-        if (!answer) {
+        if (!answer || isStateRefusal(answer)) {
             throw new Error('the conversation state could not be read');
         }
 
