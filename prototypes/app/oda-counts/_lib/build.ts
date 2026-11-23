@@ -129,3 +129,5 @@ export const odaBuild: BuildPage<Built> = {
     name: PAGE,
     build: (options) => readOdaCounts(liveRefs.data, options),
 };
+
+export default odaBuild;

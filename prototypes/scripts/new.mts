@@ -1,8 +1,11 @@
 // `pnpm new <slug> [title] [--python]`: starts a prototype. Copies template/
-// to app/<slug>/, names the slug in its page.mdx, keeps the TypeScript data
-// step (or the Python one with --python), and adds an entry to the top of
+// to app/<slug>/, writes the slug wherever the template says __SLUG__ (the
+// page, its BuildPage's name and refs.json), keeps the TypeScript refs step
+// (or the Python one with --python), and adds an entry to the top of
 // registry.ts dated today. Refuses a slug that exists or does not fit a URL.
-import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+// The page reads DFO at build like the others: `pnpm read` finds its
+// _lib/build.ts by convention, so nothing else needs registering.
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const APP = path.join(import.meta.dirname, '..');
@@ -67,12 +70,24 @@ const updated = registry.includes(`${LIST_START}];`)
 cpSync(TEMPLATE, target, { recursive: true });
 rmSync(path.join(target, '_data', python ? 'fetch.mts' : 'fetch.py'));
 
-const page = path.join(target, 'page.mdx');
-writeFileSync(page, readFileSync(page, 'utf8').replaceAll('__SLUG__', slug));
+const PLACEHOLDER = '__SLUG__';
+const files = readdirSync(target, { recursive: true, withFileTypes: true }).filter((entry) =>
+    entry.isFile(),
+);
+for (const entry of files) {
+    const file = path.join(entry.parentPath, entry.name);
+    const text = readFileSync(file, 'utf8');
+
+    if (text.includes(PLACEHOLDER)) {
+        writeFileSync(file, text.replaceAll(PLACEHOLDER, slug));
+    }
+}
+
 writeFileSync(REGISTRY, updated);
 
 console.log(`Created app/${slug}/ and its entry in registry.ts.
 Next:
-  1. Write the summary in registry.ts and the question in app/${slug}/_data/fetch.${python ? 'py' : 'mts'}.
-  2. pnpm data ${slug}     writes app/${slug}/_data/series.json; commit it.
+  1. Write the summary in registry.ts, the reads in app/${slug}/_data/refs.json (pnpm data ${slug} --search
+     asks the question in app/${slug}/_data/fetch.${python ? 'py' : 'mts'}) and the figures in app/${slug}/_lib/build.ts.
+  2. pnpm read             reads DFO into .build-data/${slug}.json; pnpm build runs it first.
   3. pnpm dev              then open http://localhost:3000/prototypes/${slug}/`);

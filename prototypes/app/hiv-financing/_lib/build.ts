@@ -14,3 +14,5 @@ export const hivBuild: BuildPage<BuildRead<HivKey, HivFigures>> = {
     build: (options) =>
         readSettled('hiv-financing', hivSources(liveRefs.data), hivFromRows, options),
 };
+
+export default hivBuild;

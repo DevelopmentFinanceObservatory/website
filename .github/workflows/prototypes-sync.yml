@@ -1,0 +1,111 @@
+name: Sync dev into prototypes
+
+# Keeps the `prototypes` branch at dev plus prototypes/: each push to dev
+# merges into `prototypes`. A clean merge is pushed to `prototypes`, and since
+# a push made with GITHUB_TOKEN starts no workflow, the job then dispatches
+# deploy-prototypes.yml on `prototypes` itself. A merge that conflicts, or one
+# that changes a workflow file (which a GITHUB_TOKEN push may not), goes to the
+# branch sync/dev-into-prototypes instead, with a pull request into
+# `prototypes` opened or left open for a person to finish. That pull request
+# is opened with GITHUB_TOKEN too, so its preview build starts on the first
+# push a person makes to it.
+#
+# It lives on dev, because dev is the branch it watches; deploy-prototypes.yml
+# is identical on dev and `prototypes`.
+
+on:
+    push:
+        branches: [dev]
+    workflow_dispatch: {}
+
+permissions:
+    contents: read
+
+# Two dev pushes queue rather than race to push `prototypes`; the later merge
+# carries every commit of the earlier one.
+concurrency:
+    group: prototypes-sync
+    cancel-in-progress: false
+
+env:
+    SYNC_BRANCH: sync/dev-into-prototypes
+
+jobs:
+    sync:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+            actions: write
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  ref: prototypes
+                  fetch-depth: 0
+
+            - id: merge
+              run: |
+                  git config user.name 'github-actions[bot]'
+                  git config user.email '41898299+github-actions[bot]@users.noreply.github.com'
+                  git fetch origin dev
+                  if git merge --no-edit origin/dev; then
+                    echo "clean=true" >> "$GITHUB_OUTPUT"
+                  else
+                    git merge --abort
+                    echo "clean=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            # GitHub refuses a GITHUB_TOKEN push that changes a file under
+            # .github/workflows/, so a merge carrying such a change goes to the pull
+            # request below, as a conflict does.
+            - id: push
+              if: steps.merge.outputs.clean == 'true'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/prototypes)" ]; then
+                    echo "prototypes already holds dev; nothing to push." >> "$GITHUB_STEP_SUMMARY"
+                    echo "pushed=true" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  if ! git push origin HEAD:prototypes; then
+                    echo "pushed=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  echo "pushed=true" >> "$GITHUB_OUTPUT"
+                  gh workflow run deploy-prototypes.yml --ref prototypes
+                  echo "Merged dev into prototypes and dispatched the deploy." >> "$GITHUB_STEP_SUMMARY"
+
+            # The sync branch starts at dev's head, so the pull request shows the
+            # conflict against `prototypes` and a person resolves it there by merging
+            # `prototypes` into it. Later dev pushes merge into the branch without
+            # force, so a resolution in progress survives them.
+            - if: steps.merge.outputs.clean == 'false' || steps.push.outputs.pushed == 'false'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  PR_BODY: >-
+                      The sync workflow could not merge dev into `prototypes` by itself:
+                      the merge conflicts, or it changes a workflow file, which a
+                      GITHUB_TOKEN push may not. Merge `prototypes` into this branch and
+                      resolve any conflict, then merge this pull request. The sync
+                      workflow merges each later dev push into this branch.
+              run: |
+                  if git fetch origin "$SYNC_BRANCH"; then
+                    git checkout -B "$SYNC_BRANCH" FETCH_HEAD
+                    if ! git merge --no-edit origin/dev; then
+                      git merge --abort
+                      echo "::error::dev does not merge into $SYNC_BRANCH either; merge it there by hand."
+                      exit 1
+                    fi
+                    git push origin "HEAD:refs/heads/$SYNC_BRANCH"
+                  else
+                    git push origin "origin/dev:refs/heads/$SYNC_BRANCH"
+                  fi
+                  open=$(gh pr list --base prototypes --head "$SYNC_BRANCH" --state open --json number --jq 'length')
+                  if [ "$open" = "0" ]; then
+                    gh pr create --base prototypes --head "$SYNC_BRANCH" \
+                      --title 'Merge dev into prototypes' --body "$PR_BODY"
+                  fi
+                  echo "::warning::dev did not merge into prototypes by itself; see the pull request from $SYNC_BRANCH."

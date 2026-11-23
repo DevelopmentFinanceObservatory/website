@@ -1,0 +1,209 @@
+{
+    "provenance": {
+        "sdk": "@developmentfinance/client@0.7.0",
+        "query": "__SLUG__ reads",
+        "retrieved": "2026-11-19T22:35:23.948Z"
+    },
+    "data": {
+        "series": {
+            "ref": {
+                "format_version": 1,
+                "members": [
+                    {
+                        "parts": [],
+                        "sentence": "OECD headline ODA by provider",
+                        "spec": {
+                            "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+                            "definition": {
+                                "schema_version": 1,
+                                "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+                                "identity": {
+                                    "shape": {
+                                        "kind": "statvar_schema",
+                                        "stat_type": "measuredValue",
+                                        "population_type": "FinancialFlow",
+                                        "measured_property": "amount",
+                                        "measurement_qualifier": "Nominal"
+                                    },
+                                    "slots": [
+                                        {
+                                            "binding": {
+                                                "ref": "DAC1AidType1010",
+                                                "state": "value"
+                                            },
+                                            "property": "dac1AidType"
+                                        },
+                                        {
+                                            "binding": {
+                                                "state": "unbound"
+                                            },
+                                            "property": "dacTypeOfFinance"
+                                        },
+                                        {
+                                            "binding": {
+                                                "ref": "Disbursement",
+                                                "state": "value"
+                                            },
+                                            "property": "financialFlowType"
+                                        },
+                                        {
+                                            "binding": {
+                                                "ref": "Net",
+                                                "state": "value"
+                                            },
+                                            "property": "nettingBasis"
+                                        }
+                                    ],
+                                    "facets": {
+                                        "provenance": {
+                                            "ref": "provenance/ONEOECDHeadlineODA",
+                                            "state": "value"
+                                        }
+                                    },
+                                    "entities": {},
+                                    "open_roles": ["origin"],
+                                    "identity_version": "spec1",
+                                    "requested_window": {
+                                        "kind": "range",
+                                        "end_year": 2025,
+                                        "start_year": 2015
+                                    }
+                                }
+                            }
+                        },
+                        "content_version": "cv_b5c9be1f98e485284c206b7344ac45c2",
+                        "artifact": {
+                            "digest": "sha256:af257d9a02a20d63d807d07e1549840bbf020186d5e5cb62586fcc3fbc5829e8",
+                            "rendering": {
+                                "format": "parquet",
+                                "bundle": false
+                            }
+                        }
+                    }
+                ]
+            },
+            "provenance": {
+                "format_version": 1,
+                "sentence": "OECD headline ODA by provider",
+                "citation": {
+                    "text": "OECD DAC1 (2026), via the Development Finance Observatory",
+                    "sources": [
+                        {
+                            "ref": "provenance/OECDDAC1",
+                            "label": "OECD DAC1",
+                            "licence": "OECD Terms and Conditions",
+                            "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+                            "url": "https://data-explorer.oecd.org/vis?fs[0]=Topic,0%7CDevelopment%23DEV%23&fs[1]=Topic,1%7CDevelopment%23DEV%23%7COfficial%20Development%20Assistance%20%28ODA%29%23DEV_ODA%23&pg=0&fc=Topic&snb=23&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_DAC1%40DF_DAC1&df[ag]=OECD.DCD.FSD&df[vs]=1.7&dq=._Z.....&pd=,&to[TIME_PERIOD]=false&isAvailabilityDisabled=false&page=0"
+                        }
+                    ]
+                },
+                "fetched_at": "2026-11-19T22:35:20Z",
+                "question": null,
+                "ref": {
+                    "format_version": 1,
+                    "members": [
+                        {
+                            "parts": [],
+                            "sentence": "OECD headline ODA by provider",
+                            "spec": {
+                                "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+                                "definition": {
+                                    "schema_version": 1,
+                                    "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+                                    "identity": {
+                                        "shape": {
+                                            "kind": "statvar_schema",
+                                            "stat_type": "measuredValue",
+                                            "population_type": "FinancialFlow",
+                                            "measured_property": "amount",
+                                            "measurement_qualifier": "Nominal"
+                                        },
+                                        "slots": [
+                                            {
+                                                "binding": {
+                                                    "ref": "DAC1AidType1010",
+                                                    "state": "value"
+                                                },
+                                                "property": "dac1AidType"
+                                            },
+                                            {
+                                                "binding": {
+                                                    "state": "unbound"
+                                                },
+                                                "property": "dacTypeOfFinance"
+                                            },
+                                            {
+                                                "binding": {
+                                                    "ref": "Disbursement",
+                                                    "state": "value"
+                                                },
+                                                "property": "financialFlowType"
+                                            },
+                                            {
+                                                "binding": {
+                                                    "ref": "Net",
+                                                    "state": "value"
+                                                },
+                                                "property": "nettingBasis"
+                                            }
+                                        ],
+                                        "facets": {
+                                            "provenance": {
+                                                "ref": "provenance/ONEOECDHeadlineODA",
+                                                "state": "value"
+                                            }
+                                        },
+                                        "entities": {},
+                                        "open_roles": ["origin"],
+                                        "identity_version": "spec1",
+                                        "requested_window": {
+                                            "kind": "range",
+                                            "end_year": 2025,
+                                            "start_year": 2015
+                                        }
+                                    }
+                                }
+                            },
+                            "content_version": "cv_b5c9be1f98e485284c206b7344ac45c2",
+                            "artifact": {
+                                "digest": "sha256:af257d9a02a20d63d807d07e1549840bbf020186d5e5cb62586fcc3fbc5829e8",
+                                "rendering": {
+                                    "format": "parquet",
+                                    "bundle": false
+                                }
+                            }
+                        }
+                    ]
+                },
+                "pinned": true,
+                "held_until": null,
+                "warnings": [],
+                "complete": true,
+                "missing": [],
+                "members": [
+                    {
+                        "spec_id": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+                        "content_version": "cv_b5c9be1f98e485284c206b7344ac45c2",
+                        "digest": "sha256:af257d9a02a20d63d807d07e1549840bbf020186d5e5cb62586fcc3fbc5829e8",
+                        "parts": [],
+                        "sentence": "OECD headline ODA by provider",
+                        "citation": {
+                            "text": "OECD DAC1 (2026), via the Development Finance Observatory",
+                            "sources": [
+                                {
+                                    "ref": "provenance/OECDDAC1",
+                                    "label": "OECD DAC1",
+                                    "licence": "OECD Terms and Conditions",
+                                    "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+                                    "url": "https://data-explorer.oecd.org/vis?fs[0]=Topic,0%7CDevelopment%23DEV%23&fs[1]=Topic,1%7CDevelopment%23DEV%23%7COfficial%20Development%20Assistance%20%28ODA%29%23DEV_ODA%23&pg=0&fc=Topic&snb=23&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_DAC1%40DF_DAC1&df[ag]=OECD.DCD.FSD&df[vs]=1.7&dq=._Z.....&pd=,&to[TIME_PERIOD]=false&isAvailabilityDisabled=false&page=0"
+                                }
+                            ]
+                        },
+                        "pinned": true,
+                        "held_until": null
+                    }
+                ]
+            }
+        }
+    }
+}

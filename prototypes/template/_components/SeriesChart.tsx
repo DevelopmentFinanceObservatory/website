@@ -4,9 +4,7 @@ import { useState } from 'react';
 
 import styles from './SeriesChart.module.scss';
 
-import type { DataFile } from '#lib/dataFile.mts';
-
-import type { Point } from '../_data/types.ts';
+import type { Series } from '../_lib/build.ts';
 
 const WINDOWS = [10, 20, Infinity] as const;
 
@@ -15,14 +13,15 @@ const formatValue = new Intl.NumberFormat('en-GB', {
     maximumFractionDigits: 1,
 });
 
-/** A bar chart of the series, with a choice of how many recent years to show. */
-const SeriesChart = ({ file }: { file: DataFile<Point[]> }) => {
+/** A bar chart of the series the build read, with a choice of how many recent years to show.
+ *  Its root carries `data-read-tier="built"`, which `pnpm check:live` reads. */
+const SeriesChart = ({ series }: { series: Series }) => {
     const [years, setYears] = useState<(typeof WINDOWS)[number]>(20);
-    const points = file.data.slice(-years);
+    const points = series.points.slice(-years);
     const max = Math.max(...points.map((point) => point.value), 1);
 
     return (
-        <figure className={styles.chart}>
+        <figure className={styles.chart} data-read-tier="built" data-read-live="built">
             <div className={styles.controls} role="group" aria-label="Years shown">
                 {WINDOWS.map((option) => (
                     <button
@@ -47,7 +46,7 @@ const SeriesChart = ({ file }: { file: DataFile<Point[]> }) => {
                 ))}
             </ol>
             <figcaption className={styles.caption}>
-                {String(file.provenance.sentence ?? file.provenance.query)}
+                {series.provider}: {series.sentence}
             </figcaption>
         </figure>
     );

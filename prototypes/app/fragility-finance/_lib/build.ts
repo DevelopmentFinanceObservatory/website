@@ -37,3 +37,5 @@ export const fragilityBuild: BuildPage<BuildRead<string, Figures>> = {
         );
     },
 };
+
+export default fragilityBuild;

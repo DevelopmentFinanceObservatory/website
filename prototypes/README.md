@@ -1,6 +1,6 @@
 # Prototypes
 
-A static Next.js app served at `developmentfinance.org/prototypes`. Each prototype is one MDX page with its own React components and a JSON file of data fetched once with the DFO SDKs. The app imports the site's fonts, styles and components from `../src`, builds to static files, and deploys to a Cloudflare Worker on its own workflow, so a prototype ships without a website release.
+A static Next.js app served at `developmentfinance.org/prototypes`. Each prototype is one MDX page with its own React components. A page reads its figures from DFO when the app builds, through the DFO SDK, and the repository keeps only the queries it asks and the inputs that come from outside DFO. The app imports the site's fonts, styles and components from `../src`, builds to static files, and deploys to a Cloudflare Worker from the `prototypes` branch, rebuilt every day, so a prototype ships without a website release.
 
 ## Set up
 
@@ -13,77 +13,74 @@ pnpm install
 pnpm dev                # http://localhost:3000/prototypes/
 ```
 
+Work on prototypes from the `prototypes` branch, which is dev plus `prototypes/`: branch from it and open the pull request into it.
+
 ## Start a prototype
 
 ```sh
-pnpm new debt-diagnostic "Debt diagnostic"            # TypeScript data step
-pnpm new debt-diagnostic "Debt diagnostic" --python   # Python data step
+pnpm new debt-diagnostic "Debt diagnostic"            # TypeScript refs step
+pnpm new debt-diagnostic "Debt diagnostic" --python   # Python refs step
+pnpm read                                             # reads DFO into .build-data/
+pnpm dev
 ```
 
-Run `pnpm data <slug>` before `pnpm dev` or `pnpm build`, because the page imports `_data/series.json`, which only the data step writes. `pnpm new` copies `template/` to `app/<slug>/`, writes the slug into its page and adds an entry dated today to the top of `registry.ts`. Write the entry's `summary` there. The index lists the registry entry and the page's metadata reads it, so each title and summary lives in one place. A slug is lowercase letters, digits and dashes.
+`pnpm new` copies `template/` to `app/<slug>/`, writes the slug wherever the template says `__SLUG__` (the page, its build read's name and `refs.json`), and adds an entry dated today to the top of `registry.ts`. Write the entry's `summary` there. The index lists the registry entry and the page's metadata reads it, so each title and summary lives in one place. A slug is lowercase letters, digits and dashes. The new page builds as it stands: it reads the committed ref in `refs.json` and charts one provider's ODA. `pnpm read` finds its `_lib/build.ts` by its path, so nothing else needs registering. To have `pnpm check:live` check it after a deploy, add its slug to `PAGES` in `scripts/check-live.mts`.
 
 ```text
 app/debt-diagnostic/
-  page.mdx                  the write-up; imports the data and the components
+  page.mdx                      the write-up; renders the server components
+  _components/Built.tsx         server components that read the build's data with readBuilt
   _components/SeriesChart.tsx   a client component; replace it with your own
-  _data/fetch.mts           the data step (fetch.py with --python)
-  _data/types.ts            the shape of the data, shared by the step and the components
-  _data/series.json         written by the data step, committed
+  _lib/build.ts                 the page's BuildPage: its DFO reads and what it derives from them
+  _data/refs.json               the reads the build makes, committed
+  _data/fetch.mts               the refs step that rewrites refs.json (fetch.py with --python)
 ```
 
 Folders starting with `_` become no route. `template/` sits outside `app/`, so it is type-checked and skipped by the build.
 
-## Write the data step
+## Read DFO at build
 
-A data step runs by hand, writes JSON, and the page imports that JSON at build time, so a page opens on committed data. A page may also call the site's API from the browser on the same origin, as `oda-counts` does to convert figures to a currency the reader picks. `pnpm dev` rewrites `/api/v1` to developmentfinance.org for that. Run a step with:
+A page's figures come from the build. Its `_lib/build.ts` default-exports a `BuildPage` (`lib/buildRead.ts`) named after the page's directory, whose `build` does all the page's DFO work, mostly through `readSettled(page, sources, derive)`. That runs each source at DFO's newest stored version through `readStored` (`lib/liveRead.ts`), with no fallback, and hands the rows and datasets to `derive`. A source is `{ ref }`, a ref from the page's `_data/`, or `{ recipe }`, an analysis recipe. `pnpm read` (`scripts/read.mts`) imports every `app/*/_lib/build.ts`, runs each page's `build` in one Node process through one set of lanes, and writes each result to `.build-data/<page>.json` (`lib/buildData.ts`), which git ignores. `pnpm build` runs it before `next build`, so a failed read or a derivation that refuses its rows stops the build, naming the page, and production keeps the last good deploy.
+
+The page's server components read the file through `readBuilt(page)`, and client components take what they need as props:
+
+```tsx
+import page from '../_lib/build.ts';
+import SeriesChart from './SeriesChart';
+
+import { readBuilt } from '#lib/buildData.ts';
+
+export const BuiltSeries = async () => {
+    const { value } = await readBuilt(page);
+
+    return <SeriesChart series={value} />;
+};
+```
+
+Under `next build` a missing file is an error naming `pnpm read`. Under `next dev` a missing file runs the page's `build` once and writes it, so delete `.build-data/` or run `pnpm read` for newer figures. The result carries `value`, `retrieved` (UTC, for the page to print) and, per source, the spec ids and content versions read (a recipe's resolved roots) with their `freshness`. The part of the page the build's figures fill carries `data-read-tier="built"` and `data-read-live="built"`, which `pnpm check:live` reads.
+
+Each read may take 5 minutes, since the build is often the first reader after DFO takes in new data and meets cold computes. While any dataset's `freshness` is `pending`, DFO is checking its sources for newer data; the build reads again every 30 seconds, for at most `BUILD_PENDING_BOUND_S` seconds, then takes what it has. Unset, the bound is 0, so a local build, a push and a pull request take what DFO serves at once, and the daily build waits up to 600 seconds. Build reads use their own anonymous client on the production API and one set of lanes across every page, at most four reads and two recipes at once (`READ_CONCURRENCY`, `ANALYSIS_CONCURRENCY`), so a build from a shared runner address stays inside the gateway's allowances.
+
+`fragility-finance`, `hiv-financing` and `oda-counts` read this way. A build-read page commits no DFO figures. Its `_data/` holds the refs it reads and the inputs from outside DFO, such as `fragility-finance`'s `fragility-2026.tsv`. Quotes and figures from outside DFO, such as `hiv-financing`'s KFF and UNAIDS quotes, stay in the page's code.
+
+## Write the refs step
+
+`_data/refs.json` is the page's query config: the reads its build makes. A ref names a dataset's spec, its window and the version a step read, so a page reads the same question on every build. The build reads each ref's newest stored version, so the version in the file marks when the step last ran; the step pins it so the ref stays fetchable. `data.ref.toJSON()` (TypeScript) and `data.ref.to_json()` (Python) write a ref, and `DatasetRef.fromJSON` and `DatasetRef.from_json` read it back. Run a page's step with:
 
 ```sh
-pnpm data debt-diagnostic
+pnpm data debt-diagnostic              # fetch each committed ref's newest version, pin it, rewrite refs.json
+pnpm data debt-diagnostic --search     # ask the step's QUERY instead, pin the answer and write it
 ```
 
-This runs `_data/fetch.mts` with Node, or `_data/fetch.py` with `uv run`. Without a key both SDKs call the API anonymously, under a per-IP quota, which is enough for one fetch a prototype.
-
-In TypeScript, ask a question, fetch, keep the columns the page needs, and write them with `writeDataFile`:
-
-```ts
-import { Client } from '@developmentfinance/client';
-
-import { writeDataFile } from '#lib/dataFile.mts';
-
-const answer = await new Client().search(QUERY);
-const dataset = await answer.fetch();
-const data = (await dataset.toRows()).map((row) => ({
-    year: Number(row.time_period),
-    value: Number(row.value),
-}));
-
-writeDataFile(new URL('./series.json', import.meta.url), {
-    query: QUERY,
-    data,
-    extra: { sentence: dataset.sentence, citation: dataset.citation.text },
-});
-```
-
-`#lib/*` maps to `lib/*` (the `imports` field in `package.json`), so the same import works from `template/` and from `app/<slug>/`. Node files here end in `.mts` because the package has no `"type"` field, and a `.ts` file run by Node would load with a warning.
+This runs `_data/fetch.mts` with Node, or `_data/fetch.py` with `uv run`. Without a key both SDKs call the API anonymously, under a per-IP quota, which is enough for one step. Each new pin counts against a daily allowance. `#lib/*` maps to `lib/*` (the `imports` field in `package.json`), so the same import works from `template/` and from `app/<slug>/`. Node files here end in `.mts` because the package has no `"type"` field, and a `.ts` file run by Node would load with a warning.
 
 In Python, the script carries its own dependencies as PEP 723 inline metadata, and uv installs them in a cached environment:
 
 ```python
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["development-finance==0.4.2"]
+# dependencies = ["development-finance==0.6.0"]
 # ///
-```
-
-`uv run --script _data/fetch.py` runs it, and `pnpm data` does that for you. The template's `fetch.py` builds the same envelope by hand. The core is:
-
-```python
-envelope = {
-    "provenance": {"sdk": f"development-finance=={dfo.__version__}", "query": QUERY,
-                   "retrieved": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")},
-    "data": data,
-}
-Path(__file__).with_name("series.json").write_text(json.dumps(envelope, indent=2) + "\n")
 ```
 
 ### The envelope
@@ -93,111 +90,57 @@ Every JSON file under `app/*/_data/` has this shape:
 ```json
 {
     "provenance": {
-        "sdk": "@developmentfinance/client@0.5.0",
-        "query": "ODA from Germany to Nigeria",
-        "retrieved": "2026-11-16T09:30:00.000Z",
-        "sentence": "Germany's net disbursements (bilateral flows) to Nigeria ...",
-        "citation": "OECD DAC2A (2026), via the Development Finance Observatory"
+        "sdk": "development-finance==0.6.0",
+        "query": "debt-diagnostic reads",
+        "retrieved": "2026-11-19T09:30:00.000Z"
     },
-    "data": []
+    "data": {}
 }
 ```
 
-`sdk`, `query` and `retrieved` are required. `writeDataFile` stamps the SDK version from the installed client and the time in UTC. Anything else, such as Search's sentence, the citation or a share URL, goes in `extra`. The provenance sits in the same file as the data so the two cannot drift apart, and the page prints its source line from it. The file is committed so CI builds without DFO credentials and the page shows the same numbers until you refetch. `pnpm check:data` fails on a data file without the three required fields, and CI runs it.
+`sdk`, `query` and `retrieved` are required. `writeDataFile` (`lib/dataFile.mts`) stamps the SDK version from the installed client and the time in UTC, and a Python step writes the same fields by hand. `pnpm check:data` fails on a data file without the three required fields, and CI runs it.
 
-### Pinned reads and refs
-
-A data step that wants its numbers to reproduce reads through refs. A ref names the exact dataset versions a read returned, so a later run fetches the same bytes and the output does not drift when DFO revises its data. `data.ref.to_json()` (Python) and `data.ref.toJSON()` (TypeScript) write one, and `DatasetRef.from_json` and `DatasetRef.fromJSON` read it back. Pin a dataset's versions before committing its ref, because an unpinned version expires.
-
-`app/<slug>/_data/refs.json` is an envelope whose `provenance` is `{ "sdk": "development-finance==0.4.2", "query": "<prototype> pinned reads", "retrieved": <time of the refresh run> }`. Its `data` maps each read key to the ref and the dataset's provenance:
+`refs.json`'s `data` maps each read key to the ref and the dataset's provenance:
 
 ```json
 {
-    "provenance": {
-        "sdk": "development-finance==0.4.2",
-        "query": "oda-counts pinned reads",
-        "retrieved": "2026-11-19T09:30:00.000Z"
-    },
-    "data": {
-        "germany-kenya": {
-            "ref": { "format_version": 1, "members": [] },
-            "provenance": { "...": "data.provenance.to_json()" }
-        }
+    "germany-kenya": {
+        "ref": { "format_version": 1, "members": [] },
+        "provenance": { "...": "data.provenance.to_json()" }
     }
 }
 ```
 
-A step runs in one of three modes:
+`live-refs.json` maps each key to a ref object alone; `hiv-financing` and `oda-counts` build from it, and `debt-thresholds` reads it in the browser. `pnpm check:data` requires each entry of `refs.json` to have a `ref` object (with `format_version`) that lists at least one member, and a `provenance` object whose members are listed and all pinned. It requires each entry of `live-refs.json` to be a ref object with members, each of whose content versions is pinned in the same directory's `refs.json`. Each problem prints with a code such as `live_member_unpinned`.
 
-- Plain, the default: fetch each committed ref, write the outputs, and copy `provenance` and `retrieved` from `refs.json`. The outputs reproduce byte for byte.
-- `--refresh`: fetch the latest version of each ref (`latest=True`), pin it, and rewrite `refs.json`.
-- `--search`: with no refs yet, search or build the specs the step defines, pin them, and write `refs.json`. A ref keeps its window and spec, so a step uses this mode once and `--refresh` after.
+## Read in the browser
 
-To check that a step reproduces, run it plain with an empty `DFO_CACHE_DIR`, confirm every member of every ref is pinned, then run `git diff --exit-code -- app/<slug>/_data`.
+`debt-thresholds` still commits its figures: its Python step writes `thresholds.json` and `transfers.json` to `_data/`, and its page imports them. Its net-transfers section also reads in the browser through `readLive` (`lib/liveRead.ts`), which reads the sources at DFO's newest stored versions with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`) and at most two recipes at a time (`ANALYSIS_CONCURRENCY`). When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
 
-`pnpm check:data` requires each entry of `refs.json` to have a `ref` object (with `format_version`) that lists at least one member, and a `provenance` object whose members are listed and all pinned. It requires each entry of `live-refs.json` to be a ref object with members, each of whose content versions is pinned in the same directory's `refs.json`. Each problem prints with a code such as `live_member_unpinned`.
+- `committed`: figures the page committed, with no request. The page renders them first and swaps in the stored figures when they arrive. A page with a recipe falls back here, because a pinned analysis posts to the same server and fails the same way.
+- `pinned`: every ref's pinned version, the rows the step read. A page whose committed JSON leaves the figures out falls back here and shows a loading state until they arrive, as `debt-thresholds`' net transfers do.
 
-### Reads in the browser
+`tier` on `readLive`'s result says which tier the figures came from: `stored`, `pinned` or `committed`. The page puts it on the root of the part it derives as `data-read-tier`, with `loading` before it has figures and `failed` when every tier failed (`tierAttribute`), and puts its read switch on the same root as `data-read-live`, so `pnpm check:live` can assert that the section reads `stored`. Each dataset's `freshness` says whether DFO has confirmed a stored version against its sources (`current`), is checking (`pending`) or could not check (`stale`), and is null after a pinned fallback.
 
-A figure a page derives on the client reads its rows in the browser. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object.
-
-`lib/liveRead.ts` reads a page's sources with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`) and at most two analysis recipes at a time (`ANALYSIS_CONCURRENCY`, which leaves analysis threads for other readers while DFO computes a cold answer), and runs the page's derivation on their rows and datasets. A source is `{ ref }`, a ref from `live-refs.json`, or `{ recipe }`, an analysis recipe. It reads the version DFO stores as the newest of each dataset's spec, so the page shows a release DFO took in after the step ran. When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
-
-- `committed`: the figures the step wrote to the page's JSON, with no request. The page renders them first and swaps in the stored figures when they arrive, as `oda-counts` does with `counts.json`. A page with a recipe falls back here, because a pinned analysis posts to the same server and fails the same way. A recipe reads the newest stored version of each dataset it starts from in two requests: the analysis POST, whose answer carries the result's manifest, then the result's file by its digest. After a fall-back here, the page's other recipes still run in the background, so DFO stores their answers for the next reader; their rows change nothing on the page.
-- `pinned`: every ref's pinned version, the rows the step read. A page whose committed JSON leaves the figures out falls back here, shows a loading state until they arrive, and renders no server text from them, as `hiv-financing` and `debt-thresholds` do.
-
-A page can instead take its figures from the build, the `built` tier. It exports a `BuildPage` (`lib/buildRead.ts`) from `_lib/build.ts`, whose `build` does all its DFO work, mostly through `readSettled(page, sources, derive)`, which runs the sources through `readStored`, the stored read with no fallback. `pnpm read` (`scripts/read.mts`) runs every page's `build` in one Node process and writes each result to `.build-data/<page>.json`, which git ignores; `pnpm build` runs it before `next build`, so a failed read or refused derivation stops the build, naming the page, and production keeps the last good deploy. The page's server components read the file through `readBuilt(page)` from `lib/buildData.ts`. Under `next build` a missing file is an error naming `pnpm read`; under `next dev` it runs the page's `build` once and writes the file, so delete `.build-data/` for newer figures. Each read may take 5 minutes, since the build is often the first reader after DFO takes in new data and meets cold computes. While any dataset's `freshness` is `pending` the build reads again every 30 seconds, for at most `BUILD_PENDING_BOUND_S` seconds (default 0, taking what DFO serves), then takes what it has. The result carries `value`, `retrieved` (UTC, for the page to print) and, per source, the spec ids and content versions read (a recipe's resolved roots) with their `freshness`. Build reads use their own anonymous client and one set of lanes across every page, at most four reads and two recipes at once. The page renders `data-read-tier="built"` and `data-read-live="built"` on the part it derives, and the repository holds none of its figures.
-
-`tier` on `readLive`'s result says which tier the figures came from: `stored`, `pinned` or `committed`. Each page puts it on the root of the part it derives as `data-read-tier`, with `loading` before a page without committed figures has any and `failed` when every tier failed (`tierAttribute`), so a browser check can assert that a page reads `stored`. The attribute covers the figures the page reads live and no others. On `hiv-financing` it is the older tier of the aid read and the UNAIDS read, and the aid counts as `committed` while `READ_AID_LIVE` is off. On `fragility-finance` it covers the figures `figuresFromRows` replaces: each context's pillars, ODA, OOF, donors and climate split, and each group's donors. Remittances, FDI, debt service, population and the indicators stay at `profiles.json`'s pinned versions. `asCommitted` says whether every dataset is the version its ref pins, so the page knows whether a label the step committed, such as a release name, describes the figures. Each dataset's `freshness` says whether DFO has confirmed a stored version against its sources (`current`), is checking (`pending`) or could not check (`stale`), and is null after a pinned fallback.
-
-```tsx
-'use client';
-
-import { useEffect, useState } from 'react';
-
-import { readLive, type LiveRead } from '#lib/liveRead.ts';
-
-import totals from '../_data/totals.json';
-import liveRefs from '../_data/live-refs.json';
-
-export function useTotal() {
-    const [read, setRead] = useState<LiveRead<'gross', number>>();
-
-    useEffect(() => {
-        const abort = new AbortController();
-        const total = (rows: { gross: { value?: unknown }[] }) =>
-            rows.gross.reduce((sum, row) => sum + Number(row.value ?? 0), 0);
-
-        readLive({ gross: { ref: liveRefs.data.gross } }, total, {
-            fallback: { tier: 'committed', value: totals.data.gross },
-            signal: abort.signal,
-        }).then(setRead, (reason) => {
-            if (!abort.signal.aborted) console.error(reason);
-        });
-
-        return () => abort.abort();
-    }, []);
-
-    return { total: read?.value ?? totals.data.gross, tier: read?.tier ?? 'committed' };
-}
-```
-
-Each stored read is two GETs: the spec's newest stored version, then its file. Each stored recipe is two requests: the analysis POST, then its file. The website's gateway counts each request that reaches it against an allowance per address (`src/lib/proxy/rateLimit.ts`): `datasets`, 300 a minute, for every path below `/api/v1/datasets/`, and `api`, 120 a minute, for every other `/api` route, Search resolve among them. The pacer in `lib/pacing.ts` keeps one reading per allowance. A file the edge cache serves does not reach the gateway. `oda-counts` spends 19 to 38 of the 300 on its stored reads, and its currency picks have the 120 to themselves.
+Each stored read is two GETs: the spec's newest stored version, then its file. Each stored recipe is two requests: the analysis POST, then its file. The website's gateway counts each request that reaches it against an allowance per address (`src/lib/proxy/rateLimit.ts`): `datasets`, 300 a minute, for every path below `/api/v1/datasets/`, and `api`, 120 a minute, for every other `/api` route, Search resolve among them. The pacer in `lib/pacing.ts` keeps one reading per allowance. A file the edge cache serves does not reach the gateway. `oda-counts` posts to the site's same-origin Search API from the browser when a reader picks another currency or base year, on the `api` allowance; `pnpm dev` rewrites `/api/v1` to developmentfinance.org for that.
 
 `readLive` raises before any request for a ref it cannot read or a recipe with a `pinned` fallback, raises the pinned read's error or the derivation's error on the pinned rows when that fallback fails too, and raises on an aborted signal without falling back. The page owns its hook and its loading and error states.
 
 ## Write the page
 
-`page.mdx` is Markdown with JSX. It takes its metadata from the registry and its numbers from the envelope:
+`page.mdx` is Markdown with JSX. It takes its metadata from the registry and its figures from the server components:
 
 ```mdx
-import { prototype } from '../../registry';
-import series from './_data/series.json';
+import { prototype, prototypeMetadata } from '../../registry';
+
+import { BuiltSeries, Citation, Retrieved } from './_components/Built';
 
 export const entry = prototype('debt-diagnostic');
-export const metadata = { title: entry.title, description: entry.summary };
+export const metadata = prototypeMetadata(entry);
 
-Source: {series.provenance.citation}, fetched on {series.provenance.retrieved.slice(0, 10)}.
+<BuiltSeries />
+
+Source: <Citation />. Read from the [Development Finance Observatory](https://developmentfinance.org/data) on <Retrieved />.
 ```
 
 Link to the main site with absolute URLs such as `https://developmentfinance.org/data`. The app's `basePath` turns a root-relative link into `/prototypes/data`, which does not exist. `SourceLink` already writes absolute URLs here. `pnpm check:dist` fails on any link, image or CSS `url()` in the build that leaves `/prototypes/` or names a missing file.
@@ -218,17 +161,19 @@ pnpm preview            # wrangler dev on dist/, http://localhost:8787/prototype
 pnpm preview --port 8798   # when 8787 is taken
 ```
 
-`pnpm build` runs `next build`, then moves the export to `dist/prototypes/` and copies `edge/_headers` and `edge/_redirects` to `dist/`. `pnpm preview` serves `dist/` as the Worker does in production, including trailing-slash redirects and the 404 page. Rebuild before previewing a change.
+`pnpm build` runs `pnpm read`, then `next build`, then moves the export to `dist/prototypes/` and copies `edge/_headers` and `edge/_redirects` to `dist/`. `pnpm preview` serves `dist/` as the Worker does in production, including trailing-slash redirects and the 404 page. Rebuild before previewing a change.
 
 ## Deploys and previews
 
-`.github/workflows/deploy-prototypes.yml` builds and deploys the app, and the website's deploy workflows ignore `prototypes/`.
+`.github/workflows/deploy-prototypes.yml` builds and deploys the app from the `prototypes` branch, and the website's deploy workflows ignore `prototypes/`. Nothing on dev or main builds prototypes.
 
-- A push to `dev` that touches `prototypes/` or the workflow deploys to `developmentfinance.org/prototypes` with `wrangler deploy`, then checks that `/prototypes/` serves this app and that the site root still serves the website. There is no approval step, and the build uses `dev`'s `src/`.
-- A ready pull request that touches `prototypes/`, `src/`, the root manifest or the workflow builds the app and runs the checks above. When the secrets are set it uploads a preview version under the alias `pr-<number>` and writes its workers.dev URL to the job summary. Draft pull requests skip.
+- A push to `prototypes` that touches `prototypes/`, `src/`, the root manifest or the workflow deploys to `developmentfinance.org/prototypes` with `wrangler deploy`, then checks that `/prototypes/` serves this app, that the site root still serves the website, and that each page in `scripts/check-live.mts` serves this run's build on its expected tier. There is no approval step.
+- A ready pull request into `prototypes` that touches the same paths builds the app and runs the checks. When the secrets are set it uploads a preview version under the alias `pr-<number>` and writes its workers.dev URL to the job summary. Draft pull requests skip.
+- `.github/workflows/prototypes-daily.yml` dispatches the deploy on `prototypes` at 05:17 UTC every day with a 600-second pending bound, so the pages carry DFO's newest stored data. A failed read fails the build without deploying, and the last deploy stays live. GitHub mails a failed scheduled run to whoever last edited its schedule.
+- `.github/workflows/prototypes-sync.yml` merges every push to dev into `prototypes` and dispatches the deploy, so the build uses dev's `src/`. When the merge conflicts, or changes a workflow file, which the workflow's token may not push, it opens a pull request from `sync/dev-into-prototypes` into `prototypes` for a person to finish.
 
-The workflow reads two repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit on the account, Workers Routes edit and Zone read on `developmentfinance.org`) and `CLOUDFLARE_ACCOUNT_ID`. Without them, previews are skipped and a deploy fails naming the missing secret. `wrangler.jsonc` holds the Worker's name, route and assets settings.
+The daily and sync workflows run from dev, since GitHub runs schedules and dispatches only from workflow files on the default branch, and dev holds `deploy-prototypes.yml` identical to the copy on `prototypes`. The deploy workflow reads two repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit on the account, Workers Routes edit and Zone read on `developmentfinance.org`) and `CLOUDFLARE_ACCOUNT_ID`. Without them, previews are skipped and a deploy fails naming the missing secret. `wrangler.jsonc` holds the Worker's name, route and assets settings.
 
 ## SDK versions
 
-Prototypes use `@developmentfinance/client@0.7.0` from npm, pinned exactly in `package.json`, and `development-finance` from PyPI, pinned exactly in each step's PEP 723 header: 0.6.0 for `fragility-finance` and `hiv-financing`, 0.4.2 for the others and the template. The pin gives a reader the release a prototype used. Client 0.5.0 is the first npm release with `latest: "stored"`, which the pages' browser reads use, 0.6.0 the first that reads a recipe at `latest: "stored"`, and 0.7.0 the first that reads one in two requests. PyPI 0.4.2 is the first release with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because data steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.7.0 for everything under `prototypes/`. A step moves to a newer release by raising its header and rerunning with `--refresh`.
+Prototypes use `@developmentfinance/client@0.7.0` from npm, pinned exactly in `package.json`, for the build's reads, the browser reads and the TypeScript steps, and `development-finance` from PyPI, pinned exactly in each Python step's PEP 723 header: 0.6.0 for `fragility-finance`, `hiv-financing` and the template, 0.4.2 for `oda-counts` and `debt-thresholds`. The pin gives a reader the release a prototype used. Client 0.5.0 is the first npm release with `latest: "stored"`, which the build's reads and the browser reads use, 0.6.0 the first that reads a recipe at `latest: "stored"`, and 0.7.0 the first that reads one in two requests. PyPI 0.4.2 is the first release with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because the prototypes build and steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.7.0 for everything under `prototypes/`. A step moves to a newer release by raising its header and running again.
