@@ -245,7 +245,7 @@ test('requestSurface: without Sec-Fetch-Site, the Referer host, then the Origin 
     const surface = (headers: Record<string, string>) =>
         requestSurface(new Headers({ host: 'developmentfinance.org', ...headers }));
 
-    // Own host, ports and case ignored, as the request log rule reads it.
+    // Own host, with ports and case ignored.
     assert.equal(surface({ referer: 'https://developmentfinance.org/data?q=x' }), 'website');
     assert.equal(surface({ referer: 'https://DevelopmentFinance.org:443/data' }), 'website');
     assert.equal(

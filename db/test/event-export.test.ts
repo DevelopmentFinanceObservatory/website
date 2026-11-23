@@ -432,7 +432,7 @@ const VERSION_1_ROWS: ExportRow[] = [
     },
 ];
 
-// Version 2 added rows 5 to 9 to the sample, which version 3 leaves as they were.
+// Rows 5 to 9 are the version 2 rows, and version 3 exports them unchanged.
 const VERSION_2_ROWS: ExportRow[] = [
     ...VERSION_1_ROWS,
     {

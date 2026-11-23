@@ -283,8 +283,8 @@ principal goes `x-dfo-surface`, `website` for a fetch from one of the site's
 own pages and `api` otherwise (`requestSurface()` in `src/lib/proxy/caller.ts`).
 It comes from the client's `Sec-Fetch-Site` header. When the request sends no
 `Sec-Fetch-Site`, it compares the `Referer` host, else the `Origin` host, with
-the `Host` header, ports and case ignored. It serves counting only. The site's own share calls always send
-`website`.
+the `Host` header, ports and case ignored. It serves counting only. The site's
+own share calls always send `website`.
 The client's `x-dfo-client` passes through. The Studio's
 turn and interrupt calls carry `x-dfo-caller` and, for a signed-in user,
 `x-dfo-account` (the export's `user_hash` under `EXPORT_ID_HMAC_KEY`, none for

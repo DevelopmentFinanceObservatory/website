@@ -39,12 +39,13 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
     }
 
     // Counted here, server-side, with nothing stored on the device, so it
-    // needs no consent. embed.view holds no address or id; data.view stores
+    // needs no consent. embed.view holds no address or id. data.view stores
     // the caller digest (a keyed digest of the client address) in the events
-    // table, and the export keeps it. The two rows of one render sit
+    // table, and the export keeps it, so the two rows of one render sit
     // together in the export. embed.view holds who viewed the share
-    // (`viewer`: owner, other, signed_out or unknown) and `internal_eng`, read from the domain of the session's
-    // verified email, and leaves off the user id (src/lib/events/shareView).
+    // (`viewer`: owner, other, signed_out or unknown) and `internal_eng`, read
+    // from the domain of the session's verified email, and leaves off the user
+    // id (src/lib/events/shareView).
     // Headers are read during render: inside after() they throw.
     const incoming = await headers();
     const host = refererHost(incoming.get('referer'));
@@ -64,10 +65,11 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
 
         await track('embed.view', props, { ...who, headers: incoming });
 
-        // The frames dfo-apis last recorded for the share, one data.view per embed served, so
-        // the count rests on the site's own render and on nothing a browser
-        // reports. The same anonymous `who`, and no share id, which beside
-        // the caller digest would tie an owner's address to their account.
+        // One data.view per embed served, of the frames dfo-apis last recorded
+        // for the share, so the count rests on the site's own render and on
+        // nothing a browser reports. It uses the same anonymous `who` and
+        // carries no share id, which beside the caller digest would tie an
+        // owner's address to their account.
         const shown = await sharedView.catch(() => null);
         const dataView =
             shown &&

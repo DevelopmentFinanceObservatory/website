@@ -52,10 +52,10 @@ const hostHostname = (host: string | null): string | null =>
  * A request that sends Sec-Fetch-Site is `website` only for `same-origin`.
  * Safari before 16.4, in-app browsers and some bots send none, so a request
  * without it is `website` when its Referer's hostname is the one its Host
- * header names, else, when it has no http or https Referer, when its Origin's
- * is. The hostnames are compared with ports and case ignored. Every
- * header here is a client claim, which any non-browser client can forge, so
- * the surface is for counting only. The site's own share calls always send
+ * header names. A request with no http or https Referer uses its Origin's
+ * hostname the same way. Hostnames are compared with ports and case ignored.
+ * Every header here is a client claim, which any non-browser client can forge,
+ * so the surface is for counting only. The site's own share calls always send
  * `website`.
  */
 export const requestSurface = (incoming: Headers): ApisSurface => {
