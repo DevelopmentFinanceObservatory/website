@@ -1,5 +1,6 @@
-// The shape of _data/profiles.json's `data`, written by fetch.py and read by the page's
-// components with `import type`. Money is in current US dollars, rounded to the dollar.
+// The shape of the page's figures, which the build derives from DFO's rows (_lib/figures.ts)
+// and the page's components read with `import type`. Money is in current US dollars, rounded
+// to the dollar.
 
 /** The OECD's six dimensions of fragility. */
 export type DimensionKey = 'eco' | 'env' | 'hum' | 'pol' | 'sec' | 'soc';
@@ -67,7 +68,7 @@ export type Context = {
 /** The groups the page can show: all 62 contexts, or one tier. */
 export type GroupKey = 'all' | 'extreme' | 'high';
 
-/** What _data/groups.json holds per group. Every other group figure is summed in _lib. */
+/** What the build derives per group. Every other group figure is summed in _lib. */
 export type Group = {
     /** The six largest providers of ODA to the group's contexts in 2024, largest first. */
     donors: DonorShare[];

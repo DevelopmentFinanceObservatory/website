@@ -2,14 +2,12 @@
 
 import { createContext, use, type ReactNode } from 'react';
 
-import { useFigures, type LiveFigures } from './useFigures';
+import type { Figures } from '../_lib/figures.ts';
 
-import type { Context as Place, Groups } from '../_data/types.ts';
-
-const Context = createContext<LiveFigures | null>(null);
+const Context = createContext<Figures | null>(null);
 
 /** The page's figures, for every component under `FiguresProvider`. */
-export const usePageFigures = (): LiveFigures => {
+export const usePageFigures = (): Figures => {
     const value = use(Context);
 
     if (value === null) {
@@ -20,16 +18,13 @@ export const usePageFigures = (): LiveFigures => {
 };
 
 /**
- * Holds the page's figures (`useFigures`) for the island and the prose around it, so both
- * print the same ones. These are the committed figures in the static HTML and until a live
- * read settles, and the read's after.
+ * Holds the figures the build read (./FragilityPage.tsx) for the island and the prose around
+ * it, so both print the same ones.
  */
 export const FiguresProvider = ({
-    contexts,
-    groups,
+    figures,
     children,
 }: {
-    contexts: Place[];
-    groups: Groups;
+    figures: Figures;
     children: ReactNode;
-}) => <Context value={useFigures({ contexts, groups })}>{children}</Context>;
+}) => <Context value={figures}>{children}</Context>;

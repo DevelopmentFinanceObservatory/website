@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { context, PROFILES } from './fixture.mts';
+import { context, SAMPLE } from './fixture.mts';
 import {
     comparisonGroup,
     groupContexts,
@@ -12,12 +12,15 @@ import {
     toggleContext,
 } from './scope.ts';
 
-test('groups split the 62 into 20 extreme and 42 high', () => {
+test('groups count the contexts of each tier', () => {
     assert.deepEqual(
-        (['all', 'extreme', 'high'] as const).map((key) => groupLabel(PROFILES, key)),
-        ['All 62', 'Extreme 20', 'High 42'],
+        (['all', 'extreme', 'high'] as const).map((key) => groupLabel(SAMPLE, key)),
+        ['All 5', 'Extreme 2', 'High 3'],
     );
-    assert.ok(groupContexts(PROFILES, 'high').every((c) => c.tier === 'high'));
+    assert.deepEqual(
+        groupContexts(SAMPLE, 'high').map((c) => c.iso3),
+        ['SSD', 'GNQ', 'HTI'],
+    );
 });
 
 test('a context scope covers the context and compares with its tier', () => {
