@@ -87,6 +87,9 @@ def test_prints_the_2025_view_and_the_versions_read(build, capsys) -> None:
     assert len(build.state["transfers"]) == 75
     # The build reads anonymously.
     assert build.state["clients"][0]["api_key"] is False
+    # It names itself, so DFO's analytics counts its reads as the build's.
+    assert build.state["clients"][0]["headers"] == {"User-Agent": stored.BUILD_USER_AGENT}
+    assert stored.BUILD_USER_AGENT == "dfo-prototypes-build/1"
 
 
 def test_opens_on_2024_when_too_many_countries_lack_a_core_series(build, capsys) -> None:
