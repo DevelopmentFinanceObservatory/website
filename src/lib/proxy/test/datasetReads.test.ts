@@ -35,11 +35,17 @@ const FILE_TRACE = 'trace-of-a-file-link';
 const CLIENT_ADDRESS = '203.0.113.7';
 // What dfo-apis sends on a route the gateway does not handle as a read.
 const OTHER_CACHE_CONTROL = 'private, max-age=5';
+// What dfo-apis sends on a heads 200: unlike any lifetime the gateway sets itself.
+const HEADS_CACHE_CONTROL = 'public, max-age=300';
+const HEADS_TRACE = 'trace-of-a-heads-check';
+const OTHER_SPEC = 'spec_other';
 
 // Storage responses held open, for the streaming test to finish.
 const held: ServerResponse[] = [];
 const storageRequests: Record<string, string | string[] | undefined>[] = [];
 const apisRequests: Record<string, string | string[] | undefined>[] = [];
+// The query string of each heads read dfo-apis received.
+const headsQueries: string[] = [];
 
 // One server plays dfo-apis under /api/datasets/ and storage under /bucket/.
 // A file digest picks the upstream's answer: `<tier>` redirects to a stored
@@ -89,6 +95,39 @@ const server = createServer((req, res) => {
     }
 
     apisRequests.push(req.headers);
+
+    if (spec === 'heads' && cv === undefined && ['GET', 'HEAD'].includes(req.method ?? '')) {
+        // The heads check: a spec_ id names its version, SPEC's CV and null for
+        // any other; no id, or an id that is not spec_, is refused.
+        const ids = url.searchParams.getAll('spec_id');
+
+        headsQueries.push(url.search);
+
+        if (ids.length === 0 || ids.some((id) => !id.startsWith('spec_'))) {
+            res.writeHead(400, {
+                'content-type': 'application/problem+json',
+                'cache-control': 'no-store',
+                'x-dfo-trace-id': HEADS_TRACE,
+            }).end('{"code": "request_invalid"}');
+        } else {
+            res.writeHead(200, {
+                'content-type': 'application/json',
+                'cache-control': HEADS_CACHE_CONTROL,
+                'x-dfo-trace-id': HEADS_TRACE,
+                'server-timing': 'db;dur=3',
+            });
+            res.end(
+                JSON.stringify({
+                    heads: ids.map((id) => ({
+                        spec_id: id,
+                        content_version: id === SPEC ? CV : null,
+                    })),
+                }),
+            );
+        }
+
+        return;
+    }
 
     if (spec === SPEC && cv === undefined) {
         // The spec's current read. `mode` picks the answer: `legacy` sends
@@ -365,6 +404,7 @@ for (const [name, rest] of [
     ['a spec id where a derived id goes', `derived/${SPEC}/${OCV}/files/pinned`],
     ['a derived version in the wrong case', `derived/${OPS}/Ocv_${OCV.slice(4)}/files/pinned`],
     ['a dataset version where a derived version goes', `derived/${OPS}/${CV}/files/pinned`],
+    ['a path below heads', `heads/extra?spec_id=${SPEC}`],
 ] as const) {
     test(`other routes: ${name} is forwarded with no read handling`, async () => {
         logged.mock.resetCalls();
@@ -829,4 +869,101 @@ test('log: a current read is a definition line with the content version dfo-apis
     assert.equal('digest' in entry, false);
     assert.equal(entry.served_by, 'gateway');
     assert.equal(entry.status, 200);
+});
+
+const HEADS = `heads?spec_id=${SPEC}&spec_id=${OTHER_SPEC}&spec_id=${SPEC}`;
+
+test('heads: a 200 keeps dfo-apis Cache-Control, varies on Origin, is open to a DFO origin and drops per-request headers', async () => {
+    const res = await call(HEADS, { headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), HEADS_CACHE_CONTROL);
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('cache-tag'), null);
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.doesNotMatch(res.headers.get('access-control-expose-headers')!, /Trace|RateLimit/i);
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    assert.equal(res.headers.get('server-timing'), null);
+    assert.deepEqual(await res.json(), {
+        heads: [
+            { spec_id: SPEC, content_version: CV },
+            { spec_id: OTHER_SPEC, content_version: null },
+            { spec_id: SPEC, content_version: CV },
+        ],
+    });
+});
+
+test('heads: a HEAD is read as a GET', async () => {
+    const res = await call(HEADS, { method: 'HEAD', headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), HEADS_CACHE_CONTROL);
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    await res.body?.cancel();
+});
+
+test('heads: a 400 is no-store and keeps its per-request headers', async () => {
+    const res = await call('heads?spec_id=nope', { headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.equal(res.headers.get('x-dfo-trace-id'), HEADS_TRACE);
+    assert.match(res.headers.get('access-control-expose-headers')!, /\bX-DFO-Trace-Id\b/);
+    await res.arrayBuffer();
+});
+
+test('heads: the preflight is answered and a foreign origin gets no CORS headers and is logged', async () => {
+    logged.mock.resetCalls();
+    const preflight = await call(HEADS, {
+        method: 'OPTIONS',
+        headers: { origin: ORIGIN, 'access-control-request-method': 'GET' },
+    });
+    const foreign = await call(HEADS, { headers: { origin: 'https://example.org' } });
+
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.equal(preflight.headers.get('vary'), 'Origin');
+    assert.equal(foreign.status, 200);
+    assert.equal(foreign.headers.get('access-control-allow-origin'), null);
+    assert.equal(foreign.headers.get('vary'), 'Origin');
+    await foreign.arrayBuffer();
+
+    const refused = lines(logged.mock.calls).filter((e) => e.message === 'gateway.cors_refused');
+
+    assert.deepEqual(
+        refused.map((e) => [e.door, e.method]),
+        [['heads', 'GET']],
+    );
+});
+
+test('heads: repeated spec_id parameters reach dfo-apis in order, and the line names them', async () => {
+    logged.mock.resetCalls();
+    await (await call(HEADS)).arrayBuffer();
+
+    assert.equal(headsQueries.at(-1), `?spec_id=${SPEC}&spec_id=${OTHER_SPEC}&spec_id=${SPEC}`);
+
+    const [entry] = loggedReads();
+
+    assert.equal(entry.door, 'heads');
+    assert.equal(entry.trace_id, HEADS_TRACE);
+    assert.equal(entry.spec_id, null);
+    assert.deepEqual(entry.spec_ids, [SPEC, OTHER_SPEC, SPEC]);
+    assert.equal(entry.content_version, null);
+    assert.equal(entry.status, 200);
+    assert.equal(entry.served_by, 'gateway');
+});
+
+test('heads: another method is forwarded with no read handling', async () => {
+    logged.mock.resetCalls();
+    const res = await call(HEADS, { method: 'POST', headers: { origin: ORIGIN } });
+
+    assert.equal(res.headers.get('cache-control'), OTHER_CACHE_CONTROL);
+    assert.equal(res.headers.get('vary'), null);
+    assert.equal(res.headers.get('access-control-allow-origin'), null);
+    await res.arrayBuffer();
+    assert.equal(loggedReads().length, 0);
 });
