@@ -175,6 +175,10 @@ test('reads again while a dataset is pending, and takes the first read with none
 
 test('stops reading again at the bound and takes the pending read it has', async () => {
     const warn = mock.method(console, 'warn', () => {});
+    const log = mock.method(console, 'log', () => {});
+    const actions = process.env.GITHUB_ACTIONS;
+
+    process.env.GITHUB_ACTIONS = 'true';
 
     try {
         const pending = Array.from({ length: 100 }, (_, index) => dataset(index, 'pending'));
@@ -194,8 +198,20 @@ test('stops reading again at the bound and takes the pending read it has', async
         assert.equal(read.sources.a.freshness, 'pending');
         assert.ok(time.now() <= PENDING_BOUND_MS);
         assert.equal(warn.mock.callCount(), 1);
+        assert.deepEqual(
+            log.mock.calls.map(({ arguments: [line] }) => String(line).split(' ')[0]),
+            ['::warning::p:'],
+        );
+        assert.match(String(log.mock.calls[0]?.arguments[0]), /\ba still pending\b/);
     } finally {
+        if (actions === undefined) {
+            delete process.env.GITHUB_ACTIONS;
+        } else {
+            process.env.GITHUB_ACTIONS = actions;
+        }
+
         warn.mock.restore();
+        log.mock.restore();
     }
 });
 
@@ -244,6 +260,8 @@ test('the pending bound comes from BUILD_PENDING_BOUND_S, 0 when unset', () => {
 
 test('with no bound set, a pending read is taken at once', async () => {
     const warn = mock.method(console, 'warn', () => {});
+    // Keeps the warning annotation out of a test run in GitHub Actions.
+    const log = mock.method(console, 'log', () => {});
     const set = process.env.BUILD_PENDING_BOUND_S;
 
     delete process.env.BUILD_PENDING_BOUND_S;
@@ -267,5 +285,6 @@ test('with no bound set, a pending read is taken at once', async () => {
         }
 
         warn.mock.restore();
+        log.mock.restore();
     }
 });

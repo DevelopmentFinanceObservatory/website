@@ -170,9 +170,15 @@ export const readSettled = async <K extends string, T>(
         }
 
         if (pending.length > 0) {
-            console.warn(
-                `${page}: ${pending.join(', ')} still pending after ${Math.round((now() - start) / 1000)} s; the build takes the versions it has.`,
-            );
+            const message = `${page}: ${pending.join(', ')} still pending after ${Math.round((now() - start) / 1000)} s; the build takes the versions it has.`;
+
+            console.warn(message);
+
+            // A workflow command on stdout, which GitHub Actions shows on the run's summary, so a
+            // green daily run that took unconfirmed data says so where people look.
+            if (process.env.GITHUB_ACTIONS) {
+                console.log(`::warning::${message}`);
+            }
         }
 
         return {

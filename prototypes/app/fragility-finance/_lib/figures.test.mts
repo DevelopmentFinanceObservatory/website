@@ -436,15 +436,17 @@ test('each structural check refuses the figures that break it', () => {
             {
                 ...passing(),
                 debtService: PLACES.map((iso3) =>
-                    byRecipient(iso3, 2024, iso3 === 'MOZ' ? MOZ_2024 * 1.02 : 1e6),
+                    byRecipient(iso3, 2024, iso3 === 'MOZ' ? MOZ_2024 * 1.3 : 1e6),
                 ),
             },
         ],
         ['group_short_of_donors', passing({ providers: PROVIDERS.slice(0, 5) })],
         // Six donors of 1bn to each context give 372bn of 62bn in ODA.
         ['donors_above_oda', passing({ given: 1e9 })],
-        // 62 times 400m is 24.8bn.
+        // 62 times 400m is 24.8bn, above 21.875bn.
         ['oof_out_of_range', passing({ oof: 400e6 })],
+        // 62 times 200m is 12.4bn, below 13.125bn.
+        ['oof_out_of_range', passing({ oof: 200e6 })],
         // 18.6bn, but above zero in 48 contexts.
         ['oof_out_of_range', without(passing(), 'oof-1', 14)],
     ];
@@ -452,4 +454,29 @@ test('each structural check refuses the figures that break it', () => {
     for (const [check, rows] of cases) {
         assert.deepEqual(broken(rows), [check], check);
     }
+});
+
+test('a routine revision of the known value and of OOF passes the checks', () => {
+    const revised = {
+        ...passing({ oof: 330e6 }),
+        debtService: PLACES.map((iso3) =>
+            byRecipient(iso3, 2024, iso3 === 'MOZ' ? MOZ_2024 * 1.1 : 1e6),
+        ),
+    };
+
+    assert.deepEqual(broken(revised), []);
+});
+
+test('a second row for a place and year in a read of one value each is refused', () => {
+    const doubled = (rows: Record<string, Row[]>, key: string) => ({
+        ...rows,
+        [key]: [...rows[key]!, rows[key]![0]!],
+    });
+
+    for (const key of ['debtService', 'population']) {
+        assert.deepEqual(broken(doubled(passing(), key)), ['repeated_place_year'], key);
+    }
+
+    // OOF rows come one per provider, so a place and year with two of them sums.
+    assert.deepEqual(broken(doubled(passing(), 'oof-1')), []);
 });

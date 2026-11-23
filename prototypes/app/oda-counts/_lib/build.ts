@@ -16,9 +16,11 @@ import {
     type BuildPage,
     type BuildRead,
     type BuildReadOptions,
+    buildLanes,
     readSettled,
 } from '#lib/buildRead.ts';
 import type { Derive } from '#lib/liveRead.ts';
+import type { Lane } from '#lib/pacing.ts';
 import { recordOf } from '#lib/record.ts';
 
 const PAGE = 'oda-counts';
@@ -59,30 +61,38 @@ export const deriveCounts: Derive<ReadKey, BuiltCounts> = (rows, datasets) => ({
     citation: datasets['gross/current'].citation.text,
 });
 
-/** The definitions, from a lookup of each graph node in NODE_IDS. */
-export const readDefinitions = async (client: Lookups): Promise<Definition[]> =>
+/** Runs `task` in `lane`, or at once with no lane. */
+const inLane = <T>(lane: Lane | undefined, task: () => Promise<T>): Promise<T> =>
+    lane === undefined ? task() : lane.run(task);
+
+/** The definitions, from a lookup of each graph node in NODE_IDS, each run in `lane` when
+ *  given. */
+export const readDefinitions = async (client: Lookups, lane?: Lane): Promise<Definition[]> =>
     definitionsFromNodes(
         await Promise.all(
             NODE_IDS.map(async (id) => {
-                const node = await client.lookup.node(id, { timeout: LOOKUP_TIMEOUT_MS });
+                const node = await inLane(lane, () =>
+                    client.lookup.node(id, { timeout: LOOKUP_TIMEOUT_MS }),
+                );
 
                 return { id, name: node.name, description: node.raw.description };
             }),
         ),
     );
 
-/** The identities from live-refs.json and the offer Search gives for them, in two requests. */
+/** The identities from live-refs.json and the offer Search gives for them, in two requests,
+ *  each run in `lane` when given. */
 export const readLive = async (
     client: Lookups,
     refs: Readonly<Record<string, unknown>>,
+    lane?: Lane,
 ): Promise<LiveData> => {
     const identities = identitiesFromRefs(refs);
     const answers = await Promise.all(
         offerRequests(identities).map(async ({ keys, body }) => {
-            const response = await client.request('POST', RESOLVE_PATH, {
-                json: body,
-                timeout: LOOKUP_TIMEOUT_MS,
-            });
+            const response = await inLane(lane, () =>
+                client.request('POST', RESOLVE_PATH, { json: body, timeout: LOOKUP_TIMEOUT_MS }),
+            );
 
             if (response.status !== 200) {
                 throw new Error(`Search answered ${response.status} to the offer request.`);
@@ -96,7 +106,9 @@ export const readLive = async (
 };
 
 /**
- * The page's reads of `refs`, live-refs.json's `data`, with `options` for the DAC1 reads.
+ * The page's reads of `refs`, live-refs.json's `data`, with `options` for the DAC1 reads. The
+ * graph lookups and Search requests run in the same reads lane as the DAC1 reads, the build's
+ * shared lanes unless `options` gives others, so the build's requests share one bound.
  *
  * @throws An error naming the page, whose cause is the failed read or the refused answer.
  */
@@ -107,10 +119,11 @@ export const readOdaCounts = async (
     const client = new Client({ apiKey: false });
     const started = Date.now();
     const sources = recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));
+    const { reads } = options.lanes ?? buildLanes;
     const [counts, definitions, live] = await Promise.all([
         readSettled(PAGE, sources, deriveCounts, options),
-        readDefinitions(client),
-        readLive(client, refs),
+        readDefinitions(client, reads),
+        readLive(client, refs, reads),
     ]).catch((error: unknown) => {
         throw new Error(`The build read of ${PAGE} failed, so the build stops.`, {
             cause: error,

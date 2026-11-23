@@ -3,8 +3,10 @@ name: Sync dev into prototypes
 # Keeps the `prototypes` branch at dev plus prototypes/: each push to dev
 # merges into `prototypes`. A clean merge is pushed to `prototypes`, and since
 # a push made with GITHUB_TOKEN starts no workflow, the job then dispatches
-# deploy-prototypes.yml on `prototypes` itself. A merge that conflicts, or one
-# that changes a workflow file (which a GITHUB_TOKEN push may not), goes to the
+# deploy-prototypes.yml on `prototypes` itself, when the merge changed a path
+# the deploy builds from (prototypes/, src/, package.json, pnpm-lock.yaml). A
+# merge that conflicts, or one that changes a workflow file (which GitHub
+# refuses in a GITHUB_TOKEN push), goes to the
 # branch sync/dev-into-prototypes instead, with a pull request into
 # `prototypes` opened or left open for a person to finish. That pull request
 # is opened with GITHUB_TOKEN too, so its preview build starts on the first
@@ -65,7 +67,8 @@ jobs:
 
             # GitHub refuses a GITHUB_TOKEN push that changes a file under
             # .github/workflows/, so a merge carrying such a change goes to the pull
-            # request below, as a conflict does.
+            # request below, as a conflict does. Any other failed push fails the
+            # step with git's error.
             - id: push
               if: steps.merge.outputs.clean == 'true'
               env:
@@ -77,12 +80,27 @@ jobs:
                     echo "pushed=true" >> "$GITHUB_OUTPUT"
                     exit 0
                   fi
-                  if ! git push origin HEAD:prototypes; then
-                    echo "pushed=false" >> "$GITHUB_OUTPUT"
+                  if ! pushed_out=$(git push origin HEAD:prototypes 2>&1); then
+                    echo "$pushed_out"
+                    # GitHub's refusal reads "refusing to allow a GitHub App to create
+                    # or update workflow `...` without `workflows` permission".
+                    if grep -qE 'refusing to allow .+ to create or update workflow|without .workflows?. (scope|permission)' <<< "$pushed_out"; then
+                      echo "pushed=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                    fi
+                    echo "::error::The push to prototypes failed; see git's error above."
+                    exit 1
+                  fi
+                  echo "$pushed_out"
+                  echo "pushed=true" >> "$GITHUB_OUTPUT"
+                  # ORIG_HEAD is prototypes before the merge step's merge.
+                  changed=$(git diff --name-only ORIG_HEAD HEAD -- prototypes/ src/ package.json pnpm-lock.yaml | wc -l)
+                  if [ "$changed" -eq 0 ]; then
+                    echo "Merged dev into prototypes; it changed nothing the deploy builds from, so no deploy." >> "$GITHUB_STEP_SUMMARY"
                     exit 0
                   fi
-                  echo "pushed=true" >> "$GITHUB_OUTPUT"
-                  gh workflow run deploy-prototypes.yml --ref prototypes
+                  gh workflow run deploy-prototypes.yml --ref prototypes \
+                      -f dispatch_id="sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
                   echo "Merged dev into prototypes and dispatched the deploy." >> "$GITHUB_STEP_SUMMARY"
 
             # The sync branch starts at dev's head, so the pull request shows the

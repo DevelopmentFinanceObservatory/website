@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { pinnedVersions, problems } from './check-data-rules.mts';
+import { buildPageProblems, pinnedVersions, problems } from './check-data-rules.mts';
 
 const provenance = {
     sdk: 'development-finance==0.4.2',
@@ -111,4 +111,10 @@ test('refs files still need the envelope provenance', () => {
     );
 
     assert.deepEqual(codes(found), ['retrieved_invalid']);
+});
+
+test('a page that reads DFO at build time commits only its refs files', () => {
+    assert.deepEqual(codes(buildPageProblems('refs.json')), []);
+    assert.deepEqual(codes(buildPageProblems('live-refs.json')), []);
+    assert.deepEqual(codes(buildPageProblems('counts.json')), ['build_page_figures_file']);
 });

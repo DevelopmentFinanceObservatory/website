@@ -79,15 +79,19 @@ const AID_READ = /^aid-\d+$/;
 const MIN_CONTEXTS_WITH_AID = 60;
 const MIN_CONTEXTS_WITH_DEBT = 45;
 const MIN_CONTEXTS_WITH_POPULATION = 60;
-const OOF_RANGE = [15e9, 20e9] as const;
+/** 17.5bn ± 25%: a band that catches a read in the wrong units or of the wrong flows, wide
+ *  enough that a routine revision of the CRS cannot stop the daily build. */
+const OOF_RANGE = [17.5e9 * 0.75, 17.5e9 * 1.25] as const;
 const MIN_CONTEXTS_WITH_OOF = 50;
-/** Debt service paid in closed years, as DFO gave it. A read that moves one by more than
- *  `KNOWN_TOLERANCE` fails the build, so a change in the source is seen before it reaches the
- *  page. Each year is at most `LAST_PAID_YEAR`; later years are projections, which move. */
+/** Debt service paid in closed years, as DFO gave it. A read more than `KNOWN_TOLERANCE` away
+ *  fails the build. The check guards scale and units: a read in thousands, or of the wrong
+ *  series, misses by far more than 25%, and the World Bank's routine revisions of past years
+ *  stay inside it, so they cannot stop the daily build. Each year is at most `LAST_PAID_YEAR`;
+ *  later years are projections, which move. */
 export const KNOWN: readonly { iso3: string; year: number; value: number }[] = [
     { iso3: 'MOZ', year: 2024, value: 916_663_899.7 },
 ];
-const KNOWN_TOLERANCE = 0.01;
+const KNOWN_TOLERANCE = 0.25;
 
 /** A value by year. */
 type Yearly = Map<number, number>;
@@ -222,9 +226,21 @@ const numberOf = (row: Row): number | null => {
     return typeof value === 'number' && !Number.isNaN(value) ? value : null;
 };
 
-/** Each place's value in each year, keyed by ISO3 code, summed over any other columns. A year
- *  whose values are all null is left out. */
-const byPlace = (rows: readonly Row[], column: string): Map<string, Yearly> => {
+/** What a second row for one place and year means: a part to `sum`, as in the sums by
+ *  recipient and purpose and the OOF rows by provider, or an error to `refuse`, as in a read
+ *  that gives one value per place and year. */
+type Repeats = 'sum' | 'refuse';
+
+/** Each place's value in each year, keyed by ISO3 code, from `read`'s rows, with a repeated
+ *  place and year handled as `repeats` says. A year whose values are all null is left out.
+ *  @throws {FiguresCheckError} With `repeated_place_year` when `repeats` is `refuse` and two
+ *    rows hold one place and year. */
+const byPlace = (
+    read: string,
+    rows: readonly Row[],
+    column: string,
+    repeats: Repeats,
+): Map<string, Yearly> => {
     const places = new Map<string, Yearly>();
 
     for (const row of rows) {
@@ -237,6 +253,13 @@ const byPlace = (rows: readonly Row[], column: string): Map<string, Yearly> => {
         const iso3 = String(row[column]).replace(/^country\//, '');
         const year = Number(row.time_period);
         const values = places.get(iso3) ?? new Map<number, number>();
+
+        if (repeats === 'refuse' && values.has(year)) {
+            throw new FiguresCheckError(
+                ['repeated_place_year'],
+                `${read} holds more than one row for ${iso3} in ${year}`,
+            );
+        }
 
         values.set(year, (values.get(year) ?? 0) + value);
         places.set(iso3, values);
@@ -271,8 +294,10 @@ const byPillar = (
         joined(
             parts.map((part) =>
                 byPlace(
+                    pillar,
                     part.filter((row) => pillarOf(row) === pillar),
                     RECIPIENT,
+                    'sum',
                 ),
             ),
         );
@@ -430,7 +455,8 @@ const latest = (values: Yearly | undefined): Reading | null => {
 };
 
 /**
- * A structural check the figures break: fewer than `MIN_CONTEXTS_WITH_AID` contexts with aid,
+ * A structural check the figures break: a read of one value per place and year holding two
+ * rows for one (`repeated_place_year`), fewer than `MIN_CONTEXTS_WITH_AID` contexts with aid,
  * `MIN_CONTEXTS_WITH_DEBT` with debt service or `MIN_CONTEXTS_WITH_POPULATION` with
  * population, a value of `KNOWN` that moved, a group without `TOP_DONORS` donors, the six
  * largest donors to all contexts giving more than all ODA in `DONOR_YEAR`, or OOF in
@@ -438,6 +464,7 @@ const latest = (values: Yearly | undefined): Reading | null => {
  * contexts.
  */
 export type FiguresCheck =
+    | 'repeated_place_year'
     | 'contexts_without_aid'
     | 'contexts_without_debt_service'
     | 'contexts_without_population'
@@ -450,8 +477,10 @@ export type FiguresCheck =
 export class FiguresCheckError extends Error {
     readonly checks: readonly FiguresCheck[];
 
-    constructor(checks: readonly FiguresCheck[]) {
-        super(`The figures break the build's checks: ${checks.join(', ')}`);
+    constructor(checks: readonly FiguresCheck[], detail?: string) {
+        super(
+            `The figures break the build's checks: ${checks.join(', ')}${detail === undefined ? '' : ` (${detail})`}`,
+        );
         this.name = 'FiguresCheckError';
         this.checks = checks;
     }
@@ -533,6 +562,8 @@ export const figuresFromRows = (
  * @throws When rows are missing for a source, a purpose is not a CRS purpose code, a recipient
  *   is in two CRS reads, a climate part is negative, a provider among the largest has no
  *   label, or a provider has two.
+ * @throws {FiguresCheckError} With `repeated_place_year` when the remittance, FDI, debt
+ *   service, population or indicator rows hold two rows for one place and year.
  */
 export const deriveFigures = (
     rows: Record<string, Row[]>,
@@ -541,17 +572,26 @@ export const deriveFigures = (
 ): Figures => {
     const reads = Object.keys(groups);
     const purposes = reads.map((key) => rowsOf(rows, `${key}/purposes`));
-    const totals = joined(purposes.map((part) => byPlace(part, RECIPIENT)));
+    const totals = joined(
+        reads.map((key, index) => byPlace(`${key}/purposes`, purposes[index]!, RECIPIENT, 'sum')),
+    );
     const pillars = byPillar(purposes);
-    const official = joined(reads.map((key) => byPlace(rowsOf(rows, oofOf(key)), RECIPIENT)));
-    const climate = CLIMATE_READS.map((key) => byPlace(rowsOf(rows, `${key}/total`), RECIPIENT));
+    const official = joined(
+        reads.map((key) => byPlace(oofOf(key), rowsOf(rows, oofOf(key)), RECIPIENT, 'sum')),
+    );
+    const climate = CLIMATE_READS.map((key) =>
+        byPlace(`${key}/total`, rowsOf(rows, `${key}/total`), RECIPIENT, 'sum'),
+    );
     const change = changes(CHANGE_READS.flatMap((key) => rowsOf(rows, key)));
     const given = providersByPlace(reads.flatMap((key) => rowsOf(rows, `${key}/providers`)));
     const labels = providerLabels(reads.flatMap((key) => rowsOf(rows, key)));
-    const [remittances, fdi] = FLOW_READS.map((key) => byPlace(rowsOf(rows, key), PLACE));
-    const debt = byPlace(rowsOf(rows, DEBT), RECIPIENT);
-    const population = byPlace(rowsOf(rows, POPULATION), PLACE);
-    const indicators = recordOf(INDICATORS, (key) => byPlace(rowsOf(rows, key), PLACE));
+    // These reads give one value per place and year, so a second row is an error to refuse.
+    const plain = (key: string, column: string) =>
+        byPlace(key, rowsOf(rows, key), column, 'refuse');
+    const [remittances, fdi] = FLOW_READS.map((key) => plain(key, PLACE));
+    const debt = plain(DEBT, RECIPIENT);
+    const population = plain(POPULATION, PLACE);
+    const indicators = recordOf(INDICATORS, (key) => plain(key, PLACE));
     const none = new Map<number, number>();
 
     const contexts = profiles.map((profile): Context => {

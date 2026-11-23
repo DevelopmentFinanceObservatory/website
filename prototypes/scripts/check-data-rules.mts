@@ -136,6 +136,24 @@ const refProblems = (name: string, data: unknown, pinned: ReadonlySet<string>): 
     return found;
 };
 
+/** The data files a page that reads DFO at build time (`_lib/build.ts`) may commit: its query
+ *  config. Its figures come from the build's reads, so the repository holds none. */
+const BUILD_PAGE_FILES: ReadonlySet<string> = new Set(['refs.json', 'live-refs.json']);
+
+/**
+ * What is wrong with a data file named `name` under a page that reads DFO at build time, empty
+ * for the page's refs files.
+ */
+export const buildPageProblems = (name: string): Problem[] =>
+    BUILD_PAGE_FILES.has(name)
+        ? []
+        : [
+              problem(
+                  'build_page_figures_file',
+                  `the page reads DFO at build time (_lib/build.ts), so it commits only ${[...BUILD_PAGE_FILES].join(' and ')}`,
+              ),
+          ];
+
 /**
  * What is wrong with one parsed file, empty when it is a valid envelope.
  * `name` is the file's base name, which selects the extra rules for

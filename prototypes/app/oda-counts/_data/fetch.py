@@ -6,9 +6,9 @@
 
 Pins the 19 OECD DAC1 reads the page takes, every provider, 2015 to 2025, in current and
 constant 2024 US dollars, and ODA/GNI, and rewrites `refs.json` and `live-refs.json`
-beside this file. The page reads no figures from the repository: `next build` reads each
-ref in `live-refs.json` at DFO's newest stored versions and derives the page's figures
-with `_lib/derive.ts` (`_lib/build.ts`). The refs are the page's query config, so the
+beside this file. The page reads no figures from the repository: `pnpm read`
+(scripts/read.mts) reads each ref in `live-refs.json` at DFO's newest stored versions
+before `next build`, and derives the page's figures with `_lib/derive.ts` (`_lib/build.ts`). The refs are the page's query config, so the
 step needs to run only when a read's spec or window changes.
 
 The step runs in one of two modes:

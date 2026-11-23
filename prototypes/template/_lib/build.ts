@@ -25,12 +25,18 @@ export type Series = { provider: string; points: Point[]; sentence: string; cita
 type Key = 'series';
 
 /**
- * PROVIDER's values by year, from the rows of the `series` read.
+ * PROVIDER's values by year, from the rows of the `series` read. A row whose value is not a
+ * finite number, as a year with no figure is, is left out.
  *
  * @throws When the rows hold no value for PROVIDER, which fails the build.
  */
 export const deriveSeries: Derive<Key, Series> = (rows, datasets) => {
-    const own = rows.series.filter((row: Row) => row.financingProvider === PROVIDER);
+    const own = rows.series.filter(
+        (row: Row) =>
+            row.financingProvider === PROVIDER &&
+            typeof row.value === 'number' &&
+            Number.isFinite(row.value),
+    );
 
     if (own.length === 0) {
         throw new Error(`The series read holds no values for ${PROVIDER}.`);

@@ -6,6 +6,8 @@ import { type Lookups, readDefinitions, readLive } from './build.ts';
 import { definitionsFromNodes, NODE_IDS, OECD_QUOTES } from './definitions.ts';
 import { DEFINITIONS, OFFER } from './testFixture.ts';
 
+import { createLane, type Lane } from '#lib/pacing.ts';
+
 const liveRefs = JSON.parse(
     readFileSync(new URL('../_data/live-refs.json', import.meta.url), 'utf8'),
 ) as { data: Record<string, unknown> };
@@ -96,4 +98,23 @@ test('a Search answer other than 200 fails the offer', async () => {
     const { client } = stubClient(() => ({ status: 503, body: {} }));
 
     await assert.rejects(readLive(client, liveRefs.data));
+});
+
+test('the lookups and Search requests run in the lane given', async () => {
+    const { client, looked, posted } = stubClient(offerAnswer);
+    const inner = createLane(1);
+    let ran = 0;
+    const lane: Lane = {
+        run: (task, signal) => {
+            ran += 1;
+
+            return inner.run(task, signal);
+        },
+    };
+
+    await readDefinitions(client, lane);
+    await readLive(client, liveRefs.data, lane);
+
+    assert.equal(ran, looked.length + posted.length);
+    assert.equal(ran, NODE_IDS.length + 2);
 });

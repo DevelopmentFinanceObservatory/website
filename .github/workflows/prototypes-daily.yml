@@ -38,17 +38,19 @@ jobs:
             - env:
                   GH_TOKEN: ${{ github.token }}
                   GH_REPO: ${{ github.repository }}
-              # The dispatch returns no run id, so the step finds the first
-              # dispatched run on `prototypes` created after it.
+              # The dispatch returns no run id, so the step tags it with an id of
+              # this run, which deploy-prototypes.yml puts in its run name in
+              # parentheses, and finds the run by that.
               run: |
-                  since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-                  gh workflow run deploy-prototypes.yml --ref prototypes -f pending_bound_s=600
+                  id="daily-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+                  gh workflow run deploy-prototypes.yml --ref prototypes \
+                      -f pending_bound_s=600 -f dispatch_id="$id"
                   run=''
                   for _ in $(seq 1 30); do
                       sleep 10
                       run=$(gh run list --workflow deploy-prototypes.yml --branch prototypes \
-                          --event workflow_dispatch --limit 10 --json databaseId,createdAt \
-                          --jq "[.[] | select(.createdAt >= \"$since\")] | sort_by(.createdAt) | .[0].databaseId // empty")
+                          --event workflow_dispatch --limit 20 --json databaseId,displayTitle \
+                          --jq "[.[] | select(.displayTitle | contains(\"($id)\"))] | .[0].databaseId // empty")
                       [ -n "$run" ] && break
                   done
                   if [ -z "$run" ]; then

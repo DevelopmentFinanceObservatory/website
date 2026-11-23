@@ -217,11 +217,11 @@ test('rows that break a rule the figures rest on are refused', async (t) => {
             },
         ],
         [
-            'a known value more than 0.5% away',
+            'a known value more than 25% away, as a read in the wrong units would be',
             (rows) => {
                 const row = rowOf(rows, 'grantEquivalent/current', 'country/FRA', 2024);
 
-                row.value = Number(row.value) * 1.006;
+                row.value = Number(row.value) * 1.26;
             },
         ],
         [
@@ -281,6 +281,20 @@ test('a revised preliminary year passes, since only closed years are known', () 
     assert.doesNotThrow(() => countsFromRows(rows, scope));
 });
 
+test('a routine revision of a known value passes', () => {
+    const rows = fixtureRows();
+
+    for (const series of ['grantEquivalent', 'headline'] as const) {
+        for (const prices of ['current', 'constant'] as const) {
+            const row = rowOf(rows, `${series}/${prices}`, 'country/FRA', 2024);
+
+            row.value = Number(row.value) * 1.1;
+        }
+    }
+
+    assert.doesNotThrow(() => countsFromRows(rows, scope));
+});
+
 test('rounds as Python does, an exact tie going to the even digit', () => {
     for (const [x, digits, expected] of [
         [0.125, 2, 0.12],
@@ -289,7 +303,7 @@ test('rounds as Python does, an exact tie going to the even digit', () => {
         [2.675, 2, 2.67], // the double lies below 2.675
         [1234.5678, 2, 1234.57],
         [0.0005, 3, 0.001], // the double lies above 0.0005
-        [-0.001, 2, -0],
+        [-0.001, 2, 0], // JSON cannot carry -0
         [99.999, 2, 100],
     ] as const) {
         assert.ok(Object.is(roundHalfEven(x, digits), expected), `${x} to ${digits}`);

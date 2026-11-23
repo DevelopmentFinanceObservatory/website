@@ -35,6 +35,14 @@ name: Deploy prototypes
 #                         resources limited to developmentfinance.org.
 #   CLOUDFLARE_ACCOUNT_ID the account that owns the zone and the Worker.
 
+# A dispatch that passes dispatch_id carries it in its run name, in
+# parentheses, so the workflow that dispatched it can find the run. Other runs
+# keep GitHub's usual name: the commit message or the pull request title.
+run-name: >-
+    ${{ inputs.dispatch_id && format('Deploy prototypes ({0})', inputs.dispatch_id)
+    || github.event.pull_request.title || github.event.head_commit.message
+    || 'Deploy prototypes' }}
+
 on:
     push:
         branches: [prototypes]
@@ -59,6 +67,13 @@ on:
                 description: >-
                     Seconds the build reads again while a dataset's freshness is
                     pending; empty or 0 takes what DFO serves.
+                required: false
+                default: ''
+                type: string
+            dispatch_id:
+                description: >-
+                    An id the run name carries, so the workflow that dispatched
+                    this run can find it; empty leaves the name plain.
                 required: false
                 default: ''
                 type: string

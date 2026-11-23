@@ -55,13 +55,15 @@ const KNOWN_KINDS: Readonly<Record<string, boolean>> = {
     'country/FRA': false,
 };
 
-/** Values in current US dollars the rows must reproduce within `KNOWN_TOLERANCE`. Each is in a
- *  closed year, which the OECD no longer revises, so a routine release cannot fail the build. */
+/** Values in current US dollars the rows must reproduce within `KNOWN_TOLERANCE`. The check
+ *  guards scale and units: a read in thousands, millions or the wrong series misses by far more
+ *  than 25%. The OECD does revise earlier years in later releases, and a routine revision stays
+ *  well inside the band, so it cannot stop the daily build. */
 const KNOWN: readonly { provider: string; key: SeriesKey; year: number; value: number }[] = [
     { provider: 'country/FRA', key: 'grantEquivalent', year: 2024, value: 15.448e9 },
 ];
 
-const KNOWN_TOLERANCE = 0.005;
+const KNOWN_TOLERANCE = 0.25;
 
 /** A read's values by provider, then year. */
 type Values = Map<string, Map<number, number>>;
@@ -97,7 +99,8 @@ export const roundHalfEven = (x: number, digits: number): number => {
     const padded = scaled.padStart(digits + 1, '0');
     const text = `${padded.slice(0, padded.length - digits)}.${padded.slice(padded.length - digits)}`;
 
-    return Number(`${x < 0 || Object.is(x, -0) ? '-' : ''}${text}`);
+    // + 0 turns -0 into 0, which JSON cannot carry.
+    return Number(`${x < 0 ? '-' : ''}${text}`) + 0;
 };
 
 /** A read's values, and each provider's name and group flag from its last row. Rows without a
