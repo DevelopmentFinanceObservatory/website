@@ -284,7 +284,7 @@ export const sendNewQuestion = async ({
 }): Promise<void> => {
     for (;;) {
         // Set by the refusal handler during `send`.
-        let wait = null as number | null;
+        let wait: number | null = null;
         let moved = false;
 
         await send(turnIndex, {
@@ -665,8 +665,11 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * paused meanwhile) or 503 `transient_unavailable` reads the state again,
  * after the wait the refusal names and at least DEFAULT_WAIT_SECONDS.
  * Each read goes to `onRead`, which merges it, and is asked with `since()`.
- * Rejects when a resume is refused otherwise or RESUME_ATTEMPTS times, or
- * a read fails, and with an AbortError when `signal` aborts.
+ * Any other refused resume, and a read refused as a StateRefusal (the
+ * session is gone, or a guest must sign in), goes to `handlers.onRefusal`
+ * and ends the turn when it deals with it. Rejects when that refusal is not
+ * dealt with, a resume is refused RESUME_ATTEMPTS times, or a read fails,
+ * and with an AbortError when `signal` aborts.
  */
 export const carryOnTurn = async ({
     conversationId,
@@ -710,7 +713,7 @@ export const carryOnTurn = async ({
 
         if (step.kind === 'resume') {
             // Set by the refusal handler during the request.
-            let refused = null as StreamRefusal | null;
+            let refused: StreamRefusal | null = null;
 
             await resume(
                 conversationId,
@@ -730,12 +733,17 @@ export const carryOnTurn = async ({
                 return;
             }
 
-            const wait = resumeRetryAfter(refused);
+            const final: StreamRefusal = refused;
+            const wait = resumeRetryAfter(final);
+
+            if (wait === null && handlers.onRefusal?.(final)) {
+                return;
+            }
 
             refusals += 1;
 
             if (wait === null || refusals >= RESUME_ATTEMPTS) {
-                throw new Error(`the turn could not be resumed: HTTP ${refused.status}`);
+                throw new Error(`the turn could not be resumed: HTTP ${final.status}`);
             }
 
             await sleep(wait * 1000, signal);
@@ -744,6 +752,10 @@ export const carryOnTurn = async ({
         }
 
         const answer = await read(conversationId, since(), signal);
+
+        if (answer && isStateRefusal(answer) && handlers.onRefusal?.(answer.http)) {
+            return;
+        }
 
         if (!answer || isStateRefusal(answer)) {
             throw new Error('the conversation state could not be read');

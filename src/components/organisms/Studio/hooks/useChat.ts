@@ -57,6 +57,7 @@ import {
     createLegacyCanvas,
     legacyHiddenCards,
     restoreCanvas,
+    sessionLeftCards,
     takeManifest,
     withoutRemovedCards,
     type CanvasBaseline,
@@ -139,6 +140,7 @@ import {
     STOP_GRACE_MS,
     stopAction,
     SWITCH_STOP_GRACE_MS,
+    watchAdmission,
     whileBusy,
     type StreamHandlers,
     type StreamRefusal,
@@ -623,7 +625,7 @@ export const useChat = (
     // session's own and the id stays. Without it the next turn opens a new id
     // with a recap of the transcript (forkRecap).
     const leaveSession = useCallback((turn?: number) => {
-        const cards = canvasRef.current?.ids ?? [];
+        const cards = sessionLeftCards(canvasRef.current?.ids ?? [], widgetsRef.current);
         const left = (messages: ChatMessage[]) => withoutChips(withSessionLeft(messages, turn));
 
         sessionLeftRef.current += 1;
@@ -646,8 +648,8 @@ export const useChat = (
         canvasEditsRef.current?.reset();
         setPendingPins(new Map());
 
-        if (cards.length > 0) {
-            setLocalCards({ shown: [...cards], hidden: [] });
+        if (cards.shown.length > 0 || cards.hidden.length > 0) {
+            setLocalCards(cards);
         }
 
         setState((prev) => ({
@@ -822,9 +824,6 @@ export const useChat = (
             let failed = false;
             // The request has started.
             let sent = false;
-            // The request waits while another stream holds the conversation
-            // (onBusyWait), so the page holds no stream.
-            let busyWait = false;
             // The turn's end on screen has run (finish).
             let finished = false;
             let stopGrace: ReturnType<typeof setTimeout> | null = null;
@@ -1184,23 +1183,26 @@ export const useChat = (
             // read until the harness ends it, so the request counts as in
             // flight, and queued sends wait, until the conversation is free.
             // A caller that ends the turn itself keeps the frames (a switch's
-            // stream may re-offer the plan). A Stop before the request
-            // started ends it at once, and the request is skipped; one while
-            // the request waits on another stream's turn ends the wait at
-            // once and sends nothing (stopAction). Returns whether to send
-            // the cancel, which is true on the stream's first Stop while it
-            // holds the turn's stream.
+            // stream may re-offer the plan). A Stop before the harness
+            // admitted the request (admission) ends it at once and sends
+            // nothing more, and a metered turn's prompt is refunded
+            // (stopAction). Returns whether to send the cancel, which is true
+            // on the stream's first Stop once the harness admitted it.
             const halt = (): boolean => {
                 if (stopped || generationRef.current !== generation) {
                     return false;
                 }
 
-                const action = stopAction({ sent, busyWait });
+                const action = stopAction({ admitted: admission.admitted(), metered });
 
                 stopped = true;
                 grace.cancel();
 
-                if (action === 'abort') {
+                if (action.refunded) {
+                    setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
+                }
+
+                if (!action.cancel) {
                     controller.abort();
                 } else {
                     stopGrace = setTimeout(
@@ -1210,7 +1212,7 @@ export const useChat = (
                 }
 
                 if (onEnd) {
-                    if (action === 'abort') {
+                    if (!action.cancel) {
                         // Stop is free for the next stream queued behind this
                         // one, which the chain has not reached yet.
                         if (haltRef.current === halt) {
@@ -1241,7 +1243,7 @@ export const useChat = (
                     return endTurn({ ...prev, messages }, turn, 'skipped');
                 });
 
-                return action === 'cancel';
+                return action.cancel;
             };
 
             // The end of a turn whose caller leaves it to the stream: `done`
@@ -1345,8 +1347,6 @@ export const useChat = (
             // chat line while it waits, and the refusal stays out of the
             // transcript (whileBusy).
             const busy = (seconds: number | null) => {
-                busyWait = seconds !== null;
-
                 if (seconds !== null && generationRef.current === generation && !stopped) {
                     setState((prev) => withLine(prev, BUSY_LINE));
                 }
@@ -1356,6 +1356,16 @@ export const useChat = (
                 muted ||
                 stopped ||
                 (onUnreachable?.() ?? false);
+            // Whether the harness has admitted the request, which decides
+            // what Stop does (halt).
+            const admission = watchAdmission({
+                onFrame: handle,
+                onTurnIndex: keyTurn,
+                onKeepAlive: stall.beat,
+                onRefusal: refuse,
+                onUnreachable: unreachable,
+                onBusyWait: busy,
+            });
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
@@ -1381,17 +1391,7 @@ export const useChat = (
                     haltRef.current = halt;
                     stall.beat();
 
-                    return start(
-                        {
-                            onFrame: handle,
-                            onTurnIndex: keyTurn,
-                            onKeepAlive: stall.beat,
-                            onRefusal: refuse,
-                            onUnreachable: unreachable,
-                            onBusyWait: busy,
-                        },
-                        controller.signal,
-                    ).catch((error: Error) => {
+                    return start(admission.handlers, controller.signal).catch((error: Error) => {
                         if (error.name !== 'AbortError' && generationRef.current === generation) {
                             failed = true;
                         }

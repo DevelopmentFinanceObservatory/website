@@ -372,20 +372,50 @@ export const busyRetryAfter = (refusal: StreamRefusal): number | null =>
         : null;
 
 /**
- * What Stop does to a stream. `cancel`: the page holds the turn's stream, so
- * the harness is asked to cancel the turn and the stream is read to its end.
- * `abort`: the page holds no stream, because the request has not started
- * (`sent`) or waits while another stream holds the conversation
- * (`busyWait`, from onBusyWait), so the request ends at once, nothing more
- * is sent, and no cancel goes out, which would end the other stream's turn.
+ * `handlers` with a record of whether the harness has admitted the request:
+ * it named the stream's turn (`onTurnIndex`) or sent a frame. Until then the
+ * page holds no stream of its own. The request has not started, waits while
+ * another stream holds the conversation (whileBusy), or is on its way and
+ * may yet be refused as busy.
+ */
+export const watchAdmission = (
+    handlers: StreamHandlers,
+): { handlers: StreamHandlers; admitted: () => boolean } => {
+    let admitted = false;
+
+    return {
+        handlers: {
+            ...handlers,
+            onTurnIndex: (index) => {
+                admitted = true;
+                handlers.onTurnIndex?.(index);
+            },
+            onFrame: (frame) => {
+                admitted = true;
+                handlers.onFrame(frame);
+            },
+        },
+        admitted: () => admitted,
+    };
+};
+
+/**
+ * What Stop does to a stream. `cancel`: the harness admitted the request
+ * (watchAdmission), so it is asked to cancel the turn and the stream is read
+ * to its end. Otherwise the request ends at once, nothing more is sent, and
+ * no cancel goes out, since the turn running may be another stream's. A
+ * `metered` request (a POST turn) ended so is `refunded`: the site's meter
+ * gives back the prompt of a refused turn, and a turn the harness never
+ * admitted was refused or never sent.
  */
 export const stopAction = ({
-    sent,
-    busyWait,
+    admitted,
+    metered,
 }: {
-    sent: boolean;
-    busyWait: boolean;
-}): 'cancel' | 'abort' => (sent && !busyWait ? 'cancel' : 'abort');
+    admitted: boolean;
+    metered: boolean;
+}): { cancel: boolean; refunded: boolean } =>
+    admitted ? { cancel: true, refunded: false } : { cancel: false, refunded: metered };
 
 /** Whether a turn request naming `after_turn` was refused because a later
  *  turn began first (409 `edit_conflict`, `constraint_id: "turn_moved"`). */
@@ -428,8 +458,8 @@ export const whileBusy = async (
     }: { sleep?: (ms: number, signal?: AbortSignal) => Promise<void> } = {},
 ): Promise<void> => {
     for (;;) {
-        // Set by the refusal handler during `run`, which the compiler cannot see.
-        let wait = null as number | null;
+        // Set by the refusal handler during `run`.
+        let wait: number | null = null;
 
         await run({
             ...handlers,
@@ -489,8 +519,12 @@ export const isSignInRequired = ({
 /** A state read the harness or the proxy refused for a reason the page acts
  *  on: the harness holds no such conversation (`session_gone`), or the
  *  conversation is an account's and the caller is a guest
- *  (`sign_in_required`). */
-export type StateRefusal = { refusal: 'session_gone' | 'sign_in_required' };
+ *  (`sign_in_required`). `http` is the refusal as a stream request would
+ *  have heard it, for a stream that reads the state (carryOnTurn). */
+export type StateRefusal = {
+    refusal: 'session_gone' | 'sign_in_required';
+    http: StreamRefusal;
+};
 
 export const isStateRefusal = (answer: ConversationRead | StateRefusal): answer is StateRefusal =>
     'refusal' in answer;
@@ -532,13 +566,19 @@ export const readState = async (
         }
 
         const { error, proxy } = await readRefusal(res);
+        const http: StreamRefusal = {
+            status: res.status,
+            detail: error?.detail ?? null,
+            error,
+            ...(proxy && { proxy }),
+        };
 
-        if (isSessionGone({ status: res.status, error })) {
-            return { refusal: 'session_gone' };
+        if (isSessionGone(http)) {
+            return { refusal: 'session_gone', http };
         }
 
-        if (isSignInRequired({ status: res.status, proxy })) {
-            return { refusal: 'sign_in_required' };
+        if (isSignInRequired(http)) {
+            return { refusal: 'sign_in_required', http };
         }
 
         const transient =

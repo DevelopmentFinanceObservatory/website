@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { canvasWidgetsOf } from '../../chat/canvas.ts';
+import { canvasWidgetsOf, isHarnessCard } from '../../chat/canvas.ts';
 import {
     createLegacyCanvas,
     legacyHiddenCards,
     restoreCanvas,
+    sessionLeftCards,
     takeManifest,
     withLocalCards,
     withManifestPins,
@@ -580,4 +581,38 @@ test("an inherited card made local in the render that takes the manifest's pins 
         removedIds: [],
         localIds: ['cmp_inherited'],
     });
+});
+
+test('a page that leaves its harness session keeps its canvas, with every card local as a fork has it', async (t) => {
+    // Harness cards on the canvas and taken off it, and a fork's inherited
+    // cards, one shown and one the user took off.
+    const card = (id: string) => ({ kind: 'text' as const, id, title: id, body: '', turn: 1 });
+    const widgets = ['cmp_shown', 'cmp_taken_off', 'cmp_local', 'cmp_local_off'].map(card);
+    const marks: CardMarks = {
+        pinnedIds: [],
+        removedIds: ['cmp_local_off'],
+        localIds: ['cmp_local', 'cmp_local_off'],
+    };
+    const cases: [string, string[], string[]][] = [
+        ['a canvas showing cards', ['cmp_shown'], ['cmp_shown', 'cmp_local']],
+        ['an empty canvas', [], ['cmp_local']],
+    ];
+
+    for (const [name, canvasIds, expected] of cases) {
+        await t.test(name, () => {
+            const { shown, hidden } = sessionLeftCards(canvasIds, widgets);
+            const left = withLocalCards(marks, shown, hidden);
+            const state = { ...left, widgets, canvas: null };
+
+            assert.deepEqual(
+                canvasWidgetsOf(state).map((widget) => widget.id),
+                expected,
+            );
+            // Add on any card acts on the page, since no harness holds it.
+            assert.deepEqual(
+                widgets.filter((widget) => isHarnessCard(state, widget.id)),
+                [],
+            );
+        });
+    }
 });

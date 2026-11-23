@@ -147,6 +147,19 @@ export const legacyHiddenCards = (
  *  page showed, and the ones it hid, which stay off the canvas. */
 export type LegacyLocal = { shown: string[]; hidden: string[] };
 
+/** The cards that turn local when the page leaves its harness session, as a
+ *  fork's do (forkedCanvas): every card of the conversation, the ones the
+ *  harness's canvas showed (`canvasIds`) shown and the rest hidden, so Add
+ *  brings a hidden one back on the page alone. withLocalCards leaves a card
+ *  that is local already as it is. */
+export const sessionLeftCards = (
+    canvasIds: readonly string[],
+    widgets: readonly { id: string }[],
+): LegacyLocal => ({
+    shown: [...canvasIds],
+    hidden: widgets.map((widget) => widget.id).filter((id) => !canvasIds.includes(id)),
+});
+
 /**
  * A legacy canvas (see CanvasBaseline) while the harness's manifest is
  * brought to it. The harness holds every card such a conversation drew,
@@ -362,14 +375,17 @@ export type CardMarks = { pinnedIds: string[]; removedIds: string[]; localIds: s
 
 /** `marks` with the cards the harness turned out never to hold (useChat's
  *  localCards): `shown` ones stay on the canvas and `hidden` ones go off it.
- *  Unchanged when it holds them already. */
+ *  A card `marks` holds local already keeps whether it shows. Unchanged when
+ *  it holds them all already. */
 export const withLocalCards = (
     marks: CardMarks,
     shown: readonly string[],
     hidden: readonly string[] = [],
 ): CardMarks => {
     const local = [...shown, ...hidden].filter((id) => !marks.localIds.includes(id));
-    const removed = hidden.filter((id) => !marks.removedIds.includes(id));
+    const removed = hidden.filter(
+        (id) => !marks.removedIds.includes(id) && !marks.localIds.includes(id),
+    );
 
     return local.length === 0 && removed.length === 0
         ? marks

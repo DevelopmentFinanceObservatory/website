@@ -19,6 +19,7 @@ import {
     runTurn,
     STATE_READ_ATTEMPTS,
     stopAction,
+    watchAdmission,
     whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
@@ -457,44 +458,47 @@ test('whileBusy: a turn refused 409 while another stream holds the conversation 
     assert.deepEqual(frames, [{ event: 'message.complete', seq: 3, text: 'The answer.' }]);
 });
 
+// The harness's answer while another stream holds the conversation.
+const busyAnswer = (seconds: number) =>
+    Response.json(
+        {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'another request is streaming on this conversation',
+            retry_after_seconds: seconds,
+        },
+        { status: 409 },
+    );
+
 test('whileBusy: a Stop while a send waits on another stream ends the wait, sends nothing more and cancels nothing', async (t) => {
     const answers = [
-        Response.json(
-            {
-                error: 'transient_unavailable',
-                retry: 'retry_after_delay',
-                detail: 'another request is streaming on this conversation',
-                retry_after_seconds: 30,
-            },
-            { status: 409 },
-        ),
+        busyAnswer(30),
         new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n'),
     ];
     const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
     const controller = new AbortController();
     const waits: (number | null)[] = [];
-    let busyWait = false;
     let action: ReturnType<typeof stopAction> | null = null;
+    const admission = watchAdmission({
+        onFrame: () => {},
+        onBusyWait: (seconds) => {
+            waits.push(seconds);
+
+            // The user presses Stop as the wait begins.
+            if (seconds !== null) {
+                action = stopAction({ admitted: admission.admitted(), metered: true });
+
+                if (!action.cancel) {
+                    controller.abort();
+                }
+            }
+        },
+    });
 
     await assert.rejects(
         whileBusy(
             (handlers) => runTurn('conv', 'and in 2021?', handlers, controller.signal),
-            {
-                onFrame: () => {},
-                onBusyWait: (seconds) => {
-                    waits.push(seconds);
-                    busyWait = seconds !== null;
-
-                    // The user presses Stop as the wait begins.
-                    if (busyWait) {
-                        action = stopAction({ sent: true, busyWait });
-
-                        if (action === 'abort') {
-                            controller.abort();
-                        }
-                    }
-                },
-            },
+            admission.handlers,
             controller.signal,
             {
                 // The wait as abortableSleep runs it, without the clock.
@@ -504,12 +508,56 @@ test('whileBusy: a Stop while a send waits on another stream ends the wait, send
         { name: 'AbortError' },
     );
 
-    assert.equal(action, 'abort');
+    assert.deepEqual(action, { cancel: false, refunded: true });
     assert.equal(fetch.mock.callCount(), 1);
     assert.deepEqual(waits, [30]);
-    // A stream the page holds is cancelled; one not yet sent is skipped.
-    assert.equal(stopAction({ sent: true, busyWait: false }), 'cancel');
-    assert.equal(stopAction({ sent: false, busyWait: false }), 'abort');
+});
+
+test('whileBusy: Stop cancels a turn only once the harness admits the request, and refunds a metered prompt until then', async (t) => {
+    const answers = [
+        busyAnswer(4),
+        new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n', {
+            headers: { 'x-dfo-turn-index': '3' },
+        }),
+    ];
+
+    t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+
+    // What Stop would do at each point the stream reports.
+    const stops: [string, ReturnType<typeof stopAction>][] = [];
+    const stop = (at: string) =>
+        stops.push([at, stopAction({ admitted: admission.admitted(), metered: true })]);
+    const admission = watchAdmission({
+        onFrame: () => stop('frame'),
+        onTurnIndex: () => stop('turn index'),
+        onBusyWait: (seconds) => stop(seconds === null ? 'sent again' : 'waiting'),
+    });
+
+    stop('queued');
+    await whileBusy(
+        (handlers) => runTurn('conv', 'and in 2021?', handlers),
+        admission.handlers,
+        undefined,
+        { sleep: async () => {} },
+    );
+
+    const ends = { cancel: false, refunded: true };
+    const cancels = { cancel: true, refunded: false };
+
+    // The send that follows a wait may itself find another tab's turn
+    // running, so Stop cancels nothing until the harness names this turn.
+    assert.deepEqual(stops, [
+        ['queued', ends],
+        ['waiting', ends],
+        ['sent again', ends],
+        ['turn index', cancels],
+        ['frame', cancels],
+    ]);
+    // A free request ended before admission had no prompt to give back.
+    assert.deepEqual(stopAction({ admitted: false, metered: false }), {
+        cancel: false,
+        refunded: false,
+    });
 });
 
 test('whileBusy: any other refusal reaches onRefusal once and is not retried', async (t) => {
@@ -569,12 +617,31 @@ test('readState: a refusal the page acts on is named, any other is null', async 
         [
             'the harness holds no such conversation',
             () => Response.json(unknownConversation, { status: 404 }),
-            { refusal: 'session_gone' },
+            {
+                refusal: 'session_gone',
+                http: {
+                    status: 404,
+                    detail: unknownConversation.detail,
+                    error: unknownConversation,
+                },
+            },
         ],
         [
             'a guest on a conversation an account owns',
             () => proxyProblem(401, 'sign_in_required'),
-            { refusal: 'sign_in_required' },
+            {
+                refusal: 'sign_in_required',
+                http: {
+                    status: 401,
+                    detail: null,
+                    error: null,
+                    proxy: {
+                        code: 'sign_in_required',
+                        upstreamStatus: null,
+                        retryAfterSeconds: null,
+                    },
+                },
+            },
         ],
         [
             "the proxy's 404 for another account's conversation",

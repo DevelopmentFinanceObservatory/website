@@ -57,6 +57,7 @@ import {
     isStateRefusal,
     readComponent,
     runTurn,
+    type StateRefusal,
     type StreamHandlers,
     type StreamRefusal,
 } from '../studioClient.ts';
@@ -291,11 +292,12 @@ test('the cards a legacy canvas counts as drawn: every closed turn, and an open 
 test('a state read refused on a later page is the answer', async () => {
     const answers = [
         readOf({ closed_since: [closed(1), closed(2), closed(3)], closed_total: 5 }),
-        { refusal: 'session_gone' as const },
+        { refusal: 'session_gone' as const, http: { status: 404, detail: null, error: null } },
     ];
 
     assert.deepEqual(await readConversation('conv', 0, undefined, async () => answers.shift()!), {
         refusal: 'session_gone',
+        http: { status: 404, detail: null, error: null },
     });
 });
 
@@ -386,15 +388,18 @@ test('attachStep decides from the turn status and the lease', () => {
 });
 
 // A carryOnTurn run with recorded calls: `resumes` answers each resume in
-// turn (frames, or a refusal), `reads` each state read.
+// turn (frames, or a refusal), `reads` each state read, and `onRefusal`
+// stands for the stream's own refusal handler.
 const run = async (
     first: AttachStep,
     {
         resumes = [],
         reads = [],
+        onRefusal,
     }: {
         resumes?: (StudioFrame[] | StreamRefusal)[];
-        reads?: (ConversationRead | null)[];
+        reads?: (ConversationRead | StateRefusal | null)[];
+        onRefusal?: StreamHandlers['onRefusal'];
     } = {},
 ) => {
     const frames: StudioFrame[] = [];
@@ -404,7 +409,7 @@ const run = async (
     await carryOnTurn({
         conversationId: 'conv',
         first,
-        handlers: { onFrame: (frame) => frames.push(frame) },
+        handlers: { onFrame: (frame) => frames.push(frame), onRefusal },
         signal: new AbortController().signal,
         since: () => 1,
         onRead: (read) => merged.push(read),
@@ -497,6 +502,53 @@ test('carryOnTurn ends the turn once the harness has closed it', async () => {
 
 test('carryOnTurn rejects when the state cannot be read, so the turn ends failed', async () => {
     await assert.rejects(run({ kind: 'wait', turnIndex: 2, seconds: 1 }, { reads: [null] }));
+});
+
+test('carryOnTurn hands a refusal it does not retry to the stream, which ends the turn', async (t) => {
+    const gone: StreamRefusal = {
+        status: 404,
+        detail: "no conversation 'conv'",
+        error: {
+            error: 'not_found',
+            retry: 'do_not_retry',
+            detail: "no conversation 'conv'",
+            pointer: '/conversation_id',
+        },
+    };
+    const cases: [string, AttachStep, Parameters<typeof run>[1], string[]][] = [
+        [
+            'a resume refused',
+            { kind: 'resume', turnIndex: 2 },
+            { resumes: [gone] },
+            ['resume conv 2'],
+        ],
+        [
+            'a read refused',
+            { kind: 'wait', turnIndex: 2, seconds: 3 },
+            { reads: [{ refusal: 'session_gone', http: gone }] },
+            ['sleep 3000', 'read conv 1'],
+        ],
+    ];
+
+    for (const [name, first, answers, expected] of cases) {
+        await t.test(name, async () => {
+            const heard: StreamRefusal[] = [];
+            const { calls } = await run(first, {
+                ...answers,
+                onRefusal: (refusal) => {
+                    heard.push(refusal);
+
+                    return true;
+                },
+            });
+
+            assert.deepEqual(heard, [gone]);
+            assert.deepEqual(calls, expected);
+        });
+    }
+
+    // A refusal the stream does not deal with ends the turn failed.
+    await assert.rejects(run({ kind: 'resume', turnIndex: 2 }, { resumes: [gone] }));
 });
 
 test('carryOnTurn waits after any refused resume it may retry, and gives up after RESUME_ATTEMPTS', async () => {
