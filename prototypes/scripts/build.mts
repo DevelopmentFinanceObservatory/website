@@ -1,8 +1,8 @@
 // `pnpm build`: the static export, assembled as the Worker's assets directory.
 // scripts/read.mts first reads every build-read page's DFO data to .build-data/
-// and stops the build on a failed read. next build then writes out/; out/ moves to dist/prototypes/, because the Worker
-// route keeps /prototypes in the request path, and edge/ (_headers,
-// _redirects) copies to the root of dist/ when it exists.
+// and stops the build on a failed read. next build then writes out/. out/ moves to
+// dist/prototypes/, because the Worker route keeps /prototypes in the request path, and edge/
+// (_headers, _redirects) copies to the root of dist/ when it exists.
 //
 // It runs the root install's next, so `pnpm install` must have run at the
 // repository root first (prototypes/package.json lists no next or react).
@@ -27,7 +27,7 @@ rmSync(DIST, { recursive: true, force: true });
 const READ = path.join(APP, 'scripts', 'read.mts');
 
 /** Runs `args` under this Node in APP, exits with its status on a failure, and returns how long
- *  it took in seconds. */
+ *  it took as text, such as `3.2 s`. */
 const run = (args: string[]): string => {
     const started = Date.now();
     const child = spawnSync(process.execPath, args, { cwd: APP, stdio: 'inherit' });

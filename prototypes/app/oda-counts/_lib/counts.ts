@@ -852,8 +852,8 @@ const DOT_INTERVALS = 5;
  * Axis ticks for the dot plot of a donor's counts in a year, over both price bases, so
  * switching prices never rescales it. Dots encode position, so the axis need not start
  * at zero. It starts at a tick at or below the smaller of half the OECD headline (half
- * gross disbursements where the headline is missing) and the smallest count, never
- * below zero unless a count is, and ends at a tick at or above the largest count. With
+ * gross disbursements where the headline is missing) and the smallest count, and
+ * goes below zero only if a count does. It ends at a tick at or above the largest count. With
  * no count published that year, the axis spans the donor's counts over every year. With
  * a `lead` basis, the ticks hold to it as `heldTicks` has it.
  */

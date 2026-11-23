@@ -209,7 +209,7 @@ const parseSources = <K extends string>(
 
 /**
  * Fetches the newest stored data for each of `sources` and runs `derive` on the rows, with no
- * fallback: the `stored` tier or a rejection. Recipes run first, in `lanes.recipes`, and every
+ * fallback, so it returns the `stored` tier or rejects. Recipes run first, in `lanes.recipes`, and every
  * read runs in `lanes.reads`, the page's pacer and analysis lane unless given. Once a read fails
  * no other read starts. `timeout` bounds each read, STORED_TIMEOUT_MS unless given. `client`
  * stands in for the anonymous one on the production API, as a test does.

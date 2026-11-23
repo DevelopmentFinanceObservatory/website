@@ -13,7 +13,7 @@ pnpm install
 pnpm dev                # http://localhost:3000/prototypes/
 ```
 
-Work on prototypes from the `prototypes` branch, which is dev plus `prototypes/`: branch from it and open the pull request into it.
+Work on prototypes from the `prototypes` branch, which is dev plus `prototypes/`. Branch from it and open the pull request into it.
 
 ## Start a prototype
 
@@ -65,7 +65,7 @@ Each read may take 5 minutes, since the build is often the first reader after DF
 
 ## Write the refs step
 
-`_data/refs.json` is the page's query config: the reads its build makes. A ref names a dataset's spec, its window and the version a step read, so a page reads the same question on every build. The build reads each ref's newest stored version, so the version in the file marks when the step last ran; the step pins it so the ref stays fetchable. `data.ref.toJSON()` (TypeScript) and `data.ref.to_json()` (Python) write a ref, and `DatasetRef.fromJSON` and `DatasetRef.from_json` read it back. Run a page's step with:
+`_data/refs.json` is the page's query config, the reads its build makes. A ref names a dataset's spec, its window and the version a step read, so a page reads the same question on every build. The build reads each ref's newest stored version, so the version in the file marks when the step last ran; the step pins it so the ref stays fetchable. `data.ref.toJSON()` (TypeScript) and `data.ref.to_json()` (Python) write a ref, and `DatasetRef.fromJSON` and `DatasetRef.from_json` read it back. Run a page's step with:
 
 ```sh
 pnpm data debt-diagnostic              # fetch each committed ref's newest version, pin it, rewrite refs.json
@@ -115,7 +115,7 @@ Every JSON file under `app/*/_data/` has this shape:
 
 ## Read in the browser
 
-`debt-thresholds` still commits its figures: its Python step writes `thresholds.json` and `transfers.json` to `_data/`, and its page imports them. Its net-transfers section also reads in the browser through `readLive` (`lib/liveRead.ts`), which reads the sources at DFO's newest stored versions with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`) and at most two recipes at a time (`ANALYSIS_CONCURRENCY`). When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
+`debt-thresholds` commits its figures: its Python step writes `thresholds.json` and `transfers.json` to `_data/`, and its page imports them. Its net-transfers section also reads in the browser through `readLive` (`lib/liveRead.ts`), which reads the sources at DFO's newest stored versions with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`) and at most two recipes at a time (`ANALYSIS_CONCURRENCY`). When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
 
 - `committed`: figures the page committed, with no request. The page renders them first and swaps in the stored figures when they arrive. A page with a recipe falls back here, because a pinned analysis posts to the same server and fails the same way.
 - `pinned`: every ref's pinned version, the rows the step read. A page whose committed JSON leaves the figures out falls back here and shows a loading state until they arrive, as `debt-thresholds`' net transfers do.
@@ -143,7 +143,7 @@ export const metadata = prototypeMetadata(entry);
 Source: <Citation />. Read from the [Development Finance Observatory](https://developmentfinance.org/data) on <Retrieved />.
 ```
 
-Link to the main site with absolute URLs such as `https://developmentfinance.org/data`. The app's `basePath` turns a root-relative link into `/prototypes/data`, which does not exist. `SourceLink` already writes absolute URLs here. `pnpm check:dist` fails on any link, image or CSS `url()` in the build that leaves `/prototypes/` or names a missing file.
+Link to the main site with absolute URLs such as `https://developmentfinance.org/data`. The app's `basePath` turns a root-relative link into `/prototypes/data`, which does not exist. `SourceLink` writes absolute URLs here. `pnpm check:dist` fails on any link, image or CSS `url()` in the build that leaves `/prototypes/` or names a missing file.
 
 Every page carries the site's own header and footer (`src/components/organisms/Header` and `Footer`), as `src/app/(site)/layout.tsx` does. They build their links with `siteHref` from `src/lib/site.ts`, which returns the path unchanged on the website and an absolute `https://developmentfinance.org/...` URL here, because `next.config.ts` sets `NEXT_PUBLIC_SITE_LINK_ORIGIN`. Their buttons load the site page in full, and no menu entry is marked current. The header is fixed, so a page's first block starts below it: the index opens with the site's dark `PageHero`, which also turns the header light, and MDX pages pad their top through `components/Prose`. The account button asks the site's `/api/auth` for the session, which answers in production because the Worker shares the site's origin. Locally the request fails with a 404 and the button stays in its signed-out state. Every page also loads the site's consent manager and GA4 tag through `src/components/atoms/Analytics`, and `pnpm check:dist` fails on a page without the consent scripts. The consent manager shows and stores the visitor's site-wide choices. GA4 records page views under `/prototypes/` on developmentfinance.org only, with cookies once the visitor consents and as cookieless pings until then, as on the site. GA4 also counts every URL change made through the history API as a page view, so a prototype keeps its state out of the address bar and puts it in the links it offers, as the debt-thresholds page's copy-link button does.
 

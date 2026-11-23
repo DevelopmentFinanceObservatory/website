@@ -1,7 +1,7 @@
 // The files the build's reads leave for `next build`. `pnpm read` (scripts/read.mts) runs every
 // build-read page's `build` (./buildRead.ts) in one process through one set of lanes and writes
 // each result to .build-data/<page>.json, which git ignores. A page's server components read
-// their file through `readBuilt`. Under `next build` a missing file fails the build; under
+// their file through `readBuilt`. Under `next build` a missing file fails the build. Under
 // `next dev` it runs the page's `build` once per process and writes the file, so `pnpm dev`
 // needs no separate step. Delete .build-data/ or run `pnpm read` again for newer figures.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

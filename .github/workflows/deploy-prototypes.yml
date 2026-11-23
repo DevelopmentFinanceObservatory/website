@@ -184,7 +184,7 @@ jobs:
                   path: prototypes/dist
 
             # Aliases hold lowercase letters, digits and dashes, and start with a
-            # letter; pr-<number> fits. Cloudflare keeps the newest 1,000.
+            # letter, and pr-<number> fits. Cloudflare keeps the newest 1,000.
             - if: steps.token.outputs.enabled == 'true'
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -15,7 +15,7 @@
 // Build reads use their own anonymous client on the production API and their own lanes, at
 // most READ_CONCURRENCY reads and ANALYSIS_CONCURRENCY recipes at once across every page, so a
 // build from a shared runner address stays inside the gateway's allowances. This module runs on
-// the server only; the client components of a page take its result as props.
+// the server only. The client components of a page take its result as props.
 import { Client, type Dataset } from '@developmentfinance/client';
 import { type Freshness, isDerived } from '@developmentfinance/client/types';
 

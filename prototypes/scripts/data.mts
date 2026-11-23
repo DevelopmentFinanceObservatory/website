@@ -1,6 +1,6 @@
 // `pnpm data <slug>`: runs a prototype's data step by hand. app/<slug>/_data/
 // fetch.mts runs under Node, fetch.py under `uv run`, which installs the SDK
-// its inline metadata pins. The build runs no data step; its own DFO reads run
+// its inline metadata pins. The build runs no data step. Its own DFO reads run
 // in scripts/read.mts. A step rewrites the files git keeps under _data/: the
 // refs the build reads (refs.json, live-refs.json), and for debt-thresholds
 // the figures its page imports.

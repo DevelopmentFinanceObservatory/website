@@ -10,11 +10,10 @@ name: Prototypes daily build
 # freshness is `pending` (BUILD_PENDING_BOUND_S, prototypes/lib/buildRead.ts),
 # then takes what it has. A failed read fails the build without deploying, so
 # the last deploy stays live. GitHub mails a failed scheduled run to the user
-# who last edited the schedule (the cron line below), and the dispatched run is
-# not the scheduled one, so this job watches it and fails with it. Whoever
-# edits the cron line takes on those mails. A
-# deploy that a newer push to `prototypes` supersedes before it starts counts
-# as a failure here too.
+# who last edited the schedule (the cron line below), so whoever edits the cron
+# line takes on those mails. The dispatched run is not the scheduled one, so
+# this job watches it and fails with it. A deploy that a newer push to
+# `prototypes` supersedes before it starts counts as a failure here too.
 
 on:
     schedule:

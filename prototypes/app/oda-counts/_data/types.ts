@@ -20,7 +20,7 @@ export type Donor = {
     /** the DFO provider id, such as `country/FRA` or `DACCountriesTotal` */
     id: string;
     name: string;
-    /** a DAC group total, such as DAC countries, rather than one donor */
+    /** a DAC group total, such as DAC countries, covering several donors */
     isGroup: boolean;
     /**
      * Each series in millions of US dollars, at current prices and at constant
