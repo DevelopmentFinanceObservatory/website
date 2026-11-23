@@ -1,0 +1,187 @@
+name: Sync dev into prototypes
+
+# Keeps the `prototypes` branch at dev plus prototypes/: each push to dev
+# merges into `prototypes`. prototypes/ lives on `prototypes` alone, so the
+# merge keeps it as `prototypes` has it, whatever dev did there since the two
+# branches last met; a dev change that adds or edits a file under prototypes/
+# stops the job, since that work belongs on `prototypes`. A clean merge is
+# pushed to `prototypes`, and since a push made with GITHUB_TOKEN starts no
+# workflow, the job then dispatches deploy-prototypes.yml on `prototypes`
+# itself, when the merge changed a path the deploy builds from (prototypes/,
+# src/, package.json, pnpm-lock.yaml). When `prototypes` already holds dev, as
+# on a rerun after a failed dispatch, the job dispatches unless a deploy of its
+# head is queued, running or succeeded. A merge that conflicts outside
+# prototypes/, or one that changes a workflow file (which GitHub refuses in a
+# GITHUB_TOKEN push), goes to the branch sync/dev-into-prototypes, with a pull
+# request into `prototypes` opened or left open for a person to finish. That
+# pull request is opened with GITHUB_TOKEN too, so its preview build starts on
+# the first push a person makes to it. Merging it with a merge commit makes
+# dev's commits ancestors of `prototypes`, so later syncs merge from a current
+# base and meet fewer of the same conflicts.
+#
+# It lives on dev, because dev is the branch it watches. deploy-prototypes.yml
+# is identical on dev and `prototypes`.
+
+on:
+    push:
+        branches: [dev]
+    workflow_dispatch: {}
+
+permissions:
+    contents: read
+
+# Two dev pushes queue, so they cannot race to push `prototypes`. The later merge
+# carries every commit of the earlier one.
+concurrency:
+    group: prototypes-sync
+    cancel-in-progress: false
+
+env:
+    SYNC_BRANCH: sync/dev-into-prototypes
+
+jobs:
+    sync:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+            actions: write
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  ref: prototypes
+                  fetch-depth: 0
+
+            # merge-dev.sh merges origin/dev into the checked-out branch and keeps
+            # prototypes/ as that branch has it: checking out HEAD's prototypes/
+            # restores files dev deleted and settles conflicts there. It exits 1,
+            # with the merge aborted, on a conflict anywhere else.
+            - id: merge
+              run: |
+                  git config user.name 'github-actions[bot]'
+                  git config user.email '41898299+github-actions[bot]@users.noreply.github.com'
+                  git fetch origin dev
+                  edited=$(git diff --name-only --diff-filter=AM "$(git merge-base HEAD origin/dev)" origin/dev -- prototypes/ | head -5 | tr '\n' ' ')
+                  if [ -n "$edited" ]; then
+                    echo "::error::dev adds or edits files under prototypes/ (for example ${edited}). That work belongs on the prototypes branch; move it there and revert it on dev."
+                    exit 1
+                  fi
+                  cat > "$RUNNER_TEMP/merge-dev.sh" <<'SH'
+                  set -euo pipefail
+                  if git merge-base --is-ancestor origin/dev HEAD; then
+                    exit 0
+                  fi
+                  git merge --no-commit --no-ff origin/dev > /dev/null || true
+                  if [ -n "$(git ls-tree -d HEAD prototypes)" ]; then
+                    git checkout HEAD -- prototypes/
+                  fi
+                  if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+                    git merge --abort
+                    exit 1
+                  fi
+                  git commit --quiet -m "Merge dev $(git rev-parse --short origin/dev) into $(git rev-parse --abbrev-ref HEAD)"
+                  SH
+                  echo "before=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                  if bash "$RUNNER_TEMP/merge-dev.sh"; then
+                    echo "clean=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "clean=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            # GitHub refuses a GITHUB_TOKEN push that changes a file under
+            # .github/workflows/, so a merge carrying such a change goes to the pull
+            # request below, as a conflict does. Any other failed push fails the
+            # step with git's error.
+            - id: push
+              if: steps.merge.outputs.clean == 'true'
+              env:
+                  BEFORE: ${{ steps.merge.outputs.before }}
+              run: |
+                  if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/prototypes)" ]; then
+                    echo "prototypes already holds dev; nothing to push." >> "$GITHUB_STEP_SUMMARY"
+                    echo "pushed=true" >> "$GITHUB_OUTPUT"
+                    echo "deploy=unless-deployed" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  if ! pushed_out=$(git push origin HEAD:prototypes 2>&1); then
+                    echo "$pushed_out"
+                    # GitHub's refusal reads "refusing to allow a GitHub App to create
+                    # or update workflow `...` without `workflows` permission".
+                    if grep -qE 'refusing to allow .+ to create or update workflow|without .workflows?. (scope|permission)' <<< "$pushed_out"; then
+                      echo "pushed=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                    fi
+                    echo "::error::The push to prototypes failed; see git's error above."
+                    exit 1
+                  fi
+                  echo "$pushed_out"
+                  echo "pushed=true" >> "$GITHUB_OUTPUT"
+                  changed=$(git diff --name-only "$BEFORE" HEAD -- prototypes/ src/ package.json pnpm-lock.yaml | wc -l)
+                  if [ "$changed" -eq 0 ]; then
+                    echo "Merged dev into prototypes; it changed nothing the deploy builds from, so no deploy." >> "$GITHUB_STEP_SUMMARY"
+                    echo "deploy=false" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "deploy=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            # A rerun after a failed dispatch finds `prototypes` already holding dev,
+            # so it dispatches unless a deploy of that head is queued, running or
+            # succeeded. A failed dispatch fails the job.
+            - if: steps.push.outputs.deploy == 'true' || steps.push.outputs.deploy == 'unless-deployed'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  DEPLOY: ${{ steps.push.outputs.deploy }}
+              run: |
+                  head=$(git rev-parse HEAD)
+                  if [ "$DEPLOY" = 'unless-deployed' ]; then
+                    deployed=$(gh run list --workflow deploy-prototypes.yml --branch prototypes \
+                        --commit "$head" --json status,conclusion \
+                        --jq '[.[] | select(.status != "completed" or .conclusion == "success")] | length')
+                    if [ "$deployed" != "0" ]; then
+                      echo "A deploy of prototypes at $head is queued, running or succeeded; no dispatch." >> "$GITHUB_STEP_SUMMARY"
+                      exit 0
+                    fi
+                  fi
+                  gh workflow run deploy-prototypes.yml --ref prototypes \
+                      -f dispatch_id="sync-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+                  echo "Dispatched the deploy of prototypes at $head." >> "$GITHUB_STEP_SUMMARY"
+
+            # The sync branch starts at dev's head plus a commit that takes
+            # prototypes/ from `prototypes`, so the pull request shows only the
+            # conflicts outside prototypes/, and a person resolves them there by
+            # merging `prototypes` into it. Later dev pushes merge into the branch
+            # without force, keeping its prototypes/, so a resolution in progress
+            # survives them.
+            - if: steps.merge.outputs.clean == 'false' || steps.push.outputs.pushed == 'false'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  PR_BODY: >-
+                      The sync workflow could not merge dev into `prototypes` by itself:
+                      the merge conflicts outside prototypes/, or it changes a workflow
+                      file, which a GITHUB_TOKEN push may not. Merge `prototypes` into
+                      this branch and resolve any conflict, then merge this pull request
+                      with "Create a merge commit". A merge commit makes dev's commits
+                      ancestors of `prototypes`, so later syncs merge from a current base
+                      and meet fewer of the same conflicts. The sync workflow merges each
+                      later dev push into this branch.
+              run: |
+                  if git fetch origin "$SYNC_BRANCH"; then
+                    git checkout -B "$SYNC_BRANCH" FETCH_HEAD
+                    if ! bash "$RUNNER_TEMP/merge-dev.sh"; then
+                      echo "::error::dev does not merge into $SYNC_BRANCH either; merge it there by hand."
+                      exit 1
+                    fi
+                  else
+                    git checkout -B "$SYNC_BRANCH" origin/dev
+                    git checkout origin/prototypes -- prototypes/
+                    git diff --cached --quiet || git commit --quiet -m 'Keep prototypes/ from prototypes'
+                  fi
+                  git push origin "HEAD:refs/heads/$SYNC_BRANCH"
+                  open=$(gh pr list --base prototypes --head "$SYNC_BRANCH" --state open --json number --jq 'length')
+                  if [ "$open" = "0" ]; then
+                    gh pr create --base prototypes --head "$SYNC_BRANCH" \
+                      --title 'Merge dev into prototypes (use "Create a merge commit")' --body "$PR_BODY"
+                  fi
+                  echo "::warning::dev did not merge into prototypes by itself; see the pull request from $SYNC_BRANCH."

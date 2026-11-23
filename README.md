@@ -10,7 +10,7 @@ This repository is under active development. Interfaces, schemas, and data may c
 
 - `src/` holds the application: the App Router pages and API routes in `src/app`, atomic components in `src/components`, and the proxy, search, Studio, auth and feedback code in `src/lib`.
 - `db/` holds the Drizzle schema, the forward-only migrations and the runner that applies them.
-- `prototypes/` holds a separate static app of data prototypes, published at `/prototypes` by its own workflow. See `prototypes/README.md`.
+- `prototypes/` holds a separate static app of data prototypes, published at `/prototypes` by its own workflow. It lives on the `prototypes` branch, which takes every push to `dev`; see `prototypes/README.md` there.
 - `deploy/` holds the Dockerfile and the deploy notes.
 - `.github/workflows/` holds CI and the deploy workflows.
 - `docs/` holds the maintainer and endpoint documentation.
