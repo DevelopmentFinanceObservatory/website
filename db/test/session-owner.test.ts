@@ -130,12 +130,73 @@ test("a deleted account's harness conversation stays owned by nobody", async (t)
 });
 
 /**
- * Migration 0027 gives each harness conversation already named by saved
- * conversations to the account whose row naming it was created first. The
- * migration has already run on the empty tables by the time the rows go in,
- * so the test runs its backfill again over them.
+ * A save whose id belongs to another account writes nothing, so it claims
+ * nothing either.
  */
-test('migration 0027 gives a harness conversation to its earliest save', async (t) => {
+test("a save refused on another account's id claims no harness conversation", async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await applyMigrations(database.migratorPool(), {
+        migrationsFolder: MIGRATIONS_FOLDER,
+        runtimeDbUser: database.runtimeUser,
+        migratorDbUser: database.migratorUser,
+    });
+
+    const db = drizzle(database.runtimePool());
+
+    await db.insert(user).values([
+        { id: 'user-ana', name: 'Ana', email: 'ana@example.org' },
+        { id: 'user-ben', name: 'Ben', email: 'ben@example.org' },
+    ]);
+    await saveConversation(db, 'user-ana', saved('conv-ana', 'harness-1'));
+    await saveConversation(db, 'user-ben', saved('conv-ana', 'harness-2'));
+
+    assert.deepEqual(await sessionOwners(db, 'harness-2'), []);
+    assert.deepEqual(await sessionOwners(db, 'harness-1'), ['user-ana']);
+});
+
+/**
+ * Saves written without an owner row (rows inserted directly here) give the
+ * harness conversation to their account on the next read, save or turn
+ * claim, ahead of whichever account asks.
+ */
+test('a harness conversation saved without an owner row goes to its saver', async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await applyMigrations(database.migratorPool(), {
+        migrationsFolder: MIGRATIONS_FOLDER,
+        runtimeDbUser: database.runtimeUser,
+        migratorDbUser: database.migratorUser,
+    });
+
+    const db = drizzle(database.runtimePool());
+
+    await db.insert(user).values([
+        { id: 'user-ana', name: 'Ana', email: 'ana@example.org' },
+        { id: 'user-ben', name: 'Ben', email: 'ben@example.org' },
+    ]);
+    await database.adminPool().query(
+        `insert into conversation (id, user_id, title, agent_session_id, data) values
+                ('conv-1', 'user-ana', 'Chat', 'harness-save', '{}'),
+                ('conv-2', 'user-ana', 'Chat', 'harness-turn', '{}')`,
+    );
+
+    await saveConversation(db, 'user-ben', saved('conv-ben', 'harness-save'));
+
+    assert.deepEqual(await sessionOwners(db, 'harness-save'), ['user-ana']);
+    assert.deepEqual(await claimSessionOwner(db, 'harness-turn', 'user-ben'), ['user-ana']);
+});
+
+/**
+ * Migration 0027's backfill and the read-time claim in `sessionOwners` give
+ * a harness conversation to an account only when every saved conversation
+ * naming it belongs to that account. The migration has already run on the
+ * empty tables by the time the rows go in, so the test runs its backfill
+ * again over them, then clears the owner rows and reads each id.
+ */
+test('migration 0027 and the read-time claim own only single-account sessions', async (t) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
 
@@ -153,9 +214,10 @@ test('migration 0027 gives a harness conversation to its earliest save', async (
     );
     await pool.query(
         `insert into conversation (id, user_id, title, agent_session_id, data, created_at) values
-            ('conv-ben', 'user-ben', 'Copy', 'harness-1', '{}', '2026-11-02'),
-            ('conv-ana', 'user-ana', 'Chat', 'harness-1', '{}', '2026-11-01'),
-            ('conv-ben-2', 'user-ben', 'Own', 'harness-2', '{}', '2026-11-03'),
+            ('conv-ben', 'user-ben', 'Copy', 'harness-shared', '{}', '2026-11-02'),
+            ('conv-ana', 'user-ana', 'Chat', 'harness-shared', '{}', '2026-11-01'),
+            ('conv-ben-2', 'user-ben', 'Own', 'harness-ben', '{}', '2026-11-03'),
+            ('conv-ben-3', 'user-ben', 'Fork', 'harness-ben', '{}', '2026-11-05'),
             ('conv-new', 'user-ben', 'New', null, '{}', '2026-11-04')`,
     );
 
@@ -171,8 +233,12 @@ test('migration 0027 gives a harness conversation to its earliest save', async (
         'select agent_session_id, user_id from studio_session_owner order by agent_session_id',
     );
 
-    assert.deepEqual(rows, [
-        { agent_session_id: 'harness-1', user_id: 'user-ana' },
-        { agent_session_id: 'harness-2', user_id: 'user-ben' },
-    ]);
+    assert.deepEqual(rows, [{ agent_session_id: 'harness-ben', user_id: 'user-ben' }]);
+
+    await pool.query('delete from studio_session_owner');
+
+    const db = drizzle(database.runtimePool());
+
+    assert.deepEqual(await sessionOwners(db, 'harness-shared'), []);
+    assert.deepEqual(await sessionOwners(db, 'harness-ben'), ['user-ben']);
 });

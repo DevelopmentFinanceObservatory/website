@@ -1,7 +1,7 @@
 /**
- * The Studio proxy's ownership check: a conversation an account saved
- * answers only to that account, and reading or resuming it needs the
- * caller's own saved copy.
+ * The Studio proxy's ownership check: a conversation an account owns
+ * answers only to that account, and reading or resuming it needs the caller
+ * to own it.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -9,12 +9,13 @@ import test from 'node:test';
 import {
     canonicalStudioCall,
     checkStudioOwner,
+    MAX_CONVERSATION_ID_CHARS,
     readStudioCall,
     SIGN_IN_REQUIRED,
 } from '../studioAccess.ts';
 
 type CallInput = Parameters<typeof readStudioCall>[0];
-type OwnerInput = Omit<Parameters<typeof checkStudioOwner>[0], 'conversationId'>;
+type OwnerInput = Omit<Parameters<typeof checkStudioOwner>[0], 'conversationId' | 'refuse'>;
 
 // Both steps of the proxy's check, as studioProxy runs them: the call it
 // rebuilds, then the owner check on the conversation that call names.
@@ -25,7 +26,11 @@ const studioAccess = async (input: CallInput & OwnerInput) => {
         return read;
     }
 
-    const refusal = await checkStudioOwner({ ...input, conversationId: read.call.conversationId });
+    const refusal = await checkStudioOwner({
+        ...input,
+        conversationId: read.call.conversationId,
+        refuse: (ownerRefusal) => ownerRefusal,
+    });
 
     return refusal === null ? read : { refusal, call: null };
 };
@@ -63,7 +68,7 @@ const check = (
 
 // A guest is asked to sign in, and another account is told there is no
 // such conversation.
-test('a conversation another account saved refuses a guest and a non-owner apart', async () => {
+test('a conversation another account owns refuses a guest and a non-owner apart', async () => {
     for (const route of ROUTES) {
         assert.equal(await check(route, 'user-ben', 'conv-ana'), 'not_found', route);
         assert.equal(await check(route, null, 'conv-ana'), SIGN_IN_REQUIRED, `guest ${route}`);
@@ -78,7 +83,7 @@ test('a conversation whose owner deleted their account answers to nobody', async
     }
 });
 
-test('studioAccessRefusal gives state and resume only to an owner with a saved copy', async () => {
+test('studioAccessRefusal gives state and resume only to the owner', async () => {
     for (const route of ['state', 'resume']) {
         assert.equal(await check(route, null, 'conv-guest'), 'not_found', `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-guest'), 'not_found', route);
@@ -135,6 +140,22 @@ test('canonicalStudioCall reads the query of a GET and the JSON body otherwise',
         );
     }
     assert.equal(canonicalStudioCall('POST', search, '{"message":"hi"}')?.conversationId, null);
+
+    const long = 'c'.repeat(MAX_CONVERSATION_ID_CHARS + 1);
+
+    assert.equal(
+        canonicalStudioCall('GET', new URLSearchParams({ conversation_id: long }), null),
+        null,
+    );
+    assert.equal(
+        canonicalStudioCall('POST', search, JSON.stringify({ conversation_id: long })),
+        null,
+    );
+    assert.equal(
+        canonicalStudioCall('POST', search, JSON.stringify({ conversation_id: long.slice(1) }))
+            ?.conversationId,
+        long.slice(1),
+    );
 });
 
 // The harness reads a repeated query parameter's last value, an older
@@ -314,10 +335,151 @@ test('a call to a route that drives a turn must name a conversation', async () =
                     readUserId: async () => userId,
                     ownersOf: async () => [],
                     claimOwner: unclaimed,
+                    refuse: (refusal) => refusal,
                 }),
                 'not_found',
                 `${userId} ${route}`,
             );
         }
     }
+});
+
+// A body read the way the proxy reads one (readBoundedText): null past the
+// cap the proxy passes in.
+const boundedBody = (body: string) => async (maxBytes: number) =>
+    Buffer.byteLength(body) > maxBytes ? null : body;
+
+// A turn seeding six Spec blocks of 1 MiB each, as a Search-to-Studio
+// handoff may, is read whole. Any other route keeps a small cap.
+test('readStudioCall reads a turn carrying six 1 MiB seeds and caps other routes', async () => {
+    const body = JSON.stringify({
+        conversation_id: 'conv-ana',
+        message: 'hi',
+        seed_spec: Array.from({ length: 6 }, () => 'x'.repeat(1_048_000)),
+    });
+    const read = (route: string) =>
+        readStudioCall({
+            route,
+            method: 'POST',
+            search: new URLSearchParams(),
+            readBody: boundedBody(body),
+        });
+
+    assert.equal((await read('turn')).refusal, null);
+
+    for (const route of ['interrupt', 'cancel', 'composition', 'resume']) {
+        assert.equal((await read(route)).refusal, 'too_large', route);
+    }
+});
+
+// An OPTIONS call is answered by the proxy and a method the route does not
+// serve is refused, both before the body is read.
+test('readStudioCall answers OPTIONS and refuses a method the route does not serve', async () => {
+    const reads: string[] = [];
+    const read = (route: string, method: string) =>
+        readStudioCall({
+            route,
+            method,
+            search: new URLSearchParams({ conversation_id: 'conv-ana' }),
+            readBody: async () => {
+                reads.push(`${method} ${route}`);
+
+                return '{"conversation_id":"conv-ana"}';
+            },
+        });
+
+    for (const route of ROUTES) {
+        assert.equal((await read(route, 'OPTIONS')).refusal, 'options', route);
+    }
+
+    for (const method of ['GET', 'HEAD']) {
+        assert.equal((await read('turn', method)).refusal, 'method_not_allowed', method);
+    }
+
+    assert.equal((await read('state', 'POST')).refusal, 'method_not_allowed');
+    assert.deepEqual(reads, []);
+});
+
+// A turn reads the owner, then spends its prompt, then claims: a caller the
+// owner refuses spends nothing, a turn the allowance refuses claims nothing,
+// and a claim lost to another account refuses a turn already paid for, so
+// the proxy gives that prompt back.
+test('checkStudioOwner claims a conversation only for a turn its prompt admits', async () => {
+    const steps: string[] = [];
+    const turn = ({
+        owners = [],
+        spendRefusal = null,
+        claimed,
+    }: {
+        owners?: string[];
+        spendRefusal?: string | null;
+        claimed?: string;
+    }) =>
+        checkStudioOwner({
+            route: 'turn',
+            conversationId: 'conv-new',
+            readUserId: async () => 'user-ben',
+            ownersOf: async () => {
+                steps.push('read');
+
+                return owners;
+            },
+            claimOwner: async (_id, userId) => {
+                steps.push('claim');
+
+                return [claimed ?? userId];
+            },
+            spend: async () => {
+                steps.push('spend');
+
+                return spendRefusal;
+            },
+            refuse: (refusal): string => refusal,
+        });
+
+    assert.equal(await turn({ owners: ['user-ana'] }), 'not_found');
+    assert.deepEqual(steps.splice(0), ['read']);
+
+    assert.equal(await turn({ spendRefusal: 'resource_exhausted' }), 'resource_exhausted');
+    assert.deepEqual(steps.splice(0), ['read', 'spend']);
+
+    assert.equal(await turn({ claimed: 'user-ana' }), 'not_found');
+    assert.deepEqual(steps.splice(0), ['read', 'spend', 'claim']);
+
+    assert.equal(await turn({}), null);
+    assert.deepEqual(steps.splice(0), ['read', 'spend', 'claim']);
+
+    // The caller's own conversation needs no claim.
+    assert.equal(await turn({ owners: ['user-ben'] }), null);
+    assert.deepEqual(steps.splice(0), ['read', 'spend']);
+});
+
+// An owner read that answers after the timeout refused the call claims
+// nothing.
+test('checkStudioOwner claims nothing after its owner read times out', async () => {
+    const claims: string[] = [];
+    let answer: (owners: string[]) => void = () => {};
+    const refusal = await checkStudioOwner({
+        route: 'turn',
+        conversationId: 'conv-new',
+        readUserId: async () => 'user-ana',
+        ownersOf: () =>
+            new Promise<string[]>((resolve) => {
+                answer = resolve;
+            }),
+        claimOwner: async (_id, userId) => {
+            claims.push(userId);
+
+            return [userId];
+        },
+        refuse: (ownerRefusal) => ownerRefusal,
+        timeoutMs: 10,
+    });
+
+    assert.equal(refusal, 'unavailable');
+
+    answer([]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    assert.deepEqual(claims, []);
 });
