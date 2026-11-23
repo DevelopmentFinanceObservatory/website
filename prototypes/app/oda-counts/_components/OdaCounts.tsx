@@ -27,7 +27,7 @@ import {
  */
 export const OdaCounts = ({ definitions }: { definitions: Definition[] }) => {
     const [year, setYear] = useState(DEFAULT_YEAR);
-    const { data, tier, offer, picked, shown, donor, lead, pending, failed, pickDonor, pickUnit } =
+    const { data, offer, picked, shown, donor, lead, pending, failed, pickDonor, pickUnit } =
         useLiveUnits();
     const { unit } = shown;
     const pickedDonor = findDonor(data, picked.donorId) ?? donor;
@@ -37,8 +37,8 @@ export const OdaCounts = ({ definitions }: { definitions: Definition[] }) => {
         `No disbursement figure of ${possessive(donor.name)} ODA in ${year} is published.`;
 
     return (
-        // The page has no switch, so its read is always on.
-        <div className={styles.island} data-read-tier={tier} data-read-live="true">
+        // The build read the figures, so the browser reads none of them again.
+        <div className={styles.island} data-read-tier="built" data-read-live="built">
             <Controls
                 donors={data.donors}
                 donor={pickedDonor}

@@ -8,16 +8,21 @@ import type { ObservationPoint, SpecObservations } from '@developmentfinance/cli
 
 import { createLane, createPacer } from '#lib/pacing.ts';
 
-import type { CountsData, Donor, LiveData, SeriesKey } from '../_data/types.ts';
+import type { Donor, LiveData, SeriesKey } from '../_data/types.ts';
 
 import { findDonor } from './counts.ts';
 import {
     basisKey,
     currencyMatches,
+    DAC_CURRENCIES,
     fetchBasis,
-    isCommitted,
+    identitiesFromRefs,
+    isBuilt,
     liveDonor,
     maskTo,
+    MAX_ENTRIES,
+    offerFromResponses,
+    offerRequests,
     pickCurrency,
     priceBases,
     resolveRequests,
@@ -27,13 +32,19 @@ import {
     validBaseYear,
     type Unit,
 } from './live.ts';
+import { COUNTS, OFFER } from './testFixture.ts';
 
-const read = <T,>(name: string): T =>
-    JSON.parse(readFileSync(new URL(`../_data/${name}`, import.meta.url), 'utf8')).data as T;
+const liveRefs = JSON.parse(
+    readFileSync(new URL('../_data/live-refs.json', import.meta.url), 'utf8'),
+) as { data: Record<string, unknown> };
 
-const counts = read<CountsData>('counts.json');
-const live = read<LiveData>('live.json');
-const { offer } = live;
+const counts = COUNTS;
+const offer = OFFER;
+const live: LiveData = {
+    maxEntries: MAX_ENTRIES,
+    identities: identitiesFromRefs(liveRefs.data),
+    offer,
+};
 
 const france = (): Donor => {
     const donor = findDonor(counts, 'country/FRA');
@@ -441,7 +452,7 @@ test('fetchBasis takes an aborted pick out of the queue at once', async () => {
     assert.equal(sent.length, 0);
 });
 
-test('maskTo and liveDonor keep every null counts.json holds, at each price basis', () => {
+test('maskTo and liveDonor keep every null the built figures hold, at each price basis', () => {
     assert.deepEqual(maskTo([1, null, 3], [10, 20, null]), [10, null, null]);
 
     const committed = france();
@@ -463,17 +474,17 @@ test('maskTo and liveDonor keep every null counts.json holds, at each price basi
     assert.deepEqual(donor.odaGni, committed.odaGni);
 });
 
-test('isCommitted and basisKey tell committed units from live ones', () => {
+test('isBuilt and basisKey tell built units from live ones', () => {
     const usd = (prices: 'current' | 'constant', baseYear: number): Unit => ({
         currency: 'USD',
         prices,
         baseYear,
     });
 
-    assert.equal(isCommitted(usd('current', 2010), counts), true);
-    assert.equal(isCommitted(usd('constant', counts.baseYear), counts), true);
-    assert.equal(isCommitted(usd('constant', 2010), counts), false);
-    assert.equal(isCommitted(EUR_2023, counts), false);
+    assert.equal(isBuilt(usd('current', 2010), counts), true);
+    assert.equal(isBuilt(usd('constant', counts.baseYear), counts), true);
+    assert.equal(isBuilt(usd('constant', 2010), counts), false);
+    assert.equal(isBuilt(EUR_2023, counts), false);
     assert.equal(basisKey('country/FRA', EUR_2023), 'country/FRA EUR constant 2023');
     assert.equal(
         basisKey('country/FRA', { ...EUR_2023, prices: 'current' }),
@@ -541,4 +552,91 @@ test('currencyMatches finds a currency by name or code, by name', () => {
         unitPhrase({ ...EUR_2023, currency: 'USD', prices: 'current' }, offer),
         'current US dollars',
     );
+});
+
+test('identitiesFromRefs takes each monetary series from its current-price ref, provider open', () => {
+    assert.deepEqual(
+        live.identities.map(({ key }) => key),
+        [
+            'gross',
+            'net',
+            'grantEquivalent',
+            'commitments',
+            'headline',
+            'bilateral',
+            'multilateral',
+            'refugeeCosts',
+            'grossNonGrants',
+        ],
+    );
+
+    const [gross] = live.identities;
+
+    assert.equal(gross?.sentence, 'Gross ODA disbursements by provider');
+    assert.deepEqual(gross?.identity.entities, {});
+    assert.equal('open_roles' in (gross?.identity ?? {}), false);
+    assert.deepEqual(gross?.identity.facets, {
+        provenance: { ref: 'provenance/OECDDAC1', state: 'value' },
+    });
+    assert.throws(() => identitiesFromRefs({ ...liveRefs.data, 'net/current': undefined }));
+});
+
+test('offerRequests asks for every series with the provider open and no observations', () => {
+    const requests = offerRequests(live.identities);
+
+    assert.deepEqual(
+        requests.map(({ keys }) => keys.length),
+        [6, 3],
+    );
+
+    for (const { body } of requests) {
+        const { input, response_options } = body as Body;
+
+        assert.equal(response_options.include_observations, false);
+
+        for (const { identity } of input.entries) {
+            assert.deepEqual((identity as { open_roles?: unknown }).open_roles, ['origin']);
+            assert.deepEqual(identity.entities, {});
+            assert.equal(identity.facets.unit, undefined);
+        }
+    }
+});
+
+test('offerFromResponses keeps the DAC currencies of the offer every series shares', () => {
+    const extra = { ...OFFER.currencies[0]!, code: 'BRL', noun: 'Brazilian reais' };
+    const conversion = {
+        default_base_year: OFFER.defaultBaseYear,
+        currencies: [...OFFER.currencies, extra],
+    };
+    const answer = (
+        keys: SeriesKey[],
+        unitConversion: unknown = conversion,
+        status = 'definite',
+    ) => ({
+        keys,
+        body: {
+            parts: keys.map(() => ({
+                status,
+                spec: { resolved: { unit_conversion: unitConversion } },
+            })),
+        },
+    });
+
+    assert.deepEqual(offerFromResponses([answer(['gross', 'net']), answer(['headline'])]), OFFER);
+    assert.equal(OFFER.currencies.length, DAC_CURRENCIES.length);
+
+    const without = (code: string) => ({
+        ...conversion,
+        currencies: conversion.currencies.filter((currency) => currency.code !== code),
+    });
+
+    for (const [label, answers] of [
+        ['offers that differ', [answer(['gross']), answer(['net'], without('BRL'))]],
+        ['a DAC currency missing', [answer(['gross'], without('ISK'))]],
+        ['a part that is not definite', [answer(['gross'], conversion, 'ambiguous')]],
+        ['a part with no conversion', [answer(['gross'], null)]],
+        ['no answer', []],
+    ] as const) {
+        assert.throws(() => offerFromResponses(answers), Error, label);
+    }
 });

@@ -5,15 +5,13 @@ import { createContext, use, useRef, useState, type ReactNode } from 'react';
 
 import { liveClient, pacer, pickLane } from '#lib/pacing.ts';
 
-import { useCounts, type Counts } from './useCounts';
-
 import type { CountsData, Donor, LiveData, Offer, Prices, SeriesKey } from '../_data/types.ts';
 import { DEFAULT_DONOR, findDonor } from '../_lib/counts.ts';
 import {
     basisKey,
-    committedUnit,
+    builtUnit,
     fetchBasis as fetchLiveBasis,
-    isCommitted,
+    isBuilt,
     liveDonor,
     resolveRequests,
     withPrices,
@@ -52,12 +50,8 @@ export type Failure = 'rate_limited' | 'error';
 type Shown = { donorId: string; unit: Unit };
 
 type LiveUnits = {
-    /** the figures in US dollars, from counts.json until the live read replaces them */
+    /** the figures in US dollars, as the build read them */
     data: CountsData;
-    /** where `data` came from, which the page root shows as `data-read-tier` */
-    tier: Counts['tier'];
-    /** counts.json's provenance describes `data` */
-    asCommitted: boolean;
     offer: Offer;
     /** the donor and unit the controls show, which lead `shown` while a fetch runs */
     picked: Shown;
@@ -94,8 +88,8 @@ const sameShown = (a: Shown, b: Shown): boolean =>
     a.unit.prices === b.unit.prices &&
     a.unit.baseYear === b.unit.baseYear;
 
-/** A donor's committed series at one price basis. */
-const committedBasis = (donor: Donor, prices: Prices): LiveBasis =>
+/** A donor's built series at one price basis. */
+const builtBasis = (donor: Donor, prices: Prices): LiveBasis =>
     Object.fromEntries(
         Object.entries(donor.series).map(([key, byPrices]) => [key, byPrices[prices]]),
     ) as Record<SeriesKey, (number | null)[]>;
@@ -106,7 +100,7 @@ const pairKey = ({ donorId, unit }: Shown): string =>
 
 /**
  * Holds the donor and the unit the page shows, and fetches a donor's figures from Search
- * in any unit counts.json does not hold. A pick shows at once when its figures are at
+ * in any unit the built figures do not hold. A pick shows at once when its figures are at
  * hand. Otherwise the previous figures stay on screen while the picked price basis loads
  * in one-entry requests through the page's pick lane (see PICKED_PER_REQUEST), after which the
  * other basis of the same currency loads in the background, so switching prices never
@@ -118,7 +112,7 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * the address's `api` allowance (see PICKED_PER_REQUEST).
  */
 export const LiveUnitsProvider = ({
-    data: committed,
+    data,
     live,
     children,
 }: {
@@ -126,8 +120,7 @@ export const LiveUnitsProvider = ({
     live: LiveData;
     children: ReactNode;
 }) => {
-    const { data, tier, asCommitted } = useCounts(committed);
-    const start: Shown = { donorId: DEFAULT_DONOR, unit: committedUnit(data) };
+    const start: Shown = { donorId: DEFAULT_DONOR, unit: builtUnit(data) };
     const [picked, setPicked] = useState<Shown>(start);
     const [shown, setShown] = useState<Shown>(start);
     const [cache, setCache] = useState<ReadonlyMap<string, LiveBasis>>(new Map());
@@ -148,14 +141,14 @@ export const LiveUnitsProvider = ({
         const donor = findDonor(data, donorId) ?? data.donors[0];
 
         if (donor === undefined) {
-            throw new Error('counts.json holds no donors');
+            throw new Error('The built figures hold no donors');
         }
 
         return donor;
     };
 
     const available = (donorId: string, unit: Unit): boolean =>
-        isCommitted(unit, data) || cached.current.has(basisKey(donorId, unit));
+        isBuilt(unit, data) || cached.current.has(basisKey(donorId, unit));
 
     const fetchBasis = (donorId: string, unit: Unit, perRequest: number): Promise<LiveBasis> => {
         const key = basisKey(donorId, unit);
@@ -283,7 +276,7 @@ export const LiveUnitsProvider = ({
                         : {
                               donorId: target.donorId,
                               unit: {
-                                  ...committedUnit(data),
+                                  ...builtUnit(data),
                                   prices: target.unit.prices,
                               },
                           };
@@ -300,11 +293,11 @@ export const LiveUnitsProvider = ({
     const basisOf = (prices: Prices): LiveBasis | undefined => {
         const unit = withPrices(shown.unit, prices);
 
-        return isCommitted(unit, data)
-            ? committedBasis(donor, prices)
+        return isBuilt(unit, data)
+            ? builtBasis(donor, prices)
             : cache.get(basisKey(shown.donorId, unit));
     };
-    const view = isCommitted(withPrices(shown.unit, 'constant'), data)
+    const view = isBuilt(withPrices(shown.unit, 'constant'), data)
         ? donor
         : liveDonor(donor, { current: basisOf('current'), constant: basisOf('constant') });
 
@@ -312,8 +305,6 @@ export const LiveUnitsProvider = ({
         <Context
             value={{
                 data,
-                tier,
-                asCommitted,
                 offer: live.offer,
                 picked,
                 shown,

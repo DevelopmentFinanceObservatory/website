@@ -1,4 +1,4 @@
-// Pure functions over _data/counts.json and _data/definitions.json, so the controls,
+// Pure functions over the built figures and definitions (_lib/build.ts), so the controls,
 // the headline sentence, the bars, the bridge and the tests read the same numbers.
 // Only type imports, which keeps the module loadable by `node --test`.
 import type { CountKey, CountsData, Definition, Donor, Prices, SeriesKey } from '../_data/types.ts';
@@ -390,7 +390,7 @@ const definitionOf = (id: string, definitions: Definition[]): Definition => {
     const found = definitions.find((definition) => definition.id === id);
 
     if (!found) {
-        throw new Error(`definitions.json has no entry for "${id}"`);
+        throw new Error(`The definitions have no entry for "${id}"`);
     }
 
     return found;

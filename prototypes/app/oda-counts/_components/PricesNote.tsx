@@ -2,14 +2,14 @@
 
 import { useLiveUnits } from './LiveUnits';
 
-import { COMMITTED_CURRENCY, currencyNoun } from '../_lib/live.ts';
+import { BUILT_CURRENCY, currencyNoun } from '../_lib/live.ts';
 
 /** The Notes line on prices, naming the exchange rates when the figures are in another currency. */
 export const PricesNote = () => {
     const { offer, shown } = useLiveUnits();
     const { currency } = shown.unit;
 
-    return currency === COMMITTED_CURRENCY ? (
+    return currency === BUILT_CURRENCY ? (
         <>Constant prices use the OECD DAC deflators, from ONE&apos;s conversion tables.</>
     ) : (
         <>
