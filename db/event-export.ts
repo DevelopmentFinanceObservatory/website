@@ -2,7 +2,7 @@ import { createHash, createHmac } from 'node:crypto';
 import fs from 'node:fs/promises';
 
 import type { GalleryKind } from '../src/components/organisms/Gallery/galleryData.ts';
-import type { CardTarget } from '../src/components/organisms/Studio/hooks/useChat.ts';
+import type { PromptIntent } from '../src/lib/studio/promptAllowance.ts';
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
@@ -133,8 +133,15 @@ const ABANDON_REASONS = every<AbandonReason>()(['hidden', 'superseded', 'reset',
 const SHARE_KINDS = every<ShareKind>()(['conversation', 'canvas', 'card', 'search']);
 // share.create, share.copy and share.open send Studio's ShareMode, search.action the search's.
 const SHARE_MODES = every<SearchShareMode | ShareMode>()(['live', 'snapshot']);
-// A prompt with no card target is `new` on the first turn.
-const PROMPT_INTENTS = every<'new' | CardTarget['intent']>()(['new', 'follow_up', 'edit']);
+// A prompt with no card target is `new` on the first turn; a chip pick is
+// `apply_choice` and a card's Change unit `apply_unit`.
+const PROMPT_INTENTS = every<PromptIntent>()([
+    'new',
+    'follow_up',
+    'edit',
+    'apply_choice',
+    'apply_unit',
+]);
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
