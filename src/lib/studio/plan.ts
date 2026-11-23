@@ -7,6 +7,7 @@
 
 import type { Clarify } from './clarify';
 import type { StreamRefusal } from './studioClient';
+import { servesUnit, unitChanged, unitText } from './unitChoice.ts';
 import type {
     InterruptResponse,
     PlanAction,
@@ -18,6 +19,8 @@ import type {
     PlanStep,
     PlanSwitchFailed,
     ToolError,
+    UnitChoice,
+    UnitOffer,
 } from './wire';
 
 /** A switch the user asked for and the harness has not answered yet. */
@@ -121,7 +124,8 @@ export type ApprovedPlan = Omit<PlanApproved, 'event' | 'seq'>;
 
 export type SwitchReply = Required<
     Pick<InterruptResponse, 'decision' | 'choice_id' | 'option_id' | 'plan_revision'>
->;
+> &
+    Pick<InterruptResponse, 'unit'>;
 
 /** The ToolError `constraint_id` of a switch or approve sent against an
  *  older plan. */
@@ -157,16 +161,40 @@ const answerStep = (frame: PlanProposed): string | null => {
 export const activeLabel = (decision: PlanDecision): string =>
     decision.options?.find((option) => isActiveOption(decision, option))?.label ?? decision.chosen;
 
+/** The option id naming `unit` on a unit row: "USD-current",
+ *  "USD-constant-2015". */
+export const unitOptionId = (unit: UnitChoice): string =>
+    unit.prices === 'constant'
+        ? `${unit.currency}-constant-${unit.base_year}`
+        : `${unit.currency}-current`;
+
+/** The unit `optionId` names (unitOptionId), or null when it names none
+ *  `offer` serves. */
+export const unitFromOptionId = (offer: UnitOffer, optionId: string): UnitChoice | null => {
+    const [currency = '', prices, year, ...rest] = optionId.split('-');
+    const unit: UnitChoice | null =
+        prices === 'current' && year === undefined
+            ? { currency, prices }
+            : prices === 'constant' && year !== undefined && /^\d+$/.test(year)
+              ? { currency, prices, base_year: Number(year) }
+              : null;
+
+    return unit && rest.length === 0 && servesUnit(offer, unit) ? unit : null;
+};
+
 /** The label of one option of a scope choice, or null when the plan has no
- *  such option. */
+ *  such option. On a unit row, any unit its offer serves reads in words. */
 export const optionLabel = (
     decisions: PlanDecision[],
     choiceId: string,
     optionId: string,
-): string | null =>
-    decisions
-        .find((decision) => decision.choice_id === choiceId)
-        ?.options?.find((option) => option.option_id === optionId)?.label ?? null;
+): string | null => {
+    const decision = decisions.find((candidate) => candidate.choice_id === choiceId);
+    const label = decision?.options?.find((option) => option.option_id === optionId)?.label;
+    const unit = decision?.unit && unitFromOptionId(decision.unit, optionId);
+
+    return label ?? (decision?.unit && unit ? unitText(decision.unit, unit) : null);
+};
 
 /** The `choice_id` prefix of a planner decision's row. Switching one replans
  *  with the user's pick held, which takes tens of seconds; switching a scope
@@ -177,17 +205,28 @@ export const PLANNER_CHOICE_PREFIX = 'decision/';
 export const isPlannerChoice = (choiceId: string): boolean =>
     choiceId.startsWith(PLANNER_CHOICE_PREFIX);
 
+/** Switching `choiceId` on `decisions` replans. A unit row's id is a
+ *  planner decision's, but its switch re-reads the parts it covers, as a
+ *  scope choice's does. */
+export const replansChoice = (decisions: PlanDecision[], choiceId: string): boolean =>
+    isPlannerChoice(choiceId) &&
+    !decisions.find((decision) => decision.choice_id === choiceId)?.unit;
+
 /** The chat line while a switch to `label` runs: "Switching to net
- *  disbursements", or "Replanning with top 10" on a planner decision. */
-export const switchLine = (choiceId: string, label: string | null): string => {
-    const [verb, link] = isPlannerChoice(choiceId) ? ['Replanning', 'with'] : ['Switching', 'to'];
+ *  disbursements", or "Replanning with top 10" when the switch replans. */
+export const switchLine = (
+    choiceId: string,
+    label: string | null,
+    replans = isPlannerChoice(choiceId),
+): string => {
+    const [verb, link] = replans ? ['Replanning', 'with'] : ['Switching', 'to'];
 
     return label ? `${verb} ${link} ${label}` : verb;
 };
 
 /** What the picked option says while its switch runs. */
-export const switchPendingText = (choiceId: string): string =>
-    isPlannerChoice(choiceId) ? 'Replanning' : 'Updating plan';
+export const switchPendingText = (choiceId: string, replans = isPlannerChoice(choiceId)): string =>
+    replans ? 'Replanning' : 'Updating plan';
 
 /** The `switch_failed.code` of a switch the user stopped through `/cancel`,
  *  re-offering the unchanged plan. */
@@ -407,7 +446,9 @@ export const yearsText = (years: readonly (readonly [number, number])[]): string
 /**
  * The interrupt reply that switches `choiceId` to `optionId`, or null when
  * the plan offers no such switch: switching is off, another switch is in
- * flight, or the option is unknown, unavailable or already active.
+ * flight, or the option is unknown, unavailable or already active. On a unit
+ * row `optionId` names any unit the offer serves (unitOptionId), and the
+ * reply carries that unit.
  */
 export const switchReply = (
     plan: PlanState,
@@ -419,18 +460,22 @@ export const switchReply = (
     }
 
     const decision = plan.decisions.find((candidate) => candidate.choice_id === choiceId);
-    const option = decision?.options?.find((candidate) => candidate.option_id === optionId);
-
-    if (!decision || !option || !isSelectable(decision, option)) {
-        return null;
-    }
-
-    return {
+    const reply: SwitchReply = {
         decision: 'switch',
         choice_id: choiceId,
         option_id: optionId,
         plan_revision: plan.revision,
     };
+
+    if (decision?.unit && switchOptions(decision)) {
+        const unit = unitFromOptionId(decision.unit, optionId);
+
+        return unit && unitChanged(decision.unit.start, unit) ? { ...reply, unit } : null;
+    }
+
+    const option = decision?.options?.find((candidate) => candidate.option_id === optionId);
+
+    return decision && option && isSelectable(decision, option) ? reply : null;
 };
 
 /** The plan while its switch is in flight: the card stays, its controls
@@ -853,7 +898,7 @@ export const planView = (plan: PlanState): PlanView => {
                 changedReason: change?.reason ?? null,
                 reason: decision.reason || null,
                 decision,
-                planner: isPlannerChoice(choiceId),
+                planner: replansChoice(plan.decisions, choiceId),
             });
         } else {
             others.push({

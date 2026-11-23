@@ -38,6 +38,7 @@ import {
     switchReply,
     SCOPE_HEAD,
     UNREACHABLE_NOTICE,
+    unitOptionId,
     unreachableSwitch,
     withApprovedPlan,
     withQuestion,
@@ -47,8 +48,15 @@ import {
 } from '../plan.ts';
 import { clarifyFromFrame } from '../clarify.ts';
 import { withoutChips } from '../chips.ts';
-import type { StreamRefusal } from '../studioClient.ts';
-import type { PlanApproved, PlanDecision, PlanProposed, RetryMode } from '../wire.ts';
+import { runInterrupt, type StreamRefusal } from '../studioClient.ts';
+import { withBaseYear, withCurrency } from '../unitChoice.ts';
+import type {
+    InterruptResponse,
+    PlanApproved,
+    PlanDecision,
+    PlanProposed,
+    RetryMode,
+} from '../wire.ts';
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 
 const countDecision: PlanDecision = {
@@ -1673,4 +1681,61 @@ test("answering a switch's question resumes the switch: its fresh plan, switch_f
 
     // A second question during the resumed switch carries it again.
     assert.equal(questionPause(question('int-q2'), resumed).switch, card);
+});
+
+/** The harness's unit-row fixtures (`services/harness/tests/wire_fixtures/
+ *  studio` in dfo-ai), copied. */
+const unitFixture = (name: string): unknown =>
+    JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+
+test('a unit row switches to any unit its offer serves, posting the harness fixture request', async (t) => {
+    const unitFrame = unitFixture('event-22-plan-proposed-unit.json') as PlanProposed;
+    const request = unitFixture('request-20-interrupt-switch-unit.json') as InterruptResponse;
+    const plan = planFromFrame(unitFrame);
+    const [row] = planView(plan).choices;
+    const offer = row?.decision?.unit;
+
+    assert.ok(row && offer && request.choice_id);
+    assert.deepEqual(offer.start, { currency: 'EUR', prices: 'constant', base_year: 2020 });
+    // The unit re-reads the parts it covers, as a scope choice does.
+    assert.deepEqual(
+        ledgerSections(planView(plan)).map((section) => section.head),
+        [SCOPE_HEAD],
+    );
+    assert.equal(switchPendingText(row.key, row.planner), 'Updating plan');
+
+    const picked = withBaseYear(withCurrency(offer, offer.start, 'USD'), 2015);
+    const reply = switchReply(plan, request.choice_id, unitOptionId(picked));
+
+    assert.ok(reply);
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+
+    await runInterrupt(request.conversation_id, request.interrupt_id, reply, {
+        onFrame: () => {},
+    });
+    assert.deepEqual(
+        JSON.parse((fetch.mock.calls[0]?.arguments[1] as RequestInit).body as string),
+        { ...request, client_features: ['unit_question', 'multi_select'] },
+    );
+
+    // The unit it starts on, and units the offer does not serve, send
+    // nothing.
+    for (const optionId of ['EUR-constant-2020', 'KES-constant-2015', 'USD-constant-1900', 'USD']) {
+        assert.equal(switchReply(plan, request.choice_id, optionId), null, optionId);
+    }
+
+    // A failed switch names the unit on the row, and Try again resends it.
+    const failed = planFromFrame({
+        ...unitFrame,
+        switch_failed: {
+            choice_id: request.choice_id,
+            option_id: 'USD-constant-2015',
+            code: 'switch_option_unavailable',
+            reason: 'Search could not re-read the 2010-2014 part.',
+            retryable: true,
+        },
+    });
+
+    assert.equal(failed.notice?.lead, 'Could not switch to Constant 2015 US dollars.');
+    assert.deepEqual(switchReply(failed, request.choice_id, 'USD-constant-2015'), reply);
 });

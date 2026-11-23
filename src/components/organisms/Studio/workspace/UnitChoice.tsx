@@ -31,6 +31,11 @@ type UnitChoiceProps = {
     onSkip?: () => void;
     // Send stays dimmed until a chip moves off `offer.start`.
     sendDisabledUntilChanged?: boolean;
+    // Send stays dimmed while what it sends elsewhere waits.
+    busy?: boolean;
+    // What the sent unit says while it applies (the plan card's switch),
+    // beside Send.
+    pendingText?: string | null;
 };
 
 // Where focus goes after the next render: a chip, once its list closes, or
@@ -108,10 +113,18 @@ const UnitList = <TValue extends string | number>({
     );
 };
 
-// The unit choice a unit question shows: three chips (currency, prices, and
-// the base year on constant prices), each opening its list below them, then
-// Send and an optional Skip. The pure rules live in lib/studio/unitChoice.ts.
-const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitChoiceProps) => {
+// The unit choice a unit question, a card's Change unit and a plan card's
+// unit row show: three chips (currency, prices, and the base year on
+// constant prices), each opening its list below them, then Send and an
+// optional Skip. The pure rules live in lib/studio/unitChoice.ts.
+const UnitChoice = ({
+    offer,
+    onSend,
+    onSkip,
+    sendDisabledUntilChanged,
+    busy,
+    pendingText,
+}: UnitChoiceProps) => {
     const [unit, setUnit] = useState<Unit>(offer.start);
     const [open, setOpen] = useState<UnitChipKey | null>(null);
     const [all, setAll] = useState(false);
@@ -138,7 +151,9 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
     // The base-year list closes when the prices move off constant.
     const shownList = open === 'year' && unit.prices !== 'constant' ? null : open;
     const live =
-        servesUnit(offer, unit) && (!sendDisabledUntilChanged || unitChanged(offer.start, unit));
+        !busy &&
+        servesUnit(offer, unit) &&
+        (!sendDisabledUntilChanged || unitChanged(offer.start, unit));
     const listId = useId();
 
     const toggle = (key: UnitChipKey) => {
@@ -250,6 +265,12 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
                 {list()}
             </div>
             <div className={styles.foot}>
+                {pendingText && (
+                    <span className={ledgerStyles.optionTag}>
+                        <span className={ledgerStyles.spin} />
+                        {pendingText}
+                    </span>
+                )}
                 {onSkip && (
                     <Button variant="bordered" onClick={onSkip}>
                         Skip
