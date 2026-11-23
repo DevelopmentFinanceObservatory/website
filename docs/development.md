@@ -232,7 +232,7 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 
 ### Prototypes
 
-`prototypes/` builds and deploys apart from the website: `deploy-prototypes.yml` publishes it to `developmentfinance.org/prototypes*`, and `deploy.yml` and `deploy-prod.yml` ignore it. `prototypes/README.md` covers adding a prototype, building and previewing locally, and the deploy secrets.
+`prototypes/` lives on the `prototypes` branch and builds and deploys apart from the website. `deploy-prototypes.yml` publishes that branch to `developmentfinance.org/prototypes*` on each push to it and previews pull requests into it. `prototypes-sync.yml` merges every push to `dev` into `prototypes`, opening a pull request when the merge conflicts or touches `.github/workflows/`, and `prototypes-daily.yml` rebuilds it every morning so its figures follow DFO. `deploy.yml` and `deploy-prod.yml` ignore `prototypes/`. Branch from `prototypes` to work on a prototype; its `prototypes/README.md` covers adding one, building and previewing locally, and the deploy secrets.
 
 ## Scripts
 

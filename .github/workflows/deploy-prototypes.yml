@@ -6,17 +6,28 @@ name: Deploy prototypes
 # deploy-prod.yml, which ignore prototypes/, so a prototype ships without a
 # website release.
 #
-# A push to dev that touches prototypes/ or this file deploys to the production
-# route. main moves only through a release pull request carrying every website
-# change on dev, so a main trigger would tie each prototype to a website
-# release. There is no approval gate, and dev's unreleased src/ ships through
-# /prototypes because the app imports it. A Cloudflare token cannot be limited
+# Prototypes publish from the long-lived `prototypes` branch, which is dev plus
+# prototypes/. prototypes-sync.yml merges each dev push into it, so the build
+# uses dev's src/, and prototypes-daily.yml dispatches this workflow on
+# `prototypes` once a day, so the pages read DFO's newest stored data at least
+# daily. Both of those live on dev, because GitHub runs schedules and
+# workflow_dispatch only from workflow files on the default branch; this file
+# is identical on dev and `prototypes`. Nothing on dev or main builds or
+# deploys prototypes.
+#
+# A push to `prototypes` that touches prototypes/, src/, the root manifest or
+# this file deploys to the production route, as does a dispatch on
+# `prototypes`. There is no approval gate. A Cloudflare token cannot be limited
 # to preview uploads, so any branch in this repository can deploy with it.
 #
-# A pull request builds and, when the secrets exist, uploads a preview version
-# under the alias pr-<number>. The build covers src/ and the root manifest as
-# well, because prototypes import src/ and run on the root install, so a website
-# change can break them. Draft pull requests skip, as ci.yml does.
+# A pull request into `prototypes` builds and, when the secrets exist, uploads
+# a preview version under the alias pr-<number>. Draft pull requests skip, as
+# ci.yml does.
+#
+# The build reads DFO (prototypes/scripts/read.mts) and fails without
+# deploying when a read fails, so the last deploy stays live. While a dataset's
+# freshness is `pending`, the build reads again for at most the dispatch's
+# pending_bound_s seconds; pushes and pull requests take what DFO serves.
 #
 # Repository secrets (Settings > Secrets and variables > Actions):
 #   CLOUDFLARE_API_TOKEN  with Account > Workers Scripts > Edit, Zone > Workers
@@ -24,221 +35,249 @@ name: Deploy prototypes
 #                         resources limited to developmentfinance.org.
 #   CLOUDFLARE_ACCOUNT_ID the account that owns the zone and the Worker.
 
+# A dispatch that passes dispatch_id carries it in its run name, in
+# parentheses, so the workflow that dispatched it can find the run. Other runs
+# keep GitHub's usual name: the commit message or the pull request title.
+run-name: >-
+    ${{ inputs.dispatch_id && format('Deploy prototypes ({0})', inputs.dispatch_id)
+    || github.event.pull_request.title || github.event.head_commit.message
+    || 'Deploy prototypes' }}
+
 on:
-  push:
-    branches: [dev]
-    paths:
-      - 'prototypes/**'
-      - '.github/workflows/deploy-prototypes.yml'
-  pull_request:
-    branches: [main, dev, 'fix/**', 'feat/**']
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'prototypes/**'
-      - 'src/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-prototypes.yml'
-  workflow_dispatch: {}
+    push:
+        branches: [prototypes]
+        paths:
+            - 'prototypes/**'
+            - 'src/**'
+            - 'package.json'
+            - 'pnpm-lock.yaml'
+            - '.github/workflows/deploy-prototypes.yml'
+    pull_request:
+        branches: [prototypes]
+        types: [opened, synchronize, reopened, ready_for_review]
+        paths:
+            - 'prototypes/**'
+            - 'src/**'
+            - 'package.json'
+            - 'pnpm-lock.yaml'
+            - '.github/workflows/deploy-prototypes.yml'
+    workflow_dispatch:
+        inputs:
+            pending_bound_s:
+                description: >-
+                    Seconds the build reads again while a dataset's freshness is
+                    pending; empty or 0 takes what DFO serves.
+                required: false
+                default: ''
+                type: string
+            dispatch_id:
+                description: >-
+                    An id the run name carries, so the workflow that dispatched
+                    this run can find it; empty leaves the name plain.
+                required: false
+                default: ''
+                type: string
 
 permissions:
-  contents: read
+    contents: read
 
 # A newer push supersedes a pending one, so an older build cannot deploy after
 # a newer one. A deploy already running finishes. A pull request's newer
 # commit cancels its older run.
 concurrency:
-  group: prototypes-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    group: prototypes-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Runs without the Cloudflare token, so a pull request from a branch cannot
-  # read it through the build.
-  build:
-    if: github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    # Runs without the Cloudflare token, so a pull request from a branch cannot
+    # read it through the build.
+    build:
+        if: github.event.pull_request.draft != true
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            prototypes/pnpm-lock.yaml
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: pnpm
+                  cache-dependency-path: |
+                      pnpm-lock.yaml
+                      prototypes/pnpm-lock.yaml
 
-      # The app imports src/, whose bare imports resolve from the root
-      # node_modules, so the root install comes first.
-      - run: pnpm install --frozen-lockfile
+            # The app imports src/, whose bare imports resolve from the root
+            # node_modules, so the root install comes first.
+            - run: pnpm install --frozen-lockfile
 
-      - run: pnpm install --frozen-lockfile
-        working-directory: prototypes
+            - run: pnpm install --frozen-lockfile
+              working-directory: prototypes
 
-      - run: pnpm check:deps
-        working-directory: prototypes
+            - run: pnpm check:deps
+              working-directory: prototypes
 
-      - run: pnpm test
-        working-directory: prototypes
+            - run: pnpm test
+              working-directory: prototypes
 
-      - run: pnpm check:data
-        working-directory: prototypes
+            - run: pnpm check:data
+              working-directory: prototypes
 
-      - run: pnpm typecheck
-        working-directory: prototypes
+            - run: pnpm typecheck
+              working-directory: prototypes
 
-      # DEPLOY_COMMIT is written into every page as <meta name="dfo-build">,
-      # which the live read check matches against the commit it expects.
-      - run: pnpm build
-        working-directory: prototypes
-        env:
-          DEPLOY_COMMIT: ${{ github.sha }}
+            # DEPLOY_COMMIT and the run id are written into every page as
+            # <meta name="dfo-build">, which the live read check matches against the
+            # commit and run it expects.
+            - run: pnpm build
+              working-directory: prototypes
+              env:
+                  DEPLOY_COMMIT: ${{ github.sha }}
+                  BUILD_PENDING_BOUND_S: ${{ inputs.pending_bound_s || '0' }}
 
-      - run: pnpm check:dist
-        working-directory: prototypes
+            - run: pnpm check:dist
+              working-directory: prototypes
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: prototypes-dist
-          path: prototypes/dist
-          if-no-files-found: error
-          retention-days: 7
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: prototypes-dist
+                  path: prototypes/dist
+                  if-no-files-found: error
+                  retention-days: 7
 
-  preview:
-    needs: build
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    preview:
+        needs: build
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: prototypes/pnpm-lock.yaml
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: pnpm
+                  cache-dependency-path: prototypes/pnpm-lock.yaml
 
-      # A pull request from a fork or Dependabot, or a repository before its
-      # secrets exist, has none. The upload is skipped and the job passes.
-      - id: token
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No Cloudflare secrets in this run, so no preview was uploaded." >> "$GITHUB_STEP_SUMMARY"
-          fi
+            # A pull request from a fork or Dependabot, or a repository before its
+            # secrets exist, has none. The upload is skipped and the job passes.
+            - id: token
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+              run: |
+                  if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+                    echo "enabled=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "No Cloudflare secrets in this run, so no preview was uploaded." >> "$GITHUB_STEP_SUMMARY"
+                  fi
 
-      - if: steps.token.outputs.enabled == 'true'
-        run: pnpm install --frozen-lockfile
-        working-directory: prototypes
+            - if: steps.token.outputs.enabled == 'true'
+              run: pnpm install --frozen-lockfile
+              working-directory: prototypes
 
-      - if: steps.token.outputs.enabled == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: prototypes-dist
-          path: prototypes/dist
+            - if: steps.token.outputs.enabled == 'true'
+              uses: actions/download-artifact@v8
+              with:
+                  name: prototypes-dist
+                  path: prototypes/dist
 
-      # Aliases hold lowercase letters, digits and dashes, and start with a
-      # letter; pr-<number> fits. Cloudflare keeps the newest 1,000.
-      - if: steps.token.outputs.enabled == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        working-directory: prototypes
-        # bash with pipefail, so a failed upload fails the step through tee.
-        shell: bash
-        run: |
-          pnpm exec wrangler versions upload --preview-alias "pr-$PR_NUMBER" | tee upload.log
-          {
-            echo "### Prototypes preview"
-            echo
-            grep -oE "https://pr-$PR_NUMBER-[^ ]+" upload.log | head -n 1 || echo "Uploaded; the alias URL is in the step log."
-            echo
-            echo "Open it at /prototypes/ (the root redirects there)."
-          } >> "$GITHUB_STEP_SUMMARY"
+            # Aliases hold lowercase letters, digits and dashes, and start with a
+            # letter, and pr-<number> fits. Cloudflare keeps the newest 1,000.
+            - if: steps.token.outputs.enabled == 'true'
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+              working-directory: prototypes
+              # bash with pipefail, so a failed upload fails the step through tee.
+              shell: bash
+              run: |
+                  pnpm exec wrangler versions upload --preview-alias "pr-$PR_NUMBER" | tee upload.log
+                  {
+                    echo "### Prototypes preview"
+                    echo
+                    grep -oE "https://pr-$PR_NUMBER-[^ ]+" upload.log | head -n 1 || echo "Uploaded; the alias URL is in the step log."
+                    echo
+                    echo "Open it at /prototypes/ (the root redirects there)."
+                  } >> "$GITHUB_STEP_SUMMARY"
 
-  deploy:
-    needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+    deploy:
+        needs: build
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/prototypes'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: prototypes/pnpm-lock.yaml
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: pnpm
+                  cache-dependency-path: prototypes/pnpm-lock.yaml
 
-      - env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Repository secret $name is not set, so prototypes cannot deploy."
-              exit 1
-            fi
-          done
+            - env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+              run: |
+                  for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+                    if [ -z "${!name}" ]; then
+                      echo "::error::Repository secret $name is not set, so prototypes cannot deploy."
+                      exit 1
+                    fi
+                  done
 
-      - run: pnpm install --frozen-lockfile
-        working-directory: prototypes
+            - run: pnpm install --frozen-lockfile
+              working-directory: prototypes
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: prototypes-dist
-          path: prototypes/dist
+            - uses: actions/download-artifact@v8
+              with:
+                  name: prototypes-dist
+                  path: prototypes/dist
 
-      - env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: prototypes
-        run: pnpm exec wrangler deploy
+            - env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+              working-directory: prototypes
+              run: pnpm exec wrangler deploy
 
-      # The route can take a few seconds to reach the edge, so each probe
-      # retries before it fails. The second probe checks that the Worker route
-      # does not shadow the website at the root.
-      - name: Smoke test
-        run: |
-          probe() {
-            url="$1"
-            for _ in 1 2 3 4 5 6; do
-              code=$(curl -sS -o body.html -w '%{http_code}' "$url" || true)
-              [ "$code" = "200" ] && return 0
-              sleep 5
-            done
-            echo "::error::$url answered $code, expected 200."
-            return 1
-          }
-          probe https://developmentfinance.org/prototypes/
-          if ! grep -q '/prototypes/_next/static/' body.html; then
-            echo "::error::/prototypes/ did not serve the prototypes app."
-            exit 1
-          fi
-          probe https://developmentfinance.org/
-          if grep -q '/prototypes/_next/static/' body.html; then
-            echo "::error::The site root now serves the prototypes app."
-            exit 1
-          fi
+            # The route can take a few seconds to reach the edge, so each probe
+            # retries before it fails. The second probe checks that the Worker route
+            # does not shadow the website at the root.
+            - name: Smoke test
+              run: |
+                  probe() {
+                    url="$1"
+                    for _ in 1 2 3 4 5 6; do
+                      code=$(curl -sS -o body.html -w '%{http_code}' "$url" || true)
+                      [ "$code" = "200" ] && return 0
+                      sleep 5
+                    done
+                    echo "::error::$url answered $code, expected 200."
+                    return 1
+                  }
+                  probe https://developmentfinance.org/prototypes/
+                  if ! grep -q '/prototypes/_next/static/' body.html; then
+                    echo "::error::/prototypes/ did not serve the prototypes app."
+                    exit 1
+                  fi
+                  probe https://developmentfinance.org/
+                  if grep -q '/prototypes/_next/static/' body.html; then
+                    echo "::error::The site root now serves the prototypes app."
+                    exit 1
+                  fi
 
-      # Loads each live page in Chromium, waits until it serves this commit,
-      # and checks its settled tier against the switch the served island
-      # states (committed off, stored on), so a switch change that breaks the
-      # live read shows here. A page from the previous build fails and is
-      # tried again for about a minute while the edge takes the new one.
-      # playwright-core is a root dependency, and the headless shell is the
-      # smallest Chromium it can drive.
-      - name: Live read check
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm exec playwright-core install --with-deps chromium-headless-shell
-          pnpm --dir prototypes check:live https://developmentfinance.org/prototypes/ --commit "$GITHUB_SHA"
+            # Loads each live page in Chromium, waits until it serves this run's build,
+            # and checks its settled tier against the switch the served island
+            # states (committed off, stored on), so a switch change that breaks the
+            # live read shows here. A page from the previous build fails and is
+            # tried again for about a minute while the edge takes the new one.
+            # playwright-core is a root dependency, and the headless shell is the
+            # smallest Chromium it can drive.
+            - name: Live read check
+              run: |
+                  pnpm install --frozen-lockfile
+                  pnpm exec playwright-core install --with-deps chromium-headless-shell
+                  pnpm --dir prototypes check:live https://developmentfinance.org/prototypes/ --commit "$GITHUB_SHA" --run "$GITHUB_RUN_ID"
