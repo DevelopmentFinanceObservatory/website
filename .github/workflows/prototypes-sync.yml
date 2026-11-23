@@ -48,6 +48,14 @@ jobs:
                   git config user.name 'github-actions[bot]'
                   git config user.email '41898299+github-actions[bot]@users.noreply.github.com'
                   git fetch origin dev
+                  # dev holds no prototypes/. If dev deleted files there since the
+                  # two branches last met, the merge that keeps them is missing from
+                  # their history; a person makes it by hand, so the job stops.
+                  gone=$(git diff --name-only --diff-filter=D "$(git merge-base HEAD origin/dev)" origin/dev -- prototypes/ | head -5 | tr '\n' ' ')
+                  if [ -n "$gone" ]; then
+                    echo "::error::dev deletes files under prototypes/ (for example ${gone}). Merge dev into prototypes by hand, keeping prototypes/."
+                    exit 1
+                  fi
                   if git merge --no-edit origin/dev; then
                     echo "clean=true" >> "$GITHUB_OUTPUT"
                   else
