@@ -11,7 +11,7 @@ import {
     sessionOwners,
 } from '../../src/lib/chat/conversationSave.ts';
 import { applyMigrations } from '../apply-migrations.ts';
-import { user } from '../schema.ts';
+import { conversation, user } from '../schema.ts';
 import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
@@ -190,15 +190,14 @@ test('a harness conversation saved without an owner row goes to its saver', asyn
 });
 
 /**
- * Migration 0027's backfill and the read-time claim in `sessionOwners` give
- * a harness conversation to an account only when every saved conversation
- * naming it belongs to that account. A session two accounts' saves name gets
- * no owner from a turn claim or a save by either account. The migration has
- * already run on the empty tables by the time the rows go in, so the test
- * runs its backfill again over them, then clears the owner rows and reads
- * each id.
+ * Migration 0027's backfill, the read-time claim in `sessionOwners`, and the
+ * turn and save claims all give a harness conversation to the account behind
+ * the oldest saved conversation naming it, by `created_at`, then `id`,
+ * whichever account asks. The migration has already run on the empty tables
+ * by the time the rows go in, so the test runs its backfill again over them,
+ * then clears the owner rows and claims each id another way.
  */
-test('migration 0027 and every claim own only single-account sessions', async (t) => {
+test('migration 0027 and every claim give a session to its oldest saver', async (t) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
 
@@ -218,8 +217,9 @@ test('migration 0027 and every claim own only single-account sessions', async (t
         `insert into conversation (id, user_id, title, agent_session_id, data, created_at) values
             ('conv-ben', 'user-ben', 'Copy', 'harness-shared', '{}', '2026-11-02'),
             ('conv-ana', 'user-ana', 'Chat', 'harness-shared', '{}', '2026-11-01'),
+            ('conv-b', 'user-ana', 'Tie', 'harness-tie', '{}', '2026-11-06'),
+            ('conv-a', 'user-ben', 'Tie', 'harness-tie', '{}', '2026-11-06'),
             ('conv-ben-2', 'user-ben', 'Own', 'harness-ben', '{}', '2026-11-03'),
-            ('conv-ben-3', 'user-ben', 'Fork', 'harness-ben', '{}', '2026-11-05'),
             ('conv-new', 'user-ben', 'New', null, '{}', '2026-11-04')`,
     );
 
@@ -235,17 +235,100 @@ test('migration 0027 and every claim own only single-account sessions', async (t
         'select agent_session_id, user_id from studio_session_owner order by agent_session_id',
     );
 
-    assert.deepEqual(rows, [{ agent_session_id: 'harness-ben', user_id: 'user-ben' }]);
-
-    await pool.query('delete from studio_session_owner');
+    assert.deepEqual(rows, [
+        { agent_session_id: 'harness-ben', user_id: 'user-ben' },
+        { agent_session_id: 'harness-shared', user_id: 'user-ana' },
+        { agent_session_id: 'harness-tie', user_id: 'user-ben' },
+    ]);
 
     const db = drizzle(database.runtimePool());
 
-    assert.deepEqual(await sessionOwners(db, 'harness-shared'), []);
-    assert.deepEqual(await sessionOwners(db, 'harness-ben'), ['user-ben']);
+    await pool.query('delete from studio_session_owner');
+    assert.deepEqual(await sessionOwners(db, 'harness-shared'), ['user-ana']);
+    assert.deepEqual(await sessionOwners(db, 'harness-tie'), ['user-ben']);
 
-    assert.deepEqual(await claimSessionOwner(db, 'harness-shared', 'user-ana'), []);
-    await saveConversation(db, 'user-ana', saved('conv-ana', 'harness-shared'));
-    assert.deepEqual(await claimSessionOwner(db, 'harness-shared', 'user-ben'), []);
-    assert.deepEqual(await sessionOwners(db, 'harness-shared'), []);
+    await pool.query('delete from studio_session_owner');
+    assert.deepEqual(await claimSessionOwner(db, 'harness-shared', 'user-ben'), ['user-ana']);
+    assert.deepEqual(await claimSessionOwner(db, 'harness-tie', 'user-ana'), ['user-ben']);
+
+    await pool.query('delete from studio_session_owner');
+    await saveConversation(db, 'user-ben', saved('conv-ben', 'harness-shared'));
+    assert.deepEqual(await sessionOwners(db, 'harness-shared'), ['user-ana']);
+});
+
+/**
+ * A page's saves carry its `saveWriter` and a `saveSeq` it raises for each
+ * snapshot. A save of that writer with a lower sequence that arrives last
+ * changes nothing. A save from another writer, or with no order fields,
+ * writes whatever its sequence or clock.
+ */
+test("a page's older save that arrives last leaves its newer one stored", async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await applyMigrations(database.migratorPool(), {
+        migrationsFolder: MIGRATIONS_FOLDER,
+        runtimeDbUser: database.runtimeUser,
+        migratorDbUser: database.migratorUser,
+    });
+
+    const db = drizzle(database.runtimePool());
+
+    await db.insert(user).values({ id: 'user-ana', name: 'Ana', email: 'ana@example.org' });
+
+    const save = (title: string, order: { saveWriter: string; saveSeq: number } | null) =>
+        saveConversation(db, 'user-ana', {
+            ...saved('conv-ana', null),
+            title,
+            ...order,
+        } as SavedConversation);
+    const stored = async () => {
+        const [row] = await db
+            .select({ title: conversation.title, data: conversation.data })
+            .from(conversation)
+            .where(eq(conversation.id, 'conv-ana'));
+
+        return [row?.title, (row?.data as SavedConversation | undefined)?.title];
+    };
+
+    await save('Second', { saveWriter: 'page-1', saveSeq: 2 });
+    await save('First', { saveWriter: 'page-1', saveSeq: 1 });
+
+    assert.deepEqual(await stored(), ['Second', 'Second']);
+
+    await save('Same sequence', { saveWriter: 'page-1', saveSeq: 2 });
+
+    assert.deepEqual(await stored(), ['Same sequence', 'Same sequence']);
+
+    await save('Other page', { saveWriter: 'page-2', saveSeq: 0 });
+
+    assert.deepEqual(await stored(), ['Other page', 'Other page']);
+
+    await save('No order', null);
+
+    assert.deepEqual(await stored(), ['No order', 'No order']);
+
+    await save('After no order', { saveWriter: 'page-2', saveSeq: 0 });
+
+    assert.deepEqual(await stored(), ['After no order', 'After no order']);
+});
+
+/**
+ * A turn claim by a user id with no user row raises, so the Studio proxy
+ * answers 503, and leaves the harness conversation without an owner.
+ */
+test('a claim by an account with no user row raises and claims nothing', async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await applyMigrations(database.migratorPool(), {
+        migrationsFolder: MIGRATIONS_FOLDER,
+        runtimeDbUser: database.runtimeUser,
+        migratorDbUser: database.migratorUser,
+    });
+
+    const db = drizzle(database.runtimePool());
+
+    await assert.rejects(claimSessionOwner(db, 'harness-1', 'user-gone'));
+    assert.deepEqual(await sessionOwners(db, 'harness-1'), []);
 });

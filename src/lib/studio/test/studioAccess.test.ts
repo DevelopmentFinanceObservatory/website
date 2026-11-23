@@ -91,7 +91,7 @@ test('studioAccessRefusal gives state and resume only to the owner', async () =>
     }
 
     // A conversation no account owns yet (a guest's, or one an account is
-    // about to claim) can still drive its turn.
+    // about to claim) can drive its turn.
     for (const route of ['turn', 'interrupt', 'cancel', 'composition']) {
         assert.equal(await check(route, null, 'conv-guest'), null, `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-guest'), null, route);

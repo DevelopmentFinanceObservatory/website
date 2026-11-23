@@ -290,7 +290,7 @@ const withinTimeout = async <T>(work: Promise<T>, timeoutMs: number): Promise<T>
  * call as `unavailable`, since forwarding it unchecked would open an owned
  * conversation to anyone. A claim starts only after the owner read has
  * answered in time. An owner read the timeout gave up on starts no claim,
- * though a claim from saves inside that read can still land after it.
+ * though a claim from saves inside that read can land after it.
  */
 export const checkStudioOwner = async <R>({
     route,

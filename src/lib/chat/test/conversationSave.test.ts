@@ -1,14 +1,21 @@
 /**
  * The save route stores a document only when its ids are conversation ids
- * the text primary keys that hold them accept (`isSaveableConversation` in
- * `conversationSave.ts`).
+ * the text primary keys that hold them accept and it carries well-formed
+ * save order fields or none (`isSaveableConversation` in
+ * `conversationSave.ts`), and a stored
+ * conversation reopens with a harness id those checks accept
+ * (`readSavedConversation`).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { SavedConversation } from '../history.ts';
 import { MAX_CONVERSATION_ID_CHARS } from '../../studio/studioAccess.ts';
-import { isSaveableConversation } from '../conversationSave.ts';
+import {
+    isSaveableConversation,
+    MAX_SAVE_WRITER_CHARS,
+    readSavedConversation,
+} from '../conversationSave.ts';
 
 const saved = (id: string, sessionId: string | null): SavedConversation => ({
     id,
@@ -47,4 +54,43 @@ test('a save naming another id, or a non-string harness id, is refused', () => {
         isSaveableConversation('conv-1', { ...saved('conv-1', null), sessionId: 7 } as never),
         false,
     );
+});
+
+for (const [name, order, expected] of [
+    ['no save order', {}, true],
+    ['a writer and sequence 0', { saveWriter: 'page-1', saveSeq: 0 }, true],
+    [
+        'a writer at the length limit',
+        { saveWriter: 'w'.repeat(MAX_SAVE_WRITER_CHARS), saveSeq: 3 },
+        true,
+    ],
+    [
+        'a writer over the length limit',
+        { saveWriter: 'w'.repeat(MAX_SAVE_WRITER_CHARS + 1), saveSeq: 3 },
+        false,
+    ],
+    ['an empty writer', { saveWriter: '', saveSeq: 3 }, false],
+    ['a NUL in the writer', { saveWriter: 'page\u00001', saveSeq: 3 }, false],
+    ['a numeric writer', { saveWriter: 7, saveSeq: 3 }, false],
+    ['a writer without a sequence', { saveWriter: 'page-1' }, false],
+    ['a sequence without a writer', { saveSeq: 3 }, false],
+    ['a negative sequence', { saveWriter: 'page-1', saveSeq: -1 }, false],
+    ['a fractional sequence', { saveWriter: 'page-1', saveSeq: 1.5 }, false],
+    ['an unsafe sequence', { saveWriter: 'page-1', saveSeq: 2 ** 53 }, false],
+    ['a string sequence', { saveWriter: 'page-1', saveSeq: '3' }, false],
+] as const) {
+    test(`a save with ${name} is ${expected ? 'kept' : 'refused'}`, () => {
+        assert.equal(
+            isSaveableConversation('conv-1', { ...saved('conv-1', null), ...order } as never),
+            expected,
+        );
+    });
+}
+
+test('a stored empty harness id reopens as none, and a saveable one as it was', () => {
+    const stored = readSavedConversation(saved('conv-1', ''));
+
+    assert.equal(stored.sessionId, null);
+    assert.equal(isSaveableConversation('conv-1', stored), true);
+    assert.equal(readSavedConversation(saved('conv-1', 'harness-1')).sessionId, 'harness-1');
 });

@@ -6,7 +6,6 @@ import { counterDb } from '@/lib/db';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
 import {
-    missingProblem,
     notFoundProblem,
     problem,
     rateLimitedProblem,
@@ -58,7 +57,10 @@ const giveBack = (receipt: Parameters<typeof refundPrompt>[1]) =>
         console.error('studio: a prompt was not given back', error),
     );
 
-const ownerProblem = (refusal: StudioOwnerRefusal): Response => {
+const notFoundWith = (detail: string, headers: Record<string, string>): Response =>
+    problem({ status: 404, code: 'not_found', detail, retryable: false, headers });
+
+const ownerProblem = (refusal: StudioOwnerRefusal, rate: Record<string, string>): Response => {
     switch (refusal) {
         case SIGN_IN_REQUIRED:
             return problem({
@@ -66,32 +68,41 @@ const ownerProblem = (refusal: StudioOwnerRefusal): Response => {
                 code: SIGN_IN_REQUIRED,
                 detail: 'Sign in to the account that owns this conversation.',
                 retryable: false,
+                headers: rate,
             });
         case 'not_found':
-            return missingProblem('There is no such conversation.');
+            return notFoundWith('There is no such conversation.', rate);
         case 'unavailable':
             return problem({
                 status: 503,
                 code: 'transient_unavailable',
                 detail: 'The conversation could not be checked. Try again shortly.',
                 retryable: true,
-                headers: { 'Retry-After': String(OWNERSHIP_RETRY_SECONDS) },
+                headers: { ...rate, 'Retry-After': String(OWNERSHIP_RETRY_SECONDS) },
             });
     }
 };
 
-// The proxy's own answer to a call it does not forward (readStudioCall).
-const callProblem = (route: string, refusal: StudioCallRefusal): Response => {
+// The proxy's own answer to a call it does not forward (readStudioCall), with
+// the rate-limit headers of the call's count.
+const callProblem = (
+    route: string,
+    refusal: StudioCallRefusal,
+    rate: Record<string, string>,
+): Response => {
     switch (refusal) {
         case 'options':
-            return new Response(null, { status: 204, headers: { Allow: studioAllow(route) } });
+            return new Response(null, {
+                status: 204,
+                headers: { ...rate, Allow: studioAllow(route) },
+            });
         case 'method_not_allowed':
             return problem({
                 status: 405,
                 code: 'method_not_allowed',
                 detail: `The ${route} route takes ${studioAllow(route)}.`,
                 retryable: false,
-                headers: { Allow: studioAllow(route) },
+                headers: { ...rate, Allow: studioAllow(route) },
             });
         case 'too_large':
             return problem({
@@ -99,12 +110,15 @@ const callProblem = (route: string, refusal: StudioCallRefusal): Response => {
                 code: 'payload_too_large',
                 detail: `The request body is over ${maxStudioBodyBytes(route)} bytes.`,
                 retryable: false,
+                headers: rate,
             });
         case 'malformed':
             return requestInvalidProblem(
                 'A Studio call names its conversation once: in one conversation_id query ' +
                     'parameter, or in the conversation_id member of a JSON object body. ' +
                     'A query carries no session_id.',
+                undefined,
+                rate,
             );
     }
 };
@@ -167,16 +181,30 @@ export const studioProxy =
                 readBody: (maxBytes) => readBoundedText(req.body, maxBytes),
             });
         } catch (error) {
-            // The client dropped the connection mid-upload.
-            if (!req.signal.aborted) {
-                console.error('studio: the request body was not read', error);
+            // A client that dropped the connection mid-upload cannot be
+            // retried by the proxy; any other read failure is the server's
+            // and a retry may succeed.
+            if (req.signal.aborted) {
+                return requestInvalidProblem(
+                    'The request body could not be read.',
+                    undefined,
+                    limitHeaders,
+                );
             }
 
-            return requestInvalidProblem('The request body could not be read.');
+            console.error('studio: the request body was not read', error);
+
+            return problem({
+                status: 503,
+                code: 'transient_unavailable',
+                detail: 'The request body could not be read. Try again shortly.',
+                retryable: true,
+                headers: limitHeaders,
+            });
         }
 
         if (read.call === null) {
-            return callProblem(route, read.refusal);
+            return callProblem(route, read.refusal, limitHeaders);
         }
 
         const { call } = read;
@@ -189,7 +217,7 @@ export const studioProxy =
                 ownersOf,
                 claimOwner,
                 spend,
-                refuse: ownerProblem,
+                refuse: (refusal) => ownerProblem(refusal, limitHeaders),
             });
 
         const options = {
