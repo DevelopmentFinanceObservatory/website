@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
-import { DatasetRef, recipe } from '@developmentfinance/client';
+import { DatasetRef, recipe, StoredVersions } from '@developmentfinance/client';
 
 import {
     BUILD_TIMEOUT_MS,
+    CHECK_TIMEOUT_MS,
+    CHECKED_READS,
+    type Checker,
     checkOneVersionPerSpec,
     pendingBoundOf,
     PENDING_RETRY_MS,
+    readChecked,
     readSettled,
 } from './buildRead.ts';
 import { ANALYSIS_CONCURRENCY, type Fetcher, READ_CONCURRENCY } from './liveRead.ts';
@@ -400,5 +404,139 @@ test('checkOneVersionPerSpec refuses reads that took one spec at two versions, n
                 { c: source('s1', 'cv1') },
             ),
         /page took one spec at two versions.*s1 at cv1 and cv2\./,
+    );
+});
+
+/** A stored-versions check naming SPEC and ROOT at the versions given. */
+const heads = (spec: string | null, root: string | null) =>
+    StoredVersions.fromJSON({
+        format_version: 1,
+        heads: [
+            { spec_id: SPEC, content_version: spec },
+            { spec_id: ROOT, content_version: root },
+        ].toSorted((a, b) => a.spec_id.localeCompare(b.spec_id)),
+    });
+
+const NEWER = `cv_${'d'.repeat(32)}`;
+
+/** A stand-in client whose reads answer from `answers` in turn, as `stubClient`'s do, and
+ *  whose checks answer from `checks` in turn, the last one again once they run out. */
+const checkingClient = (answers: unknown[], checks: StoredVersions[]) => {
+    const { calls, client } = stubClient(...answers);
+    const checked: { targets: readonly unknown[]; timeout?: number }[] = [];
+    const checking = {
+        fetch: client.fetch,
+        storedVersions: async (targets: readonly unknown[], { timeout }: { timeout?: number }) => {
+            checked.push({ targets, timeout });
+
+            return checks[checked.length - 1] ?? checks.at(-1)!;
+        },
+    };
+
+    // The stand-in implements only `fetch` and `storedVersions`.
+    return { calls, checked, client: checking as unknown as Checker };
+};
+
+const checkedSources = { a: { ref: refJson }, b: { recipe: recipe(ref) } };
+
+test('records the stored-versions check taken before the reads and after, when the two agree', async () => {
+    const { calls, checked, client } = checkingClient(
+        [derived(1), dataset(0)],
+        [heads(VERSION, ROOT_VERSION)],
+    );
+
+    const read = await readChecked('p', checkedSources, valueOf, {
+        client,
+        lanes: freshLanes(),
+        ...fakeTime(),
+    });
+
+    assert.deepEqual(read.stored, heads(VERSION, ROOT_VERSION).toJSON());
+    assert.deepEqual(read.value, [0, 1]);
+    assert.equal(calls.length, 2);
+    assert.equal(checked.length, 2);
+    assert.equal(checked[0]?.timeout, CHECK_TIMEOUT_MS);
+    assert.ok(checked[0]?.targets[0] instanceof DatasetRef);
+    assert.equal(checked[0]?.targets.length, 2);
+});
+
+test('reads again when the check moved during the reads, and records the check that held', async () => {
+    const info = mock.method(console, 'info', () => {});
+
+    try {
+        const { calls, checked, client } = checkingClient(
+            [dataset(1), dataset(2)],
+            [heads(VERSION, ROOT_VERSION), heads(NEWER, ROOT_VERSION)],
+        );
+
+        const read = await readChecked('p', { a: { ref: refJson } }, valueOf, {
+            client,
+            lanes: freshLanes(),
+            pendingBound: 0,
+            ...fakeTime(),
+        });
+
+        assert.deepEqual(read.value, [2]);
+        assert.equal(calls.length, 2);
+        assert.equal(checked.length, 3);
+        assert.deepEqual(read.stored, heads(NEWER, ROOT_VERSION).toJSON());
+        assert.match(String(info.mock.calls[0]?.arguments[0]), new RegExp(SPEC));
+    } finally {
+        info.mock.restore();
+    }
+});
+
+for (const [label, pendingBound, reads] of [
+    ['with no pending bound, after one read again', 0, 2],
+    ['within the pending bound, after CHECKED_READS reads', PENDING_BOUND_MS, CHECKED_READS],
+] as const) {
+    test(`fails the build when the check moves during every read: ${label}`, async () => {
+        const info = mock.method(console, 'info', () => {});
+
+        try {
+            const checks = Array.from({ length: 10 }, (_, index) =>
+                heads(index % 2 === 0 ? VERSION : NEWER, ROOT_VERSION),
+            );
+            const { calls, client } = checkingClient(
+                Array.from({ length: 10 }, (_, index) => dataset(index)),
+                checks,
+            );
+
+            await assert.rejects(
+                readChecked('fragility-finance', { a: { ref: refJson } }, valueOf, {
+                    client,
+                    lanes: freshLanes(),
+                    pendingBound,
+                    ...fakeTime(),
+                }),
+                (error: Error) =>
+                    /fragility-finance/.test(error.message) && error.message.includes(SPEC),
+            );
+            assert.equal(calls.length, reads);
+        } finally {
+            info.mock.restore();
+        }
+    });
+}
+
+test('fails the build, naming the page, when the check fails', async () => {
+    const { client } = checkingClient([], []);
+    const failing = {
+        ...client,
+        storedVersions: async () => {
+            throw new Error('503');
+        },
+    } as unknown as Checker;
+
+    await assert.rejects(
+        readChecked('p', checkedSources, valueOf, {
+            client: failing,
+            lanes: freshLanes(),
+            ...fakeTime(),
+        }),
+        (error: Error) =>
+            /stored-versions check of p/.test(error.message) &&
+            error.cause instanceof Error &&
+            error.cause.message === '503',
     );
 });

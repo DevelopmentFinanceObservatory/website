@@ -4,8 +4,11 @@
 // from DEPLOY_COMMIT and, in CI, GITHUB_RUN_ID (lib/buildStamp.ts). Then the tier must match the
 // island's `data-read-live`, which each island renders from its read switch: `stored` with the
 // switch on, `committed` with it off, and `built` for figures the build read from DFO.
-// Every page in PAGES renders `built`: the build reads its figures (lib/buildRead.ts) and the
-// browser reads nothing.
+// Every page in PAGES renders `built`: the build reads its figures (lib/buildRead.ts). Each page
+// of STORED_CHECK_PAGES also asks DFO after paint whether it stores newer data than the build
+// read (lib/storedCheck.ts) and states the outcome as `data-stored-check`, which must leave
+// `checking` for `unchanged`, `refreshed` or `failed`. Each of the three passes, since a failed
+// check leaves the built figures on the page.
 //
 // After a deploy the edge can serve the previous build for a while, and that build passes its own
 // tier check, so only the expected build counts. A scheduled rebuild of an unchanged commit
@@ -39,10 +42,17 @@ export const RETRY_DELAY_MS = 20_000;
 
 const ISLAND = '[data-read-tier]';
 const BUILD_MARKER = 'meta[name="dfo-build"]';
-const SETTLED = '[data-read-tier]:not([data-read-tier="loading"])';
+const SETTLED =
+    '[data-read-tier]:not([data-read-tier="loading"]):not([data-stored-check="checking"])';
 
 /** The live prototype pages, by slug. */
 export const PAGES = ['oda-counts', 'fragility-finance', 'hiv-financing', 'debt-thresholds'];
+
+/** The pages whose island checks DFO for newer stored data after paint. */
+export const STORED_CHECK_PAGES = ['oda-counts', 'fragility-finance', 'hiv-financing'];
+
+/** The values a settled `data-stored-check` may take. */
+export const STORED_CHECK_OUTCOMES = ['unchanged', 'refreshed', 'failed'];
 
 /** An island's `data-read-live`: true when it reads in the browser, false when it shows its
  *  committed figures, and `built` when its figures come from the build's read of DFO. */
@@ -69,7 +79,8 @@ export const liveSwitch = (attribute: string | null): LiveSwitch | null =>
  * - `navigation_timeout`: the page did not load within NAVIGATION_TIMEOUT_MS.
  * - `navigation_failed`: the page did not load, for the reason in `errors`.
  * - `no_island`: the loaded page holds no `[data-read-tier]`.
- * - `not_settled`: the island did not leave `loading` within SETTLE_TIMEOUT_MS.
+ * - `not_settled`: the island did not leave `loading`, or its stored-data check did not leave
+ *   `checking`, within SETTLE_TIMEOUT_MS.
  */
 export type Failure = 'navigation_timeout' | 'navigation_failed' | 'no_island' | 'not_settled';
 
@@ -83,6 +94,8 @@ export type Result = {
     build: string | null;
     /** the settled `data-read-tier`, or null when the page gave none */
     tier: string | null;
+    /** the settled `data-stored-check`, or null when the island carries none */
+    storedCheck: string | null;
     ms: number;
     failure: Failure | null;
     errors: string[];
@@ -92,7 +105,7 @@ const FAILURES: Record<Failure, string> = {
     navigation_timeout: `did not load within ${NAVIGATION_TIMEOUT_MS / 1000} s`,
     navigation_failed: 'did not load',
     no_island: 'holds no [data-read-tier] after load',
-    not_settled: `never left \`loading\` within ${SETTLE_TIMEOUT_MS / 1000} s`,
+    not_settled: `never left \`loading\` or \`checking\` within ${SETTLE_TIMEOUT_MS / 1000} s`,
 };
 
 /** The problems in one result, empty when the page passes. */
@@ -122,8 +135,23 @@ export const problems = (result: Result): string[] => {
 
     return [
         ...(result.tier === expected ? [] : [`tier \`${result.tier}\`, expected \`${expected}\``]),
+        ...storedCheckProblems(result),
         ...errors,
     ];
+};
+
+/** What is wrong with a result's `data-stored-check`: missing on a page of STORED_CHECK_PAGES,
+ *  or a value other than STORED_CHECK_OUTCOMES. */
+const storedCheckProblems = ({ slug, storedCheck }: Result): string[] => {
+    if (storedCheck === null) {
+        return STORED_CHECK_PAGES.includes(slug) ? ['the island carries no data-stored-check'] : [];
+    }
+
+    return STORED_CHECK_OUTCOMES.includes(storedCheck)
+        ? []
+        : [
+              `data-stored-check \`${storedCheck}\`, expected one of ${STORED_CHECK_OUTCOMES.join(', ')}`,
+          ];
 };
 
 /** The exit code for a run: 1 when any result has a problem or there are none. */
@@ -160,6 +188,7 @@ export const checkPage = async (
         live: null,
         build: null,
         tier: null,
+        storedCheck: null,
         failure: null,
         ...over,
         expected,
@@ -196,6 +225,7 @@ export const checkPage = async (
     return result({
         build: await page.getAttribute(BUILD_MARKER, 'content'),
         tier: await page.getAttribute(ISLAND, 'data-read-tier'),
+        storedCheck: await page.getAttribute(ISLAND, 'data-stored-check'),
         live: liveSwitch(await page.getAttribute(ISLAND, 'data-read-live')),
     });
 };
@@ -236,7 +266,8 @@ const report = (result: Result): string[] => {
 
     return [
         `${found.length === 0 ? 'ok  ' : 'FAIL'} ${result.slug}: build ${result.build ?? 'none'}, ` +
-            `tier ${result.tier ?? 'none'} (data-read-live ${result.live ?? 'none'}, expected ${expected}) in ${result.ms} ms`,
+            `tier ${result.tier ?? 'none'} (data-read-live ${result.live ?? 'none'}, expected ${expected}), ` +
+            `stored check ${result.storedCheck ?? 'none'} in ${result.ms} ms`,
         ...found.map((problem) => `     ${problem}`),
     ];
 };

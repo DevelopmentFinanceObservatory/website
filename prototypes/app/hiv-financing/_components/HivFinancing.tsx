@@ -23,6 +23,8 @@ import {
 import { lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
+import { useStoredCheckState } from '#lib/useStoredCheck.ts';
+
 const ALL_COUNTRIES = 'All countries';
 
 const chartTitle = (name: string, data: HivData) =>
@@ -40,7 +42,8 @@ const scrollBehaviour = (): ScrollBehavior =>
  * or a row returns to all countries; choosing it in the search keeps it.
  *
  * The aid and UNAIDS figures are the ones the build read from DFO, held by AidProvider for the
- * island and the prose around it.
+ * island and the prose around it, or a read again when DFO stored newer data, which the root's
+ * `data-stored-check` says (lib/storedCheck.ts).
  */
 export const HivFinancing = () => {
     const [selected, setSelected] = useState<string | null>(null);
@@ -48,6 +51,7 @@ export const HivFinancing = () => {
     const topRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLElement>(null);
     const { data, unaids } = useAidFigures();
+    const storedCheck = useStoredCheckState();
     const countries = useMemo(() => joinUnaids(data.countries, unaids, data.years), [data, unaids]);
     const chosen =
         selected === null ? undefined : countries.find((country) => country.iso3 === selected);
@@ -103,6 +107,7 @@ export const HivFinancing = () => {
             className={styles.island}
             data-read-tier="built"
             data-read-live="built"
+            data-stored-check={storedCheck ?? undefined}
         >
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>

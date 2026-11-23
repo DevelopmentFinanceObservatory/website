@@ -208,6 +208,19 @@ const parseSources = <K extends string>(
 };
 
 /**
+ * What a stored-versions check of `sources` asks about (`client.storedVersions`): each ref read
+ * from its JSON, and each recipe as it is.
+ *
+ * @throws A ref the client cannot read.
+ */
+export const storedTargets = (
+    sources: Readonly<Record<string, LiveSource>>,
+): (DatasetRef | Recipe)[] =>
+    Object.values(sources).map((source) =>
+        'recipe' in source ? source.recipe : DatasetRef.fromJSON(source.ref),
+    );
+
+/**
  * Fetches the newest stored data for each of `sources` and runs `derive` on the rows, with no
  * fallback, so it returns the `stored` tier or rejects. Recipes run first, in `lanes.recipes`, and every
  * read runs in `lanes.reads`, the page's pacer and analysis lane unless given. Once a read fails

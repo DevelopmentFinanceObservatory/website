@@ -18,8 +18,17 @@
 // most READ_CONCURRENCY reads and ANALYSIS_CONCURRENCY recipes at once across every page, so a
 // build from a shared runner address stays inside the gateway's allowances. This module runs on
 // the server only. The client components of a page take its result as props.
-import { Client, type Dataset } from '@developmentfinance/client';
-import { type Freshness, isDerived } from '@developmentfinance/client/types';
+//
+// A page whose figures come only from stored reads here reads them through `readChecked`, which
+// records DFO's stored versions of every spec the reads take (`client.storedVersions`), checked
+// before the reads and again after, so a check in the browser can tell whether DFO has stored
+// newer data since the build.
+import { Client, type Dataset, type StoredVersions } from '@developmentfinance/client';
+import {
+    type Freshness,
+    isDerived,
+    type StoredVersionsJson,
+} from '@developmentfinance/client/types';
 
 import {
     ANALYSIS_CONCURRENCY,
@@ -29,6 +38,7 @@ import {
     READ_CONCURRENCY,
     type ReadLanes,
     readStored,
+    storedTargets,
 } from './liveRead.ts';
 import { createLane } from './pacing.ts';
 import { recordOf } from './record.ts';
@@ -162,9 +172,12 @@ export const buildLanes: ReadLanes = {
     recipes: createLane(ANALYSIS_CONCURRENCY),
 };
 
+/** The part of a client a build read uses: `fetch`, and `storedVersions` for `readChecked`. */
+export type Checker = Pick<Client, 'fetch' | 'storedVersions'>;
+
 export type BuildReadOptions = {
     /** Stands in for the build's client, as a test does. */
-    client?: Fetcher;
+    client?: Checker;
     /** Stand in for the build's lanes. */
     lanes?: ReadLanes;
     timeout?: number;
@@ -265,7 +278,11 @@ export const readSettled = <K extends string, T>(
     page: string,
     sources: Record<K, LiveSource>,
     derive: Derive<K, T>,
-    { client = buildClient(), lanes = buildLanes, ...options }: BuildReadOptions = {},
+    {
+        client = buildClient(),
+        lanes = buildLanes,
+        ...options
+    }: Omit<BuildReadOptions, 'client'> & { client?: Fetcher } = {},
 ): Promise<BuildRead<K, T>> => {
     // Object.keys widens to string. These are the keys of `sources`.
     const keys = Object.keys(sources) as K[];
@@ -285,6 +302,83 @@ export const readSettled = <K extends string, T>(
         },
         options,
     );
+};
+
+/** How long the build's stored-versions check may take: one GET, which DFO answers from its
+ *  database. */
+export const CHECK_TIMEOUT_MS = 60_000;
+
+/** The most times `readChecked` reads a page's sources: the first read, one read again when
+ *  the check moved during it, and one more while the pending bound has time left. */
+export const CHECKED_READS = 3;
+
+/** A build read with DFO's stored versions of every spec it read, which the page compares with
+ *  a check in the browser. */
+export type CheckedRead<K extends string, T> = BuildRead<K, T> & {
+    /** The check taken after the reads, as `StoredVersions.toJSON()` writes it, equal to the
+     *  one taken before them. */
+    stored: StoredVersionsJson;
+};
+
+/**
+ * Reads `sources` as `readSettled` does, between two checks of DFO's stored versions of every
+ * spec they read, and records the check. When the checks differ, DFO stored newer data during
+ * the reads, so the read runs again between the second check and a third, at most
+ * CHECKED_READS times in all: a second read always, a third only while the pending bound has
+ * time left, which each read again shares with `readSettled`'s.
+ *
+ * @throws An error naming `page` when a check or a read fails, or when the checks still differ
+ *  after the last read.
+ */
+export const readChecked = async <K extends string, T>(
+    page: string,
+    sources: Record<K, LiveSource>,
+    derive: Derive<K, T>,
+    { client = buildClient(), lanes = buildLanes, ...options }: BuildReadOptions = {},
+): Promise<CheckedRead<K, T>> => {
+    const { pendingBound = pendingBoundOf(process.env), now = Date.now } = options;
+    const targets = storedTargets(sources);
+    const check = async (): Promise<StoredVersions> => {
+        try {
+            return await lanes.reads.run(() =>
+                client.storedVersions(targets, { timeout: CHECK_TIMEOUT_MS }),
+            );
+        } catch (error) {
+            throw new Error(`The stored-versions check of ${page} failed, so the build stops.`, {
+                cause: error,
+            });
+        }
+    };
+    const start = now();
+    let before = await check();
+
+    for (let reads = 1; ; reads += 1) {
+        const left = Math.max(0, pendingBound - (now() - start));
+        const read = await readSettled(page, sources, derive, {
+            ...options,
+            client,
+            lanes,
+            pendingBound: left,
+        });
+        const after = await check();
+
+        if (after.equals(before)) {
+            return { ...read, stored: after.toJSON() };
+        }
+
+        const changed = after.changedSince(before).join(', ');
+
+        if (reads >= CHECKED_READS || (reads > 1 && now() - start >= pendingBound)) {
+            throw new Error(
+                `DFO stored newer data of ${changed} during each of ${reads} build reads of ${page}, so the build stops.`,
+            );
+        }
+
+        console.info(
+            `${page}: DFO stored newer data of ${changed} during the read; reading again.`,
+        );
+        before = after;
+    }
 };
 
 /** Warns that the build takes data DFO has not confirmed as its newest. */

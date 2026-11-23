@@ -1,25 +1,25 @@
 // Everything the page shows from DFO, as the build reads it before `next build`
 // (lib/buildData.ts): the 19 DAC1 reads of live-refs.json at DFO's newest stored versions
-// (lib/buildRead.ts), the graph nodes the definitions come from, and the currencies Search
+// (lib/buildRead.ts), with DFO's stored versions of their specs checked before the reads and
+// after (`readChecked`), the graph nodes the definitions come from, and the currencies Search
 // converts the series to. Any failed read or refused answer fails the build, so production keeps
 // the last good deploy. Runs on the server only; the client components take the result as props.
 import { Client } from '@developmentfinance/client';
 
 import liveRefs from '../_data/live-refs.json' with { type: 'json' };
-import type { CountsData, Definition, LiveData } from '../_data/types.ts';
+import type { Definition, LiveData } from '../_data/types.ts';
 
 import { definitionsFromNodes, NODE_IDS } from './definitions.ts';
-import { BASE_YEAR, countsFromRows, READ_KEYS, type ReadKey, YEARS } from './derive.ts';
+import { type BuiltCounts, deriveCounts, READ_KEYS, type ReadKey } from './derive.ts';
 import { identitiesFromRefs, MAX_ENTRIES, offerFromResponses, offerRequests } from './live.ts';
 
 import {
     type BuildPage,
-    type BuildRead,
     type BuildReadOptions,
     buildLanes,
-    readSettled,
+    type CheckedRead,
+    readChecked,
 } from '#lib/buildRead.ts';
-import type { Derive } from '#lib/liveRead.ts';
 import type { Lane } from '#lib/pacing.ts';
 import { recordOf } from '#lib/record.ts';
 
@@ -31,11 +31,8 @@ const LOOKUP_TIMEOUT_MS = 120_000;
 /** The Search route a resolve request posts to, under the client's base URL. */
 const RESOLVE_PATH = '/search/resolve';
 
-/** The figures and the citation of the reads. */
-export type BuiltCounts = { data: CountsData; citation: string };
-
 export type Built = {
-    counts: BuildRead<ReadKey, BuiltCounts>;
+    counts: CheckedRead<ReadKey, BuiltCounts>;
     definitions: Definition[];
     /** The series' identities and the offer, for the reader's currency picks. */
     live: LiveData;
@@ -50,16 +47,6 @@ export type Lookups = {
         options: { json: unknown; timeout: number },
     ) => Promise<{ status: number; json: () => unknown }>;
 };
-
-/** The page's figures from the rows, and the citation the gross read gives. */
-export const deriveCounts: Derive<ReadKey, BuiltCounts> = (rows, datasets) => ({
-    data: countsFromRows(rows, {
-        years: [...YEARS],
-        baseYear: BASE_YEAR,
-        members: recordOf(READ_KEYS, (key) => datasets[key].members.length),
-    }),
-    citation: datasets['gross/current'].citation.text,
-});
 
 /** Runs `task` in `lane`, or at once with no lane. */
 const inLane = <T>(lane: Lane | undefined, task: () => Promise<T>): Promise<T> =>
@@ -121,7 +108,7 @@ export const readOdaCounts = async (
     const sources = recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));
     const { reads } = options.lanes ?? buildLanes;
     const [counts, definitions, live] = await Promise.all([
-        readSettled(PAGE, sources, deriveCounts, options),
+        readChecked(PAGE, sources, deriveCounts, options),
         readDefinitions(client, reads),
         readLive(client, refs, reads),
     ]).catch((error: unknown) => {

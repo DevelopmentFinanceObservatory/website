@@ -26,6 +26,7 @@ import {
     pickCurrency,
     priceBases,
     resolveRequests,
+    resumePick,
     SearchRefusalError,
     seriesFromResponse,
     unitPhrase,
@@ -639,4 +640,32 @@ test('offerFromResponses keeps the DAC currencies of the offer every series shar
     ] as const) {
         assert.throws(() => offerFromResponses(answers), Error, label);
     }
+});
+
+test('when the counts change, a pick they hold shows at once and any other is fetched again from the built currency', () => {
+    const start = {
+        donorId: 'DAC',
+        unit: { currency: 'USD', prices: 'current', baseYear: 2024 },
+    } as const;
+    const euros = {
+        donorId: 'FRA',
+        unit: { currency: 'EUR', prices: 'constant', baseYear: 2024 },
+    } as const;
+    const dollars = {
+        donorId: 'FRA',
+        unit: { currency: 'USD', prices: 'constant', baseYear: 2024 },
+    } as const;
+    // Counts read again in a later year, whose constant dollars no longer hold 2024 prices.
+    const later = { ...COUNTS, baseYear: 2025 };
+
+    assert.deepEqual(resumePick(null, start, COUNTS), { picked: start, shown: start });
+    assert.deepEqual(resumePick(dollars, start, COUNTS), { picked: dollars, shown: dollars });
+    assert.deepEqual(resumePick(euros, start, COUNTS), {
+        picked: euros,
+        shown: { donorId: 'FRA', unit: { currency: 'USD', prices: 'constant', baseYear: 2024 } },
+    });
+    assert.deepEqual(resumePick(dollars, start, later), {
+        picked: dollars,
+        shown: { donorId: 'FRA', unit: { currency: 'USD', prices: 'constant', baseYear: 2025 } },
+    });
 });

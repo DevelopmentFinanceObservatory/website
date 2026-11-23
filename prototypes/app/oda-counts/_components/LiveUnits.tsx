@@ -1,12 +1,24 @@
 'use client';
 
 import { RateLimitError } from '@developmentfinance/client/errors';
-import { createContext, use, useRef, useState, type ReactNode } from 'react';
+import type { StoredVersionsJson } from '@developmentfinance/client/types';
+import {
+    createContext,
+    use,
+    useEffect,
+    useEffectEvent,
+    useRef,
+    useState,
+    type ReactNode,
+} from 'react';
 
 import { liveClient, pacer, pickLane } from '#lib/pacing.ts';
+import { StoredCheckContext, useStoredCheck } from '#lib/useStoredCheck.ts';
 
 import type { CountsData, Donor, LiveData, Offer, Prices, SeriesKey } from '../_data/types.ts';
+import type { BuiltCounts } from '../_lib/derive.ts';
 import { DEFAULT_DONOR, findDonor } from '../_lib/counts.ts';
+import { loadRefresh } from '../_lib/refresh.ts';
 import {
     basisKey,
     builtUnit,
@@ -14,9 +26,11 @@ import {
     isBuilt,
     liveDonor,
     resolveRequests,
+    resumePick,
     withPrices,
     type LiveBasis,
     type Resolver,
+    type Shown,
     type Unit,
 } from '../_lib/live.ts';
 
@@ -46,12 +60,11 @@ const resolverClient = (): Resolver => (resolver ??= liveClient().withOptions({ 
 /** Why the last pick could not be fetched: the gateway's allowance was spent, or anything else. */
 export type Failure = 'rate_limited' | 'error';
 
-/** What the page shows: one donor in one unit. */
-type Shown = { donorId: string; unit: Unit };
-
 type LiveUnits = {
-    /** the figures in US dollars, as the build read them */
+    /** the figures in US dollars, as the build read them or the page read them again */
     data: CountsData;
+    /** the citation of the reads the figures come from */
+    citation: string;
     offer: Offer;
     /** the donor and unit the controls show, which lead `shown` while a fetch runs */
     picked: Shown;
@@ -110,19 +123,66 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * request it does not need. A failed pick returns to the figures on screen, or to the new
  * donor in US dollars, and sets `failed`, which says whether the gateway refused it for
  * the address's `api` allowance (see PICKED_PER_REQUEST).
+ *
+ * The figures in US dollars are the build's `counts`, read at `retrieved`, until a check after
+ * paint finds DFO has stored newer data than `stored`, the build's check, and the read again
+ * succeeds (lib/storedCheck.ts). Then the provider below starts over on the new counts, so no
+ * figure fetched for the old ones stays on screen or in the cache, and fetches the reader's last
+ * pick again (`resumePick`).
  */
 export const LiveUnitsProvider = ({
-    data,
+    counts,
+    retrieved,
+    stored,
     live,
     children,
 }: {
-    data: CountsData;
+    counts: BuiltCounts;
+    retrieved: string;
+    stored: StoredVersionsJson;
     live: LiveData;
     children: ReactNode;
 }) => {
-    const start: Shown = { donorId: DEFAULT_DONOR, unit: builtUnit(data) };
-    const [picked, setPicked] = useState<Shown>(start);
-    const [shown, setShown] = useState<Shown>(start);
+    const { value, ...checked } = useStoredCheck(counts, retrieved, stored, loadRefresh);
+    // The reader's last pick, which outlives the provider below when the counts change.
+    const [lastPick, setLastPick] = useState<Shown | null>(null);
+
+    return (
+        <StoredCheckContext value={checked}>
+            <PickedUnits
+                key={checked.retrieved}
+                counts={value}
+                live={live}
+                resume={lastPick}
+                onPick={setLastPick}
+            >
+                {children}
+            </PickedUnits>
+        </StoredCheckContext>
+    );
+};
+
+/** `LiveUnitsProvider`'s picks on one set of counts, resuming at `resume`, the reader's pick
+ *  before the counts changed, and telling `onPick` of each pick. */
+const PickedUnits = ({
+    counts,
+    live,
+    resume,
+    onPick,
+    children,
+}: {
+    counts: BuiltCounts;
+    live: LiveData;
+    resume: Shown | null;
+    onPick: (pick: Shown) => void;
+    children: ReactNode;
+}) => {
+    const { data, citation } = counts;
+    const [initial] = useState(() =>
+        resumePick(resume, { donorId: DEFAULT_DONOR, unit: builtUnit(data) }, data),
+    );
+    const [picked, setPicked] = useState<Shown>(initial.picked);
+    const [shown, setShown] = useState<Shown>(initial.shown);
     const [cache, setCache] = useState<ReadonlyMap<string, LiveBasis>>(new Map());
     // The lead basis of each pair drawn before its other basis was in, by `pairKey`.
     const [leads, setLeads] = useState<ReadonlyMap<string, Prices>>(new Map());
@@ -133,9 +193,16 @@ export const LiveUnitsProvider = ({
     );
     // Mirrors `cache` for the async code, which must not read a stale render's copy.
     const cached = useRef(new Map<string, LiveBasis>());
-    const latest = useRef(start);
+    const latest = useRef(initial.picked);
     // The figures on screen, for the async code.
-    const onScreen = useRef(start);
+    const onScreen = useRef(initial.shown);
+    // False once the counts change, so answers to this provider's requests are dropped.
+    const active = useRef(true);
+
+    const pickTo = (target: Shown) => {
+        setPicked(target);
+        onPick(target);
+    };
 
     const donorOf = (donorId: string): Donor => {
         const donor = findDonor(data, donorId) ?? data.donors[0];
@@ -231,7 +298,7 @@ export const LiveUnitsProvider = ({
 
     const choose = (target: Shown) => {
         latest.current = target;
-        setPicked(target);
+        pickTo(target);
         setFailed(null);
 
         // Keep only the requests the target needs: its basis and the other basis of its pair.
@@ -248,6 +315,11 @@ export const LiveUnitsProvider = ({
             }
         }
 
+        request(target);
+    };
+
+    /** Shows `target`, at once when its figures are at hand, else once they are fetched. */
+    const request = (target: Shown) => {
         if (available(target.donorId, target.unit)) {
             show(target);
             prefetchSibling(target);
@@ -257,13 +329,13 @@ export const LiveUnitsProvider = ({
 
         fetchBasis(target.donorId, target.unit, pickedPerRequest(target)).then(
             () => {
-                if (sameShown(latest.current, target)) {
+                if (active.current && sameShown(latest.current, target)) {
                     show(target);
                     prefetchSibling(target);
                 }
             },
             (error: unknown) => {
-                if (!sameShown(latest.current, target)) {
+                if (!active.current || !sameShown(latest.current, target)) {
                     return;
                 }
 
@@ -282,12 +354,36 @@ export const LiveUnitsProvider = ({
                           };
 
                 latest.current = fallback;
-                setPicked(fallback);
+                pickTo(fallback);
                 show(fallback);
                 setFailed(error instanceof RateLimitError ? 'rate_limited' : 'error');
             },
         );
     };
+
+    // A pick the counts no longer held when they changed is fetched again on the new ones.
+    const resumeRequest = useEffectEvent(() => {
+        if (!sameShown(initial.picked, initial.shown)) {
+            request(initial.picked);
+        }
+    });
+
+    useEffect(() => {
+        const running = inflight.current;
+
+        active.current = true;
+        resumeRequest();
+
+        return () => {
+            active.current = false;
+
+            for (const { controller } of running.values()) {
+                controller.abort();
+            }
+
+            running.clear();
+        };
+    }, []);
 
     const donor = donorOf(shown.donorId);
     const basisOf = (prices: Prices): LiveBasis | undefined => {
@@ -305,6 +401,7 @@ export const LiveUnitsProvider = ({
         <Context
             value={{
                 data,
+                citation,
                 offer: live.offer,
                 picked,
                 shown,

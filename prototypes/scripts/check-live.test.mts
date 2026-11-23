@@ -24,6 +24,7 @@ const result = (over: Partial<Result> = {}): Result => ({
     expected: ANY_RUN,
     build: NEW,
     tier: 'committed',
+    storedCheck: null,
     ms: 10,
     failure: null,
     errors: [],
@@ -39,6 +40,7 @@ const fakePage = (
         live?: string | null;
         commit?: string | null;
         island?: boolean;
+        storedCheck?: string;
         navigation?: Error;
         hangs?: boolean;
         pageError?: string;
@@ -49,6 +51,7 @@ const fakePage = (
         'data-read-tier': options.tier ?? 'committed',
         'data-read-live': options.live === undefined ? 'false' : options.live,
         content: options.commit === undefined ? NEW : options.commit,
+        'data-stored-check': options.storedCheck ?? null,
     };
 
     return {
@@ -246,4 +249,32 @@ test('withRetries runs again after a failing run, up to its attempts, and stops 
 
     assert.equal(exitCode(failed), 1);
     assert.equal(made, 2);
+});
+
+test('a page that checks DFO for newer stored data passes on each outcome, and fails without one', async () => {
+    const built = { tier: 'built', live: 'built' };
+
+    for (const storedCheck of ['unchanged', 'refreshed', 'failed']) {
+        const checked = await checkPage(
+            fakePage({ ...built, storedCheck }),
+            'u',
+            'fragility-finance',
+            ANY_RUN,
+        );
+
+        assert.equal(checked.storedCheck, storedCheck);
+        assert.deepEqual(problems(checked), []);
+    }
+
+    for (const storedCheck of ['checking', 'stale']) {
+        const checked = await checkPage(fakePage({ ...built, storedCheck }), 'u', 'p', ANY_RUN);
+
+        assert.equal(exitCode([checked]), 1);
+    }
+
+    assert.equal(
+        exitCode([await checkPage(fakePage(built), 'u', 'fragility-finance', ANY_RUN)]),
+        1,
+    );
+    assert.equal(exitCode([await checkPage(fakePage(built), 'u', 'debt-thresholds', ANY_RUN)]), 0);
 });

@@ -10,6 +10,10 @@
 // a build whose transfers read took another version of it than the pipeline did, or that took
 // any spec at two versions, stops: the section's release label would not match its data. Runs
 // on the server only; the client components take the result as props.
+//
+// The page records no stored-versions check (`readChecked`, lib/buildRead.ts) and checks nothing
+// in the browser: its 2025 view comes from the Python pipeline, whose reads a check here cannot
+// follow, so the page shows what the build read until the next build.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 

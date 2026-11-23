@@ -1,6 +1,6 @@
 // The page's layout and the figures the build read (_lib/build.ts). A server component: it
 // renders every figure from .build-data/fragility-finance.json (lib/buildData.ts) into the
-// static HTML, so the browser reads nothing.
+// static HTML. The browser reads again only when DFO has stored newer data (./Figures.tsx).
 import type { ReactNode } from 'react';
 
 import { PrototypePage } from '../../../components/PrototypePage/PrototypePage';
@@ -10,6 +10,9 @@ import { FiguresProvider } from './Figures';
 import { fragilityBuild } from '../_lib/build.ts';
 
 import { readBuilt } from '#lib/buildData.ts';
+
+/** When the figures shown were read, which follows a read again in the browser. */
+export { Retrieved } from './Figures';
 
 const readFragility = () => readBuilt(fragilityBuild);
 
@@ -25,16 +28,13 @@ export const FragilityPage = async ({
     lede: ReactNode;
     children: ReactNode;
 }) => {
-    const { value } = await readFragility();
+    const { value, retrieved, stored } = await readFragility();
 
     return (
-        <FiguresProvider figures={value}>
+        <FiguresProvider figures={value} retrieved={retrieved} stored={stored}>
             <PrototypePage title={title} sections={sections} lede={lede}>
                 {children}
             </PrototypePage>
         </FiguresProvider>
     );
 };
-
-/** The day the build read the figures, in UTC, as YYYY-MM-DD. */
-export const Retrieved = async () => (await readFragility()).retrieved.slice(0, 10);
