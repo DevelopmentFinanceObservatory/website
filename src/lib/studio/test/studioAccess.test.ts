@@ -6,11 +6,32 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { canonicalStudioCall, studioAccess } from '../studioAccess.ts';
+import {
+    canonicalStudioCall,
+    checkStudioOwner,
+    readStudioCall,
+    SIGN_IN_REQUIRED,
+} from '../studioAccess.ts';
 
-type AccessInput = Parameters<typeof studioAccess>[0];
+type CallInput = Parameters<typeof readStudioCall>[0];
+type OwnerInput = Omit<Parameters<typeof checkStudioOwner>[0], 'conversationId'>;
 
-const studioAccessRefusal = async (input: AccessInput) => (await studioAccess(input)).refusal;
+// Both steps of the proxy's check, as studioProxy runs them: the call it
+// rebuilds, then the owner check on the conversation that call names.
+const studioAccess = async (input: CallInput & OwnerInput) => {
+    const read = await readStudioCall(input);
+
+    if (read.refusal !== null || read.call === null) {
+        return read;
+    }
+
+    const refusal = await checkStudioOwner({ ...input, conversationId: read.call.conversationId });
+
+    return refusal === null ? read : { refusal, call: null };
+};
+
+const studioAccessRefusal = async (input: CallInput & OwnerInput) =>
+    (await studioAccess(input)).refusal;
 
 // A claim on a conversation no other account has claimed: the caller owns it.
 const unclaimed = async (_id: string, userId: string) => [userId];
@@ -21,6 +42,8 @@ const OWNERS: Record<string, (string | null)[]> = {
     // Its owner's account was deleted.
     'conv-orphan': [null],
 };
+
+const ROUTES = ['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume'];
 
 const check = (
     route: string,
@@ -38,16 +61,18 @@ const check = (
         claimOwner: unclaimed,
     });
 
-test('studioAccessRefusal answers 404 for a conversation another account saved', async () => {
-    for (const route of ['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume']) {
+// A guest is asked to sign in, and another account is told there is no
+// such conversation.
+test('a conversation another account saved refuses a guest and a non-owner apart', async () => {
+    for (const route of ROUTES) {
         assert.equal(await check(route, 'user-ben', 'conv-ana'), 'not_found', route);
-        assert.equal(await check(route, null, 'conv-ana'), 'not_found', `guest ${route}`);
+        assert.equal(await check(route, null, 'conv-ana'), SIGN_IN_REQUIRED, `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-ana'), null, `owner ${route}`);
     }
 });
 
 test('a conversation whose owner deleted their account answers to nobody', async () => {
-    for (const route of ['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume']) {
+    for (const route of ROUTES) {
         assert.equal(await check(route, null, 'conv-orphan'), 'not_found', `guest ${route}`);
         assert.equal(await check(route, 'user-ben', 'conv-orphan'), 'not_found', route);
     }
@@ -138,6 +163,30 @@ test('studioAccess forwards only the conversation it checked', async () => {
 
     assert.equal(repeated.refusal, 'malformed');
 
+    const aliasQuery = await asBen(
+        'state',
+        'GET',
+        new URLSearchParams([
+            ['conversation_id', 'conv-ben'],
+            ['session_id', 'conv-ana'],
+        ]),
+        '',
+    );
+
+    assert.equal(aliasQuery.refusal, 'malformed');
+
+    // A POST carries its conversation in the body, and its query never
+    // reaches the harness.
+    const postQuery = await asBen(
+        'turn',
+        'POST',
+        new URLSearchParams({ conversation_id: 'conv-ana', session_id: 'conv-ana' }),
+        '{"conversation_id":"conv-ben"}',
+    );
+
+    assert.equal(postQuery.refusal, null);
+    assert.equal(postQuery.call?.search.toString(), '');
+
     const nonJson = await asBen(
         'turn',
         'POST',
@@ -204,6 +253,11 @@ test('studioAccess binds a new conversation to the first account to drive a turn
 
     assert.equal(await turn(null), null, 'a guest claims nothing');
     assert.equal(await turn('user-ana', 'state'), 'not_found', 'a state read claims nothing');
+
+    for (const route of ['interrupt', 'cancel', 'composition']) {
+        assert.equal(await turn('user-ben', route), null, `${route} claims nothing`);
+    }
+
     assert.deepEqual(claims, []);
 
     const [ana, ben] = await Promise.all([turn('user-ana'), turn('user-ben')]);
@@ -211,7 +265,7 @@ test('studioAccess binds a new conversation to the first account to drive a turn
     assert.deepEqual([ana, ben], [null, 'not_found']);
     assert.deepEqual(claims, ['user-ana', 'user-ben']);
     assert.equal(await turn('user-ben'), 'not_found');
-    assert.equal(await turn(null), 'not_found');
+    assert.equal(await turn(null), SIGN_IN_REQUIRED);
     assert.equal(await turn('user-ana', 'state'), null);
 });
 

@@ -16,17 +16,18 @@ import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 
-const saved = (id: string, sessionId: string | null): SavedConversation =>
-    ({
-        id,
-        sessionId,
-        title: 'Aid question',
-        updatedAt: 1_800_000_000_000,
-        messages: [],
-        widgets: [],
-        turnCount: 1,
-        pinnedIds: [],
-    }) as unknown as SavedConversation;
+const saved = (id: string, sessionId: string | null): SavedConversation => ({
+    id,
+    sessionId,
+    title: 'Aid question',
+    updatedAt: 1_800_000_000_000,
+    messages: [],
+    widgets: [],
+    turnCount: 1,
+    pinnedIds: [],
+    removedIds: [],
+    layout: {},
+});
 
 /**
  * A harness conversation belongs to the first account that saved it. A save

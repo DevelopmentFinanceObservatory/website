@@ -12,7 +12,7 @@ import type { SavedConversation } from '../history.ts';
 
 // A fork saved before forks named their local cards: no session, the
 // source's cards, and no `localIds`.
-const devFork = {
+const devFork: SavedConversation = {
     id: 'fork',
     sessionId: null,
     title: 'Fork',
@@ -30,11 +30,11 @@ const devFork = {
     pinnedIds: ['cmp_pinned'],
     removedIds: [],
     layout: {},
-} as SavedConversation;
+};
 
 const shown = (saved: SavedConversation) => canvasWidgetsOf(saved).map((widget) => widget.id);
 
-test("Remove and Add work on the inherited cards of a fork saved before forks named their local cards", () => {
+test('Remove and Add work on the inherited cards of a fork saved before forks named their local cards', () => {
     const opened = openedSave(devFork);
 
     assert.deepEqual(shown(opened), ['cmp_pinned', 'cmp_latest']);
