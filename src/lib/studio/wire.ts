@@ -298,7 +298,7 @@ export type TurnRequest = {
      *  `detail` to show. */
     apply_choice?: ApplyChoice | null;
     /** The index of the turn the request follows (0 before the first). A
-     *  request whose turn is no longer the conversation's latest is refused
+     *  request whose turn is not the conversation's latest is refused
      *  409 `edit_conflict` with `constraint_id: "turn_moved"` and begins no
      *  turn, so of two pages sending the same new question one begins it. */
     after_turn?: number | null;

@@ -92,9 +92,9 @@ export const PRESENTATION_HEADERS: HeaderPass = {
 };
 
 /**
- * What the Studio harness's routes need beyond the defaults: the index of
- * the turn each stream carries (x-dfo-turn-index), which the page keys its
- * transcript on.
+ * The Studio harness's routes pass one response header beyond the defaults,
+ * x-dfo-turn-index, the index of the turn each stream carries, which the page
+ * keys its transcript on.
  */
 export const STUDIO_HEADERS: HeaderPass = {
     request: [],

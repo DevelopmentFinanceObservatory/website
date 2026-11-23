@@ -190,7 +190,7 @@ export const mergeClosedTurns = (
  * follow-up (withFollowup). `tried` says the page sent it once and the
  * harness never admitted it: a refused send, which the meter gave back, a
  * send that never reached the harness, or one stopped while it waited. Such
- * a question is offered for the user to send, never sent again on its own.
+ * a question is offered for the user to send and is not sent again on its own.
  * A fork's inherited prompts answer another session's turns. Returns the
  * turn's index and the text, or null, and null also for a read whose latest
  * turn `closed_since` does not hold.
@@ -244,10 +244,10 @@ const DEFAULT_WAIT_SECONDS = 2;
 // The refused resumes carryOnTurn takes before it gives up on the turn.
 export const RESUME_ATTEMPTS = 5;
 
-// The seconds to wait after a refused resume before reading the state again,
-// or null when the refusal is final: a 409 (another stream took the turn,
-// or it paused or closed meanwhile) or a 503 `transient_unavailable` waits
-// the time it names and at least DEFAULT_WAIT_SECONDS.
+// The seconds to wait after a refused resume before reading the state again.
+// A 409 (another stream took the turn, or it paused or closed meanwhile) or a
+// 503 `transient_unavailable` waits the time it names and at least
+// DEFAULT_WAIT_SECONDS. Null for any other refusal, which is final.
 const resumeRetryAfter = (refusal: StreamRefusal): number | null => {
     const transient =
         refusal.status === 409 ||
@@ -262,11 +262,10 @@ const resumeRetryAfter = (refusal: StreamRefusal): number | null => {
  * Send harness turn `turnIndex`'s new question with `send`, which names that
  * turn as the one the request follows (`after_turn`). A request the harness
  * answers busy waits the time it names, which `handlers.onBusyWait` hears
- * (whileBusy), and is sent again. One it refuses
- * `turn_moved` (isTurnMoved) found a later turn begun, by another page that
- * sent the question or by this page's own earlier send, so it is not sent
- * again and `onMoved` hears it. Two pages that owe the same question
- * therefore begin one turn.
+ * (whileBusy), and is sent again. One it refuses `turn_moved` (isTurnMoved)
+ * found a later turn begun, by another page that sent the question or by
+ * this page's own earlier send, so it is not sent again and `onMoved` hears
+ * it. Two pages that owe the same question therefore begin one turn.
  */
 export const sendNewQuestion = async ({
     turnIndex,
@@ -392,8 +391,8 @@ export const approvalKeys = (messages: readonly ChatMessage[]): Set<string> => {
 /**
  * The plan a `plan.approved` frame of harness turn `turnIndex` brings, or
  * null for one that turn's reply already took (`held`, which then holds it):
- * a resume, and an `/interrupt` retry whose approval the run already took,
- * open with the frames of the plans the turn approved. A frame without a
+ * a resume and an `/interrupt` retry whose approval the run already took
+ * both open with the frames of the plans the turn approved. A frame without a
  * revision is always taken.
  */
 export const takeApproval = (
@@ -486,10 +485,9 @@ export const cardTurns = (
  * arrived meanwhile (`held`) or the page moved on (`isCurrent`), and handed
  * to `onDrawn`. Each card drawn, one the page never saw or one a missed turn
  * revised, is also kept on a legacy canvas (`keep`), as a streamed card is,
- * so a save made before the legacy canvas is taken holds it as shown, never
- * as a card the save hid. `inFlight`
- * holds the reads under way, by id and revision, so overlapping reads ask
- * for each card once.
+ * so a save made before the legacy canvas is taken holds it as shown.
+ * `inFlight` holds the reads under way, by id and revision, so overlapping
+ * reads ask for each card once.
  */
 export const drawManifestCards = async ({
     manifest,

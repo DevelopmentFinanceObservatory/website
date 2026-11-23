@@ -86,7 +86,7 @@ type StudioUser = { id: string; email: string };
  * harness gets the query and body the check read its conversation id from,
  * so both name one conversation. The ownership check runs in forward()'s
  * `admit` hook, after the per-address rate limit, and on a turn before the
- * prompt spend: a turn spends one prompt of the caller's daily allowance,
+ * prompt spend. A turn spends one prompt of the caller's daily allowance,
  * and meterTurn (src/lib/studio/spendPrompt) gives it back when the turn does
  * not start. Reading the state and resuming a turn spend none.
  *

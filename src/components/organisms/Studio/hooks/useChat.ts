@@ -296,7 +296,7 @@ const NO_LOCAL: LegacyLocal = { shown: [], hidden: [] };
 // conversation an account owns (isSignInRequired).
 const SIGN_IN_NOTE = '_Sign in to the account that owns this conversation to continue it._';
 
-// The reply of a turn the harness refused because it no longer holds the
+// The reply of a turn the harness refused because it holds no session for the
 // conversation (isSessionGone). The next turn starts afresh with a recap.
 const SESSION_GONE_NOTE =
     '_The server no longer holds this conversation. Send your message again to continue it._';
@@ -352,7 +352,7 @@ const endTurn = (
 // A conversation restored WITHOUT its server-side session (a fork of a
 // share, or a save whose session is gone) primes the next turn with a compact
 // recap of the transcript (forkRecap), so the agent picks up the thread
-// instead of starting cold. Sent with the message, never shown in the chat.
+// instead of starting cold. Sent with the message, hidden from the chat.
 
 // A saved transcript as the chat shows it. Without its harness session the
 // conversation starts afresh on the harness, which holds none of the answers
@@ -615,8 +615,8 @@ export const useChat = (
     // at once, and once answered the manifest decides again: the answer's,
     // or for a refused edit the one held before it (shownPins).
     const [pendingPins, setPendingPins] = useState<PendingPins>(() => new Map());
-    // The page learnt that the harness no longer holds this conversation's
-    // session: a state read or a request answered that the harness holds no
+    // Called when the harness holds no session for this conversation: a state
+    // read or a request answered that the harness holds no
     // conversation under its id (isSessionGone), or a new turn was admitted
     // at an index a prompt holds, since `/turn` begins a new conversation
     // under an id the harness lacks and numbers its turns from 1 again. The
@@ -663,8 +663,8 @@ export const useChat = (
     }, []);
     // A new question the page sent once and the harness never admitted
     // (refused, never reached, stopped, or taken out of the queue) is offered
-    // on the reply of the turn that asked it, for the user to send, and is
-    // never sent on its own again (owedNewQuestion reads the offer). Its
+    // on the reply of the turn that asked it, for the user to send, and the
+    // page sends it only on that click (owedNewQuestion reads the offer). Its
     // unsent prompt leaves the transcript with its reply and its Activity
     // entry, and its page turn is free again when it was the latest.
     const offerNewQuestion = useCallback((turnIndex: number, text: string) => {

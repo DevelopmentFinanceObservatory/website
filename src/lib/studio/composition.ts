@@ -6,9 +6,9 @@ import { isHarnessCard, legacyCanvasWidgetsOf, type CanvasState } from '../chat/
 /** The harness canvas this page last saw: which composition, at which
  *  revision, holding which cards, and which of them the manifest pins
  *  (`pinned`, absent on a legacy canvas and on a baseline saved before the
- *  page kept it). A null `compositionId` marks a legacy canvas: the cards a
- *  save from before the page kept the manifest showed, which the harness's
- *  manifest has not yet been brought to (createLegacyCanvas). */
+ *  page kept it). A null `compositionId` marks a legacy canvas, the cards a
+ *  save from before the page kept the manifest showed, which createLegacyCanvas
+ *  brings to the harness's manifest. */
 export type CanvasBaseline = {
     compositionId: string | null;
     revision: number;
@@ -64,7 +64,7 @@ export type TakenManifest = { baseline: CanvasBaseline; local: string[] };
  * lacks is one the harness removed. A manifest of another composition (a
  * forked conversation's new session, or a session the harness started
  * afresh under the same id) holds none of the old baseline's cards, so the
- * ones it lacks come back as `local`: the page keeps them, and the new
+ * ones it lacks come back as `local`. The page keeps them, and the new
  * session's manifests cannot take them off. The first manifest after a
  * legacy canvas returns no `local`, since createLegacyCanvas decides those.
  */
@@ -102,8 +102,8 @@ export const takeManifest = (
  * harness refused with "no block". The baseline's cards came from a manifest
  * of this composition, so the harness held each once and has since removed
  * it. The revision stays, so the next manifest is taken. Null when the
- * baseline is legacy or holds none of `ids`: the harness never held those
- * cards (createLegacyCanvas's `unheld`).
+ * baseline is legacy or holds none of `ids`, since the harness never held
+ * those cards (createLegacyCanvas's `unheld`).
  */
 export const withoutRemovedCards = (
     baseline: CanvasBaseline | null,
@@ -125,8 +125,8 @@ export const withoutRemovedCards = (
 /**
  * The cards a legacy save (see restoreCanvas) holds that its canvas hid, with
  * the revision the save held each at (`revisions`, restoreCardRevisions), or
- * null where the save does not know it: its widgets less the ones it showed
- * and less a fork's named inherited cards.
+ * null where the save does not know it. These are its widgets less the ones
+ * it showed and less a fork's named inherited cards.
  */
 export const legacyHiddenCards = (
     saved: { widgets: readonly { id: string }[]; localIds?: readonly string[] },
@@ -148,10 +148,10 @@ export const legacyHiddenCards = (
 export type LegacyLocal = { shown: string[]; hidden: string[] };
 
 /** The cards that turn local when the page leaves its harness session, as a
- *  fork's do (forkedCanvas): every card of the conversation, the ones the
- *  harness's canvas showed (`canvasIds`) shown and the rest hidden, so Add
- *  brings a hidden one back on the page alone. withLocalCards leaves a card
- *  that is local already as it is. */
+ *  fork's do (forkedCanvas). Every card of the conversation turns local, the
+ *  ones the harness's canvas showed (`canvasIds`) shown and the rest hidden,
+ *  so Add brings a hidden one back on the page alone. withLocalCards leaves a
+ *  card that is local already as it is. */
 export const sessionLeftCards = (
     canvasIds: readonly string[],
     widgets: readonly { id: string }[],
@@ -374,7 +374,7 @@ export type LegacyCanvas = ReturnType<typeof createLegacyCanvas>;
 export type CardMarks = { pinnedIds: string[]; removedIds: string[]; localIds: string[] };
 
 /** `marks` with the cards the harness turned out never to hold (useChat's
- *  localCards): `shown` ones stay on the canvas and `hidden` ones go off it.
+ *  localCards). `shown` ones stay on the canvas and `hidden` ones go off it.
  *  A card `marks` holds local already keeps whether it shows. Unchanged when
  *  it holds them all already. */
 export const withLocalCards = (

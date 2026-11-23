@@ -251,10 +251,10 @@ export const messageTurns = (
 };
 
 /**
- * The transcript with each prompt stamped with its page turn (`turn`) as
- * messageTurns numbers the transcript as saved. A save from before prompts
- * were stamped then renders as it did, and a turn a state read inserts
- * later cannot renumber it. Unchanged when every prompt has its stamp.
+ * The transcript with each unstamped prompt stamped with the page turn
+ * (`turn`) messageTurns gives it in the transcript as saved. A turn a state
+ * read inserts later then cannot renumber it. Unchanged when every prompt
+ * has its stamp.
  */
 export const withTurnStamps = (
     messages: ChatMessage[],

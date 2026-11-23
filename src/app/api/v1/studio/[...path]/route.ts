@@ -3,7 +3,7 @@ import { claimConversationOwner, conversationOwners } from '@/lib/chat/conversat
 import { studioProxy } from '@/lib/studio/studioProxy';
 
 // The studio-v1 harness (`/api/studio/*` on dfo-ai), mirrored under the
-// site's domain: src/lib/studio/studioProxy.
+// site's domain by src/lib/studio/studioProxy.
 const proxy = studioProxy({
     getUser,
     ownersOf: conversationOwners,

@@ -26,11 +26,10 @@ import { uuid } from '@/lib/uuid';
  * cards the canvas shows is the harness manifest's (canvasWidgetsOf).
  */
 export const useCanvasDocument = (initial?: SavedConversation) => {
-    // Pinned cards (`pinnedIds`): the harness keeps them when the model
-    // clears the canvas. The cards the harness never held (`localIds`), such
-    // as a fork's inherited cards. The cards of those and the text cards that
-    // the user took off the canvas (`removedIds`); the harness's manifest
-    // decides for its own.
+    // `pinnedIds` are the cards the harness keeps when the model clears the
+    // canvas. `localIds` are the cards the harness never held, such as a
+    // fork's inherited cards. `removedIds` are the local and text cards the
+    // user took off the canvas. The harness's manifest decides for its own.
     const [marks, setMarks] = useState<CardMarks>({
         pinnedIds: initial?.pinnedIds ?? [],
         removedIds: initial?.removedIds ?? [],

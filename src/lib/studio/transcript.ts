@@ -28,10 +28,10 @@ export const withRefundedPrompt = (messages: ChatMessage[]): ChatMessage[] => {
     return messages.map((message, at) => (at === index ? { ...prompt, refunded: true } : message));
 };
 
-// A prompt that opened a turn of this conversation's harness session: not
-// an answer, not refunded, not inherited from the conversation a fork
-// copied, and not a prompt of an unkeyed save whose turn could not be told
-// (keyUnkeyedSave).
+// A prompt that opened a turn of this conversation's harness session.
+// Answers, refunded prompts, prompts inherited from the conversation a fork
+// copied, and prompts of an unkeyed save whose turn could not be told
+// (keyUnkeyedSave) are excluded.
 const isOwnPrompt = (message: ChatMessage): message is Extract<ChatMessage, { role: 'user' }> =>
     message.role === 'user' &&
     isPrompt(message) &&
@@ -114,9 +114,9 @@ export const withSessionLeft = (messages: ChatMessage[], turn?: number): ChatMes
     return [...left, ...messages.slice(until)];
 };
 
-// A fork's first turn, before forks marked their inherited messages, was
-// sent as a recap of the copied transcript followed by the user's message
-// (forkRecap). The harness records that whole text as the turn's prompt.
+// A fork's first turn can open with a recap of the copied transcript
+// followed by the user's message (forkRecap). The harness records that whole
+// text as the turn's prompt.
 const RECAP_HEAD = 'Context \u2014 this continues an earlier conversation';
 const RECAP_TAIL = '\n\nNew message:\n';
 const RECAP_TURNS = 6;
@@ -164,8 +164,8 @@ const recordsText = (recorded: string, text: string): boolean =>
     recorded === text || recorded.startsWith(`${text}\n(then: `);
 
 // The labels a chip prompt of `text` may name: a page shows a chip's prompt
-// as its action (chipAction) or, before chips were worded as actions, as the
-// option's bare label.
+// as its action (chipAction) or, in an older save, as the option's bare
+// label.
 const CHIP_ACTIONS = ['Count as ', 'Switch to '];
 
 const chipLabels = (text: string): string[] => [
@@ -201,10 +201,9 @@ const afterRecap = (recorded: string): string | null => {
  * - A turn whose recorded prompt matches one page prompt, and that prompt no
  *   other turn, pairs them, in order. A chip's turn, recorded as
  *   `count {label}`, matches the prompt that shows the chip (recordsPrompt).
- *   A fork's first turn matches on its
- *   recap: the recap of the messages before the prompt (forkRecap) followed
- *   by the prompt's text, else the text after the recap when only one prompt
- *   has it.
+ *   A fork's first turn matches on its recap, which is the recap of the
+ *   messages before the prompt (forkRecap) followed by the prompt's text, or
+ *   else the text after the recap when only one prompt has it.
  * - Between two such pairs, prompts and turns of equal number whose texts
  *   match one for one pair in order.
  *
@@ -212,8 +211,8 @@ const afterRecap = (recorded: string): string | null => {
  * its prompt are a fork's copied transcript and become `inherited`. Every
  * other prompt left without a turn is kept with its reply and marked
  * `unkeyed`, so it numbers no turn; the turns it may have been are merged in
- * from the harness's record (ensureTurn). Unchanged for a transcript that
- * is no unkeyed save.
+ * from the harness's record (ensureTurn). Unchanged for any other
+ * transcript.
  */
 export const keyUnkeyedSave = (
     messages: ChatMessage[],
@@ -391,8 +390,7 @@ export const UNSENT_NOTE = '_This message was not sent._';
  * turn, takes the turn after the latest the transcript holds when the read
  * holds that turn and the harness recorded its text (recordsPrompt, or the
  * text after a fork's recap on turn 1), whether or not a later turn
- * followed it. Every other
- * own prompt with no turn is one the read shows the harness lacks: it is
+ * followed it. Every other own prompt with no turn is one the read shows the harness lacks: it is
  * marked `unkeyed`, so it numbers no turn, and an empty reply says it was
  * not sent. The turns it may have been come in from the harness's record
  * (ensureTurn).
@@ -423,7 +421,7 @@ export const withReadPrompts = (
         return messages;
     }
 
-    // Each unsent prompt's reply: the last bot message before the next prompt.
+    // Each unsent prompt's reply is the last bot message before the next prompt.
     const replies = new Set(
         [...unsent].flatMap((at) => {
             const next = messages.findIndex((message, other) => other > at && isPrompt(message));

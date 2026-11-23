@@ -13,14 +13,13 @@
  * turn also need the caller to own it, so a guest, who owns nothing, gets
  * neither. A conversation no account owns (a guest's) stays open to the
  * routes that drive a turn. What keeps a conversation private is its id, a
- * random UUID the page mints; the refusals here do not hide whether an id
- * exists.
+ * random UUID the page mints. The refusals here reveal whether an id exists.
  *
  * The proxy checks a call in two steps. readStudioCall rebuilds the call it
  * forwards, before the rate limit, and reads no database. checkStudioOwner
  * reads and claims the owner inside forward()'s `admit` hook, after the rate
- * limit and before a turn spends a prompt, so a refused or unmetered call
- * reads and writes no owner row.
+ * limit and before a turn spends a prompt, so a call the rate limit refuses
+ * reads no owner row, and only a `turn` call writes one.
  */
 
 // The routes that need the caller's own saved copy of the conversation.
@@ -30,8 +29,8 @@ const OWNER_ROUTES: ReadonlySet<string> = new Set(['state', 'resume']);
 // call without one is refused here.
 const DRIVE_ROUTES: ReadonlySet<string> = new Set(['turn', 'interrupt', 'cancel', 'composition']);
 
-// The route that drives a turn, and so the only one whose call claims a
-// conversation no account owns for the signed-in caller.
+// Only a `turn` call claims, for the signed-in caller, a conversation no
+// account owns.
 const CLAIM_ROUTE = 'turn';
 
 // The largest request body the proxy reads for its conversation id. A turn's
@@ -65,7 +64,7 @@ export type StudioCall = {
  * URLSearchParams keeps the first, and so is a `session_id` parameter, which
  * a harness older than the one this page needs read as an alias of
  * `conversation_id`. Any other method carries a JSON object body and no
- * query: the query is dropped, and the body is forwarded as re-serialised
+ * query. The query is dropped, and the body is forwarded as re-serialised
  * here. The raw text never reaches the harness, so a body the harness's JSON
  * parser would read differently (a repeated member, `NaN`) cannot name a
  * conversation the proxy did not check. The body loses `session_id` for the
@@ -124,8 +123,8 @@ export type StudioCallRead =
  * one. `readBody` reads the request body, null when it is over
  * MAX_STUDIO_BODY_BYTES. A call that cannot name one conversation
  * unambiguously is `malformed`, as is a body whose `conversation_id` is not a
- * string. An OPTIONS call reads nothing and goes on
- * with no query and no body (`call` null).
+ * string. An OPTIONS call reads nothing and goes on with no query and no body
+ * (`call` null).
  */
 export const readStudioCall = async ({
     method,
@@ -201,8 +200,9 @@ export const OWNERSHIP_RETRY_SECONDS = 5;
  * and the other is refused. A call that names no conversation goes on to the
  * harness, which refuses it, except on a route that needs the caller's own
  * copy, and on a route that drives a turn, which always names one. A check
- * whose reads fail, or have not answered within `timeoutMs`, refuses the call as `unavailable`, since forwarding it unchecked would open
- * a saved conversation to anyone.
+ * whose reads fail, or have not answered within `timeoutMs`, refuses the call
+ * as `unavailable`, since forwarding it unchecked would open a saved
+ * conversation to anyone.
  */
 export const checkStudioOwner = async ({
     route,

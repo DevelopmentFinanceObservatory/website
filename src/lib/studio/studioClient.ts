@@ -96,7 +96,7 @@ export const turnIndexOf = (headers: Headers): number | null => {
  *  `error` frame. Each returns true when it has dealt with it. `onBusyWait`
  *  hears the seconds a request waits because another stream holds the
  *  conversation (whileBusy), and null when the wait is over and the request
- *  goes again: between the two the page holds no stream. */
+ *  goes again. Between the two the page holds no stream. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onTurnIndex?: (index: number) => void;
@@ -400,9 +400,9 @@ export const watchAdmission = (
 };
 
 /**
- * What Stop does to a stream. `cancel`: the harness admitted the request
- * (watchAdmission), so it is asked to cancel the turn and the stream is read
- * to its end. Otherwise the request ends at once, nothing more is sent, and
+ * What Stop does to a stream. When the harness admitted the request
+ * (watchAdmission), `cancel` is true, the harness is asked to cancel the turn
+ * and the stream is read to its end. Otherwise the request ends at once and
  * no cancel goes out, since the turn running may be another stream's. A
  * `metered` request (a POST turn) ended so is `refunded`: the site's meter
  * gives back the prompt of a refused turn, and a turn the harness never

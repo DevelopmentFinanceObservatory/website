@@ -92,7 +92,7 @@ export const withPinsSent = (
 };
 
 /** `pending` once the harness answered `operations`, by a manifest or a
- *  refusal: a card with no edit left in flight shows the manifest's pin. */
+ *  refusal. A card with no edit left in flight shows the manifest's pin. */
 export const withPinsSettled = (
     pending: PendingPins,
     operations: readonly MutationOperation[],

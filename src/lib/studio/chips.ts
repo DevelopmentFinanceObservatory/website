@@ -2,8 +2,8 @@
  * The chips a `suggestions` frame offers after an answer: prompt follow-ups,
  * sent as the user's next message, and `apply_choice` chips, which switch a
  * scope choice of the answer's readings, or how its flow is counted, in one
- * turn. Also what the
- * transcript shows when the harness refuses a chip that no longer applies.
+ * turn. Also what the transcript shows when the harness refuses a chip that
+ * no longer applies.
  */
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
@@ -44,8 +44,7 @@ export const isCountChoice = (choiceId: string): boolean => choiceId.endsWith(':
  * What a chip says, and what the transcript shows once it is clicked: the
  * switch it makes, "Switch to gross disbursements, current USD", or for a
  * count chip "Count as net disbursements". The harness sends the option's
- * bare label, which on its own reads as the basis of the answer above it
- * rather than the other option it offers.
+ * bare label, which on its own reads as the basis of the answer above it.
  */
 export const chipAction = (chip: ApplyChoiceSuggestion): string =>
     isCountChoice(chip.choice_id) ? `Count as ${chip.label}` : `Switch to ${chip.label}`;

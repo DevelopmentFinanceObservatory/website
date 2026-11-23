@@ -23,7 +23,7 @@ const bindSessionOwner = async (db: SaveDb, agentSessionId: string, userId: stri
 };
 
 /**
- * Insert or replace `userId`'s saved conversation: the client owns the id and
+ * Insert or replace `userId`'s saved conversation. The client owns the id and
  * sends the full document. A save naming a harness conversation that belongs
  * to no account yet makes it `userId`'s (studioSessionOwner). A harness
  * conversation that already belongs to an account stays with it, whoever
