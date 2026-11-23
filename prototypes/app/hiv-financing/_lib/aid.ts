@@ -526,7 +526,7 @@ export const readAid = async (
         { fallback: { tier: 'committed', value: committed }, signal },
     );
 
-const RANK: Record<ReadTier, number> = { committed: 0, pinned: 1, stored: 2 };
+const RANK: Record<ReadTier, number> = { committed: 0, pinned: 1, built: 2, stored: 3 };
 
 /**
  * The island's `data-read-tier`, the oldest tier of the two reads its figures come from: the

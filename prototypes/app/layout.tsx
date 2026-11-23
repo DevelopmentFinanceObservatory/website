@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
+import { buildStamp } from '#lib/buildStamp.ts';
+
 import { CARD } from '../registry';
 
 import Analytics from '@/components/atoms/Analytics/Analytics';
@@ -23,10 +25,14 @@ import '@/styles/main.scss';
 // app shares the site's origin, so the consent manager shows and stores the
 // visitor's site-wide choices, and GA4 reports its pages under /prototypes/.
 // The header and footer link to the site through siteHref (src/lib/site.ts).
-// The commit this build was made from, read by scripts/check-live.mts as
-// <meta name="dfo-build"> so a post-deploy check accepts only the new build. The deploy
-// workflow sets DEPLOY_COMMIT; a local build without it reads `local`.
-const BUILD_COMMIT = process.env.DEPLOY_COMMIT || 'local';
+// The commit this build was made from and, in CI, its run (lib/buildStamp.ts), read by
+// scripts/check-live.mts as <meta name="dfo-build"> so a post-deploy check accepts only the new
+// build. The deploy workflow sets DEPLOY_COMMIT and Actions sets GITHUB_RUN_ID; a local build
+// without them reads `local`.
+const BUILD_STAMP = buildStamp({
+    commit: process.env.DEPLOY_COMMIT || 'local',
+    run: process.env.GITHUB_RUN_ID,
+});
 const DESCRIPTION = `Tools and apps built on the ${SITE_NAME} infrastructure.`;
 
 export const metadata: Metadata = {
@@ -36,7 +42,7 @@ export const metadata: Metadata = {
         template: `%s · Prototypes · ${SITE_NAME}`,
     },
     description: DESCRIPTION,
-    other: { 'dfo-build': BUILD_COMMIT },
+    other: { 'dfo-build': BUILD_STAMP },
     openGraph: {
         ...pageOpenGraph({ title: 'Prototypes', description: DESCRIPTION, image: CARD }),
         type: 'website',
