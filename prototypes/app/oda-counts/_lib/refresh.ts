@@ -4,18 +4,17 @@
 // live-refs.json loads only here, when a spec changed.
 import type { BuiltCounts, ReadKey } from './derive.ts';
 
-import { recordOf } from '#lib/record.ts';
 import type { RefreshPlan } from '#lib/storedCheck.ts';
 
 /** The page's DAC1 sources and derivation, as the build reads them. */
 export const loadRefresh = async (): Promise<RefreshPlan<ReadKey, BuiltCounts>> => {
-    const [{ default: liveRefs }, { deriveCounts, READ_KEYS }] = await Promise.all([
+    const [{ default: liveRefs }, { countsSources, deriveCounts }] = await Promise.all([
         import('../_data/live-refs.json', { with: { type: 'json' } }),
         import('./derive.ts'),
     ]);
 
     return {
-        sources: recordOf(READ_KEYS, (key) => ({ ref: liveRefs.data[key] })),
+        sources: countsSources(liveRefs.data),
         derive: deriveCounts,
     };
 };

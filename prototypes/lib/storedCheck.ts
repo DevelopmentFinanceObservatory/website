@@ -5,15 +5,19 @@
 // changed, the page reads nothing. When any did, it reads every source again at DFO's newest
 // stored versions (`readStored`, ./liveRead.ts) and derives its figures as the build does, since
 // each page derives its figures from all its sources together, and shows them in place of the
-// built ones. Any failure, a figure check the new rows break included, leaves the built figures.
+// built ones. Reads that took one spec at two versions, as when DFO stored a version between two
+// of them, mix two releases and are refused, as the build refuses them (`checkOneVersionPerSpec`,
+// ./versions.ts). Any failure, a figure check the new rows break included, leaves the built
+// figures.
 //
 // The check and the reads go through the page's anonymous client and pacer (./pacing.ts), as
 // every other browser read does. The page's root carries the outcome as `data-stored-check`.
-import { type Client, type Spec, StoredVersions } from '@developmentfinance/client';
+import { type Client, type Dataset, type Spec, StoredVersions } from '@developmentfinance/client';
 import type { StoredVersionsJson } from '@developmentfinance/client/types';
 
 import { type Derive, type LiveSource, readStored, STORED_TIMEOUT_MS } from './liveRead.ts';
 import { type Lane, liveClient, pacer } from './pacing.ts';
+import { checkOneVersionPerSpec, datasetVersionsOf } from './versions.ts';
 
 /** A page root's `data-stored-check`: `checking` until DFO answers, `unchanged` when DFO
  *  stores nothing newer than the build read, `refreshed` when the page shows figures read
@@ -75,7 +79,8 @@ const specsOf = (built: StoredVersions): Spec[] =>
 /**
  * Checks DFO's stored versions of the specs `stored` names and, when any changed, reads every
  * source of `load()` again and derives the page's figures. Resolves `failed`, logging only to
- * `console.debug`, when the check, the load, a read or the derivation fails, or `signal` aborts.
+ * `console.debug`, when the check, the load, a read or the derivation fails, the reads took one
+ * spec at two versions, or `signal` aborts.
  * `client`, `lane` and `now` stand in for the page's client, pacer and clock, as a test does.
  */
 export const refreshIfNewer = async <K extends string, T>({
@@ -106,6 +111,16 @@ export const refreshIfNewer = async <K extends string, T>({
 
         const { sources, derive } = await load();
         const read = await readStored(sources, derive, { client, signal });
+
+        checkOneVersionPerSpec(
+            'the page',
+            Object.fromEntries(
+                Object.entries<Dataset>(read.datasets).map(([key, dataset]) => [
+                    key,
+                    { versions: datasetVersionsOf(dataset), freshness: dataset.freshness },
+                ]),
+            ),
+        );
 
         return {
             status: 'refreshed',

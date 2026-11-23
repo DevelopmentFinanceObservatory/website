@@ -6,7 +6,7 @@ import type { Row } from '@developmentfinance/client/types';
 
 import type { ByYear, CountsData, Donor, Prices, SeriesKey } from '../_data/types.ts';
 
-import type { Derive } from '#lib/liveRead.ts';
+import type { Derive, LiveSource } from '#lib/liveRead.ts';
 import { recordOf } from '#lib/record.ts';
 
 /** The monetary series, in the order the page lists them. */
@@ -356,3 +356,8 @@ export const deriveCounts: Derive<ReadKey, BuiltCounts> = (rows, datasets) => ({
     }),
     citation: datasets['gross/current'].citation.text,
 });
+
+/** The page's 19 DAC1 reads of `refs`, live-refs.json's `data`, by key. */
+export const countsSources = (
+    refs: Readonly<Record<ReadKey, unknown>>,
+): Record<ReadKey, LiveSource> => recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));

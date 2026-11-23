@@ -490,7 +490,7 @@ for (const [label, pendingBound, reads] of [
     ['with no pending bound, after one read again', 0, 2],
     ['within the pending bound, after CHECKED_READS reads', PENDING_BOUND_MS, CHECKED_READS],
 ] as const) {
-    test(`fails the build when the check moves during every read: ${label}`, async () => {
+    test(`takes the last read and records the check before it when the check moves during every read: ${label}`, async () => {
         const info = mock.method(console, 'info', () => {});
 
         try {
@@ -501,18 +501,24 @@ for (const [label, pendingBound, reads] of [
                 Array.from({ length: 10 }, (_, index) => dataset(index)),
                 checks,
             );
+            let read: Awaited<ReturnType<typeof readChecked<'a', unknown[]>>> | undefined;
 
-            await assert.rejects(
-                readChecked('fragility-finance', { a: { ref: refJson } }, valueOf, {
+            const lines = await withWarnings(async () => {
+                read = await readChecked('fragility-finance', { a: { ref: refJson } }, valueOf, {
                     client,
                     lanes: freshLanes(),
                     pendingBound,
                     ...fakeTime(),
-                }),
-                (error: Error) =>
-                    /fragility-finance/.test(error.message) && error.message.includes(SPEC),
-            );
+                });
+            });
+
             assert.equal(calls.length, reads);
+            assert.deepEqual(read?.value, [reads - 1]);
+            // The check taken before the last read: the older heads, so a visitor's check differs.
+            assert.deepEqual(read?.stored, checks[reads - 1]?.toJSON());
+            assert.equal(lines.length, 1);
+            assert.match(lines[0] ?? '', /^::warning::fragility-finance: /);
+            assert.ok(lines[0]?.includes(SPEC));
         } finally {
             info.mock.restore();
         }

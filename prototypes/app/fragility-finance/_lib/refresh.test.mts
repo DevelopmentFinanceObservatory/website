@@ -5,9 +5,11 @@ import test from 'node:test';
 import refs from '../_data/refs.json' with { type: 'json' };
 
 import { parseClassification } from './classification.ts';
-import { recipientGroups } from './figures.ts';
+import { recipientGroups, sources } from './figures.ts';
 import { context } from './fixture.mts';
 import { loadRefresh, profilesOf } from './refresh.ts';
+
+import { assertSameSources } from '#lib/sameSources.mts';
 
 const profiles = parseClassification(
     readFileSync(new URL('../_data/fragility-2026.tsv', import.meta.url), 'utf8'),
@@ -18,18 +20,9 @@ test('the browser takes the classification back from the built figures, in its o
     assert.deepEqual(profilesOf(built), profiles);
 });
 
-test('the browser reads again what the build reads, for the same recipients', async () => {
-    const { sources } = await loadRefresh(built);
-    const groups = recipientGroups(refs.data, profiles);
+test('the browser reads again the sources the build reads', async () => {
+    const { sources: loaded } = await loadRefresh(built);
 
-    assert.deepEqual(
-        Object.keys(sources).toSorted(),
-        [
-            ...Object.keys(groups).flatMap((key) => [key, `${key}/purposes`, `${key}/providers`]),
-            ...['climate-total', 'climate-adaptation', 'climate-mitigation'].map(
-                (key) => `${key}/total`,
-            ),
-            ...Object.keys(refs.data).filter((key) => !/^aid-|^climate-/.test(key)),
-        ].toSorted(),
-    );
+    // As _lib/build.ts reads them, from the classification file.
+    assertSameSources(loaded, sources(refs.data, recipientGroups(refs.data, profiles)));
 });

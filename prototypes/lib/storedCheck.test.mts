@@ -27,7 +27,6 @@ const refJson = {
         },
     ],
 };
-const ref = DatasetRef.fromJSON(refJson);
 
 /** The build's check: SPEC and OTHER at VERSION. */
 const BUILT = {
@@ -48,11 +47,24 @@ const checkWith = (version: string | null) =>
         ],
     });
 
+/** A ref of SPEC at `version`, as a read returns it. */
+const refAt = (version: string) =>
+    DatasetRef.fromJSON({
+        ...refJson,
+        members: [{ ...refJson.members[0]!, content_version: version }],
+    });
+
 /** A stand-in client whose check answers `check`, or throws it when it is an Error, and whose
- *  reads answer one row holding `value`, or throw `value` when it is an Error. */
-const stubClient = (check: StoredVersions | Error, value: number | Error = 7) => {
+ *  reads answer one row holding `value`, or throw `value` when it is an Error. The nth read
+ *  takes SPEC at `versions[n]`, VERSION once they run out. */
+const stubClient = (
+    check: StoredVersions | Error,
+    value: number | Error = 7,
+    versions: readonly string[] = [],
+) => {
     const checked: unknown[][] = [];
     const fetched: unknown[] = [];
+    const options: { latest?: unknown }[] = [];
     const client = {
         storedVersions: async (targets: unknown[]) => {
             checked.push(targets);
@@ -63,15 +75,16 @@ const stubClient = (check: StoredVersions | Error, value: number | Error = 7) =>
 
             return check;
         },
-        fetch: async (target: unknown) => {
+        fetch: async (target: unknown, given: { latest?: unknown }) => {
             fetched.push(target);
+            options.push(given);
 
             if (value instanceof Error) {
                 throw value;
             }
 
             return {
-                ref,
+                ref: refAt(versions[fetched.length - 1] ?? VERSION),
                 freshness: 'current',
                 toRows: async () => [{ time_period: 2024, value }],
             };
@@ -79,7 +92,7 @@ const stubClient = (check: StoredVersions | Error, value: number | Error = 7) =>
     };
 
     // The stand-in implements only `storedVersions` and `fetch`, and returns dataset stubs.
-    return { checked, fetched, client: client as unknown as StoredChecker };
+    return { checked, fetched, options, client: client as unknown as StoredChecker };
 };
 
 const sources: Record<'a' | 'b', LiveSource> = { a: { ref: refJson }, b: { ref: refJson } };
@@ -129,7 +142,7 @@ test('reads nothing when DFO stores the versions the build recorded', async () =
 });
 
 test('reads every source again and derives the figures when a spec changed', async () => {
-    const { checked, fetched, client } = stubClient(checkWith(NEWER), 5);
+    const { checked, fetched, options, client } = stubClient(checkWith(NEWER), 5);
     const { calls, load } = counted();
 
     const result = await refreshIfNewer({
@@ -147,7 +160,46 @@ test('reads every source again and derives the figures when a spec changed', asy
     });
     assert.equal(checked.length, 1);
     assert.equal(fetched.length, 2);
+    assert.deepEqual(
+        options.map(({ latest }) => latest),
+        ['stored', 'stored'],
+    );
     assert.equal(calls.count, 1);
+});
+
+test('reads nothing when a spec held no stored version at the build and holds none now', async () => {
+    const none = {
+        ...BUILT,
+        heads: [
+            { spec_id: SPEC, content_version: null },
+            { spec_id: OTHER, content_version: VERSION },
+        ],
+    };
+    const { fetched, client } = stubClient(checkWith(null));
+    const { calls, load } = counted();
+
+    const result = await refreshIfNewer({ stored: none, load, client, lane: createLane(4) });
+
+    assert.deepEqual(result, { status: 'unchanged' });
+    assert.equal(fetched.length, 0);
+    assert.equal(calls.count, 0);
+});
+
+test('fails, keeping the built figures, when the reads again took one spec at two versions', async () => {
+    const { client } = stubClient(checkWith(NEWER), 5, [VERSION, NEWER]);
+    let result: unknown;
+
+    const logged = await quietly(async () => {
+        result = await refreshIfNewer({
+            stored: BUILT,
+            load: counted().load,
+            client,
+            lane: createLane(4),
+        });
+    });
+
+    assert.deepEqual(result, { status: 'failed' });
+    assert.equal(logged, 1);
 });
 
 for (const [label, make] of [
@@ -185,7 +237,7 @@ test('fails, keeping the built figures, when the rows read again break a figure 
 });
 
 test('fails, reading nothing, when the page aborts the check', async () => {
-    const { fetched, client } = stubClient(checkWith(NEWER));
+    const { checked, fetched, client } = stubClient(checkWith(NEWER));
     let result: unknown;
 
     await quietly(async () => {
@@ -199,6 +251,7 @@ test('fails, reading nothing, when the page aborts the check', async () => {
     });
 
     assert.deepEqual(result, { status: 'failed' });
+    assert.equal(checked.length, 0);
     assert.equal(fetched.length, 0);
 });
 

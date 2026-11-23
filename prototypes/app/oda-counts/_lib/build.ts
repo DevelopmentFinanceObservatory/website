@@ -10,7 +10,13 @@ import liveRefs from '../_data/live-refs.json' with { type: 'json' };
 import type { Definition, LiveData } from '../_data/types.ts';
 
 import { definitionsFromNodes, NODE_IDS } from './definitions.ts';
-import { type BuiltCounts, deriveCounts, READ_KEYS, type ReadKey } from './derive.ts';
+import {
+    type BuiltCounts,
+    countsSources,
+    deriveCounts,
+    READ_KEYS,
+    type ReadKey,
+} from './derive.ts';
 import { identitiesFromRefs, MAX_ENTRIES, offerFromResponses, offerRequests } from './live.ts';
 
 import {
@@ -21,7 +27,6 @@ import {
     readChecked,
 } from '#lib/buildRead.ts';
 import type { Lane } from '#lib/pacing.ts';
-import { recordOf } from '#lib/record.ts';
 
 const PAGE = 'oda-counts';
 
@@ -105,7 +110,7 @@ export const readOdaCounts = async (
 ): Promise<Built> => {
     const client = new Client({ apiKey: false });
     const started = Date.now();
-    const sources = recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));
+    const sources = countsSources(refs);
     const { reads } = options.lanes ?? buildLanes;
     const [counts, definitions, live] = await Promise.all([
         readChecked(PAGE, sources, deriveCounts, options),

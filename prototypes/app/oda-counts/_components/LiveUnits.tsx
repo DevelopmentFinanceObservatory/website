@@ -7,6 +7,7 @@ import {
     use,
     useEffect,
     useEffectEvent,
+    useLayoutEffect,
     useRef,
     useState,
     type ReactNode,
@@ -111,6 +112,11 @@ const builtBasis = (donor: Donor, prices: Prices): LiveBasis =>
 const pairKey = ({ donorId, unit }: Shown): string =>
     `${donorId} ${unit.currency} ${unit.baseYear}`;
 
+/** Whether a rejection is an aborted request's: the client rejects with the signal's reason,
+ *  an `AbortError` when the provider aborts it. */
+const isAbort = (error: unknown): boolean =>
+    error instanceof DOMException && error.name === 'AbortError';
+
 /**
  * Holds the donor and the unit the page shows, and fetches a donor's figures from Search
  * in any unit the built figures do not hold. A pick shows at once when its figures are at
@@ -122,13 +128,15 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * them. Figures are cached per donor and unit for the session. A newer pick aborts every
  * request it does not need. A failed pick returns to the figures on screen, or to the new
  * donor in US dollars, and sets `failed`, which says whether the gateway refused it for
- * the address's `api` allowance (see PICKED_PER_REQUEST).
+ * the address's `api` allowance (see PICKED_PER_REQUEST). A request the provider aborted
+ * itself sets nothing.
  *
  * The figures in US dollars are the build's `counts`, read at `retrieved`, until a check after
  * paint finds DFO has stored newer data than `stored`, the build's check, and the read again
- * succeeds (lib/storedCheck.ts). Then the provider below starts over on the new counts, so no
- * figure fetched for the old ones stays on screen or in the cache, and fetches the reader's last
- * pick again (`resumePick`).
+ * succeeds (lib/storedCheck.ts). When the counts change, before the browser paints them, the
+ * provider drops every conversion and lead fetched for the old counts and aborts the requests
+ * in flight, then resumes the reader's pick on the new counts (`resumePick`). Everything else on
+ * the page, such as the year shown, stays.
  */
 export const LiveUnitsProvider = ({
     counts,
@@ -144,45 +152,10 @@ export const LiveUnitsProvider = ({
     children: ReactNode;
 }) => {
     const { value, ...checked } = useStoredCheck(counts, retrieved, stored, loadRefresh);
-    // The reader's last pick, which outlives the provider below when the counts change.
-    const [lastPick, setLastPick] = useState<Shown | null>(null);
-
-    return (
-        <StoredCheckContext value={checked}>
-            <PickedUnits
-                key={checked.retrieved}
-                counts={value}
-                live={live}
-                resume={lastPick}
-                onPick={setLastPick}
-            >
-                {children}
-            </PickedUnits>
-        </StoredCheckContext>
-    );
-};
-
-/** `LiveUnitsProvider`'s picks on one set of counts, resuming at `resume`, the reader's pick
- *  before the counts changed, and telling `onPick` of each pick. */
-const PickedUnits = ({
-    counts,
-    live,
-    resume,
-    onPick,
-    children,
-}: {
-    counts: BuiltCounts;
-    live: LiveData;
-    resume: Shown | null;
-    onPick: (pick: Shown) => void;
-    children: ReactNode;
-}) => {
-    const { data, citation } = counts;
-    const [initial] = useState(() =>
-        resumePick(resume, { donorId: DEFAULT_DONOR, unit: builtUnit(data) }, data),
-    );
-    const [picked, setPicked] = useState<Shown>(initial.picked);
-    const [shown, setShown] = useState<Shown>(initial.shown);
+    const { data, citation } = value;
+    const start: Shown = { donorId: DEFAULT_DONOR, unit: builtUnit(data) };
+    const [picked, setPicked] = useState<Shown>(start);
+    const [shown, setShown] = useState<Shown>(start);
     const [cache, setCache] = useState<ReadonlyMap<string, LiveBasis>>(new Map());
     // The lead basis of each pair drawn before its other basis was in, by `pairKey`.
     const [leads, setLeads] = useState<ReadonlyMap<string, Prices>>(new Map());
@@ -193,16 +166,13 @@ const PickedUnits = ({
     );
     // Mirrors `cache` for the async code, which must not read a stale render's copy.
     const cached = useRef(new Map<string, LiveBasis>());
-    const latest = useRef(initial.picked);
+    const latest = useRef(start);
     // The figures on screen, for the async code.
-    const onScreen = useRef(initial.shown);
-    // False once the counts change, so answers to this provider's requests are dropped.
-    const active = useRef(true);
-
-    const pickTo = (target: Shown) => {
-        setPicked(target);
-        onPick(target);
-    };
+    const onScreen = useRef(start);
+    // The counts the cache and the requests belong to, and how many times they changed, so an
+    // answer to a request made on older counts is dropped.
+    const counted = useRef(data);
+    const generation = useRef(0);
 
     const donorOf = (donorId: string): Donor => {
         const donor = findDonor(data, donorId) ?? data.donors[0];
@@ -217,16 +187,21 @@ const PickedUnits = ({
     const available = (donorId: string, unit: Unit): boolean =>
         isBuilt(unit, data) || cached.current.has(basisKey(donorId, unit));
 
-    const fetchBasis = (donorId: string, unit: Unit, perRequest: number): Promise<LiveBasis> => {
+    const fetchBasis = (
+        donorId: string,
+        unit: Unit,
+        perRequest: number,
+    ): { promise: Promise<LiveBasis>; signal: AbortSignal } => {
         const key = basisKey(donorId, unit);
         const running = inflight.current.get(key);
 
         if (running !== undefined) {
-            return running.promise;
+            return { promise: running.promise, signal: running.controller.signal };
         }
 
-        // A newer pick that does not need this basis aborts it.
+        // A newer pick that does not need this basis aborts it, as a change of counts does.
         const controller = new AbortController();
+        const made = generation.current;
         const promise: Promise<LiveBasis> = fetchLiveBasis({
             client: resolverClient(),
             lane: pickLane,
@@ -239,8 +214,10 @@ const PickedUnits = ({
             signal: controller.signal,
         })
             .then((basis) => {
-                cached.current.set(key, basis);
-                setCache(new Map(cached.current));
+                if (generation.current === made) {
+                    cached.current.set(key, basis);
+                    setCache(new Map(cached.current));
+                }
 
                 return basis;
             })
@@ -254,7 +231,7 @@ const PickedUnits = ({
 
         inflight.current.set(key, { promise, controller });
 
-        return promise;
+        return { promise, signal: controller.signal };
     };
 
     /** Entries per request for `target`'s basis: one, unless the allowance the gateway last
@@ -277,7 +254,7 @@ const PickedUnits = ({
         const sibling = siblingOf(target);
 
         if (!available(target.donorId, sibling)) {
-            fetchBasis(target.donorId, sibling, live.maxEntries).catch(() => {
+            fetchBasis(target.donorId, sibling, live.maxEntries).promise.catch(() => {
                 // A sibling that fails loads again when the reader picks it.
             });
         }
@@ -296,9 +273,62 @@ const PickedUnits = ({
         setShown(target);
     };
 
+    /** Shows `target`, at once when its figures are at hand, else once they are fetched. */
+    const request = (target: Shown) => {
+        if (available(target.donorId, target.unit)) {
+            show(target);
+            prefetchSibling(target);
+
+            return;
+        }
+
+        const made = generation.current;
+        const { promise, signal } = fetchBasis(
+            target.donorId,
+            target.unit,
+            pickedPerRequest(target),
+        );
+        const current = () => generation.current === made && sameShown(latest.current, target);
+
+        promise.then(
+            () => {
+                if (current()) {
+                    show(target);
+                    prefetchSibling(target);
+                }
+            },
+            (error: unknown) => {
+                // The provider aborted the request itself: a newer pick, new counts, or its
+                // own unmount, as Strict Mode runs one.
+                if (signal.aborted || isAbort(error) || !current()) {
+                    return;
+                }
+
+                console.error('ODA counts: could not convert the figures live', error);
+
+                // Back to the figures on screen, or to the new donor in US dollars.
+                const fallback: Shown =
+                    onScreen.current.donorId === target.donorId
+                        ? onScreen.current
+                        : {
+                              donorId: target.donorId,
+                              unit: {
+                                  ...builtUnit(data),
+                                  prices: target.unit.prices,
+                              },
+                          };
+
+                latest.current = fallback;
+                setPicked(fallback);
+                show(fallback);
+                setFailed(error instanceof RateLimitError ? 'rate_limited' : 'error');
+            },
+        );
+    };
+
     const choose = (target: Shown) => {
         latest.current = target;
-        pickTo(target);
+        setPicked(target);
         setFailed(null);
 
         // Keep only the requests the target needs: its basis and the other basis of its pair.
@@ -318,71 +348,50 @@ const PickedUnits = ({
         request(target);
     };
 
-    /** Shows `target`, at once when its figures are at hand, else once they are fetched. */
-    const request = (target: Shown) => {
-        if (available(target.donorId, target.unit)) {
-            show(target);
-            prefetchSibling(target);
+    /** Aborts every request in flight and forgets it. */
+    const abortAll = (running: Map<string, { controller: AbortController }>) => {
+        for (const { controller } of running.values()) {
+            controller.abort();
+        }
 
+        running.clear();
+    };
+
+    // New counts: drop what was fetched for the old ones and resume the reader's pick on them.
+    const startOver = useEffectEvent(() => {
+        if (counted.current === data) {
             return;
         }
 
-        fetchBasis(target.donorId, target.unit, pickedPerRequest(target)).then(
-            () => {
-                if (active.current && sameShown(latest.current, target)) {
-                    show(target);
-                    prefetchSibling(target);
-                }
-            },
-            (error: unknown) => {
-                if (!active.current || !sameShown(latest.current, target)) {
-                    return;
-                }
+        counted.current = data;
+        generation.current += 1;
+        abortAll(inflight.current);
+        cached.current = new Map();
+        setCache(new Map());
+        setLeads(new Map());
+        setFailed(null);
 
-                console.error('ODA counts: could not convert the figures live', error);
+        const next = resumePick(latest.current, start, data);
 
-                // Back to the figures on screen, or to the new donor in US dollars.
-                const fallback: Shown =
-                    onScreen.current.donorId === target.donorId
-                        ? onScreen.current
-                        : {
-                              donorId: target.donorId,
-                              unit: {
-                                  ...builtUnit(data),
-                                  prices: target.unit.prices,
-                              },
-                          };
+        latest.current = next.picked;
+        setPicked(next.picked);
+        onScreen.current = next.shown;
+        setShown(next.shown);
 
-                latest.current = fallback;
-                pickTo(fallback);
-                show(fallback);
-                setFailed(error instanceof RateLimitError ? 'rate_limited' : 'error');
-            },
-        );
-    };
-
-    // A pick the counts no longer held when they changed is fetched again on the new ones.
-    const resumeRequest = useEffectEvent(() => {
-        if (!sameShown(initial.picked, initial.shown)) {
-            request(initial.picked);
+        if (!sameShown(next.picked, next.shown)) {
+            request(next.picked);
         }
     });
+
+    // Before paint, so no conversion of the old counts is drawn beside the new ones.
+    useLayoutEffect(() => {
+        startOver();
+    }, [data]);
 
     useEffect(() => {
         const running = inflight.current;
 
-        active.current = true;
-        resumeRequest();
-
-        return () => {
-            active.current = false;
-
-            for (const { controller } of running.values()) {
-                controller.abort();
-            }
-
-            running.clear();
-        };
+        return () => abortAll(running);
     }, []);
 
     const donor = donorOf(shown.donorId);
@@ -398,22 +407,24 @@ const PickedUnits = ({
         : liveDonor(donor, { current: basisOf('current'), constant: basisOf('constant') });
 
     return (
-        <Context
-            value={{
-                data,
-                citation,
-                offer: live.offer,
-                picked,
-                shown,
-                donor: view,
-                lead: leads.get(pairKey(shown)) ?? null,
-                pending: !sameShown(picked, shown),
-                failed,
-                pickDonor: (donorId) => choose({ donorId, unit: picked.unit }),
-                pickUnit: (unit) => choose({ donorId: picked.donorId, unit }),
-            }}
-        >
-            {children}
-        </Context>
+        <StoredCheckContext value={checked}>
+            <Context
+                value={{
+                    data,
+                    citation,
+                    offer: live.offer,
+                    picked,
+                    shown,
+                    donor: view,
+                    lead: leads.get(pairKey(shown)) ?? null,
+                    pending: !sameShown(picked, shown),
+                    failed,
+                    pickDonor: (donorId) => choose({ donorId, unit: picked.unit }),
+                    pickUnit: (unit) => choose({ donorId: picked.donorId, unit }),
+                }}
+            >
+                {children}
+            </Context>
+        </StoredCheckContext>
     );
 };

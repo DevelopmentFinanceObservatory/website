@@ -23,12 +23,8 @@
 // records DFO's stored versions of every spec the reads take (`client.storedVersions`), checked
 // before the reads and again after, so a check in the browser can tell whether DFO has stored
 // newer data since the build.
-import { Client, type Dataset, type StoredVersions } from '@developmentfinance/client';
-import {
-    type Freshness,
-    isDerived,
-    type StoredVersionsJson,
-} from '@developmentfinance/client/types';
+import { Client, type StoredVersions } from '@developmentfinance/client';
+import type { StoredVersionsJson } from '@developmentfinance/client/types';
 
 import {
     ANALYSIS_CONCURRENCY,
@@ -42,6 +38,7 @@ import {
 } from './liveRead.ts';
 import { createLane } from './pacing.ts';
 import { recordOf } from './record.ts';
+import { type BuildSource, versionsOf } from './versions.ts';
 
 /** How long each build read may take, a cold compute included. */
 export const BUILD_TIMEOUT_MS = 5 * 60_000;
@@ -75,12 +72,13 @@ export const pendingBoundOf = (env: Readonly<Record<string, string | undefined>>
 /** How long the build waits before reading again while a dataset's freshness is `pending`. */
 export const PENDING_RETRY_MS = 30_000;
 
-/** One dataset version a read took: the spec and the content version DFO served. */
-export type StoredVersion = { specId: string; contentVersion: string };
-
-/** What the build read for one source: the dataset versions it took and how new DFO says they
- *  are. A ref's versions are its members'; a recipe's are the roots DFO resolved it on. */
-export type BuildSource = { versions: StoredVersion[]; freshness: Freshness | null };
+export {
+    type BuildSource,
+    checkOneVersionPerSpec,
+    splitVersions,
+    type StoredVersion,
+    versionsOf,
+} from './versions.ts';
 
 export type BuildRead<K extends string, T> = {
     /** What the page's derivation made of the rows. */
@@ -90,71 +88,6 @@ export type BuildRead<K extends string, T> = {
     /** Each source's versions and freshness, for the page to print and a later check to compare
      *  against DFO's newest. */
     sources: Record<K, BuildSource>;
-};
-
-/** The dataset versions a read took, each once: a dataset member's own version, or for a
- *  derived member each root its recipe ran on. */
-export const versionsOf = (dataset: Dataset): StoredVersion[] => {
-    const seen = new Map<string, StoredVersion>();
-
-    for (const member of dataset.ref.members) {
-        const versions = isDerived(member)
-            ? member.roots.map(({ specId, contentVersion }) => ({ specId, contentVersion }))
-            : [{ specId: member.spec.spec_id, contentVersion: member.contentVersion }];
-
-        for (const version of versions) {
-            seen.set(`${version.specId}@${version.contentVersion}`, version);
-        }
-    }
-
-    return [...seen.values()];
-};
-
-/**
- * Each spec the reads took at more than one content version, with those versions sorted, as when
- * DFO stored a new version between two reads of one build. A build that shows such reads side by
- * side mixes two releases.
- */
-export const splitVersions = (
-    ...reads: readonly Readonly<Record<string, BuildSource>>[]
-): Map<string, string[]> => {
-    const bySpec = new Map<string, Set<string>>();
-
-    for (const sources of reads) {
-        for (const { versions } of Object.values(sources)) {
-            for (const { specId, contentVersion } of versions) {
-                bySpec.set(specId, (bySpec.get(specId) ?? new Set()).add(contentVersion));
-            }
-        }
-    }
-
-    return new Map(
-        [...bySpec]
-            .filter(([, versions]) => versions.size > 1)
-            .map(([specId, versions]) => [specId, [...versions].toSorted()]),
-    );
-};
-
-/**
- * Checks that the reads took each spec at one content version.
- *
- * @throws An error naming `page`, each split spec and its versions.
- */
-export const checkOneVersionPerSpec = (
-    page: string,
-    ...reads: readonly Readonly<Record<string, BuildSource>>[]
-): void => {
-    const split = splitVersions(...reads);
-
-    if (split.size > 0) {
-        const named = [...split]
-            .map(([specId, versions]) => `${specId} at ${versions.join(' and ')}`)
-            .join('; ');
-
-        throw new Error(
-            `The build read of ${page} took one spec at two versions, so the build stops: ${named}.`,
-        );
-    }
 };
 
 let client: Client | undefined;
@@ -325,10 +258,12 @@ export type CheckedRead<K extends string, T> = BuildRead<K, T> & {
  * spec they read, and records the check. When the checks differ, DFO stored newer data during
  * the reads, so the read runs again between the second check and a third, at most
  * CHECKED_READS times in all: a second read always, a third only while the pending bound has
- * time left, which each read again shares with `readSettled`'s.
+ * time left, which each read again shares with `readSettled`'s. When the checks still differ
+ * after the last read, the build takes that read and records the check taken before it, with a
+ * warning naming the specs that moved: the visitors' checks then see the newer versions and read
+ * them again in the browser.
  *
- * @throws An error naming `page` when a check or a read fails, or when the checks still differ
- *  after the last read.
+ * @throws An error naming `page` when a check or a read fails.
  */
 export const readChecked = async <K extends string, T>(
     page: string,
@@ -369,9 +304,11 @@ export const readChecked = async <K extends string, T>(
         const changed = after.changedSince(before).join(', ');
 
         if (reads >= CHECKED_READS || (reads > 1 && now() - start >= pendingBound)) {
-            throw new Error(
-                `DFO stored newer data of ${changed} during each of ${reads} build reads of ${page}, so the build stops.`,
+            warnPending(
+                `${page}: DFO stored newer data of ${changed} during each of ${reads} build reads; the build takes the last read and records the versions from before it, so the page reads the newer ones in the browser.`,
             );
+
+            return { ...read, stored: before.toJSON() };
         }
 
         console.info(

@@ -8,7 +8,7 @@
 // of STORED_CHECK_PAGES also asks DFO after paint whether it stores newer data than the build
 // read (lib/storedCheck.ts) and states the outcome as `data-stored-check`, which must leave
 // `checking` for `unchanged`, `refreshed` or `failed`. Each of the three passes, since a failed
-// check leaves the built figures on the page.
+// check leaves the built figures on the page, and `failed` prints a warning naming the page.
 //
 // After a deploy the edge can serve the previous build for a while, and that build passes its own
 // tier check, so only the expected build counts. A scheduled rebuild of an unchanged commit
@@ -260,7 +260,15 @@ export const withRetries = async (
     }
 };
 
-const report = (result: Result): string[] => {
+/** What passes but deserves a look: a stored-data check that failed, which leaves the built
+ *  figures on the page. */
+export const warnings = ({ slug, storedCheck }: Result): string[] =>
+    storedCheck === 'failed'
+        ? [`${slug}: the stored-data check failed, so the page shows the built figures`]
+        : [];
+
+/** The lines a run prints for one result. */
+export const report = (result: Result): string[] => {
     const found = problems(result);
     const expected = result.live === null ? 'none' : expectedTier(result.live);
 
@@ -269,6 +277,7 @@ const report = (result: Result): string[] => {
             `tier ${result.tier ?? 'none'} (data-read-live ${result.live ?? 'none'}, expected ${expected}), ` +
             `stored check ${result.storedCheck ?? 'none'} in ${result.ms} ms`,
         ...found.map((problem) => `     ${problem}`),
+        ...warnings(result).map((warning) => `     warning: ${warning}`),
     ];
 };
 

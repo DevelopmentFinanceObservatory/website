@@ -55,6 +55,9 @@ export const HivFinancing = () => {
     const countries = useMemo(() => joinUnaids(data.countries, unaids, data.years), [data, unaids]);
     const chosen =
         selected === null ? undefined : countries.find((country) => country.iso3 === selected);
+    // The country the page shows, or null for all: a selection the figures read again no longer
+    // hold counts as none.
+    const scope = chosen?.iso3 ?? null;
     const [chartSection, tableSection] = aidSections(data);
     const year = lastYear(data);
 
@@ -80,10 +83,10 @@ export const HivFinancing = () => {
         islandRef.current?.setAttribute('data-ready', '');
     }, []);
 
-    const toggle = (iso3: string) => setSelected((current) => (current === iso3 ? null : iso3));
+    const toggle = (iso3: string) => setSelected(scope === iso3 ? null : iso3);
 
     const onRow = (iso3: string) => {
-        const opening = selected !== iso3;
+        const opening = scope !== iso3;
 
         toggle(iso3);
 
@@ -114,7 +117,7 @@ export const HivFinancing = () => {
                     <button
                         type="button"
                         className={styles.all}
-                        aria-pressed={selected === null}
+                        aria-pressed={scope === null}
                         onClick={() => setSelected(null)}
                     >
                         {ALL_COUNTRIES}
@@ -140,10 +143,10 @@ export const HivFinancing = () => {
                     <Reserved text={title} variants={variants.titles} block />
                 </h3>
                 <ProviderBars
-                    series={scopeSeries(data, selected)}
-                    multi={scopeMulti(data, selected)}
+                    series={scopeSeries(data, scope)}
+                    multi={scopeMulti(data, scope)}
                     years={data.years}
-                    scope={selected ?? ALL_COUNTRIES}
+                    scope={scope ?? ALL_COUNTRIES}
                 />
                 <p className={styles.note}>{unallocatedCaption(data)}</p>
                 <div className={styles.below}>
@@ -151,7 +154,7 @@ export const HivFinancing = () => {
                         countries={countries}
                         year={year}
                         caption={stripCaption(countries, year)}
-                        selected={selected}
+                        selected={scope}
                         onSelect={toggle}
                     />
                 </div>
@@ -170,7 +173,7 @@ export const HivFinancing = () => {
                     countries={countries}
                     year={year}
                     legend={flagLegend(data)}
-                    selected={selected}
+                    selected={scope}
                     onSelect={onRow}
                     onCollapse={onCollapse}
                 />

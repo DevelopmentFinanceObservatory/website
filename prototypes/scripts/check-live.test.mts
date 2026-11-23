@@ -7,6 +7,8 @@ import {
     expectedTier,
     liveSwitch,
     problems,
+    report,
+    warnings,
     withRetries,
     type Failure,
     type PageLike,
@@ -277,4 +279,26 @@ test('a page that checks DFO for newer stored data passes on each outcome, and f
         1,
     );
     assert.equal(exitCode([await checkPage(fakePage(built), 'u', 'debt-thresholds', ANY_RUN)]), 0);
+});
+
+test('a failed stored-data check passes with a warning naming the page', async () => {
+    const built = { tier: 'built', live: 'built' };
+    const failed = await checkPage(
+        fakePage({ ...built, storedCheck: 'failed' }),
+        'u',
+        'hiv-financing',
+        ANY_RUN,
+    );
+    const unchanged = await checkPage(
+        fakePage({ ...built, storedCheck: 'unchanged' }),
+        'u',
+        'hiv-financing',
+        ANY_RUN,
+    );
+
+    assert.equal(exitCode([failed]), 0);
+    assert.equal(warnings(failed).length, 1);
+    assert.match(warnings(failed)[0] ?? '', /^hiv-financing: /);
+    assert.ok(report(failed).some((line) => line.includes('warning: hiv-financing')));
+    assert.deepEqual(warnings(unchanged), []);
 });
