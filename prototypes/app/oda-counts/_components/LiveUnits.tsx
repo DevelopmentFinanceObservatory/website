@@ -32,11 +32,10 @@ const REQUEST_TIMEOUT_MS = 30_000;
  * request. They run in the page's pick lane (lib/pacing.ts), apart from the stored reads, so
  * all nine go out together. The other basis loads afterwards at the most entries a request
  * takes, so a pick costs 11 requests. The website's gateway allows each address 120 requests a
- * minute on /api/v1, shared with the page's stored reads: 19 GETs of the specs' newest
- * versions, plus one GET of each file the edge cache does not hold, 19 to 38 in all. That leaves
- * room for 7 to 9 picks in the minute after a load, and 10 in each later minute. Once the pacer
- * reports fewer requests left than a one-entry pick costs, picks take the most entries a
- * request holds (two requests for each basis).
+ * minute on its `api` allowance, which Search resolve requests count against; the page's stored
+ * reads count against the separate `datasets` allowance. That leaves room for 10 picks a minute.
+ * Once the pacer reports fewer `api` requests left than a one-entry pick costs, picks take the
+ * most entries a request holds (two requests for each basis).
  */
 const PICKED_PER_REQUEST = 1;
 
@@ -116,7 +115,7 @@ const pairKey = ({ donorId, unit }: Shown): string =>
  * them. Figures are cached per donor and unit for the session. A newer pick aborts every
  * request it does not need. A failed pick returns to the figures on screen, or to the new
  * donor in US dollars, and sets `failed`, which says whether the gateway refused it for
- * the address's allowance (see PICKED_PER_REQUEST).
+ * the address's `api` allowance (see PICKED_PER_REQUEST).
  */
 export const LiveUnitsProvider = ({
     data: committed,
@@ -199,9 +198,9 @@ export const LiveUnitsProvider = ({
     };
 
     /** Entries per request for `target`'s basis: one, unless the allowance the gateway last
-     *  reported cannot pay for a one-entry pick and its sibling. */
+     *  reported for `api` cannot pay for a one-entry pick and its sibling. */
     const pickedPerRequest = (target: Shown): number => {
-        const left = pacer.allowance();
+        const left = pacer.allowance('api');
         const cost =
             resolveRequests(live, target.donorId, target.unit, PICKED_PER_REQUEST).length +
             resolveRequests(live, target.donorId, target.unit).length;

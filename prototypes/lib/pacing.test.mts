@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createLane, createPacer } from './pacing.ts';
+import { createLane, createPacer, surfaceOf } from './pacing.ts';
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
 
@@ -96,7 +96,7 @@ test('a malformed allowance header leaves the last reading in place', async () =
         await pacer.fetch('https://developmentfinance.org/api/v1/x');
     }
 
-    assert.deepEqual(pacer.allowance(), { remaining: 37, until: now + 20_000 });
+    assert.deepEqual(pacer.allowance('api'), { remaining: 37, until: now + 20_000 });
 });
 
 test('reads the allowance off each response, keeps the lowest in a window and past a response without, and drops it once reset', async () => {
@@ -123,27 +123,77 @@ test('reads the allowance off each response, keeps the lowest in a window and pa
         now: () => now,
     });
 
-    assert.equal(pacer.allowance(), null);
+    assert.equal(pacer.allowance('api'), null);
 
     const response = await pacer.fetch('https://developmentfinance.org/api/v1/x');
 
     assert.equal(response.status, 200);
-    assert.deepEqual(pacer.allowance(), { remaining: 37, until: now + 20_000 });
+    assert.deepEqual(pacer.allowance('api'), { remaining: 37, until: now + 20_000 });
 
     await pacer.fetch('https://developmentfinance.org/api/v1/x');
-    assert.deepEqual(pacer.allowance(), { remaining: 37, until: now + 20_000 });
+    assert.deepEqual(pacer.allowance('api'), { remaining: 37, until: now + 20_000 });
 
     now += 1_000;
     await pacer.fetch('https://developmentfinance.org/api/v1/x');
-    assert.deepEqual(pacer.allowance(), { remaining: 36, until: now + 19_000 });
+    assert.deepEqual(pacer.allowance('api'), { remaining: 36, until: now + 19_000 });
 
     await pacer.fetch('https://developmentfinance.org/api/v1/x');
-    assert.deepEqual(pacer.allowance(), { remaining: 36, until: now + 19_000 });
+    assert.deepEqual(pacer.allowance('api'), { remaining: 36, until: now + 19_000 });
 
     now += 19_000;
-    assert.equal(pacer.allowance(), null);
+    assert.equal(pacer.allowance('api'), null);
 
     // The next window's first response starts a new reading.
     await pacer.fetch('https://developmentfinance.org/api/v1/x');
-    assert.deepEqual(pacer.allowance(), { remaining: 119, until: now + 60_000 });
+    assert.deepEqual(pacer.allowance('api'), { remaining: 119, until: now + 60_000 });
+});
+
+test('a request below /api/v1/datasets/ or /api/datasets/ counts against datasets, any other against api', () => {
+    const origin = 'https://developmentfinance.org';
+
+    for (const path of [
+        '/api/v1/datasets/ds_x',
+        '/api/v1/datasets/analysis',
+        '/api/v1/datasets/derived/ops_a/ocv_b/files/abc',
+        '/api/datasets/ds_x/versions/latest',
+    ]) {
+        assert.equal(surfaceOf(`${origin}${path}`), 'datasets', path);
+    }
+
+    for (const path of [
+        '/api/v1/datasets/',
+        '/api/v1/datasets',
+        '/api/v1/search/resolve',
+        '/api/v1/codes/x',
+        '/api/v2/datasets/ds_x',
+    ]) {
+        assert.equal(surfaceOf(`${origin}${path}`), 'api', path);
+    }
+
+    assert.equal(surfaceOf(new URL(`${origin}/api/v1/datasets/ds_x`)), 'datasets');
+    assert.equal(
+        surfaceOf(new Request(`${origin}/api/v1/search/resolve`, { method: 'POST' })),
+        'api',
+    );
+});
+
+test('a datasets response with little left leaves the api reading as it was, and the other way round', async () => {
+    const now = 1_000_000;
+    const pacer = createPacer({
+        limit: 4,
+        fetch: async (input) =>
+            new Response('{}', {
+                headers: new URL(String(input)).pathname.startsWith('/api/v1/datasets/')
+                    ? { 'x-ratelimit-remaining': '3', 'x-ratelimit-reset': '10' }
+                    : { 'x-ratelimit-remaining': '90', 'x-ratelimit-reset': '40' },
+            }),
+        now: () => now,
+    });
+
+    await pacer.fetch('https://developmentfinance.org/api/v1/search/resolve');
+    assert.equal(pacer.allowance('datasets'), null);
+
+    await pacer.fetch('https://developmentfinance.org/api/v1/datasets/analysis');
+    assert.deepEqual(pacer.allowance('api'), { remaining: 90, until: now + 40_000 });
+    assert.deepEqual(pacer.allowance('datasets'), { remaining: 3, until: now + 10_000 });
 });

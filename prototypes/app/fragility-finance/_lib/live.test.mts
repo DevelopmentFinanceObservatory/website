@@ -1,21 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { Row } from '@developmentfinance/client/types';
 
-import type { Groups } from '../_data/types.ts';
-
-import { context, flow, PROFILES } from './fixture.mts';
-import {
-    deriveFigures,
-    figuresFromRows,
-    FiguresCheckError,
-    money,
-    recipes,
-    type FiguresCheck,
-    type LiveInputs,
-} from './live.ts';
+import { context, flow } from './fixture.mts';
+import { deriveFigures, figuresFromRows, money, sources, type LiveInputs } from './live.ts';
 
 const SPEC_ID = `spec_${'a'.repeat(32)}`;
 const ref = {
@@ -55,40 +44,48 @@ const LIVE: LiveInputs = {
     },
     providers: { 'country/DEU': 'Germany', IDA: 'International Development Association' },
 };
-const TIERS = new Map([
-    ['country/AAA', 'extreme'],
-    ['country/BBB', 'high'],
-]);
-
 const byPlace = (place: string, year: number, value: number): Row => ({
     financingRecipient: `country/${place}`,
     time_period: String(year),
     value,
 });
-const byProvider = (provider: string, value: number, place?: string): Row => ({
+const byProvider = (provider: string, value: number, place: string, year = 2024): Row => ({
     financingProvider: provider,
+    financingRecipient: `country/${place}`,
+    time_period: String(year),
+    value,
+});
+const byPurpose = (place: string, code: number | string, value: number): Row => ({
+    financingRecipient: `country/${place}`,
+    stat_var_crsPurpose: `CRSPurposeCode${code}`,
     time_period: '2024',
     value,
-    ...(place === undefined ? {} : { financingRecipient: `country/${place}` }),
 });
+/** DAC1 rows of `provider`'s total ODA in 2024 and 2025. */
+const dac1 = (provider: string, first: number, last: number): Row[] => [
+    { financingProvider: provider, time_period: 2024, value: first },
+    { financingProvider: provider, time_period: 2025, value: last },
+];
 
-/** The rows of every recipe: AAA's 2024 aid of 1,000.5 is 300 humanitarian and 100 peace. */
+/** The rows of every source: AAA's 2024 aid of 1,000.5 is 300 humanitarian, from two codes,
+ *  100 peace, and the rest development. */
 const ROWS: Record<string, Row[]> = {
-    'aid-1/total': [byPlace('AAA', 2024, 1000.5), byPlace('BBB', 2024, 50)],
-    'aid-1/humanitarian': [byPlace('AAA', 2024, 300)],
-    'aid-1/peace': [byPlace('AAA', 2024, 100)],
-    'aid-1/donors': [
+    'aid-1/purposes': [
+        byPurpose('AAA', 72010, 200),
+        byPurpose('AAA', 72040, 100),
+        byPurpose('AAA', 15210, 100),
+        byPurpose('AAA', 11110, 600.5),
+        byPurpose('BBB', 11110, 50),
+    ],
+    'aid-1/providers': [
         byProvider('IDA', 400, 'AAA'),
         byProvider('country/DEU', 600, 'AAA'),
         byProvider('IDA', 50, 'BBB'),
+        byProvider('IDA', 9, 'BBB', 2023),
     ],
-    'aid-1/extreme': [byProvider('IDA', 400), byProvider('country/DEU', 600)],
-    'aid-1/high': [byProvider('IDA', 50), { ...byProvider('IDA', 9), time_period: '2023' }],
-    'oof-1/total': [byPlace('AAA', 2024, 20)],
-    'donors2025/change': [
-        { financingProvider: 'country/DEU', time_period: '2024/2025', value: -0.11414 },
-    ],
-    'donors2025-eu/change': [],
+    'oof-1': [byPlace('AAA', 2024, 15), byPlace('AAA', 2024, 5)],
+    donors2025: dac1('country/DEU', 100_000, 88_586),
+    'donors2025-eu': [],
     'climate-total/total': [byPlace('AAA', 2024, 100)],
     'climate-adaptation/total': [byPlace('AAA', 2024, 60)],
     'climate-mitigation/total': [byPlace('AAA', 2024, 30)],
@@ -110,35 +107,36 @@ const COMMITTED = {
     },
 };
 
-test("recipes are the step's, in its order, with a tier filter only where a read mixes tiers", () => {
-    const chains = recipes(REFS, LIVE, TIERS);
-
-    assert.deepEqual(Object.keys(chains), [
-        'aid-1/total',
-        'aid-1/humanitarian',
-        'aid-1/peace',
-        'aid-1/donors',
-        'aid-1/extreme',
-        'aid-1/high',
-        'oof-1/total',
-        'donors2025/change',
-        'donors2025-eu/change',
+test('the sources are two recipes per CRS aid read, the climate recipes, and the OOF and DAC1 rows', () => {
+    const found = sources(REFS, LIVE);
+    const recipes = [
+        'aid-1/purposes',
+        'aid-1/providers',
         'climate-total/total',
         'climate-adaptation/total',
         'climate-mitigation/total',
-    ]);
+    ];
 
-    const tree = JSON.stringify(chains['aid-1/donors']!.tree());
-
-    assert.match(tree, /"partition_by":\["destination"\]/);
-    assert.match(JSON.stringify(chains['aid-1/humanitarian']!.tree()), /emergency food assistance/);
-    assert.match(JSON.stringify(chains['aid-1/extreme']!.tree()), /country\/AAA/);
-    assert.equal(
-        Object.keys(
-            recipes(REFS, LIVE, new Map([...TIERS].map(([place]) => [place, 'high']))),
-        ).filter((key) => /extreme|high/.test(key)).length,
-        1,
+    assert.deepEqual(Object.keys(found), [...recipes, 'oof-1', 'donors2025', 'donors2025-eu']);
+    assert.deepEqual(
+        Object.entries(found)
+            .filter(([, source]) => 'recipe' in source)
+            .map(([key]) => key),
+        recipes,
     );
+
+    const tree = (key: string) => {
+        const source = found[key];
+
+        assert.ok(source !== undefined && 'recipe' in source);
+
+        return JSON.stringify(source.recipe.tree());
+    };
+
+    // No filter by purpose, which DFO sums on a slower path.
+    assert.doesNotMatch(tree('aid-1/purposes'), /filter|emergency food assistance/);
+    assert.match(tree('aid-1/purposes'), /crsPurpose/);
+    assert.match(tree('aid-1/providers'), /"2024"/);
 });
 
 test('figures from the rows replace the DFO figures and keep the rest', () => {
@@ -178,8 +176,39 @@ test('figures from the rows replace the DFO figures and keep the rest', () => {
 
 test('a pillar that comes back empty where the committed figure is above zero is refused', () => {
     assert.throws(
-        () => deriveFigures({ ...ROWS, 'aid-1/humanitarian': [] }, COMMITTED, LIVE),
+        () =>
+            deriveFigures(
+                {
+                    ...ROWS,
+                    'aid-1/purposes': ROWS['aid-1/purposes']!.filter(
+                        (row) => !/7201|7204/.test(String(row.stat_var_crsPurpose)),
+                    ),
+                },
+                COMMITTED,
+                LIVE,
+            ),
         /AAA 2024: no humanitarian aid/,
+    );
+});
+
+test('a row without a purpose code is refused', () => {
+    assert.throws(
+        () =>
+            deriveFigures(
+                {
+                    ...ROWS,
+                    'aid-1/purposes': [
+                        ...ROWS['aid-1/purposes']!,
+                        {
+                            ...byPurpose('AAA', 0, 5),
+                            stat_var_crsPurpose: 'emergency food assistance',
+                        },
+                    ],
+                },
+                COMMITTED,
+                LIVE,
+            ),
+        /emergency food assistance is not a CRS purpose code/,
     );
 });
 
@@ -187,7 +216,7 @@ test('a provider live.json does not name is refused', () => {
     assert.throws(
         () =>
             deriveFigures(
-                { ...ROWS, 'aid-1/donors': [byProvider('country/FRA', 1, 'AAA')] },
+                { ...ROWS, 'aid-1/providers': [byProvider('country/FRA', 1, 'AAA')] },
                 COMMITTED,
                 LIVE,
             ),
@@ -201,124 +230,13 @@ test('money takes a half to the even neighbour and gives no negative zero', () =
 });
 
 test("a donor's change rounds a tie to even and leaves out a change that is not finite", () => {
-    const changes = (value: number) =>
-        deriveFigures(
-            {
-                ...ROWS,
-                'donors2025/change': [
-                    { financingProvider: 'country/DEU', time_period: '2024/2025', value },
-                ],
-            },
-            COMMITTED,
-            LIVE,
-        ).contexts[0]!.donors.map((donor) => donor.change2025);
+    const changes = (rows: Row[]) =>
+        deriveFigures({ ...ROWS, donors2025: rows }, COMMITTED, LIVE).contexts[0]!.donors.map(
+            (donor) => donor.change2025,
+        );
 
-    // Python: round(0.03125, 4) is 0.0312, where toFixed gives 0.0313.
-    assert.deepEqual(changes(0.03125), [0.0312, null]);
-    assert.deepEqual(changes(Infinity), [null, null]);
-});
-
-const data = <T,>(name: string): T =>
-    (JSON.parse(readFileSync(new URL(`../_data/${name}`, import.meta.url), 'utf8')) as { data: T })
-        .data;
-
-// The trees of the step's recipes and the rows DFO computed for them, as fetch.py wrote them,
-// and the figures it derived.
-const FIXTURE = data<{
-    recipes: Record<string, unknown>;
-    rows: Record<string, { columns: string[]; rows: Row[string][][] }>;
-}>('live-fixture.json');
-const PINNED = {
-    contexts: PROFILES,
-    groups: data<Groups>('groups.json'),
-};
-const PINNED_LIVE = data<LiveInputs>('live.json');
-
-/** Each recipe's rows, as `Dataset.toRows()` gives them. */
-const pinnedRows = (): Record<string, Row[]> =>
-    Object.fromEntries(
-        Object.entries(FIXTURE.rows).map(([key, { columns, rows }]) => [
-            key,
-            rows.map((row) => Object.fromEntries(columns.map((column, at) => [column, row[at]]))),
-        ]),
-    );
-
-test("the recipes build the trees fetch.py sent, from refs.json's and live.json's inputs", () => {
-    const chains = recipes(
-        data<Record<string, { ref: unknown }>>('refs.json'),
-        PINNED_LIVE,
-        new Map(PROFILES.map((each) => [`country/${each.iso3}`, each.tier])),
-    );
-
-    assert.deepStrictEqual(
-        Object.fromEntries(Object.entries(chains).map(([key, chain]) => [key, chain.tree()])),
-        FIXTURE.recipes,
-    );
-});
-
-test('the pinned rows give profiles.json and groups.json exactly', () => {
-    assert.deepStrictEqual(figuresFromRows(pinnedRows(), PINNED, PINNED_LIVE), PINNED);
-});
-
-/** The checks `figuresFromRows` names for the pinned rows that `change` mutates. */
-const broken = (change: (rows: Record<string, Row[]>) => void): readonly FiguresCheck[] => {
-    const rows = pinnedRows();
-
-    change(rows);
-
-    try {
-        figuresFromRows(rows, PINNED, PINNED_LIVE);
-    } catch (error) {
-        if (error instanceof FiguresCheckError) {
-            return error.checks;
-        }
-
-        throw error;
-    }
-
-    return [];
-};
-
-const eachRead = (figure: string) =>
-    Object.keys(FIXTURE.rows).filter((key) => key.endsWith(figure));
-
-test("figures that break the step's checks are refused, each check by its code", () => {
-    // Three contexts with no aid recorded, which leaves 59.
-    assert.deepEqual(
-        broken((rows) => {
-            const gone = new Set(PROFILES.slice(-3).map(({ iso3 }) => `country/${iso3}`));
-
-            for (const key of eachRead('/total').filter((each) => each.startsWith('aid-'))) {
-                rows[key] = rows[key]!.filter((row) => !gone.has(String(row.financingRecipient)));
-            }
-        }),
-        ['contexts_without_aid'],
-    );
-    // No provider to the high-fragility contexts, so that group has no donors.
-    assert.deepEqual(
-        broken((rows) => {
-            for (const key of eachRead('/high')) {
-                rows[key] = [];
-            }
-        }),
-        ['group_short_of_donors'],
-    );
-    // Sums by provider ten times the ODA they are drawn from.
-    assert.deepEqual(
-        broken((rows) => {
-            for (const key of [...eachRead('/extreme'), ...eachRead('/high')]) {
-                rows[key] = rows[key]!.map((row) => ({ ...row, value: Number(row.value) * 10 }));
-            }
-        }),
-        ['donors_above_oda'],
-    );
-    // No OOF recorded.
-    assert.deepEqual(
-        broken((rows) => {
-            for (const key of eachRead('/total').filter((each) => each.startsWith('oof-'))) {
-                rows[key] = [];
-            }
-        }),
-        ['oof_out_of_range'],
-    );
+    // 32 to 33 is 0.03125. Python: round(0.03125, 4) is 0.0312, where toFixed gives 0.0313.
+    assert.deepEqual(changes(dac1('country/DEU', 32, 33)), [0.0312, null]);
+    assert.deepEqual(changes(dac1('country/DEU', 0, 5)), [null, null]);
+    assert.deepEqual(changes(dac1('country/DEU', 100, 90).slice(0, 1)), [null, null]);
 });

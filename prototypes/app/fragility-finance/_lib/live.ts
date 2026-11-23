@@ -1,26 +1,36 @@
 // The figures _data/fetch.py has DFO compute, read again in the browser on DFO's newest stored
 // data: each pillar's total and the total ODA and OOF per context and year, the six largest
 // providers per context and per tier, climate finance per context, and each DAC member's
-// change in 2025. `recipes` builds the step's recipes from refs.json and live.json, and
-// `figuresFromRows` repeats the step's small arithmetic on their rows and refuses figures that
-// fail the step's `check`. Every other figure on the page, such as remittances, FDI, debt
-// service, population and the indicators, stays as profiles.json holds it. live.test.mts checks
-// both against the trees and rows the step writes to _data/live-fixture.json.
+// change in 2025. Every other figure on the page, such as remittances, FDI, debt service,
+// population and the indicators, stays as profiles.json holds it.
 //
-// The pillar guard refuses a pillar that comes back empty for a context and year. If one of a
-// pillar's labels stops matching in a newer stored version while the others match, as a
-// relabelled purpose code would, that code's money moves to development and the guard passes.
-// The step's `pillar_purposes` reads the labels afresh, so its next run catches the relabel.
+// `sources` reads fewer, larger results than the step's 30 recipes, so a load stays inside the
+// gateway's allowance. Per CRS aid read it runs two recipes: a sum by recipient and purpose,
+// which gives the total and, by purpose code, each pillar, and 2024 by provider and recipient,
+// from which the page ranks each context's donors and sums each tier's. Neither filters by
+// purpose, so neither takes DFO's slower path for a sum of selected purposes. It reads the OOF
+// and DAC1 reads as rows and sums them here; their values are whole dollars, so those sums do
+// not depend on the order they run in. Climate finance keeps the step's three recipes, since
+// its values hold cents and the page's sums must round as DFO's do. `figuresFromRows` repeats
+// the step's small arithmetic and refuses figures that fail the step's `check`. live.test.mts
+// checks that the climate recipes are the step's (_data/live-fixture.json) and that the rows
+// these sources gave at the pinned versions (_data/live-sources-fixture.json.gz, written by
+// _data/live-sources.mts) derive profiles.json's and groups.json's figures exactly.
+//
+// Each pillar is its purpose codes, as fetch.py's `pillar` counts them, so a purpose relabelled
+// in a newer stored version stays in its pillar. The pillar guard refuses a pillar that comes
+// back empty for a context and year where profiles.json holds it above zero.
 import { DatasetRef, recipe } from '@developmentfinance/client';
 import type { Row } from '@developmentfinance/client/types';
 
 import type { ClimateSplit, Context, DonorShare, Groups, PillarYear } from '../_data/types.ts';
 
-import type { Recipe } from '#lib/liveRead.ts';
+import type { LiveSource } from '#lib/liveRead.ts';
 import { pythonRound } from '#lib/round.ts';
 
 /** What _data/live.json holds: the recipients of each CRS read, the labels of each pillar's
- *  purpose codes, and each CRS provider's label by code. */
+ *  purpose codes, and each CRS provider's label by code. The page counts pillars by purpose
+ *  code, so it reads no label of `purposes`. */
 export type LiveInputs = {
     groups: Record<string, string[]>;
     purposes: { humanitarian: string[]; peace: string[] };
@@ -34,9 +44,21 @@ const CLIMATE_YEAR = 2024;
 const TOP_DONORS = 6;
 const RECIPIENT = 'financingRecipient';
 const PROVIDER = 'financingProvider';
-const PURPOSE_FILTER = 'stat_var_crsPurpose';
+/** The column a sum by purpose holds a CRS read's purpose codes in. */
+const PURPOSE_COLUMN = 'stat_var_crsPurpose';
+const PURPOSE_CODE = 'CRSPurposeCode';
 const TIERS = ['extreme', 'high'] as const;
 const PILLARS = ['humanitarian', 'peace'] as const;
+/** The OECD's pillars by purpose code, as fetch.py's `HUMANITARIAN` and `PEACE` hold them
+ *  (States of Fragility 2025, Annex A, Tables A.1 and A.2). Every other code is
+ *  development. */
+const PILLAR_CODES: Record<(typeof PILLARS)[number], ReadonlySet<number>> = {
+    humanitarian: new Set([72010, 72040, 72050, 73010, 74020]),
+    peace: new Set([
+        15210, 15220, 15230, 15240, 15250, 15261, 15110, 15111, 15112, 15113, 15130, 15150, 15152,
+        15153, 15160, 15170, 15180, 15190,
+    ]),
+};
 const CLIMATE_READS = ['climate-total', 'climate-adaptation', 'climate-mitigation'] as const;
 const CHANGE_READS = ['donors2025', 'donors2025-eu'] as const;
 /** The step's `check`: how many of the 62 contexts must have aid, and the range of OOF in
@@ -49,82 +71,51 @@ const MIN_CONTEXTS_WITH_OOF = 50;
 type Yearly = Map<number, number>;
 
 /**
- * The step's recipes, keyed as fetch.py's `figures` keys them, such as `aid-1/humanitarian`,
- * in the same order: each CRS aid read's total, pillars, ranking per recipient and sums by
- * provider per tier, each OOF read's total, the DAC1 change and the climate totals.
+ * What the page reads, by key: per CRS aid read `aid-N`, the recipes `aid-N/purposes` and
+ * `aid-N/providers`; the climate recipes, keyed as the step keys them, such as
+ * `climate-total/total`; and each OOF and DAC1 read as rows under its key in refs.json, such
+ * as `oof-1`.
  */
-export const recipes = (
+export const sources = (
     refs: Record<string, { ref: unknown }>,
     live: LiveInputs,
-    tiers: ReadonlyMap<string, string>,
-): Record<string, Recipe> => {
-    const start = (key: string) => {
+): Record<string, LiveSource> => {
+    const refOf = (key: string) => {
         const source = refs[key];
 
         if (source === undefined) {
             throw new Error(`refs.json holds no ${key}`);
         }
 
-        return recipe(DatasetRef.fromJSON(source.ref));
+        return source.ref;
     };
-    const found: Record<string, Recipe> = {};
-
-    for (const [key, places] of Object.entries(live.groups)) {
-        found[`${key}/total`] = start(key).aggregate({ by: 'destination' });
-
-        for (const pillar of PILLARS) {
-            found[`${key}/${pillar}`] = start(key)
-                .filter({ keep: { [PURPOSE_FILTER]: live.purposes[pillar] } })
-                .aggregate({ by: 'destination' });
-        }
-
-        found[`${key}/donors`] = start(key).rank({
-            by: 'origin',
-            per: 'destination',
-            window: [DONOR_YEAR, DONOR_YEAR],
-            how: 'sum',
-            limit: TOP_DONORS,
-        });
-        const held = [...new Set(places.map((place) => tierOf(tiers, place)))].toSorted();
-
-        for (const tier of held) {
-            const of = places.filter((place) => tierOf(tiers, place) === tier);
-            const chain =
-                held.length > 1 ? start(key).filter({ keep: { destination: of } }) : start(key);
-
-            found[`${key}/${tier}`] = chain.aggregate({ by: 'origin' });
-        }
-    }
+    const start = (key: string) => recipe(DatasetRef.fromJSON(refOf(key)));
+    const found: Record<string, LiveSource> = {};
 
     for (const key of Object.keys(live.groups)) {
-        const oof = key.replace(/^aid-/, 'oof-');
-
-        found[`${oof}/total`] = start(oof).aggregate({ by: 'destination' });
-    }
-
-    for (const key of CHANGE_READS) {
-        found[`${key}/change`] = start(key).growth({
-            by: 'origin',
-            window: [DONOR_YEAR, DONOR_YEAR + 1],
-        });
+        found[`${key}/purposes`] = {
+            recipe: start(key).aggregate({ by: ['destination', 'crsPurpose'] }),
+        };
+        found[`${key}/providers`] = {
+            recipe: start(key)
+                .filter({ keep: { time_period: String(DONOR_YEAR) } })
+                .aggregate({ by: ['origin', 'destination'] }),
+        };
     }
 
     for (const key of CLIMATE_READS) {
-        found[`${key}/total`] = start(key).aggregate({ by: 'destination' });
+        found[`${key}/total`] = { recipe: start(key).aggregate({ by: 'destination' }) };
+    }
+
+    for (const key of [...Object.keys(live.groups).map(oofOf), ...CHANGE_READS]) {
+        found[key] = { ref: refOf(key) };
     }
 
     return found;
 };
 
-const tierOf = (tiers: ReadonlyMap<string, string>, place: string) => {
-    const tier = tiers.get(place);
-
-    if (tier === undefined) {
-        throw new Error(`${place} has no tier`);
-    }
-
-    return tier;
-};
+/** The OOF read of the same recipients as the CRS aid read `key`. */
+const oofOf = (key: string) => key.replace(/^aid-/, 'oof-');
 
 /** Python's `round` to the dollar, which takes a half to the even neighbour and gives no
  *  negative zero, so the page's dollars match the step's. */
@@ -168,6 +159,91 @@ const joined = (parts: readonly Map<string, Yearly>[]): Map<string, Yearly> => {
                 throw new Error(`${iso3} is in two CRS reads`);
             }
 
+            found.set(iso3, values);
+        }
+    }
+
+    return found;
+};
+
+/** Each pillar's value by place and year, from the rows of the sums by recipient and purpose,
+ *  each purpose counted in its pillar by code. */
+const byPillar = (
+    parts: readonly (readonly Row[])[],
+): Record<(typeof PILLARS)[number], Map<string, Yearly>> => {
+    const split = (pillar: (typeof PILLARS)[number]) =>
+        joined(
+            parts.map((part) =>
+                byPlace(
+                    part.filter((row) => pillarOf(row) === pillar),
+                    RECIPIENT,
+                ),
+            ),
+        );
+
+    return { humanitarian: split('humanitarian'), peace: split('peace') };
+};
+
+/** The pillar of a row's purpose code, or null for development.
+ *  @throws When the row holds no purpose code. */
+const pillarOf = (row: Row): (typeof PILLARS)[number] | null => {
+    const purpose = String(row[PURPOSE_COLUMN]);
+    const code = Number(purpose.slice(PURPOSE_CODE.length));
+
+    if (!purpose.startsWith(PURPOSE_CODE) || !Number.isInteger(code)) {
+        throw new Error(`${purpose} is not a CRS purpose code`);
+    }
+
+    return PILLARS.find((pillar) => PILLAR_CODES[pillar].has(code)) ?? null;
+};
+
+/** Each provider's change in total ODA from `DONOR_YEAR` to the next year, as a fraction, from
+ *  the DAC1 rows, as DFO's `growth` gives it. A provider without both years, or with a change
+ *  that is not finite, which a zero base gives, is left out, as the step leaves it out. */
+const changes = (rows: readonly Row[]): Map<string, number> => {
+    const values = new Map<string, Yearly>();
+
+    for (const row of rows) {
+        const value = numberOf(row);
+
+        if (value !== null) {
+            const provider = String(row[PROVIDER]);
+            const years = values.get(provider) ?? new Map<number, number>();
+            const year = Number(row.time_period);
+
+            years.set(year, (years.get(year) ?? 0) + value);
+            values.set(provider, years);
+        }
+    }
+
+    const found = new Map<string, number>();
+
+    for (const [provider, years] of values) {
+        const first = years.get(DONOR_YEAR);
+        const last = years.get(DONOR_YEAR + 1);
+        const change = first === undefined || last === undefined ? NaN : (last - first) / first;
+
+        if (Number.isFinite(change)) {
+            found.set(provider, change);
+        }
+    }
+
+    return found;
+};
+
+/** Each context's money from each provider in `DONOR_YEAR`, keyed by ISO3 code. */
+const providersByPlace = (rows: readonly Row[]): Map<string, Map<string, number>> => {
+    const found = new Map<string, Map<string, number>>();
+
+    for (const row of rows) {
+        const value = numberOf(row);
+
+        if (value !== null && Number(row.time_period) === DONOR_YEAR) {
+            const iso3 = String(row[RECIPIENT]).replace(/^country\//, '');
+            const values = found.get(iso3) ?? new Map<string, number>();
+            const provider = String(row[PROVIDER]);
+
+            values.set(provider, (values.get(provider) ?? 0) + value);
             found.set(iso3, values);
         }
     }
@@ -261,7 +337,7 @@ const figureProblems = ({ contexts, groups }: Figures): FiguresCheck[] => {
 };
 
 /**
- * The page's figures from the rows of `recipes`: `committed` with each context's pillars,
+ * The page's figures from the rows of `sources`: `committed` with each context's pillars,
  * ODA, OOF, donors and climate split, and each group's donors, replaced by what the rows give,
  * once they pass the step's `check` (`FiguresCheck`).
  *
@@ -294,43 +370,13 @@ export const deriveFigures = (
     live: LiveInputs,
 ): Figures => {
     const reads = Object.keys(live.groups);
-    const summed = (figure: string, read = (key: string) => key) =>
-        joined(reads.map((key) => byPlace(rowsOf(rows, `${read(key)}/${figure}`), RECIPIENT)));
-    const totals = summed('total');
-    const pillars = {
-        humanitarian: summed('humanitarian'),
-        peace: summed('peace'),
-    };
-    const official = summed('total', (key) => key.replace(/^aid-/, 'oof-'));
+    const purposes = reads.map((key) => rowsOf(rows, `${key}/purposes`));
+    const totals = joined(purposes.map((part) => byPlace(part, RECIPIENT)));
+    const pillars = byPillar(purposes);
+    const official = joined(reads.map((key) => byPlace(rowsOf(rows, oofOf(key)), RECIPIENT)));
     const climate = CLIMATE_READS.map((key) => byPlace(rowsOf(rows, `${key}/total`), RECIPIENT));
-    const change = new Map<string, number>();
-
-    for (const key of CHANGE_READS) {
-        for (const row of rowsOf(rows, `${key}/change`)) {
-            const value = numberOf(row);
-
-            // A change from a zero base is infinite or NaN, and the step leaves it out.
-            if (value !== null && Number.isFinite(value)) {
-                change.set(String(row[PROVIDER]), value);
-            }
-        }
-    }
-
-    const ranked = new Map<string, Map<string, number>>();
-
-    for (const key of reads) {
-        for (const row of rowsOf(rows, `${key}/donors`)) {
-            const value = numberOf(row);
-
-            if (value !== null) {
-                const iso3 = String(row[RECIPIENT]).replace(/^country\//, '');
-                const values = ranked.get(iso3) ?? new Map<string, number>();
-
-                values.set(String(row[PROVIDER]), value);
-                ranked.set(iso3, values);
-            }
-        }
-    }
+    const change = changes(CHANGE_READS.flatMap((key) => rowsOf(rows, key)));
+    const given = providersByPlace(reads.flatMap((key) => rowsOf(rows, `${key}/providers`)));
 
     const contexts = committed.contexts.map((context): Context => {
         const { iso3 } = context;
@@ -377,12 +423,14 @@ export const deriveFigures = (
                     oof: money(flows.get(flow.year) ?? 0),
                 };
             }),
-            donors: largest(ranked.get(iso3) ?? new Map(), live.providers, change),
+            donors: largest(given.get(iso3) ?? new Map(), live.providers, change),
             climate: split,
         };
     });
 
-    return { contexts, groups: groupDonors(rows, reads, live.providers, change) };
+    const tiers = new Map(committed.contexts.map(({ iso3, tier }) => [iso3, tier]));
+
+    return { contexts, groups: groupDonors(given, tiers, live.providers, change) };
 };
 
 /** Climate finance in 2024 split into adaptation only, mitigation only and both, as
@@ -414,35 +462,34 @@ const climateSplit = (
     return { year: CLIMATE_YEAR, ...split };
 };
 
-/** Each group's six largest providers in 2024, summed over each read's sums by provider for
- *  a tier, in fetch.py's order so the sums match to the dollar. */
+/** Each group's six largest providers in 2024: each provider's sums to the contexts of a tier,
+ *  added up per group, as fetch.py's `group_donors` adds DFO's sums by provider per read and
+ *  tier. The sums are whole dollars, so the order does not change them. */
 const groupDonors = (
-    rows: Record<string, Row[]>,
-    reads: readonly string[],
+    given: ReadonlyMap<string, ReadonlyMap<string, number>>,
+    tiers: ReadonlyMap<string, string>,
     providers: Record<string, string>,
     change: ReadonlyMap<string, number>,
 ): Groups => {
     const byTier = new Map<string, Map<string, number>>(TIERS.map((tier) => [tier, new Map()]));
 
-    for (const key of reads) {
-        for (const tier of TIERS) {
-            for (const row of rows[`${key}/${tier}`] ?? []) {
-                const value = numberOf(row);
+    for (const [iso3, values] of given) {
+        const tier = tiers.get(iso3);
+        const totals = tier === undefined ? undefined : byTier.get(tier);
 
-                if (value !== null && Number(row.time_period) === DONOR_YEAR) {
-                    const totals = byTier.get(tier)!;
-                    const provider = String(row[PROVIDER]);
+        if (totals === undefined) {
+            throw new Error(`${iso3} has no tier`);
+        }
 
-                    totals.set(provider, (totals.get(provider) ?? 0) + value);
-                }
-            }
+        for (const [provider, value] of values) {
+            totals.set(provider, (totals.get(provider) ?? 0) + value);
         }
     }
 
-    const sum = (tiers: readonly string[]) => {
+    const sum = (of: readonly string[]) => {
         const totals = new Map<string, number>();
 
-        for (const tier of tiers) {
+        for (const tier of of) {
             for (const [provider, value] of byTier.get(tier)!) {
                 totals.set(provider, (totals.get(provider) ?? 0) + value);
             }

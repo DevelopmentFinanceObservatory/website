@@ -14,7 +14,7 @@ import type { ReadTier } from '#lib/liveRead.ts';
  * request for them. Each stored read runs one of DFO's analysis recipes, so this waits on their
  * timing against DFO. AidProvider holds the figures for the island and the prose around it.
  */
-export const READ_AID_LIVE = false;
+export const READ_AID_LIVE = true;
 
 export type Aid = {
     data: HivData;
