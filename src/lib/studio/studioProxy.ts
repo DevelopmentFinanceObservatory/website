@@ -15,10 +15,12 @@ import {
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
 import {
     checkStudioOwner,
-    MAX_STUDIO_BODY_BYTES,
+    maxStudioBodyBytes,
     OWNERSHIP_RETRY_SECONDS,
     readStudioCall,
     SIGN_IN_REQUIRED,
+    studioAllow,
+    type StudioCallRefusal,
     type StudioOwnerRefusal,
 } from '@/lib/studio/studioAccess';
 import {
@@ -43,8 +45,8 @@ const sessionOnce = <U>(getUser: () => Promise<U>) => {
     return () => (user ??= getUser());
 };
 
-const queryOf = (search: URLSearchParams | undefined): string => {
-    const query = search?.toString();
+const queryOf = (search: URLSearchParams): string => {
+    const query = search.toString();
 
     return query ? `?${query}` : '';
 };
@@ -76,6 +78,35 @@ const ownerProblem = (refusal: StudioOwnerRefusal): Response => {
     }
 };
 
+// The proxy's own answer to a call it does not forward (readStudioCall).
+const callProblem = (route: string, refusal: StudioCallRefusal): Response => {
+    switch (refusal) {
+        case 'options':
+            return new Response(null, { status: 204, headers: { Allow: studioAllow(route) } });
+        case 'method_not_allowed':
+            return problem({
+                status: 405,
+                code: 'method_not_allowed',
+                detail: `The ${route} route takes ${studioAllow(route)}.`,
+                retryable: false,
+                headers: { Allow: studioAllow(route) },
+            });
+        case 'too_large':
+            return problem({
+                status: 413,
+                code: 'payload_too_large',
+                detail: `The request body is over ${maxStudioBodyBytes(route)} bytes.`,
+                retryable: false,
+            });
+        case 'malformed':
+            return requestInvalidProblem(
+                'A Studio call names its conversation once: in one conversation_id query ' +
+                    'parameter, or in the conversation_id member of a JSON object body. ' +
+                    'A query carries no session_id.',
+            );
+    }
+};
+
 type StudioUser = { id: string; email: string };
 
 /**
@@ -84,11 +115,13 @@ type StudioUser = { id: string; email: string };
  * routes the browser calls go through (studioRoute), each about a
  * conversation the caller may reach (src/lib/studio/studioAccess). The
  * harness gets the query and body the check read its conversation id from,
- * so both name one conversation. The ownership check runs in forward()'s
- * `admit` hook, after the per-address rate limit, and on a turn before the
- * prompt spend. A turn spends one prompt of the caller's daily allowance,
- * and meterTurn (src/lib/studio/spendPrompt) gives it back when the turn does
- * not start. Reading the state and resuming a turn spend none.
+ * so both name one conversation. The proxy answers an OPTIONS call and a
+ * method the route does not serve itself, and forwards neither. The
+ * ownership check runs in forward()'s `admit` hook, after the per-address
+ * rate limit, and on a turn around the prompt spend (checkStudioOwner). A
+ * turn spends one prompt of the caller's daily allowance, and meterTurn
+ * (src/lib/studio/spendPrompt) gives it back when the turn does not start.
+ * Reading the state and resuming a turn spend none.
  *
  * `getUser` reads the signed-in user, `ownersOf` and `claimOwner` the
  * account a harness conversation belongs to (src/lib/chat/conversationStore).
@@ -113,58 +146,42 @@ export const studioProxy =
         const session = sessionOnce(getUser);
         const readUserId = async () => (await session())?.id ?? null;
 
-        const { refusal, call } = await readStudioCall({
+        const read = await readStudioCall({
+            route,
             method: req.method,
             search: req.nextUrl.searchParams,
-            readBody: () => readBoundedText(req.body, MAX_STUDIO_BODY_BYTES),
+            readBody: (maxBytes) => readBoundedText(req.body, maxBytes),
         });
 
-        if (refusal === 'too_large') {
-            return problem({
-                status: 413,
-                code: 'payload_too_large',
-                detail: `The request body is over ${MAX_STUDIO_BODY_BYTES} bytes.`,
-                retryable: false,
-            });
+        if (read.call === null) {
+            return callProblem(route, read.refusal);
         }
 
-        if (refusal === 'malformed') {
-            return requestInvalidProblem(
-                'A Studio call names its conversation once: in one conversation_id query ' +
-                    'parameter, or in the conversation_id member of a JSON object body. ' +
-                    'A query carries no session_id.',
-            );
-        }
+        const { call } = read;
 
-        // An OPTIONS call (`call` null) names no conversation and is not checked.
-        const admitOwner = async (): Promise<Response | null> => {
-            if (!call) {
-                return null;
-            }
-
-            const ownerRefusal = await checkStudioOwner({
+        const admitOwner = (spend?: () => Promise<Response | null>) =>
+            checkStudioOwner({
                 route,
                 conversationId: call.conversationId,
                 readUserId,
                 ownersOf,
                 claimOwner,
+                spend,
+                refuse: ownerProblem,
             });
-
-            return ownerRefusal ? ownerProblem(ownerRefusal) : null;
-        };
 
         const options = {
             surface: 'api',
-            target: `${STUDIO_API_BASE}/api/studio/${route}${queryOf(call?.search)}`,
-            body: call?.body ?? undefined,
+            target: `${STUDIO_API_BASE}/api/studio/${route}${queryOf(call.search)}`,
+            body: call.body ?? undefined,
             bearer: STUDIO_TOKEN,
             pass: STUDIO_HEADERS,
             unreachable: 'The studio agent is unreachable. Is it running? (just dev in dfo-ai)',
-            admit: admitOwner,
+            admit: () => admitOwner(),
             ...studioIdentity(route, req.headers, readUserId),
         } as const;
 
-        if (req.method !== 'POST' || route !== 'turn') {
+        if (route !== 'turn') {
             return forward(req, options);
         }
 
@@ -176,9 +193,6 @@ export const studioProxy =
         };
 
         return meterTurn(spend, giveBack, (admitTurn) =>
-            forward(req, {
-                ...options,
-                admit: async () => (await admitOwner()) ?? admitTurn(),
-            }),
+            forward(req, { ...options, admit: () => admitOwner(admitTurn) }),
         );
     };

@@ -53,7 +53,8 @@ export const getConversation = async (
 
 /** The account the harness conversation `agentSessionId` belongs to, as a
  *  list of none or one, null for a deleted account
- *  (src/lib/studio/studioAccess). */
+ *  (src/lib/studio/studioAccess). A conversation with no owner row goes to
+ *  the account behind its saves when they agree on one (sessionOwners). */
 export const conversationOwners = (agentSessionId: string): Promise<(string | null)[]> =>
     sessionOwners(db, agentSessionId);
 

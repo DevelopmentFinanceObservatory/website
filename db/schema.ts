@@ -24,8 +24,8 @@ export * from './auth-schema.ts';
  * document, plus the columns the history list needs without unpacking it.
  * `agentSessionId` is the agent's server-side conversation, so a reopened
  * conversation resumes with its context. It is part of the saved document,
- * which the account rewrites on every save, so it grants nothing: which
- * account the harness conversation belongs to is `studioSessionOwner`.
+ * which the account rewrites on every save, so it grants nothing. The account
+ * a harness conversation belongs to is in `studioSessionOwner`.
  */
 export const conversation = pgTable(
     'conversation',
@@ -51,18 +51,24 @@ export type ConversationRow = typeof conversation.$inferSelect;
  * The account a harness conversation (`agentSessionId`) belongs to, which the
  * Studio proxy (src/lib/studio/studioProxy) reads in its `admit` hook, after
  * the rate limit, on each call that names a conversation
- * (src/lib/studio/studioAccess). The first save naming the harness
- * conversation writes the row (src/lib/chat/conversationSave). No later save
- * changes it, so a save by another account, or the owner's save naming a
- * different harness conversation, leaves the owner as it was. Deleting the
- * account keeps the row with a null `userId`: the conversation then belongs
- * to nobody, and the proxy refuses every call about it.
+ * (src/lib/studio/studioAccess). Three writers insert the row, each only when
+ * none exists (src/lib/chat/conversationSave): a signed-in turn naming the
+ * harness conversation, a save naming it, and a read that finds no row
+ * while every saved conversation naming it belongs to one account. Once
+ * written, the owner stays, so a save by another account, or the owner's save
+ * naming a different harness conversation, leaves it as it was. Deleting the
+ * account sets `userId` to null and keeps the row, so the conversation
+ * belongs to nobody and the proxy refuses every call about it.
  */
-export const studioSessionOwner = pgTable('studio_session_owner', {
-    agentSessionId: text('agent_session_id').primaryKey(),
-    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const studioSessionOwner = pgTable(
+    'studio_session_owner',
+    {
+        agentSessionId: text('agent_session_id').primaryKey(),
+        userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    },
+    (table) => [index('studio_session_owner_user_idx').on(table.userId)],
+);
 
 /**
  * A public share: a pruned copy of a conversation (or its canvas, or one

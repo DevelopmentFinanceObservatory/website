@@ -6,8 +6,10 @@ import {
     getConversation,
     upsertConversation,
 } from '@/lib/chat/conversationStore';
+import { isSaveableConversation } from '@/lib/chat/conversationSave';
 import type { SavedConversation } from '@/lib/chat/history';
 import { missingProblem, requestInvalidProblem, unauthorizedProblem } from '@/lib/proxy/problem';
+import { MAX_CONVERSATION_ID_CHARS } from '@/lib/studio/studioAccess';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -41,14 +43,9 @@ export const PUT = async (request: Request, { params }: Params) => {
     const { id } = await params;
     const body = (await request.json().catch(() => null)) as SavedConversation | null;
 
-    if (
-        !body ||
-        body.id !== id ||
-        typeof body.title !== 'string' ||
-        !Array.isArray(body.messages)
-    ) {
+    if (!isSaveableConversation(id, body)) {
         return requestInvalidProblem(
-            'The body needs the conversation id from the path, a title, and a list of messages.',
+            `The body needs the conversation id from the path, a title, and a list of messages, with ids of at most ${MAX_CONVERSATION_ID_CHARS} characters.`,
         );
     }
 

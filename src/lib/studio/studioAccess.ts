@@ -1,11 +1,13 @@
 /**
  * Who may call the harness about a conversation. The proxy sends every Studio
  * call with one shared token, so the harness holds no per-user identity and a
- * conversation id is all a call names. The site holds the ownership: the
- * first account to drive a turn in a harness conversation, or to save a
- * conversation naming it, owns it, and nothing changes the owner afterwards
- * (`studioSessionOwner` in db/schema.ts, written by
- * src/lib/chat/conversationSave).
+ * conversation id is all a call names. The site holds the ownership in one
+ * owner row per harness conversation (`studioSessionOwner` in db/schema.ts),
+ * which nothing changes once written. Three writers race to insert it, and
+ * the first wins: a signed-in turn's claim (checkStudioOwner), a save naming
+ * the conversation (src/lib/chat/conversationSave), and the owner read
+ * itself, which claims a conversation for the one account whose saved
+ * conversations name it (src/lib/chat/conversationStore).
  *
  * A conversation an account owns answers only to that account, on every
  * route: a guest is asked to sign in (SIGN_IN_REQUIRED) and another account
@@ -18,11 +20,26 @@
  * The proxy checks a call in two steps. readStudioCall rebuilds the call it
  * forwards, before the rate limit, and reads no database. checkStudioOwner
  * reads and claims the owner inside forward()'s `admit` hook, after the rate
- * limit and before a turn spends a prompt, so a call the rate limit refuses
- * reads no owner row, and only a `turn` call writes one.
+ * limit, so a call the rate limit refuses reads no owner row. Of the Studio
+ * calls, only a POST `turn` whose prompt the allowance admits writes one.
  */
 
-// The routes that need the caller's own saved copy of the conversation.
+// The methods the harness serves on each route, and so the only ones the
+// proxy forwards.
+const STUDIO_METHODS: Readonly<Record<string, readonly string[]>> = {
+    turn: ['POST'],
+    interrupt: ['POST'],
+    cancel: ['POST'],
+    composition: ['POST'],
+    resume: ['POST'],
+    state: ['GET', 'HEAD'],
+};
+
+/** The `Allow` header of a Studio route: its methods and OPTIONS. */
+export const studioAllow = (route: string): string =>
+    [...(STUDIO_METHODS[route] ?? []), 'OPTIONS'].join(', ');
+
+// The routes that need the caller to own the conversation.
 const OWNER_ROUTES: ReadonlySet<string> = new Set(['state', 'resume']);
 
 // The routes that drive a turn. Each names the conversation it acts on, so a
@@ -33,9 +50,26 @@ const DRIVE_ROUTES: ReadonlySet<string> = new Set(['turn', 'interrupt', 'cancel'
 // account owns.
 const CLAIM_ROUTE = 'turn';
 
-// The largest request body the proxy reads for its conversation id. A turn's
-// body is a message and a few small members.
+// The largest request body the proxy reads for its conversation id on a
+// route other than `turn`.
 export const MAX_STUDIO_BODY_BYTES = 1_048_576;
+
+// The largest `turn` body: its `seed_spec` carries up to six Spec blocks of
+// up to 1 MiB each beside the message. Equal to the harness's own cap,
+// `MAX_TURN_REQUEST_BYTES` in dfo-ai's services/harness/src/harness/wire.py.
+export const MAX_TURN_BODY_BYTES = 6 * 1_048_576 + 65_536;
+
+/** The largest request body the proxy reads on `route`. */
+export const maxStudioBodyBytes = (route: string): number =>
+    route === CLAIM_ROUTE ? MAX_TURN_BODY_BYTES : MAX_STUDIO_BODY_BYTES;
+
+/**
+ * The longest conversation id the site accepts, on a Studio call and in a
+ * save (src/lib/chat/conversationSave). The id is the text primary key of
+ * its owner row, whose btree index refuses a key over about 2.7 KB. The page
+ * mints a 36-character UUID.
+ */
+export const MAX_CONVERSATION_ID_CHARS = 256;
 
 /**
  * The problem code of a guest's call about a conversation an account owns
@@ -69,7 +103,8 @@ export type StudioCall = {
  * parser would read differently (a repeated member, `NaN`) cannot name a
  * conversation the proxy did not check. The body loses `session_id` for the
  * same older harness, so only `conversation_id` names the conversation
- * whichever harness answers.
+ * whichever harness answers. An id longer than MAX_CONVERSATION_ID_CHARS
+ * names no conversation the site can own, and is refused.
  */
 export const canonicalStudioCall = (
     method: string,
@@ -79,7 +114,9 @@ export const canonicalStudioCall = (
     if (method === 'GET' || method === 'HEAD') {
         const ids = search.getAll('conversation_id');
 
-        return ids.length > 1 || search.has('session_id')
+        return ids.length > 1 ||
+            search.has('session_id') ||
+            (ids[0]?.length ?? 0) > MAX_CONVERSATION_ID_CHARS
             ? null
             : { conversationId: ids[0] ?? null, search: new URLSearchParams(search), body: null };
     }
@@ -102,7 +139,7 @@ export const canonicalStudioCall = (
 
     const id = members.conversation_id;
 
-    if (id !== undefined && typeof id !== 'string') {
+    if (id !== undefined && (typeof id !== 'string' || id.length > MAX_CONVERSATION_ID_CHARS)) {
         return null;
     }
 
@@ -113,36 +150,49 @@ export const canonicalStudioCall = (
     };
 };
 
-export type StudioCallRefusal = 'too_large' | 'malformed';
+/**
+ * Why the proxy answers a call itself: a body over the route's cap
+ * (`too_large`), a call that cannot name one conversation unambiguously
+ * (`malformed`), a method the route does not serve (`method_not_allowed`),
+ * or an OPTIONS call (`options`), which the proxy answers with the route's
+ * methods and never forwards.
+ */
+export type StudioCallRefusal = 'too_large' | 'malformed' | 'method_not_allowed' | 'options';
 
 export type StudioCallRead =
-    { refusal: StudioCallRefusal; call: null } | { refusal: null; call: StudioCall | null };
+    { refusal: StudioCallRefusal; call: null } | { refusal: null; call: StudioCall };
 
 /**
- * The call the proxy forwards (canonicalStudioCall), or why it cannot build
- * one. `readBody` reads the request body, null when it is over
- * MAX_STUDIO_BODY_BYTES. A call that cannot name one conversation
- * unambiguously is `malformed`, as is a body whose `conversation_id` is not a
- * string. An OPTIONS call reads nothing and goes on with no query and no body
- * (`call` null).
+ * The call the proxy forwards on `route` (canonicalStudioCall), or why it
+ * cannot build one. `readBody` reads the request body, null when it is over
+ * `maxBytes`, which is the route's cap (maxStudioBodyBytes). A call that
+ * cannot name one conversation unambiguously is `malformed`, as is a body
+ * whose `conversation_id` is not a string. A method checks first, so an
+ * OPTIONS call or a method the route does not serve reads no body.
  */
 export const readStudioCall = async ({
+    route,
     method,
     search,
     readBody,
 }: {
+    route: string;
     method: string;
     search: URLSearchParams;
-    readBody: () => Promise<string | null>;
+    readBody: (maxBytes: number) => Promise<string | null>;
 }): Promise<StudioCallRead> => {
     if (method === 'OPTIONS') {
-        return { refusal: null, call: null };
+        return { refusal: 'options', call: null };
+    }
+
+    if (!STUDIO_METHODS[route]?.includes(method)) {
+        return { refusal: 'method_not_allowed', call: null };
     }
 
     let body: string | null = null;
 
     if (method !== 'GET' && method !== 'HEAD') {
-        body = await readBody();
+        body = await readBody(maxStudioBodyBytes(route));
 
         if (body === null) {
             return { refusal: 'too_large', call: null };
@@ -183,58 +233,19 @@ export const studioOwnerRefusal = (
     return OWNER_ROUTES.has(route) ? 'not_found' : null;
 };
 
-// How long the ownership check waits on the session and the saved
-// conversations before it refuses the call as unavailable, and the
-// Retry-After its refusal names.
+// How long the ownership check waits on each of its reads (the session and
+// the owner row, then a turn's claim) before it refuses the call as
+// unavailable, and the Retry-After its refusal names.
 export const OWNERSHIP_TIMEOUT_MS = 5_000;
 export const OWNERSHIP_RETRY_SECONDS = 5;
 
-/**
- * The proxy's ownership check for one Studio call about `conversationId`,
- * run in forward()'s `admit` hook: why it is refused (studioOwnerRefusal), or
- * null. `readUserId` reads the signed-in user, and `ownersOf` the account
- * owning a harness conversation (none or one). A signed-in turn naming a
- * conversation no account owns first claims it with `claimOwner`, which
- * binds the caller unless another account got there first and answers the
- * owner either way: of two accounts racing on a new conversation, one owns it
- * and the other is refused. A call that names no conversation goes on to the
- * harness, which refuses it, except on a route that needs the caller's own
- * copy, and on a route that drives a turn, which always names one. A check
- * whose reads fail, or have not answered within `timeoutMs`, refuses the call
- * as `unavailable`, since forwarding it unchecked would open a saved
- * conversation to anyone.
- */
-export const checkStudioOwner = async ({
-    route,
-    conversationId,
-    readUserId,
-    ownersOf,
-    claimOwner,
-    timeoutMs = OWNERSHIP_TIMEOUT_MS,
-}: {
-    route: string;
-    conversationId: string | null;
-    readUserId: () => Promise<string | null>;
-    ownersOf: (conversationId: string) => Promise<(string | null)[]>;
-    claimOwner: (conversationId: string, userId: string) => Promise<(string | null)[]>;
-    timeoutMs?: number;
-}): Promise<StudioOwnerRefusal | null> => {
-    if (conversationId === null) {
-        return OWNER_ROUTES.has(route) || DRIVE_ROUTES.has(route) ? 'not_found' : null;
-    }
-
+// `work`'s answer, or a rejection once `timeoutMs` passes first.
+const withinTimeout = async <T>(work: Promise<T>, timeoutMs: number): Promise<T> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
-        const read = async (): Promise<[string | null, (string | null)[]]> => {
-            const [userId, owners] = await Promise.all([readUserId(), ownersOf(conversationId)]);
-
-            return owners.length === 0 && userId !== null && route === CLAIM_ROUTE
-                ? [userId, await claimOwner(conversationId, userId)]
-                : [userId, owners];
-        };
-        const [userId, owners] = await Promise.race([
-            read(),
+        return await Promise.race([
+            work,
             new Promise<never>((_, reject) => {
                 timer = setTimeout(
                     () => reject(new Error(`no answer within ${timeoutMs} ms`)),
@@ -242,13 +253,96 @@ export const checkStudioOwner = async ({
                 );
             }),
         ]);
-
-        return studioOwnerRefusal(route, userId, owners);
-    } catch (error) {
-        console.error('studio: the conversation owner was not read', error);
-
-        return 'unavailable';
     } finally {
         clearTimeout(timer);
     }
+};
+
+/**
+ * The proxy's admission of one Studio call about `conversationId`, run in
+ * forward()'s `admit` hook: the refusal to answer with, or null to forward
+ * the call. `refuse` turns an ownership refusal (studioOwnerRefusal) into
+ * that answer. `readUserId` reads the signed-in user, `ownersOf` the account
+ * owning a harness conversation (none or one), and `claimOwner` binds the
+ * caller to a conversation unless another account got there first,
+ * answering the owner either way.
+ *
+ * A call on a route that drives a turn, or that needs the caller to own the
+ * conversation, names one or is refused. The owner is read first, so a
+ * caller the owner refuses spends nothing. A `turn` then spends its prompt
+ * through `spend`, whose refusal is the answer. Only after that does a
+ * signed-in turn claim a conversation no account owns. Of two accounts
+ * racing on a new conversation, one owns it and the other is refused
+ * `not_found`, and the proxy gives that turn's prompt back as it does for
+ * any turn that does not start (meterTurn in src/lib/studio/spendPrompt).
+ *
+ * Each read that fails, or has not answered within `timeoutMs`, refuses the
+ * call as `unavailable`, since forwarding it unchecked would open an owned
+ * conversation to anyone. A claim starts only after the owner read has
+ * answered in time, so an owner read the timeout gave up on claims nothing.
+ */
+export const checkStudioOwner = async <R>({
+    route,
+    conversationId,
+    readUserId,
+    ownersOf,
+    claimOwner,
+    spend,
+    refuse,
+    timeoutMs = OWNERSHIP_TIMEOUT_MS,
+}: {
+    route: string;
+    conversationId: string | null;
+    readUserId: () => Promise<string | null>;
+    ownersOf: (conversationId: string) => Promise<(string | null)[]>;
+    claimOwner: (conversationId: string, userId: string) => Promise<(string | null)[]>;
+    spend?: () => Promise<R | null>;
+    refuse: (refusal: StudioOwnerRefusal) => R;
+    timeoutMs?: number;
+}): Promise<R | null> => {
+    if (conversationId === null) {
+        return OWNER_ROUTES.has(route) || DRIVE_ROUTES.has(route) ? refuse('not_found') : null;
+    }
+
+    let userId: string | null;
+    let owners: (string | null)[];
+
+    try {
+        [userId, owners] = await withinTimeout(
+            Promise.all([readUserId(), ownersOf(conversationId)]),
+            timeoutMs,
+        );
+    } catch (error) {
+        console.error('studio: the conversation owner was not read', error);
+
+        return refuse('unavailable');
+    }
+
+    const ownerRefusal = studioOwnerRefusal(route, userId, owners);
+
+    if (ownerRefusal) {
+        return refuse(ownerRefusal);
+    }
+
+    const spendRefusal = (await spend?.()) ?? null;
+
+    if (spendRefusal !== null) {
+        return spendRefusal;
+    }
+
+    if (route !== CLAIM_ROUTE || userId === null || owners.length > 0) {
+        return null;
+    }
+
+    try {
+        owners = await withinTimeout(claimOwner(conversationId, userId), timeoutMs);
+    } catch (error) {
+        console.error('studio: the conversation owner was not claimed', error);
+
+        return refuse('unavailable');
+    }
+
+    const claimRefusal = studioOwnerRefusal(route, userId, owners);
+
+    return claimRefusal ? refuse(claimRefusal) : null;
 };

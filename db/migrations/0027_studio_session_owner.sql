@@ -5,9 +5,11 @@ CREATE TABLE "studio_session_owner" (
 );
 --> statement-breakpoint
 ALTER TABLE "studio_session_owner" ADD CONSTRAINT "studio_session_owner_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
--- Each harness conversation a saved conversation names goes to the account whose row naming it was created first, the earliest save on record.
-INSERT INTO "studio_session_owner" ("agent_session_id", "user_id", "created_at")
-SELECT DISTINCT ON ("agent_session_id") "agent_session_id", "user_id", "created_at"
+CREATE INDEX "studio_session_owner_user_idx" ON "studio_session_owner" USING btree ("user_id");--> statement-breakpoint
+-- A harness conversation goes to the account behind the saved conversations naming it when they all belong to one account, the rule claimFromSaves in src/lib/chat/conversationSave.ts applies on read. One named by two accounts' saves stays without an owner.
+INSERT INTO "studio_session_owner" ("agent_session_id", "user_id")
+SELECT "agent_session_id", min("user_id")
 FROM "conversation"
 WHERE "agent_session_id" IS NOT NULL
-ORDER BY "agent_session_id", "created_at", "id";
+GROUP BY "agent_session_id"
+HAVING count(DISTINCT "user_id") = 1;
