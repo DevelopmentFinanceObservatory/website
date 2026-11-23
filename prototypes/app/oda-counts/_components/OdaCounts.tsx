@@ -20,6 +20,8 @@ import {
     rangeSentence,
 } from '../_lib/counts.ts';
 
+import { useStoredCheckState } from '#lib/useStoredCheck.ts';
+
 /**
  * The interactive part of the page: the controls, the headline sentence, the counts on one
  * axis and the bridges between them, all for one donor, year and unit. While the picked
@@ -29,6 +31,7 @@ export const OdaCounts = ({ definitions }: { definitions: Definition[] }) => {
     const [year, setYear] = useState(DEFAULT_YEAR);
     const { data, offer, picked, shown, donor, lead, pending, failed, pickDonor, pickUnit } =
         useLiveUnits();
+    const storedCheck = useStoredCheckState();
     const { unit } = shown;
     const pickedDonor = findDonor(data, picked.donorId) ?? donor;
 
@@ -37,8 +40,14 @@ export const OdaCounts = ({ definitions }: { definitions: Definition[] }) => {
         `No disbursement figure of ${possessive(donor.name)} ODA in ${year} is published.`;
 
     return (
-        // The build read the figures, so the browser reads none of them again.
-        <div className={styles.island} data-read-tier="built" data-read-live="built">
+        // The build read the figures. The browser reads them again only when DFO stored newer
+        // data, which `data-stored-check` says (lib/storedCheck.ts).
+        <div
+            className={styles.island}
+            data-read-tier="built"
+            data-read-live="built"
+            data-stored-check={storedCheck ?? undefined}
+        >
             <Controls
                 donors={data.donors}
                 donor={pickedDonor}

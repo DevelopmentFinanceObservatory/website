@@ -45,6 +45,34 @@ export const isBuilt = (unit: Unit, data: CountsData): boolean =>
 /** One price basis of a unit's pair: the unit's own, or the other one at the same base year. */
 export const withPrices = (unit: Unit, prices: Prices): Unit => ({ ...unit, prices });
 
+/** One donor in one unit, as the page picks or shows it. */
+export type Shown = { donorId: string; unit: Unit };
+
+/**
+ * Where the page stands when its counts change under the reader's last `pick`, as after a read
+ * again: conversions fetched for the old counts no longer apply, so a pick the new counts hold
+ * shows at once, and any other shows its donor in the built currency at the pick's prices while
+ * the pick is fetched again. With no pick, the page opens on `start`.
+ */
+export const resumePick = (
+    pick: Shown | null,
+    start: Shown,
+    data: CountsData,
+): { picked: Shown; shown: Shown } => {
+    if (pick === null) {
+        return { picked: start, shown: start };
+    }
+
+    if (isBuilt(pick.unit, data)) {
+        return { picked: pick, shown: pick };
+    }
+
+    return {
+        picked: pick,
+        shown: { donorId: pick.donorId, unit: withPrices(builtUnit(data), pick.unit.prices) },
+    };
+};
+
 /** The key a donor's figures in one currency at one price basis are cached under. */
 export const basisKey = (donorId: string, unit: Unit): string =>
     unit.prices === 'current'

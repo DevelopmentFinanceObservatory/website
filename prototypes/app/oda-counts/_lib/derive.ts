@@ -1,10 +1,12 @@
 // The page's figures from the rows of its 19 reads of DAC1, which the build takes at DFO's newest
-// stored versions (_lib/build.ts). It refuses rows that break a rule the figures rest on, which
-// fails the build.
+// stored versions (_lib/build.ts) and the browser takes again when DFO stores newer data
+// (_lib/refresh.ts). It refuses rows that break a rule the figures rest on, which fails the build
+// and, in the browser, keeps the built figures.
 import type { Row } from '@developmentfinance/client/types';
 
 import type { ByYear, CountsData, Donor, Prices, SeriesKey } from '../_data/types.ts';
 
+import type { Derive, LiveSource } from '#lib/liveRead.ts';
 import { recordOf } from '#lib/record.ts';
 
 /** The monetary series, in the order the page lists them. */
@@ -341,3 +343,21 @@ export const countsFromRows = (
 
     return { years: [...years], baseYear, donors };
 };
+
+/** The figures and the citation of the reads. */
+export type BuiltCounts = { data: CountsData; citation: string };
+
+/** The page's figures from the rows, and the citation the gross read gives. */
+export const deriveCounts: Derive<ReadKey, BuiltCounts> = (rows, datasets) => ({
+    data: countsFromRows(rows, {
+        years: [...YEARS],
+        baseYear: BASE_YEAR,
+        members: recordOf(READ_KEYS, (key) => datasets[key].members.length),
+    }),
+    citation: datasets['gross/current'].citation.text,
+});
+
+/** The page's 19 DAC1 reads of `refs`, live-refs.json's `data`, by key. */
+export const countsSources = (
+    refs: Readonly<Record<ReadKey, unknown>>,
+): Record<ReadKey, LiveSource> => recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));

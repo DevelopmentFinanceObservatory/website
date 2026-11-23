@@ -41,16 +41,20 @@ import {
 } from '../_lib/scope.ts';
 import { LIVING_STRIPS } from '../_lib/strip.ts';
 
+import { useStoredCheckState } from '#lib/useStoredCheck.ts';
+
 const LIVING_COLOUR = '#5e5e52';
 
 /**
  * The interactive part of the page: the scope row, the one headline sentence, and every
  * section that follows the scope, from the money in and out to living conditions. Every figure
  * comes from the build's read of DFO (./FragilityPage.tsx), so its root's `data-read-tier` and
- * `data-read-live` are `built`.
+ * `data-read-live` are `built`, or from a read again when DFO stored newer data, which its
+ * `data-stored-check` says (lib/storedCheck.ts).
  */
 export const FragilityFinance = () => {
     const { contexts, groups } = usePageFigures();
+    const storedCheck = useStoredCheckState();
     const [scope, setScope] = useState<Scope>(DEFAULT_SCOPE);
     const [group, setGroup] = useState<GroupKey>('all');
     const chosen = scope.kind === 'context' ? findContext(contexts, scope.iso3) : undefined;
@@ -94,7 +98,12 @@ export const FragilityFinance = () => {
     );
 
     return (
-        <div className={styles.island} data-read-tier="built" data-read-live="built">
+        <div
+            className={styles.island}
+            data-read-tier="built"
+            data-read-live="built"
+            data-stored-check={storedCheck ?? undefined}
+        >
             <div className={styles.top}>
                 <div className={styles.controls}>
                     <span className={styles.seg} role="group" aria-label="Contexts shown">

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { debtBuild } from './build.ts';
 import type { Spawn } from './pipeline.ts';
 
-import type { Fetcher } from '#lib/liveRead.ts';
+import type { Checker } from '#lib/buildRead.ts';
 import { createLane } from '#lib/pacing.ts';
 
 test('a failed transfers read stops the pipeline child and fails the build', async () => {
@@ -27,7 +27,7 @@ test('a failed transfers read stops the pipeline child and fails the build', asy
         fetch: async () => {
             throw new Error('gateway refused');
         },
-    } as unknown as Fetcher;
+    } as unknown as Checker;
 
     await assert.rejects(
         debtBuild.build({
