@@ -1,6 +1,7 @@
 /**
- * The save route stores a document only when its ids fit the text primary
- * keys that hold them (`isSaveableConversation` in `conversationSave.ts`).
+ * The save route stores a document only when its ids are conversation ids
+ * the text primary keys that hold them accept (`isSaveableConversation` in
+ * `conversationSave.ts`).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -30,6 +31,10 @@ for (const [name, id, sessionId, expected] of [
     ['no harness conversation', 'conv-1', null, true],
     ['a conversation id over the limit', tooLong, 'harness-1', false],
     ['a harness conversation id over the limit', 'conv-1', tooLong, false],
+    ['an empty conversation id', '', 'harness-1', false],
+    ['an empty harness conversation id', 'conv-1', '', false],
+    ['a NUL in the conversation id', 'conv\u00001', 'harness-1', false],
+    ['a NUL in the harness conversation id', 'conv-1', 'harness\u00001', false],
 ] as const) {
     test(`a save with ${name} is ${expected ? 'kept' : 'refused'}`, () => {
         assert.equal(isSaveableConversation(id, saved(id, sessionId)), expected);

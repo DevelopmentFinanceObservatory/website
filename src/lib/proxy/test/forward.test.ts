@@ -107,6 +107,18 @@ test('forward: sends the body option in place of a client body already read', as
     assert.equal(await res.text(), '{"conversation_id":"conv-b"}');
 });
 
+test('forward: takes the verdict of a call already counted and counts nothing more', async () => {
+    const res = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
+        surface: 'api',
+        counted: { allowed: false, limit: 120, remaining: 0, reset: 30, counted: true },
+        target: `${base}/empty`,
+        unreachable: 'The API is unreachable.',
+    });
+
+    assert.equal(res.status, 429);
+    assert.equal((await res.json()).code, 'rate_limited');
+});
+
 for (const acceptEncoding of ['gzip, deflate, br', null]) {
     test(`forward: relays a JSON body unencoded, Accept-Encoding ${acceptEncoding}`, async () => {
         const res = await call(

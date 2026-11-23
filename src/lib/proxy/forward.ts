@@ -14,7 +14,7 @@ import {
     type HeaderPass,
 } from './headers';
 import { rateLimitedProblem, unreachableProblem } from './problem';
-import { rateHeaders } from './rateHeaders';
+import { rateHeaders, type RateVerdict } from './rateHeaders';
 import { hit, type Surface } from './rateLimit';
 
 /**
@@ -77,6 +77,10 @@ export const clientIp = (req: NextRequest): string =>
 export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
+    // The verdict of a call the caller has already counted against `surface`
+    // (the Studio proxy counts before it reads a body); forward() then counts
+    // nothing more.
+    counted?: RateVerdict;
     // The upstream URL to hit (path + query already resolved).
     target: string;
     // A bearer the proxy attaches on the caller's behalf; when unset, the
@@ -149,7 +153,9 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
 };
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
-    const verdict = options.surface ? await hit(options.surface, clientIp(req)) : undefined;
+    const verdict =
+        options.counted ??
+        (options.surface ? await hit(options.surface, clientIp(req)) : undefined);
     const limitHeaders = verdict ? rateHeaders(verdict) : {};
 
     if (verdict && !verdict.allowed) {

@@ -1,11 +1,11 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, exists, ne, not, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { SavedConversation } from './history.ts';
 
-import { MAX_CONVERSATION_ID_CHARS } from '../studio/studioAccess.ts';
+import { isConversationId } from '../studio/studioAccess.ts';
 
-import { conversation, studioSessionOwner } from '../../../db/schema.ts';
+import { conversation, studioSessionOwner, user } from '../../../db/schema.ts';
 
 /**
  * Saving a Studio conversation, and the account a harness conversation
@@ -24,8 +24,8 @@ type OwnerDb = Pick<NodePgDatabase, 'select' | 'insert'>;
 
 /**
  * Whether `body` is a saveable document for the conversation `id`. It names
- * `id`, has a title and a list of messages, and its ids fit
- * MAX_CONVERSATION_ID_CHARS.
+ * `id`, has a title and a list of messages, and its ids pass
+ * isConversationId.
  */
 export const isSaveableConversation = (
     id: string,
@@ -33,17 +33,39 @@ export const isSaveableConversation = (
 ): body is SavedConversation =>
     !!body &&
     body.id === id &&
-    id.length <= MAX_CONVERSATION_ID_CHARS &&
+    isConversationId(id) &&
     typeof body.title === 'string' &&
     Array.isArray(body.messages) &&
     (body.sessionId == null ||
-        (typeof body.sessionId === 'string' && body.sessionId.length <= MAX_CONVERSATION_ID_CHARS));
+        (typeof body.sessionId === 'string' && isConversationId(body.sessionId)));
 
-// Make `userId` the owner of a harness conversation no account owns yet.
+/**
+ * Make `userId` the owner of a harness conversation no account owns yet,
+ * unless a saved conversation of another account names it. Shares from older
+ * releases stored the owner's harness id (src/lib/chat/sharePrune.ts), so a
+ * copier's save can name it, and a session that two accounts' saves name
+ * stays without an owner whichever account turns or saves first.
+ */
 const bindSessionOwner = async (db: OwnerDb, agentSessionId: string, userId: string) => {
+    const otherSaves = db
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(
+            and(eq(conversation.agentSessionId, agentSessionId), ne(conversation.userId, userId)),
+        );
+
     await db
         .insert(studioSessionOwner)
-        .values({ agentSessionId, userId })
+        .select(
+            db
+                .select({
+                    agentSessionId: sql<string>`${agentSessionId}::text`.as('agent_session_id'),
+                    userId: user.id,
+                    createdAt: sql<Date>`now()`.as('created_at'),
+                })
+                .from(user)
+                .where(and(eq(user.id, userId), not(exists(otherSaves)))),
+        )
         .onConflictDoNothing({ target: studioSessionOwner.agentSessionId });
 };
 
@@ -87,10 +109,11 @@ const readOwners = async (db: OwnerDb, agentSessionId: string) => {
  * Insert or replace `userId`'s saved conversation. The client owns the id and
  * sends the full document. In the same transaction, a save that writes the
  * row makes the harness conversation it names `userId`'s when no account owns
- * it (studioSessionOwner), after claimFromSaves gives it to the account behind
- * earlier saves. A harness conversation that belongs to an account stays with
- * it, whoever saves a document naming it, and a save refused because the id
- * is another account's claims nothing.
+ * it and no other account's save names it (bindSessionOwner), after
+ * claimFromSaves gives it to the account behind earlier saves. A harness
+ * conversation that belongs to an account stays with it, whoever saves a
+ * document naming it, and a save refused because the id is another
+ * account's claims nothing.
  */
 export const saveConversation = async <TSchema extends Record<string, unknown>>(
     db: SaveDb<TSchema>,
@@ -157,9 +180,11 @@ export const sessionOwners = async (
 
 /**
  * Make `userId` the owner of the harness conversation `agentSessionId` if no
- * account owns it and its saves name no single account (claimFromSaves), and
- * answer its owner (src/lib/studio/studioAccess). Of concurrent claims, the
- * first insert wins and every claim answers the winner.
+ * account owns it, its saves name no single account (claimFromSaves), and no
+ * other account's save names it (bindSessionOwner), and answer its owner
+ * (src/lib/studio/studioAccess). A session that two accounts' saves name
+ * answers no owner. Of concurrent claims, the first insert wins and every
+ * claim answers the winner.
  */
 export const claimSessionOwner = async (
     db: OwnerDb,

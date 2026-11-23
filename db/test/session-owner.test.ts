@@ -192,11 +192,13 @@ test('a harness conversation saved without an owner row goes to its saver', asyn
 /**
  * Migration 0027's backfill and the read-time claim in `sessionOwners` give
  * a harness conversation to an account only when every saved conversation
- * naming it belongs to that account. The migration has already run on the
- * empty tables by the time the rows go in, so the test runs its backfill
- * again over them, then clears the owner rows and reads each id.
+ * naming it belongs to that account. A session two accounts' saves name gets
+ * no owner from a turn claim or a save by either account. The migration has
+ * already run on the empty tables by the time the rows go in, so the test
+ * runs its backfill again over them, then clears the owner rows and reads
+ * each id.
  */
-test('migration 0027 and the read-time claim own only single-account sessions', async (t) => {
+test('migration 0027 and every claim own only single-account sessions', async (t) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
 
@@ -241,4 +243,9 @@ test('migration 0027 and the read-time claim own only single-account sessions', 
 
     assert.deepEqual(await sessionOwners(db, 'harness-shared'), []);
     assert.deepEqual(await sessionOwners(db, 'harness-ben'), ['user-ben']);
+
+    assert.deepEqual(await claimSessionOwner(db, 'harness-shared', 'user-ana'), []);
+    await saveConversation(db, 'user-ana', saved('conv-ana', 'harness-shared'));
+    assert.deepEqual(await claimSessionOwner(db, 'harness-shared', 'user-ben'), []);
+    assert.deepEqual(await sessionOwners(db, 'harness-shared'), []);
 });
