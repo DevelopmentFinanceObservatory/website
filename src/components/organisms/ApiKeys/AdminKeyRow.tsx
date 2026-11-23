@@ -1,6 +1,5 @@
 'use client';
 
-import classNames from 'classnames';
 import { useState, useTransition } from 'react';
 
 import styles from './AdminApiKeys.module.scss';
@@ -9,7 +8,6 @@ import { type AdminActions, formatDateTime, formatDay } from './AdminState';
 import { keySnippet } from './format';
 
 import Button from '@/components/atoms/Button/Button';
-import Icon from '@/components/atoms/Icon/Icon';
 import Spinner from '@/components/atoms/Spinner/Spinner';
 import UsageMeter from '@/components/atoms/UsageMeter/UsageMeter';
 import type { AdminKey } from '@/lib/apiKeys/service';
@@ -27,6 +25,17 @@ const ResetIcon = () => (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={styles.iconSvg}>
         <path
             d="M15.5 10a5.5 5.5 0 1 1-1.8-4.07M15 3.5v3h-3"
+            stroke="currentColor"
+            strokeLinecap="square"
+            strokeWidth="1.2"
+        />
+    </svg>
+);
+
+const TrashIcon = () => (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={styles.iconSvg}>
+        <path
+            d="M4.5 6h11M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6M8.75 8.5v4.5M11.25 8.5v4.5"
             stroke="currentColor"
             strokeLinecap="square"
             strokeWidth="1.2"
@@ -76,37 +85,38 @@ const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) 
 
     return (
         <>
-            <tr className={classNames(styles.keyRow, open && styles.keyRowOpen)}>
+            <tr className={styles.keyRow}>
                 <td className={styles.keyCell}>
-                    <span className={styles.keyName}>{name}</span>
-                    <code className={styles.keySnippet}>
-                        {keySnippet(keyData.start, keyData.tail)}
-                    </code>
-                    <span className={styles.keyCreated}>
-                        Created{' '}
-                        <time dateTime={keyData.createdAt.toISOString()}>
-                            {formatDay(keyData.createdAt)}
-                        </time>
+                    <span className={styles.keyName}>
+                        {name}
+                        <code className={styles.keySnippet}>
+                            {keySnippet(keyData.start, keyData.tail)}
+                        </code>
                     </span>
                     <span className={styles.keyCreated}>
+                        <time dateTime={keyData.createdAt.toISOString()}>
+                            {formatDateTime(keyData.createdAt)}
+                        </time>
+                        {' · '}
                         {keyData.lastRequest ? (
                             <>
-                                Last used{' '}
+                                last used{' '}
                                 <time dateTime={keyData.lastRequest.toISOString()}>
-                                    {formatDateTime(keyData.lastRequest)} UTC
+                                    {formatDay(keyData.lastRequest)}
                                 </time>
                             </>
                         ) : (
-                            'Never used'
+                            'never used'
                         )}
                     </span>
                 </td>
-                <td>
+                <td className={styles.usageCell}>
                     <div className={styles.usage}>
                         <UsageMeter
                             used={keyData.usedToday}
                             limit={keyData.dailyLimit}
                             label="API calls today"
+                            layout="inline"
                             className={styles.meter}
                         />
                         <span className={styles.of}>of</span>
@@ -141,7 +151,7 @@ const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) 
                             setAsking(true);
                         }}
                     >
-                        <Icon name="remove" />
+                        <TrashIcon />
                     </button>
                 </td>
             </tr>

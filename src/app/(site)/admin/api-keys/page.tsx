@@ -12,6 +12,7 @@ import {
 import AdminApiKeys from '@/components/organisms/ApiKeys/AdminApiKeys';
 import { ADMIN_PAGE_SIZE } from '@/components/organisms/ApiKeys/AdminState';
 import { keyService, requireAdmin } from '@/lib/apiKeys/server';
+import { isAdmin, parseAdminEmails } from '@/lib/apiKeys/settings';
 import { keysEnabled } from '@/lib/proxy/forward';
 import { KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
@@ -55,9 +56,14 @@ const AdminApiKeysPage = async ({
         limit: ADMIN_PAGE_SIZE,
     });
 
+    const admins = parseAdminEmails(process.env.ADMIN_EMAILS);
+
     return (
         <AdminApiKeys
-            users={users}
+            users={users.map((user) => ({
+                ...user,
+                role: isAdmin(user, admins) ? 'admin' : 'standard',
+            }))}
             total={total}
             matched={matched}
             query={query}

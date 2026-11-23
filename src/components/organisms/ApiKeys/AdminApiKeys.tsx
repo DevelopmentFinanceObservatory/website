@@ -70,7 +70,7 @@ const AdminApiKeys = ({
                             {count(total)}
                         </span>
                     </h1>
-                    <p className={styles.lead}>Manage all user API keys</p>
+                    <p className={styles.lead}>Manage all user permissions and API keys</p>
                     <AdminSearch defaultValue={query} />
                 </PageHero>
 
@@ -97,6 +97,9 @@ const AdminApiKeys = ({
                                 <thead>
                                     <tr>
                                         <th scope="col">User</th>
+                                        <th scope="col">
+                                            <span className={styles.visuallyHidden}>Role</span>
+                                        </th>
                                         <th scope="col">Created</th>
                                         <th scope="col">API Keys</th>
                                         <th scope="col">

@@ -121,6 +121,7 @@ export type CreateResult =
 export type AdminUser = {
     id: string;
     email: string;
+    emailVerified: boolean;
     name: string | null;
     createdAt: Date;
     // Keys that are enabled and not expired.
@@ -434,6 +435,7 @@ export const createKeyService = ({
                     .select({
                         id: user.id,
                         email: user.email,
+                        emailVerified: user.emailVerified,
                         name: user.name,
                         createdAt: user.createdAt,
                         accountLimit: user.apiRateLimit,

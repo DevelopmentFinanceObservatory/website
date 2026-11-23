@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 
 import styles from './AdminApiKeys.module.scss';
 
-import Button from '@/components/atoms/Button/Button';
+import Icon from '@/components/atoms/Icon/Icon';
 
 // How long typing pauses before the list follows it.
 const DEBOUNCE_MS = 300;
@@ -33,8 +33,10 @@ const AdminSearch = ({ defaultValue }: { defaultValue: string }) => {
 
     return (
         <form className={styles.search} method="get" role="search">
+            {/* A form with one text field submits on Enter, so it needs no button. */}
             <label className={styles.searchField}>
                 <span className={styles.visuallyHidden}>Search by email address</span>
+                <Icon name="search" className={styles.searchIcon} />
                 <input
                     className={styles.searchInput}
                     type="search"
@@ -42,13 +44,10 @@ const AdminSearch = ({ defaultValue }: { defaultValue: string }) => {
                     defaultValue={defaultValue}
                     maxLength={320}
                     autoComplete="off"
-                    placeholder="Search by email address"
+                    placeholder="Search by email address..."
                     onChange={(event) => follow(event.target.value)}
                 />
             </label>
-            <Button type="submit" variant="light" icon="search">
-                Search
-            </Button>
         </form>
     );
 };

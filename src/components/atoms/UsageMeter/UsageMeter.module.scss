@@ -35,6 +35,24 @@
     transition: width 0.3s ease;
 }
 
+// The bar first, the count after it on the same line.
+.inline {
+    flex-direction: row-reverse;
+    gap: rem(10);
+    align-items: center;
+
+    .count {
+        @include font-size(12px, 1);
+
+        min-width: 3ch;
+        text-align: right;
+    }
+
+    .track {
+        flex: 1 1 auto;
+    }
+}
+
 .full .fill {
     background-color: var(--color-red);
 }

@@ -29,10 +29,23 @@ export type AdminActions = {
     setAccountLimit: (email: string, limit: string) => Promise<AdminDoneResult>;
 };
 
+/**
+ * What an account may do on the site. `admin` is an account whose verified
+ * email is in ADMIN_EMAILS (settings.isAdmin); every other account is
+ * `standard`.
+ */
+export type AdminRole = 'admin' | 'standard';
+
+export const ROLE_LABELS: Record<AdminRole, string> = {
+    admin: 'Admin User',
+    standard: 'Standard User',
+};
+
 /** One row of the user table: what the page passes to the client row. */
 export type AdminUserView = {
     id: string;
     email: string;
+    role: AdminRole;
     createdAt: Date;
     activeKeys: number;
     accountLimit: number | null;

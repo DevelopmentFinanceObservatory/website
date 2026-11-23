@@ -9,6 +9,8 @@ type UsageMeterProps = {
     limit: number;
     // Read out with the numbers, for example "MCP calls today".
     label: string;
+    // 'stacked' puts the count above the bar; 'inline' puts it to the right.
+    layout?: 'stacked' | 'inline';
     className?: string;
 };
 
@@ -16,13 +18,20 @@ type UsageMeterProps = {
  * A thermometer: a bar filled to `used / limit`, with the count above it.
  * It turns red at the limit.
  */
-const UsageMeter = ({ used, limit, label, className }: UsageMeterProps) => {
+const UsageMeter = ({ used, limit, label, layout = 'stacked', className }: UsageMeterProps) => {
     const shown = Math.min(used, limit);
     const ratio = limit > 0 ? shown / limit : 1;
     const full = used >= limit;
 
     return (
-        <div className={classNames(styles.meter, full && styles.full, className)}>
+        <div
+            className={classNames(
+                styles.meter,
+                layout === 'inline' && styles.inline,
+                full && styles.full,
+                className,
+            )}
+        >
             <span className={styles.count} aria-hidden>
                 {used.toLocaleString('en-GB')}
             </span>
