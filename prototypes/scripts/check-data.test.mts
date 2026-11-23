@@ -113,8 +113,24 @@ test('refs files still need the envelope provenance', () => {
     assert.deepEqual(codes(found), ['retrieved_invalid']);
 });
 
-test('a page that reads DFO at build time commits only its refs files', () => {
-    assert.deepEqual(codes(buildPageProblems('refs.json')), []);
-    assert.deepEqual(codes(buildPageProblems('live-refs.json')), []);
-    assert.deepEqual(codes(buildPageProblems('counts.json')), ['build_page_figures_file']);
+test('a page that reads DFO at build time commits its refs files and outside data only', () => {
+    const outside = (value: unknown) => ({
+        provenance: { ...provenance, outside: value },
+        data: {},
+    });
+
+    assert.deepEqual(codes(buildPageProblems('refs.json', {})), []);
+    assert.deepEqual(codes(buildPageProblems('live-refs.json', {})), []);
+    assert.deepEqual(codes(buildPageProblems('weo.json', outside(['IMF WEO, October 2026']))), []);
+
+    for (const value of [undefined, [], [''], ['IMF WEO', 3], 'IMF WEO', true]) {
+        assert.deepEqual(codes(buildPageProblems('counts.json', outside(value))), [
+            'build_page_not_outside',
+        ]);
+    }
+
+    assert.deepEqual(codes(buildPageProblems('counts.json', { provenance, data: {} })), [
+        'build_page_not_outside',
+    ]);
+    assert.deepEqual(codes(buildPageProblems('counts.json', null)), ['build_page_not_outside']);
 });

@@ -72,7 +72,6 @@ def test_render_coverage_structure() -> None:
         coverage,
         missing,
         checks=checks,
-        default_year=2025,
         notes=["a note"],
         views=VIEWS,
         today=TODAY,

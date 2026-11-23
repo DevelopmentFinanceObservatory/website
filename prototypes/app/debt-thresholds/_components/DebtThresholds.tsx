@@ -33,7 +33,7 @@ import {
     type Group,
 } from '../_lib/thresholds.ts';
 import { ticksTo } from '../_lib/scale.ts';
-import type { TransfersMembers } from '../_lib/transfers.ts';
+import type { TransfersData } from '../_lib/transfers.ts';
 
 const CAPACITY_OPTIONS = [
     { value: 'assessed', label: 'As assessed' },
@@ -235,7 +235,7 @@ export const DebtThresholds = ({
     transfers,
 }: {
     data: ThresholdsData;
-    transfers: TransfersMembers;
+    transfers: TransfersData;
 }) => {
     const { countries } = data;
     const ticks = scatterTicks(data);
@@ -329,7 +329,9 @@ export const DebtThresholds = ({
     }));
 
     return (
-        <div id="groups" className={styles.island}>
+        // The build read every figure here from DFO, or took the 2024 view the step committed
+        // from outside it (_lib/build.ts), so the browser reads nothing.
+        <div id="groups" className={styles.island} data-read-tier="built" data-read-live="built">
             <Summary
                 counts={counts}
                 owner={
@@ -428,7 +430,7 @@ export const DebtThresholds = ({
                 </div>
 
                 <TransfersSection
-                    members={transfers}
+                    data={transfers}
                     groupOf={groupOf}
                     groupSource={groupSource}
                     highlight={selected === undefined ? null : groupOf(selected.iso3)}

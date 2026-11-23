@@ -3,7 +3,13 @@ import test, { mock } from 'node:test';
 
 import { DatasetRef, recipe } from '@developmentfinance/client';
 
-import { BUILD_TIMEOUT_MS, pendingBoundOf, PENDING_RETRY_MS, readSettled } from './buildRead.ts';
+import {
+    BUILD_TIMEOUT_MS,
+    checkOneVersionPerSpec,
+    pendingBoundOf,
+    PENDING_RETRY_MS,
+    readSettled,
+} from './buildRead.ts';
 import { ANALYSIS_CONCURRENCY, type Fetcher, READ_CONCURRENCY } from './liveRead.ts';
 import { createLane } from './pacing.ts';
 
@@ -377,4 +383,22 @@ test('with no bound set, a pending read is taken at once', async () => {
         warn.mock.restore();
         log.mock.restore();
     }
+});
+
+test('checkOneVersionPerSpec refuses reads that took one spec at two versions, naming both', () => {
+    const source = (specId: string, contentVersion: string) => ({
+        versions: [{ specId, contentVersion }],
+        freshness: 'current' as const,
+    });
+
+    checkOneVersionPerSpec('page', { a: source('s1', 'cv1') }, { b: source('s1', 'cv1') });
+    assert.throws(
+        () =>
+            checkOneVersionPerSpec(
+                'page',
+                { a: source('s1', 'cv2'), b: source('s2', 'cv1') },
+                { c: source('s1', 'cv1') },
+            ),
+        /page took one spec at two versions.*s1 at cv1 and cv2\./,
+    );
 });

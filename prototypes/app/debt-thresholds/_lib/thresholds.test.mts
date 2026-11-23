@@ -23,7 +23,7 @@ import {
 } from './thresholds.ts';
 
 const envelope = JSON.parse(
-    readFileSync(new URL('../_data/fixture.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('./fixtures/thresholds.json', import.meta.url), 'utf8'),
 ) as { provenance: Record<string, string>; data: ThresholdsData };
 const { countries } = envelope.data;
 

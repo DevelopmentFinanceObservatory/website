@@ -29,7 +29,6 @@ import {
     READ_CONCURRENCY,
     type ReadLanes,
     readStored,
-    type StoredRead,
 } from './liveRead.ts';
 import { createLane } from './pacing.ts';
 import { recordOf } from './record.ts';
@@ -101,6 +100,53 @@ export const versionsOf = (dataset: Dataset): StoredVersion[] => {
     return [...seen.values()];
 };
 
+/**
+ * Each spec the reads took at more than one content version, with those versions sorted, as when
+ * DFO stored a new version between two reads of one build. A build that shows such reads side by
+ * side mixes two releases.
+ */
+export const splitVersions = (
+    ...reads: readonly Readonly<Record<string, BuildSource>>[]
+): Map<string, string[]> => {
+    const bySpec = new Map<string, Set<string>>();
+
+    for (const sources of reads) {
+        for (const { versions } of Object.values(sources)) {
+            for (const { specId, contentVersion } of versions) {
+                bySpec.set(specId, (bySpec.get(specId) ?? new Set()).add(contentVersion));
+            }
+        }
+    }
+
+    return new Map(
+        [...bySpec]
+            .filter(([, versions]) => versions.size > 1)
+            .map(([specId, versions]) => [specId, [...versions].toSorted()]),
+    );
+};
+
+/**
+ * Checks that the reads took each spec at one content version.
+ *
+ * @throws An error naming `page`, each split spec and its versions.
+ */
+export const checkOneVersionPerSpec = (
+    page: string,
+    ...reads: readonly Readonly<Record<string, BuildSource>>[]
+): void => {
+    const split = splitVersions(...reads);
+
+    if (split.size > 0) {
+        const named = [...split]
+            .map(([specId, versions]) => `${specId} at ${versions.join(' and ')}`)
+            .join('; ');
+
+        throw new Error(
+            `The build read of ${page} took one spec at two versions, so the build stops: ${named}.`,
+        );
+    }
+};
+
 let client: Client | undefined;
 
 /** The build's anonymous client on the production API. Built on first use. */
@@ -129,35 +175,40 @@ export type BuildReadOptions = {
     sleep?: (ms: number) => Promise<void>;
 };
 
+/** One complete read of a page's sources: what the page made of it, and each source's versions
+ *  and freshness. */
+export type SourcedRead<K extends string, T> = Omit<BuildRead<K, T>, 'retrieved'>;
+
+export type SettleOptions = Pick<
+    BuildReadOptions,
+    'timeout' | 'pendingBound' | 'retryDelay' | 'now' | 'sleep'
+>;
+
 /**
- * Reads `sources` at DFO's newest stored versions and derives the page's figures, reading again
- * while any dataset's freshness is `pending`, within `pendingBound`. A read again that fails or
- * times out leaves the last complete read, which the build takes with a warning.
+ * Runs `readOnce` and runs it again while any source's freshness is `pending`, within
+ * `pendingBound`, as `readSettled` does for a page's DFO reads. `readOnce` gets the time it may
+ * take: `timeout`, or for a read again the time left to the bound when that is less. A read again
+ * that fails or times out leaves the last complete read, which the build takes with a warning. A
+ * page whose reads run outside `readStored`, such as in a child process, settles them here.
  *
- * @throws An error naming `page`, whose cause is the first read's failure or the derivation's
- *  refusal.
+ * @throws An error naming `page`, whose cause is the first read's failure.
  */
-export const readSettled = async <K extends string, T>(
+export const settle = async <K extends string, T>(
     page: string,
-    sources: Record<K, LiveSource>,
-    derive: Derive<K, T>,
+    readOnce: (timeout: number) => Promise<SourcedRead<K, T>>,
     {
-        client = buildClient(),
-        lanes = buildLanes,
         timeout = BUILD_TIMEOUT_MS,
         pendingBound = pendingBoundOf(process.env),
         retryDelay = PENDING_RETRY_MS,
         now = Date.now,
         sleep = (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-    }: BuildReadOptions = {},
+    }: SettleOptions = {},
 ): Promise<BuildRead<K, T>> => {
     const start = now();
-    // Object.keys widens to string. These are the keys of `sources`.
-    const keys = Object.keys(sources) as K[];
-    let read: StoredRead<K, T>;
+    let read: SourcedRead<K, T>;
 
     try {
-        read = await readStored(sources, derive, { client, timeout, lanes });
+        read = await readOnce(timeout);
     } catch (error) {
         throw new Error(`The build read of ${page} failed, so the build stops.`, {
             cause: error,
@@ -168,7 +219,10 @@ export const readSettled = async <K extends string, T>(
     let retryFailure = '';
 
     for (;;) {
-        const pending = keys.filter((key) => read.datasets[key].freshness === 'pending');
+        // Object.entries widens the keys to string. These are the keys of `read.sources`.
+        const pending = (Object.entries(read.sources) as [K, BuildSource][])
+            .filter(([, source]) => source.freshness === 'pending')
+            .map(([key]) => key);
 
         if (pending.length === 0) {
             break;
@@ -186,11 +240,7 @@ export const readSettled = async <K extends string, T>(
         await sleep(retryDelay);
 
         try {
-            read = await readStored(sources, derive, {
-                client,
-                timeout: Math.min(timeout, pendingBound - (now() - start)),
-                lanes,
-            });
+            read = await readOnce(Math.min(timeout, pendingBound - (now() - start)));
             retrieved = now();
         } catch (error) {
             retryFailure = `, and the read again failed (${error instanceof Error ? error.message : String(error)})`;
@@ -200,11 +250,41 @@ export const readSettled = async <K extends string, T>(
     return {
         value: read.value,
         retrieved: new Date(retrieved).toISOString(),
-        sources: recordOf(keys, (key) => ({
-            versions: versionsOf(read.datasets[key]),
-            freshness: read.datasets[key].freshness,
-        })),
+        sources: read.sources,
     };
+};
+
+/**
+ * Reads `sources` at DFO's newest stored versions and derives the page's figures, reading again
+ * while any dataset's freshness is `pending`, within `pendingBound` (`settle`).
+ *
+ * @throws An error naming `page`, whose cause is the first read's failure or the derivation's
+ *  refusal.
+ */
+export const readSettled = <K extends string, T>(
+    page: string,
+    sources: Record<K, LiveSource>,
+    derive: Derive<K, T>,
+    { client = buildClient(), lanes = buildLanes, ...options }: BuildReadOptions = {},
+): Promise<BuildRead<K, T>> => {
+    // Object.keys widens to string. These are the keys of `sources`.
+    const keys = Object.keys(sources) as K[];
+
+    return settle(
+        page,
+        async (timeout) => {
+            const read = await readStored(sources, derive, { client, timeout, lanes });
+
+            return {
+                value: read.value,
+                sources: recordOf(keys, (key) => ({
+                    versions: versionsOf(read.datasets[key]),
+                    freshness: read.datasets[key].freshness,
+                })),
+            };
+        },
+        options,
+    );
 };
 
 /** Warns that the build takes data DFO has not confirmed as its newest. */

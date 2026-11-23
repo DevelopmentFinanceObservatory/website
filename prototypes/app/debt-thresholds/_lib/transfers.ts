@@ -1,27 +1,92 @@
 // Net transfers on external debt, grouped the way the scatter groups countries. Pure
-// functions over `_data/transfers.json`, so the chart, its heading and the tests read
-// the same sums. Only type imports, which keeps the module loadable by `node --test`.
+// functions over the transfers rows the build reads (_lib/build.ts) and the members in
+// `_data/groups.csv`, so the chart, its heading and the tests read the same sums. Only type
+// imports, which keeps the module loadable by `node --test`.
 import type { Group } from './thresholds.ts';
 
-/** One member of the 75, as `_data/transfers.json` keeps it: the rows carry no names or groups. */
+/** One member of the 75, as `_data/groups.csv` lists it: the rows carry no names or groups. */
 export type TransferMember = { iso3: string; name: string; group: string };
 
-/** The `data` of `_data/transfers.json`: the membership and the release label. */
-export type TransfersMembers = {
-    /** The IDS release the values come from, e.g. "November 2026". */
-    release: string;
-    countries: TransferMember[];
+/** The groups `_data/groups.csv` may name, as `_data/pipeline/transfers.py`'s TRANSFER_GROUPS. */
+export const TRANSFER_GROUPS: ReadonlySet<string> = new Set([
+    'lower-risk',
+    'illiquid-issuer',
+    'illiquid-no-issuer',
+    'insolvent',
+    'not-in-dsa',
+]);
+
+/** The fields of one CSV line, with RFC 4180 quoting. */
+const csvFields = (line: string): string[] => {
+    const fields: string[] = [];
+    let field = '';
+    let quoted = false;
+
+    for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+
+        if (quoted && char === '"' && line[i + 1] === '"') {
+            field += '"';
+            i += 1;
+        } else if (char === '"') {
+            quoted = !quoted;
+        } else if (char === ',' && !quoted) {
+            fields.push(field);
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+
+    return [...fields, field];
 };
 
-/** The members with their net transfers by year, built in the browser from the transfers ref. */
-export type TransfersData = {
-    /** The release label the chart's source line shows: the committed release, or a label
-     *  naming the DFO's newest version when DFO serves another version than the ref's. */
-    release: string;
+/**
+ * Port of `parse_groups`: the members of `_data/groups.csv`'s text, skipping the `#` source
+ * comment.
+ *
+ * @throws When the header is not `iso3,name,group`, a line has another number of fields, or a
+ *   member's group is not one of TRANSFER_GROUPS.
+ */
+export const parseGroups = (text: string): TransferMember[] => {
+    const [header, ...lines] = text
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== '' && !line.startsWith('#'));
+
+    if (header !== 'iso3,name,group') {
+        throw new Error(`groups.csv starts ${JSON.stringify(header)}, not iso3,name,group.`);
+    }
+
+    return lines.map((line) => {
+        const fields = csvFields(line);
+        const [iso3, name, group] = fields;
+
+        if (
+            fields.length !== 3 ||
+            iso3 === undefined ||
+            name === undefined ||
+            group === undefined
+        ) {
+            throw new Error(`groups.csv has a line of ${fields.length} fields: ${line}`);
+        }
+
+        if (!TRANSFER_GROUPS.has(group)) {
+            throw new Error(`groups.csv names an unknown group: ${group}`);
+        }
+
+        return { iso3, name, group };
+    });
+};
+
+/** The members with their net transfers by year, from the transfers rows. */
+export type TransferSeries = {
     years: number[];
     /** Every member, in membership order, with its net transfers by year, null where missing. */
     countries: (TransferMember & { values: (number | null)[] })[];
 };
+
+/** What the section draws: the series and the IDS release they come from, e.g. "November 2026". */
+export type TransfersData = TransferSeries & { release: string };
 
 /** A transfers row. The port reads `financingRecipient`, `time_period` and `value`. */
 export type TransferRow = Record<string, unknown>;
@@ -99,20 +164,103 @@ export const lastActualYear = (values: Map<string, Map<number, number>>): number
 /** Port of `transfers_by_country`: the members' values on the years `FIRST_YEAR` to the last actual one. */
 export const transfersByCountry = (
     rows: TransferRow[],
-    { release, countries }: TransfersMembers,
-): TransfersData => {
+    members: TransferMember[],
+): TransferSeries => {
     const values = valuesByCountry(rows);
     const last = lastActualYear(values);
     const years = Array.from({ length: last - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i);
 
     return {
-        release,
         years,
-        countries: countries.map((member) => ({
+        countries: members.map((member) => ({
             ...member,
             values: years.map((year) => values.get(member.iso3)?.get(year) ?? null),
         })),
     };
+};
+
+/**
+ * Members of `_data/groups.csv` the transfers read holds no value for from FIRST_YEAR on, as IDS
+ * reports no net transfers for them: Micronesia, Kiribati, Namibia, North Korea and South Sudan.
+ * Their series are all null. Every other member without a value fails the build.
+ */
+export const NO_DATA_ISO3: ReadonlySet<string> = new Set(['FSM', 'KIR', 'NAM', 'PRK', 'SSD']);
+
+/**
+ * A rule the transfers read must keep for the section to draw what it says:
+ * - `spec_roles`: the read's spec binds `destination` and leaves no role open, so its rows sum all
+ *   creditors, as `_data/pipeline/sources/dfo_api.py`'s `check_roles` reads net transfers.
+ * - `member_not_in_ref`: a member of groups.csv is not among the spec's destinations, which the
+ *   data step fixed, so groups.csv changed after it ran.
+ * - `member_without_values`: a member outside NO_DATA_ISO3 has no value from FIRST_YEAR on.
+ */
+export type TransfersCheck = 'spec_roles' | 'member_not_in_ref' | 'member_without_values';
+
+/** The transfers read breaks a rule of `TransfersCheck`, so the build stops. */
+export class TransfersCheckError extends Error {
+    readonly checks: readonly TransfersCheck[];
+
+    constructor(checks: readonly TransfersCheck[], detail: string) {
+        super(`The net transfers break the build's checks: ${checks.join(', ')} (${detail})`);
+        this.name = 'TransfersCheckError';
+        this.checks = checks;
+    }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The members' net transfers from the transfers read: `transfersByCountry` once the read keeps
+ * every rule of `TransfersCheck`. `definition` is the definition of the read's spec.
+ *
+ * @throws {TransfersCheckError} With every rule the read breaks.
+ */
+export const transfersFromRead = (
+    rows: TransferRow[],
+    members: TransferMember[],
+    definition: unknown,
+): TransferSeries => {
+    const identity =
+        isRecord(definition) && isRecord(definition['identity']) ? definition['identity'] : {};
+    const entities = isRecord(identity['entities']) ? identity['entities'] : {};
+    const openRoles = Array.isArray(identity['open_roles']) ? identity['open_roles'] : [];
+    const destinations = new Set(
+        Array.isArray(entities['destination']) ? entities['destination'] : [],
+    );
+    const values = valuesByCountry(rows);
+    const notInRef = members.filter(({ iso3 }) => !destinations.has(`country/${iso3}`));
+    const withoutValues = members.filter(
+        ({ iso3 }) => !NO_DATA_ISO3.has(iso3) && !values.has(iso3),
+    );
+    const roles = Object.keys(entities).toSorted().join(', ');
+    const found: [TransfersCheck, boolean, string][] = [
+        [
+            'spec_roles',
+            roles !== 'destination' || openRoles.length > 0,
+            `the spec binds ${roles || 'nothing'} and leaves ${openRoles.join(', ') || 'nothing'} open`,
+        ],
+        [
+            'member_not_in_ref',
+            notInRef.length > 0,
+            `not among the destinations: ${notInRef.map(({ iso3 }) => iso3).join(', ')}`,
+        ],
+        [
+            'member_without_values',
+            withoutValues.length > 0,
+            `no value from ${FIRST_YEAR} on: ${withoutValues.map(({ iso3 }) => iso3).join(', ')}`,
+        ],
+    ];
+    const broken = found.filter(([, breaks]) => breaks);
+
+    if (broken.length > 0) {
+        throw new TransfersCheckError(
+            broken.map(([check]) => check),
+            broken.map(([, , detail]) => detail).join('; '),
+        );
+    }
+
+    return transfersByCountry(rows, members);
 };
 
 /** A scatter group, or `outside` for countries not in FDL's 58. */

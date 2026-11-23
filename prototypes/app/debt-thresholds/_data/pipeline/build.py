@@ -1,11 +1,15 @@
 """The per-country BaseYear records and projection inputs for one view."""
 
+from dataclasses import dataclass
+
 from pipeline.capacity import capacity_for
 from pipeline.config import FIRST_FLOW_YEAR, GROUPS, HISTORY, REFERENCE_YEARS, View
-from pipeline.countries import ISO3
-from pipeline.creditors import groups, net_flows
+from pipeline.countries import COUNTRIES, ISO3
+from pipeline.coverage import coverage_rows
+from pipeline.creditors import estimate_imf_charges, groups, guard_groups, net_flows
 from pipeline.panel import Panel, Series, amount_of, span, whole
 from pipeline.project import project_service
+from pipeline.terms import lending_terms
 from pipeline.valuation import present_value
 
 
@@ -86,3 +90,72 @@ def build_view(
             "years": years,
         }
     return built, all_inputs
+
+
+@dataclass(frozen=True)
+class Assembled:
+    """One view built from its panel: the records, the projection inputs and the checks."""
+
+    bases: dict[str, dict]
+    inputs: dict[str, dict]
+    coverage: list[dict]
+    # ISO3 codes of the countries lacking a core series in the base year.
+    missing: list[str]
+    # The creditor-group guard and the lending-terms fallback, for the coverage report.
+    check: dict
+
+
+def assemble_view(
+    view: View,
+    panel: Panel,
+    *,
+    creditor_sums: dict[str, Series],
+    weo: dict[str, dict[str, Series]],
+    us_rate: Series,
+    ida: dict[str, bool],
+    capacity: dict[str, dict[str, str]],
+) -> Assembled:
+    """Return one view's records, inputs and checks from its IDS panel and WEO series.
+
+    The data step builds both views this way and the page's build the current one,
+    so the two cannot drift.
+    """
+    panel = estimate_imf_charges(panel, view)
+    terms, fallback = lending_terms(panel)
+    bases, inputs = build_view(
+        view, panel, weo=weo, us_rate=us_rate, ida=ida, terms=terms, capacity=capacity
+    )
+    rows = coverage_rows(bases, view)
+    return Assembled(
+        bases=bases,
+        inputs=inputs,
+        coverage=rows,
+        missing=[row["iso3"] for row in rows if row["missing"]],
+        check={"guard": guard_groups(panel, view, creditor_sums), "terms_fallback": fallback},
+    )
+
+
+def view_data(view: View, bases: dict[str, dict]) -> dict:
+    """Return what the page shows of one base year: its releases and each country's record.
+
+    The page puts the views together into `ThresholdsData` (`types.ts`), each
+    country's `bases` keyed by base year.
+    """
+    return {
+        "year": view.base,
+        "vintage": {
+            "ids": view.ids,
+            "weo": f"{view.weo[0]} {view.weo[1]}",
+            "capacityAsOf": view.capacity_as_of,
+            "archived": view.archived,
+        },
+        "countries": [
+            {
+                "iso3": country.iso3,
+                "name": country.name,
+                "fdl2024": country.fdl2024,
+                "base": bases[country.iso3],
+            }
+            for country in COUNTRIES
+        ],
+    }

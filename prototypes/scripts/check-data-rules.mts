@@ -136,23 +136,35 @@ const refProblems = (name: string, data: unknown, pinned: ReadonlySet<string>): 
     return found;
 };
 
-/** The data files a page that reads DFO at build time (`_lib/build.ts`) may commit: its query
- *  config. Its figures come from the build's reads, so the repository holds none. */
-const BUILD_PAGE_FILES: ReadonlySet<string> = new Set(['refs.json', 'live-refs.json']);
+/** The query config of a page that reads DFO at build time (`_lib/build.ts`): the reads its
+ *  build makes. */
+const REFS_FILES: ReadonlySet<string> = new Set(['refs.json', 'live-refs.json']);
 
 /**
  * What is wrong with a data file named `name` under a page that reads DFO at build time, empty
- * for the page's refs files.
+ * when it is sound. The page's figures from DFO come from the build's reads, so the repository
+ * holds only its refs files and data from outside DFO, which says so: its `provenance.outside`
+ * names each source it comes from, as a list of non-empty strings.
  */
-export const buildPageProblems = (name: string): Problem[] =>
-    BUILD_PAGE_FILES.has(name)
+export const buildPageProblems = (name: string, value: unknown): Problem[] => {
+    if (REFS_FILES.has(name)) {
+        return [];
+    }
+
+    const provenance = isRecord(value) ? value.provenance : undefined;
+    const outside = isRecord(provenance) ? provenance.outside : undefined;
+
+    return Array.isArray(outside) &&
+        outside.length > 0 &&
+        outside.every((source) => typeof source === 'string' && source.trim() !== '')
         ? []
         : [
               problem(
-                  'build_page_figures_file',
-                  `the page reads DFO at build time (_lib/build.ts), so it commits only ${[...BUILD_PAGE_FILES].join(' and ')}`,
+                  'build_page_not_outside',
+                  `the page reads DFO at build time (_lib/build.ts), so a data file other than ${[...REFS_FILES].join(' and ')} must hold data from outside DFO and name its sources in provenance.outside`,
               ),
           ];
+};
 
 /**
  * What is wrong with one parsed file, empty when it is a valid envelope.

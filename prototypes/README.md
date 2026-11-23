@@ -4,7 +4,7 @@ A static Next.js app served at `developmentfinance.org/prototypes`. Each prototy
 
 ## Set up
 
-Install at the repository root first, then here. The app runs on the root install's `next`, `react` and `typescript`.
+Install at the repository root first, then here. The app runs on the root install's `next`, `react` and `typescript`. `pnpm build` and `pnpm read` also need [uv](https://docs.astral.sh/uv/), which runs `debt-thresholds`' Python pipeline.
 
 ```sh
 pnpm install            # at the repository root
@@ -61,7 +61,13 @@ Under `next build` a missing file is an error naming `pnpm read`. Under `next de
 
 Each read may take 5 minutes, since the build is often the first reader after DFO takes in new data and meets cold computes. While any dataset's `freshness` is `pending`, DFO is checking its sources for newer data; the build reads again every 30 seconds, for at most `BUILD_PENDING_BOUND_S` seconds, then takes what it has. Unset, the bound is 0, so a local build, a push and a pull request take what DFO serves at once, and the daily build waits up to 600 seconds. Build reads use their own anonymous client on the production API and one set of lanes across every page, at most four reads and two recipes at once (`READ_CONCURRENCY`, `ANALYSIS_CONCURRENCY`), so a build from a shared runner address stays inside the gateway's allowances.
 
-`fragility-finance`, `hiv-financing` and `oda-counts` read this way. A build-read page commits no DFO figures. Its `_data/` holds the refs it reads and the inputs from outside DFO, such as `fragility-finance`'s `fragility-2026.tsv`. Quotes and figures from outside DFO, such as `hiv-financing`'s KFF and UNAIDS quotes, stay in the page's code.
+Every page reads this way. A build-read page commits no DFO figures. Its `_data/` holds the refs it reads and the inputs from outside DFO, such as `fragility-finance`'s `fragility-2026.tsv`. A JSON file there other than `refs.json` and `live-refs.json` names the sources outside DFO it comes from in `provenance.outside`, and `pnpm check:data` refuses one that does not (`build_page_not_outside`). Quotes and figures from outside DFO, such as `hiv-financing`'s KFF and UNAIDS quotes, stay in the page's code.
+
+### Run a Python pipeline at build
+
+`debt-thresholds` computes its 2025 view with the Python pipeline its data step runs, so the page shows what the step computes with no port to TypeScript. Its `build` starts `_data/build.py` with `uv run --script` (`_lib/pipeline.ts`), which reads every ref in `refs.json` at DFO's newest stored version, one request at a time, and prints the view and each read's versions and freshness as JSON. The child holds one slot of the build's reads lane while it runs, so the build's bound of four reads at once holds. It takes no slot of the recipes lane, which would halve the other pages' recipes for the whole run, so one of its 13 recipes (the China cuts of the by-creditor reads) can run beside the TypeScript pages' two. `settle` (`lib/buildRead.ts`) runs it again while a read is `pending`, as `readSettled` does. It reads nothing else over the network: the WEO series, US rate, IDA status and capacities come from files the data step committed (`weo-2025.json`, `reference.json`, `capacity.csv`). A failed read, a refused check or a child that exits non-zero fails the build, naming the page, with the end of the child's log.
+
+The 2024 view comes from outside DFO, from the World Bank's IDS bulk files as the Internet Archive saved them and IMF WEO October 2025 through bblocks, so the data step commits it as `thresholds-2024.json`, and the page puts it together with the built 2025 view (`_lib/views.ts`). The page's net transfers are a TypeScript `readSettled` of the `transfers` ref, joined to the 75 countries in `groups.csv`.
 
 ## Write the refs step
 
@@ -98,7 +104,7 @@ Every JSON file under `app/*/_data/` has this shape:
 }
 ```
 
-`sdk`, `query` and `retrieved` are required. `writeDataFile` (`lib/dataFile.mts`) stamps the SDK version from the installed client and the time in UTC, and a Python step writes the same fields by hand. `pnpm check:data` fails on a data file without the three required fields, and CI runs it.
+`sdk`, `query` and `retrieved` are required, and a build-read page's data from outside DFO adds `outside`, the list of its sources. `writeDataFile` (`lib/dataFile.mts`) stamps the SDK version from the installed client and the time in UTC, and a Python step writes the same fields by hand. `pnpm check:data` fails on a data file without the three required fields, and CI runs it.
 
 `refs.json`'s `data` maps each read key to the ref and the dataset's provenance:
 
@@ -111,14 +117,14 @@ Every JSON file under `app/*/_data/` has this shape:
 }
 ```
 
-`live-refs.json` maps each key to a ref object alone; `hiv-financing` and `oda-counts` build from it, and `debt-thresholds` reads it in the browser. `pnpm check:data` requires each entry of `refs.json` to have a `ref` object (with `format_version`) that lists at least one member, and a `provenance` object whose members are listed and all pinned. It requires each entry of `live-refs.json` to be a ref object with members, each of whose content versions is pinned in the same directory's `refs.json`. Each problem prints with a code such as `live_member_unpinned`.
+`live-refs.json` maps each key to a ref object alone; `hiv-financing` and `oda-counts` build from it. `debt-thresholds`' `refs.json` entries also carry `reading`, Search's answer to the series code the last search asked. `pnpm check:data` requires each entry of `refs.json` to have a `ref` object (with `format_version`) that lists at least one member, and a `provenance` object whose members are listed and all pinned. It requires each entry of `live-refs.json` to be a ref object with members, each of whose content versions is pinned in the same directory's `refs.json`. Each problem prints with a code such as `live_member_unpinned`.
 
 ## Read in the browser
 
-`debt-thresholds` commits its figures: its Python step writes `thresholds.json` and `transfers.json` to `_data/`, and its page imports them. Its net-transfers section also reads in the browser through `readLive` (`lib/liveRead.ts`), which reads the sources at DFO's newest stored versions with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`) and at most two recipes at a time (`ANALYSIS_CONCURRENCY`). When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
+No page reads its figures in the browser. `readLive` (`lib/liveRead.ts`) stays for a page that does: it reads the sources at DFO's newest stored versions with an anonymous client on the production API, four at a time (`READ_CONCURRENCY`) and at most two recipes at a time (`ANALYSIS_CONCURRENCY`). When any stored read fails, takes longer than 10 seconds, or gives rows the derivation refuses, it warns in the console and falls back to one of two tiers, which the page names:
 
 - `committed`: figures the page committed, with no request. The page renders them first and swaps in the stored figures when they arrive. A page with a recipe falls back here, because a pinned analysis posts to the same server and fails the same way.
-- `pinned`: every ref's pinned version, the rows the step read. A page whose committed JSON leaves the figures out falls back here and shows a loading state until they arrive, as `debt-thresholds`' net transfers do.
+- `pinned`: every ref's pinned version, the rows the step read. A page whose committed JSON leaves the figures out falls back here and shows a loading state until they arrive.
 
 `tier` on `readLive`'s result says which tier the figures came from: `stored`, `pinned` or `committed`. The page puts it on the root of the part it derives as `data-read-tier`, with `loading` before it has figures and `failed` when every tier failed (`tierAttribute`), and puts its read switch on the same root as `data-read-live`, so `pnpm check:live` can assert that the section reads `stored`. Each dataset's `freshness` says whether DFO has confirmed a stored version against its sources (`current`), is checking (`pending`) or could not check (`stale`), and is null after a pinned fallback.
 
@@ -176,4 +182,4 @@ The daily and sync workflows run from dev, since GitHub runs schedules and dispa
 
 ## SDK versions
 
-Prototypes use `@developmentfinance/client@0.7.0` from npm, pinned exactly in `package.json`, for the build's reads, the browser reads and the TypeScript steps, and `development-finance` from PyPI, pinned exactly in each Python step's PEP 723 header: 0.6.0 for `fragility-finance`, `hiv-financing` and the template, 0.4.2 for `oda-counts` and `debt-thresholds`. The pin gives a reader the release a prototype used. Client 0.5.0 is the first npm release with `latest: "stored"`, which the build's reads and the browser reads use, 0.6.0 the first that reads a recipe at `latest: "stored"`, and 0.7.0 the first that reads one in two requests. PyPI 0.4.2 is the first release with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because the prototypes build and steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.7.0 for everything under `prototypes/`. A step moves to a newer release by raising its header and running again.
+Prototypes use `@developmentfinance/client@0.7.0` from npm, pinned exactly in `package.json`, for the build's reads, the browser reads and the TypeScript steps, and `development-finance` from PyPI, pinned exactly in each Python step's PEP 723 header: 0.6.0 for `fragility-finance`, `hiv-financing`, the template and `debt-thresholds`' build (`_data/build.py`), 0.4.2 for `oda-counts` and `debt-thresholds`' data step. The build needs 0.6.0, the first release that reads a ref and a recipe at `latest="stored"`; the data step stays on 0.4.2, the release its committed files name. The pin gives a reader the release a prototype used. Client 0.5.0 is the first npm release with `latest: "stored"`, which the build's reads and the browser reads use, 0.6.0 the first that reads a recipe at `latest: "stored"`, and 0.7.0 the first that reads one in two requests. PyPI 0.4.2 is the first release with `data.provenance`, pinned refs through `client.fetch(ref)` and `dfo.analysis`. The website vendors client 0.1.0 as a tarball in `vendor/`, with `check:client-provenance` recording which sdk commit built it. The two do not meet, because the prototypes build and steps run in Node outside the website's bundle and `prototypes/node_modules` holds 0.7.0 for everything under `prototypes/`. A step moves to a newer release by raising its header and running again.

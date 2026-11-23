@@ -4,9 +4,8 @@
 // from DEPLOY_COMMIT and, in CI, GITHUB_RUN_ID (lib/buildStamp.ts). Then the tier must match the
 // island's `data-read-live`, which each island renders from its read switch: `stored` with the
 // switch on, `committed` with it off, and `built` for figures the build read from DFO.
-// oda-counts, fragility-finance and hiv-financing render `built`: the build reads their figures
-// (lib/buildRead.ts) and the browser reads nothing. debt-thresholds' transfers section has no
-// switch, so its browser read is always on and it must settle on `stored`.
+// Every page in PAGES renders `built`: the build reads its figures (lib/buildRead.ts) and the
+// browser reads nothing.
 //
 // After a deploy the edge can serve the previous build for a while, and that build passes its own
 // tier check, so only the expected build counts. A scheduled rebuild of an unchanged commit
