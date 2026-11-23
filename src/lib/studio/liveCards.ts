@@ -1,5 +1,5 @@
 import { asRecord } from '../asRecord.ts';
-import { canvasWidgetsOf } from '../chat/canvas.ts';
+import { savedCanvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import { isLiveStudioShare, type StudioShareKind } from '../chat/shareMode.ts';
 import type { CardInfo, Widget } from '../chat/widgets.ts';
@@ -539,6 +539,6 @@ export const cardsToFill = (
 };
 
 /** The cards of a shared canvas that draw data: every card the canvas shows
- *  (`canvasWidgetsOf`) other than a text card. */
+ *  (`savedCanvasWidgetsOf`) other than a text card. */
 export const dataCardsOf = (saved: SavedConversation): Widget[] =>
-    canvasWidgetsOf(saved).filter(isLiveDataCard);
+    savedCanvasWidgetsOf(saved).filter(isLiveDataCard);

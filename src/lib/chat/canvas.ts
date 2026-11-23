@@ -66,6 +66,42 @@ export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
 };
 
 /**
+ * `saved` with the cards it showed that its harness never held marked local,
+ * for a save whose baseline names a composition but carries no pins. The
+ * page that saved it showed cards by the turn rule (legacyCanvasWidgetsOf),
+ * pinned and grace cards included, whatever the manifest held, while a
+ * baseline shows only the cards it holds. A card the rule showed that the
+ * baseline lacks and the user did not remove becomes local, as a fork's
+ * cards do, and keeps showing. A legacy baseline (no composition) holds the
+ * cards the rule showed already, less the ones the user took off since.
+ * Studio's open (openedSave) and share viewer, an embed, and a share's
+ * slots (savedCanvasWidgetsOf) all read a stored conversation through it,
+ * so each shows the cards the page that saved it showed.
+ */
+export const withUnheldShownCards = <State extends CanvasState>(saved: State): State => {
+    const { canvas } = saved;
+
+    if (!canvas || canvas.compositionId === null || canvas.pinned) {
+        return saved;
+    }
+
+    const held = new Set([...canvas.ids, ...(saved.localIds ?? []), ...saved.removedIds]);
+    const unheld = legacyCanvasWidgetsOf(saved)
+        .map((widget) => widget.id)
+        .filter((id) => !held.has(id));
+
+    return unheld.length === 0
+        ? saved
+        : { ...saved, localIds: [...(saved.localIds ?? []), ...unheld] };
+};
+
+/** The cards a stored conversation's canvas shows (canvasWidgetsOf), with
+ *  the cards its page showed that its harness never held kept
+ *  (withUnheldShownCards). */
+export const savedCanvasWidgetsOf = (saved: CanvasState): Widget[] =>
+    canvasWidgetsOf(withUnheldShownCards(saved));
+
+/**
  * Whether the harness holds card `id`, so its canvas edits go to the
  * harness and its manifest decides whether it shows. A text card and a
  * fork's inherited card (`localIds`) live only on the page.

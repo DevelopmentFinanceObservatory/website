@@ -235,7 +235,8 @@ export type CardTarget = {
 // clicked `apply_choice` chip waits the same way, under its label, and a
 // card's unit change under its bubble's words. A new question a harness turn
 // handed back carries that turn's index (`fromNewQuestion`), which its
-// prompt keeps.
+// prompt keeps, and `handedBack`, since it joined the queue without passing
+// the page's prompt gate (admitHandedBack).
 export type QueuedMessage = {
     id: string;
     text: string;
@@ -244,6 +245,7 @@ export type QueuedMessage = {
     chip?: ApplyChoiceSuggestion;
     unit?: CardUnitChange;
     fromNewQuestion?: number;
+    handedBack?: true;
 };
 
 export type ChatState = {
@@ -404,11 +406,16 @@ export const useChat = (
     {
         onCardReplaced,
         readsState = false,
+        admitHandedBack,
     }: {
         onCardReplaced?: (from: string, to: string) => void;
         // The page may read the harness's state (reattach): a signed-in
         // user's own conversation. A guest's read is refused.
         readsState?: boolean;
+        // The page's prompt gate for a new question a harness turn handed
+        // back, as the queue sends it: whether the prompt may go (it runs
+        // `send` when it may). `queued` counts the prompts still waiting.
+        admitHandedBack?: (text: string, queued: number, send: () => void) => boolean;
     } = {},
 ) => {
     // The saved transcript as restored, computed once for the refs and the
@@ -613,7 +620,12 @@ export const useChat = (
             return;
         }
 
-        const queued: QueuedMessage = { id: uuid(), text, fromNewQuestion: turnIndex };
+        const queued: QueuedMessage = {
+            id: uuid(),
+            text,
+            fromNewQuestion: turnIndex,
+            handedBack: true,
+        };
 
         askedRef.current.add(turnIndex);
         queueRef.current.unshift(queued);
@@ -721,6 +733,10 @@ export const useChat = (
                     legacyRef.current?.keep(operation.component_id);
                 } else if (operation.op === 'remove') {
                     legacyRef.current?.drop(operation.component_id);
+                } else if (operation.op === 'pin') {
+                    legacyRef.current?.pin(operation.component_id);
+                } else if (operation.op === 'unpin') {
+                    legacyRef.current?.unpin(operation.component_id);
                 }
             }
 
@@ -2138,8 +2154,18 @@ export const useChat = (
         [holdTurn, patchWidget, startTurn, stream],
     );
 
+    const admitHandedBackRef = useRef(admitHandedBack);
+
+    useEffect(() => {
+        admitHandedBackRef.current = admitHandedBack;
+    }, [admitHandedBack]);
+
     // The queue head goes next, unless a pause (plan or clarify) is waiting
     // on the user: a new turn would abandon it, so the answer goes first.
+    // A handed-back question goes through the page's prompt gate, which the
+    // user's own prompts passed when they were queued; one the gate refuses
+    // is offered on its turn's reply, as a question taken out of the queue
+    // is, and the next item goes.
     useEffect(() => {
         drainRef.current = () => {
             if (inFlightRef.current > 0 || pendingInterruptRef.current) {
@@ -2161,11 +2187,22 @@ export const useChat = (
                 applyChoice(next.chip);
             } else if (next.unit) {
                 applyUnit(next.unit);
+            } else if (next.handedBack && next.fromNewQuestion !== undefined) {
+                const turnIndex = next.fromNewQuestion;
+                const sendNext = () => send(next.text, next.card, next.seeds, turnIndex);
+                const gate = admitHandedBackRef.current;
+
+                if (!gate) {
+                    sendNext();
+                } else if (!gate(next.text, queueRef.current.length, sendNext)) {
+                    offerNewQuestion(turnIndex, next.text);
+                    drainRef.current();
+                }
             } else {
                 send(next.text, next.card, next.seeds, next.fromNewQuestion);
             }
         };
-    }, [applyChoice, applyUnit, send]);
+    }, [applyChoice, applyUnit, offerNewQuestion, send]);
 
     // The Stop control: end the running turn (see `halt` in stream()), which
     // asks the harness to cancel once per stream, as soon as the harness has
@@ -2360,143 +2397,152 @@ export const useChat = (
         }
 
         const generation = generationRef.current;
-        const unkeyed = isUnkeyedSave(messagesRef.current);
-        // A legacy canvas waits for the cards every turn of the session drew,
-        // so its read starts at turn 0.
-        const produced = producedRef.current;
-        let read: ConversationRead | null = null;
 
-        producedRef.current = null;
-        inFlightRef.current += 1;
-        void readConversation(
-            conversation,
-            unkeyed || produced ? 0 : readSince(messagesRef.current),
-        )
-            .then((answer) => {
-                if (generationRef.current !== generation) {
-                    return;
-                }
+        // The read waits behind any request in flight, as a turn does, so it
+        // never reads the harness while a prompt's POST is on its way: such a
+        // read lacks that turn and would mark its prompt unsent. Counting it
+        // in flight at once holds the sends made meanwhile behind it.
+        const readHarness = () => {
+            if (generationRef.current !== generation) {
+                return;
+            }
 
-                if (!answer || isStateRefusal(answer)) {
-                    produced?.(null);
+            const unkeyed = isUnkeyedSave(messagesRef.current);
+            // A legacy canvas waits for the cards every turn of the session
+            // drew, so its read starts at turn 0.
+            const produced = producedRef.current;
+            let read: ConversationRead | null = null;
 
-                    // A 401 keeps the conversation the page holds.
-                    if (answer?.refusal === 'session_gone') {
-                        leaveSession();
+            producedRef.current = null;
+
+            return readConversation(
+                conversation,
+                unkeyed || produced ? 0 : readSince(messagesRef.current),
+            )
+                .then((answer) => {
+                    if (generationRef.current !== generation) {
+                        return;
                     }
 
-                    return;
-                }
+                    if (!answer || isStateRefusal(answer)) {
+                        produced?.(null);
 
-                read = answer;
+                        // A 401 keeps the conversation the page holds.
+                        if (answer?.refusal === 'session_gone') {
+                            leaveSession();
+                        }
 
-                const open = answer.turn;
-                const recorded = [
-                    ...answer.closed_since,
-                    ...(open &&
-                    open.user_message !== undefined &&
-                    !answer.closed_since.some((turn) => turn.turn_index === open.index)
-                        ? [{ turn_index: open.index, user_message: open.user_message }]
-                        : []),
-                ];
+                        return;
+                    }
 
-                if (!unkeyed) {
-                    // A prompt saved before its stream named its turn takes
-                    // the turn after the ones the page holds only where the
-                    // read confirms it; the rest the harness lacks show as
-                    // unsent.
-                    messagesRef.current = withReadPrompts(messagesRef.current, recorded);
-                    setState((prev) => ({
-                        ...prev,
-                        messages: withReadPrompts(prev.messages, recorded),
-                    }));
+                    read = answer;
+
+                    const open = answer.turn;
+                    const recorded = [
+                        ...answer.closed_since,
+                        ...(open &&
+                        open.user_message !== undefined &&
+                        !answer.closed_since.some((turn) => turn.turn_index === open.index)
+                            ? [{ turn_index: open.index, user_message: open.user_message }]
+                            : []),
+                    ];
+
+                    // The prompts saved before prompts carried their turn are
+                    // keyed first (keyUnkeyedSave). A prompt saved before its
+                    // stream named its turn then takes the turn after the ones
+                    // the page holds only where the read confirms it; the rest
+                    // the harness lacks show as unsent (withReadPrompts).
+                    const keyed = (messages: ChatMessage[]) =>
+                        withReadPrompts(keyUnkeyedSave(messages, recorded), recorded);
+
+                    messagesRef.current = keyed(messagesRef.current);
+                    setState((prev) => ({ ...prev, messages: keyed(prev.messages) }));
                     produced?.(producedCards(answer, openTurnCards(answer)));
-
-                    return;
-                }
-
-                messagesRef.current = keyUnkeyedSave(messagesRef.current, recorded);
-                setState((prev) => ({
-                    ...prev,
-                    messages: keyUnkeyedSave(prev.messages, recorded),
-                }));
-                produced?.(producedCards(answer, openTurnCards(answer)));
-            })
-            .finally(() => {
-                if (generationRef.current !== generation) {
-                    return;
-                }
-
-                inFlightRef.current -= 1;
-
-                if (read) {
-                    const merged = takeRead(read);
-                    const held = heldTurns(merged);
-                    const step = attachStep(read);
-                    // The page turn of the prompt that holds the open turn.
-                    const holding =
-                        step.kind === 'none'
-                            ? undefined
-                            : [...promptTurns(merged)].findLast(
-                                  ([, index]) => index === step.turnIndex,
-                              )?.[0];
-                    const holder = holding === undefined ? undefined : merged[holding];
-                    let streamTurn = holder?.role === 'user' ? holder.turn : undefined;
-
-                    // A held open turn streams into its own reply, also when
-                    // an unsent prompt follows it (pageTurnReplyAt).
-                    if (step.kind !== 'none') {
-                        if (step.turnIndex > held) {
-                            const prompt = read.turn?.user_message ?? '';
-
-                            turnCount.current += 1;
-
-                            const turn = turnCount.current;
-
-                            streamTurn = turn;
-
-                            // The turn's approvals ride on its reply, as the
-                            // stream would have put them.
-                            const approved = read.turn?.approved;
-
-                            approvalsRef.current = new Set([
-                                ...approvalsRef.current,
-                                ...turnApprovalKeys(step.turnIndex, approved),
-                            ]);
-                            setState((prev) => ({
-                                ...prev,
-                                messages: withTurnApprovals(
-                                    ensureTurn(prev.messages, step.turnIndex, prompt, turn),
-                                    step.turnIndex,
-                                    approved,
-                                    new Set(),
-                                ),
-                                activity: [
-                                    ...prev.activity,
-                                    { turn, prompt, startedAt: Date.now(), tools: [] },
-                                ],
-                            }));
-                        }
-
-                        if (step.kind !== 'pause') {
-                            setState((prev) => ({ ...withLine(prev, WORKING), thinking: true }));
-                        }
-
-                        stream(streamTurn ?? turnCount.current, (handlers, signal) =>
-                            carryOnTurn({
-                                conversationId: conversation,
-                                first: step,
-                                handlers,
-                                signal,
-                                since: () => readSince(messagesRef.current),
-                                onRead: takeRead,
-                            }),
-                        );
+                })
+                .finally(() => {
+                    if (generationRef.current !== generation) {
+                        return;
                     }
-                }
 
-                drainRef.current();
-            });
+                    inFlightRef.current -= 1;
+
+                    if (read) {
+                        const merged = takeRead(read);
+                        const held = heldTurns(merged);
+                        const step = attachStep(read);
+                        // The page turn of the prompt that holds the open turn.
+                        const holding =
+                            step.kind === 'none'
+                                ? undefined
+                                : [...promptTurns(merged)].findLast(
+                                      ([, index]) => index === step.turnIndex,
+                                  )?.[0];
+                        const holder = holding === undefined ? undefined : merged[holding];
+                        let streamTurn = holder?.role === 'user' ? holder.turn : undefined;
+
+                        // A held open turn streams into its own reply, also when
+                        // an unsent prompt follows it (pageTurnReplyAt).
+                        if (step.kind !== 'none') {
+                            if (step.turnIndex > held) {
+                                const prompt = read.turn?.user_message ?? '';
+
+                                turnCount.current += 1;
+
+                                const turn = turnCount.current;
+
+                                streamTurn = turn;
+
+                                // The turn's approvals ride on its reply, as the
+                                // stream would have put them.
+                                const approved = read.turn?.approved;
+
+                                approvalsRef.current = new Set([
+                                    ...approvalsRef.current,
+                                    ...turnApprovalKeys(step.turnIndex, approved),
+                                ]);
+                                setState((prev) => ({
+                                    ...prev,
+                                    messages: withTurnApprovals(
+                                        ensureTurn(prev.messages, step.turnIndex, prompt, turn),
+                                        step.turnIndex,
+                                        approved,
+                                        new Set(),
+                                    ),
+                                    activity: [
+                                        ...prev.activity,
+                                        { turn, prompt, startedAt: Date.now(), tools: [] },
+                                    ],
+                                }));
+                            }
+
+                            if (step.kind !== 'pause') {
+                                setState((prev) => ({
+                                    ...withLine(prev, WORKING),
+                                    thinking: true,
+                                }));
+                            }
+
+                            stream(streamTurn ?? turnCount.current, (handlers, signal) =>
+                                carryOnTurn({
+                                    conversationId: conversation,
+                                    first: step,
+                                    handlers,
+                                    signal,
+                                    since: () => readSince(messagesRef.current),
+                                    onRead: takeRead,
+                                }),
+                            );
+                        }
+                    }
+
+                    drainRef.current();
+                });
+        };
+
+        inFlightRef.current += 1;
+        chainRef.current = chainRef.current.then(readHarness).catch((error: unknown) => {
+            console.error('studio: the harness state read failed', error);
+        });
     }, [leaveSession, stream, takeRead]);
 
     useEffect(() => {

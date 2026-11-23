@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { canvasWidgetsOf, isHarnessCard } from '../canvas.ts';
+import { canvasWidgetsOf, isHarnessCard, savedCanvasWidgetsOf } from '../canvas.ts';
 import { openedSave } from '../fork.ts';
 import type { SavedConversation } from '../history.ts';
 
@@ -86,6 +86,11 @@ test('a save whose baseline predates manifest pins keeps the pinned and grace ca
     assert.deepEqual(shown(opened), ['cmp_pinned', 'cmp_latest', 'cmp_grace']);
     assert.equal(isHarnessCard(opened, 'cmp_pinned'), false);
     assert.equal(isHarnessCard(opened, 'cmp_latest'), true);
+    // A share or an embed of the save shows what Studio shows.
+    assert.deepEqual(
+        savedCanvasWidgetsOf(save).map((widget) => widget.id),
+        shown(opened),
+    );
     // A card the user removed stays off.
     assert.deepEqual(shown(openedSave({ ...save, removedIds: ['cmp_grace'] })), [
         'cmp_pinned',

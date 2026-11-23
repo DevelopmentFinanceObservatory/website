@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { effectiveKind, widgetTitle } from './canvas/layout';
 import LiveNote from './canvas/LiveNote';
@@ -33,7 +33,7 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
-import { isHarnessCard } from '@/lib/chat/canvas';
+import { isHarnessCard, withUnheldShownCards } from '@/lib/chat/canvas';
 import { forkOf, openedSave } from '@/lib/chat/fork';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
@@ -131,7 +131,12 @@ const Studio = ({
     continuable = false,
     examples = [],
 }: StudioProps) => {
-    const sharedSaved = shared?.saved;
+    // A share keeps the cards its page showed that its harness never held,
+    // as the owner's reopened copy does (openedSave).
+    const sharedSaved = useMemo(
+        () => (shared ? withUnheldShownCards(shared.saved) : undefined),
+        [shared],
+    );
 
     const readOnly = !!shared;
     // What a signed-in user has and a guest lacks: history and saving.
@@ -191,6 +196,9 @@ const Studio = ({
     const conversation = useChat(sharedSaved, {
         onCardReplaced: doc.renameWidget,
         readsState: account && unsavedGuestId === null,
+        // A new question a turn handed back joins the queue past the gate
+        // below, so the queue sends it through the gate.
+        admitHandedBack: (text, queued, run) => prompt(undefined, text.trim().length, run, queued),
     });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
@@ -223,29 +231,34 @@ const Studio = ({
     // through here: past the limit a guest's is dropped, the rest are counted
     // as usage (turn, intent and a typed prompt's length, never the text). A
     // prompt the chat queues is counted here once; the queue's drain sends it
-    // inside the chat, past this gate.
+    // inside the chat, past this gate, except a new question a turn handed
+    // back, which the drain sends through here with the count of prompts
+    // still queued behind it (`queued`). Returns whether the prompt went.
     const prompt = (
         intent: PromptIntent | undefined,
         length: number | undefined,
         run: () => void,
-    ) => {
+        queued = conversation.queued.length,
+    ): boolean => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
         const event = promptEvent({
             guest,
             used: readGuestUsed(),
-            queued: conversation.queued.length,
+            queued,
             sent: sentCount,
             intent,
             length,
         });
 
         if (!event) {
-            return;
+            return false;
         }
 
         track('studio.prompt', event);
         run();
+
+        return true;
     };
     const send: typeof conversation.send = (text, options, seeds) =>
         prompt(options?.intent, text.trim().length, () => conversation.send(text, options, seeds));
