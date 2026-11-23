@@ -114,6 +114,14 @@ jobs:
             - run: pnpm install --frozen-lockfile
               working-directory: prototypes
 
+            # debt-thresholds' build runs the page's Python pipeline under uv
+            # (prototypes/app/debt-thresholds/_data/build.py), whose PEP 723
+            # header pins its packages, so the cache follows that file.
+            # setup-uv publishes no major tag after v7, so the release is pinned.
+            - uses: astral-sh/setup-uv@v10.4.0
+              with:
+                  cache-dependency-glob: prototypes/app/*/_data/build.py
+
             - run: pnpm check:deps
               working-directory: prototypes
 
