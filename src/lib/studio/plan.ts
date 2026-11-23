@@ -839,15 +839,19 @@ export const approvedFromFrame = (frame: PlanApproved): ApprovedPlan => ({
     caveats: frame.caveats ?? [],
 });
 
-/** The transcript with `plan` kept on the reply the approve resumed: the
- *  last bot message, which the resumed stream writes into. */
+/** The transcript with `plan` kept on the reply the approve resumed, which
+ *  the resumed stream writes into: the message at `at` (pageTurnReplyAt),
+ *  by default the last. */
 export const withApprovedPlan = <TMessage extends { role: string }>(
     messages: TMessage[],
     plan: ApprovedPlan,
+    at: number = messages.length - 1,
 ): TMessage[] => {
-    const last = messages.at(-1);
+    const reply = messages[at];
 
-    return last?.role === 'bot' ? [...messages.slice(0, -1), { ...last, plan }] : messages;
+    return reply?.role === 'bot'
+        ? messages.map((message, other) => (other === at ? { ...reply, plan } : message))
+        : messages;
 };
 
 // --- What the card and the modal read --------------------------------------

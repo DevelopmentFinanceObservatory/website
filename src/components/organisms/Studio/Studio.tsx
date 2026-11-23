@@ -184,7 +184,10 @@ const Studio = ({
 
     const doc = useCanvasDocument(sharedSaved);
     // A card the harness redrew under a new id keeps the old card's settings.
-    const conversation = useChat(sharedSaved, { onCardReplaced: doc.renameWidget });
+    const conversation = useChat(sharedSaved, {
+        onCardReplaced: doc.renameWidget,
+        readsState: account,
+    });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
     // A prompt counts once it is actually sent (a queued one can still be

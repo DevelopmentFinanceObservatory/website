@@ -21,9 +21,11 @@ import {
     owedNewQuestion,
     producedCards,
     readConversation,
+    RESUME_ATTEMPTS,
     sendNewQuestion,
     takeApproval,
     widgetFromRead,
+    withMovedQuestion,
     withTurnApprovals,
     type AttachStep,
 } from '../conversationState.ts';
@@ -42,8 +44,12 @@ import {
     withInherited,
     withSessionLeft,
     offeredQuestionTurn,
+    pageTurnReplyAt,
     turnReplyAt,
+    withAnswer,
     withFollowup,
+    withNewQuestion,
+    withReplyAt,
     withOfferedQuestion,
     withoutUnsentQuestion,
 } from '../transcript.ts';
@@ -493,6 +499,64 @@ test('carryOnTurn rejects when the state cannot be read, so the turn ends failed
     await assert.rejects(run({ kind: 'wait', turnIndex: 2, seconds: 1 }, { reads: [null] }));
 });
 
+test('carryOnTurn waits after any refused resume it may retry, and gives up after RESUME_ATTEMPTS', async () => {
+    const conflict: StreamRefusal = {
+        status: 409,
+        detail: 'stale',
+        error: { error: 'edit_conflict', retry: 'refresh_then_retry', detail: 'stale' },
+    };
+    const unavailable: StreamRefusal = {
+        status: 503,
+        detail: 'busy',
+        error: {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'busy',
+            retry_after_seconds: 5,
+        },
+    };
+    const running = readOf({ turn: turnState({}) });
+    const closedRead = readOf({
+        turn: turnState({ status: 'done' }),
+        closed_since: [closed(2)],
+    });
+    const { calls } = await run(
+        { kind: 'resume', turnIndex: 2 },
+        { resumes: [conflict, unavailable], reads: [running, closedRead] },
+    );
+
+    // A 409 naming no wait waits the default; a 503 the time it names.
+    assert.deepEqual(calls, [
+        'resume conv 2',
+        'sleep 2000',
+        'read conv 1',
+        'resume conv 2',
+        'sleep 5000',
+        'read conv 1',
+    ]);
+
+    // A turn refused on every resume ends failed after a bounded number.
+    let resumes = 0;
+
+    await assert.rejects(
+        carryOnTurn({
+            conversationId: 'conv',
+            first: { kind: 'resume', turnIndex: 2 },
+            handlers: { onFrame: () => {} },
+            signal: new AbortController().signal,
+            since: () => 1,
+            onRead: () => {},
+            resume: async (_id, _turn, handlers: StreamHandlers) => {
+                resumes += 1;
+                handlers.onRefusal?.(resumes > 50 ? { ...conflict, status: 500 } : conflict);
+            },
+            read: async () => running,
+            sleep: async () => {},
+        }),
+    );
+    assert.equal(resumes, RESUME_ATTEMPTS);
+});
+
 test("owedNewQuestion sends a latest turn's new question once, while no turn follows it", () => {
     const asked = { ...closed(3, 'Set aside for a new question.'), new_question: 'ODA to Ghana' };
     const read = readOf({ turn: turnState({ index: 3, status: 'done' }), closed_since: [asked] });
@@ -541,6 +605,31 @@ test("owedNewQuestion sends a latest turn's new question once, while no turn fol
             followups: ['ODA to Ghana'],
         },
     );
+});
+
+test("a moved new question leaves the transcript for a page that reads state, and stays offered on a guest's", () => {
+    const messages: ChatMessage[] = [
+        { role: 'user', text: 'question 3', turn: 3, harnessTurn: 3 },
+        { role: 'bot', text: NEW_QUESTION_NOTE },
+        { role: 'user', text: 'ODA to Ghana', turn: 4, fromNewQuestion: 3 },
+        { role: 'bot', text: '' },
+    ];
+
+    // The state read brings in the turn that went ahead.
+    assert.deepEqual(withMovedQuestion(messages, 3, 'ODA to Ghana', true), messages.slice(0, 2));
+    // A guest reads no state, so the question stays for the user to send.
+    const guest = withMovedQuestion(messages, 3, 'ODA to Ghana', false);
+
+    assert.deepEqual(guest, [
+        messages[0],
+        {
+            role: 'bot',
+            text: NEW_QUESTION_NOTE,
+            followups: ['ODA to Ghana'],
+            newQuestion: 'ODA to Ghana',
+        },
+    ]);
+    assert.equal(offeredQuestionTurn(guest, 'ODA to Ghana'), 3);
 });
 
 test('an owed question sent again replaces the send the harness never admitted', () => {
@@ -825,6 +914,58 @@ test("a paused turn the page's later unsent prompt does not hold joins the trans
         { role: 'user', text: 'later', turn: 2, unkeyed: true },
         { role: 'bot', text: UNSENT_NOTE },
     ]);
+});
+
+test('a held open turn with an unsent prompt after it streams into its own reply', () => {
+    // The page holds turn 1 (page turn 1), left running, then sent `later`
+    // (page turn 2), which the harness never admitted.
+    const page: ChatMessage[] = [
+        { role: 'user', text: 'question 1', turn: 1, harnessTurn: 1 },
+        { role: 'bot', text: '' },
+        { role: 'user', text: 'later', turn: 2 },
+        { role: 'bot', text: '' },
+    ];
+    const read = readOf({ turn: turnState({ index: 1, user_message: 'question 1' }) });
+    const step = attachStep(read);
+
+    assert.deepEqual(step, { kind: 'resume', turnIndex: 1 });
+    assert.equal(heldTurns(page), 1);
+
+    // The carried-on stream is page turn 1's: its deltas, its approved
+    // plan, an answer to its pause and a new question it hands on all land
+    // on turn 1's reply, and `later`'s reply stays as it was.
+    const at = (messages: ChatMessage[]) => pageTurnReplyAt(messages, 1);
+    const streamed = withReplyAt(page, at(page), (reply) => ({
+        ...reply,
+        text: reply.text + 'The answer.',
+    }));
+
+    assert.deepEqual(streamed[1], { role: 'bot', text: 'The answer.' });
+    assert.deepEqual(streamed.slice(2), page.slice(2));
+
+    const plan = approvedFromFrame(approvedOf('rev-a'));
+
+    assert.deepEqual(withApprovedPlan(page, plan, at(page))[1], { role: 'bot', text: '', plan });
+
+    const answered = withAnswer(page, 'Since 2018.', at(page));
+
+    assert.deepEqual(answered.slice(1, 3), [
+        { role: 'user', text: 'Since 2018.', answer: true },
+        { role: 'bot', text: '' },
+    ]);
+    assert.deepEqual(withNewQuestion(answered, 'Since 2018.', at(answered)), [
+        page[0],
+        { role: 'bot', text: NEW_QUESTION_NOTE },
+        ...page.slice(2),
+    ]);
+
+    // A transcript without page turn stamps writes into the last reply.
+    const unstamped: ChatMessage[] = [
+        { role: 'user', text: 'question 1' },
+        { role: 'bot', text: '' },
+    ];
+
+    assert.equal(pageTurnReplyAt(unstamped, 1), 1);
 });
 
 // An unkeyed transcript of prompt/reply pairs.

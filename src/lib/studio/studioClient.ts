@@ -93,11 +93,15 @@ export const turnIndexOf = (headers: Headers): number | null => {
  *  turn an accepted stream carries, before its first frame. `onRefusal` sees
  *  an HTTP refusal, and `onUnreachable` a request that got no response at
  *  all (the fetch rejected), before the stream would report either as an
- *  `error` frame. Each returns true when it has dealt with it. */
+ *  `error` frame. Each returns true when it has dealt with it. `onBusyWait`
+ *  hears the seconds a request waits because another stream holds the
+ *  conversation (whileBusy), and null when the wait is over and the request
+ *  goes again: between the two the page holds no stream. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onTurnIndex?: (index: number) => void;
     onKeepAlive?: () => void;
+    onBusyWait?: (seconds: number | null) => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
     onUnreachable?: () => boolean;
 };
@@ -367,6 +371,22 @@ export const busyRetryAfter = (refusal: StreamRefusal): number | null =>
         ? Math.max(1, refusal.error.retry_after_seconds ?? 1)
         : null;
 
+/**
+ * What Stop does to a stream. `cancel`: the page holds the turn's stream, so
+ * the harness is asked to cancel the turn and the stream is read to its end.
+ * `abort`: the page holds no stream, because the request has not started
+ * (`sent`) or waits while another stream holds the conversation
+ * (`busyWait`, from onBusyWait), so the request ends at once, nothing more
+ * is sent, and no cancel goes out, which would end the other stream's turn.
+ */
+export const stopAction = ({
+    sent,
+    busyWait,
+}: {
+    sent: boolean;
+    busyWait: boolean;
+}): 'cancel' | 'abort' => (sent && !busyWait ? 'cancel' : 'abort');
+
 /** Whether a turn request naming `after_turn` was refused because a later
  *  turn began first (409 `edit_conflict`, `constraint_id: "turn_moved"`). */
 export const isTurnMoved = (refusal: StreamRefusal): boolean =>
@@ -394,20 +414,18 @@ export const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> 
 /**
  * Run the stream request `run` and, while the harness answers that another
  * stream holds the conversation (busyRetryAfter), wait the seconds it names
- * and send it again. `onWait` hears each wait. Any other refusal goes to
- * `handlers.onRefusal` as usual, and the busy answer ends in the wait.
+ * and send it again. `handlers.onBusyWait` hears each wait start and end. A
+ * `signal` aborted during a wait rejects with an AbortError and sends
+ * nothing more. Any other refusal goes to `handlers.onRefusal` as usual,
+ * and the busy answer ends in the wait.
  */
 export const whileBusy = async (
     run: (handlers: StreamHandlers) => Promise<void>,
     handlers: StreamHandlers,
     signal?: AbortSignal,
     {
-        onWait,
         sleep = abortableSleep,
-    }: {
-        onWait?: (seconds: number) => void;
-        sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
-    } = {},
+    }: { sleep?: (ms: number, signal?: AbortSignal) => Promise<void> } = {},
 ): Promise<void> => {
     for (;;) {
         // Set by the refusal handler during `run`, which the compiler cannot see.
@@ -426,8 +444,9 @@ export const whileBusy = async (
             return;
         }
 
-        onWait?.(wait);
+        handlers.onBusyWait?.(wait);
         await sleep(wait * 1000, signal);
+        handlers.onBusyWait?.(null);
     }
 };
 

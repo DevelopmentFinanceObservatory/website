@@ -77,6 +77,7 @@ import {
     takeApproval,
     turnApprovalKeys,
     widgetFromRead,
+    withMovedQuestion,
     withTurnApprovals,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
@@ -109,7 +110,7 @@ import {
     keyUnkeyedSave,
     promptTurns,
     readSince,
-    turnReplyAt,
+    pageTurnReplyAt,
     withAnswer,
     offeredQuestionTurn,
     withFollowup,
@@ -119,6 +120,7 @@ import {
     withoutUnsentQuestion,
     withReadPrompts,
     withRefundedPrompt,
+    withReplyAt,
     withSessionLeft,
 } from '@/lib/studio/transcript';
 import {
@@ -135,6 +137,7 @@ import {
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
+    stopAction,
     SWITCH_STOP_GRACE_MS,
     whileBusy,
     type StreamHandlers,
@@ -321,11 +324,11 @@ type StreamEnding = {
     sent: boolean;
 };
 
-// Whether the turn's reply has text: the last message is the bot's, with any.
-const hasAnswer = (messages: ChatMessage[]): boolean => {
-    const last = messages.at(-1);
+// Whether page turn `turn`'s reply (pageTurnReplyAt) has text.
+const hasAnswer = (messages: ChatMessage[], turn: number): boolean => {
+    const reply = messages[pageTurnReplyAt(messages, turn)];
 
-    return last?.role === 'bot' && !!last.text;
+    return reply?.role === 'bot' && !!reply.text;
 };
 
 // A turn's end on screen, however it ended: its Activity entry closes and
@@ -335,7 +338,7 @@ const endTurn = (
     prev: ChatState,
     turn: number,
     open?: 'skipped' | 'failed',
-    answered = hasAnswer(prev.messages),
+    answered = hasAnswer(prev.messages, turn),
 ): ChatState => ({
     ...prev,
     activity: endTurnActivity(prev.activity, turn, open, answered),
@@ -386,7 +389,15 @@ const restoredWidgets = (saved: ChatSnapshot): TurnWidget[] =>
  */
 export const useChat = (
     initial?: ChatSnapshot,
-    { onCardReplaced }: { onCardReplaced?: (from: string, to: string) => void } = {},
+    {
+        onCardReplaced,
+        readsState = false,
+    }: {
+        onCardReplaced?: (from: string, to: string) => void;
+        // The page may read the harness's state (reattach): a signed-in
+        // user's own conversation. A guest's read is refused.
+        readsState?: boolean;
+    } = {},
 ) => {
     const [state, setState] = useState<ChatState>(() => ({
         messages: initial ? restoredMessages(initial) : [],
@@ -446,6 +457,9 @@ export const useChat = (
     // For plans, the plan that switchChoice() checks a pick against. A
     // question a switch's replan asked carries the switch's waiting plan.
     const pendingInterruptRef = useRef<Pause | null>(null);
+    // The page turn of the stream that offered the pending pause, which the
+    // answer's stream carries on, so it writes into that turn's reply.
+    const pauseTurnRef = useRef(0);
     // The latest plan this turn offered, or is waiting on a switch of. A
     // fresh plan.proposed carries its baseline (what the turn's first plan
     // held) and learns which choice its switch moved. A new turn clears it.
@@ -808,6 +822,9 @@ export const useChat = (
             let failed = false;
             // The request has started.
             let sent = false;
+            // The request waits while another stream holds the conversation
+            // (onBusyWait), so the page holds no stream.
+            let busyWait = false;
             // The turn's end on screen has run (finish).
             let finished = false;
             let stopGrace: ReturnType<typeof setTimeout> | null = null;
@@ -845,18 +862,19 @@ export const useChat = (
                     ),
                 }));
 
+            // The stream writes into its own turn's reply (pageTurnReplyAt),
+            // which an unsent prompt may follow.
             const patchBot = (
                 fn: (message: Extract<ChatMessage, { role: 'bot' }>) => ChatMessage,
             ) =>
                 setState((prev) => {
-                    const messages = prev.messages.slice();
-                    const last = messages[messages.length - 1];
+                    const messages = withReplyAt(
+                        prev.messages,
+                        pageTurnReplyAt(prev.messages, turn),
+                        fn,
+                    );
 
-                    if (last?.role === 'bot') {
-                        messages[messages.length - 1] = fn(last);
-                    }
-
-                    return { ...prev, messages };
+                    return messages === prev.messages ? prev : { ...prev, messages };
                 });
 
             // Deltas BEFORE any step are the agent's preamble ("Checking the
@@ -1035,6 +1053,7 @@ export const useChat = (
                         // since the turn's first plan.
                         stall.stop();
                         grace.cancel();
+                        pauseTurnRef.current = turn;
                         offerPlan(planFromFrame(frame, turnPlanRef.current ?? undefined));
 
                         // The turn waits on the user again, so a Stop has
@@ -1063,7 +1082,11 @@ export const useChat = (
 
                         setState((prev) => ({
                             ...prev,
-                            messages: withApprovedPlan(prev.messages, approved),
+                            messages: withApprovedPlan(
+                                prev.messages,
+                                approved,
+                                pageTurnReplyAt(prev.messages, turn),
+                            ),
                             activity: prev.activity.map((entry) =>
                                 entry.turn === turn ? recordApproval(entry, approvedAt) : entry,
                             ),
@@ -1081,6 +1104,7 @@ export const useChat = (
 
                         stall.stop();
                         grace.cancel();
+                        pauseTurnRef.current = turn;
                         pendingInterruptRef.current = questionPause(
                             clarify,
                             pendingInterruptRef.current,
@@ -1130,7 +1154,11 @@ export const useChat = (
                             const origin = turnIndex;
 
                             setState((prev) => {
-                                const messages = withNewQuestion(prev.messages, question);
+                                const messages = withNewQuestion(
+                                    prev.messages,
+                                    question,
+                                    pageTurnReplyAt(prev.messages, turn),
+                                );
 
                                 return {
                                     ...prev,
@@ -1157,18 +1185,24 @@ export const useChat = (
             // flight, and queued sends wait, until the conversation is free.
             // A caller that ends the turn itself keeps the frames (a switch's
             // stream may re-offer the plan). A Stop before the request
-            // started ends it at once, and the request is skipped. Returns
-            // whether to send the cancel, which is true on the stream's
-            // first Stop once its request has started.
+            // started ends it at once, and the request is skipped; one while
+            // the request waits on another stream's turn ends the wait at
+            // once and sends nothing (stopAction). Returns whether to send
+            // the cancel, which is true on the stream's first Stop while it
+            // holds the turn's stream.
             const halt = (): boolean => {
                 if (stopped || generationRef.current !== generation) {
                     return false;
                 }
 
+                const action = stopAction({ sent, busyWait });
+
                 stopped = true;
                 grace.cancel();
 
-                if (sent) {
+                if (action === 'abort') {
+                    controller.abort();
+                } else {
                     stopGrace = setTimeout(
                         () => controller.abort(),
                         onEnd ? SWITCH_STOP_GRACE_MS : STOP_GRACE_MS,
@@ -1176,7 +1210,7 @@ export const useChat = (
                 }
 
                 if (onEnd) {
-                    if (!sent) {
+                    if (action === 'abort') {
                         // Stop is free for the next stream queued behind this
                         // one, which the chain has not reached yet.
                         if (haltRef.current === halt) {
@@ -1197,17 +1231,17 @@ export const useChat = (
                 stall.stop();
 
                 setState((prev) => {
-                    const messages = prev.messages.slice();
-                    const last = messages[messages.length - 1];
-
-                    if (last?.role === 'bot' && !last.text) {
-                        messages[messages.length - 1] = { ...last, text: stoppedReply(preamble) };
-                    }
+                    const messages = withReplyAt(
+                        prev.messages,
+                        pageTurnReplyAt(prev.messages, turn),
+                        (reply) =>
+                            reply.text ? reply : { ...reply, text: stoppedReply(preamble) },
+                    );
 
                     return endTurn({ ...prev, messages }, turn, 'skipped');
                 });
 
-                return sent;
+                return action === 'cancel';
             };
 
             // The end of a turn whose caller leaves it to the stream: `done`
@@ -1224,18 +1258,17 @@ export const useChat = (
 
                 if (detail !== undefined) {
                     setState((prev) => {
-                        const messages = prev.messages.slice();
-                        const last = messages[messages.length - 1];
-
-                        if (last?.role === 'bot' && !last.text) {
-                            messages[messages.length - 1] = { ...last, text: `_${detail}_` };
-                        }
+                        const messages = withReplyAt(
+                            prev.messages,
+                            pageTurnReplyAt(prev.messages, turn),
+                            (reply) => (reply.text ? reply : { ...reply, text: `_${detail}_` }),
+                        );
 
                         return endTurn(
                             { ...prev, messages },
                             turn,
                             'failed',
-                            hasAnswer(prev.messages),
+                            hasAnswer(prev.messages, turn),
                         );
                     });
                 } else if (ending.failed || ending.done) {
@@ -1292,17 +1325,31 @@ export const useChat = (
                 }
 
                 setState((prev) => {
-                    const messages = prev.messages.slice();
-                    const last = messages.at(-1);
+                    const messages = withReplyAt(
+                        prev.messages,
+                        pageTurnReplyAt(prev.messages, turn),
+                        (reply) => (reply.text ? reply : { ...reply, text: note }),
+                    );
 
-                    if (last?.role === 'bot' && !last.text) {
-                        messages[messages.length - 1] = { ...last, text: note };
-                    }
-
-                    return endTurn({ ...prev, messages }, turn, 'failed', hasAnswer(prev.messages));
+                    return endTurn(
+                        { ...prev, messages },
+                        turn,
+                        'failed',
+                        hasAnswer(prev.messages, turn),
+                    );
                 });
 
                 return true;
+            };
+            // A request another stream's turn holds back says so on the
+            // chat line while it waits, and the refusal stays out of the
+            // transcript (whileBusy).
+            const busy = (seconds: number | null) => {
+                busyWait = seconds !== null;
+
+                if (seconds !== null && generationRef.current === generation && !stopped) {
+                    setState((prev) => withLine(prev, BUSY_LINE));
+                }
             };
             const unreachable = (): boolean =>
                 generationRef.current !== generation ||
@@ -1341,6 +1388,7 @@ export const useChat = (
                             onKeepAlive: stall.beat,
                             onRefusal: refuse,
                             onUnreachable: unreachable,
+                            onBusyWait: busy,
                         },
                         controller.signal,
                     ).catch((error: Error) => {
@@ -1430,50 +1478,40 @@ export const useChat = (
         return { turn, conversation };
     }, []);
 
-    // A turn request sent while another stream holds the conversation (a
-    // second tab, or a stream the harness has not yet seen end) is answered
-    // 409 `transient_unavailable`. It is sent again after the wait the
-    // answer names, with the chat line saying so, and the refusal stays out
-    // of the transcript.
-    const untilFree = useCallback(
-        (
-            run: (handlers: StreamHandlers) => Promise<void>,
-            handlers: StreamHandlers,
-            signal: AbortSignal,
-        ): Promise<void> => {
-            const generation = generationRef.current;
-
-            return whileBusy(run, handlers, signal, {
-                onWait: () => {
-                    if (generationRef.current === generation) {
-                        setState((prev) => withLine(prev, BUSY_LINE));
-                    }
-                },
-            });
-        },
-        [],
-    );
-
     // A new question the harness refused because a later turn began first
     // (sendNewQuestion) takes its prompt and empty reply back off the
-    // transcript, with the turn's Activity entry, and the turns the page
-    // lacks are then read in and carried on (reattach).
+    // transcript, with the turn's Activity entry. A page that reads state
+    // then reads in and carries on the turns it lacks (reattach); a guest's
+    // keeps the question offered on the turn's reply (withMovedQuestion).
     const reattachRef = useRef<() => void>(() => {});
-    const dropMovedQuestion = useCallback((turn: number, turnIndex: number) => {
+    const readsStateRef = useRef(readsState);
+
+    useEffect(() => {
+        readsStateRef.current = readsState;
+    }, [readsState]);
+
+    const dropMovedQuestion = useCallback((turn: number, turnIndex: number, text: string) => {
+        const reads = readsStateRef.current;
+        const moved = (messages: ChatMessage[]) =>
+            withMovedQuestion(messages, turnIndex, text, reads);
+
         if (turnCount.current === turn) {
             turnCount.current -= 1;
         }
 
         // Set at once, since reattach() reads it before the next render.
-        messagesRef.current = withoutUnsentQuestion(messagesRef.current, turnIndex);
+        messagesRef.current = moved(messagesRef.current);
         setState((prev) => ({
             ...prev,
             ...NO_LINE,
             thinking: false,
-            messages: withoutUnsentQuestion(prev.messages, turnIndex),
+            messages: moved(prev.messages),
             activity: prev.activity.filter((entry) => entry.turn !== turn),
         }));
-        reattachRef.current();
+
+        if (reads) {
+            reattachRef.current();
+        }
     }, []);
 
     // `fromNewQuestion` is the harness turn whose new question this sends
@@ -1543,7 +1581,7 @@ export const useChat = (
                 turn,
                 (handlers, signal) => {
                     if (fromNewQuestion === undefined) {
-                        return untilFree((busy) => run(busy, signal), handlers, signal);
+                        return whileBusy((busy) => run(busy, signal), handlers, signal);
                     }
 
                     return sendNewQuestion({
@@ -1557,16 +1595,11 @@ export const useChat = (
                             },
                         },
                         signal,
-                        onWait: () => {
-                            if (generationRef.current === generation) {
-                                setState((prev) => withLine(prev, BUSY_LINE));
-                            }
-                        },
                         onMoved: () => {
                             moved = true;
 
                             if (generationRef.current === generation) {
-                                dropMovedQuestion(turn, fromNewQuestion);
+                                dropMovedQuestion(turn, fromNewQuestion, text);
                             }
                         },
                     });
@@ -1584,7 +1617,7 @@ export const useChat = (
                 },
             );
         },
-        [dropMovedQuestion, holdTurn, offerNewQuestion, startTurn, stream, untilFree],
+        [dropMovedQuestion, holdTurn, offerNewQuestion, startTurn, stream],
     );
 
     // A queued message taken out of the queue. A new question taken out is
@@ -1685,7 +1718,7 @@ export const useChat = (
 
                         return after === prev
                             ? prev
-                            : endTurn(after, turn, activity, hasAnswer(prev.messages));
+                            : endTurn(after, turn, activity, hasAnswer(prev.messages, turn));
                     });
                 },
             });
@@ -1709,15 +1742,19 @@ export const useChat = (
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
             const after = answeredPause(pending);
+            const turn = pauseTurnRef.current;
 
             pendingInterruptRef.current = after;
 
             setState((prev) => ({
                 // The decision shows on the status line; the user's answer
                 // also stays in the transcript, once (a repeated click finds
-                // no pause left to answer).
+                // no pause left to answer), before the paused turn's reply.
                 ...withLine(prev, note ? plainTextFromNote(note) : 'Thinking'),
-                messages: answer && pending ? withAnswer(prev.messages, answer) : prev.messages,
+                messages:
+                    answer && pending
+                        ? withAnswer(prev.messages, answer, pageTurnReplyAt(prev.messages, turn))
+                        : prev.messages,
                 thinking: true,
                 clarify: null,
                 plan: after?.plan ?? null,
@@ -1731,12 +1768,12 @@ export const useChat = (
                 runInterrupt(conversation, pending.interruptId, reply, handlers, signal);
 
             if (after?.plan) {
-                streamSwitch(turnCount.current, after.plan, start);
+                streamSwitch(turn, after.plan, start);
 
                 return;
             }
 
-            stream(turnCount.current, start, {
+            stream(turn, start, {
                 onRefusal: (refusal) => {
                     const current = stalePlan(refusal, pending?.plan);
 
@@ -1837,7 +1874,7 @@ export const useChat = (
             }
 
             const label = optionLabel(plan.decisions, choiceId, optionId);
-            const turn = turnCount.current;
+            const turn = pauseTurnRef.current;
 
             // The pause stays pending with the waiting plan. switchReply
             // refuses a second pick while it waits, and the plan the harness
@@ -1898,7 +1935,7 @@ export const useChat = (
             stream(
                 turn,
                 (handlers, signal) =>
-                    untilFree(
+                    whileBusy(
                         (busyHandlers) => runApplyChoice(conversation, chip, busyHandlers, signal),
                         handlers,
                         signal,
@@ -1917,7 +1954,7 @@ export const useChat = (
                                 { ...prev, messages: withRefusedChip(prev.messages, chip, detail) },
                                 turn,
                                 'failed',
-                                hasAnswer(prev.messages),
+                                hasAnswer(prev.messages, turn),
                             ),
                         );
 
@@ -1926,7 +1963,7 @@ export const useChat = (
                 },
             );
         },
-        [holdTurn, startTurn, stream, untilFree],
+        [holdTurn, startTurn, stream],
     );
 
     // A card's Change unit: a turn that moves the card to the picked unit
@@ -1963,7 +2000,7 @@ export const useChat = (
             stream(
                 turn,
                 (handlers, signal) =>
-                    untilFree(
+                    whileBusy(
                         (busyHandlers) =>
                             runApplyUnit(conversation, change.request, busyHandlers, signal),
                         handlers,
@@ -1998,7 +2035,7 @@ export const useChat = (
                                 { ...prev, messages },
                                 turn,
                                 'failed',
-                                hasAnswer(prev.messages),
+                                hasAnswer(prev.messages, turn),
                             );
                         });
 
@@ -2007,7 +2044,7 @@ export const useChat = (
                 },
             );
         },
-        [holdTurn, patchWidget, startTurn, stream, untilFree],
+        [holdTurn, patchWidget, startTurn, stream],
     );
 
     // The queue head goes next, unless a pause (plan or clarify) is waiting
@@ -2332,14 +2369,9 @@ export const useChat = (
                     const holder = holding === undefined ? undefined : merged[holding];
                     let streamTurn = holder?.role === 'user' ? holder.turn : undefined;
 
-                    // A held open turn whose reply is not the transcript's
-                    // last message (an unsent prompt follows it) is left as
-                    // it is: its stream would write into the later reply.
-                    if (
-                        step.kind !== 'none' &&
-                        (step.turnIndex > held ||
-                            turnReplyAt(merged, step.turnIndex) === merged.length - 1)
-                    ) {
+                    // A held open turn streams into its own reply, also when
+                    // an unsent prompt follows it (pageTurnReplyAt).
+                    if (step.kind !== 'none') {
                         if (step.turnIndex > held) {
                             const prompt = read.turn?.user_message ?? '';
 

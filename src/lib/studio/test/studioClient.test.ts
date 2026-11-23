@@ -18,6 +18,7 @@ import {
     runInterrupt,
     runTurn,
     STATE_READ_ATTEMPTS,
+    stopAction,
     whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
@@ -430,6 +431,7 @@ test('whileBusy: a turn refused 409 while another stream holds the conversation 
     const frames: StudioFrame[] = [];
     const refusals: StreamRefusal[] = [];
     const waits: number[] = [];
+    const busy: (number | null)[] = [];
 
     await whileBusy(
         (handlers) => runTurn('conv', 'and in 2021?', handlers),
@@ -440,6 +442,7 @@ test('whileBusy: a turn refused 409 while another stream holds the conversation 
 
                 return false;
             },
+            onBusyWait: (seconds) => busy.push(seconds),
         },
         undefined,
         { sleep: async (ms) => void waits.push(ms) },
@@ -447,9 +450,66 @@ test('whileBusy: a turn refused 409 while another stream holds the conversation 
 
     assert.equal(fetch.mock.callCount(), 2);
     assert.deepEqual(waits, [4000]);
+    // The page holds no stream from the busy answer until the second send.
+    assert.deepEqual(busy, [4, null]);
     assert.deepEqual(refusals, []);
     // The refusal's detail becomes no frame, so it cannot become the reply.
     assert.deepEqual(frames, [{ event: 'message.complete', seq: 3, text: 'The answer.' }]);
+});
+
+test('whileBusy: a Stop while a send waits on another stream ends the wait, sends nothing more and cancels nothing', async (t) => {
+    const answers = [
+        Response.json(
+            {
+                error: 'transient_unavailable',
+                retry: 'retry_after_delay',
+                detail: 'another request is streaming on this conversation',
+                retry_after_seconds: 30,
+            },
+            { status: 409 },
+        ),
+        new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n'),
+    ];
+    const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+    const controller = new AbortController();
+    const waits: (number | null)[] = [];
+    let busyWait = false;
+    let action: ReturnType<typeof stopAction> | null = null;
+
+    await assert.rejects(
+        whileBusy(
+            (handlers) => runTurn('conv', 'and in 2021?', handlers, controller.signal),
+            {
+                onFrame: () => {},
+                onBusyWait: (seconds) => {
+                    waits.push(seconds);
+                    busyWait = seconds !== null;
+
+                    // The user presses Stop as the wait begins.
+                    if (busyWait) {
+                        action = stopAction({ sent: true, busyWait });
+
+                        if (action === 'abort') {
+                            controller.abort();
+                        }
+                    }
+                },
+            },
+            controller.signal,
+            {
+                // The wait as abortableSleep runs it, without the clock.
+                sleep: async (_ms, signal) => signal?.throwIfAborted(),
+            },
+        ),
+        { name: 'AbortError' },
+    );
+
+    assert.equal(action, 'abort');
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.deepEqual(waits, [30]);
+    // A stream the page holds is cancelled; one not yet sent is skipped.
+    assert.equal(stopAction({ sent: true, busyWait: false }), 'cancel');
+    assert.equal(stopAction({ sent: false, busyWait: false }), 'abort');
 });
 
 test('whileBusy: any other refusal reaches onRefusal once and is not retried', async (t) => {

@@ -472,14 +472,58 @@ export const turnReplyAt = (messages: readonly ChatMessage[], index: number): nu
 };
 
 /**
- * The transcript with the user's answer to a paused turn. It goes before the
- * turn's reply, which the resumed stream goes on writing into.
+ * The position of page turn `turn`'s reply, which a stream opened for that
+ * turn writes into: the last bot message after the latest prompt stamped
+ * `turn` and before the next prompt, so a held turn's stream keeps to its
+ * own reply when a later prompt follows it. With no prompt stamped `turn`,
+ * the last bot message. -1 when there is no such reply.
  */
-export const withAnswer = (messages: ChatMessage[], text: string): ChatMessage[] => {
-    const answer: ChatMessage = { role: 'user', text, answer: true };
-    const last = messages[messages.length - 1];
+export const pageTurnReplyAt = (messages: readonly ChatMessage[], turn: number): number => {
+    const prompt = messages.findLastIndex(
+        (message) => message.role === 'user' && isPrompt(message) && message.turn === turn,
+    );
 
-    return last?.role === 'bot' ? [...messages.slice(0, -1), answer, last] : [...messages, answer];
+    if (prompt === -1) {
+        return messages.findLastIndex((message) => message.role === 'bot');
+    }
+
+    const next = messages.findIndex((message, at) => at > prompt && isPrompt(message));
+    const reply = messages
+        .slice(prompt + 1, next === -1 ? messages.length : next)
+        .findLastIndex((message) => message.role === 'bot');
+
+    return reply === -1 ? -1 : prompt + 1 + reply;
+};
+
+/** The transcript with the reply at position `at` (pageTurnReplyAt) passed
+ *  through `fn`. Unchanged when no reply sits there. */
+export const withReplyAt = (
+    messages: ChatMessage[],
+    at: number,
+    fn: (reply: Extract<ChatMessage, { role: 'bot' }>) => ChatMessage,
+): ChatMessage[] => {
+    const reply = messages[at];
+
+    return reply?.role === 'bot'
+        ? messages.map((message, other) => (other === at ? fn(reply) : message))
+        : messages;
+};
+
+/**
+ * The transcript with the user's answer to a paused turn. It goes before the
+ * turn's reply, at `at` (pageTurnReplyAt) and by default the last message,
+ * which the resumed stream goes on writing into.
+ */
+export const withAnswer = (
+    messages: ChatMessage[],
+    text: string,
+    at: number = messages.length - 1,
+): ChatMessage[] => {
+    const answer: ChatMessage = { role: 'user', text, answer: true };
+
+    return messages[at]?.role === 'bot'
+        ? [...messages.slice(0, at), answer, ...messages.slice(at)]
+        : [...messages, answer];
 };
 
 /**
@@ -609,23 +653,30 @@ export const NEW_QUESTION_NOTE = '_Taken as a new question._';
 /**
  * The transcript once the harness took the user's change to the plan as a
  * new question (`done`'s `new_question`). The plan card closes, so the turn's
- * empty reply says so, and the typed text leaves the turn, since the next
- * turn opens with it.
+ * empty reply, at `at` (pageTurnReplyAt) and by default the last message,
+ * says so, and the typed text leaves the turn, since the next turn opens
+ * with it.
  */
-export const withNewQuestion = (messages: ChatMessage[], question: string): ChatMessage[] => {
-    const reply = messages.at(-1);
+export const withNewQuestion = (
+    messages: ChatMessage[],
+    question: string,
+    at: number = messages.length - 1,
+): ChatMessage[] => {
+    const reply = messages[at];
 
     if (reply?.role !== 'bot') {
         return messages;
     }
 
-    const typed = messages.at(-2);
-    const kept =
-        typed?.role === 'user' && typed.answer && typed.text === question
-            ? messages.slice(0, -2)
-            : messages.slice(0, -1);
+    const typed = messages[at - 1];
+    const from =
+        at > 0 && typed?.role === 'user' && typed.answer && typed.text === question ? at - 1 : at;
 
-    return [...kept, reply.text ? reply : { ...reply, text: NEW_QUESTION_NOTE }];
+    return [
+        ...messages.slice(0, from),
+        reply.text ? reply : { ...reply, text: NEW_QUESTION_NOTE },
+        ...messages.slice(at + 1),
+    ];
 };
 
 /**

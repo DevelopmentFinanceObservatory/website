@@ -19,7 +19,15 @@ import {
 import { factsOf } from './liveCards.ts';
 import { approvedFromFrame, type ApprovedPlan } from './plan.ts';
 import { describedBy, payloadDescription } from './payload.ts';
-import { ensureTurn, isPrompt, NEW_QUESTION_NOTE, promptTurns, turnReplyAt } from './transcript.ts';
+import {
+    ensureTurn,
+    isPrompt,
+    NEW_QUESTION_NOTE,
+    promptTurns,
+    turnReplyAt,
+    withOfferedQuestion,
+    withoutUnsentQuestion,
+} from './transcript.ts';
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
 import type {
     ClosedTurn,
@@ -228,13 +236,32 @@ export const owedNewQuestion = (
     };
 };
 
-// How long to wait before reading again when a live lease states no time.
+// How long to wait before reading again when a live lease or a refused
+// resume states no time, and the least a refused resume waits.
 const DEFAULT_WAIT_SECONDS = 2;
+
+// The refused resumes carryOnTurn takes before it gives up on the turn.
+export const RESUME_ATTEMPTS = 5;
+
+// The seconds to wait after a refused resume before reading the state again,
+// or null when the refusal is final: a 409 (another stream took the turn,
+// or it paused or closed meanwhile) or a 503 `transient_unavailable` waits
+// the time it names and at least DEFAULT_WAIT_SECONDS.
+const resumeRetryAfter = (refusal: StreamRefusal): number | null => {
+    const transient =
+        refusal.status === 409 ||
+        (refusal.status === 503 && refusal.error?.error === 'transient_unavailable');
+
+    return transient
+        ? Math.max(DEFAULT_WAIT_SECONDS, refusal.error?.retry_after_seconds ?? 0)
+        : null;
+};
 
 /**
  * Send harness turn `turnIndex`'s new question with `send`, which names that
  * turn as the one the request follows (`after_turn`). A request the harness
- * answers busy waits the time it names and is sent again. One it refuses
+ * answers busy waits the time it names, which `handlers.onBusyWait` hears
+ * (whileBusy), and is sent again. One it refuses
  * `turn_moved` (isTurnMoved) found a later turn begun, by another page that
  * sent the question or by this page's own earlier send, so it is not sent
  * again and `onMoved` hears it. Two pages that owe the same question
@@ -245,7 +272,6 @@ export const sendNewQuestion = async ({
     send,
     handlers,
     signal,
-    onWait,
     onMoved,
     sleep = abortableSleep,
 }: {
@@ -253,7 +279,6 @@ export const sendNewQuestion = async ({
     send: (afterTurn: number, handlers: StreamHandlers) => Promise<void>;
     handlers: StreamHandlers;
     signal: AbortSignal;
-    onWait?: (seconds: number) => void;
     onMoved: () => void;
     sleep?: typeof abortableSleep;
 }): Promise<void> => {
@@ -287,10 +312,30 @@ export const sendNewQuestion = async ({
             return;
         }
 
-        onWait?.(wait);
+        handlers.onBusyWait?.(wait);
         await sleep(wait * 1000, signal);
+        handlers.onBusyWait?.(null);
     }
 };
+
+/**
+ * The transcript once harness turn `turnIndex`'s new question `text` was
+ * refused `turn_moved` (sendNewQuestion). A page that reads the harness's
+ * state (`readsState`) takes the send off the transcript
+ * (withoutUnsentQuestion) and reads in the turn that went ahead. A page
+ * that cannot, a guest's, whose state read the proxy refuses, offers the
+ * question on the turn's reply for the user to send (withOfferedQuestion),
+ * so it stays on screen.
+ */
+export const withMovedQuestion = (
+    messages: ChatMessage[],
+    turnIndex: number,
+    text: string,
+    readsState: boolean,
+): ChatMessage[] =>
+    readsState
+        ? withoutUnsentQuestion(messages, turnIndex)
+        : withOfferedQuestion(messages, turnIndex, text);
 
 // An approval's key: its turn and its plan's revision. Two turns can approve
 // plans of the same content, and so the same revision.
@@ -617,10 +662,11 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * `handlers`: resume a running turn nobody holds (`resume`), wait while
  * another stream holds it, show a pause by its frames, and end with a `done`
  * once the harness has closed it. A resume refused 409 (the turn was taken or
- * paused meanwhile) reads the state again, after the wait the refusal names.
+ * paused meanwhile) or 503 `transient_unavailable` reads the state again,
+ * after the wait the refusal names and at least DEFAULT_WAIT_SECONDS.
  * Each read goes to `onRead`, which merges it, and is asked with `since()`.
- * Rejects when a resume is refused otherwise or a read fails, and with an
- * AbortError when `signal` aborts.
+ * Rejects when a resume is refused otherwise or RESUME_ATTEMPTS times, or
+ * a read fails, and with an AbortError when `signal` aborts.
  */
 export const carryOnTurn = async ({
     conversationId,
@@ -647,6 +693,8 @@ export const carryOnTurn = async ({
     ) => Promise<ConversationRead | StateRefusal | null>;
     sleep?: typeof abortableSleep;
 }): Promise<void> => {
+    let refusals = 0;
+
     for (let step = first; ;) {
         if (step.kind === 'pause') {
             step.frames.forEach(handlers.onFrame);
@@ -682,11 +730,15 @@ export const carryOnTurn = async ({
                 return;
             }
 
-            if (refused.status !== 409) {
+            const wait = resumeRetryAfter(refused);
+
+            refusals += 1;
+
+            if (wait === null || refusals >= RESUME_ATTEMPTS) {
                 throw new Error(`the turn could not be resumed: HTTP ${refused.status}`);
             }
 
-            await sleep((busyRetryAfter(refused) ?? 0) * 1000, signal);
+            await sleep(wait * 1000, signal);
         } else {
             await sleep(step.seconds * 1000, signal);
         }
