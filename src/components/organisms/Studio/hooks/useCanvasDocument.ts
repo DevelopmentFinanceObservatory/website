@@ -8,9 +8,13 @@ import type { TurnWidget } from './useChat';
 import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation, ShareMark } from '@/lib/chat/history';
 import type { TextWidget, Widget } from '@/lib/chat/widgets';
-import { withHarnessPins } from '@/lib/studio/canvasEdits';
 import { renameId, renameKey } from '@/lib/studio/cardReplace';
-import type { CanvasBaseline } from '@/lib/studio/composition';
+import {
+    type CanvasBaseline,
+    type CardMarks,
+    withLocalCards,
+    withManifestPins,
+} from '@/lib/studio/composition';
 import { DEFAULT_THEME, type StudioTheme } from '@/lib/studio/theme';
 import { uuid } from '@/lib/uuid';
 
@@ -22,13 +26,17 @@ import { uuid } from '@/lib/uuid';
  * cards the canvas shows is the harness manifest's (canvasWidgetsOf).
  */
 export const useCanvasDocument = (initial?: SavedConversation) => {
-    // Pinned cards: the harness keeps them when the model clears the canvas.
-    const [pinnedIds, setPinnedIds] = useState<string[]>(initial?.pinnedIds ?? []);
-    // The cards the harness never held (text cards, `localIds`) that the
-    // user took off the canvas. The harness's manifest decides for its own.
-    const [removedIds, setRemovedIds] = useState<string[]>(initial?.removedIds ?? []);
-    // A fork's inherited cards, which its harness session never held.
-    const [localIds, setLocalIds] = useState<string[]>(initial?.localIds ?? []);
+    // Pinned cards (`pinnedIds`): the harness keeps them when the model
+    // clears the canvas. The cards the harness never held (`localIds`), such
+    // as a fork's inherited cards. The cards of those and the text cards that
+    // the user took off the canvas (`removedIds`); the harness's manifest
+    // decides for its own.
+    const [marks, setMarks] = useState<CardMarks>({
+        pinnedIds: initial?.pinnedIds ?? [],
+        removedIds: initial?.removedIds ?? [],
+        localIds: initial?.localIds ?? [],
+    });
+    const { pinnedIds, removedIds, localIds } = marks;
     // A save from before the manifest decided the canvas keeps the grace set
     // its canvas was drawn with, as loaded (legacyCanvasWidgetsOf).
     const [grace, setGrace] = useState<{ ids: string[]; turn: number }>({
@@ -63,9 +71,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
 
     // A fresh canvas (a new prompt from the landing).
     const reset = useCallback(() => {
-        setPinnedIds([]);
-        setRemovedIds([]);
-        setLocalIds([]);
+        setMarks({ pinnedIds: [], removedIds: [], localIds: [] });
         setGrace({ ids: [], turn: 0 });
         setViews({});
         setRatios({});
@@ -80,9 +86,11 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
 
     // A saved conversation, exactly as it was left.
     const load = useCallback((saved: SavedConversation) => {
-        setPinnedIds(saved.pinnedIds);
-        setRemovedIds(saved.removedIds);
-        setLocalIds(saved.localIds ?? []);
+        setMarks({
+            pinnedIds: saved.pinnedIds,
+            removedIds: saved.removedIds,
+            localIds: saved.localIds ?? [],
+        });
         setGrace({ ids: saved.graceIds ?? [], turn: saved.graceTurn ?? 0 });
         setViews(saved.views ?? {});
         setRatios(saved.ratios ?? {});
@@ -96,60 +104,76 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         setReplacedIds({});
     }, []);
 
+    const setPinnedIds = useCallback(
+        (update: (prev: string[]) => string[]) =>
+            setMarks((prev) => {
+                const next = update(prev.pinnedIds);
+
+                return next === prev.pinnedIds ? prev : { ...prev, pinnedIds: next };
+            }),
+        [],
+    );
+
+    const setRemovedIds = useCallback(
+        (update: (prev: string[]) => string[]) =>
+            setMarks((prev) => {
+                const next = update(prev.removedIds);
+
+                return next === prev.removedIds ? prev : { ...prev, removedIds: next };
+            }),
+        [],
+    );
+
     const togglePin = useCallback(
         (id: string) =>
             setPinnedIds((prev) =>
                 prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
             ),
-        [],
+        [setPinnedIds],
     );
 
     // Cards the harness turned out never to hold (useChat's localCards):
     // `shown` ones stay on the canvas and `hidden` ones go off it.
-    const addLocalIds = useCallback((shown: readonly string[], hidden: readonly string[] = []) => {
-        const ids = [...shown, ...hidden];
-
-        setLocalIds((prev) => {
-            const added = ids.filter((id) => !prev.includes(id));
-
-            return added.length > 0 ? [...prev, ...added] : prev;
-        });
-        setRemovedIds((prev) => {
-            const added = hidden.filter((id) => !prev.includes(id));
-
-            return added.length > 0 ? [...prev, ...added] : prev;
-        });
-    }, []);
+    const addLocalIds = useCallback(
+        (shown: readonly string[], hidden: readonly string[] = []) =>
+            setMarks((prev) => withLocalCards(prev, shown, hidden)),
+        [],
+    );
 
     // The harness cards' pins as the harness's manifest has them, with the
-    // pins of the cards only the page holds kept (withHarnessPins).
+    // pins of the cards only the page holds kept. Which cards those are is
+    // read from the state this update writes, so local cards added earlier
+    // in the same render keep their pins.
     const takeHarnessPins = useCallback(
-        (pins: readonly string[], isHarness: (id: string) => boolean) =>
-            setPinnedIds((prev) => withHarnessPins(prev, pins, isHarness)),
+        (pins: readonly string[], widgets: readonly { id: string }[]) =>
+            setMarks((prev) => withManifestPins(prev, pins, widgets)),
         [],
     );
 
     const unpin = useCallback(
         (id: string) => setPinnedIds((prev) => prev.filter((other) => other !== id)),
-        [],
+        [setPinnedIds],
     );
 
     // A card the harness redrew under a new id (see cardReplace): its pin,
     // grace, removal, view, ratio, title and note move to the new id.
-    const renameWidget = useCallback((from: string, to: string) => {
-        setPinnedIds((prev) => renameId(prev, from, to));
-        setRemovedIds((prev) => renameId(prev, from, to));
-        setGrace((prev) => {
-            const ids = renameId(prev.ids, from, to);
+    const renameWidget = useCallback(
+        (from: string, to: string) => {
+            setPinnedIds((prev) => renameId(prev, from, to));
+            setRemovedIds((prev) => renameId(prev, from, to));
+            setGrace((prev) => {
+                const ids = renameId(prev.ids, from, to);
 
-            return ids === prev.ids ? prev : { ...prev, ids };
-        });
-        setViews((prev) => renameKey(prev, from, to));
-        setRatios((prev) => renameKey(prev, from, to));
-        setTitles((prev) => renameKey(prev, from, to));
-        setNotes((prev) => renameKey(prev, from, to));
-        setReplacedIds((prev) => ({ ...prev, [to]: from }));
-    }, []);
+                return ids === prev.ids ? prev : { ...prev, ids };
+            });
+            setViews((prev) => renameKey(prev, from, to));
+            setRatios((prev) => renameKey(prev, from, to));
+            setTitles((prev) => renameKey(prev, from, to));
+            setNotes((prev) => renameKey(prev, from, to));
+            setReplacedIds((prev) => ({ ...prev, [to]: from }));
+        },
+        [setPinnedIds, setRemovedIds],
+    );
 
     // A local card off the canvas (card menu → Remove).
     const removeWidget = useCallback(
@@ -157,13 +181,14 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
             setRemovedIds((prev) => [...prev, id]);
             unpin(id);
         },
-        [unpin],
+        [setRemovedIds, unpin],
     );
 
     // Chat chip → Add: a removed local card is un-removed.
-    const addWidget = useCallback((id: string) => {
-        setRemovedIds((prev) => prev.filter((other) => other !== id));
-    }, []);
+    const addWidget = useCallback(
+        (id: string) => setRemovedIds((prev) => prev.filter((other) => other !== id)),
+        [setRemovedIds],
+    );
 
     // Add or edit a text card (an empty title falls back to "Text Card").
     const upsertTextCard = useCallback((id: string | null, title: string, body: string) => {

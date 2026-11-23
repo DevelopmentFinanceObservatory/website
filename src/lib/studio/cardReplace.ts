@@ -55,58 +55,6 @@ export const placeCard = <TCard extends PlacedCard>(
         : [...cards, card];
 };
 
-/**
- * The agent's card removals during a turn, held until the turn's stream
- * ends. The harness's manifest can drop a card before the frame of the card
- * that replaces it arrives, and a removal applied then would unpin and drop
- * a card that lives on under a new id. At the end a held removal goes ahead
- * unless a replacement took the card over; a card once replaced is never
- * removed by a later manifest either. Outside a turn removals pass at once.
- */
-export const createRemovalHold = () => {
-    let open = false;
-    let held: string[] = [];
-    const replaced = new Set<string>();
-
-    const live = (ids: readonly string[]) => ids.filter((id) => !replaced.has(id));
-
-    return {
-        /** A turn's stream starts. */
-        begin: () => {
-            open = true;
-        },
-        /** The removals to apply now: none while a turn streams. */
-        remove: (ids: readonly string[]): string[] => {
-            if (!open) {
-                return live(ids);
-            }
-
-            held.push(...ids.filter((id) => !held.includes(id)));
-
-            return [];
-        },
-        /** A replacement took `id` over: its removal is no removal. */
-        replace: (id: string) => {
-            replaced.add(id);
-        },
-        /** The turn's stream ended: the held removals to apply now. */
-        end: (): string[] => {
-            const removals = live(held);
-
-            open = false;
-            held = [];
-
-            return removals;
-        },
-        /** A new or reopened conversation. */
-        reset: () => {
-            open = false;
-            held = [];
-            replaced.clear();
-        },
-    };
-};
-
 /** `ids` with `from` swapped for `to`, in place; the same array when it
  *  does not hold `from`. */
 export const renameId = (ids: string[], from: string, to: string): string[] =>

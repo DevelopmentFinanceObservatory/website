@@ -9,6 +9,7 @@ import { widgetTitle } from '../canvas/layout';
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
+import { createSaveWaiters } from '@/lib/studio/saveWaiters';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
 import { isPrompt } from '@/lib/studio/transcript';
 
@@ -103,13 +104,20 @@ export const useConversationSave = ({
         };
     }, [takeChatSnapshot]);
 
+    // Callers waiting on a conversation's next save (whenSaved).
+    const [waiters] = useState(createSaveWaiters);
+
     const persistNow = useCallback(() => {
         const saved = buildSnapshot();
 
         if (saved) {
-            void pushConversation(saved);
+            void pushConversation(saved).then((ok) => {
+                if (ok) {
+                    waiters.saved(saved.id);
+                }
+            });
         }
-    }, [buildSnapshot]);
+    }, [buildSnapshot, waiters]);
 
     const scheduleSave = useCallback(() => {
         if (readOnly) {
@@ -241,6 +249,7 @@ export const useConversationSave = ({
                             .length,
                         shareId: answer.id,
                         at: Date.now(),
+                        turnCount: saved.turnCount,
                     });
                 }
 
@@ -253,11 +262,15 @@ export const useConversationSave = ({
     );
 
     // Start tracking a conversation: a fresh id (new prompt) or a saved one.
-    const track = useCallback((id: string | null, layout: CardLayout) => {
-        conversationIdRef.current = id;
-        layoutRef.current = layout;
-        setOpenedLayout(layout);
-    }, []);
+    const track = useCallback(
+        (id: string | null, layout: CardLayout) => {
+            conversationIdRef.current = id;
+            layoutRef.current = layout;
+            setOpenedLayout(layout);
+            waiters.track(id);
+        },
+        [waiters],
+    );
 
     return {
         openedLayout,
@@ -266,6 +279,9 @@ export const useConversationSave = ({
         handleLayoutChange,
         createShare,
         track,
+        // Resolves true once a save of conversation `id` lands, false if the
+        // page tracks another conversation first.
+        whenSaved: waiters.wait,
         conversationId: () => conversationIdRef.current,
     };
 };

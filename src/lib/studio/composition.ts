@@ -1,6 +1,7 @@
+import { withHarnessPins } from './canvasEdits.ts';
 import type { CompositionManifest, MutationOperation } from './wire';
 
-import { legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
+import { isHarnessCard, legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
 
 /** The harness canvas this page last saw: which composition, at which
  *  revision, holding which cards, and which of them the manifest pins
@@ -52,27 +53,74 @@ export const restoreCanvas = (
     };
 };
 
+/** A manifest taken as the new baseline (takeManifest), with the cards the
+ *  page should keep as local cards (`local`). */
+export type TakenManifest = { baseline: CanvasBaseline; local: string[] };
+
 /**
  * Take a canvas manifest as the new baseline, or null for a manifest of the
  * same composition no newer than the baseline (a frame or response arriving
- * late), which changes nothing. A manifest of another composition (a forked
- * conversation's new session, or the first after a legacy canvas) starts a
- * new baseline.
+ * late), which changes nothing. Within one composition a card the manifest
+ * lacks is one the harness removed. A manifest of another composition (a
+ * forked conversation's new session, or a session the harness started
+ * afresh under the same id) holds none of the old baseline's cards, so the
+ * ones it lacks come back as `local`: the page keeps them, and the new
+ * session's manifests cannot take them off. The first manifest after a
+ * legacy canvas returns no `local`, since createLegacyCanvas decides those.
  */
 export const takeManifest = (
     previous: CanvasBaseline | null,
     manifest: CompositionManifest,
-): CanvasBaseline | null =>
-    previous?.compositionId === manifest.composition_id && manifest.revision <= previous.revision
-        ? null
-        : {
-              compositionId: manifest.composition_id,
-              revision: manifest.revision,
-              ids: manifest.blocks.map((block) => block.component_id),
-              pinned: manifest.blocks
-                  .filter((block) => block.pinned)
-                  .map((block) => block.component_id),
-          };
+): TakenManifest | null => {
+    if (
+        previous?.compositionId === manifest.composition_id &&
+        manifest.revision <= previous.revision
+    ) {
+        return null;
+    }
+
+    const ids = manifest.blocks.map((block) => block.component_id);
+    const held = new Set(ids);
+    const replaced =
+        previous?.compositionId != null && previous.compositionId !== manifest.composition_id;
+
+    return {
+        baseline: {
+            compositionId: manifest.composition_id,
+            revision: manifest.revision,
+            ids,
+            pinned: manifest.blocks
+                .filter((block) => block.pinned)
+                .map((block) => block.component_id),
+        },
+        local: replaced ? previous.ids.filter((id) => !held.has(id)) : [],
+    };
+};
+
+/**
+ * The baseline less the cards among `ids` it holds, for `remove` edits the
+ * harness refused with "no block". The baseline's cards came from a manifest
+ * of this composition, so the harness held each once and has since removed
+ * it. The revision stays, so the next manifest is taken. Null when the
+ * baseline is legacy or holds none of `ids`: the harness never held those
+ * cards (createLegacyCanvas's `unheld`).
+ */
+export const withoutRemovedCards = (
+    baseline: CanvasBaseline | null,
+    ids: readonly string[],
+): CanvasBaseline | null => {
+    if (baseline?.compositionId == null || !ids.some((id) => baseline.ids.includes(id))) {
+        return null;
+    }
+
+    const gone = new Set(ids);
+
+    return {
+        ...baseline,
+        ids: baseline.ids.filter((id) => !gone.has(id)),
+        ...(baseline.pinned ? { pinned: baseline.pinned.filter((id) => !gone.has(id)) } : {}),
+    };
+};
 
 /**
  * The cards a legacy save (see restoreCanvas) holds that its canvas hid, with
@@ -94,29 +142,35 @@ export const legacyHiddenCards = (
     );
 };
 
-/** The cards a legacy canvas's save holds that the harness's manifest
- *  lacks, so the harness never held them (a fork's inherited cards): the
- *  ones the page showed, and the ones it hid, which stay off the canvas. */
+/** The cards a legacy canvas's save holds that no harness turn produced,
+ *  so the harness never held them (a fork's inherited cards): the ones the
+ *  page showed, and the ones it hid, which stay off the canvas. */
 export type LegacyLocal = { shown: string[]; hidden: string[] };
 
 /**
  * A legacy canvas (see CanvasBaseline) while the harness's manifest is
  * brought to it. The harness holds every card such a conversation drew,
  * because the page that saved it never reported the cards its turn rule hid.
- * The first manifest `offer`ed sends one `remove` for each card the save hid
- * (`hidden`, legacyHiddenCards) that the manifest holds at no newer revision
- * than the save did, against the manifest's revision (`expected_revision`).
- * A card the save never held, such as one another tab's turn drew since, one
- * revised since the save, and one whose saved revision is unknown, stays.
+ * The first manifest `offer`ed waits for `produced`: the ids of every card a
+ * turn of the harness session drew, from all its closed turns since turn 0
+ * plus the cards of a turn left paused or running, or null when they could
+ * not be read, which leaves the canvas legacy. A manifest offered meanwhile
+ * replaces an older one. The manifest then taken gets one `remove` for each
+ * card the save hid (`hidden`, legacyHiddenCards) that the manifest holds at
+ * no newer revision than the save did, against the manifest's revision
+ * (`expected_revision`). A card the save never held, such as one another
+ * tab's turn drew since, one revised since the save, and one whose saved
+ * revision is unknown, stays.
  * The same request sends a `pin` for each card the save showed pinned
  * (`pinned`) that the manifest holds unpinned, since the page that saved it
  * kept its pins to itself. `onTake` hears the manifest that
  * answers, then any later one offered meanwhile, as the canvas to take from
- * then on. Before it, `onLocal` hears the cards the save held that the
- * offered manifest lacks, cards the harness never held such as a fork's
- * inherited ones, which stay on the page as local cards, those the page hid
- * or the user took off and the harness refused to remove (`unheld`) staying
- * off the canvas.
+ * then on. Before it, `onLocal` hears the cards the save held that no
+ * harness turn produced, such as a fork's inherited ones, which stay on the
+ * page as local cards, those the page hid or the user took off and the
+ * harness refused to remove (`unheld`) staying off the canvas. A card a turn
+ * produced that the manifest lacks is one the harness removed, so it leaves
+ * the canvas.
  * Until then the canvas shows `ids()`: the legacy cards plus the cards drawn
  * since (`keep`), less the ones the user took off (`drop`), and `onChange`
  * hears each change. A failed `remove`, a stale revision included, leaves
@@ -127,6 +181,7 @@ export const createLegacyCanvas = ({
     ids,
     hidden,
     pinned,
+    produced,
     mutate,
     onTake,
     onLocal,
@@ -135,6 +190,7 @@ export const createLegacyCanvas = ({
     ids: readonly string[];
     hidden: ReadonlyMap<string, number | null>;
     pinned: readonly string[];
+    produced: Promise<ReadonlySet<string> | null>;
     mutate: (
         operations: MutationOperation[],
         expectedRevision: number,
@@ -148,11 +204,17 @@ export const createLegacyCanvas = ({
     // it never held them (a fork's inherited card). Each stays local and off
     // the canvas.
     const unheld = new Set<string>();
-    let state: 'waiting' | 'sent' | 'failed' | 'taken' = 'waiting';
-    // The newest manifest offered while the `remove` was in flight.
+    let state: 'waiting' | 'reading' | 'sent' | 'failed' | 'taken' = 'waiting';
+    // The newest manifest offered while `produced` was read or the `remove`
+    // was in flight.
     let later: CompositionManifest | null = null;
     // The cards of the manifest taken.
     let taken: ReadonlySet<string> = new Set();
+    // The cards the harness session's turns drew, once read.
+    let drawn: ReadonlySet<string> = new Set();
+
+    const newest = (manifest: CompositionManifest) =>
+        later && later.revision >= manifest.revision ? later : manifest;
 
     const take = (manifest: CompositionManifest, local: LegacyLocal) => {
         state = 'taken';
@@ -171,6 +233,62 @@ export const createLegacyCanvas = ({
         later = null;
     };
 
+    const bring = async (manifest: CompositionManifest): Promise<void> => {
+        const held = new Set(manifest.blocks.map((block) => block.component_id));
+        const ownless = (id: string) => !held.has(id) && !drawn.has(id);
+        const local = {
+            shown: [...shown].filter(ownless),
+            hidden: [...new Set([...hidden.keys(), ...unheld])].filter(
+                (id) => !shown.has(id) && ownless(id),
+            ),
+        };
+        const removed = manifest.blocks
+            .filter((block) => {
+                const revision = hidden.get(block.component_id);
+
+                return (
+                    revision !== undefined &&
+                    revision !== null &&
+                    block.revision <= revision &&
+                    !shown.has(block.component_id)
+                );
+            })
+            .map((block) => block.component_id);
+        const pins = manifest.blocks
+            .filter(
+                (block) =>
+                    !block.pinned &&
+                    pinned.includes(block.component_id) &&
+                    shown.has(block.component_id),
+            )
+            .map((block) => block.component_id);
+        const operations: MutationOperation[] = [
+            ...removed.map((id) => ({ op: 'remove' as const, component_id: id })),
+            ...pins.map((id) => ({ op: 'pin' as const, component_id: id })),
+        ];
+
+        if (operations.length === 0) {
+            take(manifest, local);
+
+            return;
+        }
+
+        state = 'sent';
+
+        const answer = await mutate(operations, manifest.revision).catch((error: unknown) => {
+            console.warn('Studio: a legacy canvas was not brought to the harness', error);
+
+            return null;
+        });
+
+        if (answer) {
+            take(answer, local);
+        } else {
+            state = 'failed';
+            later = null;
+        }
+    };
+
     return {
         ids: (): string[] => [...shown],
         keep: (id: string) => {
@@ -187,7 +305,7 @@ export const createLegacyCanvas = ({
         },
         // The harness refused the `remove` of card `id`, which it never held.
         // Before the take, the take makes it local; after it, a card the
-        // taken manifest lacks is made local at once.
+        // taken manifest lacks and no turn drew is made local at once.
         unheld: (id: string) => {
             if (shown.has(id)) {
                 return;
@@ -195,7 +313,7 @@ export const createLegacyCanvas = ({
 
             if (state !== 'taken') {
                 unheld.add(id);
-            } else if (!taken.has(id)) {
+            } else if (!taken.has(id) && !drawn.has(id)) {
                 onLocal({ shown: [], hidden: [id] });
             }
         },
@@ -204,66 +322,75 @@ export const createLegacyCanvas = ({
                 return;
             }
 
-            if (state === 'sent') {
-                later = later && later.revision >= manifest.revision ? later : manifest;
+            if (state === 'sent' || state === 'reading') {
+                later = newest(manifest);
 
                 return;
             }
 
-            const held = new Set(manifest.blocks.map((block) => block.component_id));
-            const local = {
-                shown: [...shown].filter((id) => !held.has(id)),
-                hidden: [...new Set([...hidden.keys(), ...unheld])].filter(
-                    (id) => !shown.has(id) && !held.has(id),
-                ),
-            };
-            const removed = manifest.blocks
-                .filter((block) => {
-                    const revision = hidden.get(block.component_id);
+            state = 'reading';
+            later = manifest;
 
-                    return (
-                        revision !== undefined &&
-                        revision !== null &&
-                        block.revision <= revision &&
-                        !shown.has(block.component_id)
-                    );
-                })
-                .map((block) => block.component_id);
-            const pins = manifest.blocks
-                .filter(
-                    (block) =>
-                        !block.pinned &&
-                        pinned.includes(block.component_id) &&
-                        shown.has(block.component_id),
-                )
-                .map((block) => block.component_id);
-            const operations: MutationOperation[] = [
-                ...removed.map((id) => ({ op: 'remove' as const, component_id: id })),
-                ...pins.map((id) => ({ op: 'pin' as const, component_id: id })),
-            ];
-
-            if (operations.length === 0) {
-                take(manifest, local);
-
-                return;
-            }
-
-            state = 'sent';
-
-            const answer = await mutate(operations, manifest.revision).catch((error: unknown) => {
-                console.warn('Studio: a legacy canvas was not brought to the harness', error);
+            const read = await produced.catch((error: unknown) => {
+                console.warn('Studio: the cards of a legacy canvas were not read', error);
 
                 return null;
             });
+            const offered = later ?? manifest;
 
-            if (answer) {
-                take(answer, local);
-            } else {
+            later = null;
+
+            if (!read) {
                 state = 'failed';
-                later = null;
+
+                return;
             }
+
+            drawn = read;
+            await bring(offered);
         },
     };
 };
 
 export type LegacyCanvas = ReturnType<typeof createLegacyCanvas>;
+
+/** A canvas document's say over its cards: which are pinned, which the
+ *  harness never held (`localIds`), and which of those the user took off
+ *  (`removedIds`). One state, so a pin taken from a manifest reads the local
+ *  cards a change in the same render made. */
+export type CardMarks = { pinnedIds: string[]; removedIds: string[]; localIds: string[] };
+
+/** `marks` with the cards the harness turned out never to hold (useChat's
+ *  localCards): `shown` ones stay on the canvas and `hidden` ones go off it.
+ *  Unchanged when it holds them already. */
+export const withLocalCards = (
+    marks: CardMarks,
+    shown: readonly string[],
+    hidden: readonly string[] = [],
+): CardMarks => {
+    const local = [...shown, ...hidden].filter((id) => !marks.localIds.includes(id));
+    const removed = hidden.filter((id) => !marks.removedIds.includes(id));
+
+    return local.length === 0 && removed.length === 0
+        ? marks
+        : {
+              ...marks,
+              localIds: [...marks.localIds, ...local],
+              removedIds: [...marks.removedIds, ...removed],
+          };
+};
+
+/** `marks` with the harness cards' pins taken from the manifest's (`pins`),
+ *  the pins of the cards `marks` holds local kept (withHarnessPins).
+ *  Unchanged when they already agree. */
+export const withManifestPins = (
+    marks: CardMarks,
+    pins: readonly string[],
+    widgets: readonly { id: string }[],
+): CardMarks => {
+    const pinnedIds = withHarnessPins(marks.pinnedIds, pins, (id) =>
+        isHarnessCard({ widgets, localIds: marks.localIds }, id),
+    );
+
+    return pinnedIds === marks.pinnedIds ? marks : { ...marks, pinnedIds };
+};

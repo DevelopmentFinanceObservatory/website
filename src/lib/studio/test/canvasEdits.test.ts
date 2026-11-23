@@ -132,13 +132,14 @@ const pinnedManifest = (revision: number, blocks: [string, boolean][]): Composit
 });
 
 test("a harness card's pin is the manifest's, shown at once and settled by the answer", () => {
-    const canvas = takeManifest(
-        null,
-        pinnedManifest(3, [
-            ['cmp_a', true],
-            ['cmp_b', false],
-        ]),
-    );
+    const canvas =
+        takeManifest(
+            null,
+            pinnedManifest(3, [
+                ['cmp_a', true],
+                ['cmp_b', false],
+            ]),
+        )?.baseline ?? null;
 
     assert.deepEqual(shownPins(canvas, new Map()), ['cmp_a']);
 
@@ -152,38 +153,40 @@ test("a harness card's pin is the manifest's, shown at once and settled by the a
     assert.deepEqual(shownPins(canvas, withPinsSettled(sent, pin)), ['cmp_a']);
 
     // It accepted it: the answer's manifest holds the pin.
-    const answered = takeManifest(
-        canvas,
-        pinnedManifest(4, [
-            ['cmp_a', true],
-            ['cmp_b', true],
-        ]),
-    );
+    const answered =
+        takeManifest(
+            canvas,
+            pinnedManifest(4, [
+                ['cmp_a', true],
+                ['cmp_b', true],
+            ]),
+        )?.baseline ?? null;
 
     assert.deepEqual(shownPins(answered, withPinsSettled(sent, pin)), ['cmp_a', 'cmp_b']);
 });
 
 test('a pin on a card a turn removed rolls back, and Add brings it back as the manifest says', () => {
     // A turn took cmp_b off; the page pinned it before the manifest arrived.
-    const canvas = takeManifest(null, pinnedManifest(5, [['cmp_a', false]]));
+    const canvas = takeManifest(null, pinnedManifest(5, [['cmp_a', false]]))?.baseline ?? null;
     const pin: MutationOperation[] = [{ op: 'pin', component_id: 'cmp_b' }];
     const failed = withPinsSettled(withPinsSent(new Map(), pin), pin);
 
     assert.deepEqual(shownPins(canvas, failed), []);
 
-    const added = takeManifest(
-        canvas,
-        pinnedManifest(6, [
-            ['cmp_a', false],
-            ['cmp_b', false],
-        ]),
-    );
+    const added =
+        takeManifest(
+            canvas,
+            pinnedManifest(6, [
+                ['cmp_a', false],
+                ['cmp_b', false],
+            ]),
+        )?.baseline ?? null;
 
     assert.deepEqual(shownPins(added, failed), []);
 });
 
 test('a failed Remove of a pinned card leaves it pinned, and two edits settle in turn', () => {
-    const canvas = takeManifest(null, pinnedManifest(2, [['cmp_a', true]]));
+    const canvas = takeManifest(null, pinnedManifest(2, [['cmp_a', true]]))?.baseline ?? null;
     const remove: MutationOperation[] = [{ op: 'remove', component_id: 'cmp_a' }];
 
     assert.deepEqual(shownPins(canvas, withPinsSettled(withPinsSent(new Map(), remove), remove)), [

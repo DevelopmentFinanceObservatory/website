@@ -393,7 +393,10 @@ const Studio = ({
 
     // Reopen a saved conversation exactly as it was left — same transcript,
     // widgets, pins and card layout; follow-ups keep saving under its id.
-    const openSaved = (stored: SavedConversation) => {
+    // A guest canvas restored after sign-in (`fromGuest`) has no owner until
+    // its first save claims it, and before then the harness state read
+    // answers 404, so the restore reads the harness once that save lands.
+    const openSaved = (stored: SavedConversation, fromGuest = false) => {
         // A fork's inherited turns and cards are marked as such (openedSave).
         const saved = openedSave(stored);
 
@@ -408,7 +411,15 @@ const Studio = ({
         // The harness's copy of the conversation fills in what the snapshot
         // missed: a pending card, a turn that ended or paused after the page
         // left, a turn left running.
-        if (account) {
+        if (account && fromGuest) {
+            const { reattach } = chat;
+
+            void save.whenSaved(saved.id).then((landed) => {
+                if (landed) {
+                    reattach();
+                }
+            });
+        } else if (account) {
             chat.reattach();
         }
 
@@ -440,7 +451,7 @@ const Studio = ({
             const saved = takeGuestSession(() => window.sessionStorage);
 
             if (saved) {
-                openSaved(saved);
+                openSaved(saved, true);
             }
         }, 0);
 
@@ -562,16 +573,17 @@ const Studio = ({
     }, [localCards, addLocalIds]);
 
     // A harness card's pin is the harness manifest's (chat.pins): the
-    // document takes it, keeping the pins of the cards only the page holds.
+    // document takes it, keeping the pins of the cards only the page holds,
+    // the ones the effect above made local included.
     // A legacy canvas, whose manifest has not been taken, keeps the save's.
     const { pins, widgets: chatWidgets } = chat;
-    const { takeHarnessPins, localIds } = doc;
+    const { takeHarnessPins } = doc;
 
     useLayoutEffect(() => {
         if (pins) {
-            takeHarnessPins(pins, (id) => isHarnessCard({ widgets: chatWidgets, localIds }, id));
+            takeHarnessPins(pins, chatWidgets);
         }
-    }, [pins, chatWidgets, localIds, takeHarnessPins]);
+    }, [pins, chatWidgets, takeHarnessPins]);
 
     // The card menu's Remove and Pin. A harness card's edit goes to the
     // harness, whose answer settles it; a legacy canvas shows its pin here

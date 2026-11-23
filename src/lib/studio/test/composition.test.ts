@@ -7,7 +7,11 @@ import {
     legacyHiddenCards,
     restoreCanvas,
     takeManifest,
+    withLocalCards,
+    withManifestPins,
+    withoutRemovedCards,
     type CanvasBaseline,
+    type CardMarks,
     type LegacyLocal,
 } from '../composition.ts';
 import type { CompositionManifest, MutationOperation } from '../wire.ts';
@@ -30,14 +34,15 @@ const manifest = (
     counts: { all: ids.length, stats: 0, charts: ids.length, tables: 0, notes: 0 },
 });
 
+// A harness session whose turns drew none of the cards a test's save holds.
+const NONE_DRAWN = Promise.resolve(new Set<string>());
+
 const base: CanvasBaseline = { compositionId: 'cps_1', revision: 3, ids: ['cmp_1', 'cmp_2'] };
 
 test('a newer manifest of the same composition becomes the baseline', () => {
     assert.deepEqual(takeManifest(base, manifest(4, [])), {
-        compositionId: 'cps_1',
-        revision: 4,
-        ids: [],
-        pinned: [],
+        baseline: { compositionId: 'cps_1', revision: 4, ids: [], pinned: [] },
+        local: [],
     });
 });
 
@@ -47,11 +52,17 @@ test('a manifest no newer than the baseline arrived late and changes nothing', (
 });
 
 test('another composition, a legacy canvas or no baseline starts afresh', () => {
-    assert.deepEqual(takeManifest(base, manifest(1, ['cmp_9'], 'cps_fork'))?.ids, ['cmp_9']);
-    assert.deepEqual(takeManifest(null, manifest(1, []))?.ids, []);
+    assert.deepEqual(takeManifest(base, manifest(1, ['cmp_9'], 'cps_fork'))?.baseline.ids, [
+        'cmp_9',
+    ]);
+    assert.deepEqual(takeManifest(null, manifest(1, [])), {
+        baseline: { compositionId: 'cps_1', revision: 1, ids: [], pinned: [] },
+        local: [],
+    });
+    // createLegacyCanvas decides which of a legacy canvas's cards stay local.
     assert.deepEqual(
-        takeManifest({ compositionId: null, revision: -1, ids: ['cmp_1'] }, manifest(0, []))?.ids,
-        [],
+        takeManifest({ compositionId: null, revision: -1, ids: ['cmp_1'] }, manifest(0, [])),
+        { baseline: { compositionId: 'cps_1', revision: 0, ids: [], pinned: [] }, local: [] },
     );
 });
 
@@ -114,6 +125,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
         ids: restored.ids,
         hidden,
         pinned: save.pinnedIds,
+        produced: NONE_DRAWN,
         mutate: async (operations, expectedRevision) => {
             sent.push(operations);
             expected.push(expectedRevision);
@@ -155,6 +167,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
         ids: restored.ids,
         hidden,
         pinned: save.pinnedIds,
+        produced: NONE_DRAWN,
         mutate: async () => null,
         onTake: (answer) => taken.push(answer),
         onLocal: () => assert.fail('a legacy canvas that stays legacy adopts no card'),
@@ -185,9 +198,10 @@ test('a legacy canvas keeps the inherited cards its session never held as local 
         ids: restored.ids,
         hidden: legacyHiddenCards(save, restored, new Map()),
         pinned: [],
+        produced: NONE_DRAWN,
         mutate: async () => assert.fail('the harness holds no card the page hides'),
         onTake: (answer) => {
-            canvas = takeManifest(canvas, answer);
+            canvas = takeManifest(canvas, answer)?.baseline ?? canvas;
         },
         onLocal: (cards) => local.push(...cards.shown),
         onChange: () => {},
@@ -238,6 +252,7 @@ test('a legacy canvas removes only the cards its save hid, at the revision it hi
         ids: restored.ids,
         hidden,
         pinned: [],
+        produced: NONE_DRAWN,
         mutate: async (operations, expectedRevision) => {
             sent.push([operations, expectedRevision]);
 
@@ -276,9 +291,10 @@ test("a legacy fork's hidden inherited cards become local and stay off the canva
         ids: restored.ids,
         hidden: legacyHiddenCards(save, restored, new Map([['cmp_old_hidden', 3]])),
         pinned: save.pinnedIds,
+        produced: NONE_DRAWN,
         mutate: async () => assert.fail('the harness holds no card the page hides'),
         onTake: (answer) => {
-            canvas = takeManifest(canvas, answer);
+            canvas = takeManifest(canvas, answer)?.baseline ?? canvas;
         },
         onLocal: (cards) => local.push(cards),
         onChange: () => {},
@@ -321,6 +337,7 @@ test("a legacy canvas pins the harness cards its save showed pinned, against the
         ids: restored.ids,
         hidden: legacyHiddenCards(save, restored, new Map([['cmp_hidden', 1]])),
         pinned: save.pinnedIds,
+        produced: NONE_DRAWN,
         mutate: async (operations, expectedRevision) => {
             sent.push([operations, expectedRevision]);
 
@@ -348,6 +365,7 @@ test("a legacy canvas pins the harness cards its save showed pinned, against the
         ids: restored.ids,
         hidden: new Map(),
         pinned: save.pinnedIds,
+        produced: NONE_DRAWN,
         mutate: async () => assert.fail('nothing to bring to the harness'),
         onTake: () => {},
         onLocal: () => {},
@@ -374,7 +392,7 @@ test('takeManifest keeps which harness cards the manifest pins', () => {
                 ...block,
                 pinned: block.component_id === 'cmp_b',
             })),
-        })?.pinned,
+        })?.baseline.pinned,
         ['cmp_b'],
     );
 });
@@ -396,6 +414,7 @@ test('an inherited card taken off a legacy fork stays local once the harness ref
         ids: restored.ids,
         hidden: legacyHiddenCards(save, restored, new Map()),
         pinned: [],
+        produced: NONE_DRAWN,
         mutate: async () => assert.fail('the harness holds no card the page hides'),
         onTake: () => {},
         onLocal: (cards) => local.push(cards),
@@ -418,6 +437,7 @@ test('an inherited card taken off a legacy fork stays local once the harness ref
         ids: restored.ids,
         hidden: new Map(),
         pinned: [],
+        produced: NONE_DRAWN,
         mutate: async () => assert.fail('nothing to bring to the harness'),
         onTake: () => {},
         onLocal: (cards) => local.push(cards),
@@ -429,4 +449,135 @@ test('an inherited card taken off a legacy fork stays local once the harness ref
     after.unheld('cmp_inherited');
 
     assert.deepEqual(local.at(-1), { shown: [], hidden: ['cmp_inherited'] });
+});
+
+test("a new composition leaves the old baseline's cards it lacks local", () => {
+    // The harness started a new session under the same id: its manifest holds
+    // its own card and none of the old session's.
+    assert.deepEqual(takeManifest(base, manifest(1, ['cmp_2', 'cmp_9'], 'cps_new'))?.local, [
+        'cmp_1',
+    ]);
+    // Within one composition a card the manifest lacks is one the harness removed.
+    assert.deepEqual(takeManifest(base, manifest(4, ['cmp_2']))?.local, []);
+});
+
+test('a refused remove of a card the baseline holds drops it, so the next manifest is taken', () => {
+    const pinned: CanvasBaseline = { ...base, pinned: ['cmp_1'] };
+    const dropped = withoutRemovedCards(pinned, ['cmp_1']);
+
+    assert.deepEqual(dropped, { compositionId: 'cps_1', revision: 3, ids: ['cmp_2'], pinned: [] });
+    assert.deepEqual(takeManifest(dropped, manifest(4, ['cmp_2']))?.baseline.ids, ['cmp_2']);
+    // A card the baseline never held, and a legacy baseline, are not the harness's removals.
+    assert.equal(withoutRemovedCards(base, ['cmp_inherited']), null);
+    assert.equal(
+        withoutRemovedCards({ compositionId: null, revision: -1, ids: ['cmp_1'] }, ['cmp_1']),
+        null,
+    );
+});
+
+test('a legacy canvas leaves off a shown card a harness turn drew and the manifest lacks', async () => {
+    // Saved showing an inherited card and two of the session's own; since
+    // then the user, in another tab, took cmp_removed off.
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [
+            { kind: 'text' as const, id: 'cmp_inherited', title: '', body: '', turn: 1 },
+            { kind: 'text' as const, id: 'cmp_removed', title: '', body: '', turn: 2 },
+            { kind: 'text' as const, id: 'cmp_kept', title: '', body: '', turn: 2 },
+        ],
+        pinnedIds: ['cmp_inherited'],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    const local: LegacyLocal[] = [];
+    let canvas: CanvasBaseline | null = restored;
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: legacyHiddenCards(save, restored, new Map()),
+        pinned: [],
+        produced: Promise.resolve(new Set(['cmp_removed', 'cmp_kept'])),
+        mutate: async () => assert.fail('nothing to bring to the harness'),
+        onTake: (answer) => {
+            canvas = takeManifest(canvas, answer)?.baseline ?? canvas;
+        },
+        onLocal: (cards) => local.push(cards),
+        onChange: () => {},
+    });
+
+    await legacy.offer(manifest(6, ['cmp_kept']));
+
+    assert.deepEqual(local, [{ shown: ['cmp_inherited'], hidden: [] }]);
+    assert.deepEqual(
+        canvasWidgetsOf({ ...save, canvas, localIds: local[0]!.shown }).map((widget) => widget.id),
+        ['cmp_inherited', 'cmp_kept'],
+    );
+});
+
+test('a legacy canvas takes no manifest before the cards its turns drew are read', async () => {
+    const save = {
+        sessionId: 'conversation_1',
+        widgets: [{ kind: 'text' as const, id: 'cmp_own', title: '', body: '', turn: 1 }],
+        pinnedIds: [],
+        removedIds: [],
+    };
+    const restored = restoreCanvas(save)!;
+    let read: (ids: ReadonlySet<string> | null) => void = () => {};
+    const taken: number[] = [];
+    const legacy = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: new Map(),
+        pinned: [],
+        produced: new Promise((resolve) => {
+            read = resolve;
+        }),
+        mutate: async () => assert.fail('nothing to bring to the harness'),
+        onTake: (answer) => taken.push(answer.revision),
+        onLocal: () => assert.fail('the harness drew every card of this save'),
+        onChange: () => {},
+    });
+
+    // A stream frame's manifest, then a newer one, arrive before the read.
+    const first = legacy.offer(manifest(2, []));
+
+    await legacy.offer(manifest(3, []));
+    assert.deepEqual(taken, []);
+    read(new Set(['cmp_own']));
+    await first;
+    assert.deepEqual(taken, [3]);
+
+    // A read that failed leaves the canvas legacy.
+    const failed = createLegacyCanvas({
+        ids: restored.ids,
+        hidden: new Map(),
+        pinned: [],
+        produced: Promise.resolve(null),
+        mutate: async () => assert.fail('nothing to bring to the harness'),
+        onTake: () => assert.fail('a canvas whose cards were not read stays legacy'),
+        onLocal: () => assert.fail('a canvas whose cards were not read adopts no card'),
+        onChange: () => {},
+    });
+
+    await failed.offer(manifest(2, []));
+    await failed.offer(manifest(3, []));
+});
+
+test("an inherited card made local in the render that takes the manifest's pins keeps its pin", () => {
+    // A legacy fork's first manifest: in one render the page learns the
+    // inherited card is local and takes the manifest's pins, which lack it.
+    const widgets = [{ id: 'cmp_inherited' }, { id: 'cmp_own' }];
+    const updates = [
+        (marks: CardMarks) => withLocalCards(marks, ['cmp_inherited']),
+        (marks: CardMarks) => withManifestPins(marks, ['cmp_own'], widgets),
+    ];
+    const marks = updates.reduce((prev, update) => update(prev), {
+        pinnedIds: ['cmp_inherited'],
+        removedIds: [],
+        localIds: [],
+    } as CardMarks);
+
+    assert.deepEqual(marks, {
+        pinnedIds: ['cmp_inherited', 'cmp_own'],
+        removedIds: [],
+        localIds: ['cmp_inherited'],
+    });
 });

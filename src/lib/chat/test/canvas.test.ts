@@ -54,7 +54,10 @@ test('cards of earlier turns stay on the canvas while the manifest holds them', 
 });
 
 test('a card the model took off leaves the canvas with the manifest that dropped it', () => {
-    const taken = takeManifest(baseline(['cmp_first', 'cmp_second']), manifest(3, ['cmp_first']));
+    const taken = takeManifest(
+        baseline(['cmp_first', 'cmp_second']),
+        manifest(3, ['cmp_first']),
+    )?.baseline;
 
     assert.deepEqual(ids(state({ canvas: taken })), ['cmp_first', 'text_local']);
 });
@@ -89,8 +92,8 @@ test("a fork's inherited cards show beside the manifest of its own session", () 
 
 test('a card the model takes off and draws again shows again', () => {
     const drawn = baseline(['cmp_first', 'cmp_second']);
-    const off = takeManifest(drawn, manifest(3, ['cmp_first']));
-    const back = takeManifest(off, manifest(4, ['cmp_first', 'cmp_second']));
+    const off = takeManifest(drawn, manifest(3, ['cmp_first']))?.baseline ?? null;
+    const back = takeManifest(off, manifest(4, ['cmp_first', 'cmp_second']))?.baseline;
 
     // A save that listed the model's removal among the user's still shows it.
     assert.deepEqual(ids(state({ canvas: back, removedIds: ['cmp_second'] })), [

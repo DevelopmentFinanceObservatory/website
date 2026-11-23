@@ -71,7 +71,10 @@ export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
  * fork's inherited card (`localIds`) live only on the page.
  */
 export const isHarnessCard = (
-    { widgets, localIds = [] }: Pick<CanvasState, 'widgets' | 'localIds'>,
+    {
+        widgets,
+        localIds = [],
+    }: { widgets: readonly { id: string }[]; localIds?: readonly string[] },
     id: string,
 ): boolean => widgets.some((widget) => widget.id === id) && !localIds.includes(id);
 
