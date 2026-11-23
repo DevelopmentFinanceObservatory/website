@@ -620,9 +620,10 @@ test(
                     response.setHeader('content-type', 'application/json');
 
                     if (path.startsWith('/upload/')) {
-                        const boundary = /boundary=(.+)$/.exec(
-                            request.headers['content-type'] ?? '',
-                        )?.[1];
+                        const contentType = request.headers['content-type'] ?? '';
+                        const boundary = contentType.slice(
+                            contentType.indexOf('boundary=') + 'boundary='.length,
+                        );
                         const parts = Buffer.concat(chunks).toString('utf8').split(`--${boundary}`);
 
                         insert = JSON.parse(parts[1]!.split('\r\n\r\n')[1]!);
