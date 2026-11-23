@@ -1,5 +1,7 @@
-// The shape of _data/thresholds.json's `data`, shared by the Python data step
-// (which writes it), the classification module and the page's components.
+// The shape of the page's thresholds data, shared by the Python steps (which write each base
+// year as a `ViewData`), the classification module and the page's components. The data step
+// commits the 2024 view to thresholds-2024.json, the page's build makes the 2025 view from DFO
+// (_lib/build.ts), and `thresholdsData` (_lib/views.ts) puts them together as `ThresholdsData`.
 // Components import it with `import type`, so it never reaches the bundle.
 //
 // Money is in current US dollars. Ratios are computed from these amounts by
@@ -98,4 +100,12 @@ export type ThresholdsData = {
     /** Countries whose 2024 rebuilt group equals FDL's published group, from the reproduction check. */
     fdlMatch?: { matched: number; total: number };
     countries: Country[];
+};
+
+/** One base year as a Python step writes it (`pipeline.build.view_data`): its releases and each
+ *  country's record, in the order of FDL's annex. */
+export type ViewData = {
+    year: number;
+    vintage: Vintage;
+    countries: (Omit<Country, 'bases'> & { base: BaseYear })[];
 };

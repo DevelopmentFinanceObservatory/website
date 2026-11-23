@@ -6,7 +6,8 @@
 // pinned, and a live ref names only versions that refs.json pins. A page prints
 // its source line from these fields, and CI cannot refetch them, so a file
 // without them fails here. A page with `_lib/build.ts` reads its figures from
-// DFO at build time, so its _data/ holds only refs.json and live-refs.json.
+// DFO at build time, so its _data/ holds its refs files and data from outside
+// DFO, each of which names its sources in `provenance.outside`.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -57,7 +58,7 @@ for (const file of dataFiles) {
 
     const readsAtBuild = existsSync(path.join(path.dirname(file), '..', '_lib', 'build.ts'));
     const found = [
-        ...(readsAtBuild ? buildPageProblems(name) : []),
+        ...(readsAtBuild ? buildPageProblems(name, parsed) : []),
         ...problems(parsed, name, pinned),
     ];
 

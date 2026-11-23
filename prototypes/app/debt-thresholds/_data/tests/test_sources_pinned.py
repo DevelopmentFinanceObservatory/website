@@ -143,3 +143,124 @@ def test_pinned_ref_refuses_an_unpinned_member() -> None:
     reads = Reads(Manifests(), mode=Mode.PLAIN, committed=committed)
     with pytest.raises(DataError, match="not pinned"):
         reads.pinned_ref("k")
+
+
+def stored(members: list, freshness: str | None) -> SimpleNamespace:
+    """A dataset a `latest="stored"` read returns, with `members` and `freshness`."""
+    return SimpleNamespace(ref=SimpleNamespace(members=members), freshness=freshness)
+
+
+def member(spec_id: str, version: str) -> SimpleNamespace:
+    return SimpleNamespace(spec=SimpleNamespace(spec_id=spec_id), content_version=version)
+
+
+def derived(*roots: tuple[str, str]) -> SimpleNamespace:
+    return SimpleNamespace(
+        roots=[SimpleNamespace(spec_id=spec_id, content_version=cv) for spec_id, cv in roots]
+    )
+
+
+class StoredClient:
+    """Answers each fetch with the next of `served`, and records what was fetched."""
+
+    def __init__(self, *served: SimpleNamespace) -> None:
+        self.served = list(served)
+        self.calls: list[tuple] = []
+
+    def fetch(self, target: object, **options: object) -> SimpleNamespace:
+        self.calls.append((target, options))
+        return self.served.pop(0)
+
+
+def test_stored_reads_the_newest_stored_version_and_records_versions_and_freshness() -> None:
+    committed = {"k": {"ref": {"members": ["a"]}, "provenance": {}}}
+    client = StoredClient(stored([member("spec_1", "cv_new")], "pending"))
+    reads = Reads(client, mode=Mode.STORED, committed=committed)
+    reads.fetch("k", never)
+    assert client.calls == [
+        (SimpleNamespace(members=["a"]), {"latest": "stored", "progress": False})
+    ]
+    assert reads.sources == {
+        "k": {
+            "versions": [{"specId": "spec_1", "contentVersion": "cv_new"}],
+            "freshness": "pending",
+        }
+    }
+    # A stored read pins nothing and records no ref for refs.json.
+    reads.keep()
+    assert reads.records == {}
+    assert reads.pins == 0
+
+
+def test_stored_analyse_runs_a_recipe_and_keeps_each_root_once_and_the_worst_freshness(
+    monkeypatch,
+) -> None:
+    steps: list = []
+
+    class Recipe:
+        def __init__(self, ref: object) -> None:
+            self.ref = ref
+
+        def filter(self, **arguments: object) -> tuple:
+            steps.append(("filter", arguments))
+            return ("recipe", self.ref, "filter")
+
+        def aggregate(self, **arguments: object) -> tuple:
+            steps.append(("aggregate", arguments))
+            return ("recipe", self.ref, "aggregate")
+
+    monkeypatch.setattr(
+        sys.modules["dfo"], "analysis", SimpleNamespace(recipe=Recipe), raising=False
+    )
+    client = StoredClient(
+        stored([derived(("spec_1", "cv_1"))], "current"),
+        stored([derived(("spec_1", "cv_1"), ("spec_2", "cv_2"))], "stale"),
+    )
+    reads = Reads(client, mode=Mode.STORED, committed={})
+    reads.analyse("k", "ref", "filter", keep={"origin": "x"})
+    reads.analyse("k", "ref", "aggregate", by="destination")
+    assert steps == [("filter", {"keep": {"origin": "x"}}), ("aggregate", {"by": "destination"})]
+    assert [call[1] for call in client.calls] == [{"latest": "stored"}] * 2
+    assert reads.sources["k"] == {
+        "versions": [
+            {"specId": "spec_1", "contentVersion": "cv_1"},
+            {"specId": "spec_2", "contentVersion": "cv_2"},
+        ],
+        "freshness": "stale",
+    }
+
+
+def test_a_read_without_a_stated_freshness_leaves_its_key_unknown() -> None:
+    client = StoredClient(stored([member("s", "a")], "current"), stored([member("s", "a")], None))
+    reads = Reads(client, mode=Mode.STORED, committed={"k": {"ref": {}, "provenance": {}}})
+    reads.fetch("k", never)
+    reads.fetch("k", never)
+    assert reads.sources["k"]["freshness"] is None
+
+
+def test_other_modes_analyse_on_the_refs_own_version() -> None:
+    analysis = SimpleNamespace(filter=lambda ref, **arguments: ("filtered", ref, arguments))
+    reads = Reads(SimpleNamespace(analysis=analysis), mode=Mode.PLAIN, committed={})
+    assert reads.analyse("k", "ref", "filter", keep={"origin": "x"}) == (
+        "filtered",
+        "ref",
+        {"keep": {"origin": "x"}},
+    )
+    assert reads.sources == {}
+
+
+def test_a_refresh_keeps_the_reading_the_last_search_recorded() -> None:
+    committed = {"k": {"ref": {"r": "old"}, "provenance": {}, "reading": {"code": "X"}}}
+    reads = Reads(Client(dataset("new", pinned=False)), mode=Mode.REFRESH, committed=committed)
+    reads.fetch("k", never)
+    reads.keep()
+    assert reads.records["k"]["reading"] == {"code": "X"}
+    assert reads.records["k"]["ref"] == {"r": "new"}
+
+
+def test_a_search_records_its_reading_beside_the_ref() -> None:
+    committed = {"k": {"ref": {"r": "old"}, "provenance": {}, "reading": {"code": "old"}}}
+    reads = Reads(Client(dataset("unused", pinned=True)), mode=Mode.SEARCH, committed=committed)
+    reads.fetch("k", lambda: ({"code": "new"}, dataset("built", pinned=False)))
+    reads.keep()
+    assert reads.records["k"]["reading"] == {"code": "new"}

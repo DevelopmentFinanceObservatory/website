@@ -1,27 +1,92 @@
 // Net transfers on external debt, grouped the way the scatter groups countries. Pure
-// functions over `_data/transfers.json`, so the chart, its heading and the tests read
-// the same sums. Only type imports, which keeps the module loadable by `node --test`.
+// functions over the transfers rows the build reads (_lib/build.ts) and the members in
+// `_data/groups.csv`, so the chart, its heading and the tests read the same sums. Only type
+// imports, which keeps the module loadable by `node --test`.
 import type { Group } from './thresholds.ts';
 
-/** One member of the 75, as `_data/transfers.json` keeps it: the rows carry no names or groups. */
+/** One member of the 75, as `_data/groups.csv` lists it: the rows carry no names or groups. */
 export type TransferMember = { iso3: string; name: string; group: string };
 
-/** The `data` of `_data/transfers.json`: the membership and the release label. */
-export type TransfersMembers = {
-    /** The IDS release the values come from, e.g. "November 2026". */
-    release: string;
-    countries: TransferMember[];
+/** The groups `_data/groups.csv` may name, as `_data/pipeline/transfers.py`'s TRANSFER_GROUPS. */
+export const TRANSFER_GROUPS: ReadonlySet<string> = new Set([
+    'lower-risk',
+    'illiquid-issuer',
+    'illiquid-no-issuer',
+    'insolvent',
+    'not-in-dsa',
+]);
+
+/** The fields of one CSV line, with RFC 4180 quoting. */
+const csvFields = (line: string): string[] => {
+    const fields: string[] = [];
+    let field = '';
+    let quoted = false;
+
+    for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+
+        if (quoted && char === '"' && line[i + 1] === '"') {
+            field += '"';
+            i += 1;
+        } else if (char === '"') {
+            quoted = !quoted;
+        } else if (char === ',' && !quoted) {
+            fields.push(field);
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+
+    return [...fields, field];
 };
 
-/** The members with their net transfers by year, built in the browser from the transfers ref. */
-export type TransfersData = {
-    /** The release label the chart's source line shows: the committed release, or a label
-     *  naming the DFO's newest version when DFO serves another version than the ref's. */
-    release: string;
+/**
+ * Port of `parse_groups`: the members of `_data/groups.csv`'s text, skipping the `#` source
+ * comment.
+ *
+ * @throws When the header is not `iso3,name,group`, a line has another number of fields, or a
+ *   member's group is not one of TRANSFER_GROUPS.
+ */
+export const parseGroups = (text: string): TransferMember[] => {
+    const [header, ...lines] = text
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== '' && !line.startsWith('#'));
+
+    if (header !== 'iso3,name,group') {
+        throw new Error(`groups.csv starts ${JSON.stringify(header)}, not iso3,name,group.`);
+    }
+
+    return lines.map((line) => {
+        const fields = csvFields(line);
+        const [iso3, name, group] = fields;
+
+        if (
+            fields.length !== 3 ||
+            iso3 === undefined ||
+            name === undefined ||
+            group === undefined
+        ) {
+            throw new Error(`groups.csv has a line of ${fields.length} fields: ${line}`);
+        }
+
+        if (!TRANSFER_GROUPS.has(group)) {
+            throw new Error(`groups.csv names an unknown group: ${group}`);
+        }
+
+        return { iso3, name, group };
+    });
+};
+
+/** The members with their net transfers by year, from the transfers rows. */
+export type TransferSeries = {
     years: number[];
     /** Every member, in membership order, with its net transfers by year, null where missing. */
     countries: (TransferMember & { values: (number | null)[] })[];
 };
+
+/** What the section draws: the series and the IDS release they come from, e.g. "November 2026". */
+export type TransfersData = TransferSeries & { release: string };
 
 /** A transfers row. The port reads `financingRecipient`, `time_period` and `value`. */
 export type TransferRow = Record<string, unknown>;
@@ -99,16 +164,15 @@ export const lastActualYear = (values: Map<string, Map<number, number>>): number
 /** Port of `transfers_by_country`: the members' values on the years `FIRST_YEAR` to the last actual one. */
 export const transfersByCountry = (
     rows: TransferRow[],
-    { release, countries }: TransfersMembers,
-): TransfersData => {
+    members: TransferMember[],
+): TransferSeries => {
     const values = valuesByCountry(rows);
     const last = lastActualYear(values);
     const years = Array.from({ length: last - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i);
 
     return {
-        release,
         years,
-        countries: countries.map((member) => ({
+        countries: members.map((member) => ({
             ...member,
             values: years.map((year) => values.get(member.iso3)?.get(year) ?? null),
         })),

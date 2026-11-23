@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 
 from pipeline.config import View
 from pipeline.countries import ISO3
@@ -84,3 +86,22 @@ def weo_panel(rows: Iterable[tuple[str, str, int, float]]) -> dict[str, dict[str
             if row_code == code:
                 out[iso3][key][int(year)] = float(amount)
     return out
+
+
+def read_weo_file(path: Path) -> dict[str, dict[str, Series]]:
+    """Return the WEO series a data step committed to `path`, by ISO3 then key, years as ints.
+
+    A series the release lacks for a country reads as empty, as in `weo_panel`.
+    Raises `DataError` when the file lacks a country in the note.
+    """
+    data = json.loads(path.read_text())["data"]
+    lacking = [iso3 for iso3 in ISO3 if iso3 not in data]
+    if lacking:
+        raise DataError(f"{path.name} lacks {', '.join(lacking)}; run the data step.")
+    return {
+        iso3: {
+            key: {int(year): float(value) for year, value in data[iso3].get(key, {}).items()}
+            for key in WEO_SERIES
+        }
+        for iso3 in ISO3
+    }

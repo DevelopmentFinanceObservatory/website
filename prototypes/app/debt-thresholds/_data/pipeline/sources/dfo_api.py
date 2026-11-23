@@ -135,11 +135,17 @@ def fetch_dfo(view: View, *, reads: Reads, ledger: Ledger) -> tuple[Panel, dict[
         build = partial(build_reading, reads.client, key, places, window)
         if key in CHINA_KEYS:
             # The step needs China's rows and, for the guard, the creditors' sum: DFO
-            # cuts both from the pinned ref, so a plain run downloads neither in full.
-            ref = reads.pinned_ref(key) if reads.mode is Mode.PLAIN else reads.fetch(key, build).ref
+            # cuts both from the ref, so a plain or stored run downloads neither in full.
+            ref = (
+                reads.pinned_ref(key)
+                if reads.mode is Mode.PLAIN
+                else reads.committed_ref(key)
+                if reads.mode is Mode.STORED
+                else reads.fetch(key, build).ref
+            )
             member = ref.members[0]
             check_roles(key, member.spec)
-            frame = by_creditor(reads.client, key, ref, creditor_sums)
+            frame = by_creditor(reads, key, ref, creditor_sums)
             put(collected, _rows(frame), CHINA_KEYS[key])
         else:
             data = reads.fetch(key, build)
@@ -190,21 +196,22 @@ def check_roles(key: str, spec: dfo.Spec) -> None:
 
 
 def by_creditor(
-    client: dfo.Client, key: str, ref: dfo.DatasetRef, creditor_sums: dict[str, Series]
+    reads: Reads, key: str, ref: dfo.DatasetRef, creditor_sums: dict[str, Series]
 ) -> pd.DataFrame:
-    """Return China's rows of a by-creditor reading, cut by DFO from its pinned ref.
+    """Return China's rows of a by-creditor reading, cut by DFO from `ref`.
 
     For `service_by_creditor`, also store each country-year's sum over single
     creditors in `creditor_sums`. Raises `DataError` when the IMF is among the
-    creditors, since PPG debt leaves IMF credit out.
+    creditors, since PPG debt leaves IMF credit out. `reads` runs each cut on
+    `ref`'s version, or in `stored` mode on the newest DFO stores.
     """
-    if len(client.analysis.filter(ref, keep={"origin": IMF})):
+    if len(reads.analyse(key, ref, "filter", keep={"origin": IMF})):
         raise DataError(f"the IMF is among the creditors in {key}.")
     if key == "service_by_creditor":
-        sums = _with_years(client.analysis.aggregate(ref, by="destination").to_pandas(), key)
+        sums = _with_years(reads.analyse(key, ref, "aggregate", by="destination").to_pandas(), key)
         for iso3, year, total in _rows(sums):
             creditor_sums[iso3][int(year)] = float(total)
-    return _with_years(client.analysis.filter(ref, keep={"origin": CHINA}).to_pandas(), key)
+    return _with_years(reads.analyse(key, ref, "filter", keep={"origin": CHINA}).to_pandas(), key)
 
 
 def _with_years(frame: pd.DataFrame, key: str) -> pd.DataFrame:
@@ -220,7 +227,7 @@ def reading_record(answer: dfo.Answer) -> dict:
     """Return the readable record of Search's reading of one series code.
 
     It keeps the code asked, the roles left open, Search's sentence, the source
-    codes the reading holds and the spec; `readings.json` commits it.
+    codes the reading holds and the spec; refs.json keeps it beside the read's ref.
     """
     part = answer.raw["parts"][0]
     spec = part["spec"]
@@ -279,10 +286,8 @@ def put(collected: Collected, rows: Iterable[tuple[str, int, float]], key: str) 
         collected[iso3][key][int(year)] = float(amount)
 
 
-def ids_release() -> str:
+def ids_release(client: dfo.Client) -> str:
     """Return the IDS release the DFO holds, as a month and year, from its last refresh date."""
-    import dfo
-
-    raw = dict[str, Any](dfo.lookup.node(IDS_NODE).raw)
+    raw = dict[str, Any](client.lookup.node(IDS_NODE).raw)
     refreshed = raw["provenance"]["last_data_refresh_date"]
     return date.fromisoformat(refreshed).strftime("%B %Y")

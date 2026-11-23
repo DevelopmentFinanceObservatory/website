@@ -3,7 +3,7 @@
 // its inline metadata pins. The build runs no data step. Its own DFO reads run
 // in scripts/read.mts. A step rewrites the files git keeps under _data/: the
 // refs the build reads (refs.json, live-refs.json), and for debt-thresholds
-// the figures its page imports.
+// the data from outside DFO its build reads beside them.
 // Arguments after the slug go to every step: `pnpm data <slug> --refresh`.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

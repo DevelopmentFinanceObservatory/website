@@ -2,29 +2,8 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pipeline.config import View
 
 type Record = dict[str, object]
-
-QUERY = (
-    "External public debt (PPG, and IMF credit for service): stock, service, principal "
-    "and disbursements by creditor group, and GDP, for the 58 countries in "
-    "FDL's March 2026 note, 2015 to 2031"
-)
-
-
-def citation(views: "Sequence[View]") -> str:
-    """Return the citation line for thresholds.json and inputs.json, from the views' releases."""
-    old, current = views
-    return (
-        f"World Bank International Debt Statistics ({old.ids} and {current.ids} "
-        f"releases; {current.ids} read through the Development Finance Observatory) "
-        f"and IMF World Economic Outlook ({old.weo[0]} {old.weo[1]} and "
-        f"{current.weo[0]} {current.weo[1]})"
-    )
 
 
 class Ledger:
@@ -70,15 +49,17 @@ def base_provenance(*, sdk_version: str, query: str, retrieved: str) -> dict:
     return {"sdk": f"development-finance=={sdk_version}", "query": query, "retrieved": retrieved}
 
 
-def envelope_provenance(ledger: Ledger, *, sdk_version: str, retrieved: str, citation: str) -> dict:
-    """Return the provenance block of thresholds.json and inputs.json.
+def outside_provenance(
+    preloads: Sequence[Record], *, sdk_version: str, query: str, retrieved: str
+) -> dict:
+    """Return the provenance block of a committed file whose data comes from outside DFO.
 
-    `retrieved` is the UTC stamp of the run that pinned the refs. `dfo` lists each
-    DFO read, whose ref and provenance refs.json holds.
+    `outside` names each source, from the `preloads` the file was built on, which
+    `pnpm check:data` requires of every committed data file a build-read page
+    keeps beside its refs. `retrieved` is the UTC stamp of the run that pinned the refs.
     """
     return {
-        **base_provenance(sdk_version=sdk_version, query=QUERY, retrieved=retrieved),
-        "citation": citation,
-        "dfo": list(ledger.reads),
-        "preloads": list(ledger.preloads),
+        **base_provenance(sdk_version=sdk_version, query=query, retrieved=retrieved),
+        "outside": list(dict.fromkeys(str(preload["name"]) for preload in preloads)),
+        "preloads": list(preloads),
     }

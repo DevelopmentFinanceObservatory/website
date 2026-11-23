@@ -6,13 +6,13 @@ from pipeline.output import write_envelope, write_text
 
 DATA = Path(__file__).resolve().parent.parent
 # The committed output by default; set BASELINE_THRESHOLDS to compare another copy.
-BASELINE = Path(os.environ.get("BASELINE_THRESHOLDS", DATA / "thresholds.json"))
+BASELINE = Path(os.environ.get("BASELINE_THRESHOLDS", DATA / "thresholds-2024.json"))
 
 
 def test_write_envelope_reproduces_baseline_bytes(tmp_path):
     original = BASELINE.read_bytes()
     envelope = json.loads(original)
-    target = tmp_path / "thresholds.json"
+    target = tmp_path / BASELINE.name
     write_envelope(target, envelope["provenance"], envelope["data"])
     assert target.read_bytes() == original
 

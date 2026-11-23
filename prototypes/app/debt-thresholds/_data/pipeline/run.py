@@ -1,34 +1,44 @@
-"""The command line entry point: reads the sources and writes the output files.
+"""The command line entry point of the data step: reads the sources and writes the files git keeps.
 
 `main` is the only place that reads the clock, opens the HTTP clients, sets up
 logging or exits. Every DFO read is a pinned ref (`pipeline.sources.pinned`):
-a plain run fetches the refs refs.json holds and reproduces every output byte
-for byte; `--refresh` fetches their newest versions; `--search` builds each read
-from its series code. Those two pin the new reads and write the refs files only
-after every check passes. `--no-pin` makes a trial run: it pins nothing and
-writes into a new temporary folder, or an `--out` outside `_data`, so the
-committed refs never name unpinned versions. It writes, into the output folder:
+a plain run fetches the refs refs.json holds; `--refresh` fetches their newest
+versions; `--search` builds each read from its series code. Those two pin the
+new reads and write the refs files only after every check passes. `--no-pin`
+makes a trial run: it pins nothing and writes into a new temporary folder, or an
+`--out` outside `_data`, so the committed refs never name unpinned versions.
 
-- `coverage.md`: the countries by series for both base years, the creditor-group
+The step builds both base years, so a refresh pins only reads that pass every
+check, but commits only what comes from outside DFO: the 2024 view, whose IDS
+release the DFO no longer holds, and the inputs the page's build needs beside
+its DFO reads. The build makes the 2025 view from DFO's newest stored data
+(`pipeline.stored`). The step writes, into the output folder:
+
+- `coverage.md`: the countries by series for the 2024 view, the creditor-group
   guard and the lending-terms fallback. The run returns 1 when more than
-  `MAX_MISSING` countries lack a core series in the default year.
-- `inputs.json`: an envelope whose `data` maps base year, then ISO3 code, to the
-  `inputs` dict `pipeline.project.project_service` takes, shaped as that module's
-  docstring describes. Two keys are extra: `contracted_disbursements`, the IDS
-  projected disbursements on commitments already made, by creditor group, from
-  the base year + 1 to the end year; and `projection_error`, the message
-  `project_service` raised for the country, or null.
-- `thresholds.json`: an envelope whose `data` is `ThresholdsData` (`types.ts`).
-- `transfers.json`: the IDS release label and the 75 countries of groups.csv; the
-  page reads their net transfers from the ref in `live-refs.json`.
-- `transfers-fixture.json`: real net-transfers rows and `pipeline.transfers`'
-  output for them, for the page's parity test.
-- `refs.json`: each read's ref and provenance, by read key; `live-refs.json`: the
-  refs the page reads in the browser; `readings.json`: Search's answer to each
-  series code, or the pinned spec, as the last `--search` run made them.
-- `reference.json`: the IDS release label, and the US rate and IDA status each
-  view was built on. A refresh keeps the archived view's values, so the 2024
-  view does not move.
+  `MAX_MISSING` countries lack a core series in it.
+- `thresholds-2024.json`: an envelope whose `data` is the 2024 view as
+  `pipeline.build.view_data` shapes it; the page merges it with the built 2025
+  view into `ThresholdsData` (`types.ts`).
+- `inputs-2024.json`: an envelope whose `data` maps ISO3 code to the `inputs`
+  dict `pipeline.project.project_service` takes for 2024, shaped as that
+  module's docstring describes. Two keys are extra: `contracted_disbursements`,
+  the IDS projected disbursements on commitments already made, by creditor
+  group, from the base year + 1 to the end year; and `projection_error`, the
+  message `project_service` raised for the country, or null.
+- `weo-2025.json`: the IMF WEO series of the 2025 view, by ISO3 code, series key
+  and year, which the build reads beside the DFO.
+- `refs.json`: each DFO read's ref and provenance, and the reading the last
+  search made of it (Search's answer to its series code, or the pinned spec), by
+  read key; the build reads every ref at DFO's newest stored version.
+- `reference.json`: the US rate and IDA status each view is built on. A refresh
+  keeps the archived view's values, so the 2024 view does not move.
+- the page's transfers parity fixture (`TRANSFERS_FIXTURE`): real net-transfers
+  rows and `pipeline.transfers`' output for them, for the page's parity test.
+  A trial run writes it into its output folder.
+
+Each JSON file in `_data` but refs.json names its sources in `provenance.outside`,
+which `pnpm check:data` requires of a build-read page.
 
 IDS projects service on all commitments already made, including the parts not
 yet disbursed, and projects the disbursements of those parts. The schedule in
@@ -49,21 +59,12 @@ from typing import Any
 import dfo
 import httpx
 
-from pipeline.build import build_view
-from pipeline.config import MAX_MISSING, Paths, views
-from pipeline.countries import COUNTRIES
-from pipeline.coverage import coverage_rows, render_coverage
-from pipeline.creditors import estimate_imf_charges, guard_groups
+from pipeline.build import assemble_view, view_data
+from pipeline.config import MAX_MISSING, Paths, View, views
+from pipeline.coverage import listed, render_coverage
 from pipeline.errors import DataError
 from pipeline.output import write_envelope, write_text
-from pipeline.panel import Series
-from pipeline.provenance import (
-    Ledger,
-    base_provenance,
-    citation,
-    envelope_provenance,
-    utc_stamp,
-)
+from pipeline.provenance import Ledger, base_provenance, outside_provenance, utc_stamp
 from pipeline.sources.dfo_api import fetch_dfo, ids_release
 from pipeline.sources.ids_bulk import load_ids
 from pipeline.sources.pinned import Mode, Reads
@@ -74,30 +75,34 @@ from pipeline.sources.reference import (
     snapshot_values,
     view_snapshots,
 )
-from pipeline.sources.transfers import KEY as TRANSFERS_KEY
 from pipeline.sources.transfers import read_net_transfers
-from pipeline.sources.weo import load_weo
-from pipeline.terms import lending_terms
+from pipeline.sources.weo import WEO_SERIES, load_weo
 from pipeline.transfers import (
-    build_transfers,
     countries_without_values,
     parity_fixture,
     parse_groups,
     transfers_by_country,
-    transfers_provenance,
 )
 
 log = logging.getLogger("pipeline")
 
+# The page's transfers parity test reads this fixture, outside `_data`, so
+# `pnpm check:data` does not take its DFO rows for page data.
+TRANSFERS_FIXTURE = Paths.default().out.parent / "_lib" / "fixtures" / "transfers-parity.json"
+
 QUERIES = {
-    "refs.json": "debt-thresholds pinned reads",
-    "live-refs.json": "debt-thresholds browser reads",
-    "readings.json": "debt-thresholds readings: Search's answer to each series code",
+    "refs.json": "debt-thresholds reads, each with the reading the last search made of it",
     "reference.json": (
-        "debt-thresholds reference reads: the IDS release the DFO holds, and FRED GS10 "
-        "and World Bank lending categories by base year"
+        "debt-thresholds reference reads: FRED GS10 and World Bank lending categories by base year"
     ),
-    "transfers-fixture.json": (
+    "thresholds": (
+        "External public debt (PPG, and IMF credit for service): stock, service, principal "
+        "and disbursements by creditor group, GDP and revenue, for the 58 countries in "
+        "FDL's March 2026 note, base year {base}, on the releases FDL used"
+    ),
+    "inputs": "The projection inputs of each of the 58 countries, base year {base}",
+    "weo": "IMF WEO series of the 58 countries for base year {base}: {series}",
+    "fixture": (
         "Net-transfers rows of seven countries, one without rows, from the transfers ref, with "
         "pipeline.transfers' output for them"
     ),
@@ -137,6 +142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(
             "--no-pin writes refs that name unpinned versions; give an --out outside _data"
         )
+    fixture = TRANSFERS_FIXTURE if out == committed_dir else out / TRANSFERS_FIXTURE.name
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter("fetch.py: %(message)s"))
@@ -158,7 +164,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         with dfo.Client(timeout=900.0, max_retries=3) as dfo_client, httpx.Client() as client:
             reads = Reads(dfo_client, mode=mode, committed=refs or {}, pin=not args.no_pin)
-            release = reference_release(reference, mode=mode)
+            release = ids_release(dfo_client)
             snapshots = view_snapshots(
                 views(today, current_ids=release),
                 reference.get("views", {}),
@@ -177,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     retrieved=retrieved,
                 )
             if args.only != "thresholds":
-                build_transfer_file(out, reads=reads, release=release, retrieved=retrieved)
+                build_transfer_fixture(fixture, reads=reads, retrieved=retrieved)
             if mode is not Mode.PLAIN:
                 if code != 0:
                     print("fetch.py: the checks failed, so nothing was pinned.", file=sys.stderr)
@@ -193,7 +199,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             out,
             reads,
             committed=refs or {},
-            reference={"idsRelease": release, "views": snapshots},
+            snapshots=snapshots,
+            both=views(today, current_ids=release),
             retrieved=retrieved,
         )
         log.info("pinned %d new member(s).", reads.pins)
@@ -224,38 +231,32 @@ def read_retrieved(path: Path) -> str:
     return json.loads(path.read_text())["provenance"]["retrieved"]
 
 
-def reference_release(reference: Mapping[str, Any], *, mode: Mode) -> str:
-    """Return the IDS release label: the committed one in a plain run, else the DFO's."""
-    if mode is not Mode.PLAIN:
-        return ids_release()
-    if "idsRelease" not in reference:
-        raise DataError("reference.json has no idsRelease; run with --refresh.")
-    return reference["idsRelease"]
-
-
 def write_refs(
     out: Path,
     reads: Reads,
     *,
     committed: Mapping[str, Any],
-    reference: dict,
+    snapshots: Mapping[str, Snapshot],
+    both: Sequence[View],
     retrieved: str,
 ) -> None:
-    """Write refs.json, live-refs.json, reference.json and, after a search, readings.json."""
+    """Write refs.json, each read with its reading, and reference.json."""
     sdk = dfo.__version__
-    records = {**committed, **reads.records}
-
-    def envelope(name: str, data: object) -> None:
-        provenance = base_provenance(sdk_version=sdk, query=QUERIES[name], retrieved=retrieved)
-        write_envelope(out / name, provenance, data)
-
-    envelope("refs.json", records)
-    if TRANSFERS_KEY in records:
-        envelope("live-refs.json", {TRANSFERS_KEY: records[TRANSFERS_KEY]["ref"]})
-    envelope("reference.json", reference)
-    if reads.readings:
-        readings = read_data(Paths.default().out / "readings.json") or {}
-        envelope("readings.json", {**readings, **reads.readings})
+    write_envelope(
+        out / "refs.json",
+        base_provenance(sdk_version=sdk, query=QUERIES["refs.json"], retrieved=retrieved),
+        {**committed, **reads.records},
+    )
+    ledger = Ledger()
+    for view in both:
+        record_reference(ledger, view, snapshots[str(view.base)])
+    write_envelope(
+        out / "reference.json",
+        outside_provenance(
+            ledger.preloads, sdk_version=sdk, query=QUERIES["reference.json"], retrieved=retrieved
+        ),
+        {"views": dict(snapshots)},
+    )
 
 
 def build_thresholds(
@@ -267,127 +268,131 @@ def build_thresholds(
     ids: str,
     retrieved: str,
 ) -> int:
-    """Write coverage.md, inputs.json and thresholds.json; return the exit code."""
+    """Build both views and write the 2024 view's files and the 2025 view's WEO series.
+
+    Return the exit code: 1 when more than `MAX_MISSING` countries lack a core
+    series in the 2024 view, which the page falls back to.
+    """
     today = date.fromisoformat(retrieved[:10])
     defaults = Paths.default()
     paths = Paths(out=out, cache=defaults.cache)
-    both = views(today, current_ids=ids)
-    ledger = Ledger()
-    capacity = load_capacity(defaults.out / "capacity.csv", ledger=ledger)
+    archived, current = views(today, current_ids=ids)
+    notes = Ledger()
+    capacity = load_capacity(defaults.out / "capacity.csv", ledger=notes)
 
-    bases: dict[int, dict[str, dict]] = {}
-    inputs: dict[str, dict[str, dict]] = {}
-    checks: dict[int, dict] = {}
-    for view in both:
+    def assemble(view: View, ledger: Ledger, weo_ledger: Ledger, *, use_dfo: bool):
         snapshot = snapshots[str(view.base)]
         us_rate, ida = snapshot_values(snapshot)
         record_reference(ledger, view, snapshot)
-        creditor_sums: dict[str, Series] = {}
-        if view.use_dfo:
+        if use_dfo:
             panel, creditor_sums = fetch_dfo(view, reads=reads, ledger=ledger)
         else:
-            panel = load_ids(view, paths=paths, client=client, ledger=ledger)
-        weo = load_weo(view, ledger=ledger)
-        panel = estimate_imf_charges(panel, view)
-        terms, fallback = lending_terms(panel)
-        bases[view.base], inputs[str(view.base)] = build_view(
+            panel, creditor_sums = load_ids(view, paths=paths, client=client, ledger=ledger), {}
+        weo = load_weo(view, ledger=weo_ledger)
+        built = assemble_view(
             view,
             panel,
+            creditor_sums=creditor_sums,
             weo=weo,
             us_rate=us_rate,
             ida=ida,
-            terms=terms,
             capacity=capacity,
         )
-        checks[view.base] = {
-            "guard": guard_groups(panel, view, creditor_sums),
-            "terms_fallback": fallback,
-        }
+        return built, weo
 
-    coverage = {v.base: coverage_rows(bases[v.base], v) for v in both}
-    missing = {
-        base: [row["iso3"] for row in rows if row["missing"]] for base, rows in coverage.items()
-    }
-    default_year = 2025 if len(missing[2025]) <= MAX_MISSING else 2024
+    old_ledger = Ledger()
+    old, _ = assemble(archived, old_ledger, old_ledger, use_dfo=False)
+    old_ledger.preload(
+        {
+            "name": "IMF-World Bank debt sustainability analyses, as capacity.csv records them",
+            "baseYear": archived.base,
+            "source": "capacity.csv",
+        }
+    )
+    # The current view is built for its checks, so a refresh pins only reads that
+    # pass them; the page's build makes it again from DFO's newest stored data.
+    weo_ledger = Ledger()
+    new, weo = assemble(current, Ledger(), weo_ledger, use_dfo=True)
+
     write_text(
         out / "coverage.md",
         render_coverage(
-            coverage,
-            missing,
-            checks=checks,
-            default_year=default_year,
-            notes=ledger.notes,
-            views=both,
+            {archived.base: old.coverage},
+            {archived.base: old.missing},
+            checks={archived.base: old.check},
+            notes=notes.notes,
+            views=(archived,),
             today=today,
         ),
     )
+    sdk = dfo.__version__
 
-    provenance = envelope_provenance(
-        ledger, sdk_version=dfo.__version__, retrieved=retrieved, citation=citation(both)
+    def provenance(ledger: Ledger, query: str) -> dict:
+        return outside_provenance(
+            ledger.preloads, sdk_version=sdk, query=query, retrieved=retrieved
+        )
+
+    base = archived.base
+    write_envelope(
+        out / f"thresholds-{base}.json",
+        provenance(old_ledger, QUERIES["thresholds"].format(base=base)),
+        view_data(archived, old.bases),
     )
-    data = {
-        "baseYears": [v.base for v in both],
-        "defaultYear": default_year,
-        "measure": "pv",
-        "vintages": {
-            str(v.base): {
-                "ids": v.ids,
-                "weo": f"{v.weo[0]} {v.weo[1]}",
-                "capacityAsOf": v.capacity_as_of,
-                "archived": v.archived,
-            }
-            for v in both
+    write_envelope(
+        out / f"inputs-{base}.json",
+        provenance(old_ledger, QUERIES["inputs"].format(base=base)),
+        old.inputs,
+    )
+    write_envelope(
+        out / f"weo-{current.base}.json",
+        provenance(
+            weo_ledger,
+            QUERIES["weo"].format(base=current.base, series=", ".join(WEO_SERIES.values())),
+        ),
+        {
+            iso3: {key: series_json(keys.get(key, {})) for key in WEO_SERIES}
+            for iso3, keys in weo.items()
         },
-        "countries": [
-            {
-                "iso3": country.iso3,
-                "name": country.name,
-                "fdl2024": country.fdl2024,
-                "bases": {str(v.base): bases[v.base][country.iso3] for v in both},
-            }
-            for country in COUNTRIES
-        ],
-    }
-    write_envelope(out / "thresholds.json", provenance, data)
-    write_envelope(out / "inputs.json", provenance, inputs)
-    log.info("wrote coverage.md, inputs.json, thresholds.json; default %d.", default_year)
+    )
+    log.info(
+        "wrote coverage.md, thresholds-%d.json, inputs-%d.json, weo-%d.json.",
+        base,
+        base,
+        current.base,
+    )
+    log.info(
+        "the %d view, which the build makes again: %s",
+        current.base,
+        listed("countries lacking a core series", new.missing).removeprefix("- "),
+    )
 
-    lacking = missing[default_year]
-    if len(lacking) > MAX_MISSING:
+    if len(old.missing) > MAX_MISSING:
         print(
-            f"fetch.py: {len(lacking)} countries lack a core series in {default_year}: "
-            f"{', '.join(lacking)}.",
+            f"fetch.py: {len(old.missing)} countries lack a core series in {base}: "
+            f"{', '.join(old.missing)}.",
             file=sys.stderr,
         )
         return 1
     return 0
 
 
-def build_transfer_file(out: Path, *, reads: Reads, release: str, retrieved: str) -> None:
-    """Write transfers.json and transfers-fixture.json from groups.csv and one pinned ref."""
+def series_json(values: Mapping[int, float]) -> dict[str, float]:
+    """Return a series by year with the years as JSON keys, oldest first."""
+    return {str(year): values[year] for year in sorted(values)}
+
+
+def build_transfer_fixture(path: Path, *, reads: Reads, retrieved: str) -> None:
+    """Refresh the transfers ref and write the page's parity fixture from groups.csv and it."""
     with (Paths.default().out / "groups.csv").open(newline="") as lines:
         members = parse_groups(lines)
     rows = read_net_transfers([member["iso3"] for member in members], reads=reads)
     years, countries = transfers_by_country(rows, members)
-    record = reads.provenance(TRANSFERS_KEY)
-    provenance = transfers_provenance(
-        sdk_version=dfo.__version__,
-        retrieved=retrieved,
-        release=release,
-        sentence=record["sentence"],
-        citation=record["citation"]["text"],
-        version=record["members"][0]["content_version"],
-    )
-    write_envelope(out / "transfers.json", provenance, build_transfers(members, release=release))
+    path.parent.mkdir(parents=True, exist_ok=True)
     write_envelope(
-        out / "transfers-fixture.json",
-        base_provenance(
-            sdk_version=dfo.__version__,
-            query=QUERIES["transfers-fixture.json"],
-            retrieved=retrieved,
-        ),
+        path,
+        base_provenance(sdk_version=dfo.__version__, query=QUERIES["fixture"], retrieved=retrieved),
         parity_fixture(rows, members),
     )
     missing = countries_without_values(countries)
-    print(f"Wrote {out / 'transfers.json'}: {len(countries)} countries, {years[0]}-{years[-1]}.")
-    print(f"No IDS values: {', '.join(missing) or 'none'}.")
+    log.info("net transfers: %d countries, %d-%d.", len(countries), years[0], years[-1])
+    log.info("no IDS values: %s.", ", ".join(missing) or "none")

@@ -6,14 +6,16 @@ import type { Group } from './thresholds.ts';
 import {
     groupTransfers,
     lastActualYear,
+    parseGroups,
     SET_ASIDE_ISO3,
     swing,
     transfersByCountry,
+    TRANSFER_GROUPS,
     transfersHeading,
     valuesByCountry,
     type TransferLine,
+    type TransferMember,
     type TransfersData,
-    type TransfersMembers,
 } from './transfers.ts';
 
 const YEARS = [2019, 2020, 2021, 2022, 2023];
@@ -71,10 +73,10 @@ test('transfersHeading states the swing, or asks a question when there is none',
 
 // The parity fixture: the Python step's output for seven countries, one without rows.
 const fixture = JSON.parse(
-    readFileSync(new URL('../_data/transfers-fixture.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('./fixtures/transfers-parity.json', import.meta.url), 'utf8'),
 ).data as {
     rows: Parameters<typeof valuesByCountry>[0];
-    members: TransfersMembers['countries'];
+    members: TransferMember[];
     expected: {
         valuesByCountry: Record<string, Record<string, number>>;
         lastActualYear: number;
@@ -82,7 +84,6 @@ const fixture = JSON.parse(
         countries: TransfersData['countries'];
     };
 };
-const members: TransfersMembers = { release: 'test', countries: fixture.members };
 
 test('the port matches the Python step on the fixture rows', () => {
     const values = valuesByCountry(fixture.rows);
@@ -96,7 +97,7 @@ test('the port matches the Python step on the fixture rows', () => {
     assert.deepEqual(asObject, fixture.expected.valuesByCountry);
     assert.equal(lastActualYear(values), fixture.expected.lastActualYear);
 
-    const built = transfersByCountry(fixture.rows, members);
+    const built = transfersByCountry(fixture.rows, fixture.members);
 
     assert.deepEqual(built.years, fixture.expected.years);
     assert.deepEqual(built.countries, fixture.expected.countries);
@@ -121,10 +122,10 @@ const synthetic = [
 ];
 
 test('the port skips early years and nulls and stops where under half report', () => {
-    const built = transfersByCountry(synthetic, {
-        release: 'test',
-        countries: ['AAA', 'BBB', 'CCC', 'DDD'].map((iso3) => ({ iso3, name: iso3, group: 'x' })),
-    });
+    const built = transfersByCountry(
+        synthetic,
+        ['AAA', 'BBB', 'CCC', 'DDD'].map((iso3) => ({ iso3, name: iso3, group: 'x' })),
+    );
 
     assert.deepEqual(built.years, [2010, 2011]);
     assert.deepEqual(
@@ -146,14 +147,14 @@ test('lastActualYear divides by the countries with values, not by the members', 
         row('CCC', 2010, 1),
         row('CCC', 2011, 1),
     ];
-    const built = transfersByCountry(rows, {
-        release: 'test',
-        countries: ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF'].map((iso3) => ({
+    const built = transfersByCountry(
+        rows,
+        ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF'].map((iso3) => ({
             iso3,
             name: iso3,
             group: 'x',
         })),
-    });
+    );
 
     assert.deepEqual(built.years, [2010, 2011, 2012]);
 });
@@ -176,4 +177,26 @@ test('the port throws on a time_period that is not a whole year, as int() does',
             ?.get(2011),
         1,
     );
+});
+
+test('parseGroups reads the 75 members of groups.csv, quoted names included', () => {
+    const members = parseGroups(
+        readFileSync(new URL('../_data/groups.csv', import.meta.url), 'utf8'),
+    );
+
+    assert.equal(members.length, 75);
+    assert.deepEqual(
+        members.find(({ iso3 }) => iso3 === 'COG'),
+        { iso3: 'COG', name: 'Congo, Rep.', group: 'insolvent' },
+    );
+    assert.deepEqual(new Set(members.map(({ group }) => group)), TRANSFER_GROUPS);
+});
+
+test('parseGroups skips comments and refuses an unknown group or a broken line', () => {
+    assert.deepEqual(parseGroups('# source\niso3,name,group\nAAA,"A ""x"", b",lower-risk\n'), [
+        { iso3: 'AAA', name: 'A "x", b', group: 'lower-risk' },
+    ]);
+    assert.throws(() => parseGroups('iso3,name,group\nAAA,Alpha,nope\n'), /unknown group/);
+    assert.throws(() => parseGroups('iso3,name,group\nAAA,Alpha\n'), /2 fields/);
+    assert.throws(() => parseGroups('iso3,group\n'), /not iso3,name,group/);
 });

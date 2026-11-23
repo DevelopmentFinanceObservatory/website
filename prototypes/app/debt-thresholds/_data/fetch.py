@@ -12,7 +12,7 @@
 # # name. It also pins pyarrow below 21, which the DFO SDK needs.
 # override-dependencies = ["imf-reader==2.3.0", "pyarrow==21.0.0"]
 # ///
-"""Entry point of the debt-thresholds data step; the work lives in `pipeline`."""
+"""Entry point of the debt-thresholds data step; the work lives in `pipeline.run`."""
 
 from pipeline.run import main
 

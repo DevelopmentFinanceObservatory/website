@@ -1,11 +1,11 @@
-"""Net transfers on external debt: transfers.json, and the series the page builds from the ref.
+"""Net transfers on external debt: the series the page builds from the transfers ref.
 
-The page reads the net-transfers rows in the browser, from the ref in
-live-refs.json, and builds each country's series with ports of
-`values_by_country`, `last_actual_year` and `transfers_by_country`. transfers.json
-holds what the rows lack: the 75 countries with their FDL group, and the IDS
-release label. `parity_fixture` writes real rows and this module's output for
-them, which the page's port is tested against.
+The page's build reads the net-transfers rows from the `transfers` ref in
+refs.json, at DFO's newest stored version, and builds each country's series with
+ports of `values_by_country`, `last_actual_year` and `transfers_by_country`,
+taking the 75 countries and their FDL groups from groups.csv. `parity_fixture`
+writes real rows and this module's output for them, which the page's port is
+tested against.
 """
 
 import csv
@@ -14,10 +14,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TypedDict
 
 from pipeline.errors import DataError
-from pipeline.provenance import base_provenance
 
 INDICATOR = "DT.NTR.DECT.CD"
-QUERY = f"{INDICATOR} for the 75 countries in groups.csv, by series code"
 FIRST_YEAR = 2010
 # The read's years. A ref keeps its window, so a release past 2031 takes a new search.
 WINDOW = (FIRST_YEAR, 2031)
@@ -109,11 +107,6 @@ def transfers_by_country(
     return years, countries
 
 
-def build_transfers(members: Sequence[Member], *, release: str) -> dict:
-    """Return the data of transfers.json: the IDS release label and the 75 members."""
-    return {"release": release, "countries": [dict(member) for member in members]}
-
-
 def parity_fixture(rows: Sequence[Mapping[str, object]], members: Sequence[Member]) -> dict:
     """Return real rows of `FIXTURE_ISO3` and this module's output for them.
 
@@ -146,26 +139,6 @@ def parity_fixture(rows: Sequence[Mapping[str, object]], members: Sequence[Membe
             "years": years,
             "countries": countries,
         },
-    }
-
-
-def transfers_provenance(
-    *,
-    sdk_version: str,
-    retrieved: str,
-    release: str,
-    sentence: str,
-    citation: str,
-    version: str,
-) -> dict:
-    """Return the provenance block of transfers.json; `retrieved` is the refs' UTC stamp."""
-    return {
-        **base_provenance(sdk_version=sdk_version, query=QUERY, retrieved=retrieved),
-        "ids": release,
-        "indicator": INDICATOR,
-        "sentence": sentence,
-        "citation": citation,
-        "version": version,
     }
 
 

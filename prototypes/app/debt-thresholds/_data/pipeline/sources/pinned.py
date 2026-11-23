@@ -1,6 +1,7 @@
-"""Each DFO read as a pinned ref, fetched the way the run's mode says.
+"""Each DFO read as a committed ref, fetched the way the run's mode says.
 
-A run has three modes:
+The data step (`pipeline.run`) runs in one of three modes, and the page's build
+(`pipeline.stored`) in a fourth:
 
 - `plain` fetches the ref refs.json holds for each read and keeps the read's
   committed record, so the outputs reproduce byte for byte. It refuses a ref
@@ -9,8 +10,11 @@ A run has three modes:
   new ref and its provenance. A ref keeps its spec and window.
 - `search` builds each read from its series code and records it, with Search's
   answer beside it. A change of spec or window takes this mode.
+- `stored` fetches the version DFO stores as the newest of each committed ref's
+  spec, with no Search call, no pin and no check that the version is pinned, and
+  records the versions read and DFO's freshness for the build.
 
-In both, `Reads.keep` pins the new reads once the run's checks hold, so a run
+In `refresh` and `search`, `Reads.keep` pins the new reads once the run's checks hold, so a run
 that fails them spends none of the day's pins.
 """
 
@@ -36,6 +40,7 @@ class Mode(StrEnum):
     PLAIN = "plain"
     REFRESH = "refresh"
     SEARCH = "search"
+    STORED = "stored"
 
 
 class Reads:
@@ -60,6 +65,8 @@ class Reads:
         self.records: dict[str, Record] = {}
         self.readings: dict[str, Record] = {}
         self.fetched: dict[str, dfo.Dataset] = {}
+        # Each `stored` read's versions and freshness, by read key.
+        self.sources: dict[str, Record] = {}
         self.pins = 0
 
     def fetch(self, key: str, build: Callable[[], tuple[Record, dfo.Dataset]]) -> dfo.Dataset:
@@ -74,6 +81,10 @@ class Reads:
         if self.mode is Mode.SEARCH:
             reading, data = build()
             self.readings[key] = reading
+        elif self.mode is Mode.STORED:
+            data = self.client.fetch(self.committed_ref(key), latest="stored", progress=False)
+            self.read_stored(key, data)
+            return data
         else:
             entry = self._entry(key)
             ref = dfo.DatasetRef.from_json(json.dumps(entry["ref"]))
@@ -103,10 +114,58 @@ class Reads:
                 self._record(key, self.client.pin(data))
 
     def _record(self, key: str, data: dfo.Dataset) -> None:
-        self.records[key] = {
+        record: Record = {
             "ref": json.loads(data.ref.to_json()),
             "provenance": json.loads(data.provenance.to_json()),
         }
+        # A refresh keeps the reading the last search recorded.
+        reading = self.readings.get(key) or self._committed.get(key, {}).get("reading")
+        if reading is not None:
+            record["reading"] = reading
+        self.records[key] = record
+
+    def committed_ref(self, key: str) -> dfo.DatasetRef:
+        """Return the ref refs.json holds for `key`, without a request."""
+        import dfo
+
+        return dfo.DatasetRef.from_json(json.dumps(self._entry(key)["ref"]))
+
+    def analyse(self, key: str, ref: dfo.DatasetRef, verb: str, **arguments: object) -> dfo.Dataset:
+        """Run one of DFO's operations on `ref`, read `key`, as `client.analysis.<verb>`.
+
+        In `stored` mode the operation runs on the version DFO stores as the newest
+        of `ref`'s spec, and what it read is recorded under `key`; in the others, on
+        `ref`'s own version.
+        """
+        import dfo
+
+        if self.mode is not Mode.STORED:
+            return getattr(self.client.analysis, verb)(ref, **arguments)
+        recipe = getattr(dfo.analysis.recipe(ref), verb)(**arguments)
+        data = self.client.fetch(recipe, latest="stored")
+        self.read_stored(key, data)
+        return data
+
+    def read_stored(self, key: str, data: dfo.Dataset) -> None:
+        """Add the versions `data` read and its freshness to `key`'s source record.
+
+        A ref member gives its own version, a recipe's member each root it ran on.
+        The freshness is the worst of the reads': `stale`, then `pending`, then
+        `current`; None when any read stated none.
+        """
+        source = self.sources.setdefault(key, {"versions": [], "freshness": "current"})
+        for member in data.ref.members:
+            roots = getattr(member, "roots", None)
+            versions = (
+                [(root.spec_id, root.content_version) for root in roots]
+                if roots is not None
+                else [(member.spec.spec_id, member.content_version)]
+            )
+            for spec_id, version in versions:
+                entry = {"specId": spec_id, "contentVersion": version}
+                if entry not in source["versions"]:
+                    source["versions"].append(entry)
+        source["freshness"] = worst_freshness(source["freshness"], data.freshness)
 
     def pinned_ref(self, key: str) -> dfo.DatasetRef:
         """Return the committed ref of `key` without downloading its rows, in `plain` mode.
@@ -116,7 +175,7 @@ class Reads:
         """
         import dfo
 
-        ref = dfo.DatasetRef.from_json(json.dumps(self._entry(key)["ref"]))
+        ref = self.committed_ref(key)
         for member in ref.members:
             try:
                 self.client.file_url(member)
@@ -134,3 +193,13 @@ class Reads:
     def provenance(self, key: str) -> Record:
         """Return the provenance record of a read this run made."""
         return self.records[key]["provenance"]
+
+
+FRESHNESS_ORDER = ("current", "pending", "stale")
+
+
+def worst_freshness(first: str | None, second: str | None) -> str | None:
+    """Return the worse of two freshness values; None when either is None."""
+    if first is None or second is None:
+        return None
+    return max(first, second, key=FRESHNESS_ORDER.index)

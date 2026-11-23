@@ -21,6 +21,7 @@ from pipeline.sources.dfo_api import (
     pinned_specs,
     put,
 )
+from pipeline.sources.pinned import Mode, Reads
 
 
 def test_put_stores_one_value_per_country_year():
@@ -72,6 +73,11 @@ class Sized(SimpleNamespace):
         return self.size
 
 
+def reads(client) -> Reads:
+    """Reads that run each cut on the ref's own version, as a plain run does."""
+    return Reads(client, mode=Mode.PLAIN, committed={})
+
+
 def row(iso3: str, year: str, value: float | None) -> dict:
     return {"financingRecipient": f"country/{iso3}", "time_period": year, "value": value}
 
@@ -86,19 +92,19 @@ def test_by_creditor_cuts_china_and_sums_creditors_for_service():
         )
     )
     sums: dict = defaultdict(dict)
-    frame = by_creditor(client, "service_by_creditor", "ref", sums)
+    frame = by_creditor(reads(client), "service_by_creditor", "ref", sums)
     assert list(frame[["iso3", "year", "value"]].itertuples(index=False, name=None)) == [
         ("KEN", 2020, 2.0)
     ]
     assert sums == {"KEN": {2020: 9.0}}
-    by_creditor(client, "principal_by_creditor", "ref", sums := defaultdict(dict))
+    by_creditor(reads(client), "principal_by_creditor", "ref", sums := defaultdict(dict))
     assert sums == {}
 
 
 def test_by_creditor_refuses_imf_among_creditors():
     client = SimpleNamespace(analysis=Analysis({IMF: [row("KEN", "2020", 1.0)]}))
     with pytest.raises(DataError, match="IMF is among the creditors"):
-        by_creditor(client, "service_by_creditor", "ref", defaultdict(dict))
+        by_creditor(reads(client), "service_by_creditor", "ref", defaultdict(dict))
 
 
 REFS = json.loads((Path(__file__).parent.parent / "refs.json").read_text())["data"]

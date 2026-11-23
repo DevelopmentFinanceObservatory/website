@@ -2,9 +2,9 @@
 
 from datetime import date
 
-from pipeline.build import build_view
+from pipeline.build import build_view, view_data
 from pipeline.config import HISTORY, views
-from pipeline.countries import ISO3
+from pipeline.countries import COUNTRIES, ISO3
 
 VIEW = views(date(2026, 1, 1), current_ids="November 2026")[0]  # base 2024, end 2030, no DFO GDP
 
@@ -64,3 +64,22 @@ def test_build_view_shapes_records_and_inputs_for_every_country() -> None:
     assert built[ISO3[1]]["debtFace"] is None  # no stock reported
     assert built[ISO3[1]]["debtPV"] is None
     assert built[ISO3[1]]["capacity"] is None
+
+
+def test_view_data_gives_the_views_releases_and_each_country_in_the_notes_order() -> None:
+    data = view_data(VIEW, {iso3: {"year": VIEW.base, "iso3": iso3} for iso3 in ISO3})
+    assert data["year"] == 2024
+    assert data["vintage"] == {
+        "ids": "December 2025",
+        "weo": "October 2025",
+        "capacityAsOf": "2026-03-14",
+        "archived": True,
+    }
+    assert [country["iso3"] for country in data["countries"]] == [c.iso3 for c in COUNTRIES]
+    first = data["countries"][0]
+    assert first == {
+        "iso3": COUNTRIES[0].iso3,
+        "name": COUNTRIES[0].name,
+        "fdl2024": COUNTRIES[0].fdl2024,
+        "base": {"year": 2024, "iso3": COUNTRIES[0].iso3},
+    }
