@@ -330,6 +330,9 @@ export type InterruptResponse = {
     choice_id?: string;
     option_id?: string;
     plan_revision?: string;
+    // A `switch` on a unit row: the unit picked, which `option_id` names in
+    // the row's id form (`USD-current`, `USD-constant-2015`).
+    unit?: UnitChoice;
     // Replaces the set the conversation keeps for the questions the resumed
     // turn asks next.
     client_features?: ClientFeature[];
@@ -415,6 +418,10 @@ export type PlanDecision = {
     choice_id?: string | null;
     options?: PlanDecisionOption[] | null;
     active_option_id?: string | null;
+    // A unit row: the units its parts convert into, starting on the one they
+    // are in now. Set only beside `choice_id`, whose `options` are then whole
+    // units, so a switch can name any offered unit.
+    unit?: UnitOffer | null;
 };
 
 export type PlanAction = 'approve' | 'amend' | 'reject' | 'switch';
