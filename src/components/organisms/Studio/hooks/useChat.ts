@@ -10,6 +10,7 @@ import {
     type ActivityEntry,
     type SavedActivityEntry,
 } from '@/lib/studio/activity';
+import { withTurnStamps } from '@/lib/studio/activityView';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
 import { placeCard, takenOver } from '@/lib/studio/cardReplace';
 import {
@@ -104,7 +105,9 @@ import {
     heldTurns,
     isUnkeyedSave,
     keyUnkeyedSave,
+    promptTurns,
     readSince,
+    turnReplyAt,
     withAnswer,
     offeredQuestionTurn,
     withFollowup,
@@ -112,6 +115,7 @@ import {
     withNewQuestion,
     withOfferedQuestion,
     withoutUnsentQuestion,
+    withReadPrompts,
     withRefundedPrompt,
 } from '@/lib/studio/transcript';
 import {
@@ -149,14 +153,18 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // `refunded` marks a prompt whose turn was refused, which the site's prompt
 // meter gave back. `harnessTurn` is the harness's index of the turn a prompt
 // opened, as its stream's x-dfo-turn-index header or a state read named it,
-// and keys the prompt and its reply to the harness's turns.
+// and keys the prompt and its reply to the harness's turns. A prompt's
+// `turn` is the page turn it opened (`turnCount` when it joined the
+// transcript), which numbers its cards, its Activity entry and its plan
+// wherever the prompt sits (messageTurns).
 // `fromNewQuestion` marks a prompt sent as the new question that harness
 // turn handed back (`done`'s `new_question`), so it is sent once.
 // `inherited` marks a message a fork copied from another conversation,
 // whose turn keys belong to that conversation's session. `unkeyed` marks a
-// prompt of a save from before prompts carried their turn whose turn the
-// harness's record could not name (keyUnkeyedSave): it keeps its text and
-// numbers no turn.
+// prompt whose turn the harness's record does not name: one of a save from
+// before prompts carried their turn (keyUnkeyedSave), or one a state read
+// shows the harness never admitted (withReadPrompts). It keeps its text and
+// numbers no harness turn.
 // A bot turn's `newQuestion` is the new question its turn handed back that
 // the page offers among its `followups` for the user to send
 // (withOfferedQuestion).
@@ -172,6 +180,7 @@ export type ChatMessage =
           answer?: true;
           refunded?: true;
           harnessTurn?: number;
+          turn?: number;
           fromNewQuestion?: number;
           inherited?: true;
           unkeyed?: true;
@@ -324,9 +333,22 @@ const endTurn = (
 
 // A saved transcript as the chat shows it. Without its harness session the
 // conversation starts afresh on the harness, which holds none of the answers
-// that offered its chips, so they go.
+// that offered its chips, so they go. Each prompt carries the page turn the
+// saved transcript numbers it (withTurnStamps) before any state read merges
+// turns in.
 const restoredMessages = (saved: ChatSnapshot): ChatMessage[] =>
-    saved.sessionId ? saved.messages : withoutChips(saved.messages);
+    withTurnStamps(
+        saved.sessionId ? saved.messages : withoutChips(saved.messages),
+        restoreActivity(saved.activity),
+    );
+
+// A restored conversation's page turn count: the saved one, raised past any
+// stamped prompt, so the next turn takes a number no prompt holds.
+const restoredTurnCount = (saved: number, messages: readonly ChatMessage[]): number =>
+    Math.max(
+        saved,
+        ...messages.map((message) => (message.role === 'user' ? (message.turn ?? 0) : 0)),
+    );
 
 // A saved canvas as the chat holds it. Without its harness session no card
 // can change its unit, so the offers go, as the chips do.
@@ -378,7 +400,9 @@ export const useChat = (
     const generationRef = useRef(0);
     // Set below: the settle handler reaches send() through it.
     const drainRef = useRef<() => void>(() => {});
-    const turnCount = useRef(initial?.turnCount ?? 0);
+    const turnCount = useRef(
+        initial ? restoredTurnCount(initial.turnCount, restoredMessages(initial)) : 0,
+    );
     // The transcript as last rendered, for the callbacks that read which
     // harness turns it holds (heldTurns) outside a state update.
     const messagesRef = useRef<ChatMessage[]>([]);
@@ -723,8 +747,9 @@ export const useChat = (
             const stepLine = createStepLine();
 
             // The harness's index of the turn this stream carries, from its
-            // x-dfo-turn-index header. The turn's prompt takes it, so the
-            // prompt and its reply are keyed on the harness's turn.
+            // x-dfo-turn-index header. The prompt of page turn `turn` takes
+            // it, unless a prompt holds it already, so the prompt and its
+            // reply are keyed on the harness's turn.
             let turnIndex: number | null = null;
 
             const keyTurn = (index: number) => {
@@ -734,7 +759,7 @@ export const useChat = (
 
                 turnIndex = index;
                 setState((prev) => {
-                    const messages = withHarnessTurn(prev.messages, index);
+                    const messages = withHarnessTurn(prev.messages, turn, index);
 
                     return messages === prev.messages ? prev : { ...prev, messages };
                 });
@@ -1229,7 +1254,7 @@ export const useChat = (
         unitTurnRef.current = false;
         setState((prev) => ({
             ...withLine(prev, line),
-            messages: [...prev.messages, user, { role: 'bot', text: '' }],
+            messages: [...prev.messages, { ...user, turn }, { role: 'bot', text: '' }],
             activity: [
                 ...prev.activity,
                 { turn, prompt: user.text, startedAt: Date.now(), tools: [] },
@@ -1927,20 +1952,24 @@ export const useChat = (
     // (drawCards). A latest turn ended by a new question no tab has sent yet
     // queues it (owedNewQuestion), as that turn's `done` would have, and a
     // send of it the harness never admitted leaves the transcript.
-    // Returns the latest harness turn the transcript then holds.
+    // Returns the transcript with the read's closed turns merged in.
     const takeRead = useCallback(
-        (read: ConversationRead): number => {
+        (read: ConversationRead): ChatMessage[] => {
             const before = messagesRef.current;
             const owed = owedNewQuestion(read, before);
-            const { messages: merged, appended } = mergeClosedTurns(before, read.closed_since);
             const firstTurn = turnCount.current + 1;
+            const { messages: merged, appended } = mergeClosedTurns(
+                before,
+                read.closed_since,
+                firstTurn,
+            );
             const now = Date.now();
 
             turnCount.current += appended.length;
 
             // Each card a closed turn made is filed under that turn, whether
             // the page held it or the read appended it.
-            const turnOf = cardTurns(merged, turnCount.current, read.closed_since);
+            const turnOf = cardTurns(merged, read.closed_since);
 
             // The approvals of the turns the read names, the open one's
             // included when the page holds it (reattach adds one it lacks).
@@ -1964,7 +1993,11 @@ export const useChat = (
                 ...approvals.flatMap(([index, approved]) => turnApprovalKeys(index, approved)),
             ]);
             setState((prev) => {
-                const { messages: closed } = mergeClosedTurns(prev.messages, read.closed_since);
+                const { messages: closed } = mergeClosedTurns(
+                    prev.messages,
+                    read.closed_since,
+                    firstTurn,
+                );
                 const messages = approve(closed);
 
                 return messages === prev.messages
@@ -2010,7 +2043,7 @@ export const useChat = (
                 drawCards(read.manifest, turnOf);
             }
 
-            return heldTurns(merged);
+            return merged;
         },
         [applyManifest, askNewQuestion, drawCards, offerNewQuestion],
     );
@@ -2043,11 +2076,29 @@ export const useChat = (
             .then((answer) => {
                 read = answer;
 
-                if (!answer || !unkeyed || generationRef.current !== generation) {
+                if (!answer || generationRef.current !== generation) {
                     return;
                 }
 
                 const open = answer.turn;
+
+                if (!unkeyed) {
+                    // A prompt saved before its stream named its turn takes
+                    // the harness's latest turn only where the read confirms
+                    // it; the rest the harness lacks show as unsent.
+                    const latest = open
+                        ? { turn_index: open.index, user_message: open.user_message ?? '' }
+                        : null;
+
+                    messagesRef.current = withReadPrompts(messagesRef.current, latest);
+                    setState((prev) => ({
+                        ...prev,
+                        messages: withReadPrompts(prev.messages, latest),
+                    }));
+
+                    return;
+                }
+
                 const recorded = [
                     ...answer.closed_since,
                     ...(open &&
@@ -2071,16 +2122,35 @@ export const useChat = (
                 inFlightRef.current -= 1;
 
                 if (read) {
-                    const held = takeRead(read);
+                    const merged = takeRead(read);
+                    const held = heldTurns(merged);
                     const step = attachStep(read);
+                    // The page turn of the prompt that holds the open turn.
+                    const holding =
+                        step.kind === 'none'
+                            ? undefined
+                            : [...promptTurns(merged)].findLast(
+                                  ([, index]) => index === step.turnIndex,
+                              )?.[0];
+                    const holder = holding === undefined ? undefined : merged[holding];
+                    let streamTurn = holder?.role === 'user' ? holder.turn : undefined;
 
-                    if (step.kind !== 'none') {
+                    // A held open turn whose reply is not the transcript's
+                    // last message (an unsent prompt follows it) is left as
+                    // it is: its stream would write into the later reply.
+                    if (
+                        step.kind !== 'none' &&
+                        (step.turnIndex > held ||
+                            turnReplyAt(merged, step.turnIndex) === merged.length - 1)
+                    ) {
                         if (step.turnIndex > held) {
                             const prompt = read.turn?.user_message ?? '';
 
                             turnCount.current += 1;
 
                             const turn = turnCount.current;
+
+                            streamTurn = turn;
 
                             // The turn's approvals ride on its reply, as the
                             // stream would have put them.
@@ -2093,7 +2163,7 @@ export const useChat = (
                             setState((prev) => ({
                                 ...prev,
                                 messages: withTurnApprovals(
-                                    ensureTurn(prev.messages, step.turnIndex, prompt),
+                                    ensureTurn(prev.messages, step.turnIndex, prompt, turn),
                                     step.turnIndex,
                                     approved,
                                     new Set(),
@@ -2109,7 +2179,7 @@ export const useChat = (
                             setState((prev) => ({ ...withLine(prev, WORKING), thinking: true }));
                         }
 
-                        stream(turnCount.current, (handlers, signal) =>
+                        stream(streamTurn ?? turnCount.current, (handlers, signal) =>
                             carryOnTurn({
                                 conversationId: conversation,
                                 first: step,
@@ -2198,9 +2268,9 @@ export const useChat = (
             cardReadsRef.current.clear();
             canvasEditsRef.current?.reset();
             recapRef.current = saved.sessionId ? null : forkRecap(saved.messages);
-            turnCount.current = saved.turnCount;
             // Set at once, since reattach() reads it before the next render.
             messagesRef.current = restoredMessages(saved);
+            turnCount.current = restoredTurnCount(saved.turnCount, messagesRef.current);
             approvalsRef.current = approvalKeys(messagesRef.current);
             widgetsRef.current = restoredWidgets(saved);
             setState({

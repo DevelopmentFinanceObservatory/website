@@ -30,6 +30,8 @@ import { approvedFromFrame, planFromFrame, withApprovedPlan } from '../plan.ts';
 import {
     ensureTurn,
     forkRecap,
+    UNSENT_NOTE,
+    withReadPrompts,
     heldTurns,
     keyUnkeyedSave,
     NEW_QUESTION_NOTE,
@@ -99,11 +101,11 @@ test('mergeClosedTurns appends a closed turn newer than the snapshot once', () =
         { role: 'bot', text: 'reply 1' },
     ];
 
-    const first = mergeClosedTurns(held, [closed(1, 'harness text'), closed(2)]);
+    const first = mergeClosedTurns(held, [closed(1), closed(2)], 2);
 
     assert.deepEqual(first.messages, [
         ...held,
-        { role: 'user', text: 'question 2', harnessTurn: 2 },
+        { role: 'user', text: 'question 2', harnessTurn: 2, turn: 2 },
         { role: 'bot', text: 'reply 2' },
     ]);
     assert.deepEqual(
@@ -112,55 +114,124 @@ test('mergeClosedTurns appends a closed turn newer than the snapshot once', () =
     );
 
     // A second read of the same turns, from the merged transcript, adds nothing.
-    const again = mergeClosedTurns(first.messages, [closed(1), closed(2)]);
+    const again = mergeClosedTurns(first.messages, [closed(1), closed(2)], 3);
 
     assert.equal(again.messages, first.messages);
     assert.deepEqual(again.appended, []);
 });
 
-test("mergeClosedTurns fills a held turn's reply only when it is empty", () => {
-    const left: ChatMessage[] = [
-        { role: 'user', text: 'question 1' },
-        { role: 'bot', text: '' },
-    ];
+// Turn 1 as the harness's state read gives it (`_closed_turn`): the answer
+// with the notes and the basis line the stream appended, as its
+// `message.complete` sent them.
+const RECORDED_CLOSED: ClosedTurn = {
+    turn_index: 1,
+    user_message: 'ODA to Kenya since 2018',
+    reply:
+        'ODA to Kenya rose from $2.5bn in 2018 to $3.4bn in 2022.\n\n' +
+        'Matched "Kenya" to the recipient Kenya.\n\n' +
+        'Basis: OECD CRS, gross disbursements, constant 2022 USD.',
+    component_ids: ['cmp_kenya'],
+    approved: null,
+    error: null,
+    new_question: null,
+};
 
-    assert.deepEqual(mergeClosedTurns(left, [closed(1)]).messages, [
-        left[0],
-        { role: 'bot', text: 'reply 1' },
+test("a held turn that closed cleanly takes the harness's reply, which the page saved mid-stream", () => {
+    const prompt: ChatMessage = {
+        role: 'user',
+        text: 'ODA to Kenya since 2018',
+        harnessTurn: 1,
+        turn: 1,
+    };
+    // Saved while the answer streamed: the deltas so far.
+    const truncated: ChatMessage[] = [prompt, { role: 'bot', text: 'ODA to Kenya rose from' }];
+
+    // The read covers the page's latest turn, the one that streamed.
+    assert.equal(readSince(truncated), 0);
+
+    const { messages } = mergeClosedTurns(truncated, [RECORDED_CLOSED], 2);
+
+    assert.deepEqual(messages, [prompt, { role: 'bot', text: RECORDED_CLOSED.reply }]);
+    // Merging the same turn again changes nothing.
+    assert.equal(mergeClosedTurns(messages, [RECORDED_CLOSED], 2).messages, messages);
+
+    // A turn that closed with an error keeps the page's text, so a stopped
+    // turn keeps its note, and fills only an empty reply.
+    const stopped = { ...RECORDED_CLOSED, reply: 'ODA to Kenya', error: 'cancelled' };
+    const noted: ChatMessage[] = [prompt, { role: 'bot', text: '_Stopped._' }];
+
+    assert.equal(mergeClosedTurns(noted, [stopped], 2).messages, noted);
+    assert.deepEqual(mergeClosedTurns([prompt, { role: 'bot', text: '' }], [stopped], 2).messages, [
+        prompt,
+        { role: 'bot', text: 'ODA to Kenya' },
     ]);
 
-    const answered: ChatMessage[] = [left[0]!, { role: 'bot', text: 'the page kept this' }];
-
-    assert.equal(mergeClosedTurns(answered, [closed(1)]).messages, answered);
+    // A turn whose stream sent no reply (`reply_shown: false`) changes nothing.
+    assert.equal(
+        mergeClosedTurns(truncated, [{ ...RECORDED_CLOSED, reply: '' }], 2).messages,
+        truncated,
+    );
 });
 
 test('a turn set aside for a new question shows a note, not an empty reply', () => {
-    const { messages } = mergeClosedTurns([], [{ ...closed(1, ''), new_question: 'ODA to Ghana' }]);
+    const { messages } = mergeClosedTurns(
+        [],
+        [{ ...closed(1, ''), new_question: 'ODA to Ghana' }],
+        1,
+    );
 
     assert.deepEqual(messages.at(-1), { role: 'bot', text: NEW_QUESTION_NOTE });
 });
 
-test('heldTurns counts on from the last prompt that names its harness turn', () => {
+test('heldTurns counts only the turns the harness confirmed', () => {
     const messages: ChatMessage[] = [
-        { role: 'user', text: 'a' },
+        { role: 'user', text: 'a', turn: 1 },
         { role: 'bot', text: 'b' },
-        { role: 'user', text: 'refused', refunded: true },
+        { role: 'user', text: 'refused', refunded: true, turn: 2 },
         { role: 'bot', text: '' },
         { role: 'user', text: 'an answer', answer: true },
-        { role: 'user', text: 'c' },
+        { role: 'user', text: 'c', turn: 3 },
     ];
 
-    // A save from before prompts named their turn counts accepted prompts.
-    assert.equal(heldTurns(messages), 2);
-    // A named turn anchors the count, and a prompt saved before its stream
-    // named one counts on from it.
-    const keyed = withHarnessTurn(messages, 7);
+    // No prompt names its turn, so the transcript holds none.
+    assert.equal(heldTurns(messages), 0);
+
+    // A stream names the turn of the prompt it was opened for, which a
+    // prompt saved before its stream named one does not count on from.
+    const keyed = withHarnessTurn(messages, 1, 7);
 
     assert.equal(heldTurns(keyed), 7);
-    assert.equal(heldTurns([...keyed, { role: 'user', text: 'd' }]), 8);
-    // The last held turn comes back in the read, for a reply it never got.
-    assert.equal(readSince(messages), 1);
+    assert.equal(heldTurns([...keyed, { role: 'user', text: 'd', turn: 4 }]), 7);
+    assert.equal(readSince(keyed), 0);
     assert.equal(readSince([]), 0);
+});
+
+test('a stream keys the prompt it was opened for, and never moves a confirmed turn', () => {
+    const messages: ChatMessage[] = [
+        { role: 'user', text: 'mine', harnessTurn: 1, turn: 1 },
+        { role: 'bot', text: 'answer' },
+        { role: 'user', text: 'sent', turn: 2 },
+        { role: 'bot', text: '' },
+        { role: 'user', text: 'queued after it', turn: 3 },
+        { role: 'bot', text: '' },
+    ];
+
+    // Page turn 2's stream names harness turn 2: the prompt it carries
+    // takes it, not the last prompt.
+    const keyed = withHarnessTurn(messages, 2, 2);
+
+    assert.deepEqual(
+        [...promptTurns(keyed)],
+        [
+            [0, 1],
+            [2, 2],
+        ],
+    );
+    // A resume of turn 1 that page turn 3's stream carried leaves turn 1
+    // where it is.
+    assert.equal(withHarnessTurn(keyed, 3, 1), keyed);
+    // A prompt that holds a turn is not relabelled.
+    assert.equal(withHarnessTurn(keyed, 2, 5), keyed);
 });
 
 test('a reload that missed five turns pages the read and appends five keyed pairs in order', async () => {
@@ -182,11 +253,11 @@ test('a reload that missed five turns pages the read and appends five keyed pair
 
     assert.deepEqual(calls, [0, 3]);
 
-    const { messages } = mergeClosedTurns(saved, read!.closed_since);
+    const { messages } = mergeClosedTurns(saved, read!.closed_since, 2);
 
     assert.deepEqual(messages.slice(2), [
         ...[2, 3, 4, 5, 6].flatMap((index): ChatMessage[] => [
-            { role: 'user', text: `question ${index}`, harnessTurn: index },
+            { role: 'user', text: `question ${index}`, harnessTurn: index, turn: index },
             { role: 'bot', text: `reply ${index}` },
         ]),
     ]);
@@ -207,14 +278,14 @@ test('attaching to an open turn the snapshot never held shows its prompt', () =>
 
     assert.deepEqual(step, { kind: 'resume', turnIndex: 2 });
 
-    const messages = ensureTurn(saved, step.turnIndex, read.turn!.user_message!);
+    const messages = ensureTurn(saved, step.turnIndex, read.turn!.user_message!, 2);
 
     assert.deepEqual(messages.slice(2), [
-        { role: 'user', text: 'question 2', harnessTurn: 2 },
+        { role: 'user', text: 'question 2', harnessTurn: 2, turn: 2 },
         { role: 'bot', text: '' },
     ]);
     // The stream that carries it on writes into that reply, the last message.
-    assert.equal(ensureTurn(messages, 2, 'question 2'), messages);
+    assert.equal(ensureTurn(messages, 2, 'question 2', 3), messages);
 });
 
 test('attachStep decides from the turn status and the lease', () => {
@@ -544,19 +615,156 @@ const keyed = (turns: number[]): ChatMessage[] =>
     ]);
 
 test("a fork's first turn is keyed from 1, whatever the source's prompts held", () => {
-    // Saved before the stream named the fork's first turn.
+    // Saved before the stream named the fork's first turn, which the
+    // harness recorded after the recap of the copied transcript.
+    const copied = withInherited(keyed([1, 2, 3, 4, 5]));
     const fork: ChatMessage[] = [
-        ...withInherited(keyed([1, 2, 3, 4, 5])),
-        { role: 'user', text: 'my question' },
+        ...copied,
+        { role: 'user', text: 'my question', turn: 6 },
         { role: 'bot', text: '' },
     ];
 
-    assert.equal(heldTurns(fork), 1);
+    assert.equal(heldTurns(fork), 0);
     assert.equal(readSince(fork), 0);
 
-    const { messages } = mergeClosedTurns(fork, [closed(1, 'the answer')]);
+    const first = {
+        turn_index: 1,
+        user_message: `${forkRecap(copied)}my question`,
+        reply: 'the answer',
+        component_ids: [],
+    };
+    const confirmed = withReadPrompts(fork, first);
+
+    assert.equal(heldTurns(confirmed), 1);
+
+    const { messages } = mergeClosedTurns(confirmed, [first], 7);
 
     assert.deepEqual(messages.at(-1), { role: 'bot', text: 'the answer' });
+});
+
+test("a prompt the harness never confirmed holds no turn another tab's reply can fill", () => {
+    // The page sent `mine` and was closed before its stream named the turn.
+    // Another tab's turn 2 then closed.
+    const page: ChatMessage[] = [
+        ...keyed([1]),
+        { role: 'user', text: 'mine', turn: 2 },
+        { role: 'bot', text: '' },
+    ];
+    const theirs = { ...closed(2, 'their answer'), user_message: 'theirs' };
+
+    assert.equal(readSince(page), 0);
+
+    // The read's latest turn is theirs, so `mine` shows as unsent.
+    const read = withReadPrompts(page, theirs);
+    const { messages, appended } = mergeClosedTurns(read, [closed(1), theirs], 3);
+
+    assert.deepEqual(messages.slice(2), [
+        { role: 'user', text: 'mine', turn: 2, unkeyed: true },
+        { role: 'bot', text: UNSENT_NOTE },
+        { role: 'user', text: 'theirs', harnessTurn: 2, turn: 3 },
+        { role: 'bot', text: 'their answer' },
+    ]);
+    assert.deepEqual(
+        appended.map((turn) => turn.turn_index),
+        [2],
+    );
+    // Without the read, the merge still leaves `mine` alone.
+    assert.deepEqual(mergeClosedTurns(page, [theirs], 3).messages.slice(2, 4), page.slice(2));
+});
+
+test("the page's last prompt takes the harness's next turn only when the harness recorded it", async (t) => {
+    const page: ChatMessage[] = [
+        ...keyed([1]),
+        { role: 'user', text: 'ODA to Ghana', turn: 2 },
+        { role: 'bot', text: '' },
+    ];
+
+    await t.test('the next turn with its text confirms it', () =>
+        assert.deepEqual(
+            [
+                ...promptTurns(
+                    withReadPrompts(page, { turn_index: 2, user_message: 'ODA to Ghana' }),
+                ),
+            ],
+            [
+                [0, 1],
+                [2, 2],
+            ],
+        ),
+    );
+
+    await t.test('a later turn, or another text, leaves it unsent', () => {
+        for (const latest of [
+            { turn_index: 3, user_message: 'ODA to Ghana' },
+            { turn_index: 2, user_message: 'ODA to Kenya' },
+            { turn_index: 1, user_message: 'question 1' },
+            null,
+        ]) {
+            const read = withReadPrompts(page, latest);
+
+            assert.deepEqual([...promptTurns(read)], [[0, 1]]);
+            assert.deepEqual(read.slice(2), [
+                { role: 'user', text: 'ODA to Ghana', turn: 2, unkeyed: true },
+                { role: 'bot', text: UNSENT_NOTE },
+            ]);
+        }
+    });
+
+    await t.test('an earlier prompt with no turn is unsent even when the last one matches', () => {
+        const earlier: ChatMessage[] = [
+            { role: 'user', text: 'lost', turn: 1 },
+            { role: 'bot', text: 'partial' },
+            { role: 'user', text: 'ODA to Ghana', turn: 2 },
+            { role: 'bot', text: '' },
+        ];
+        const read = withReadPrompts(earlier, { turn_index: 1, user_message: 'ODA to Ghana' });
+
+        assert.deepEqual(read, [
+            { role: 'user', text: 'lost', turn: 1, unkeyed: true },
+            { role: 'bot', text: 'partial' },
+            { role: 'user', text: 'ODA to Ghana', turn: 2, harnessTurn: 1 },
+            { role: 'bot', text: '' },
+        ]);
+    });
+
+    await t.test('a transcript whose prompts all hold their turns is unchanged', () => {
+        const held = keyed([1, 2]);
+
+        assert.equal(withReadPrompts(held, { turn_index: 3, user_message: 'question 3' }), held);
+    });
+});
+
+test("a paused turn the page's later unsent prompt does not hold joins the transcript last", () => {
+    // The page held turn 1, then sent `later`, which the harness never
+    // admitted; the harness's turn 2, another tab's, is paused.
+    const page: ChatMessage[] = [
+        ...keyed([1]),
+        { role: 'user', text: 'later', turn: 2 },
+        { role: 'bot', text: '' },
+    ];
+    const read = readOf({
+        turn: turnState({ index: 2, status: 'paused', user_message: 'question 2' }),
+        pause: { interrupt_id: 'int-7', kind: 'plan', frames: [PLAN] },
+        closed_since: [closed(1)],
+    });
+    const confirmed = withReadPrompts(page, {
+        turn_index: 2,
+        user_message: read.turn!.user_message!,
+    });
+    const step = attachStep(read);
+
+    assert.equal(step.kind, 'pause');
+    // The paused turn is one the page does not hold, so it gets its own
+    // prompt, and its reply, the one the pause's stream writes, is last.
+    assert.equal(heldTurns(confirmed), 1);
+
+    const messages = ensureTurn(confirmed, 2, 'question 2', 3);
+
+    assert.equal(turnReplyAt(messages, 2), messages.length - 1);
+    assert.deepEqual(messages.slice(2, 4), [
+        { role: 'user', text: 'later', turn: 2, unkeyed: true },
+        { role: 'bot', text: UNSENT_NOTE },
+    ]);
 });
 
 // An unkeyed transcript of prompt/reply pairs.
@@ -596,7 +804,7 @@ test("an unkeyed save's unsent prompt takes no earlier turn's reply", () => {
     assert.equal(keyed[4]!.role === 'user' && keyed[4]!.unkeyed, true);
     assert.ok(keyed.every((message) => !message.inherited));
 
-    const { messages } = mergeClosedTurns(keyed, turns);
+    const { messages } = mergeClosedTurns(keyed, turns, 4);
 
     assert.deepEqual(
         messages.map((message) => message.text),
@@ -626,7 +834,7 @@ test("an old fork's copied history stays inherited when the save lacks a turn", 
     assert.deepEqual([...promptTurns(keyed)], [[4, 1]]);
     assert.equal(readSince(keyed), 0);
 
-    const { messages, appended } = mergeClosedTurns(keyed, turns);
+    const { messages, appended } = mergeClosedTurns(keyed, turns, 4);
 
     assert.deepEqual(
         appended.map((turn) => turn.turn_index),
@@ -722,9 +930,14 @@ test('a turn another tab ran fills its gap in order', () => {
     // The read starts from the turn the transcript lacks.
     assert.equal(readSince(held), 3);
 
-    const { messages, appended } = mergeClosedTurns(held, [closed(4), closed(5)]);
+    const { messages, appended } = mergeClosedTurns(held, [closed(4), closed(5)], 5);
 
-    assert.deepEqual(messages, keyed([1, 2, 3, 4, 5]));
+    assert.deepEqual(messages, [
+        ...keyed([1, 2, 3]),
+        { role: 'user', text: 'question 4', harnessTurn: 4, turn: 5 },
+        { role: 'bot', text: 'reply 4' },
+        ...keyed([5]),
+    ]);
     assert.deepEqual(
         appended.map((turn) => turn.turn_index),
         [4],
@@ -757,7 +970,7 @@ test("an unkeyed save's chip prompts pair with the turns the harness recorded fo
             [6, 4],
         ],
     );
-    assert.deepEqual(mergeClosedTurns(keyed, turns).appended, []);
+    assert.deepEqual(mergeClosedTurns(keyed, turns, 5).appended, []);
 });
 
 const RECORDED_READ = bodyOf('component_read.at_revision');
@@ -921,11 +1134,25 @@ test('a state read restores the approved plan of a turn whose stream the page lo
     assert.equal(withTurnApprovals(messages, 5, [approvedOf('rev-z')], new Set()), messages);
 });
 
-test("a card a read's closed turn made is filed under that turn, held or appended", () => {
+// Prompt/reply pairs keyed on harness turns, each stamped with a page turn.
+const stamped = (pairs: [number, number][]): ChatMessage[] =>
+    pairs.flatMap(([index, turn]): ChatMessage[] => [
+        { role: 'user', text: `question ${index}`, harnessTurn: index, turn },
+        { role: 'bot', text: `reply ${index}` },
+    ]);
+
+test("a card a read's closed turn made is filed under that turn's page turn, held or appended", () => {
     // The page holds turns 1 and 2, the read appends turn 3; turn 2's card
     // landed after the page left, and turn 3's arrived with it.
-    const messages: ChatMessage[] = [...keyed([1, 2, 3])];
-    const turns = cardTurns(messages, 3, [
+    const { messages } = mergeClosedTurns(
+        stamped([
+            [1, 1],
+            [2, 2],
+        ]),
+        [closed(3)],
+        3,
+    );
+    const turns = cardTurns(messages, [
         { ...closed(2), component_ids: ['cmp_late'] },
         { ...closed(3), component_ids: ['cmp_new'] },
     ]);
@@ -938,17 +1165,44 @@ test("a card a read's closed turn made is filed under that turn, held or appende
         ],
     );
 
-    // Display turns run past the harness's when the page ran turns that
-    // opened none (a refused prompt): they follow the transcript's prompts.
+    // Page turns run past the harness's when the page ran turns that opened
+    // none (a refused prompt): each card takes its prompt's stamp.
     const refused: ChatMessage[] = [
-        { role: 'user', text: 'refused', refunded: true },
+        { role: 'user', text: 'refused', refunded: true, turn: 1 },
         { role: 'bot', text: '_No._' },
-        ...keyed([1, 2]),
+        ...stamped([
+            [1, 2],
+            [2, 3],
+        ]),
     ];
 
     assert.deepEqual(
-        [...cardTurns(refused, 3, [{ ...closed(2), component_ids: ['cmp_x'] }])],
+        [...cardTurns(refused, [{ ...closed(2), component_ids: ['cmp_x'] }])],
         [['cmp_x', 3]],
+    );
+});
+
+test("a turn a read inserts in a gap leaves every later turn's cards where they were", () => {
+    // The page ran harness turns 1, 2 and 4 as page turns 1 to 3; another
+    // tab ran turn 3, which the read inserts before turn 4.
+    const page = stamped([
+        [1, 1],
+        [2, 2],
+        [4, 3],
+    ]);
+    const { messages } = mergeClosedTurns(page, [closed(3), closed(4)], 4);
+
+    assert.deepEqual(
+        [
+            ...cardTurns(messages, [
+                { ...closed(3), component_ids: ['cmp_other_tab'] },
+                { ...closed(4), component_ids: ['cmp_mine'] },
+            ]),
+        ],
+        [
+            ['cmp_other_tab', 4],
+            ['cmp_mine', 3],
+        ],
     );
 });
 

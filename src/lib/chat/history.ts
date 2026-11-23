@@ -74,4 +74,8 @@ export type ShareMark = {
     // goes (see shareMarkAfter). Optional: marks from before this didn't
     // have it.
     userMessages?: number;
+    // The page's turn count when shared: a turn stamped later sits beyond
+    // the mark wherever a state read placed it (see shareMarkAfter).
+    // Optional: marks from before this didn't have it.
+    turnCount?: number;
 };

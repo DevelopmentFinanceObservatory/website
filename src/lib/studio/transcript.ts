@@ -41,20 +41,20 @@ const isOwnPrompt = (message: ChatMessage): message is Extract<ChatMessage, { ro
 
 /**
  * The harness turn each of the conversation's own prompts opened, keyed by
- * the prompt's position in `messages`: its `harnessTurn`, else one past the
- * prompt before it. A prompt saved before its turn arrived counts on from
- * the last prompt that has one. A refunded prompt opened no turn, an
- * inherited one (a fork's copy of another conversation) none of this
- * conversation's, and an unkeyed one (keyUnkeyedSave) none the page can name.
+ * the prompt's position in `messages`. Only a prompt the harness confirmed
+ * (`harnessTurn`, from its stream's x-dfo-turn-index header, a state read
+ * or keyUnkeyedSave) holds a turn: a prompt saved before its turn arrived
+ * holds none until a read confirms it (withReadPrompts). A refunded prompt
+ * opened no turn, an inherited one (a fork's copy of another conversation)
+ * none of this conversation's, and an unkeyed one (keyUnkeyedSave,
+ * withReadPrompts) none the harness holds.
  */
 export const promptTurns = (messages: readonly ChatMessage[]): Map<number, number> => {
     const turns = new Map<number, number>();
-    let turn = 0;
 
     for (const [at, message] of messages.entries()) {
-        if (isOwnPrompt(message)) {
-            turn = message.harnessTurn ?? turn + 1;
-            turns.set(at, turn);
+        if (isOwnPrompt(message) && message.harnessTurn !== undefined) {
+            turns.set(at, message.harnessTurn);
         }
     }
 
@@ -63,7 +63,7 @@ export const promptTurns = (messages: readonly ChatMessage[]): Map<number, numbe
 
 /** The latest harness turn the transcript holds, 0 for none. */
 export const heldTurns = (messages: readonly ChatMessage[]): number =>
-    [...promptTurns(messages).values()].at(-1) ?? 0;
+    Math.max(0, ...promptTurns(messages).values());
 
 /**
  * The `since` to read the harness's state with: the turn before the lowest
@@ -302,15 +302,24 @@ export const keyUnkeyedSave = (
 
 /**
  * The transcript with the harness turn `index` on the prompt that opened it:
- * the last prompt not refunded, since a new turn waits until the one in
- * flight ends and a refused one opened no turn. A prompt that already
- * carries `index` is left as it is.
+ * the own prompt stamped with page turn `turn`, the turn the stream that
+ * named `index` was opened for. Unchanged when a prompt already holds
+ * `index`, and when that prompt holds another turn, so a stream never moves
+ * a turn from the prompt the harness confirmed for it.
  */
-export const withHarnessTurn = (messages: ChatMessage[], index: number): ChatMessage[] => {
-    const at = messages.findLastIndex(isOwnPrompt);
+export const withHarnessTurn = (
+    messages: ChatMessage[],
+    turn: number,
+    index: number,
+): ChatMessage[] => {
+    const at = messages.findLastIndex((message) => isOwnPrompt(message) && message.turn === turn);
     const prompt = messages[at];
 
-    if (prompt?.role !== 'user' || prompt.harnessTurn === index) {
+    if (
+        prompt?.role !== 'user' ||
+        prompt.harnessTurn !== undefined ||
+        [...promptTurns(messages).values()].includes(index)
+    ) {
         return messages;
     }
 
@@ -321,29 +330,101 @@ export const withHarnessTurn = (messages: ChatMessage[], index: number): ChatMes
 
 /**
  * The transcript holding harness turn `index`: unchanged when a prompt
- * already holds it, else with `userMessage` as the turn's prompt and an
- * empty reply, placed by index before the first prompt of a later turn
- * (one another tab's turn went ahead of), else after the last message.
+ * already holds it, else with `userMessage` as the turn's prompt, stamped
+ * page turn `turn`, and an empty reply, placed by index before the first
+ * prompt of a later turn (one another tab's turn went ahead of), else after
+ * the last message.
  */
 export const ensureTurn = (
     messages: ChatMessage[],
     index: number,
     userMessage: string,
+    turn: number,
 ): ChatMessage[] => {
     const turns = [...promptTurns(messages)];
 
-    if (turns.some(([, turn]) => turn === index)) {
+    if (turns.some(([, held]) => held === index)) {
         return messages;
     }
 
-    const at = turns.find(([, turn]) => turn > index)?.[0] ?? messages.length;
+    const at = turns.find(([, held]) => held > index)?.[0] ?? messages.length;
 
     return [
         ...messages.slice(0, at),
-        { role: 'user', text: userMessage, harnessTurn: index },
+        { role: 'user', text: userMessage, harnessTurn: index, turn },
         { role: 'bot', text: '' },
         ...messages.slice(at),
     ];
+};
+
+/** The reply an own prompt shows once a state read finds the harness never
+ *  admitted it, when it has none of its own. */
+export const UNSENT_NOTE = '_This message was not sent._';
+
+/**
+ * The transcript against a state read whose latest turn is `latest` (null
+ * when the harness holds none). The page's last own prompt, saved before
+ * its stream named its turn, takes that turn when it is the one after the
+ * latest the transcript holds and the harness recorded its text
+ * (recordsPrompt, or the text after a fork's recap on turn 1). Every other
+ * own prompt with no turn is one the read shows the harness lacks: it is
+ * marked `unkeyed`, so it numbers no turn, and an empty reply says it was
+ * not sent. The turns it may have been come in from the harness's record
+ * (ensureTurn).
+ */
+export const withReadPrompts = (
+    messages: ChatMessage[],
+    latest: RecordedPrompt | null,
+): ChatMessage[] => {
+    const held = heldTurns(messages);
+    const last = messages.findLastIndex(isOwnPrompt);
+    const lastPrompt = messages[last];
+    const recorded = latest?.turn_index === held + 1 ? latest.user_message : null;
+    const confirmed =
+        recorded !== null &&
+        lastPrompt?.role === 'user' &&
+        lastPrompt.harnessTurn === undefined &&
+        (recordsPrompt(recorded, lastPrompt.text) ||
+            (held === 0 && recordsText(afterRecap(recorded) ?? '', lastPrompt.text)));
+    const unsent = new Set(
+        [...messages.entries()].flatMap(([at, message]) =>
+            isOwnPrompt(message) && message.harnessTurn === undefined && !(confirmed && at === last)
+                ? [at]
+                : [],
+        ),
+    );
+
+    if (!confirmed && unsent.size === 0) {
+        return messages;
+    }
+
+    // Each unsent prompt's reply: the last bot message before the next prompt.
+    const replies = new Set(
+        [...unsent].flatMap((at) => {
+            const next = messages.findIndex((message, other) => other > at && isPrompt(message));
+            const reply = messages
+                .slice(at + 1, next === -1 ? messages.length : next)
+                .findLastIndex((message) => message.role === 'bot');
+
+            return reply === -1 ? [] : [at + 1 + reply];
+        }),
+    );
+
+    return messages.map((message, at): ChatMessage => {
+        if (message.role === 'user' && confirmed && at === last) {
+            return { ...message, harnessTurn: held + 1 };
+        }
+
+        if (message.role === 'user' && unsent.has(at)) {
+            return { ...message, unkeyed: true };
+        }
+
+        if (message.role === 'bot' && replies.has(at) && !message.text) {
+            return { ...message, text: UNSENT_NOTE };
+        }
+
+        return message;
+    });
 };
 
 /**
@@ -527,7 +608,10 @@ export const withNewQuestion = (messages: ChatMessage[], question: string): Chat
  * The index of the message a Chat + Canvas share mark follows: the one
  * before the first user message the share did not hold (an answer can go in
  * before a paused turn's reply, so a message count would drift), else the
- * last. Marks saved without `userMessages` keep their message count.
+ * last. The user messages of a turn stamped after the share (`turn` above
+ * the mark's `turnCount`) that a state read placed among the turns the share
+ * held do not count, so a recovered turn leaves the mark where it was. Marks
+ * saved without `userMessages` keep their message count.
  */
 export const shareMarkAfter = (messages: ChatMessage[], mark: ShareMark): number => {
     if (mark.userMessages === undefined) {
@@ -535,10 +619,26 @@ export const shareMarkAfter = (messages: ChatMessage[], mark: ShareMark): number
     }
 
     let users = 0;
+    let later = false;
 
     for (const [index, message] of messages.entries()) {
-        if (message.role === 'user' && users++ === mark.userMessages) {
+        if (message.role !== 'user') {
+            continue;
+        }
+
+        if (isPrompt(message)) {
+            later =
+                mark.turnCount !== undefined &&
+                message.turn !== undefined &&
+                message.turn > mark.turnCount;
+        }
+
+        if (users === mark.userMessages) {
             return index - 1;
+        }
+
+        if (!later) {
+            users += 1;
         }
     }
 

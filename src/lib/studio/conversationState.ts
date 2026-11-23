@@ -112,14 +112,19 @@ export type ClosedMerge = {
 
 /**
  * The transcript with the harness's closed turns merged in, each keyed on
- * its turn index (ensureTurn). A turn the page holds keeps the page's text,
- * except that an empty reply takes the harness's. A turn the page lacks is
- * appended as its user message and reply. Merging the same turns again
+ * its turn index (ensureTurn). A turn the page lacks is added as its user
+ * message and reply, its prompt stamped with the next free page turn from
+ * `nextTurn` on, in turn order. A turn the page holds takes the harness's
+ * reply when it closed cleanly with one, since that is the text its
+ * `message.complete` sent, which a page saved mid-stream holds only part of.
+ * A turn that closed with an error keeps the page's text unless its reply is
+ * empty, so a stopped turn keeps its note. Merging the same turns again
  * changes nothing.
  */
 export const mergeClosedTurns = (
     messages: ChatMessage[],
     closed: readonly ClosedTurn[],
+    nextTurn: number,
 ): ClosedMerge => {
     let merged = messages;
     const appended: ClosedTurn[] = [];
@@ -127,7 +132,7 @@ export const mergeClosedTurns = (
     for (const turn of [...closed].sort((a, b) => a.turn_index - b.turn_index)) {
         const before = merged;
 
-        merged = ensureTurn(merged, turn.turn_index, turn.user_message);
+        merged = ensureTurn(merged, turn.turn_index, turn.user_message, nextTurn + appended.length);
 
         if (merged !== before) {
             appended.push(turn);
@@ -136,10 +141,10 @@ export const mergeClosedTurns = (
         const at = turnReplyAt(merged, turn.turn_index);
         const reply = merged[at];
 
-        if (reply?.role === 'bot' && !reply.text) {
-            const text = closedReply(turn);
+        if (reply?.role === 'bot') {
+            const text = !turn.error && turn.reply ? turn.reply : reply.text || closedReply(turn);
 
-            if (text) {
+            if (text !== reply.text) {
                 merged = merged.map((message, other) =>
                     other === at ? { ...reply, text } : message,
                 );
@@ -365,33 +370,29 @@ export const withTurnApprovals = (
 };
 
 /**
- * The display turn each card a read's closed turns made is filed under, by
- * component id: the turn of the page's prompt that holds the harness turn
- * (as messageTurns numbers it, `latestTurn` being the latest display turn),
- * whether the page held that turn or the read appended it. A card of a turn
- * the transcript does not hold is left out.
+ * The page turn each card a read's closed turns made is filed under, by
+ * component id: the stamp (`turn`) of the prompt that holds the harness
+ * turn, whether the page held that turn or the read appended it. A card of
+ * a turn the transcript does not hold, or whose prompt has no stamp, is
+ * left out.
  */
 export const cardTurns = (
     messages: readonly ChatMessage[],
-    latestTurn: number,
     closed: readonly ClosedTurn[],
 ): Map<string, number> => {
-    const prompts = messages.filter(isPrompt).length;
-    const dropped = Math.max(0, latestTurn - prompts);
     const turns = [...promptTurns(messages)];
     const filed = new Map<string, number>();
 
     for (const turn of closed) {
         const at = turns.findLast(([, index]) => index === turn.turn_index)?.[0];
+        const prompt = at === undefined ? undefined : messages[at];
 
-        if (at === undefined) {
+        if (prompt?.role !== 'user' || prompt.turn === undefined) {
             continue;
         }
 
-        const display = dropped + messages.slice(0, at + 1).filter(isPrompt).length;
-
         for (const id of turn.component_ids) {
-            filed.set(id, display);
+            filed.set(id, prompt.turn);
         }
     }
 

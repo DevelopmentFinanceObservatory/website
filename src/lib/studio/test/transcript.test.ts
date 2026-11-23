@@ -110,6 +110,29 @@ test('a share of a finished turn sits after its reply, before the next prompt', 
     assert.equal(shareMarkAfter([...finished, { role: 'user', text: 'And Ghana?' }], mark), 1);
 });
 
+test('a turn a read inserts above a share mark leaves the mark after the reply it followed', () => {
+    // Shared after page turn 2, harness turn 3.
+    const shared: ChatMessage[] = [
+        { role: 'user', text: 'Show me aid to Kenya', harnessTurn: 1, turn: 1 },
+        { role: 'bot', text: 'USD 1.2bn' },
+        { role: 'user', text: 'By donor', harnessTurn: 3, turn: 2 },
+        { role: 'bot', text: 'The United States leads.' },
+    ];
+    const mark = { ...markFor(shared), turnCount: 2 };
+    // A state read then inserted another tab's turn 2, stamped page turn 3,
+    // and the user asked again as page turn 4.
+    const later: ChatMessage[] = [
+        ...shared.slice(0, 2),
+        { role: 'user', text: 'And Ghana?', harnessTurn: 2, turn: 3 },
+        { role: 'bot', text: 'USD 0.9bn' },
+        ...shared.slice(2),
+        { role: 'user', text: 'By sector', harnessTurn: 4, turn: 4 },
+        { role: 'bot', text: '' },
+    ];
+
+    assert.equal(later[shareMarkAfter(later, mark)]?.text, 'The United States leads.');
+});
+
 test('a mark saved before userMessages keeps its message count', () => {
     const mark: ShareMark = { messageIndex: 2, shareId: 'share', at: 0 };
 
