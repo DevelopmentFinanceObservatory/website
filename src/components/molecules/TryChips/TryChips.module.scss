@@ -52,9 +52,8 @@
     border-radius: rem(24);
     cursor: pointer;
 
-    // No own transition: the chip is a [data-reveal] element, and a same-
-    // specificity shorthand here would override the reveal exit transition
-    // (chips would pop out instantly). The reveal lists cover bg/color too.
+    // No own transition: the chip is a [data-reveal] element, whose reveal
+    // rule already eases background-color and color.
     &:hover {
         background-color: var(--prompt-chip-hover-bg, var(--color-yellow-800));
     }
