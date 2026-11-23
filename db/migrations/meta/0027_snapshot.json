@@ -1,5 +1,5 @@
 {
-  "id": "decd84e1-2b4d-402c-ad9a-5e351db53b8a",
+  "id": "1530b0e0-7ea7-4a31-8ee1-27824604469c",
   "prevId": "c01c2094-d621-4ca0-850e-62d25a2b2269",
   "version": "7",
   "dialect": "postgresql",
@@ -72,6 +72,21 @@
             },
             {
               "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "conversation_agent_session_idx": {
+          "name": "conversation_agent_session_idx",
+          "columns": [
+            {
+              "expression": "agent_session_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

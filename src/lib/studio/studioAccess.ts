@@ -4,10 +4,10 @@
  * conversation id is all a call names. The site holds the ownership in one
  * owner row per harness conversation (`studioSessionOwner` in db/schema.ts),
  * which nothing changes once written. Three writers race to insert it, and
- * the first wins: a signed-in turn's claim (checkStudioOwner), a save naming
- * the conversation (src/lib/chat/conversationSave), and the owner read
- * itself, which claims a conversation for the one account whose saved
- * conversations name it (src/lib/chat/conversationStore).
+ * the first wins. They are a signed-in turn's claim (checkStudioOwner), a
+ * save naming the conversation (src/lib/chat/conversationSave), and the
+ * owner read itself, which claims a conversation for the one account whose
+ * saved conversations name it (src/lib/chat/conversationStore).
  *
  * A conversation an account owns answers only to that account, on every
  * route: a guest is asked to sign in (SIGN_IN_REQUIRED) and another account
@@ -18,10 +18,12 @@
  * random UUID the page mints. The refusals here reveal whether an id exists.
  *
  * The proxy checks a call in two steps. readStudioCall rebuilds the call it
- * forwards, before the rate limit, and reads no database. checkStudioOwner
- * reads and claims the owner inside forward()'s `admit` hook, after the rate
- * limit, so a call the rate limit refuses reads no owner row. Of the Studio
- * calls, only a POST `turn` whose prompt the allowance admits writes one.
+ * forwards, after the proxy counts the call against the rate limit
+ * (studioProxy) and reads no database. checkStudioOwner reads and claims the
+ * owner inside forward()'s `admit` hook, so a call the rate limit refuses
+ * reads no owner row. A signed-in POST `turn` whose prompt the allowance
+ * admits claims one, and so can any call that reaches the owner read, since
+ * that read claims from saves.
  */
 
 // The methods the harness serves on each route, and so the only ones the
@@ -32,7 +34,7 @@ const STUDIO_METHODS: Readonly<Record<string, readonly string[]>> = {
     cancel: ['POST'],
     composition: ['POST'],
     resume: ['POST'],
-    state: ['GET', 'HEAD'],
+    state: ['GET'],
 };
 
 /** The `Allow` header of a Studio route: its methods and OPTIONS. */
@@ -54,7 +56,7 @@ const CLAIM_ROUTE = 'turn';
 // route other than `turn`.
 export const MAX_STUDIO_BODY_BYTES = 1_048_576;
 
-// The largest `turn` body: its `seed_spec` carries up to six Spec blocks of
+// The largest `turn` body. Its `seed_spec` carries up to six Spec blocks of
 // up to 1 MiB each beside the message. Equal to the harness's own cap,
 // `MAX_TURN_REQUEST_BYTES` in dfo-ai's services/harness/src/harness/wire.py.
 export const MAX_TURN_BODY_BYTES = 6 * 1_048_576 + 65_536;
@@ -70,6 +72,14 @@ export const maxStudioBodyBytes = (route: string): number =>
  * mints a 36-character UUID.
  */
 export const MAX_CONVERSATION_ID_CHARS = 256;
+
+/**
+ * Whether `id` can name a conversation: not empty, at most
+ * MAX_CONVERSATION_ID_CHARS long, and free of control characters (U+0000
+ * makes a Postgres read throw).
+ */
+export const isConversationId = (id: string): boolean =>
+    id.length > 0 && id.length <= MAX_CONVERSATION_ID_CHARS && !/\p{Cc}/u.test(id);
 
 /**
  * The problem code of a guest's call about a conversation an account owns
@@ -103,8 +113,8 @@ export type StudioCall = {
  * parser would read differently (a repeated member, `NaN`) cannot name a
  * conversation the proxy did not check. The body loses `session_id` for the
  * same older harness, so only `conversation_id` names the conversation
- * whichever harness answers. An id longer than MAX_CONVERSATION_ID_CHARS
- * names no conversation the site can own, and is refused.
+ * whichever harness answers. An id that fails isConversationId names no
+ * conversation the site can own, and is refused.
  */
 export const canonicalStudioCall = (
     method: string,
@@ -116,7 +126,7 @@ export const canonicalStudioCall = (
 
         return ids.length > 1 ||
             search.has('session_id') ||
-            (ids[0]?.length ?? 0) > MAX_CONVERSATION_ID_CHARS
+            (ids[0] !== undefined && !isConversationId(ids[0]))
             ? null
             : { conversationId: ids[0] ?? null, search: new URLSearchParams(search), body: null };
     }
@@ -139,7 +149,7 @@ export const canonicalStudioCall = (
 
     const id = members.conversation_id;
 
-    if (id !== undefined && (typeof id !== 'string' || id.length > MAX_CONVERSATION_ID_CHARS)) {
+    if (id !== undefined && (typeof id !== 'string' || !isConversationId(id))) {
         return null;
     }
 
@@ -279,7 +289,8 @@ const withinTimeout = async <T>(work: Promise<T>, timeoutMs: number): Promise<T>
  * Each read that fails, or has not answered within `timeoutMs`, refuses the
  * call as `unavailable`, since forwarding it unchecked would open an owned
  * conversation to anyone. A claim starts only after the owner read has
- * answered in time, so an owner read the timeout gave up on claims nothing.
+ * answered in time. An owner read the timeout gave up on starts no claim,
+ * though a claim from saves inside that read can still land after it.
  */
 export const checkStudioOwner = async <R>({
     route,

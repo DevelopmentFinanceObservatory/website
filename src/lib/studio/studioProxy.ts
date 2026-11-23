@@ -10,8 +10,11 @@ import {
     missingProblem,
     notFoundProblem,
     problem,
+    rateLimitedProblem,
     requestInvalidProblem,
 } from '@/lib/proxy/problem';
+import { rateHeaders } from '@/lib/proxy/rateHeaders';
+import { hit } from '@/lib/proxy/rateLimit';
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
 import {
     checkStudioOwner,
@@ -146,12 +149,32 @@ export const studioProxy =
         const session = sessionOnce(getUser);
         const readUserId = async () => (await session())?.id ?? null;
 
-        const read = await readStudioCall({
-            route,
-            method: req.method,
-            search: req.nextUrl.searchParams,
-            readBody: (maxBytes) => readBoundedText(req.body, maxBytes),
-        });
+        // Counted before the body is read, so a call the proxy answers itself
+        // counts too. forward() takes this verdict and counts nothing more.
+        const counted = await hit('api', clientIp(req));
+        const limitHeaders = rateHeaders(counted);
+
+        if (!counted.allowed) {
+            return rateLimitedProblem(counted, limitHeaders);
+        }
+
+        let read: Awaited<ReturnType<typeof readStudioCall>>;
+
+        try {
+            read = await readStudioCall({
+                route,
+                method: req.method,
+                search: req.nextUrl.searchParams,
+                readBody: (maxBytes) => readBoundedText(req.body, maxBytes),
+            });
+        } catch (error) {
+            // The client dropped the connection mid-upload.
+            if (!req.signal.aborted) {
+                console.error('studio: the request body was not read', error);
+            }
+
+            return requestInvalidProblem('The request body could not be read.');
+        }
 
         if (read.call === null) {
             return callProblem(route, read.refusal);
@@ -171,7 +194,7 @@ export const studioProxy =
             });
 
         const options = {
-            surface: 'api',
+            counted,
             target: `${STUDIO_API_BASE}/api/studio/${route}${queryOf(call.search)}`,
             body: call.body ?? undefined,
             bearer: STUDIO_TOKEN,

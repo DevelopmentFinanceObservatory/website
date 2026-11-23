@@ -9,6 +9,7 @@ import test from 'node:test';
 import {
     canonicalStudioCall,
     checkStudioOwner,
+    isConversationId,
     MAX_CONVERSATION_ID_CHARS,
     readStudioCall,
     SIGN_IN_REQUIRED,
@@ -38,7 +39,7 @@ const studioAccess = async (input: CallInput & OwnerInput) => {
 const studioAccessRefusal = async (input: CallInput & OwnerInput) =>
     (await studioAccess(input)).refusal;
 
-// A claim on a conversation no other account has claimed: the caller owns it.
+// A claim on a conversation no other account has claimed, so the caller owns it.
 const unclaimed = async (_id: string, userId: string) => [userId];
 
 const OWNERS: Record<string, (string | null)[]> = {
@@ -90,7 +91,7 @@ test('studioAccessRefusal gives state and resume only to the owner', async () =>
     }
 
     // A conversation no account owns yet (a guest's, or one an account is
-    // about to claim) still drives its turn.
+    // about to claim) can still drive its turn.
     for (const route of ['turn', 'interrupt', 'cancel', 'composition']) {
         assert.equal(await check(route, null, 'conv-guest'), null, `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-guest'), null, route);
@@ -156,6 +157,26 @@ test('canonicalStudioCall reads the query of a GET and the JSON body otherwise',
             ?.conversationId,
         long.slice(1),
     );
+});
+
+test('isConversationId refuses an empty id and one with a control character', () => {
+    for (const id of ['', 'a\u0000b', 'a\nb', '\u007f']) {
+        assert.equal(isConversationId(id), false, JSON.stringify(id));
+        assert.equal(
+            canonicalStudioCall('GET', new URLSearchParams({ conversation_id: id }), null),
+            null,
+        );
+        assert.equal(
+            canonicalStudioCall(
+                'POST',
+                new URLSearchParams(),
+                JSON.stringify({ conversation_id: id }),
+            ),
+            null,
+        );
+    }
+
+    assert.equal(isConversationId('c'.repeat(MAX_CONVERSATION_ID_CHARS)), true);
 });
 
 // The harness reads a repeated query parameter's last value, an older
@@ -395,6 +416,8 @@ test('readStudioCall answers OPTIONS and refuses a method the route does not ser
     for (const method of ['GET', 'HEAD']) {
         assert.equal((await read('turn', method)).refusal, 'method_not_allowed', method);
     }
+
+    assert.equal((await read('state', 'HEAD')).refusal, 'method_not_allowed');
 
     assert.equal((await read('state', 'POST')).refusal, 'method_not_allowed');
     assert.deepEqual(reads, []);

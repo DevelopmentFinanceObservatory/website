@@ -42,7 +42,11 @@ export const conversation = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
-    (table) => [index('conversation_user_updated_idx').on(table.userId, table.updatedAt)],
+    (table) => [
+        index('conversation_user_updated_idx').on(table.userId, table.updatedAt),
+        // Owner lookups in src/lib/chat/conversationSave find saves by harness conversation.
+        index('conversation_agent_session_idx').on(table.agentSessionId),
+    ],
 );
 
 export type ConversationRow = typeof conversation.$inferSelect;
@@ -52,9 +56,10 @@ export type ConversationRow = typeof conversation.$inferSelect;
  * Studio proxy (src/lib/studio/studioProxy) reads in its `admit` hook, after
  * the rate limit, on each call that names a conversation
  * (src/lib/studio/studioAccess). Three writers insert the row, each only when
- * none exists (src/lib/chat/conversationSave): a signed-in turn naming the
- * harness conversation, a save naming it, and a read that finds no row
- * while every saved conversation naming it belongs to one account. Once
+ * none exists and no two accounts' saved conversations name the harness
+ * conversation (src/lib/chat/conversationSave): a signed-in turn naming it, a
+ * save naming it, and a read that finds no row while every saved
+ * conversation naming it belongs to one account. Once
  * written, the owner stays, so a save by another account, or the owner's save
  * naming a different harness conversation, leaves it as it was. Deleting the
  * account sets `userId` to null and keeps the row, so the conversation
