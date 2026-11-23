@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from pipeline.errors import DataError
-from pipeline.sources.pinned import Mode, Reads
+from pipeline.sources.pinned import Mode, Reads, worst_freshness
 
 COMMITTED = {"k": {"ref": {"r": "old"}, "provenance": {"p": "old"}}}
 
@@ -264,3 +264,36 @@ def test_a_search_records_its_reading_beside_the_ref() -> None:
     reads.fetch("k", lambda: ({"code": "new"}, dataset("built", pinned=False)))
     reads.keep()
     assert reads.records["k"]["reading"] == {"code": "new"}
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "combined"),
+    [
+        # Pending wins, so a stale or unknown read cannot hide one the build would read again.
+        ("stale", "pending", "pending"),
+        ("pending", None, "pending"),
+        (None, "stale", None),
+        ("current", "stale", "stale"),
+        ("current", "current", "current"),
+    ],
+)
+def test_worst_freshness_keeps_pending_over_every_other_state(first, second, combined) -> None:
+    assert worst_freshness(first, second) == combined
+    assert worst_freshness(second, first) == combined
+
+
+def test_a_spec_read_at_two_versions_makes_every_key_that_read_it_pending() -> None:
+    committed = {key: {"ref": {}, "provenance": {}} for key in ("a", "b", "c")}
+    client = StoredClient(
+        stored([member("spec_1", "cv_old")], "current"),
+        stored([member("spec_2", "cv_2")], "current"),
+        stored([derived(("spec_1", "cv_new"))], "current"),
+    )
+    reads = Reads(client, mode=Mode.STORED, committed=committed)
+    for key in ("a", "b", "c"):
+        reads.fetch(key, never)
+    assert {key: source["freshness"] for key, source in reads.sources.items()} == {
+        "a": "pending",
+        "b": "current",
+        "c": "pending",
+    }

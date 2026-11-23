@@ -33,25 +33,62 @@ def test_check_weo_names_refuses_a_renamed_series():
         check_weo_names(names, view)
 
 
+CURRENT = views(date(2026, 11, 16), current_ids="November 2026")[1]  # base 2025, end 2031
+
+
+def weo_file(path: Path, data: dict, *, vintage: str = "October 2026", base: int = 2025) -> Path:
+    """Write `data` as a WEO file read from the `vintage` release for base year `base`."""
+    preload = {"vintage": vintage, "baseYear": base, "series": list(WEO_SERIES.values())}
+    path.write_text(json.dumps({"provenance": {"preloads": [preload]}, "data": data}))
+    return path
+
+
+def full_years() -> dict:
+    """Each series with a value in every year the 2025 view needs."""
+    return {key: {str(year): 1.0 for year in range(2025, 2032)} for key in WEO_SERIES}
+
+
 def test_read_weo_file_reads_years_as_ints_and_a_missing_series_as_empty(tmp_path: Path):
     data = {iso3: {} for iso3 in ISO3}
     data["KEN"] = {"revenue_pct": {"2025": 17.5, "2024": 18}}
-    path = tmp_path / "weo-2025.json"
-    path.write_text(json.dumps({"provenance": {}, "data": data}))
-    panel = read_weo_file(path)
+    data["UGA"] = full_years()
+    panel = read_weo_file(weo_file(tmp_path / "weo-2025.json", data), CURRENT)
     assert panel["KEN"]["revenue_pct"] == {2025: 17.5, 2024: 18.0}
     assert panel["KEN"]["gdp_usd_bn"] == {}
     assert list(panel["UGA"]) == list(WEO_SERIES)
 
 
-def test_read_weo_file_refuses_a_file_without_a_country(tmp_path: Path):
-    path = tmp_path / "weo-2025.json"
-    path.write_text(json.dumps({"provenance": {}, "data": {"KEN": {}}}))
-    with pytest.raises(DataError, match="lacks"):
-        read_weo_file(path)
+@pytest.mark.parametrize(
+    ("change", "match"),
+    [
+        ({"countries": ["KEN"]}, "lacks"),
+        ({"vintage": "April 2026"}, "reads the October 2026 release"),
+        ({"base": 2024}, "reads the October 2026 release"),
+        ({"end": 2030}, "no gdp_usd_bn value in 2031"),
+    ],
+)
+def test_read_weo_file_refuses_a_file_that_is_not_the_views_slice(
+    tmp_path: Path, change: dict, match: str
+):
+    end = change.get("end", 2031)
+    years = {key: {str(year): 1.0 for year in range(2025, end + 1)} for key in WEO_SERIES}
+    data = {iso3: years for iso3 in change.get("countries", ISO3)}
+    path = weo_file(
+        tmp_path / "weo-2025.json",
+        data,
+        vintage=change.get("vintage", "October 2026"),
+        base=change.get("base", 2025),
+    )
+    with pytest.raises(DataError, match=match):
+        read_weo_file(path, CURRENT)
+
+
+def test_read_weo_file_refuses_a_missing_file(tmp_path: Path):
+    with pytest.raises(DataError, match=r"weo-2025\.json is missing"):
+        read_weo_file(tmp_path / "weo-2025.json", CURRENT)
 
 
 def test_the_committed_weo_file_covers_every_country():
-    panel = read_weo_file(Path(__file__).resolve().parent.parent / "weo-2025.json")
+    panel = read_weo_file(Path(__file__).resolve().parent.parent / "weo-2025.json", CURRENT)
     assert set(panel) == set(ISO3)
     assert sum(bool(keys["revenue_pct"]) for keys in panel.values()) > len(ISO3) / 2

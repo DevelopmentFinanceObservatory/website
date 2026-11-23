@@ -88,20 +88,45 @@ def weo_panel(rows: Iterable[tuple[str, str, int, float]]) -> dict[str, dict[str
     return out
 
 
-def read_weo_file(path: Path) -> dict[str, dict[str, Series]]:
+def read_weo_file(path: Path, view: View) -> dict[str, dict[str, Series]]:
     """Return the WEO series a data step committed to `path`, by ISO3 then key, years as ints.
 
     A series the release lacks for a country reads as empty, as in `weo_panel`.
-    Raises `DataError` when the file lacks a country in the note.
+    Raises `DataError` when the file is missing, was read from another WEO
+    release or base year than `view`'s, lacks a country in the note, or holds no
+    country's value of a series in a year from `view.base` to `view.end`.
     """
-    data = json.loads(path.read_text())["data"]
+    if not path.exists():
+        raise DataError(f"{path.name} is missing; run the data step.")
+    envelope = json.loads(path.read_text())
+    release = f"{view.weo[0]} {view.weo[1]}"
+    read = [
+        (preload.get("vintage"), preload.get("baseYear"))
+        for preload in envelope["provenance"].get("preloads", [])
+        if preload.get("series") == list(WEO_SERIES.values())
+    ]
+    if read != [(release, view.base)]:
+        raise DataError(
+            f"{path.name} holds WEO {read or 'of no stated release'}, where the "
+            f"{view.base} view reads the {release} release; run the data step."
+        )
+    data = envelope["data"]
     lacking = [iso3 for iso3 in ISO3 if iso3 not in data]
     if lacking:
         raise DataError(f"{path.name} lacks {', '.join(lacking)}; run the data step.")
-    return {
+    panel = {
         iso3: {
             key: {int(year): float(value) for year, value in data[iso3].get(key, {}).items()}
             for key in WEO_SERIES
         }
         for iso3 in ISO3
     }
+    for key in WEO_SERIES:
+        held = {year for series in panel.values() for year in series[key]}
+        short = [year for year in range(view.base, view.end + 1) if year not in held]
+        if short:
+            raise DataError(
+                f"{path.name} has no {key} value in {', '.join(map(str, short))}, which the "
+                f"{view.base} view needs; run the data step."
+            )
+    return panel

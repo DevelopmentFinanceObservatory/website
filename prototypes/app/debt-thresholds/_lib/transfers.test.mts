@@ -6,12 +6,15 @@ import type { Group } from './thresholds.ts';
 import {
     groupTransfers,
     lastActualYear,
+    NO_DATA_ISO3,
     parseGroups,
     SET_ASIDE_ISO3,
     swing,
     transfersByCountry,
     TRANSFER_GROUPS,
+    transfersFromRead,
     transfersHeading,
+    TransfersCheckError,
     valuesByCountry,
     type TransferLine,
     type TransferMember,
@@ -199,4 +202,49 @@ test('parseGroups skips comments and refuses an unknown group or a broken line',
     assert.throws(() => parseGroups('iso3,name,group\nAAA,Alpha,nope\n'), /unknown group/);
     assert.throws(() => parseGroups('iso3,name,group\nAAA,Alpha\n'), /2 fields/);
     assert.throws(() => parseGroups('iso3,group\n'), /not iso3,name,group/);
+});
+
+/** The definition of a spec that binds `destinations` and leaves `openRoles` open. */
+const definition = (destinations: string[], openRoles: string[] = []) => ({
+    identity: {
+        entities: { destination: destinations.map((iso3) => `country/${iso3}`) },
+        open_roles: openRoles,
+    },
+});
+
+/** Every rule `transfersFromRead` finds broken, or none. */
+const brokenChecks = (members: string[], spec: unknown) => {
+    try {
+        transfersFromRead(
+            synthetic,
+            members.map((iso3) => ({ iso3, name: iso3, group: 'x' })),
+            spec,
+        );
+
+        return [];
+    } catch (error) {
+        assert.ok(error instanceof TransfersCheckError, String(error));
+
+        return error.checks;
+    }
+};
+
+test('transfersFromRead refuses a member outside the ref, one without values, or other roles', () => {
+    const [noData] = NO_DATA_ISO3;
+
+    assert.ok(noData !== undefined);
+    // Every member is a destination and has values, or is listed as having none.
+    assert.deepEqual(brokenChecks(['AAA', 'CCC', noData], definition(['AAA', 'CCC', noData])), []);
+    assert.deepEqual(brokenChecks(['AAA', 'EEE'], definition(['AAA'])), [
+        'member_not_in_ref',
+        'member_without_values',
+    ]);
+    assert.deepEqual(brokenChecks(['AAA'], definition(['AAA'], ['origin'])), ['spec_roles']);
+    assert.deepEqual(
+        brokenChecks(['AAA'], {
+            identity: { entities: { destination: ['country/AAA'], origin: ['x'] } },
+        }),
+        ['spec_roles'],
+    );
+    assert.deepEqual(brokenChecks(['AAA'], undefined), ['spec_roles', 'member_not_in_ref']);
 });

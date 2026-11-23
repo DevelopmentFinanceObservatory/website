@@ -100,6 +100,53 @@ export const versionsOf = (dataset: Dataset): StoredVersion[] => {
     return [...seen.values()];
 };
 
+/**
+ * Each spec the reads took at more than one content version, with those versions sorted, as when
+ * DFO stored a new version between two reads of one build. A build that shows such reads side by
+ * side mixes two releases.
+ */
+export const splitVersions = (
+    ...reads: readonly Readonly<Record<string, BuildSource>>[]
+): Map<string, string[]> => {
+    const bySpec = new Map<string, Set<string>>();
+
+    for (const sources of reads) {
+        for (const { versions } of Object.values(sources)) {
+            for (const { specId, contentVersion } of versions) {
+                bySpec.set(specId, (bySpec.get(specId) ?? new Set()).add(contentVersion));
+            }
+        }
+    }
+
+    return new Map(
+        [...bySpec]
+            .filter(([, versions]) => versions.size > 1)
+            .map(([specId, versions]) => [specId, [...versions].toSorted()]),
+    );
+};
+
+/**
+ * Checks that the reads took each spec at one content version.
+ *
+ * @throws An error naming `page`, each split spec and its versions.
+ */
+export const checkOneVersionPerSpec = (
+    page: string,
+    ...reads: readonly Readonly<Record<string, BuildSource>>[]
+): void => {
+    const split = splitVersions(...reads);
+
+    if (split.size > 0) {
+        const named = [...split]
+            .map(([specId, versions]) => `${specId} at ${versions.join(' and ')}`)
+            .join('; ');
+
+        throw new Error(
+            `The build read of ${page} took one spec at two versions, so the build stops: ${named}.`,
+        );
+    }
+};
+
 let client: Client | undefined;
 
 /** The build's anonymous client on the production API. Built on first use. */

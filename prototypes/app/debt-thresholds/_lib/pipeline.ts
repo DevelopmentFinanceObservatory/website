@@ -37,31 +37,92 @@ export type BuiltThresholds = {
 /** What `_data/build.py` prints. */
 type Printed = BuiltThresholds & { sources: Record<string, BuildSource> };
 
-/** Starts `command` with `args` and gives its stdout, its stderr and how it ended. */
-export type Spawn = (
-    command: string,
-    args: string[],
-    options: { timeout: number },
-) => Promise<{ stdout: string; stderr: string; code: number | null; signal: string | null }>;
+/** How long a stopped child's process group has after SIGTERM before SIGKILL. */
+export const KILL_GRACE_MS = 5_000;
 
-/** Runs a child process, killing it after `timeout` milliseconds. */
-const spawnChild: Spawn = (command, args, { timeout }) =>
+/** How a child ended: its output, its exit code or signal, and whether it was stopped at its
+ *  timeout or because the page's build was abandoned. */
+export type Ended = {
+    stdout: string;
+    stderr: string;
+    code: number | null;
+    signal: string | null;
+    stopped: 'timeout' | 'aborted' | null;
+};
+
+export type SpawnOptions = {
+    /** How long the child may run, in milliseconds. */
+    timeout: number;
+    /** Stops the child when it aborts, as when another read of the page fails. */
+    signal?: AbortSignal;
+    /** How long the child's process group has after SIGTERM before SIGKILL. */
+    grace?: number;
+};
+
+/** Starts `command` with `args` and gives its stdout, its stderr and how it ended. */
+export type Spawn = (command: string, args: string[], options: SpawnOptions) => Promise<Ended>;
+
+/**
+ * Runs a child process in its own process group, so stopping it stops what it starts too, as
+ * the Python process uv starts. At `timeout`, or when `signal` aborts, the group gets SIGTERM
+ * and, if it is still running `grace` milliseconds later, SIGKILL.
+ */
+export const spawnChild: Spawn = (command, args, { timeout, signal, grace = KILL_GRACE_MS }) =>
     new Promise((resolve, reject) => {
-        const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], timeout });
+        if (signal?.aborted) {
+            resolve({ stdout: '', stderr: '', code: null, signal: null, stopped: 'aborted' });
+
+            return;
+        }
+
+        const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
         const out: Buffer[] = [];
         const err: Buffer[] = [];
+        let stopped: Ended['stopped'] = null;
+        let killer: NodeJS.Timeout | undefined;
 
+        const killGroup = (how: NodeJS.Signals): void => {
+            try {
+                // A negative pid signals the whole group, whose leader is the child.
+                process.kill(-child.pid!, how);
+            } catch {
+                // The group has already gone.
+            }
+        };
+        const stop = (why: NonNullable<Ended['stopped']>): void => {
+            if (stopped !== null) {
+                return;
+            }
+
+            stopped = why;
+            killGroup('SIGTERM');
+            killer = setTimeout(() => killGroup('SIGKILL'), grace);
+        };
+        const timer = setTimeout(() => stop('timeout'), timeout);
+        const onAbort = (): void => stop('aborted');
+
+        signal?.addEventListener('abort', onAbort, { once: true });
         child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
         child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
-        child.on('error', reject);
-        child.on('close', (code, signal) =>
+        child.on('error', (error) => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            reject(error);
+        });
+        child.on('close', (code, ended) => {
+            clearTimeout(timer);
+            clearTimeout(killer);
+            signal?.removeEventListener('abort', onAbort);
+            // The leader has ended; anything left in its group goes with it.
+            killGroup('SIGKILL');
             resolve({
                 stdout: Buffer.concat(out).toString('utf8'),
                 stderr: Buffer.concat(err).toString('utf8'),
                 code,
-                signal,
-            }),
-        );
+                signal: ended,
+                stopped,
+            });
+        });
     });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -99,6 +160,8 @@ export const parsePrinted = (stdout: string): Printed => {
 export type RunPipelineOptions = {
     /** How long the child may take, in milliseconds. */
     timeout: number;
+    /** Stops the child when it aborts, as when the page's other read fails. */
+    signal?: AbortSignal;
     /** The build's reads lane, one slot of which the child holds. */
     reads?: Lane;
     /** Stands in for starting the child, as a test does. */
@@ -108,16 +171,17 @@ export type RunPipelineOptions = {
 /**
  * Runs `_data/build.py` once and returns the 2025 view with the versions it read.
  *
- * @throws When uv cannot start, or the child fails, is killed at `timeout` or prints no view:
- *  an error naming the cause, with the tail of the child's log.
+ * @throws When uv cannot start, or the child fails, is stopped at `timeout` or by `signal`, or
+ *  prints no view: an error naming the cause, with the tail of the child's log.
  */
 export const runPipeline = async ({
     timeout,
+    signal,
     reads,
     run = spawnChild,
 }: RunPipelineOptions): Promise<SourcedRead<string, BuiltThresholds>> => {
-    const task = () => run('uv', ['run', '--script', PIPELINE_SCRIPT], { timeout });
-    let child: Awaited<ReturnType<Spawn>>;
+    const task = () => run('uv', ['run', '--script', PIPELINE_SCRIPT], { timeout, signal });
+    let child: Ended;
 
     try {
         child = await (reads === undefined ? task() : reads.run(task));
@@ -130,11 +194,17 @@ export const runPipeline = async ({
 
     const log = child.stderr.trimEnd().split('\n').slice(-LOG_TAIL).join('\n');
 
+    if (child.stopped === 'aborted') {
+        throw new Error("build.py was stopped because the page's build was abandoned.");
+    }
+
     if (child.code !== 0) {
         const how =
-            child.signal === null
-                ? `exited ${child.code}`
-                : `was stopped (${child.signal}) after ${timeout / 1000} s`;
+            child.stopped === 'timeout'
+                ? `was stopped (${child.signal ?? 'timeout'}) after ${timeout / 1000} s`
+                : child.signal === null
+                  ? `exited ${child.code}`
+                  : `was stopped (${child.signal})`;
 
         throw new Error(`build.py ${how}. Its log ends:\n${log}`);
     }

@@ -179,6 +179,90 @@ export const transfersByCountry = (
     };
 };
 
+/**
+ * Members of `_data/groups.csv` the transfers read holds no value for from FIRST_YEAR on, as IDS
+ * reports no net transfers for them: Micronesia, Kiribati, Namibia, North Korea and South Sudan.
+ * Their series are all null. Every other member without a value fails the build.
+ */
+export const NO_DATA_ISO3: ReadonlySet<string> = new Set(['FSM', 'KIR', 'NAM', 'PRK', 'SSD']);
+
+/**
+ * A rule the transfers read must keep for the section to draw what it says:
+ * - `spec_roles`: the read's spec binds `destination` and leaves no role open, so its rows sum all
+ *   creditors, as `_data/pipeline/sources/dfo_api.py`'s `check_roles` reads net transfers.
+ * - `member_not_in_ref`: a member of groups.csv is not among the spec's destinations, which the
+ *   data step fixed, so groups.csv changed after it ran.
+ * - `member_without_values`: a member outside NO_DATA_ISO3 has no value from FIRST_YEAR on.
+ */
+export type TransfersCheck = 'spec_roles' | 'member_not_in_ref' | 'member_without_values';
+
+/** The transfers read breaks a rule of `TransfersCheck`, so the build stops. */
+export class TransfersCheckError extends Error {
+    readonly checks: readonly TransfersCheck[];
+
+    constructor(checks: readonly TransfersCheck[], detail: string) {
+        super(`The net transfers break the build's checks: ${checks.join(', ')} (${detail})`);
+        this.name = 'TransfersCheckError';
+        this.checks = checks;
+    }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The members' net transfers from the transfers read: `transfersByCountry` once the read keeps
+ * every rule of `TransfersCheck`. `definition` is the definition of the read's spec.
+ *
+ * @throws {TransfersCheckError} With every rule the read breaks.
+ */
+export const transfersFromRead = (
+    rows: TransferRow[],
+    members: TransferMember[],
+    definition: unknown,
+): TransferSeries => {
+    const identity =
+        isRecord(definition) && isRecord(definition['identity']) ? definition['identity'] : {};
+    const entities = isRecord(identity['entities']) ? identity['entities'] : {};
+    const openRoles = Array.isArray(identity['open_roles']) ? identity['open_roles'] : [];
+    const destinations = new Set(
+        Array.isArray(entities['destination']) ? entities['destination'] : [],
+    );
+    const values = valuesByCountry(rows);
+    const notInRef = members.filter(({ iso3 }) => !destinations.has(`country/${iso3}`));
+    const withoutValues = members.filter(
+        ({ iso3 }) => !NO_DATA_ISO3.has(iso3) && !values.has(iso3),
+    );
+    const roles = Object.keys(entities).toSorted().join(', ');
+    const found: [TransfersCheck, boolean, string][] = [
+        [
+            'spec_roles',
+            roles !== 'destination' || openRoles.length > 0,
+            `the spec binds ${roles || 'nothing'} and leaves ${openRoles.join(', ') || 'nothing'} open`,
+        ],
+        [
+            'member_not_in_ref',
+            notInRef.length > 0,
+            `not among the destinations: ${notInRef.map(({ iso3 }) => iso3).join(', ')}`,
+        ],
+        [
+            'member_without_values',
+            withoutValues.length > 0,
+            `no value from ${FIRST_YEAR} on: ${withoutValues.map(({ iso3 }) => iso3).join(', ')}`,
+        ],
+    ];
+    const broken = found.filter(([, breaks]) => breaks);
+
+    if (broken.length > 0) {
+        throw new TransfersCheckError(
+            broken.map(([check]) => check),
+            broken.map(([, , detail]) => detail).join('; '),
+        );
+    }
+
+    return transfersByCountry(rows, members);
+};
+
 /** A scatter group, or `outside` for countries not in FDL's 58. */
 export type LineKey = Group | 'outside';
 

@@ -67,6 +67,8 @@ class Reads:
         self.fetched: dict[str, dfo.Dataset] = {}
         # Each `stored` read's versions and freshness, by read key.
         self.sources: dict[str, Record] = {}
+        # Each `stored` read's content versions by spec, and the keys that read each.
+        self._spec_versions: dict[str, dict[str, set[str]]] = {}
         self.pins = 0
 
     def fetch(self, key: str, build: Callable[[], tuple[Record, dfo.Dataset]]) -> dfo.Dataset:
@@ -150,10 +152,13 @@ class Reads:
         """Add the versions `data` read and its freshness to `key`'s source record.
 
         A ref member gives its own version, a recipe's member each root it ran on.
-        The freshness is the worst of the reads': `stale`, then `pending`, then
-        `current`; None when any read stated none.
+        The freshness combines the reads' as `worst_freshness` does. One run reads
+        each spec at one version: when DFO serves a spec at a second version, as
+        when it stores a new one between two reads, every key that read the spec
+        reports `pending`, so the page's build reads again.
         """
         source = self.sources.setdefault(key, {"versions": [], "freshness": "current"})
+        read: set[str] = set()
         for member in data.ref.members:
             roots = getattr(member, "roots", None)
             versions = (
@@ -165,7 +170,23 @@ class Reads:
                 entry = {"specId": spec_id, "contentVersion": version}
                 if entry not in source["versions"]:
                     source["versions"].append(entry)
+                by_version = self._spec_versions.setdefault(spec_id, {})
+                if version not in by_version and by_version:
+                    log.warning(
+                        "DFO served %s at %s for %s, after %s; the run reads again.",
+                        spec_id,
+                        version,
+                        key,
+                        " and ".join(sorted(by_version)),
+                    )
+                by_version.setdefault(version, set()).add(key)
+                read.add(spec_id)
         source["freshness"] = worst_freshness(source["freshness"], data.freshness)
+        for spec_id in read:
+            by_version = self._spec_versions[spec_id]
+            if len(by_version) > 1:
+                for split in set().union(*by_version.values()):
+                    self.sources[split]["freshness"] = "pending"
 
     def pinned_ref(self, key: str) -> dfo.DatasetRef:
         """Return the committed ref of `key` without downloading its rows, in `plain` mode.
@@ -195,11 +216,15 @@ class Reads:
         return self.records[key]["provenance"]
 
 
-FRESHNESS_ORDER = ("current", "pending", "stale")
-
-
 def worst_freshness(first: str | None, second: str | None) -> str | None:
-    """Return the worse of two freshness values; None when either is None."""
+    """Return the freshness of two reads together, as the page's build acts on it.
+
+    `pending` when either is, since the build reads again while any read is
+    pending and `stale` must not hide it; otherwise None when either is None,
+    then `stale`, then `current`.
+    """
+    if "pending" in (first, second):
+        return "pending"
     if first is None or second is None:
         return None
-    return max(first, second, key=FRESHNESS_ORDER.index)
+    return "stale" if "stale" in (first, second) else "current"
