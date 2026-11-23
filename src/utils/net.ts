@@ -40,25 +40,32 @@ export function sizeCanvas(
 }
 
 /**
- * Calls `frame` once per animation frame while `target` overlaps the viewport
- * and the tab is visible, and calls nothing otherwise, so a net costs no main
- * thread while nobody can see it. The clock handed to `frame` excludes the
- * spans where `target` was off screen, so a net resumes from the frame it
- * stopped on; a hidden tab does not stop the clock, as with a bare
- * requestAnimationFrame. `onReturn`
- * runs when `target` comes back after leaving the viewport entirely. Returns
- * the stop function.
+ * Calls `frame` once per animation frame while `target` overlaps the viewport,
+ * `sizedEl` (when given) has a non-zero rendered size, and the tab is visible,
+ * and calls nothing otherwise, so a net costs no main thread while nobody can
+ * see it. `sizedEl` covers a canvas host that CSS hides with `display: none`
+ * at some widths: its size drops to zero and the loop stops, and it starts
+ * again when a resize brings the host back. The clock handed to `frame`
+ * excludes the spans where `target` was off screen or `sizedEl` had no size,
+ * so a net resumes from the frame it stopped on; a hidden tab does not stop
+ * the clock, as with a bare requestAnimationFrame. `onReturn` runs when
+ * `target` comes back after leaving the viewport entirely. Returns the stop
+ * function.
  */
 export function runWhileSeen(
     target: Element,
     frame: (now: number) => void,
     onReturn?: () => void,
+    sizedEl?: Element,
 ): () => void {
     let handle = 0;
     let onScreen = false;
+    // A ResizeObserver reports nothing for an element that starts at zero
+    // size, so an observed host counts as unsized until its first report.
+    let sized = sizedEl === undefined;
     let wasOut = false;
-    // The net's clock: frame time minus every off-screen span. It stands still
-    // while `target` is off screen, so the first frame after the reader
+    // The net's clock: frame time minus every unseen span. It stands still
+    // while `target` is off screen or `sizedEl` has no size, so the first frame after the reader
     // scrolls back repeats the last time. Hidden-tab pauses keep it running.
     let clock = performance.now();
     let offset = 0;
@@ -81,9 +88,10 @@ export function runWhileSeen(
     }
 
     function sync(): void {
-        const run = onScreen && document.visibilityState === 'visible';
+        const shown = onScreen && sized;
+        const run = shown && document.visibilityState === 'visible';
 
-        if (!onScreen && offScreenSince === 0) {
+        if (!shown && offScreenSince === 0) {
             offScreenSince = performance.now();
         }
 
@@ -111,12 +119,26 @@ export function runWhileSeen(
     });
 
     observer.observe(target);
+
+    let sizeObserver: ResizeObserver | null = null;
+
+    if (sizedEl !== undefined) {
+        sizeObserver = new ResizeObserver((entries) => {
+            const box = entries[entries.length - 1]!.contentRect;
+
+            sized = box.width > 0 && box.height > 0;
+            sync();
+        });
+        sizeObserver.observe(sizedEl);
+    }
+
     document.addEventListener('visibilitychange', sync);
 
     return () => {
         cancelAnimationFrame(handle);
         handle = 0;
         observer.disconnect();
+        sizeObserver?.disconnect();
         document.removeEventListener('visibilitychange', sync);
     };
 }
