@@ -166,15 +166,20 @@ export type LegacyLocal = { shown: string[]; hidden: string[] };
 /** The cards that turn local when the page leaves its harness session, as a
  *  fork's do (forkedCanvas). Every card of the conversation turns local, the
  *  ones the harness's canvas showed (`canvasIds`) shown and the rest hidden,
- *  so Add brings a hidden one back on the page alone. withLocalCards leaves a
- *  card that is local already as it is. */
+ *  so Add brings a hidden one back on the page alone. A page with no
+ *  manifest baseline (`canvasIds` null) keeps the cards its canvas shows
+ *  (`shownIds`, canvasWidgetsOf). withLocalCards leaves a card that is local
+ *  already as it is. */
 export const sessionLeftCards = (
-    canvasIds: readonly string[],
+    canvasIds: readonly string[] | null,
     widgets: readonly { id: string }[],
-): LegacyLocal => ({
-    shown: [...canvasIds],
-    hidden: widgets.map((widget) => widget.id).filter((id) => !canvasIds.includes(id)),
-});
+    shownIds: readonly string[] = [],
+): LegacyLocal => {
+    const ids = widgets.map((widget) => widget.id);
+    const shown = canvasIds ?? ids.filter((id) => shownIds.includes(id));
+
+    return { shown: [...shown], hidden: ids.filter((id) => !shown.includes(id)) };
+};
 
 /**
  * A legacy canvas (see CanvasBaseline) while the harness's manifest is

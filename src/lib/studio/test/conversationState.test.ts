@@ -133,6 +133,18 @@ test('mergeClosedTurns appends a closed turn newer than the snapshot once', () =
     assert.deepEqual(again.appended, []);
 });
 
+test('mergeClosedTurns shows a forked first turn as the message after its recap', () => {
+    const forked = [{ role: 'user', text: 'Health aid to Ghana' } as const];
+    const recorded = { ...closed(1), user_message: `${forkRecap(forked)}and in 2021?` };
+
+    assert.deepEqual(mergeClosedTurns([], [recorded], 1).messages[0], {
+        role: 'user',
+        text: 'and in 2021?',
+        harnessTurn: 1,
+        turn: 1,
+    });
+});
+
 // Turn 1 as the harness's state read gives it (`_closed_turn`): the answer
 // with the notes and the basis line the stream appended, as its
 // `message.complete` sent them.
@@ -670,11 +682,16 @@ test("a moved new question leaves the transcript for a page that reads state, an
         { role: 'bot', text: '' },
     ];
 
-    // The state read brings in the turn that went ahead.
-    assert.deepEqual(withMovedQuestion(messages, 3, 'ODA to Ghana', true), messages.slice(0, 2));
+    // The state read brings in the turn that went ahead. The meter gave the
+    // send's prompt back, so it leaves as a refund.
+    assert.deepEqual(withMovedQuestion(messages, 3, 'ODA to Ghana', true), {
+        messages: messages.slice(0, 2),
+        refunds: 1,
+    });
     // A guest reads no state, so the question stays for the user to send.
-    const guest = withMovedQuestion(messages, 3, 'ODA to Ghana', false);
+    const { messages: guest, refunds } = withMovedQuestion(messages, 3, 'ODA to Ghana', false);
 
+    assert.equal(refunds, 1);
     assert.deepEqual(guest, [
         messages[0],
         {
@@ -685,6 +702,18 @@ test("a moved new question leaves the transcript for a page that reads state, an
         },
     ]);
     assert.equal(offeredQuestionTurn(guest, 'ODA to Ghana'), 3);
+
+    // An earlier refused send of the question, refunded already, leaves with
+    // it, so the meter hears both refunds.
+    const resent: ChatMessage[] = [
+        ...messages.slice(0, 2),
+        { role: 'user', text: 'ODA to Ghana', turn: 4, fromNewQuestion: 3, refunded: true },
+        { role: 'bot', text: 'Studio is busy.' },
+        { role: 'user', text: 'ODA to Ghana', turn: 5, fromNewQuestion: 3 },
+        { role: 'bot', text: '' },
+    ];
+
+    assert.equal(withMovedQuestion(resent, 3, 'ODA to Ghana', false).refunds, 2);
 });
 
 test('an owed question sent again replaces the send the harness never admitted', () => {
@@ -876,7 +905,7 @@ test("a prompt the harness never confirmed holds no turn another tab's reply can
     assert.deepEqual(mergeClosedTurns(page, [theirs], 3).messages.slice(2, 4), page.slice(2));
 });
 
-test("the page's last prompt takes the harness's next turn only when the harness recorded it", async (t) => {
+test("the page's last prompt takes the first later turn the harness recorded it on", async (t) => {
     const page: ChatMessage[] = [
         ...keyed([1]),
         { role: 'user', text: 'ODA to Ghana', turn: 2 },
@@ -901,9 +930,26 @@ test("the page's last prompt takes the harness's next turn only when the harness
         }
     });
 
-    await t.test('a later turn, or another text, leaves it unsent', () => {
+    await t.test("a later turn with its text confirms it, past another tab's turn", () => {
         for (const turns of [
             [{ turn_index: 3, user_message: 'ODA to Ghana' }],
+            [
+                { turn_index: 2, user_message: 'question 2' },
+                { turn_index: 3, user_message: 'ODA to Ghana' },
+            ],
+        ]) {
+            assert.deepEqual(
+                [...promptTurns(withReadPrompts(page, turns))],
+                [
+                    [0, 1],
+                    [2, 3],
+                ],
+            );
+        }
+    });
+
+    await t.test('another text, or no later turn, leaves it unsent', () => {
+        for (const turns of [
             [{ turn_index: 2, user_message: 'ODA to Kenya' }],
             [{ turn_index: 1, user_message: 'question 1' }],
             [],

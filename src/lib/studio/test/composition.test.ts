@@ -667,4 +667,23 @@ test('a page that leaves its harness session keeps its canvas, with every card l
             );
         });
     }
+
+    await t.test('a canvas with no manifest baseline keeps the cards it shows', () => {
+        // A conversation the harness sent no manifest for shows the latest
+        // turn's cards and the pinned ones (legacyCanvasWidgetsOf).
+        const drawn = [
+            { ...card('cmp_old'), turn: 1 },
+            { ...card('cmp_pinned'), turn: 1 },
+            { ...card('cmp_new'), turn: 2 },
+        ];
+        const before = { widgets: drawn, canvas: null, pinnedIds: ['cmp_pinned'], removedIds: [] };
+        const shownIds = canvasWidgetsOf(before).map((widget) => widget.id);
+        const { shown, hidden } = sessionLeftCards(null, drawn, shownIds);
+        const left = withLocalCards({ ...before, localIds: [] }, shown, hidden);
+
+        assert.deepEqual(
+            canvasWidgetsOf({ ...left, widgets: drawn, canvas: null }).map((widget) => widget.id),
+            ['cmp_pinned', 'cmp_new'],
+        );
+    });
 });

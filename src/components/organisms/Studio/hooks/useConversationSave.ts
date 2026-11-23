@@ -9,6 +9,7 @@ import { widgetTitle } from '../canvas/layout';
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
+import { createSaveQueue } from '@/lib/studio/saveQueue';
 import { createSaveWaiters } from '@/lib/studio/saveWaiters';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
 import { isPrompt } from '@/lib/studio/transcript';
@@ -107,19 +108,25 @@ export const useConversationSave = ({
     // Callers waiting on a conversation's next save (whenSaved).
     const [waiters] = useState(createSaveWaiters);
 
+    // Saves go one at a time (createSaveQueue), so an older save never
+    // lands after a newer one.
+    const [saves] = useState(() =>
+        createSaveQueue<SavedConversation>(pushConversation, (saved, ok) => {
+            if (ok) {
+                waiters.saved(saved.id);
+            } else {
+                waiters.failed(saved.id);
+            }
+        }),
+    );
+
     const persistNow = useCallback(() => {
         const saved = buildSnapshot();
 
         if (saved) {
-            void pushConversation(saved).then((ok) => {
-                if (ok) {
-                    waiters.saved(saved.id);
-                } else {
-                    waiters.failed(saved.id);
-                }
-            });
+            saves.push(saved);
         }
-    }, [buildSnapshot, waiters]);
+    }, [buildSnapshot, saves]);
 
     const scheduleSave = useCallback(() => {
         if (readOnly) {
@@ -130,11 +137,18 @@ export const useConversationSave = ({
         saveTimer.current = window.setTimeout(persistNow, 600);
     }, [persistNow, readOnly]);
 
-    // Flush the pending save (leaving the canvas must not lose it).
+    // Flush the pending save (leaving the canvas must not lose it). It goes
+    // out at once, past a save in flight, since the page may unload before
+    // that save settles.
     const flush = useCallback(() => {
         window.clearTimeout(saveTimer.current);
-        persistNow();
-    }, [persistNow]);
+
+        const saved = buildSnapshot();
+
+        if (saved) {
+            saves.sendNow(saved);
+        }
+    }, [buildSnapshot, saves]);
 
     useEffect(() => () => window.clearTimeout(saveTimer.current), []);
 

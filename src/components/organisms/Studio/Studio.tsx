@@ -192,9 +192,13 @@ const Studio = ({
     // The harness state read answers 404 until it does, so the page reads no
     // state meanwhile.
     const [unsavedGuestId, setUnsavedGuestId] = useState<string | null>(null);
+    // The ids of the cards the canvas shows, as last painted, for a chat
+    // that leaves its session before any manifest arrived.
+    const shownIdsRef = useRef<string[]>([]);
     // A card the harness redrew under a new id keeps the old card's settings.
     const conversation = useChat(sharedSaved, {
         onCardReplaced: doc.renameWidget,
+        shownCards: () => shownIdsRef.current,
         readsState: account && unsavedGuestId === null,
         // A new question a turn handed back joins the queue past the gate
         // below, so the queue sends it through the gate.
@@ -205,11 +209,12 @@ const Studio = ({
     // A prompt counts once it is actually sent (a queued one can still be
     // removed): the count follows the user turns in the transcript, so the
     // queue's own drain is covered too. A prompt the harness refused before
-    // its turn started comes back, as the server's meter gives it back. Only
-    // growth counts, of either: New Chat empties the transcript without
-    // giving prompts back.
+    // its turn started comes back, as the server's meter gives it back, also
+    // when it then left the transcript (droppedRefunds). Only growth counts,
+    // of either: New Chat empties the transcript without giving prompts back.
     const sentCount = conversation.messages.filter(isPrompt).length;
-    const refundedCount = conversation.messages.filter(isRefundedPrompt).length;
+    const refundedCount =
+        conversation.messages.filter(isRefundedPrompt).length + conversation.droppedRefunds;
     const sentRef = useRef(sentCount);
     const refundedRef = useRef(refundedCount);
 
@@ -564,6 +569,10 @@ const Studio = ({
         shared,
         doc.visibleWidgets(chat.widgets, chat.canvas),
     );
+
+    useLayoutEffect(() => {
+        shownIdsRef.current = visibleWidgets.map((widget) => widget.id);
+    }, [visibleWidgets]);
 
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
     const cardTitleOf = (id: string): string => {

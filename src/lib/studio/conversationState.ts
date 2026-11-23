@@ -20,8 +20,10 @@ import { factsOf } from './liveCards.ts';
 import { approvedFromFrame, type ApprovedPlan } from './plan.ts';
 import { describedBy, payloadDescription } from './payload.ts';
 import {
+    afterRecap,
     ensureTurn,
     isPrompt,
+    isRefundedPrompt,
     NEW_QUESTION_NOTE,
     promptTurns,
     turnReplyAt,
@@ -130,6 +132,11 @@ export const closedReply = (turn: ClosedTurn): string => {
     return turn.new_question ? NEW_QUESTION_NOTE : '';
 };
 
+/** The prompt a page shows for a turn the harness recorded as `recorded`:
+ *  the message after the recap a session's first turn opens with after a
+ *  fork or a left session (forkRecap), else the recorded text. */
+export const recordedPromptText = (recorded: string): string => afterRecap(recorded) ?? recorded;
+
 export type ClosedMerge = {
     messages: ChatMessage[];
     // The turns appended, oldest first.
@@ -139,7 +146,7 @@ export type ClosedMerge = {
 /**
  * The transcript with the harness's closed turns merged in, each keyed on
  * its turn index (ensureTurn). A turn the page lacks is added as its user
- * message and reply, its prompt stamped with the next free page turn from
+ * message, less any recap (recordedPromptText), and reply, its prompt stamped with the next free page turn from
  * `nextTurn` on, in turn order. A turn the page holds takes the harness's
  * reply when it closed cleanly with one, since that is the text its
  * `message.complete` sent, which a page saved mid-stream holds only part of.
@@ -158,7 +165,12 @@ export const mergeClosedTurns = (
     for (const turn of [...closed].sort((a, b) => a.turn_index - b.turn_index)) {
         const before = merged;
 
-        merged = ensureTurn(merged, turn.turn_index, turn.user_message, nextTurn + appended.length);
+        merged = ensureTurn(
+            merged,
+            turn.turn_index,
+            recordedPromptText(turn.user_message),
+            nextTurn + appended.length,
+        );
 
         if (merged !== before) {
             appended.push(turn);
@@ -318,6 +330,10 @@ export const sendNewQuestion = async ({
     }
 };
 
+/** A transcript after a refused send left it, and how many refunded
+ *  prompts left with the send (withMovedQuestion). */
+export type MovedQuestion = { messages: ChatMessage[]; refunds: number };
+
 /**
  * The transcript once harness turn `turnIndex`'s new question `text` was
  * refused `turn_moved` (sendNewQuestion). A page that reads the harness's
@@ -326,16 +342,37 @@ export const sendNewQuestion = async ({
  * that cannot, a guest's, whose state read the proxy refuses, offers the
  * question on the turn's reply for the user to send (withOfferedQuestion),
  * so it stays on screen.
+ * The site's meter gave the refused send's prompt, the latest, back. A
+ * guest's meter counts refunded prompts in the transcript and cannot see
+ * one that left it, so `refunds` counts the prompts that left refunded, that
+ * one included. A prompt that stays is marked refunded.
  */
 export const withMovedQuestion = (
     messages: ChatMessage[],
     turnIndex: number,
     text: string,
     readsState: boolean,
-): ChatMessage[] =>
-    readsState
+): MovedQuestion => {
+    const kept = readsState
         ? withoutUnsentQuestion(messages, turnIndex)
         : withOfferedQuestion(messages, turnIndex, text);
+    const latest = messages.findLast(isPrompt);
+    const left = (message: ChatMessage) => !kept.includes(message);
+    const refunds = messages.filter(
+        (message) => (message === latest || isRefundedPrompt(message)) && left(message),
+    ).length;
+
+    if (latest?.role !== 'user' || latest.refunded || left(latest)) {
+        return { messages: kept, refunds };
+    }
+
+    return {
+        messages: kept.map((message) =>
+            message === latest ? { ...latest, refunded: true } : message,
+        ),
+        refunds,
+    };
+};
 
 /**
  * The transcript once a state read owes harness turn `turnIndex`'s new

@@ -202,7 +202,7 @@ const recordsPrompt = (recorded: string, text: string): boolean =>
     chipLabels(text).some((label) => recordsText(recorded, `count ${label}`));
 
 // The message after a recap, when `recorded` opens with one.
-const afterRecap = (recorded: string): string | null => {
+export const afterRecap = (recorded: string): string | null => {
     if (!recorded.startsWith(RECAP_HEAD)) {
         return null;
     }
@@ -412,38 +412,59 @@ export const UNSENT_NOTE = '_This message was not sent._';
 
 /**
  * The transcript against a state read whose turns, closed and open, are
- * `turns`. The page's last own prompt, saved before its stream named its
- * turn, takes the turn after the latest the transcript holds when the read
- * holds that turn and the harness recorded its text (recordsPrompt, or the
- * text after a fork's recap on turn 1), whether or not a later turn
- * followed it. Every other own prompt with no turn is one the read shows the harness lacks: it is
- * marked `unkeyed`, so it numbers no turn, and an empty reply says it was
- * not sent. The turns it may have been come in from the harness's record
- * (ensureTurn).
+ * `turns`. The page's own prompts saved before their streams named their
+ * turns are matched, in order, against the turns after the latest the
+ * transcript holds: each takes the first turn after the one the prompt
+ * before it took whose recorded text is its own (recordsPrompt, or the text
+ * after a fork's recap on turn 1). A turn a prompt passes over is another
+ * tab's, which the merge inserts (mergeClosedTurns), and a turn from another
+ * tab with the same text can pair with the page's prompt, which then shows
+ * that turn's reply under the same words. Every other own prompt with no
+ * turn is one the read shows the harness lacks: it is marked `unkeyed`, so
+ * it numbers no turn, and an empty reply says it was not sent. The turns it
+ * may have been come in from the harness's record (ensureTurn).
  */
 export const withReadPrompts = (
     messages: ChatMessage[],
     turns: readonly RecordedPrompt[],
 ): ChatMessage[] => {
     const held = heldTurns(messages);
-    const last = messages.findLastIndex(isOwnPrompt);
-    const lastPrompt = messages[last];
-    const recorded = turns.find((turn) => turn.turn_index === held + 1)?.user_message;
-    const confirmed =
-        recorded !== undefined &&
-        lastPrompt?.role === 'user' &&
-        lastPrompt.harnessTurn === undefined &&
-        (recordsPrompt(recorded, lastPrompt.text) ||
-            (held === 0 && recordsText(afterRecap(recorded) ?? '', lastPrompt.text)));
-    const unsent = new Set(
-        [...messages.entries()].flatMap(([at, message]) =>
-            isOwnPrompt(message) && message.harnessTurn === undefined && !(confirmed && at === last)
-                ? [at]
-                : [],
-        ),
-    );
+    // A prompt ahead of one that holds a turn came before that turn, so no
+    // later turn can be its own.
+    const lastHeldAt = Math.max(-1, ...promptTurns(messages).keys());
+    const later = turns
+        .filter((turn) => turn.turn_index > held)
+        .sort((a, b) => a.turn_index - b.turn_index);
+    const confirmed = new Map<number, number>();
+    const unsent = new Set<number>();
+    // The position in `later` of the first turn the next prompt may take.
+    let from = 0;
 
-    if (!confirmed && unsent.size === 0) {
+    for (const [at, message] of messages.entries()) {
+        if (!isOwnPrompt(message) || message.harnessTurn !== undefined) {
+            continue;
+        }
+
+        const match =
+            at > lastHeldAt
+                ? later.findIndex(
+                      (turn, k) =>
+                          k >= from &&
+                          (recordsPrompt(turn.user_message, message.text) ||
+                              (turn.turn_index === 1 &&
+                                  recordsText(afterRecap(turn.user_message) ?? '', message.text))),
+                  )
+                : -1;
+
+        if (match === -1) {
+            unsent.add(at);
+        } else {
+            confirmed.set(at, later[match]!.turn_index);
+            from = match + 1;
+        }
+    }
+
+    if (confirmed.size === 0 && unsent.size === 0) {
         return messages;
     }
 
@@ -460,8 +481,10 @@ export const withReadPrompts = (
     );
 
     return messages.map((message, at): ChatMessage => {
-        if (message.role === 'user' && confirmed && at === last) {
-            return { ...message, harnessTurn: held + 1 };
+        const turn = confirmed.get(at);
+
+        if (message.role === 'user' && turn !== undefined) {
+            return { ...message, harnessTurn: turn };
         }
 
         if (message.role === 'user' && unsent.has(at)) {

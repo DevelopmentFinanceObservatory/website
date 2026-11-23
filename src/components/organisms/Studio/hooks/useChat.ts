@@ -33,9 +33,13 @@ import {
 } from '@/lib/studio/chatLine';
 import {
     createCanvasEdits,
+    shownCanvas,
     shownPins,
+    withCardsSent,
+    withCardsSettled,
     withPinsSent,
     withPinsSettled,
+    type PendingCards,
     type PendingPins,
 } from '@/lib/studio/canvasEdits';
 import {
@@ -72,6 +76,7 @@ import {
     cardTurns,
     carryOnTurn,
     mergeClosedTurns,
+    recordedPromptText,
     owedNewQuestion,
     producedCards,
     readConversation,
@@ -108,7 +113,6 @@ import {
 } from '@/lib/studio/plan';
 import {
     ensureTurn,
-    forkRecap,
     heldTurns,
     isUnkeyedSave,
     keyUnkeyedSave,
@@ -362,7 +366,7 @@ const endTurn = (
 
 // A conversation restored WITHOUT its server-side session (a fork of a
 // share, or a save whose session is gone) primes the next turn with a compact
-// recap of the transcript (forkRecap), so the agent picks up the thread
+// recap of the transcript (sessionRecap), so the agent picks up the thread
 // instead of starting cold. Sent with the message, hidden from the chat.
 
 // A saved transcript as the chat shows it. Without its harness session the
@@ -407,6 +411,7 @@ export const useChat = (
         onCardReplaced,
         readsState = false,
         admitHandedBack,
+        shownCards,
     }: {
         onCardReplaced?: (from: string, to: string) => void;
         // The page may read the harness's state (reattach): a signed-in
@@ -416,6 +421,10 @@ export const useChat = (
         // back, as the queue sends it: whether the prompt may go (it runs
         // `send` when it may). `queued` counts the prompts still waiting.
         admitHandedBack?: (text: string, queued: number, send: () => void) => boolean;
+        // The ids of the cards the page's canvas shows (canvasWidgetsOf),
+        // which a page with no manifest baseline keeps when it leaves its
+        // session (leaveSession).
+        shownCards?: () => readonly string[];
     } = {},
 ) => {
     // The saved transcript as restored, computed once for the refs and the
@@ -469,7 +478,7 @@ export const useChat = (
         widgetsRef.current = state.widgets;
     }, [state.widgets]);
     const recapRef = useRef<string | null>(
-        initial && !initial.sessionId ? forkRecap(initial.messages) : null,
+        initial && !initial.sessionId ? sessionRecap(initial.messages) : null,
     );
     // The pending pause's addressing (interrupt_id) with, for elicitations,
     // the normalized clarify that answerClarify() builds its reply and
@@ -635,6 +644,20 @@ export const useChat = (
     // at once, and once answered the manifest decides again: the answer's,
     // or for a refused edit the one held before it (shownPins).
     const [pendingPins, setPendingPins] = useState<PendingPins>(() => new Map());
+    // The add and remove edits the harness has not answered yet, which show
+    // at once the same way (shownCanvas). The ref lets leaveSession keep
+    // them.
+    const [pendingCards, setPendingCardsState] = useState<PendingCards>(() => new Map());
+    const pendingCardsRef = useRef<PendingCards>(pendingCards);
+    const setPendingCards = useCallback((update: (prev: PendingCards) => PendingCards) => {
+        pendingCardsRef.current = update(pendingCardsRef.current);
+        setPendingCardsState(pendingCardsRef.current);
+    }, []);
+    const shownCardsRef = useRef(shownCards);
+
+    useEffect(() => {
+        shownCardsRef.current = shownCards;
+    }, [shownCards]);
     // Called when the harness holds no session for this conversation: a state
     // read or a request answered that the harness holds no
     // conversation under its id (isSessionGone), or a new turn was admitted
@@ -642,8 +665,9 @@ export const useChat = (
     // under an id the harness lacks and numbers its turns from 1 again. The
     // page leaves the session as a fork leaves the one it copies: the
     // transcript is inherited (withSessionLeft), the answers' chips and unit
-    // offers go, the harness's cards become local cards, and answers to
-    // canvas edits sent to the old session are dropped. With `turn`, the
+    // offers go, the harness's cards become local cards, shown or hidden as
+    // the canvas shows them with the user's unanswered edits (shownCanvas),
+    // and answers to canvas edits sent to the old session are dropped. With `turn`, the
     // page turn of the prompt the new session admitted, that turn stays the
     // session's own and the id stays. Without it the next turn opens a new id
     // with a recap of the transcript (sessionRecap), which stops before the
@@ -651,40 +675,48 @@ export const useChat = (
     // session, since the user sends that prompt again. A plan or question
     // card goes, since the pause it answers went with the session, and the
     // queue it held back is free to go.
-    const leaveSession = useCallback((turn?: number, { refused }: { refused?: number } = {}) => {
-        const cards = sessionLeftCards(canvasRef.current?.ids ?? [], widgetsRef.current);
-        const left = (messages: ChatMessage[]) => withoutChips(withSessionLeft(messages, turn));
+    const leaveSession = useCallback(
+        (turn?: number, { refused }: { refused?: number } = {}) => {
+            const cards = sessionLeftCards(
+                shownCanvas(canvasRef.current, pendingCardsRef.current)?.ids ?? null,
+                widgetsRef.current,
+                shownCardsRef.current?.() ?? [],
+            );
+            const left = (messages: ChatMessage[]) => withoutChips(withSessionLeft(messages, turn));
 
-        sessionLeftRef.current += 1;
+            sessionLeftRef.current += 1;
 
-        messagesRef.current = left(messagesRef.current);
-        widgetsRef.current = withoutUnitChanges(widgetsRef.current);
+            messagesRef.current = left(messagesRef.current);
+            widgetsRef.current = withoutUnitChanges(widgetsRef.current);
 
-        if (turn === undefined) {
-            sessionRef.current = null;
-            recapRef.current = sessionRecap(messagesRef.current, refused);
-        }
+            if (turn === undefined) {
+                sessionRef.current = null;
+                recapRef.current = sessionRecap(messagesRef.current, refused);
+            }
 
-        pendingInterruptRef.current = null;
-        turnPlanRef.current = null;
+            pendingInterruptRef.current = null;
+            turnPlanRef.current = null;
 
-        approvalsRef.current = approvalKeys(messagesRef.current);
-        askedRef.current.clear();
-        canvasRef.current = null;
-        setCanvas(null);
-        legacyRef.current = null;
-        producedRef.current?.(null);
-        producedRef.current = null;
-        canvasEditsRef.current?.reset();
-        setPendingPins(new Map());
+            approvalsRef.current = approvalKeys(messagesRef.current);
+            askedRef.current.clear();
+            canvasRef.current = null;
+            setCanvas(null);
+            legacyRef.current = null;
+            producedRef.current?.(null);
+            producedRef.current = null;
+            canvasEditsRef.current?.reset();
+            setPendingPins(new Map());
+            setPendingCards(() => new Map());
 
-        if (cards.shown.length > 0 || cards.hidden.length > 0) {
-            setLocalCards(cards);
-        }
+            if (cards.shown.length > 0 || cards.hidden.length > 0) {
+                setLocalCards(cards);
+            }
 
-        setState((prev) => sessionLeftChat(prev, turn));
-        drainRef.current();
-    }, []);
+            setState((prev) => sessionLeftChat(prev, turn));
+            drainRef.current();
+        },
+        [setPendingCards],
+    );
     // A new question the page sent once and the harness never admitted
     // (refused, never reached, stopped, or taken out of the queue) is offered
     // on the reply of the turn that asked it, for the user to send, and the
@@ -713,7 +745,10 @@ export const useChat = (
     // Add), sent to the harness, whose manifest then decides whether the
     // card shows and whether it is pinned, so the canvas the agent reads
     // matches this one. Nothing to send before the conversation has a
-    // session. A legacy canvas shows the edit at once.
+    // session. The edit shows at once (shownPins, shownCanvas) until the
+    // harness answers; a refusal rolls it back, and one saying the session is
+    // gone keeps it, as the cards turn local (leaveSession). A refusal as
+    // busy or briefly unavailable is sent again (createCanvasEdits).
     // Edits go one after another, so a Remove then an Add land in order; a
     // response for a conversation since left is dropped.
     const syncCanvas = useCallback(
@@ -727,6 +762,7 @@ export const useChat = (
             const generation = generationRef.current;
 
             setPendingPins((prev) => withPinsSent(prev, operations));
+            setPendingCards((prev) => withCardsSent(prev, operations));
 
             for (const operation of operations) {
                 if (operation.op === 'add') {
@@ -759,18 +795,21 @@ export const useChat = (
                     return;
                 }
 
-                setPendingPins((prev) => withPinsSettled(prev, operations));
-
-                if (answered) {
-                    return;
-                }
-
-                const error = editFailuresRef.current.get(operations);
+                const error = answered ? null : editFailuresRef.current.get(operations);
                 const refusal = error instanceof CompositionRefusal ? error : null;
 
+                // Left with the edit still showing, so the cards turn local
+                // as the user left them.
                 if (refusal && isSessionGone(refusal)) {
                     leaveSession();
 
+                    return;
+                }
+
+                setPendingPins((prev) => withPinsSettled(prev, operations));
+                setPendingCards((prev) => withCardsSettled(prev, operations));
+
+                if (answered) {
                     return;
                 }
 
@@ -807,11 +846,13 @@ export const useChat = (
                 }
             });
         },
-        [applyManifest, leaveSession],
+        [applyManifest, leaveSession, setPendingCards],
     );
     // The harness cards the page shows pinned, or null while the canvas
     // holds no manifest's pins and the save's pins stand.
     const pins = useMemo(() => shownPins(canvas, pendingPins), [canvas, pendingPins]);
+    // The canvas with the user's unanswered adds and removes showing.
+    const shown = useMemo(() => shownCanvas(canvas, pendingCards), [canvas, pendingCards]);
     // Put a plan card up as the pending pause, whether from the stream or
     // from a refusal that answered a stale card with the current one.
     const offerPlan = useCallback((plan: PlanState) => {
@@ -827,17 +868,6 @@ export const useChat = (
         }));
     }, []);
 
-    // `onRefusal` answers an HTTP refusal of the request, and `onUnreachable`
-    // a request that got no response (see StreamHandlers); each returns true
-    // when it has dealt with it, and anything else ends the turn as an error.
-    // Once the stream ends, at its `done` or `error` frame or else when it
-    // closes, `onEnd` gets how it ended (see StreamEnding) and ends the turn
-    // on screen. A caller without one gets `endOwn`. A caller with one (a
-    // switch, whose harness may re-offer the plan after a Stop) also keeps
-    // the frames after Stop, for up to SWITCH_STOP_GRACE_MS, with the chat
-    // line on "Stopping". `metered` marks a POST turn, whose prompt the
-    // site's meter gives back when the response is a refusal (meterTurn), so
-    // a refusal marks the turn's prompt refunded.
     // Ask the harness to cancel the conversation's turn. Requests queued
     // behind the stream also wait for the cancel request to answer.
     const requestCancel = useCallback(() => {
@@ -852,6 +882,19 @@ export const useChat = (
         chainRef.current = chainRef.current.then(() => cancelled);
     }, []);
 
+    // `onRefusal` answers an HTTP refusal of the request, and `onUnreachable`
+    // a request that got no response (see StreamHandlers); each returns true
+    // when it has dealt with it, and anything else ends the turn as an error.
+    // Once the stream ends, at its `done` or `error` frame or else when it
+    // closes, `onEnd` gets how it ended (see StreamEnding) and ends the turn
+    // on screen. A caller without one gets `endOwn`. A caller with one (a
+    // switch, whose harness may re-offer the plan after a Stop) also keeps
+    // the frames after Stop, for up to SWITCH_STOP_GRACE_MS, with the chat
+    // line on "Stopping". `onSettled` runs once, right after that end on
+    // screen, unless reset or hydrate has walked away from the stream.
+    // `metered` marks a POST turn, whose prompt the site's meter gives back
+    // when the response is a refusal (meterTurn), so a refusal marks the
+    // turn's prompt refunded.
     const stream = useCallback(
         (
             turn: number,
@@ -1575,8 +1618,12 @@ export const useChat = (
     // transcript, with the turn's Activity entry. A page that reads state
     // then reads in and carries on the turns it lacks (reattach); a guest's
     // keeps the question offered on the turn's reply (withMovedQuestion).
+    // The prompt leaves refunded, as the site's meter gave it back, and
+    // `droppedRefunds` counts the refunded prompts that left the transcript
+    // this way, for a guest's meter, which counts refunds on the transcript.
     const reattachRef = useRef<() => void>(() => {});
     const readsStateRef = useRef(readsState);
+    const [droppedRefunds, setDroppedRefunds] = useState(0);
 
     useEffect(() => {
         readsStateRef.current = readsState;
@@ -1585,14 +1632,24 @@ export const useChat = (
     const dropMovedQuestion = useCallback((turn: number, turnIndex: number, text: string) => {
         const reads = readsStateRef.current;
         const moved = (messages: ChatMessage[]) =>
-            withMovedQuestion(messages, turnIndex, text, reads);
+            withMovedQuestion(messages, turnIndex, text, reads).messages;
+        const { messages: kept, refunds } = withMovedQuestion(
+            messagesRef.current,
+            turnIndex,
+            text,
+            reads,
+        );
 
         if (turnCount.current === turn) {
             turnCount.current -= 1;
         }
 
+        if (refunds > 0) {
+            setDroppedRefunds((prev) => prev + refunds);
+        }
+
         // Set at once, since reattach() reads it before the next render.
-        messagesRef.current = moved(messagesRef.current);
+        messagesRef.current = kept;
         setState((prev) => ({
             ...prev,
             ...NO_LINE,
@@ -2328,7 +2385,7 @@ export const useChat = (
                               ...prev.activity,
                               ...appended.map((turn, at) => ({
                                   turn: firstTurn + at,
-                                  prompt: turn.user_message,
+                                  prompt: recordedPromptText(turn.user_message),
                                   startedAt: now,
                                   endedAt: now,
                                   tools: [],
@@ -2484,7 +2541,7 @@ export const useChat = (
                         // an unsent prompt follows it (pageTurnReplyAt).
                         if (step.kind !== 'none') {
                             if (step.turnIndex > held) {
-                                const prompt = read.turn?.user_message ?? '';
+                                const prompt = recordedPromptText(read.turn?.user_message ?? '');
 
                                 turnCount.current += 1;
 
@@ -2569,6 +2626,7 @@ export const useChat = (
         legacyRef.current = null;
         setLocalCards(NO_LOCAL);
         setPendingPins(new Map());
+        setPendingCards(() => new Map());
         askedRef.current.clear();
         cardReadsRef.current.clear();
         canvasEditsRef.current?.reset();
@@ -2589,7 +2647,7 @@ export const useChat = (
             clarify: null,
             plan: null,
         });
-    }, []);
+    }, [setPendingCards]);
 
     const hydrate = useCallback(
         (saved: ChatSnapshot) => {
@@ -2613,10 +2671,11 @@ export const useChat = (
             startLegacy(saved, canvasRef.current);
             setLocalCards(NO_LOCAL);
             setPendingPins(new Map());
+            setPendingCards(() => new Map());
             askedRef.current.clear();
             cardReadsRef.current.clear();
             canvasEditsRef.current?.reset();
-            recapRef.current = saved.sessionId ? null : forkRecap(saved.messages);
+            recapRef.current = saved.sessionId ? null : sessionRecap(saved.messages);
             // Set at once, since reattach() reads it before the next render.
             messagesRef.current = restoredMessages(saved);
             turnCount.current = restoredTurnCount(saved.turnCount, messagesRef.current);
@@ -2633,7 +2692,7 @@ export const useChat = (
                 plan: null,
             });
         },
-        [startLegacy],
+        [setPendingCards, startLegacy],
     );
 
     const snapshot = useCallback(
@@ -2651,9 +2710,10 @@ export const useChat = (
 
     return {
         ...state,
+        droppedRefunds,
         localCards,
         syncCanvas,
-        canvas,
+        canvas: shown,
         pins,
         send,
         unqueue,

@@ -65,3 +65,19 @@ test('sessionRecap: a turn refused for want of the session leaves its prompt out
     // A session left for any other reason recaps the whole transcript.
     assert.ok(sessionRecap(transcript)?.includes('and in 2021?'));
 });
+
+test('sessionRecap: a refunded prompt and its note stay out of the recap', () => {
+    const reopened: ChatMessage[] = [
+        { role: 'user', text: 'Health aid to Ghana', turn: 1 },
+        { role: 'bot', text: 'Health aid to Ghana rose.' },
+        { role: 'user', text: 'and in 2021?', turn: 2, refunded: true },
+        { role: 'bot', text: 'Studio is busy. Try again.' },
+        { role: 'user', text: 'and in Kenya?', turn: 3 },
+        { role: 'bot', text: 'Kenya fell.' },
+    ];
+
+    assert.equal(
+        sessionRecap(reopened),
+        forkRecap([...reopened.slice(0, 2), ...reopened.slice(4)]),
+    );
+});

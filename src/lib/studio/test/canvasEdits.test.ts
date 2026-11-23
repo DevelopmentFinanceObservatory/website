@@ -4,12 +4,16 @@ import test from 'node:test';
 import {
     createCanvasEdits,
     pinEdit,
+    shownCanvas,
     shownPins,
+    withCardsSent,
+    withCardsSettled,
     withHarnessPins,
     withPinsSent,
     withPinsSettled,
 } from '../canvasEdits.ts';
-import { takeManifest } from '../composition.ts';
+import { sessionLeftCards, takeManifest, type CanvasBaseline } from '../composition.ts';
+import { CompositionRefusal } from '../studioClient.ts';
 import type { CompositionManifest, MutationOperation } from '../wire.ts';
 
 const remove: MutationOperation[] = [{ op: 'remove', component_id: 'cmp_1' }];
@@ -110,6 +114,121 @@ test('reopening the same session preserves ordering behind its old pending edits
     await Promise.all([pending, queued, reopened]);
     assert.deepEqual(calls, ['remove', 'pin', 'add']);
     assert.deepEqual(received, [3]);
+});
+
+test('an edit refused as busy or briefly unavailable is sent again after the wait it names', async () => {
+    const busy = new CompositionRefusal(
+        409,
+        {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'busy',
+            retry_after_seconds: 4,
+        },
+        null,
+    );
+    const unavailable = new CompositionRefusal(503, null, {
+        code: 'transient_unavailable',
+        upstreamStatus: null,
+        retryAfterSeconds: null,
+    });
+    const final = new CompositionRefusal(
+        404,
+        { error: 'not_found', retry: 'do_not_retry', detail: 'gone', pointer: '/conversation_id' },
+        null,
+    );
+    const cases: [string, unknown[], number[], unknown][] = [
+        // Busy for as long as it lasts, then answered.
+        ['busy', [busy, busy, busy, manifest], [4000, 4000, 4000], null],
+        ['unavailable, then answered', [unavailable, manifest], [1000], null],
+        // A 503 is sent CANVAS_EDIT_ATTEMPTS times in all.
+        [
+            'unavailable throughout',
+            [unavailable, unavailable, unavailable],
+            [1000, 1000],
+            unavailable,
+        ],
+        ['refused for good', [final], [], final],
+    ];
+
+    for (const [name, answers, expectedWaits, expectedFailure] of cases) {
+        const waits: number[] = [];
+        const failures: unknown[] = [];
+        const queue = [...answers];
+        const edits = createCanvasEdits({
+            mutate: async () => {
+                const answer = queue.shift();
+
+                if (answer instanceof Error) {
+                    throw answer;
+                }
+
+                return answer as CompositionManifest;
+            },
+            onManifest: () => {},
+            onFailure: (_operations, error) => failures.push(error),
+            sleep: async (ms) => {
+                waits.push(ms);
+            },
+        });
+
+        assert.equal(await edits.enqueue('session', remove), expectedFailure === null, name);
+        assert.deepEqual(waits, expectedWaits, name);
+        assert.deepEqual(failures, expectedFailure === null ? [] : [expectedFailure], name);
+    }
+});
+
+test('an edit waiting to be sent again stops when the page leaves the conversation', async () => {
+    const waking = deferred<void>();
+    let calls = 0;
+    const edits = createCanvasEdits({
+        mutate: async () => {
+            calls += 1;
+            throw new CompositionRefusal(
+                409,
+                { error: 'transient_unavailable', retry: 'retry_after_delay', detail: 'busy' },
+                null,
+            );
+        },
+        onManifest: () => assert.fail('a left conversation takes no manifest'),
+        onFailure: () => assert.fail('a left conversation hears no failure'),
+        sleep: () => waking.promise,
+    });
+    const pending = edits.enqueue('session', remove);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    edits.reset();
+    waking.resolve();
+    assert.equal(await pending, false);
+    assert.equal(calls, 1);
+});
+
+test("a harness card's add or remove shows at once, and a refusal rolls it back", () => {
+    const canvas: CanvasBaseline = { compositionId: 'cps_1', revision: 3, ids: ['cmp_1', 'cmp_2'] };
+    const restore: MutationOperation[] = [{ op: 'add', component_id: 'cmp_3' }];
+    const sent = withCardsSent(withCardsSent(new Map(), remove), restore);
+
+    assert.deepEqual(shownCanvas(canvas, sent)?.ids, ['cmp_2', 'cmp_3']);
+    // Refused: with nothing in flight the canvas is the manifest's again.
+    assert.equal(
+        shownCanvas(canvas, withCardsSettled(withCardsSettled(sent, remove), restore)),
+        canvas,
+    );
+    // A remove then an add of the same card in flight show the add.
+    assert.deepEqual(
+        shownCanvas(canvas, withCardsSent(withCardsSent(new Map(), remove), add))?.ids,
+        ['cmp_1', 'cmp_2'],
+    );
+    // Pins are not card edits.
+    assert.equal(shownCanvas(canvas, withCardsSent(new Map(), [pinEdit([], 'cmp_1')])), canvas);
+
+    // The session gone: the cards turn local as the user left them.
+    const widgets = ['cmp_1', 'cmp_2', 'cmp_3'].map((id) => ({ id }));
+
+    assert.deepEqual(sessionLeftCards(shownCanvas(canvas, sent)?.ids ?? null, widgets), {
+        shown: ['cmp_2', 'cmp_3'],
+        hidden: ['cmp_1'],
+    });
 });
 
 test('pinning sends pin, and unpinning a pinned card sends unpin', () => {
