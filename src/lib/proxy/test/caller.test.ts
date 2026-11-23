@@ -241,6 +241,61 @@ test('requestSurface: website only for a same-origin fetch', () => {
     });
 });
 
+test('requestSurface: without Sec-Fetch-Site, the Referer host, then the Origin host, decides', () => {
+    const surface = (headers: Record<string, string>) =>
+        requestSurface(new Headers({ host: 'developmentfinance.org', ...headers }));
+
+    // Own host, ports and case ignored, as the request log rule reads it.
+    assert.equal(surface({ referer: 'https://developmentfinance.org/data?q=x' }), 'website');
+    assert.equal(surface({ referer: 'https://DevelopmentFinance.org:443/data' }), 'website');
+    assert.equal(
+        requestSurface(
+            new Headers({ host: 'localhost:3000', referer: 'http://localhost:3000/data' }),
+        ),
+        'website',
+    );
+    // A foreign Referer is api, whatever the Origin says.
+    assert.equal(surface({ referer: 'https://blog.example.org/post' }), 'api');
+    assert.equal(
+        surface({
+            referer: 'https://blog.example.org/post',
+            origin: 'https://developmentfinance.org',
+        }),
+        'api',
+    );
+    assert.equal(surface({ referer: 'https://www.developmentfinance.org/' }), 'api');
+    // No usable Referer: the Origin decides.
+    assert.equal(surface({ origin: 'https://developmentfinance.org' }), 'website');
+    assert.equal(
+        surface({ referer: 'not a url', origin: 'https://developmentfinance.org' }),
+        'website',
+    );
+    assert.equal(surface({ origin: 'null' }), 'api');
+    assert.equal(surface({ origin: 'https://blog.example.org' }), 'api');
+    // Neither, or no Host to compare with.
+    assert.equal(surface({}), 'api');
+    assert.equal(
+        requestSurface(new Headers({ referer: 'https://developmentfinance.org/data' })),
+        'api',
+    );
+});
+
+test('requestSurface: a present Sec-Fetch-Site decides over an own-host Referer', () => {
+    for (const site of ['cross-site', 'same-site', 'none']) {
+        assert.equal(
+            requestSurface(
+                new Headers({
+                    host: 'developmentfinance.org',
+                    'sec-fetch-site': site,
+                    referer: 'https://developmentfinance.org/data',
+                    origin: 'https://developmentfinance.org',
+                }),
+            ),
+            'api',
+        );
+    }
+});
+
 test('applyApisCaller: the surface goes beside the principal and nowhere else', () => {
     const sent = (caller: Parameters<typeof applyApisCaller>[1]) => {
         // A client's own identity headers never survive.

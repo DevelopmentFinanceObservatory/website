@@ -31,17 +31,45 @@ export const SURFACE_HEADER = 'x-dfo-surface';
 /** Where a call to dfo-apis comes from: the site's own pages, or an outside caller. */
 export type ApisSurface = 'website' | 'api';
 
+// The hostname of an http or https URL such as a Referer or an Origin, null
+// for anything else, `null` included.
+const urlHostname = (value: string | null): string | null => {
+    const url = URL.parse(value ?? '');
+
+    return url && /^https?:$/.test(url.protocol) ? url.hostname || null : null;
+};
+
+// The hostname a Host header names, without its port.
+const hostHostname = (host: string | null): string | null =>
+    host ? URL.parse(`http://${host}`)?.hostname || null : null;
+
 /**
- * The surface of a proxied request: `website` when the request says
- * `Sec-Fetch-Site: same-origin`, a fetch from one of the site's own pages,
- * and `api` for anything else, such as an SDK, a script or a page on another
- * site. The site's pages call the same /api/v1 routes outside callers do, so
- * the route cannot tell them apart. The header is a client claim, which any
- * non-browser client can forge, so the surface is for counting only. The
- * site's own share calls always send `website`.
+ * The surface of a proxied request: `website` for a fetch from one of the
+ * site's own pages, and `api` for anything else, such as an SDK, a script or
+ * a page on another site. The site's pages call the same /api/v1 routes
+ * outside callers do, so the route cannot tell them apart.
+ *
+ * A request that sends Sec-Fetch-Site is `website` only for `same-origin`.
+ * Safari before 16.4, in-app browsers and some bots send none, so a request
+ * without it is `website` when its Referer's hostname is the one its Host
+ * header names, else, when it has no http or https Referer, when its Origin's
+ * is. The hostnames are compared with ports and case ignored. Every
+ * header here is a client claim, which any non-browser client can forge, so
+ * the surface is for counting only. The site's own share calls always send
+ * `website`.
  */
-export const requestSurface = (incoming: Headers): ApisSurface =>
-    incoming.get('sec-fetch-site') === 'same-origin' ? 'website' : 'api';
+export const requestSurface = (incoming: Headers): ApisSurface => {
+    const site = incoming.get('sec-fetch-site');
+
+    if (site !== null) {
+        return site === 'same-origin' ? 'website' : 'api';
+    }
+
+    const own = hostHostname(incoming.get('host'));
+    const from = urlHostname(incoming.get('referer')) ?? urlHostname(incoming.get('origin'));
+
+    return own !== null && from === own ? 'website' : 'api';
+};
 
 const DIGEST_LENGTH = 32;
 
