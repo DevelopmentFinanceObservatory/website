@@ -26,6 +26,13 @@ const NO_AMOUNT: StructuredUnit = {
     base_year: null,
 };
 const eurosPerPerson: PayloadUnit = { numerator: euros, denominator: population };
+const donorNaira: StructuredUnit = {
+    currency: 'NGN',
+    magnitude: null,
+    prices: 'constant',
+    base_year: 2024,
+    deflation_basis: 'donor',
+};
 
 const dollars = (fields: Partial<StructuredUnit> = {}): StructuredUnit => ({
     currency: 'USD',
@@ -65,6 +72,17 @@ const CASES: [string, PayloadUnit | undefined, number, PayloadChange | undefined
         441.9,
         undefined,
         { amount: '441.9', suffix: '', caption: 'US Dollar · constant 2023 prices · 2024' },
+    ],
+    [
+        'structured currency names whose prices deflated it',
+        donorNaira,
+        441.9,
+        undefined,
+        {
+            amount: '441.9',
+            suffix: '',
+            caption: 'Nigerian Naira · constant 2024 prices, donor prices · 2024',
+        },
     ],
     [
         'magnitude scales the value before compacting',

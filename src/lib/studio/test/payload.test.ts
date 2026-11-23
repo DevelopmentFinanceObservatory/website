@@ -131,12 +131,19 @@ test('payloadProvenance: reads a source ref beside its minted id, null when abse
 const population = { stat_var: 'dcid:Count_Person', label: 'Total population' };
 const euros = { currency: 'EUR', prices: 'constant', base_year: 2020 };
 const NO_AMOUNT = { currency: null, magnitude: null, prices: null, base_year: null };
+const donorNaira = {
+    currency: 'NGN',
+    prices: 'constant',
+    base_year: 2024,
+    deflation_basis: 'donor',
+};
 
 const UNITS: [string, unknown, unknown][] = [
     ['a label', 'USDollar', 'USDollar'],
     ['a blank string', '  ', undefined],
     ['null', null, undefined],
     ['a structured unit without a magnitude', euros, { ...euros, magnitude: null }],
+    ['a structured unit with its deflation basis', donorNaira, { ...donorNaira, magnitude: null }],
     ['a saved structured unit with every member null', NO_AMOUNT, NO_AMOUNT],
     ['an object it does not recognise', { symbol: '$' }, NO_AMOUNT],
     ['composed: a label over a StatVar', composedUnit, composedUnit],
