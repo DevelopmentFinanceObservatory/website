@@ -219,14 +219,17 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 /**
  * The turn of each message in a transcript: a prompt opens its turn, and the
  * replies and answers after it belong to that turn. A message before any
- * prompt has turn 0. The prompts are numbered back from the last Activity
- * entry's turn, so the last prompt takes that turn. This holds because each
- * prompt is appended with its entry, and a card or canvas share empties both
- * the transcript and Activity while keeping `turnCount` (1 for a card share),
- * from which a fork numbers its new entries and cards. Counting prompts from
- * the start would number a fork's turns too low. A save made before Activity
- * was kept has no entries, and a transcript holding more prompts than the last
- * entry's turn cannot align, so both count from turn 1.
+ * prompt has turn 0. A prompt stamped with the page turn it opened (`turn`)
+ * has that turn, wherever a state read placed it. An unstamped prompt, from
+ * a save made before prompts were stamped, is numbered back from the last
+ * Activity entry's turn, so the last prompt takes that turn. This holds
+ * because each prompt is appended with its entry, and a card or canvas share
+ * empties both the transcript and Activity while keeping `turnCount` (1 for
+ * a card share), from which a fork numbers its new entries and cards.
+ * Counting prompts from the start would number a fork's turns too low. A
+ * save made before Activity was kept has no entries, and a transcript
+ * holding more prompts than the last entry's turn cannot align, so both
+ * count from turn 1.
  */
 export const messageTurns = (
     messages: readonly ChatMessage[],
@@ -235,14 +238,43 @@ export const messageTurns = (
     const prompts = messages.filter(isPrompt).length;
     const dropped = Math.max(0, (activity.at(-1)?.turn ?? prompts) - prompts);
     let seen = 0;
+    let turn = 0;
 
     return messages.map((message) => {
         if (isPrompt(message)) {
             seen += 1;
+            turn = (message.role === 'user' ? message.turn : undefined) ?? dropped + seen;
         }
 
-        return seen === 0 ? 0 : dropped + seen;
+        return turn;
     });
+};
+
+/**
+ * The transcript with each unstamped prompt stamped with the page turn
+ * (`turn`) messageTurns gives it in the transcript as saved. A turn a state
+ * read inserts later then cannot renumber it. Unchanged when every prompt
+ * has its stamp.
+ */
+export const withTurnStamps = (
+    messages: ChatMessage[],
+    activity: readonly ActivityEntry[],
+): ChatMessage[] => {
+    if (
+        !messages.some(
+            (message) => message.role === 'user' && isPrompt(message) && message.turn === undefined,
+        )
+    ) {
+        return messages;
+    }
+
+    const turns = messageTurns(messages, activity);
+
+    return messages.map((message, at) =>
+        message.role === 'user' && isPrompt(message) && message.turn === undefined
+            ? { ...message, turn: turns[at] }
+            : message,
+    );
 };
 
 /** Each turn's approved plan, found on the reply it produced. */

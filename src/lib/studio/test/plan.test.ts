@@ -1568,9 +1568,9 @@ test('the ledger heads scope choices and planner decisions apart', async (t) => 
 
 test("a planner decision's switch says it is replanning", () => {
     assert.equal(switchPendingText(true), 'Replanning');
-    assert.equal(switchLine('Top 10', true), 'Replanning with Top 10');
+    assert.equal(switchLine(DONORS_PICK.choiceId, 'Top 10'), 'Replanning with Top 10');
     assert.equal(switchPendingText(false), 'Updating plan');
-    assert.equal(switchLine('Net disbursements', false), 'Switching to Net disbursements');
+    assert.equal(switchLine(PICK.choiceId, 'Net disbursements'), 'Switching to Net disbursements');
 });
 
 test("a planner decision's switch that did not apply says the plan keeps its option", () => {
@@ -1682,6 +1682,55 @@ test("answering a switch's question resumes the switch: its fresh plan, switch_f
 
     // A second question during the resumed switch carries it again.
     assert.equal(questionPause(question('int-q2'), resumed).switch, card);
+});
+
+test('a count row renders and switches as a scope row does', () => {
+    const countRow: PlanDecision = {
+        ...countDecision,
+        question: 'How the flow is counted.',
+        chosen: 'gross disbursements',
+        choice_id: 'req_1:count',
+        active_option_id: 'option_0a1b2c3d4e5f',
+        options: [
+            {
+                option_id: 'option_0a1b2c3d4e5f',
+                label: 'gross disbursements',
+                status: 'available',
+                reason: null,
+                years: null,
+            },
+            {
+                option_id: 'option_9f8e7d6c5b4a',
+                label: 'net disbursements',
+                status: 'available',
+                reason: null,
+                years: null,
+            },
+        ],
+    };
+    const plan = planFromFrame(frame({ decisions: [countRow] }));
+    const [section] = ledgerSections(planView(plan));
+
+    assert.equal(section?.head, SCOPE_HEAD);
+    assert.deepEqual(
+        section?.choices.map((choice) => [choice.key, choice.value, choice.planner]),
+        [['req_1:count', 'gross disbursements', false]],
+    );
+    assert.deepEqual(switchReply(plan, 'req_1:count', 'option_9f8e7d6c5b4a'), {
+        decision: 'switch',
+        choice_id: 'req_1:count',
+        option_id: 'option_9f8e7d6c5b4a',
+        plan_revision: 'rev-a',
+    });
+    assert.equal(switchReply(plan, 'req_1:count', 'option_0a1b2c3d4e5f'), null);
+    // The chat line words the switch as the count chip does.
+    assert.equal(
+        switchLine(
+            'req_1:count',
+            optionLabel(plan.decisions, 'req_1:count', 'option_9f8e7d6c5b4a'),
+        ),
+        'Counting as net disbursements',
+    );
 });
 
 /** The harness's unit-row fixtures (`services/harness/tests/wire_fixtures/

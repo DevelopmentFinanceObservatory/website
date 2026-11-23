@@ -203,3 +203,29 @@ export const STOPPED_NOTE = '_Stopped._';
  * preamble the line was showing, else {@link STOPPED_NOTE}.
  */
 export const stoppedReply = (preamble: string): string => preamble.trim() || STOPPED_NOTE;
+
+// The line while another stream holds the conversation and a turn waits for
+// it (whileBusy).
+export const BUSY_LINE = 'Waiting for the conversation to be free';
+
+/**
+ * The line across a wait for the conversation to be free, from the line
+ * showing (`current`) and the wait's `seconds`, null when the wait ends.
+ * `held` is the turn's own line, kept when a wait begins and given back when
+ * it ends, so the caller passes back the `held` each call returns. Calling
+ * it twice with the same arguments gives the same answer, as a state
+ * updater must.
+ */
+export const busyWaitLine = (
+    current: ChatLine | null,
+    held: ChatLine | null,
+    seconds: number | null,
+): { line: ChatLine | null; held: ChatLine | null } => {
+    const waiting = current?.label === BUSY_LINE;
+
+    if (seconds !== null) {
+        return { line: { label: BUSY_LINE, detail: null }, held: waiting ? held : current };
+    }
+
+    return { line: waiting ? held : current, held };
+};

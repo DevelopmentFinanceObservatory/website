@@ -9,7 +9,9 @@ import { widgetTitle } from '../canvas/layout';
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
+import { createSaveStamp, createSaveWaiters } from '@/lib/studio/saveWaiters';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
+import { isPrompt } from '@/lib/studio/transcript';
 
 type UseConversationSaveArgs = {
     chat: ReturnType<typeof useChat>;
@@ -53,6 +55,7 @@ export const useConversationSave = ({
             CanvasDocument,
             | 'pinnedIds'
             | 'removedIds'
+            | 'localIds'
             | 'graceIds'
             | 'graceTurn'
             | 'theme'
@@ -65,6 +68,10 @@ export const useConversationSave = ({
             | 'shareMarks'
         >;
     } | null>(null);
+
+    // This page's writer id and snapshot sequence number, by which the
+    // server keeps an older save that lands last from changing anything.
+    const [saveStamp] = useState(() => createSaveStamp());
 
     const buildSnapshot = useCallback((): SavedConversation | null => {
         const id = conversationIdRef.current;
@@ -82,11 +89,13 @@ export const useConversationSave = ({
             // runaway prompt is cut, and well past what the header shows.
             title: (snap.doc.conversationTitle ?? firstUser.text).slice(0, 400),
             updatedAt: Date.now(),
+            ...saveStamp(),
             messages: snap.messages,
             widgets: snap.widgets,
             activity: snap.activity,
             pinnedIds: snap.doc.pinnedIds,
             removedIds: snap.doc.removedIds,
+            localIds: snap.doc.localIds,
             graceIds: snap.doc.graceIds,
             graceTurn: snap.doc.graceTurn,
             layout: layoutRef.current,
@@ -98,15 +107,18 @@ export const useConversationSave = ({
             notes: snap.doc.notes,
             shareMarks: snap.doc.shareMarks,
         };
-    }, [takeChatSnapshot]);
+    }, [takeChatSnapshot, saveStamp]);
+
+    // Callers waiting on a conversation's next save (whenSaved).
+    const [waiters] = useState(createSaveWaiters);
 
     const persistNow = useCallback(() => {
         const saved = buildSnapshot();
 
         if (saved) {
-            void pushConversation(saved);
+            void pushConversation(saved).then(waiters.sending(saved.id));
         }
-    }, [buildSnapshot]);
+    }, [buildSnapshot, waiters]);
 
     const scheduleSave = useCallback(() => {
         if (readOnly) {
@@ -117,13 +129,19 @@ export const useConversationSave = ({
         saveTimer.current = window.setTimeout(persistNow, 600);
     }, [persistNow, readOnly]);
 
-    // Flush the pending save (leaving the canvas must not lose it).
+    // Send the debounced save at once, for a page leaving the canvas.
     const flush = useCallback(() => {
         window.clearTimeout(saveTimer.current);
         persistNow();
     }, [persistNow]);
 
     useEffect(() => () => window.clearTimeout(saveTimer.current), []);
+
+    // The prompts the last snapshot held, and how many carry their harness
+    // turn. A turn's stream changes the transcript faster than the save
+    // debounce, so a new prompt, and the turn index its stream names, are
+    // saved at once, keyed on the harness's index.
+    const promptsRef = useRef(0);
 
     // Any change worth keeping (a message, a widget, a pin) refreshes the
     // snapshot and queues a save.
@@ -135,6 +153,7 @@ export const useConversationSave = ({
             doc: {
                 pinnedIds: doc.pinnedIds,
                 removedIds: doc.removedIds,
+                localIds: doc.localIds,
                 graceIds: doc.graceIds,
                 graceTurn: doc.graceTurn,
                 theme: doc.theme,
@@ -147,13 +166,30 @@ export const useConversationSave = ({
                 shareMarks: doc.shareMarks,
             },
         };
-        scheduleSave();
+
+        const prompts =
+            chat.messages.filter(isPrompt).length +
+            chat.messages.filter((message) => message.role === 'user' && message.harnessTurn)
+                .length;
+        const opened = prompts > promptsRef.current;
+
+        promptsRef.current = prompts;
+
+        if (opened && !readOnly) {
+            window.clearTimeout(saveTimer.current);
+            persistNow();
+        } else {
+            scheduleSave();
+        }
     }, [
         chat.messages,
         chat.widgets,
         chat.activity,
+        // The harness canvas rides in the chat's snapshot (takeChatSnapshot).
+        chat.canvas,
         doc.pinnedIds,
         doc.removedIds,
+        doc.localIds,
         doc.graceIds,
         doc.graceTurn,
         doc.theme,
@@ -164,6 +200,8 @@ export const useConversationSave = ({
         doc.notes,
         doc.conversationTitle,
         doc.shareMarks,
+        persistNow,
+        readOnly,
         scheduleSave,
     ]);
 
@@ -211,6 +249,7 @@ export const useConversationSave = ({
                             .length,
                         shareId: answer.id,
                         at: Date.now(),
+                        turnCount: saved.turnCount,
                     });
                 }
 
@@ -223,11 +262,15 @@ export const useConversationSave = ({
     );
 
     // Start tracking a conversation: a fresh id (new prompt) or a saved one.
-    const track = useCallback((id: string | null, layout: CardLayout) => {
-        conversationIdRef.current = id;
-        layoutRef.current = layout;
-        setOpenedLayout(layout);
-    }, []);
+    const track = useCallback(
+        (id: string | null, layout: CardLayout) => {
+            conversationIdRef.current = id;
+            layoutRef.current = layout;
+            setOpenedLayout(layout);
+            waiters.track(id);
+        },
+        [waiters],
+    );
 
     return {
         openedLayout,
@@ -236,6 +279,9 @@ export const useConversationSave = ({
         handleLayoutChange,
         createShare,
         track,
+        // Resolves true once a save of conversation `id` lands, false if a
+        // save of it fails or the page tracks another conversation first.
+        whenSaved: waiters.wait,
         conversationId: () => conversationIdRef.current,
     };
 };

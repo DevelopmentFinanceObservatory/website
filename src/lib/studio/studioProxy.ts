@@ -5,6 +5,7 @@ import type { NextRequest } from 'next/server';
 import { counterDb } from '@/lib/db';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
+import { STUDIO_HEADERS } from '@/lib/proxy/headers';
 import {
     notFoundProblem,
     problem,
@@ -225,6 +226,7 @@ export const studioProxy =
             target: `${STUDIO_API_BASE}/api/studio/${route}${queryOf(call.search)}`,
             body: call.body ?? undefined,
             bearer: STUDIO_TOKEN,
+            pass: STUDIO_HEADERS,
             unreachable: 'The studio agent is unreachable. Is it running? (just dev in dfo-ai)',
             admit: () => admitOwner(),
             ...studioIdentity(route, req.headers, readUserId),
