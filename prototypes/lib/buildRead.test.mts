@@ -3,14 +3,7 @@ import test, { mock } from 'node:test';
 
 import { DatasetRef, recipe } from '@developmentfinance/client';
 
-import {
-    BUILD_TIMEOUT_MS,
-    buildFetch,
-    PENDING_BOUND_MS,
-    PENDING_RETRY_MS,
-    readAtBuild,
-    readSettled,
-} from './buildRead.ts';
+import { BUILD_TIMEOUT_MS, pendingBoundOf, PENDING_RETRY_MS, readSettled } from './buildRead.ts';
 import { ANALYSIS_CONCURRENCY, type Fetcher, READ_CONCURRENCY } from './liveRead.ts';
 import { createLane } from './pacing.ts';
 
@@ -102,6 +95,9 @@ const fakeTime = () => {
 const valueOf = (rows: Record<string, { value?: unknown }[]>) =>
     Object.values(rows).map((read) => read[0]?.value);
 
+/** The bound the scheduled build sets, ten minutes. */
+const PENDING_BOUND_MS = 600_000;
+
 const freshLanes = () => ({
     reads: createLane(READ_CONCURRENCY),
     recipes: createLane(ANALYSIS_CONCURRENCY),
@@ -166,6 +162,7 @@ test('reads again while a dataset is pending, and takes the first read with none
     const read = await readSettled('p', { a: { ref: refJson } }, valueOf, {
         client,
         lanes: freshLanes(),
+        pendingBound: PENDING_BOUND_MS,
         ...time,
     });
 
@@ -187,6 +184,7 @@ test('stops reading again at the bound and takes the pending read it has', async
         const read = await readSettled('p', { a: { ref: refJson } }, valueOf, {
             client,
             lanes: freshLanes(),
+            pendingBound: PENDING_BOUND_MS,
             ...time,
         });
         const reads = Math.floor(PENDING_BOUND_MS / PENDING_RETRY_MS) + 1;
@@ -237,42 +235,37 @@ test('runs at most ANALYSIS_CONCURRENCY recipes and READ_CONCURRENCY reads at on
     assert.equal(seen.mostReads, READ_CONCURRENCY);
 });
 
-test('readAtBuild reads a page once per process, and again after a failure', async () => {
-    const failing = stubClient(new Error('down'));
-
-    await assert.rejects(
-        readAtBuild('memo', { a: { ref: refJson } }, valueOf, {
-            client: failing.client,
-            lanes: freshLanes(),
-        }),
-    );
-
-    const { calls, client } = stubClient(dataset(5), dataset(6));
-    const options = { client, lanes: freshLanes(), ...fakeTime() };
-
-    const first = await readAtBuild('memo', { a: { ref: refJson } }, valueOf, options);
-    const second = await readAtBuild('memo', { a: { ref: refJson } }, valueOf, options);
-
-    assert.deepEqual(first.value, [5]);
-    assert.equal(second, first);
-    assert.equal(calls.length, 1);
+test('the pending bound comes from BUILD_PENDING_BOUND_S, 0 when unset', () => {
+    assert.equal(pendingBoundOf({}), 0);
+    assert.equal(pendingBoundOf({ BUILD_PENDING_BOUND_S: '' }), 0);
+    assert.equal(pendingBoundOf({ BUILD_PENDING_BOUND_S: '600' }), 600_000);
+    assert.throws(() => pendingBoundOf({ BUILD_PENDING_BOUND_S: '10m' }), /whole number/);
 });
 
-test("the build's fetch asks for no cached response, keeping the caller's options", async () => {
-    const real = globalThis.fetch;
-    const seen: RequestInit[] = [];
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-        seen.push(init ?? {});
+test('with no bound set, a pending read is taken at once', async () => {
+    const warn = mock.method(console, 'warn', () => {});
+    const set = process.env.BUILD_PENDING_BOUND_S;
 
-        return new Response('{}');
-    }) as typeof fetch;
+    delete process.env.BUILD_PENDING_BOUND_S;
 
     try {
-        await buildFetch('https://developmentfinance.org/api/v1/datasets/x', { method: 'POST' });
-    } finally {
-        globalThis.fetch = real;
-    }
+        const { calls, client } = stubClient(dataset(1, 'pending'), dataset(2));
+        const time = fakeTime();
 
-    assert.equal(seen[0]?.cache, 'no-store');
-    assert.equal(seen[0]?.method, 'POST');
+        const read = await readSettled('p', { a: { ref: refJson } }, valueOf, {
+            client,
+            lanes: freshLanes(),
+            ...time,
+        });
+
+        assert.deepEqual(read.value, [1]);
+        assert.equal(calls.length, 1);
+        assert.deepEqual(time.slept, []);
+    } finally {
+        if (set !== undefined) {
+            process.env.BUILD_PENDING_BOUND_S = set;
+        }
+
+        warn.mock.restore();
+    }
 });

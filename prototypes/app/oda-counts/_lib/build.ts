@@ -1,17 +1,23 @@
-// Everything the page shows from DFO, read once while `next build` renders it: the 19 DAC1 reads
-// of live-refs.json at DFO's newest stored versions (lib/buildRead.ts), the graph nodes the
-// definitions come from, and the currencies Search converts the series to. Any failed read or
-// refused answer fails the build, so production keeps the last good deploy. Runs on the server
-// only; the client components take the result as props.
+// Everything the page shows from DFO, as the build reads it before `next build`
+// (lib/buildData.ts): the 19 DAC1 reads of live-refs.json at DFO's newest stored versions
+// (lib/buildRead.ts), the graph nodes the definitions come from, and the currencies Search
+// converts the series to. Any failed read or refused answer fails the build, so production keeps
+// the last good deploy. Runs on the server only; the client components take the result as props.
 import { Client } from '@developmentfinance/client';
 
+import liveRefs from '../_data/live-refs.json' with { type: 'json' };
 import type { CountsData, Definition, LiveData } from '../_data/types.ts';
 
 import { definitionsFromNodes, NODE_IDS } from './definitions.ts';
 import { BASE_YEAR, countsFromRows, READ_KEYS, type ReadKey, YEARS } from './derive.ts';
 import { identitiesFromRefs, MAX_ENTRIES, offerFromResponses, offerRequests } from './live.ts';
 
-import { type BuildRead, buildFetch, readAtBuild } from '#lib/buildRead.ts';
+import {
+    type BuildPage,
+    type BuildRead,
+    type BuildReadOptions,
+    readSettled,
+} from '#lib/buildRead.ts';
 import type { Derive } from '#lib/liveRead.ts';
 import { recordOf } from '#lib/record.ts';
 
@@ -89,45 +95,37 @@ export const readLive = async (
     return { maxEntries: MAX_ENTRIES, identities, offer: offerFromResponses(answers) };
 };
 
-let built: Promise<Built> | undefined;
-
 /**
- * The page's reads of `refs`, live-refs.json's `data`, run once per process. A failed read is
- * dropped, so under `next dev` the next request reads again.
+ * The page's reads of `refs`, live-refs.json's `data`, with `options` for the DAC1 reads.
  *
  * @throws An error naming the page, whose cause is the failed read or the refused answer.
  */
-export const readOdaCounts = (refs: Readonly<Record<ReadKey, unknown>>): Promise<Built> => {
-    if (built !== undefined) {
-        return built;
-    }
-
-    // Past Next's data cache, as the build's reads go, so a later build never reuses an answer.
-    const client = new Client({ apiKey: false, fetch: buildFetch });
-    const read = (async (): Promise<Built> => {
-        const started = Date.now();
-        const sources = recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));
-        const [counts, definitions, live] = await Promise.all([
-            readAtBuild(PAGE, sources, deriveCounts),
-            readDefinitions(client),
-            readLive(client, refs),
-        ]).catch((error: unknown) => {
-            throw new Error(`The build read of ${PAGE} failed, so the build stops.`, {
-                cause: error,
-            });
+export const readOdaCounts = async (
+    refs: Readonly<Record<ReadKey, unknown>>,
+    options: BuildReadOptions = {},
+): Promise<Built> => {
+    const client = new Client({ apiKey: false });
+    const started = Date.now();
+    const sources = recordOf(READ_KEYS, (key) => ({ ref: refs[key] }));
+    const [counts, definitions, live] = await Promise.all([
+        readSettled(PAGE, sources, deriveCounts, options),
+        readDefinitions(client),
+        readLive(client, refs),
+    ]).catch((error: unknown) => {
+        throw new Error(`The build read of ${PAGE} failed, so the build stops.`, {
+            cause: error,
         });
-
-        console.info(
-            `${PAGE}: ${READ_KEYS.length} reads, ${NODE_IDS.length} graph lookups and ${offerRequests(live.identities).length} Search requests in ${((Date.now() - started) / 1000).toFixed(1)} s`,
-        );
-
-        return { counts, definitions, live };
-    })();
-
-    built = read;
-    read.catch(() => {
-        built = undefined;
     });
 
-    return read;
+    console.info(
+        `${PAGE}: ${READ_KEYS.length} reads, ${NODE_IDS.length} graph lookups and ${offerRequests(live.identities).length} Search requests in ${((Date.now() - started) / 1000).toFixed(1)} s`,
+    );
+
+    return { counts, definitions, live };
+};
+
+/** The page's build-time read: the counts, the definitions and the currency offer. */
+export const odaBuild: BuildPage<Built> = {
+    name: PAGE,
+    build: (options) => readOdaCounts(liveRefs.data, options),
 };

@@ -1,40 +1,17 @@
-// The page's layout and the build's read of its figures. A server component: `next build` awaits
-// the read once (lib/buildRead.ts) and renders every figure into the static HTML, so the browser
-// reads nothing. A failed read, a refused derivation or a broken check fails the build.
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
+// The page's layout and the figures the build read (_lib/build.ts). A server component: it
+// renders every figure from .build-data/fragility-finance.json (lib/buildData.ts) into the
+// static HTML, so the browser reads nothing.
 import type { ReactNode } from 'react';
 
 import { PrototypePage } from '../../../components/PrototypePage/PrototypePage';
 
 import { FiguresProvider } from './Figures';
 
-import refs from '../_data/refs.json';
-import { parseClassification } from '../_lib/classification.ts';
-import { figuresFromRows, recipientGroups, sources } from '../_lib/figures.ts';
+import { fragilityBuild } from '../_lib/build.ts';
 
-import { readAtBuild } from '#lib/buildRead.ts';
+import { readBuilt } from '#lib/buildData.ts';
 
-/** The OECD's classification, read from the page's directory under the build's working
- *  directory, `prototypes/`. */
-const CLASSIFICATION = path.join(
-    process.cwd(),
-    'app',
-    'fragility-finance',
-    '_data',
-    'fragility-2026.tsv',
-);
-
-/** The build's read of the page's figures, run once per build. */
-const readFragility = () => {
-    const profiles = parseClassification(readFileSync(CLASSIFICATION, 'utf8'));
-    const groups = recipientGroups(refs.data, profiles);
-
-    return readAtBuild('fragility-finance', sources(refs.data, groups), (rows) =>
-        figuresFromRows(rows, profiles, groups),
-    );
-};
+const readFragility = () => readBuilt(fragilityBuild);
 
 /** The page's layout, holding the figures the build read for the island and the prose. */
 export const FragilityPage = async ({

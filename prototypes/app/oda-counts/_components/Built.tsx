@@ -1,16 +1,17 @@
-// The page's server components, which await the build's read of DFO (_lib/build.ts) and hand
-// its results to the client components. Every one awaits the same read.
+// The page's server components, which take the build's read of DFO (_lib/build.ts) from
+// .build-data/oda-counts.json (lib/buildData.ts) and hand it to the client components.
 import type { ReactNode } from 'react';
 
 import { LiveUnitsProvider } from './LiveUnits';
 import { OdaCounts } from './OdaCounts';
 
-import liveRefs from '../_data/live-refs.json';
-import { readOdaCounts } from '../_lib/build.ts';
+import { odaBuild } from '../_lib/build.ts';
 
 import prose from '../../../components/Prose/Prose.module.scss';
 
-const read = () => readOdaCounts(liveRefs.data);
+import { readBuilt } from '#lib/buildData.ts';
+
+const read = () => readBuilt(odaBuild);
 
 /** The built figures and the reader's currency offer, for every component below. */
 export const BuiltLiveUnits = async ({ children }: { children: ReactNode }) => {

@@ -1,19 +1,17 @@
-// The page's layout and the build's read of its figures. A server component: `next build` awaits
-// the read once (lib/buildRead.ts) and renders every figure into the static HTML, so the browser
-// reads nothing. A failed read or a refused derivation fails the build.
+// The page's layout and the figures the build read (_lib/build.ts). A server component: it
+// renders every figure from .build-data/hiv-financing.json (lib/buildData.ts) into the static
+// HTML, so the browser reads nothing.
 import type { ReactNode } from 'react';
 
 import { PrototypePage } from '../../../components/PrototypePage/PrototypePage';
 
 import { AidProvider, AidRail, AidText } from './AidProse';
 
-import liveRefs from '../_data/live-refs.json';
-import { hivFromRows, hivSources } from '../_lib/figures.ts';
+import { hivBuild } from '../_lib/build.ts';
 
-import { readAtBuild } from '#lib/buildRead.ts';
+import { readBuilt } from '#lib/buildData.ts';
 
-/** The build's read of the page's figures, run once per build. */
-const readHiv = () => readAtBuild('hiv-financing', hivSources(liveRefs.data), hivFromRows);
+const readHiv = () => readBuilt(hivBuild);
 
 /** The page's layout, holding the figures the build read for the island and the prose. */
 export const HivPage = async ({ title, children }: { title: string; children: ReactNode }) => {

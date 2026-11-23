@@ -1,19 +1,21 @@
-// How a page reads DFO data at build time. A page's server component awaits `readAtBuild`, which
-// runs the page's sources through `readStored` (./liveRead.ts) at DFO's newest stored versions,
-// with no fallback, and renders the derived figures with `data-read-tier="built"`. Any failed
-// read or refused derivation throws, so `next build` fails and production keeps the last good
-// deploy. Under `next dev` a server component runs on each request, so the read is kept per
-// process by page.
+// How a page reads DFO data at build time. Each build-read page exports a `BuildPage`, whose
+// `build` does all the page's DFO work, mostly through `readSettled`, which runs the page's
+// sources through `readStored` (./liveRead.ts) at DFO's newest stored versions, with no fallback.
+// `pnpm read` (scripts/read.mts) runs every page's `build` in one Node process before
+// `next build` and writes each result to .build-data/ (./buildData.ts), which the page's server
+// components render with `data-read-tier="built"`. Any failed read or refused derivation throws,
+// so the build stops and production keeps the last good deploy.
 //
 // The build is often the first reader after DFO takes in new data, so it meets cold computes,
 // which the client waits through. Each read may take BUILD_TIMEOUT_MS. While any dataset's
 // `freshness` is `pending`, DFO is checking for newer data, so the read runs again every
-// PENDING_RETRY_MS until none is, for at most PENDING_BOUND_MS, then takes what it has.
+// PENDING_RETRY_MS until none is, for at most BUILD_PENDING_BOUND_S seconds (an environment
+// variable, default 0: take what DFO serves), then takes what it has.
 //
 // Build reads use their own anonymous client on the production API and their own lanes, at
-// most READ_CONCURRENCY reads and ANALYSIS_CONCURRENCY recipes at once, so a build from a
-// shared runner address stays inside the gateway's allowances. This module runs on the server
-// only; the client components of a page take its result as props.
+// most READ_CONCURRENCY reads and ANALYSIS_CONCURRENCY recipes at once across every page, so a
+// build from a shared runner address stays inside the gateway's allowances. This module runs on
+// the server only; the client components of a page take its result as props.
 import { Client, type Dataset } from '@developmentfinance/client';
 import { type Freshness, isDerived } from '@developmentfinance/client/types';
 
@@ -33,9 +35,31 @@ import { recordOf } from './record.ts';
 /** How long each build read may take, a cold compute included. */
 export const BUILD_TIMEOUT_MS = 5 * 60_000;
 
-/** How long the build reads again while a dataset's freshness is `pending`, from the first
- *  read's start. */
-export const PENDING_BOUND_MS = 10 * 60_000;
+/** The environment variable that bounds, in seconds, how long the build reads again while a
+ *  dataset's freshness is `pending`, from the first read's start. Unset means 0. */
+export const PENDING_BOUND_VARIABLE = 'BUILD_PENDING_BOUND_S';
+
+/**
+ * The pending bound in milliseconds from `env`'s BUILD_PENDING_BOUND_S, 0 when it is unset or
+ * empty.
+ *
+ * @throws When the variable holds anything but a whole number of seconds.
+ */
+export const pendingBoundOf = (env: Readonly<Record<string, string | undefined>>): number => {
+    const value = env[PENDING_BOUND_VARIABLE] ?? '';
+
+    if (value === '') {
+        return 0;
+    }
+
+    if (!/^\d+$/.test(value)) {
+        throw new Error(
+            `${PENDING_BOUND_VARIABLE} must be a whole number of seconds, not "${value}".`,
+        );
+    }
+
+    return Number(value) * 1000;
+};
 
 /** How long the build waits before reading again while a dataset's freshness is `pending`. */
 export const PENDING_RETRY_MS = 30_000;
@@ -75,26 +99,17 @@ export const versionsOf = (dataset: Dataset): StoredVersion[] => {
     return [...seen.values()];
 };
 
-/**
- * The platform's `fetch` with `cache: 'no-store'`. Under `next build` a server component's
- * `fetch` goes through Next's data cache, which keeps a response for a year, so every read
- * again would get the first answer back and later builds would serve old figures.
- */
-export const buildFetch: typeof globalThis.fetch = (input, init) =>
-    globalThis.fetch(input, { ...init, cache: 'no-store' });
-
 let client: Client | undefined;
 
-/** The build's anonymous client on the production API, reading past Next's data cache. Built
- *  on first use. */
+/** The build's anonymous client on the production API. Built on first use. */
 const buildClient = (): Client => {
-    client ??= new Client({ apiKey: false, fetch: buildFetch });
+    client ??= new Client({ apiKey: false });
 
     return client;
 };
 
-/** The build's lanes, apart from the browser pages' pacer. */
-const buildLanes: ReadLanes = {
+/** The build's lanes, apart from the browser pages' pacer, which every page's reads share. */
+export const buildLanes: ReadLanes = {
     reads: createLane(READ_CONCURRENCY),
     recipes: createLane(ANALYSIS_CONCURRENCY),
 };
@@ -126,7 +141,7 @@ export const readSettled = async <K extends string, T>(
         client = buildClient(),
         lanes = buildLanes,
         timeout = BUILD_TIMEOUT_MS,
-        pendingBound = PENDING_BOUND_MS,
+        pendingBound = pendingBoundOf(process.env),
         retryDelay = PENDING_RETRY_MS,
         now = Date.now,
         sleep = (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -171,32 +186,10 @@ export const readSettled = async <K extends string, T>(
     }
 };
 
-const reads = new Map<string, Promise<BuildRead<string, unknown>>>();
-
-/**
- * `readSettled` for a page's server component, run once per process for each `page`: a later
- * call with the same `page` gets the first call's result, whatever its sources. A failed read
- * is dropped, so under `next dev` the next request reads again.
- *
- * @throws As `readSettled`.
- */
-export const readAtBuild = <K extends string, T>(
-    page: string,
-    sources: Record<K, LiveSource>,
-    derive: Derive<K, T>,
-    options: BuildReadOptions = {},
-): Promise<BuildRead<K, T>> => {
-    const held = reads.get(page);
-
-    if (held !== undefined) {
-        // `page` names one page, whose sources and derivation are the ones that stored it.
-        return held as Promise<BuildRead<K, T>>;
-    }
-
-    const read = readSettled(page, sources, derive, options);
-
-    reads.set(page, read);
-    read.catch(() => reads.delete(page));
-
-    return read;
+/** One build-read page: its name, which names its file in .build-data/, and the function that
+ *  does all its build-time DFO work and returns JSON-serialisable data. `options` carries the
+ *  lanes the build shares across pages, for `build` to pass to `readSettled`. */
+export type BuildPage<T> = {
+    name: string;
+    build: (options?: BuildReadOptions) => Promise<T>;
 };
