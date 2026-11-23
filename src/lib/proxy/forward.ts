@@ -7,6 +7,7 @@ import { keyDb } from '@/lib/db';
 
 import { hasValidTag, tagSecrets } from '@/lib/auth/keyTag';
 
+import { setAccount } from './account';
 import {
     decideAccess,
     honorsKeys as surfaceHonorsKeys,
@@ -14,14 +15,7 @@ import {
     type AccessDeps,
 } from './access';
 import { API_KEY_HEADER, carriesKey, hasKeyPrefix } from './apiKey';
-import {
-    accountCaller,
-    limiterKeyFor,
-    requestCaller,
-    setApisCaller,
-    setCaller,
-    trustedHops,
-} from './caller';
+import { accountCaller, limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import {
     clientResponseHeaders,
     dropEncodedLength,
@@ -39,7 +33,8 @@ import { hit, hitDaily, hitKey, KEY_DAILY_LIMIT, KEYED_LIMIT, type Surface } fro
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
  * must not reach a client). An /api/*, /openapi.json or /mcp call, and a
- * /codes call the route forwards, is rate-limited per IP: /mcp on its own
+ * /codes call the route forwards, is rate-limited per IP: /mcp and the
+ * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
  * headers go out only on a counted call). A call on the 'api' surface may
  * carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
@@ -74,11 +69,12 @@ import { hit, hitDaily, hitKey, KEY_DAILY_LIMIT, KEYED_LIMIT, type Surface } fro
  *
  * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
  * (src/lib/apisAuth matches on the target's origin), and names the caller in
- * x-dfo-caller beside the x-dfo-caller-principal secret (setApisCaller in
- * src/lib/proxy/caller), matched on the same origin. The caller is `ip:` and
- * a digest of the address, or `user:` and a digest of the account for a call
- * with a valid key. The other upstreams get neither, bar /mcp's caller, which
- * is `ip:` and a digest of the address.
+ * x-dfo-caller and its surface in x-dfo-surface beside the
+ * x-dfo-caller-principal secret (setApisCaller in src/lib/proxy/caller),
+ * matched on the same origin. The caller is `ip:` and a digest of the
+ * address, or `user:` and a digest of the account for a call with a valid
+ * key. The other upstreams get none of them. A route names the caller to one
+ * in x-dfo-caller and x-dfo-account instead.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -183,11 +179,15 @@ export type ForwardOptions = {
     // A bearer the proxy attaches on the caller's behalf; when unset, the
     // caller's own Authorization header goes through instead.
     bearer?: string;
-    // Whether to name the caller in x-dfo-caller to an upstream other than
-    // dfo-apis (/mcp), which is resolved as for dfo-apis, which always gets
-    // its own (src/lib/proxy/caller). Any value the client sent is dropped
-    // either way.
-    sendCaller?: boolean;
+    // The x-dfo-caller value to send to an upstream other than dfo-apis,
+    // which gets its own (src/lib/proxy/caller). Any value the client sent is
+    // dropped either way.
+    caller?: string;
+    // The x-dfo-account digest to send to an upstream other than dfo-apis
+    // (src/lib/proxy/account), resolved once after the rate limit and admit
+    // checks so a refused call costs no lookup. Any value the client sent is
+    // dropped either way.
+    account?: () => Promise<string | undefined>;
     // Headers carried beyond the defaults (src/lib/proxy/headers).
     pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
@@ -292,12 +292,10 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         access.identity.kind === 'keyed' ? accountCaller(access.identity.accountId) : undefined;
 
     if (apisTarget) {
-        setApisCaller(headers, req.headers, accountName);
+        setApisCaller(headers, req.headers, undefined, accountName);
     } else {
-        setCaller(
-            headers,
-            options.sendCaller ? (accountName ?? requestCaller(req.headers)) : undefined,
-        );
+        setCaller(headers, options.caller);
+        setAccount(headers, await options.account?.());
     }
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';

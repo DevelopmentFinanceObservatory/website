@@ -24,6 +24,8 @@ import type { RateVerdict } from './rateHeaders';
  *   RATE_LIMIT_WINDOW_S   (default 60)
  *   RATE_LIMIT_API        calls per window per IP on /api/*, /openapi.json
  *                         and /codes (default 120)
+ *   RATE_LIMIT_DATASETS   calls per window per IP on the Datasets API's
+ *                         routes below /api/v1/datasets/ (default 300)
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
@@ -43,6 +45,16 @@ const PRUNE_EVERY_MS = 60 * 60 * 1000;
 
 export const LIMITS = {
     api: Number(process.env.RATE_LIMIT_API) || 120,
+    // The Datasets API's reads and analyses, counted apart from the rest of
+    // /api. A prototype page reads in one load up to 34 of them, a stored
+    // recipe being two, and readers behind one office or campus address share
+    // the count. 300 a minute is about eight such loads per address, with
+    // nothing assumed of the edge cache. Cloudflare's per-address block on
+    // the data API sits above this one, so a single reader meets this 429
+    // first. dfo-apis bounds the analyses it runs at once and answers 503
+    // past that (src/datasets_api/doors/analysis.py in dfo-apis). The mint
+    // door, /api/v1/datasets itself, stays on `api`.
+    datasets: Number(process.env.RATE_LIMIT_DATASETS) || 300,
     pin: Number(process.env.RATE_LIMIT_PIN) || 10,
     // Above the /api default on purpose. Claude, ChatGPT and Gemini call from
     // the vendor's own addresses, so one address can carry many users, and a

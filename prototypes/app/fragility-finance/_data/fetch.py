@@ -1,13 +1,13 @@
 # /// script
 # requires-python = ">=3.12,<3.13"
-# dependencies = ["development-finance[pandas]==0.3.0"]
+# dependencies = ["development-finance==0.6.0"]
 # ///
 """The fragility-finance data step, run by hand with `pnpm data fragility-finance`.
 
 Reads the OECD's 2026 fragility classification from `fragility-2026.tsv` and fetches,
 for each of its 62 contexts, the money that reaches it and the money it pays out:
 
-- gross ODA disbursements from the OECD CRS, 2010 to 2024, split into the OECD's
+- gross ODA disbursements from the OECD CRS, 2015 to 2024, split into the OECD's
   humanitarian, development and peace pillars by purpose code, and by provider in 2024;
 - each DAC member's total ODA in 2024 and 2025 from DAC1, for the change in 2025;
 - gross other official flows (OOF) disbursements from the OECD CRS, 2015 to 2024, zero in a
@@ -16,12 +16,41 @@ for each of its 62 contexts, the money that reaches it and the money it pays out
 - public external debt service from World Bank IDS, 2015 to 2033, projected after 2025;
 - climate finance received from ONE Data in 2024 under ONE's own method, for adaptation,
   mitigation and both;
-- population (UNICEF) and three living-conditions indicators (SDG database), latest year.
+- population (UNICEF) in 2024 and three living-conditions indicators (SDG database), latest
+  year.
 
-Each search runs once, with one context as its example, and each reading is then
-fetched for all 62 contexts. Checks known values, failing loudly when one differs, then
-writes `profiles.json` beside this file, and `groups.json` with the six largest providers
-of ODA in 2024 to all 62 contexts and to each tier. All money is in current US dollars.
+DFO computes the figures that sum or rank many rows: each pillar's total and the total ODA and
+OOF per context and year, the six largest providers per context and per tier, the climate
+finance per context and each DAC member's change in 2025. Each pillar is a filter on the
+pillar's purpose labels, then a sum by recipient and year. Development is the total less
+the other two. The CRS reads hold 16 recipients each, and DFO computes on one read at a time, so
+each figure takes one call per read, and the step joins the disjoint results. The step keeps
+the small arithmetic: development, climate "both" as the total less adaptation and
+mitigation, and the change joined to each provider. The page's browser read
+(`_lib/live.ts`) runs the same recipes on DFO's newest stored data, with the labels, providers
+and read groups the step writes to `live.json`.
+
+Every read is pinned, and `refs.json` beside this file keeps each read's ref and provenance.
+The step runs in one of three modes:
+
+- plain, the default: fetch each committed ref, so the outputs reproduce byte for byte;
+  provenance and the retrieval time come from `refs.json`;
+- `--refresh`: fetch the newest versions of each committed ref, pin them and rewrite
+  `refs.json`;
+- `--search`: ask each question again, with one context as its example, fetch each reading
+  for all 62 contexts, pin it and rewrite `refs.json`. A ref keeps its window and spec, so a
+  change to either takes this mode.
+
+`--no-pin`, with `--refresh` or `--search`, writes the outputs, pins nothing and leaves
+`refs.json` and `live-fixture.json` as they are, for a trial run. Pins come out of a daily
+allowance.
+
+Checks known values, failing loudly when one differs, then writes `profiles.json`,
+`groups.json`, with the six largest providers of ODA in 2024 to all 62 contexts and to each
+tier, and `live.json`. All money is in current US dollars. Beside `refs.json`, it writes
+`live-fixture.json`, which holds each recipe's tree and the rows DFO computed for it.
+`_lib/live.test.mts` checks against it that `_lib/live.ts` builds the same trees and derives
+the committed figures from those rows.
 
 `fragility-2026.tsv` is the OECD's data file behind its fragility chart, linked from the
 OECD's multidimensional fragility dashboard
@@ -30,16 +59,23 @@ country, overall score, tier, the six dimension scores and each dimension's cate
 from 1 (most fragile) to 5.
 """
 
+import argparse
 import csv
 import json
 import logging
-import warnings
-from collections.abc import Iterable
+import math
+import re
+import time
+from collections import defaultdict
+from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
+from typing import Any, Literal
 
 import dfo
-import pandas as pd
+from dfo.types import Recipe
 
 log = logging.getLogger("fragility-finance")
 
@@ -47,14 +83,19 @@ HERE = Path(__file__).parent
 CLASSIFICATION = HERE / "fragility-2026.tsv"
 TARGET = HERE / "profiles.json"
 GROUPS_TARGET = HERE / "groups.json"
+REFS = HERE / "refs.json"
+LIVE_TARGET = HERE / "live.json"
+FIXTURE = HERE / "live-fixture.json"
 
 EXAMPLE = "Mozambique"
-AID_YEARS = (2010, 2024)
 FLOW_YEARS = (2015, 2024)
 DEBT_YEARS = (2015, 2033)
 DONOR_YEAR = 2024
 CLIMATE_YEAR = 2024
+# The page draws each indicator's latest reading, which can be years old.
 INDICATOR_YEARS = (2010, 2025)
+# The page draws population in 2024 alone, beside that year's flows.
+POPULATION_YEAR = 2024
 # IDS reports debt service paid to 2025 and projects it on signed loans after that.
 LAST_PAID_YEAR = 2025
 # ONE Data's own climate method: each project's climate share (UNFCCC coefficients, else 40% of
@@ -65,9 +106,18 @@ TOP_DONORS = 6
 # The CRS returns one row per provider, purpose, finance type and modality, so a build
 # for all 62 recipients over 15 years runs in a few groups.
 CRS_GROUP = 16
+CRS_CHUNKS = 4
+# DFO computes each figure in its own call. Its analysis endpoint answers 503 past a few calls
+# in flight, so two run at once.
+ANALYSIS_CONCURRENCY = 2
+PURPOSE = "crsPurpose"
+PURPOSE_FILTER = "stat_var_crsPurpose"
+PROVIDER = "financingProvider"
 PLACE = "observationAbout"
 EU_INSTITUTIONS = "EuropeanUnionInstitutions"
 RECIPIENT = "financingRecipient"
+# The columns of a computed row that `_lib/live.ts` reads, which the parity fixture keeps.
+FIXTURE_COLUMNS = (RECIPIENT, PROVIDER, "time_period", "value")
 
 DIMENSION_SCORES = {
     "eco": "Economic.PC1",
@@ -116,15 +166,142 @@ INDICATORS = (
 FLOW_SERIES = ("oda", "oof", "remittances", "fdi", "debtService")
 GROUPS = {"all": ("extreme", "high"), "extreme": ("extreme",), "high": ("high",)}
 
-# Values read from DFO when this step was written. A refetch that moves one fails here,
-# so a change in the source is seen before it reaches the page.
+# Debt service values read from DFO. A refetch that moves one fails the check, so a change
+# in the source is seen before it reaches the page.
 KNOWN = {
     ("MOZ", 2024): 916_663_899.7,
     ("MOZ", 2033): 462_640_455.4,
 }
 TOLERANCE = 0.01
 
-READS: list[dict] = []
+type Mode = Literal["plain", "refresh", "search"]
+type Rows = list[dict[str, Any]]
+# A series' value in each year.
+type Yearly = dict[int, float]
+
+
+class Reads:
+    """The step's DFO reads under one mode, and what `refs.json` records of each.
+
+    Each read has a key in `refs.json`. A plain run fetches the committed ref and keeps
+    the committed record. The other modes fetch anew, and `keep` pins every read once the
+    checks pass and records it. With `pin` false, `keep` records the reads unpinned and
+    `write` leaves `refs.json` alone, for a trial run.
+    """
+
+    def __init__(self, mode: Mode, *, pin: bool = True) -> None:
+        self.mode = mode
+        self.pin = pin
+        self.committed = json.loads(REFS.read_text()) if mode != "search" else None
+        self.fetched: dict[str, dfo.Dataset] = {}
+        self.records: dict[str, dict] = {}
+        self.rows: dict[str, int] = {}
+        self.pins = 0
+
+    def read(
+        self,
+        key: str,
+        ask: Callable[[], dfo.Answer],
+        *,
+        role: str | None = None,
+        places: Iterable[str] = (),
+        window: tuple[int, int] | None = None,
+        facets: dict[str, str] | None = None,
+    ) -> dfo.Dataset:
+        """Fetch read `key`: its committed ref, the ref's newest versions, or `ask()`'s
+        answer for `places` under `role`."""
+        if key in self.rows:
+            raise SystemExit(f"{key}: read twice")
+
+        if self.committed is None:
+            options = {}
+
+            if window is not None:
+                options["window"] = window
+
+            if facets is not None:
+                options["facets"] = facets
+
+            if role is not None:
+                options["entities"] = {role: list(places)}
+
+            data = ask().fetch(**options)
+        else:
+            if key not in self.committed["data"]:
+                raise SystemExit(f"{key}: {REFS.name} holds no ref; run with --search")
+
+            ref = dfo.DatasetRef.from_json(json.dumps(self.committed["data"][key]["ref"]))
+            data = dfo.fetch(ref, latest=self.mode == "refresh")
+
+        if self.mode == "plain":
+            if not data.provenance.pinned:
+                raise SystemExit(f"{key}: the committed ref names a version not pinned")
+
+            self.records[key] = self.committed["data"][key]
+        else:
+            self.fetched[key] = data
+
+        self.rows[key] = len(data)
+        log.info("%s: %s rows, %s", key, f"{len(data):,}", data.sentence)
+        return data
+
+    def keep(self) -> None:
+        """Pin each read fetched anew and record its ref and provenance."""
+        for key, data in self.fetched.items():
+            if self.pin:
+                self.pins += sum(1 for member in data.members if not member.pinned)
+                data = dfo.pin(data)
+
+            self.records[key] = {
+                "ref": json.loads(data.ref.to_json()),
+                "provenance": json.loads(data.provenance.to_json()),
+            }
+
+    def retrieved(self) -> str:
+        """The time of the run that pinned the reads, which a plain run copies."""
+        if self.committed is not None and self.mode == "plain":
+            return self.committed["provenance"]["retrieved"]
+
+        return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    def summary(self, prefixes: tuple[str, ...] = ("",)) -> list[dict]:
+        """Each read whose key starts with one of `prefixes`, as the outputs record it."""
+        found = []
+
+        for key, record in self.records.items():
+            if not key.startswith(prefixes):
+                continue
+
+            provenance = dfo.Provenance.from_json(record["provenance"])
+            found.append(
+                {
+                    "key": key,
+                    "sentence": provenance.sentence,
+                    "specIds": [member.spec.spec_id for member in provenance.members],
+                    "versions": [member.content_version for member in provenance.members],
+                    "citation": provenance.citation.text,
+                    "rows": self.rows[key],
+                    "warnings": sorted({notice.code for notice in provenance.warnings}),
+                }
+            )
+
+        return found
+
+    def write(self, retrieved: str) -> None:
+        """Rewrite `refs.json`. A plain run and a trial run leave it as committed."""
+        if self.mode == "plain" or not self.pin:
+            return
+
+        envelope = {
+            "provenance": {
+                "sdk": f"development-finance=={dfo.__version__}",
+                "query": "fragility-finance pinned reads",
+                "retrieved": retrieved,
+            },
+            "data": self.records,
+        }
+        REFS.write_text(json.dumps(envelope, indent=1, ensure_ascii=False) + "\n")
+        log.info("Wrote %s; pinned %d new versions.", REFS, self.pins)
 
 
 def read_classification() -> list[dict]:
@@ -158,70 +335,58 @@ def read_classification() -> list[dict]:
     return contexts
 
 
-def answer_for(key: str, question: str | None = None, **search) -> dfo.Answer:
-    """Search once and fail unless every part of the answer has one reading."""
-    answer = dfo.search(question, **search) if question else dfo.search(**search)
+def asking(key: str, question: str | None = None, **search) -> Callable[[], dfo.Answer]:
+    """A search run at most once, on the first call, failing unless every part of the
+    answer has one reading. A plain run never calls it."""
 
-    if not answer.complete:
-        raise SystemExit(f"{key}: the search has no single reading.\n{answer}")
+    @cache
+    def answer() -> dfo.Answer:
+        found = dfo.search(question, **search) if question else dfo.search(**search)
 
-    log.info("%s: %s", key, answer.sentence)
+        if not found.complete:
+            raise SystemExit(f"{key}: the search has no single reading.\n{found}")
+
+        log.info("%s: %s", key, found.sentence)
+        return found
+
     return answer
 
 
-def fetch(
-    key: str,
-    answer: dfo.Answer,
-    *,
-    role: str | None = None,
-    places: Iterable[str] = (),
-    window: tuple[int, int] | None = None,
-    facets: dict[str, str] | None = None,
-) -> pd.DataFrame:
-    """Fetch every reading of `answer`, for `places` under `role`, recording what was read."""
-    options = {}
-
-    if window is not None:
-        options["window"] = window
-
-    if facets is not None:
-        options["facets"] = facets
-
-    if role is not None:
-        options["entities"] = {role: list(places)}
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        data = answer.fetch(**options)
-
-    READS.append(
-        {
-            "key": key,
-            "sentence": data.sentence,
-            "specIds": [spec.spec_id for spec in answer.specs],
-            "versions": [member.content_version for member in data.members],
-            "citation": data.citation.text,
-            "rows": len(data),
-            "warnings": sorted({str(warning.message).splitlines()[0] for warning in caught}),
-        }
-    )
-    return data.to_pandas()
+def rows_of(data: dfo.Dataset) -> Rows:
+    return data.to_arrow().to_pylist()
 
 
-def by_place(frame: pd.DataFrame, column: str) -> dict[str, pd.DataFrame]:
-    """Split a frame by its place column, keyed by ISO3 code."""
-    return {
-        str(dcid).removeprefix("country/"): rows for dcid, rows in frame.groupby(column, sort=False)
-    }
+def by_place(rows: Rows, column: str) -> dict[str, Yearly]:
+    """Each place's value in each year, summed over any other columns and keyed by ISO3 code.
+    A year whose values are all null is left out."""
+    places: dict[str, Yearly] = defaultdict(dict)
+
+    for row in rows:
+        value = row["value"]
+
+        if value is None or math.isnan(value):
+            continue
+
+        values = places[str(row[column]).removeprefix("country/")]
+        year = int(row["time_period"])
+        values[year] = values.get(year, 0.0) + value
+
+    return dict(places)
 
 
-def yearly(rows: pd.DataFrame | None) -> dict[int, float]:
-    """A series' value in each year, summed over any other columns."""
-    if rows is None or rows.empty:
-        return {}
+def joined(parts: Iterable[dict[str, Yearly]]) -> dict[str, Yearly]:
+    """The results of the CRS reads in one map. Each read holds its own recipients."""
+    found: dict[str, Yearly] = {}
 
-    totals = rows.groupby(rows["time_period"].astype(int))["value"].sum(min_count=1)
-    return {int(year): float(value) for year, value in totals.items() if pd.notna(value)}
+    for part in parts:
+        shared = found.keys() & part.keys()
+
+        if shared:
+            raise SystemExit(f"recipients in two CRS reads: {sorted(shared)}")
+
+        found |= part
+
+    return found
 
 
 def money(value: float | None) -> int | None:
@@ -237,9 +402,7 @@ def pillar(purpose: str) -> str:
     return "peace" if code in PEACE else "development"
 
 
-def latest(rows: pd.DataFrame | None) -> dict | None:
-    values = yearly(rows)
-
+def latest(values: Yearly | None) -> dict | None:
     if not values:
         return None
 
@@ -247,81 +410,260 @@ def latest(rows: pd.DataFrame | None) -> dict | None:
     return {"year": year, "value": round(values[year], 2)}
 
 
-def fetch_aid(places: list[str]) -> dict[str, pd.DataFrame]:
-    answer = answer_for("aid", f"ODA to {EXAMPLE} by sector")
-    aid = pd.concat(
-        [
-            fetch("aid", answer, role="destination", places=group, window=AID_YEARS)
-            for group in crs_groups(places)
-        ],
-        ignore_index=True,
-    )
-    aid["pillar"] = aid["crsPurpose"].map(pillar)
-    aid["year"] = aid["time_period"].astype(int)
-    return by_place(aid, RECIPIENT)
+def labels_of(frames: Iterable[dfo.Dataset], column: str) -> dict[str, set[str]]:
+    """Each code of `column` the frames hold, with the labels their cells give it."""
+    labels: dict[str, set[str]] = defaultdict(set)
+
+    for data in frames:
+        pairs = data.to_arrow().group_by([column, f"{column}_label"]).aggregate([])
+
+        for code, label in zip(
+            pairs.column(column).to_pylist(),
+            pairs.column(f"{column}_label").to_pylist(),
+            strict=True,
+        ):
+            labels[str(code)].add(str(label))
+
+    return labels
+
+
+def pillar_purposes(aid: list[dfo.Dataset]) -> dict[str, list[str]]:
+    """The labels of the humanitarian and peace purpose codes the CRS reads hold. The pillars'
+    filters match these labels, since DFO's cells hold a purpose's label.
+
+    Fails unless each label names one purpose code of the reads, a code of its own pillar,
+    since a label that named no code would filter to nothing and draw a zero pillar.
+    """
+    codes: dict[str, set[str]] = defaultdict(set)
+
+    for code, labels in labels_of(aid, PURPOSE).items():
+        for label in labels:
+            codes[label].add(code)
+
+    purposes = {}
+
+    for name in ("humanitarian", "peace"):
+        labels = sorted(
+            label for label, held in codes.items() if any(pillar(code) == name for code in held)
+        )
+        problems = [
+            f"{label!r} names {sorted(codes[label])}"
+            for label in labels
+            if len(codes[label]) != 1 or pillar(next(iter(codes[label]))) != name
+        ]
+
+        if not labels or problems:
+            raise SystemExit(
+                f"the {name} purpose labels do not each name one {name} code: "
+                f"{'; '.join(problems) or 'none held'}"
+            )
+
+        purposes[name] = labels
+
+    return purposes
+
+
+def provider_names(aid: list[dfo.Dataset]) -> dict[str, str]:
+    """Each provider of the CRS reads by code, with its label, which the page shows."""
+    names = {}
+
+    for code, labels in sorted(labels_of(aid, PROVIDER).items()):
+        if len(labels) != 1:
+            raise SystemExit(f"provider {code} has labels {sorted(labels)}")
+
+        names[code] = next(iter(labels))
+
+    return names
 
 
 def crs_groups(places: list[str]) -> list[list[str]]:
     return [places[start : start + CRS_GROUP] for start in range(0, len(places), CRS_GROUP)]
 
 
-def fetch_oof(places: list[str]) -> dict[str, pd.DataFrame]:
-    answer = answer_for("oof", f"gross other official flows (OOF) disbursements to {EXAMPLE}")
-    oof = pd.concat(
-        [
-            fetch("oof", answer, role="destination", places=group, window=FLOW_YEARS)
-            for group in crs_groups(places)
-        ],
-        ignore_index=True,
-    )
-    return by_place(oof, RECIPIENT)
+def crs_reads(reads: Reads, key: str, ask: Callable[[], dfo.Answer], places: list[str]) -> dict:
+    """The CRS reads of `key`, one per group of recipients, with the recipients of each."""
+    groups = crs_groups(places)
+
+    if len(groups) != CRS_CHUNKS:
+        raise SystemExit(f"{key}: {len(groups)} groups of recipients, not {CRS_CHUNKS}")
+
+    return {
+        f"{key}-{index}": (
+            reads.read(f"{key}-{index}", ask, role="destination", places=group, window=FLOW_YEARS),
+            group,
+        )
+        for index, group in enumerate(groups, start=1)
+    }
 
 
-def donor_change() -> dict[str, float]:
-    """Each DAC member's change in total ODA from 2024 to 2025, as a fraction."""
-    question = "total ODA of each DAC donor in 2024 and 2025"
-    answer = answer_for("donors2025", question)
-    # DFO's DAC members group holds the 32 member countries and leaves out EU institutions,
-    # also a DAC member. A question naming EU institutions resolves to the EU's members or to
-    # the EU as a recipient, so the EU is read from the same answer, named as the origin.
-    # Its DAC1 code, EuropeanUnionInstitutions, is the provider code the CRS uses.
-    frame = pd.concat(
-        [
-            fetch("donors2025", answer),
-            fetch("donors2025-eu", answer, role="origin", places=[EU_INSTITUTIONS]),
-        ],
-        ignore_index=True,
-    )
-    change = {}
+def figures(
+    aid: dict[str, tuple[dfo.Dataset, list[str]]],
+    oof: dict[str, dfo.Dataset],
+    donors: dict[str, dfo.Dataset],
+    climate: dict[str, dfo.Dataset],
+    purposes: dict[str, list[str]],
+    tiers: dict[str, str],
+) -> dict[str, Recipe]:
+    """The recipes DFO computes, by a key naming the read and the figure, such as
+    `aid-1/humanitarian`. `_lib/live.ts`'s `recipes` builds the same ones."""
+    recipe = dfo.analysis.recipe
+    found: dict[str, Recipe] = {}
 
-    for provider, rows in frame.groupby("financingProvider"):
-        values = yearly(rows)
+    for key, (data, group) in aid.items():
+        found[f"{key}/total"] = recipe(data.ref).aggregate(by="destination")
 
-        if values.get(2024) and 2025 in values:
-            change[str(provider)] = values[2025] / values[2024] - 1
+        for name, labels in purposes.items():
+            found[f"{key}/{name}"] = (
+                recipe(data.ref).filter(keep={PURPOSE_FILTER: labels}).aggregate(by="destination")
+            )
 
-    return change
+        found[f"{key}/donors"] = recipe(data.ref).rank(
+            by="origin",
+            per="destination",
+            window=(DONOR_YEAR, DONOR_YEAR),
+            how="sum",
+            limit=TOP_DONORS,
+        )
+        held = {tiers[place] for place in group}
+
+        for tier in sorted(held):
+            start = recipe(data.ref)
+
+            if len(held) > 1:
+                start = start.filter(
+                    keep={"destination": [place for place in group if tiers[place] == tier]}
+                )
+
+            found[f"{key}/{tier}"] = start.aggregate(by="origin")
+
+    for key, data in oof.items():
+        found[f"{key}/total"] = recipe(data.ref).aggregate(by="destination")
+
+    for key, data in donors.items():
+        found[f"{key}/change"] = recipe(data.ref).growth(
+            by="origin", window=(DONOR_YEAR, DONOR_YEAR + 1)
+        )
+
+    for key, data in climate.items():
+        found[f"{key}/total"] = recipe(data.ref).aggregate(by="destination")
+
+    return found
 
 
-def top_donors(rows: pd.DataFrame | None, change: dict[str, float]) -> list[dict]:
-    if rows is None:
-        return []
+def compute(recipes: dict[str, Recipe]) -> dict[str, Rows]:
+    """Each recipe's rows, computed by DFO, `ANALYSIS_CONCURRENCY` at a time."""
 
-    last = rows[rows["year"] == DONOR_YEAR]
-    totals = (
-        last.groupby(["financingProvider", "financingProvider_label"])["value"]
-        .sum()
-        .sort_values(ascending=False)
-    )
+    def run(key: str) -> Rows:
+        start = time.monotonic()
+        rows = rows_of(dfo.fetch(recipes[key]))
+        log.info("%s: %d rows computed in %.1f s", key, len(rows), time.monotonic() - start)
+        return rows
+
+    with ThreadPoolExecutor(ANALYSIS_CONCURRENCY) as pool:
+        return dict(zip(recipes, pool.map(run, recipes), strict=True))
+
+
+def donor_change(results: dict[str, Rows]) -> dict[str, float]:
+    """Each DAC member's change in total ODA from 2024 to 2025, as a fraction. DFO leaves
+    out a provider with no ODA in 2024 or none recorded in 2025. A change that is infinite or
+    NaN, which a zero base in 2024 would give, is left out too, since JSON cannot hold it."""
+    return {
+        str(row[PROVIDER]): row["value"]
+        for key in ("donors2025/change", "donors2025-eu/change")
+        for row in results[key]
+        if row["value"] is not None and math.isfinite(row["value"])
+    }
+
+
+def largest(
+    totals: dict[str, float], names: dict[str, str], change: dict[str, float]
+) -> list[dict]:
+    """The `TOP_DONORS` largest providers of `totals`, those above zero, largest first."""
+    ranked = sorted(totals.items(), key=lambda item: item[1], reverse=True)[:TOP_DONORS]
     return [
         {
-            "name": str(label),
+            "name": names[provider],
             "value": money(value),
             "change2025": round(change[provider], 4) if provider in change else None,
         }
-        for (provider, label), value in totals.head(TOP_DONORS).items()
+        for provider, value in ranked
         if value > 0
     ]
+
+
+def context_donors(
+    results: dict[str, Rows], names: dict[str, str], change: dict[str, float]
+) -> dict[str, list[dict]]:
+    """Each context's six largest providers in 2024, from DFO's ranking per recipient."""
+    totals: dict[str, dict[str, float]] = defaultdict(dict)
+
+    for index in range(1, CRS_CHUNKS + 1):
+        for row in results[f"aid-{index}/donors"]:
+            if row["value"] is not None:
+                iso3 = str(row[RECIPIENT]).removeprefix("country/")
+                totals[iso3][str(row[PROVIDER])] = row["value"]
+
+    return {iso3: largest(values, names, change) for iso3, values in totals.items()}
+
+
+def group_donors(
+    results: dict[str, Rows], names: dict[str, str], change: dict[str, float]
+) -> dict[str, dict]:
+    """The six largest providers of ODA in 2024 to all 62 contexts and to each tier, from
+    DFO's sum by provider over each read's contexts of a tier."""
+    by_tier: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+
+    for key, rows in results.items():
+        read, _, tier = key.partition("/")
+
+        if not read.startswith("aid-") or tier not in ("extreme", "high"):
+            continue
+
+        for row in rows:
+            if row["value"] is not None and int(row["time_period"]) == DONOR_YEAR:
+                by_tier[tier][str(row[PROVIDER])] += row["value"]
+
+    groups = {}
+
+    for key, tiers in GROUPS.items():
+        totals: dict[str, float] = defaultdict(float)
+
+        for tier in tiers:
+            for provider, value in by_tier[tier].items():
+                totals[provider] += value
+
+        groups[key] = {"donors": largest(totals, names, change)}
+
+    return groups
+
+
+def fixture(recipes: dict[str, Recipe], results: dict[str, Rows]) -> dict:
+    """Each recipe's tree and the rows DFO computed for it, cut to the columns `_lib/live.ts`
+    reads, for the page's parity test. An infinite or NaN value is written as null, which
+    `_lib/live.ts` skips as it skips NaN."""
+
+    def cell(value: Any) -> Any:
+        return None if isinstance(value, float) and not math.isfinite(value) else value
+
+    rows = {}
+
+    for key, found in results.items():
+        columns = [column for column in FIXTURE_COLUMNS if found and column in found[0]]
+        rows[key] = {
+            "columns": columns,
+            "rows": [[cell(row[column]) for column in columns] for row in found],
+        }
+
+    return {"recipes": {key: chain.tree() for key, chain in recipes.items()}, "rows": rows}
+
+
+def flat_lists(text: str) -> str:
+    """`text` with each list of plain values on one line."""
+    return re.sub(
+        r"\[\s+([^\[\]{}]*?)\s+\]",
+        lambda match: "[" + re.sub(r",\s+", ", ", match.group(1)) + "]",
+        text,
+    )
 
 
 def climate_split(iso3: str, total: dict, adaptation: dict, mitigation: dict) -> dict | None:
@@ -346,23 +688,6 @@ def climate_split(iso3: str, total: dict, adaptation: dict, mitigation: dict) ->
         raise SystemExit(f"climate finance {iso3} {CLIMATE_YEAR}: negative parts {negative}")
 
     return {"year": CLIMATE_YEAR, **split}
-
-
-def group_donors(
-    contexts: list[dict], aid: dict[str, pd.DataFrame], change: dict[str, float]
-) -> dict[str, dict]:
-    """The six largest providers of ODA in 2024 to all 62 contexts and to each tier."""
-    groups = {}
-
-    for key, tiers in GROUPS.items():
-        frames = [
-            aid[context["iso3"]]
-            for context in contexts
-            if context["tier"] in tiers and context["iso3"] in aid
-        ]
-        groups[key] = {"donors": top_donors(pd.concat(frames, ignore_index=True), change)}
-
-    return groups
 
 
 def log_panels(contexts: list[dict]) -> None:
@@ -397,37 +722,83 @@ def log_panels(contexts: list[dict]) -> None:
         )
 
 
+def parse_arguments() -> tuple[Mode, bool]:
+    """The mode, and whether to pin what a refresh or a search fetches."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--refresh", action="store_true", help="pin the newest versions of the committed refs"
+    )
+    group.add_argument(
+        "--search", action="store_true", help="search again and pin what the answers build"
+    )
+    parser.add_argument(
+        "--no-pin",
+        action="store_true",
+        help="with --refresh or --search, write the outputs but pin nothing and keep refs.json",
+    )
+    arguments = parser.parse_args()
+    mode: Mode = "refresh" if arguments.refresh else "search" if arguments.search else "plain"
+
+    if arguments.no_pin and mode == "plain":
+        parser.error("--no-pin needs --refresh or --search")
+
+    return mode, not arguments.no_pin
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    mode, pin = parse_arguments()
+    reads = Reads(mode, pin=pin)
     contexts = read_classification()
     places = [f"country/{context['iso3']}" for context in contexts]
+    tiers = {f"country/{context['iso3']}": context["tier"] for context in contexts}
 
-    def place_reading(key: str, question: str, window: tuple[int, int]) -> dict:
-        frame = fetch(key, answer_for(key, question), role="place", places=places, window=window)
-        return by_place(frame, PLACE)
+    def place_reading(key: str, question: str, window: tuple[int, int]) -> dict[str, Yearly]:
+        data = reads.read(key, asking(key, question), role="place", places=places, window=window)
+        return by_place(rows_of(data), PLACE)
 
     def recipient_reading(
         key: str, window: tuple[int, int], facets: dict[str, str] | None = None, **search
-    ) -> dict:
-        answer = answer_for(key, **search)
-        frame = fetch(key, answer, role="destination", places=places, window=window, facets=facets)
+    ) -> dfo.Dataset:
+        ask = asking(key, **search)
+        data = reads.read(key, ask, role="destination", places=places, window=window, facets=facets)
+        table = data.to_arrow()
         for column, value in (facets or {}).items():
-            held = set(frame[column].dropna().unique())
+            held = set(table.column(column).drop_null().unique().to_pylist())
             if held != {value}:
                 raise SystemExit(f"{key}: expected {column} {value}, got {sorted(held)}")
-        return by_place(frame, RECIPIENT)
+        return data
 
-    aid = fetch_aid(places)
-    oof = fetch_oof(places)
-    change = donor_change()
+    aid = crs_reads(reads, "aid", asking("aid", f"ODA to {EXAMPLE} by sector"), places)
+    oof = crs_reads(
+        reads,
+        "oof",
+        asking("oof", f"gross other official flows (OOF) disbursements to {EXAMPLE}"),
+        places,
+    )
+    # DFO's DAC members group holds the 32 member countries and leaves out EU institutions,
+    # also a DAC member. A question naming EU institutions resolves to the EU's members or to
+    # the EU as a recipient, so the EU is read from the same answer, named as the origin.
+    # Its DAC1 code, EuropeanUnionInstitutions, is the provider code the CRS uses.
+    ask_donors = asking("donors2025", "total ODA of each DAC donor in 2024 and 2025")
+    donors = {
+        "donors2025": reads.read("donors2025", ask_donors),
+        "donors2025-eu": reads.read(
+            "donors2025-eu", ask_donors, role="origin", places=[EU_INSTITUTIONS]
+        ),
+    }
     remittances = place_reading(
         "remittances", f"inward remittances to {EXAMPLE} in US dollars", FLOW_YEARS
     )
     fdi = place_reading("fdi", f"foreign direct investment inflows to {EXAMPLE}", FLOW_YEARS)
-    debt = recipient_reading("debtService", DEBT_YEARS, codes=["DT.TDS.DPPG.CD"])
+    debt = by_place(
+        rows_of(recipient_reading("debtService", DEBT_YEARS, codes=["DT.TDS.DPPG.CD"])),
+        RECIPIENT,
+    )
     climate_window = (CLIMATE_YEAR, CLIMATE_YEAR)
-    climate = {
-        objective: recipient_reading(
+    climate_reads = {
+        f"climate-{objective}": recipient_reading(
             f"climate-{objective}", climate_window, facets=CLIMATE_METHOD, question=question
         )
         for objective, question in (
@@ -437,27 +808,58 @@ def main() -> int:
         )
     }
     population = place_reading(
-        "population", f"population of {EXAMPLE}", (FLOW_YEARS[0], INDICATOR_YEARS[1])
+        "population", f"population of {EXAMPLE}", (POPULATION_YEAR, POPULATION_YEAR)
     )
     indicators = {
         key: place_reading(key, question, INDICATOR_YEARS) for key, question, _ in INDICATORS
     }
 
+    aid_frames = [data for data, _ in aid.values()]
+    purposes = pillar_purposes(aid_frames)
+    names = provider_names(aid_frames)
+    recipes = figures(
+        aid,
+        {key: data for key, (data, _) in oof.items()},
+        donors,
+        climate_reads,
+        purposes,
+        tiers,
+    )
+    results = compute(recipes)
+
+    def summed(read: str, figure: str) -> dict[str, Yearly]:
+        return joined(
+            by_place(results[f"{read}-{index}/{figure}"], RECIPIENT)
+            for index in range(1, CRS_CHUNKS + 1)
+        )
+
+    totals = summed("aid", "total")
+    pillars = {name: summed("aid", name) for name in purposes}
+    official_flows = summed("oof", "total")
+    climate = {key: by_place(results[f"{key}/total"], RECIPIENT) for key in climate_reads}
+    change = donor_change(results)
+    donors_of = context_donors(results, names, change)
+
     for context in contexts:
         iso3 = context["iso3"]
-        rows = aid.get(iso3)
-        oda = yearly(rows)
-        by_pillar = {
-            name: yearly(None if rows is None else rows[rows["pillar"] == name]) for name in PILLARS
-        }
+        oda = totals.get(iso3, {})
+        humanitarian = pillars["humanitarian"].get(iso3, {})
+        peace = pillars["peace"].get(iso3, {})
         context["pillars"] = [
-            {"year": year, **{name: money(by_pillar[name].get(year, 0.0)) for name in PILLARS}}
+            {
+                "year": year,
+                "development": money(
+                    oda[year] - humanitarian.get(year, 0.0) - peace.get(year, 0.0)
+                ),
+                "humanitarian": money(humanitarian.get(year, 0.0)),
+                "peace": money(peace.get(year, 0.0)),
+            }
             for year in sorted(oda)
         ]
 
-        official = yearly(oof.get(iso3))
-        remitted, invested = yearly(remittances.get(iso3)), yearly(fdi.get(iso3))
-        serviced = yearly(debt.get(iso3))
+        official = official_flows.get(iso3, {})
+        remitted, invested = remittances.get(iso3, {}), fdi.get(iso3, {})
+        serviced = debt.get(iso3, {})
         context["flows"] = [
             {
                 "year": year,
@@ -473,20 +875,22 @@ def main() -> int:
             {"year": year, "value": money(value), "projected": year > LAST_PAID_YEAR}
             for year, value in sorted(serviced.items())
         ]
-        context["donors"] = top_donors(rows, change)
+        context["donors"] = donors_of.get(iso3, [])
         context["climate"] = climate_split(
-            iso3, *(yearly(climate[objective].get(iso3)) for objective in climate)
+            iso3, *(climate[key].get(iso3, {}) for key in climate_reads)
         )
         context["population"] = {
-            str(year): money(value) for year, value in sorted(yearly(population.get(iso3)).items())
+            str(year): money(value) for year, value in sorted(population.get(iso3, {}).items())
         }
         context["indicators"] = {key: latest(indicators[key].get(iso3)) for key, _, _ in INDICATORS}
 
-    groups = group_donors(contexts, aid, change)
+    groups = group_donors(results, names, change)
     check(contexts, groups)
     log_panels(contexts)
+    reads.keep()
 
-    retrieved = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    retrieved = reads.retrieved()
+    every_read = reads.summary()
     envelope = {
         "provenance": {
             "sdk": f"development-finance=={dfo.__version__}",
@@ -499,14 +903,14 @@ def main() -> int:
                 "population (UNICEF) and three living-conditions indicators (SDG database)"
             ),
             "retrieved": retrieved,
-            "citation": "; ".join(sorted({read["citation"] for read in READS})),
+            "citation": "; ".join(sorted({read["citation"] for read in every_read})),
             "classification": "OECD, States of Fragility 2026 update",
             "units": {key: unit for key, _, unit in INDICATORS},
-            "dfo": READS,
+            "dfo": every_read,
         },
         "data": contexts,
     }
-    donor_reads = [read for read in READS if read["key"].startswith(("aid", "donors2025"))]
+    donor_reads = reads.summary(("aid-", "donors2025"))
     group_envelope = {
         "provenance": {
             "sdk": envelope["provenance"]["sdk"],
@@ -524,9 +928,53 @@ def main() -> int:
         "data": groups,
     }
 
-    for target, content in ((TARGET, envelope), (GROUPS_TARGET, group_envelope)):
+    live_envelope = {
+        "provenance": {
+            "sdk": envelope["provenance"]["sdk"],
+            "query": (
+                "What the page's browser read needs beside refs.json to run the step's "
+                "recipes: the recipients of each CRS read, the labels of the humanitarian and "
+                "peace purpose codes the reads hold, and each CRS provider's label"
+            ),
+            "retrieved": retrieved,
+        },
+        "data": {
+            "groups": {key: group for key, (_, group) in aid.items()},
+            "purposes": purposes,
+            "providers": names,
+        },
+    }
+
+    reads.write(retrieved)
+
+    for target, content in (
+        (TARGET, envelope),
+        (GROUPS_TARGET, group_envelope),
+        (LIVE_TARGET, live_envelope),
+    ):
         target.write_text(json.dumps(content, indent=1, ensure_ascii=False) + "\n")
         log.info("Wrote %s.", target)
+
+    # The parity test builds the recipes from refs.json, so the fixture moves with it. A trial
+    # run leaves refs.json alone, so it leaves the fixture alone too.
+    if reads.pin:
+        fixture_envelope = {
+            "provenance": {
+                "sdk": envelope["provenance"]["sdk"],
+                "query": (
+                    "The tree of each recipe DFO computed for the step and the rows it "
+                    "returned, for the page's parity test"
+                ),
+                "retrieved": retrieved,
+            },
+            "data": fixture(recipes, results),
+        }
+        FIXTURE.write_text(
+            flat_lists(json.dumps(fixture_envelope, indent=1, ensure_ascii=False)) + "\n"
+        )
+        log.info("Wrote %s.", FIXTURE)
+    else:
+        log.info("Trial run (--no-pin): left %s and %s alone.", REFS.name, FIXTURE.name)
 
     return 0
 

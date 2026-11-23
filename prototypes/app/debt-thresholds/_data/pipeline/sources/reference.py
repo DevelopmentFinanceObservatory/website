@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import csv
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from pipeline.config import REFERENCE_YEARS, View
 from pipeline.countries import COUNTRIES, ISO3
 from pipeline.errors import DataError
 from pipeline.panel import Series
 from pipeline.provenance import Ledger
+from pipeline.sources.pinned import Mode
 
 if TYPE_CHECKING:
     import httpx
@@ -22,22 +24,82 @@ if TYPE_CHECKING:
 US_RATE_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GS10"
 WB_COUNTRIES_URL = "https://api.worldbank.org/v2/country?format=json&per_page=400"
 
+# One view's reference reads: `read` (ISO date), `usRate` (year -> percent or
+# null) and `ida` (ISO3 -> IDA-eligible).
+type Snapshot = dict[str, Any]
 
-def load_us_rate(*, client: httpx.Client, ledger: Ledger, today: date) -> Series:
-    """Return the annual average of the US 10-year Treasury yield, complete years only."""
+
+def read_reference(view: View, *, client: httpx.Client, today: date) -> Snapshot:
+    """Return the US rate and IDA status one view uses, as read today.
+
+    The snapshot keeps the US rate for the reference years and the base year, and
+    goes into reference.json, so a later run builds the view on the same values.
+    """
     response = client.get(US_RATE_URL, timeout=120.0, follow_redirects=True)
     rate = parse_us_rate(response.raise_for_status().text)
+    response = client.get(WB_COUNTRIES_URL, timeout=120.0)
+    ida = parse_ida(response.raise_for_status().json())
+    return {
+        "read": today.isoformat(),
+        "usRate": {str(year): rate.get(year) for year in [*REFERENCE_YEARS, view.base]},
+        "ida": ida,
+    }
+
+
+def view_snapshots(
+    both: Sequence[View],
+    committed: Mapping[str, Snapshot],
+    *,
+    mode: Mode,
+    client: httpx.Client,
+    today: date,
+) -> dict[str, Snapshot]:
+    """Return the US rate and IDA status of each view, by base year.
+
+    A plain run takes the committed values. Otherwise the archived view keeps its
+    committed values, so a refresh leaves it as it was, and the current view
+    reads them again.
+    """
+    snapshots: dict[str, Snapshot] = {}
+    for view in both:
+        base = str(view.base)
+        if base in committed and (mode is Mode.PLAIN or view.archived):
+            snapshots[base] = committed[base]
+        elif mode is Mode.PLAIN:
+            raise DataError(f"reference.json has no {base} view; run with --refresh.")
+        else:
+            snapshots[base] = read_reference(view, client=client, today=today)
+    return snapshots
+
+
+def snapshot_values(snapshot: Snapshot) -> tuple[Series, dict[str, bool]]:
+    """Return a snapshot's US rate by year and IDA status by ISO3, as `build_view` takes them."""
+    rate = {int(year): value for year, value in snapshot["usRate"].items() if value is not None}
+    return rate, dict(snapshot["ida"])
+
+
+def record_reference(ledger: Ledger, view: View, snapshot: Snapshot) -> None:
+    """Record the US rate and IDA status a view was built on, with the day they were read."""
+    vintage = f"read {snapshot['read']}"
     ledger.preload(
         {
             "name": (
                 "US 10-year Treasury constant-maturity yield (FRED GS10), "
                 "annual average of monthly values"
             ),
-            "vintage": f"read {today.isoformat()}",
+            "baseYear": view.base,
+            "vintage": vintage,
             "source": US_RATE_URL,
         }
     )
-    return rate
+    ledger.preload(
+        {
+            "name": "World Bank lending category (IDA, blend, IBRD)",
+            "baseYear": view.base,
+            "vintage": vintage,
+            "source": WB_COUNTRIES_URL,
+        }
+    )
 
 
 def parse_us_rate(text: str) -> Series:
@@ -47,23 +109,6 @@ def parse_us_rate(text: str) -> Series:
         if row[1] not in ("", "."):
             months[int(row[0][:4])].append(float(row[1]))
     return {year: sum(v) / len(v) for year, v in months.items() if len(v) == 12}
-
-
-def load_ida(*, client: httpx.Client, ledger: Ledger, today: date) -> dict[str, bool]:
-    """Return whether each country is IDA-eligible (IDA-only or blend), by ISO3."""
-    response = client.get(WB_COUNTRIES_URL, timeout=120.0)
-    ida = parse_ida(response.raise_for_status().json())
-    ledger.preload(
-        {
-            "name": (
-                "World Bank lending category (IDA, blend, IBRD), current "
-                "classification, used for both base years"
-            ),
-            "vintage": f"read {today.isoformat()}",
-            "source": WB_COUNTRIES_URL,
-        }
-    )
-    return ida
 
 
 def parse_ida(payload: list) -> dict[str, bool]:

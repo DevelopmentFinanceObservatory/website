@@ -10,7 +10,7 @@ import styles from './OdaCounts.module.scss';
 import { Scope } from './Scope';
 import { Trend } from './Trend';
 
-import type { CountsData, Definition } from '../_data/types.ts';
+import type { Definition } from '../_data/types.ts';
 import {
     countsFor,
     DEFAULT_YEAR,
@@ -25,15 +25,9 @@ import {
  * axis and the bridges between them, all for one donor, year and unit. While the picked
  * donor or unit loads, the panels keep the previous figures, dimmed.
  */
-export const OdaCounts = ({
-    data,
-    definitions,
-}: {
-    data: CountsData;
-    definitions: Definition[];
-}) => {
+export const OdaCounts = ({ definitions }: { definitions: Definition[] }) => {
     const [year, setYear] = useState(DEFAULT_YEAR);
-    const { offer, picked, shown, donor, lead, pending, failed, pickDonor, pickUnit } =
+    const { data, tier, offer, picked, shown, donor, lead, pending, failed, pickDonor, pickUnit } =
         useLiveUnits();
     const { unit } = shown;
     const pickedDonor = findDonor(data, picked.donorId) ?? donor;
@@ -43,7 +37,8 @@ export const OdaCounts = ({
         `No disbursement figure of ${possessive(donor.name)} ODA in ${year} is published.`;
 
     return (
-        <div className={styles.island}>
+        // The page has no switch, so its read is always on.
+        <div className={styles.island} data-read-tier={tier} data-read-live="true">
             <Controls
                 donors={data.donors}
                 donor={pickedDonor}

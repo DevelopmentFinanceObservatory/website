@@ -9,12 +9,14 @@ import test from 'node:test';
 
 import {
     apisCallerFor,
+    applyApisCaller,
     assertTrustedHops,
     CALLER_HEADER,
     callerConfig,
     clientAddress,
     limiterBucket,
     limiterKeyFor,
+    requestSurface,
     resolveAccountCaller,
     resolveCaller,
     setCaller,
@@ -240,4 +242,48 @@ test('apisCallerFor: an account named by the proxy goes in place of the address'
 
     assert.deepEqual(named('2.2.2.2', 'user:abc'), { principal: 'p', caller: 'user:abc' });
     assert.deepEqual(named('2.2.2.2'), { principal: 'p', caller: digest('2.2.2.2') });
+});
+
+test('requestSurface: website only for a same-origin fetch', () => {
+    const surfaces = Object.fromEntries(
+        [undefined, 'same-origin', 'same-site', 'cross-site', 'none', 'SAME-ORIGIN'].map((site) => [
+            String(site),
+            requestSurface(new Headers(site === undefined ? {} : { 'sec-fetch-site': site })),
+        ]),
+    );
+
+    assert.deepEqual(surfaces, {
+        undefined: 'api',
+        'same-origin': 'website',
+        'same-site': 'api',
+        'cross-site': 'api',
+        none: 'api',
+        'SAME-ORIGIN': 'api',
+    });
+});
+
+test('applyApisCaller: the surface goes beside the principal and nowhere else', () => {
+    const sent = (caller: Parameters<typeof applyApisCaller>[1]) => {
+        // A client's own identity headers never survive.
+        const headers = new Headers({
+            'x-dfo-caller': 'ip:forged',
+            'x-dfo-caller-principal': 'forged',
+            'x-dfo-surface': 'studio',
+        });
+
+        applyApisCaller(headers, caller, 'website');
+
+        return Object.fromEntries(headers);
+    };
+
+    assert.deepEqual(sent({ principal: 'secret', caller: 'ip:abc' }), {
+        'x-dfo-caller': 'ip:abc',
+        'x-dfo-caller-principal': 'secret',
+        'x-dfo-surface': 'website',
+    });
+    assert.deepEqual(sent({ principal: 'secret' }), {
+        'x-dfo-caller-principal': 'secret',
+        'x-dfo-surface': 'website',
+    });
+    assert.deepEqual(sent({}), {});
 });

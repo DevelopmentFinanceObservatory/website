@@ -17,13 +17,16 @@
  * The ladder runs on the complete props, `seeds` and a settled post's run
  * fields included, and every rung is measured as the route measures it
  * (`fitsProps`). The run fields stay on every rung, and the floor drops only
- * their `byStep`. The API takes at most six
- * parts per question (`_PARSED_MAX_PARTS` in dfo-apis
- * search/models/request.py), and the floor holds only a fixed-length spec id
- * and integer counts per part, so it needs no check.
+ * their `byStep`. The flat `specIds` and `measures` lists stay on every rung
+ * too, and name each `resolved` entry by position, so no entry repeats its
+ * spec id. The API takes at most six parts per question (`_PARSED_MAX_PARTS`
+ * in dfo-apis search/models/request.py), and the floor holds only those two
+ * lists (a spec id clipped to 64 characters and a measure token of at most
+ * 128 per part) and integer counts per part: under 2 KB of the 8 KB cap, so
+ * it needs no check.
  */
 
-import { fitsProps } from '../events/limits.ts';
+import { fitsProps, MAX_LIST_IDS, MEASURE_PATTERN, NO_ID } from '../events/limits.ts';
 import {
     type DeclinedReason,
     hasDefiniteSpec,
@@ -43,6 +46,8 @@ export const EVENT_SAMPLE = 3;
 const MAX_QUERY = 500;
 const MAX_TERM = 100;
 const MAX_SPEC_ID = 64;
+// The export's token rule takes at most 128 characters.
+const MAX_DCID = 128;
 
 type Rung = 'full' | 'sampled' | 'minimal' | 'floor';
 
@@ -114,8 +119,13 @@ export type SearchEventProps = Partial<SearchSettleProps> & {
     seeds?: number;
     /** Set when the event had to drop to its minimal form or the floor. */
     truncated?: true;
+    /** The spec id of each resolved part, in order; flat so the export can keep it. */
+    specIds: string[];
+    /** The measure each resolved part asked for (see `measureToken`), one per entry of
+     *  `specIds` in the same order; `-` for a part with no measure to name. */
+    measures: string[];
+    /** One entry per entry of `specIds`, in the same order, which names its spec. */
     resolved: ({
-        specId: string;
         statVarCount: number;
         entityCount: number;
         sources?: string[];
@@ -144,6 +154,54 @@ type PlaceRole = {
     group: { dcid: string | null; label: string } | null;
     sample: string[];
     count: number;
+};
+
+/** One token for the measure a shape asks for, each member of the shape in a
+ *  fixed place with `-` for one it leaves out, behind the kind of shape:
+ *  `sv:Count_Person` for a pinned StatVar, and `schema:` plus population type,
+ *  measured property, measurement qualifier, stat type and measurement
+ *  denominator joined with `|`, which no dcid holds, for a described measure
+ *  (`schema:FinancialFlow|amount|Nominal|measuredValue|-`). A denominator the graph holds
+ *  with no dcid reads `unresolved`. Null when there is no shape or the token
+ *  is over MAX_DCID, which is dropped, since a clipped token names another
+ *  measure. A token the export's pattern (MEASURE_PATTERN) would reject reads
+ *  `-`, so one odd dcid costs its own entry and not the whole list. */
+export const measureToken = (shape: SpecIdentity['shape'] | undefined): string | null => {
+    if (!shape) {
+        return null;
+    }
+
+    const token =
+        shape.kind === 'stat_var'
+            ? `sv:${shape.id}`
+            : `schema:${[
+                  shape.population_type,
+                  shape.measured_property,
+                  shape.measurement_qualifier,
+                  shape.stat_type,
+                  denominatorOf(shape.measurement_denominator),
+              ]
+                  .map((member) => member || NO_ID)
+                  .join('|')}`;
+
+    if (token.length > MAX_DCID) {
+        return null;
+    }
+
+    return MEASURE_PATTERN.test(token) ? token : NO_ID;
+};
+
+const denominatorOf = (
+    denominator: Extract<
+        SpecIdentity['shape'],
+        { kind: 'statvar_schema' }
+    >['measurement_denominator'],
+): string | null => {
+    if (!denominator) {
+        return null;
+    }
+
+    return 'ref' in denominator ? denominator.ref : 'unresolved';
 };
 
 const sample = <T>(list: T[]): T[] => list.slice(0, EVENT_SAMPLE);
@@ -238,7 +296,6 @@ export function searchEventProps({
 
             const asked = askedFor(spec.identity, spec.entity_groups);
             const counts = {
-                specId: spec.spec_id,
                 // The served members once settled, else the family's count;
                 // none for a spec the site could not read.
                 statVarCount: statVarsUnreadable(spec)
@@ -249,7 +306,7 @@ export function searchEventProps({
             };
 
             if (rung === 'floor') {
-                return { ...counts, specId: clip(counts.specId, MAX_SPEC_ID) };
+                return counts;
             }
 
             return rung === 'minimal'
@@ -296,6 +353,12 @@ export function searchEventProps({
 
         return rung === 'floor' || !byStep ? kept : { ...kept, byStep };
     };
+    // Flat, one entry per part and bounded by the API's six parts, so they stay on every
+    // rung. The nested `resolved` is not exported, so the export reads these.
+    const specIds = definite.map((spec) => clip(spec.spec_id, MAX_SPEC_ID)).slice(0, MAX_LIST_IDS);
+    const measures = definite
+        .map((spec) => measureToken(spec.identity?.shape) ?? NO_ID)
+        .slice(0, MAX_LIST_IDS);
     const props = (rung: Rung): SearchEventProps => ({
         ...runProps(rung),
         query: rung === 'floor' ? '' : clip(query, MAX_QUERY),
@@ -305,6 +368,8 @@ export function searchEventProps({
         operations,
         ...(seeds !== undefined && { seeds }),
         ...(rung === 'minimal' || rung === 'floor' ? { truncated: true as const } : {}),
+        specIds,
+        measures,
         resolved: resolve(rung),
         refused: rung === 'floor' ? [] : refused,
     });

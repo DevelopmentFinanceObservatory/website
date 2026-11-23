@@ -27,8 +27,9 @@ import {
     PER_PERSON_MIN_PLHIV,
     withoutPlhiv,
 } from './summary.ts';
+import type { NamedFigures, UnaidsCountry } from './unaids.ts';
 
-/** A cited web page; `date` is null for an undated page, and `detail` names what the page
+/** A cited web page. `date` is null for an undated page, and `detail` names what the page
  *  takes from it. */
 export type Source = {
     publisher: string;
@@ -166,8 +167,8 @@ export const PER_PERSON_NOTE: Cited = {
 export const MEDIAN_CAVEAT = "The middle country's ratio, not spending per patient.";
 
 /** The Notes line naming the countries kept in the table with no estimate of people living with HIV. */
-export const plhivGapNote = (data: HivData): string => {
-    const names = withoutPlhiv(data);
+export const plhivGapNote = (countries: readonly NamedFigures[]): string => {
+    const names = withoutPlhiv(countries);
     const them = names.length === 1 ? 'it' : 'them';
 
     return names.length === 0
@@ -176,14 +177,17 @@ export const plhivGapNote = (data: HivData): string => {
 };
 
 /** The Notes line on the other UNAIDS figures missing for countries that do have an
- *  estimate of people living with HIV; null when none is missing. */
-export const unaidsGapNote = (data: HivData): string | null => {
-    const named = data.countries.filter((country) => country.plhiv !== null);
+ *  estimate of people living with HIV. Null when none is missing. */
+export const unaidsGapNote = (
+    countries: readonly NamedFigures[],
+    years: readonly number[],
+): string | null => {
+    const named = countries.filter((country) => country.plhiv !== null);
     const sorted = (names: string[]) => names.toSorted((a, b) => a.localeCompare(b, 'en'));
     const noArt = sorted(named.filter((c) => c.art === null).map((c) => c.name));
     const noDeaths = sorted(named.filter((c) => c.deaths.at(-1) === null).map((c) => c.name));
     const noFirst = sorted(named.filter((c) => c.deaths[0] === null).map((c) => c.name));
-    const [first, last] = [data.years[0], lastYear(data)];
+    const [first, last] = [years[0], lastYear({ years })];
     const missing = [
         noArt.length === 0 ? null : `treatment coverage for ${listOf(noArt)}`,
         noDeaths.length === 0 ? null : `AIDS-related deaths in ${last} for ${listOf(noDeaths)}`,
@@ -203,20 +207,20 @@ export const unaidsGapNote = (data: HivData): string | null => {
     );
 };
 
-/** The lede says "almost all" from this US and Global Fund share up; below it the lede throws. */
+/** The lede says "almost all" from this US and Global Fund share up, and the share below it. */
 const ALMOST_ALL = 0.95;
 
+/**
+ * The lede: how much of the last year's HIV aid to countries the United States and the Global
+ * Fund disbursed, "almost all" from ALMOST_ALL up and the share itself below it, and how many
+ * countries over $1m each led. It holds for any figures, since it renders with a live read's.
+ */
 export const ledeSentence = (data: HivData): string => {
     const { usGfShare, over1m, gfMajority, usMajority } = ledeFigures(data);
-
-    if (usGfShare < ALMOST_ALL) {
-        throw new Error(
-            `The lede says "almost all", but the US and Global Fund share is ${pct(usGfShare)}`,
-        );
-    }
+    const share = usGfShare >= ALMOST_ALL ? 'almost all' : `${pct(usGfShare)} of`;
 
     return [
-        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed almost all HIV aid recorded for countries.`,
+        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed ${share} HIV aid recorded for countries.`,
         `Of the ${over1m} countries that received more than $1m, the Global Fund disbursed more than half in ${gfMajority} and the United States in ${usMajority}.`,
     ].join(' ');
 };
@@ -239,7 +243,7 @@ export const shareNote = (data: HivData): string => {
         .join(' ');
 };
 
-/** How the page prints a provider's DFO label; a label not here prints as given. */
+/** How the page prints a provider's DFO label. A label not here prints as given. */
 export const OTHER_PROVIDER_LABELS: Readonly<Record<string, string>> = {
     'International Development Association': 'World Bank IDA',
     'Joint United Nations Programme on HIV/AIDS': 'UNAIDS',
@@ -489,10 +493,10 @@ export const loansSentence = (data: HivData): string | null => {
 };
 
 /** The strip's caption: how many countries it holds and the rule that picks them. */
-export const stripCaption = (data: HivData): string => {
-    const count = perPersonPoints(data.countries).length;
+export const stripCaption = (countries: readonly UnaidsCountry[], year: number): string => {
+    const count = perPersonPoints(countries).length;
 
-    return `${count} ${count === 1 ? 'country' : 'countries'} that received HIV aid in ${lastYear(data)} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
+    return `${count} ${count === 1 ? 'country' : 'countries'} that received HIV aid in ${year} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
 };
 
 /** The line under the table's heading: which countries it lists. */
@@ -533,12 +537,12 @@ const multiClause = (country: Country, year: number): string | null => {
         : null;
 };
 
-const treatmentClause = (country: Country): string | null =>
+const treatmentClause = (country: UnaidsCountry): string | null =>
     country.art === null || country.plhiv === null || country.plhiv === 0
         ? null
         : `${percent(country.art)} of the ${people(country.plhiv)} people living with HIV were on antiretroviral therapy.`;
 
-const deathsClause = (country: Country, years: readonly number[]): string | null => {
+const deathsClause = (country: UnaidsCountry, years: readonly number[]): string | null => {
     const first = country.deaths[0];
     const last = country.deaths.at(-1);
 
@@ -558,7 +562,7 @@ const deathsClause = (country: Country, years: readonly number[]): string | null
 };
 
 /** The summary sentence for one country. A clause whose data is missing is left out. */
-export const countrySentence = (country: Country, years: readonly number[]): string => {
+export const countrySentence = (country: UnaidsCountry, years: readonly number[]): string => {
     const aid = lastAid(country);
     const year = lastYear({ years });
     const ratio = aidPerPerson(country);
@@ -582,3 +586,33 @@ export const countrySentence = (country: Country, years: readonly number[]): str
         .filter((clause) => clause !== null)
         .join(' ');
 };
+
+/** A section of the page, by element id, for the rail and the island's heading. */
+export type Section = { id: string; title: string };
+
+/** The island's two sections, the chart's and the table's, whose title counts the countries. */
+export const aidSections = (data: HivData): readonly [Section, Section] => [
+    { id: 'by-provider', title: 'HIV aid by provider' },
+    { id: 'every-country', title: `${data.countries.length} countries, ${lastYear(data)}` },
+];
+
+/**
+ * The prose outside the island that prints an aid figure, each from the figures the island
+ * shows, so the lede and How to interpret follow them (AidProse.tsx). A sentence the figures
+ * give no reason for is empty.
+ */
+export const AID_TEXT = {
+    lede: ledeSentence,
+    share: shareNote,
+    loans: (data) => loansSentence(data) ?? '',
+    codeChange: (data) => codeChangeSentence(data) ?? '',
+    usSwing: (data) => usSwingSentence(data) ?? '',
+    firstYear: (data) => String(data.years[0] ?? ''),
+    lastYear: (data) => String(lastYear(data)),
+} as const satisfies Record<string, (data: HivData) => string>;
+
+/** The cited prose outside the island that prints an aid figure, as AID_TEXT. */
+export const AID_CITED = {
+    otherMeasures: (data) => [otherMeasures(data)],
+    usTotal: usTotalNote,
+} as const satisfies Record<string, (data: HivData) => Cited[]>;

@@ -274,7 +274,8 @@ test('forward: /mcp strips a key, names the address to dfo-ai, and the harness t
         call(headers, {
             surface: 'mcp',
             target: 'http://127.0.0.1:1/never',
-            sendCaller: true,
+            // As the /mcp route names the caller: by address (requestCaller).
+            caller: addressCaller,
             ...options,
         });
 

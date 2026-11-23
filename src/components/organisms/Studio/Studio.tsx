@@ -38,6 +38,7 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { cardUnitChange } from '@/lib/studio/cardUnit';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -50,7 +51,7 @@ import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/prom
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
-import type { Seed } from '@/lib/studio/wire';
+import type { Seed, UnitChoice } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
 
@@ -176,7 +177,9 @@ const Studio = ({
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const leaveTimer = useRef(0);
 
-    const conversation = useChat(sharedSaved);
+    const doc = useCanvasDocument(sharedSaved);
+    // A card the harness redrew under a new id keeps the old card's settings.
+    const conversation = useChat(sharedSaved, { onCardReplaced: doc.renameWidget });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
     // A prompt counts once it is actually sent (a queued one can still be
@@ -236,7 +239,9 @@ const Studio = ({
         prompt(options?.intent, text.trim().length, () => conversation.send(text, options, seeds));
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
-    const chat = { ...conversation, send, applyChoice };
+    const applyUnit: typeof conversation.applyUnit = (change) =>
+        prompt('apply_unit', undefined, () => conversation.applyUnit(change));
+    const chat = { ...conversation, send, applyChoice, applyUnit };
 
     // Usage: each card the harness puts on the canvas, once (a reopened or
     // shared conversation's cards were counted when they were made).
@@ -292,8 +297,6 @@ const Studio = ({
             track('guest.wall_hit', { prompts: guestUsed });
         }
     }, [walled, guestUsed]);
-
-    const doc = useCanvasDocument(sharedSaved);
 
     useEffect(() => {
         logRefusedDescriptions(sharedSaved?.widgets ?? []);
@@ -531,6 +534,15 @@ const Studio = ({
         return doc.titles[id] ?? (widget ? widgetTitle(widget) : 'Card');
     };
     const flyToCard = (id: string) => flyToCardRef.current?.(id);
+    // Card menu → Change unit → Send: a turn that moves the card to `unit`.
+    const changeUnit = (id: string, unit: UnitChoice) => {
+        const widget = chat.widgets.find((other) => other.id === id);
+        const change = widget && cardUnitChange(widget, cardTitleOf(id), unit);
+
+        if (change) {
+            chat.applyUnit(change);
+        }
+    };
 
     // Chat chip → Add: back on the canvas (on grace if from an older turn).
     const addWidget = (id: string) => {
@@ -600,7 +612,7 @@ const Studio = ({
     // The Data tab: every visible card with a revision to export.
     const shareData: ShareDatum[] = visibleWidgets.flatMap((widget) =>
         widget.kind !== 'text' && widget.ref
-            ? [{ id: widget.id, title: cardTitleOf(widget.id), ref: widget.ref }]
+            ? [{ id: widget.id, title: cardTitleOf(widget.id), ref: widget.ref, kind: widget.kind }]
             : [],
     );
     const infoWidget = visibleWidgets.find((widget) => widget.id === infoCardId) ?? null;
@@ -701,6 +713,7 @@ const Studio = ({
                         onTogglePin={togglePin}
                         onRemove={removeCard}
                         onAskFollowUp={askFollowUp}
+                        onChangeUnit={readOnly ? undefined : changeUnit}
                         onCardInfo={setInfoCardId}
                         focusedId={infoCardId}
                         onEditText={modals.textCard.show}
@@ -711,6 +724,7 @@ const Studio = ({
                         onRemoveNote={doc.removeNote}
                         initialLayout={save.openedLayout}
                         onLayoutChange={save.handleLayoutChange}
+                        replacedIds={doc.replacedIds}
                         flyToCardRef={flyToCardRef}
                         theme={derivedTheme}
                         views={doc.views}

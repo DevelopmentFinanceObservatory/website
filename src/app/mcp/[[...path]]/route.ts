@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 
+import { requestCaller } from '@/lib/proxy/caller';
 import { forward, forwardAsset, STUDIO_API_BASE } from '@/lib/proxy/forward';
 
 // dfo-ai's combined MCP server (`/mcp/` on the harness), mirrored at the
@@ -14,12 +15,7 @@ import { forward, forwardAsset, STUDIO_API_BASE } from '@/lib/proxy/forward';
 // holds it, it is attached on the caller's behalf (the site is the front
 // door). Otherwise the caller's own Authorization header goes through.
 // The caller is named in x-dfo-caller (src/lib/proxy/caller). Each address is
-// rate-limited (surface 'mcp' in src/lib/proxy/rateLimit), and a call with an
-// API key is counted against the key's account instead (src/lib/proxy/access).
-// The key is the caller's `X-API-Key`, or its bearer when the proxy holds the
-// harness token. A `dfo_` bearer is the proxy's own and never goes upstream, so
-// where the proxy holds no harness token, a keyed call sends the key in
-// `X-API-Key` and the harness token as its bearer.
+// rate-limited (surface 'mcp' in src/lib/proxy/rateLimit).
 //
 // The exception is the theme stylesheet presentation-mcp's views load,
 // `/mcp/presentation/theme-<hash>.css`, which is fetched from the same path on
@@ -47,7 +43,7 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path?: st
         surface: 'mcp',
         target: `${STUDIO_API_BASE}/mcp/${req.nextUrl.search}`,
         bearer: MCP_TOKEN,
-        sendCaller: true,
+        caller: requestCaller(req.headers),
         unreachable: 'The MCP servers are unreachable.',
     });
 };

@@ -504,7 +504,7 @@ If monetization becomes real, the calculation changes: metering, billing and a d
 Not planned for any phase yet. The design should not rule them out.
 
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
-- **Keys owned by an organization.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0025_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organization.
+- **Keys owned by an organization.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0027_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organization.
 - **Usage history.** The usage bar shows today's count. Counts for earlier days exist only in log lines.
 - **Signed-in MCP access** ([#176][issue-176]). `/mcp` accepts OAuth sign-in, so a signed-in user's calls count against their account. It is separate from API keys, which `/mcp` ignores. It includes how an MCP client shows a refusal: a 429 on a tool call reaches most clients as a raw transport error, so a refused `tools/call` would be better answered as a tool result with `isError: true`, as the MCP specification's own rate-limit example and the GitHub MCP server do.
 - **Terms of use at key creation.**

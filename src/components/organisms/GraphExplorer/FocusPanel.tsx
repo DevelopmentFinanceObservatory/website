@@ -28,6 +28,7 @@ import { count, ofMembers, plural, valueListLabel } from '@/lib/graphExplorer/co
 import {
     centreHeading,
     declaredDomain,
+    listsUsers,
     openEntries,
     periodText,
     sharePercent,
@@ -447,7 +448,7 @@ export const NodePanel = ({
                     </div>
                 </section>
             )}
-            {kind !== 'valueList' && <UsageBars id={id} lens={lens} />}
+            {listsUsers(model, id) && <UsageBars id={id} lens={lens} />}
             {hasList && <MemberBars id={id} lens={lens} />}
         </>
     );

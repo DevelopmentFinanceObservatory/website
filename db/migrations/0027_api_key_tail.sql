@@ -1,1 +1,0 @@
-ALTER TABLE "apikey" ADD COLUMN "tail" text;

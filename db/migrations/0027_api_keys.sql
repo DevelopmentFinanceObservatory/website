@@ -20,7 +20,9 @@ CREATE TABLE "apikey" (
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"permissions" text,
-	"metadata" text
+	"metadata" text,
+	"daily_limit" integer,
+	"tail" text
 );
 --> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "api_rate_limit" integer;--> statement-breakpoint

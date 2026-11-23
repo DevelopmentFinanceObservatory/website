@@ -1,70 +1,62 @@
 {
  "provenance": {
-  "sdk": "development-finance==0.3.0",
+  "sdk": "development-finance==0.6.0",
   "query": "The six largest providers of gross ODA disbursements in 2024 (OECD CRS) to the OECD's 62 fragile contexts in 2026, to the 20 in extreme fragility and to the 42 in high fragility, with each provider's change in total ODA from 2024 to 2025 (OECD DAC1)",
-  "retrieved": "2026-11-18T18:20:19.472Z",
+  "retrieved": "2026-11-19T22:44:40.999Z",
   "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory; OECD DAC1 (2026), via the Development Finance Observatory",
   "classification": "OECD, States of Fragility 2026 update",
   "dfo": [
    {
-    "key": "aid",
-    "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "key": "aid-1",
+    "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "specIds": [
-     "spec_041819d768f2b88ff603a40eaae21982"
+     "spec_347500caf49a6928898430717a0d778a"
     ],
     "versions": [
-     "cv_fe0208db017440d8d01932e8264fe6df"
+     "cv_d65586647fb6327d47edb8af345f72ee"
     ],
     "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 134323,
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
+    "rows": 93886,
+    "warnings": []
    },
    {
-    "key": "aid",
-    "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "key": "aid-2",
+    "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "specIds": [
-     "spec_041819d768f2b88ff603a40eaae21982"
+     "spec_196aeb9df012b9b4315ac149c005fa92"
     ],
     "versions": [
-     "cv_1979c0f136117b554bda3cad23878de6"
+     "cv_69c99f8e8c118df4ffea9d841675189d"
     ],
     "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 163516,
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
+    "rows": 116989,
+    "warnings": []
    },
    {
-    "key": "aid",
-    "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "key": "aid-3",
+    "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "specIds": [
-     "spec_041819d768f2b88ff603a40eaae21982"
+     "spec_6683f2eb9984c5045425adcde75bda82"
     ],
     "versions": [
-     "cv_02e561c8e1ea0d1ab99c05f7e47e209d"
+     "cv_31c1863f3a36253ce4e2b0936eed2b9c"
     ],
     "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 173471,
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
+    "rows": 121631,
+    "warnings": []
    },
    {
-    "key": "aid",
-    "sentence": "Gross ODA disbursements to 14 recipients from 98 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "key": "aid-4",
+    "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
     "specIds": [
-     "spec_041819d768f2b88ff603a40eaae21982"
+     "spec_2c290bb17c5fa188ea5a9ec38c1114a3"
     ],
     "versions": [
-     "cv_bde1ede10956d44c9e707b9a165b9f1b"
+     "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2"
     ],
     "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
-    "rows": 131480,
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
+    "rows": 91765,
+    "warnings": []
    },
    {
     "key": "donors2025",
@@ -77,24 +69,20 @@
     ],
     "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
     "rows": 64,
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
+    "warnings": []
    },
    {
     "key": "donors2025-eu",
     "sentence": "European Union institutions' grant equivalents for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
     "specIds": [
-     "spec_655ba7e5f4a4780661347a726ef01cef"
+     "spec_acf829e1146f4e8c56d689b406a331cc"
     ],
     "versions": [
      "cv_fae1d85e15de231ca3fabb33f623a8af"
     ],
     "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
     "rows": 2,
-    "warnings": [
-     "Search's reading differs from your question:"
-    ]
+    "warnings": []
    }
   ]
  },

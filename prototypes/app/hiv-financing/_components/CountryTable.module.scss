@@ -180,6 +180,12 @@
             outline: 2px solid #6467de;
             outline-offset: 2px;
         }
+
+        // The CSV waits for the UNAIDS figures.
+        &:disabled {
+            color: #9a9a8c;
+            cursor: default;
+        }
     }
 }
 

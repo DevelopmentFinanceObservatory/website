@@ -1,1 +1,0 @@
-ALTER TABLE "apikey" ADD COLUMN "daily_limit" integer;

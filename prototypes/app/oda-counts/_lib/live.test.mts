@@ -2,22 +2,27 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { CountsData, Donor, LiveData } from '../_data/types.ts';
+import { Client } from '@developmentfinance/client';
+import { RateLimitError } from '@developmentfinance/client/errors';
+import type { ObservationPoint, SpecObservations } from '@developmentfinance/client/wire';
+
+import { createLane, createPacer } from '#lib/pacing.ts';
+
+import type { CountsData, Donor, LiveData, SeriesKey } from '../_data/types.ts';
 
 import { findDonor } from './counts.ts';
 import {
     basisKey,
     currencyMatches,
+    fetchBasis,
     isCommitted,
     liveDonor,
     maskTo,
     pickCurrency,
     priceBases,
-    readSeries,
     resolveRequests,
-    seriesFromEvents,
-    sseParser,
-    streamEvents,
+    SearchRefusalError,
+    seriesFromResponse,
     unitPhrase,
     validBaseYear,
     type Unit,
@@ -98,44 +103,50 @@ test('resolveRequests binds the donor and the unit on every series, six entries 
     assert.deepEqual(entry?.identity.entities, { origin: ['DACCountriesTotal'] });
 });
 
-/** A server-sent event frame for one event, as Search writes it. */
-const frame = (event: { kind: string } & Record<string, unknown>): string =>
-    `event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
-
-const part = (status: string, specId: string, currency = 'EUR') => ({
-    status,
-    spec: { spec_id: specId, resolved: { facets: { unit: { currency } } } },
-});
-
-const points = (values: Record<string, number>) =>
+const points = (values: Record<string, number>): ObservationPoint[] =>
     Object.entries(values).map(([date, value]) => ({ date, value }));
 
-/** A resolve stream for gross (with two series, as the headline arrives) and refugee costs. */
-const stream = (currency = 'EUR'): string =>
-    ': ping\n\n' +
-    frame({ kind: 'sentence', spec_id: 'spec_a' }) +
-    frame({
-        kind: 'response',
-        response: {
-            kind: 'resolution',
-            parts: [part('definite', 'spec_a', currency), { status: 'no_data' }],
-        },
-    }) +
-    frame({
-        kind: 'observations',
-        spec_id: 'spec_a',
-        observations: {
-            series: [
-                { points: points({ 2016: 9_506_000_000, 2017: 10_097_000_000 }) },
-                { points: points({ 2018: 11_733_000_000, 1999: 1 }) },
-            ],
-        },
-    }) +
-    frame({ kind: 'done', elapsed_ms: 2400 });
+/** One of a part's series, as Search's SpecObservations holds it. */
+const series = (values: Record<string, number>): SpecObservations['series'][number] => ({
+    stat_var: { ref: 'dcid:ODA' },
+    entities: [{ role: 'origin', ref: 'dcid:country/FRA' }],
+    points: points(values),
+    total_obs: Object.keys(values).length,
+});
 
-test('seriesFromEvents reads each part by year in millions, joining split series', () => {
-    const series = seriesFromEvents(
-        streamEvents(stream()),
+/** Observations as Search's SpecObservations holds them: the gross headline's two series. */
+const observed = (over: Partial<SpecObservations> = {}): SpecObservations => ({
+    series: [
+        series({ 2016: 9_506_000_000, 2017: 10_097_000_000 }),
+        series({ 2018: 11_733_000_000, 1999: 1 }),
+    ],
+    total_obs: 4,
+    truncated: false,
+    ...over,
+});
+
+/** A definite part in `currency`, its observations in its `spec.resolved` as Search's JSON
+ *  response holds them, unless `observations` is null. */
+const part = (currency = 'EUR', observations: SpecObservations | null = observed()) => ({
+    status: 'definite',
+    spec: {
+        spec_id: 'spec_a',
+        resolved: {
+            facets: { unit: { currency } },
+            ...(observations === null ? {} : { observations }),
+        },
+    },
+});
+
+/** A resolve response for gross (with two series, as the headline arrives) and refugee costs. */
+const response = (first: unknown = part()) => ({
+    kind: 'resolution',
+    parts: [first, { status: 'no_data' }],
+});
+
+test('seriesFromResponse reads each part by year in millions, joining split series', () => {
+    const series = seriesFromResponse(
+        response(),
         ['gross', 'refugeeCosts'],
         [2015, 2016, 2017, 2018],
         'EUR',
@@ -147,144 +158,274 @@ test('seriesFromEvents reads each part by year in millions, joining split series
     });
 });
 
-test('seriesFromEvents refuses an error, another currency, a missing part or observations', () => {
-    const years = [2016];
-    const keys = ['gross', 'refugeeCosts'] as const;
+/** A check that a call threw a SearchRefusalError with `code`. */
+const refused = (code: SearchRefusalError['code']) => (error: unknown) =>
+    error instanceof SearchRefusalError && error.code === code;
 
-    assert.throws(
-        () => seriesFromEvents([{ kind: 'error', detail: 'stalled' }], [...keys], years, 'EUR'),
-        /stalled/,
-    );
-    assert.throws(
-        () => seriesFromEvents(streamEvents(stream('USD')), [...keys], years, 'EUR'),
-        /in USD, not EUR/,
-    );
-    assert.throws(
-        () => seriesFromEvents(streamEvents(stream()), ['gross'], years, 'EUR'),
-        /2 parts for 1 series/,
-    );
+test('seriesFromResponse refuses another currency, a missing part, and missing, omitted, empty, truncated or doubled observations', () => {
+    const years = [2016, 2017];
+    const keys: SeriesKey[] = ['gross', 'refugeeCosts'];
+    const refuses = (body: unknown, code: SearchRefusalError['code'], asked = keys) =>
+        assert.throws(() => seriesFromResponse(body, asked, years, 'EUR'), refused(code));
 
-    const noObservations = streamEvents(stream()).filter(
-        (event) => (event as { kind: string }).kind !== 'observations',
+    refuses(response(part('USD')), 'currency');
+    refuses(response(), 'part_count', ['gross']);
+    refuses(response({ status: 'choice' }), 'not_definite');
+    refuses(response(part('EUR', null)), 'no_observations');
+    refuses(
+        response(
+            part(
+                'EUR',
+                observed({
+                    series: [],
+                    total_obs: 0,
+                    omitted: {
+                        reason: 'observations_no_points',
+                        message: 'No points in the requested years.',
+                    },
+                }),
+            ),
+        ),
+        'omitted',
     );
-
-    assert.throws(
-        () => seriesFromEvents(noObservations, [...keys], years, 'EUR'),
-        /no observations for gross/,
-    );
-
-    const truncated = streamEvents(stream()).map((event) =>
-        (event as { kind: string }).kind === 'observations'
-            ? { ...(event as object), observations: { series: [{ points: [], truncated: true }] } }
-            : event,
-    );
-
-    assert.throws(
-        () => seriesFromEvents(truncated, [...keys], years, 'EUR'),
-        /truncated series for gross/,
+    refuses(response(part('EUR', observed({ series: [], total_obs: 0 }))), 'empty');
+    refuses(response(part('EUR', observed({ truncated: true }))), 'truncated');
+    refuses(
+        response(part('EUR', observed({ series: [series({ 2016: 1 }), series({ 2016: 2 })] }))),
+        'two_values',
     );
 });
 
-/** `text` as a byte stream in chunks of `size` bytes, closed after the last unless `open`. */
-const byteStream = (text: string, size: number, open = false): ReadableStream<Uint8Array> => {
-    const bytes = new TextEncoder().encode(text);
+type Sent = { method: string; url: URL; accept: string | null; body: Body };
 
-    return new ReadableStream({
-        start: (controller) => {
-            for (let at = 0; at < bytes.length; at += size) {
-                controller.enqueue(bytes.slice(at, at + size));
+/**
+ * The page's client on a stand-in network that answers each resolve body with a part per
+ * entry, or `refusal`, through a pacer bounded at `limit` whose `fetch` the client uses.
+ */
+const resolveOver = ({ limit = 4, refusal }: { limit?: number; refusal?: Response } = {}) => {
+    const sent: Sent[] = [];
+    let running = 0;
+    let most = 0;
+    const pacer = createPacer({
+        limit,
+        fetch: async (input, init) => {
+            const request = new Request(input, init);
+            sent.push({
+                method: request.method,
+                url: new URL(request.url),
+                accept: request.headers.get('accept'),
+                body: (await request.json()) as Body,
+            });
+            running += 1;
+            most = Math.max(most, running);
+            await new Promise((resolve) => setTimeout(resolve, 1));
+            running -= 1;
+
+            if (refusal) {
+                return refusal;
             }
 
-            if (!open) {
-                controller.close();
-            }
+            const { entries } = sent.at(-1)!.body.input;
+
+            return Response.json(
+                { kind: 'resolution', parts: entries.map(() => part()) },
+                { headers: { 'x-ratelimit-remaining': '80', 'x-ratelimit-reset': '30' } },
+            );
         },
     });
+    const client = new Client({ apiKey: false, fetch: pacer.fetch, maxRetries: 0 });
+
+    return { client, pacer, sent, most: () => most };
 };
 
-test('sseParser reads frames split anywhere across chunks, with LF or CRLF line ends', () => {
-    // A sentence with a euro sign, so a chunk can also split a multibyte character.
-    const lf = frame({ kind: 'sentence', text: 'Aide publique, €' }) + stream();
-    const crlf = lf.replaceAll('\n', '\r\n');
+const FRANCE_EUR = {
+    live,
+    timeoutMs: 30_000,
+    donorId: 'country/FRA',
+    unit: EUR_2023,
+    years: [2016, 2017, 2018],
+    signal: new AbortController().signal,
+};
 
-    for (const text of [lf, crlf]) {
-        const whole = streamEvents(text);
+test('fetchBasis posts each one-entry resolve body through the client, within the pacer bound', async () => {
+    const { client, pacer, sent, most } = resolveOver({ limit: 3 });
 
-        assert.equal(whole.length, 5);
+    const basis = await fetchBasis({ ...FRANCE_EUR, client, lane: pacer, perRequest: 1 });
 
-        for (let cut = 0; cut <= text.length; cut += 1) {
-            const parser = sseParser();
-            const events = [...parser.push(text.slice(0, cut)), ...parser.push(text.slice(cut))];
+    const requests = resolveRequests(live, 'country/FRA', EUR_2023, 1);
 
-            assert.deepEqual([...events, ...parser.end()], whole, `cut at ${cut}`);
-        }
-
-        const parser = sseParser();
-        const oneByOne = [...text].flatMap((char) => parser.push(char));
-
-        assert.deepEqual([...oneByOne, ...parser.end()], whole);
-    }
-});
-
-test('sseParser hands over each event as soon as its frame ends', () => {
-    const parser = sseParser();
-    const text = stream();
-    const end = text.indexOf('\n\n', text.indexOf('"response"')) + 2;
-
-    const first = parser.push(text.slice(0, end - 1));
-    const second = parser.push(text.slice(end - 1, end));
-
-    assert.deepEqual(
-        first.map((event) => (event as { kind: string }).kind),
-        ['sentence'],
-    );
-    assert.deepEqual(
-        second.map((event) => (event as { kind: string }).kind),
-        ['response'],
-    );
-});
-
-test('readSeries applies a byte stream as it arrives, in any chunk size', async () => {
-    const keys = ['gross', 'refugeeCosts'] as const;
-    const years = [2015, 2016, 2017, 2018];
-    // The euro sign is three bytes, which small chunks split.
-    const text = frame({ kind: 'sentence', text: 'Aide publique, €' }) + stream();
-    const expected = seriesFromEvents(streamEvents(text), [...keys], years, 'EUR');
-
-    for (const size of [1, 2, 7, 64, 100_000]) {
-        assert.deepEqual(
-            await readSeries(byteStream(text, size), [...keys], years, 'EUR'),
-            expected,
-            `chunks of ${size}`,
-        );
-    }
-});
-
-test('readSeries refuses an error event before the stream ends, and an incomplete stream', async () => {
-    const keys = ['gross', 'refugeeCosts'] as const;
-    const years = [2016];
-
-    // The stream never closes, so only reading the error as it arrives settles the read.
-    await assert.rejects(
-        readSeries(
-            byteStream(frame({ kind: 'error', detail: 'stalled' }), 5, true),
-            [...keys],
-            years,
-            'EUR',
+    assert.equal(sent.length, requests.length);
+    assert.equal(most(), 3);
+    assert.ok(
+        sent.every(
+            ({ method, url, accept }) =>
+                method === 'POST' &&
+                url.href === 'https://developmentfinance.org/api/v1/search/resolve' &&
+                accept === 'application/json',
         ),
-        /stalled/,
     );
+    assert.deepEqual(
+        sent.map(({ body }) => body),
+        requests.map(({ body }) => body),
+    );
+    assert.deepEqual(
+        Object.keys(basis),
+        live.identities.map(({ key }) => key),
+    );
+    assert.ok(Object.values(basis).every((values) => values.join() === '9506,10097,11733'));
+    assert.equal(pacer.allowance()?.remaining, 80);
+});
 
-    const cut = stream().slice(0, stream().indexOf('event: observations'));
+test("fetchBasis rejects a gateway 429 as the client's RateLimitError, with the allowance it reports", async () => {
+    const refusal = Response.json(
+        { code: 'rate_limited', detail: 'Too many requests.', retryable: true },
+        {
+            status: 429,
+            headers: {
+                'retry-after': '12',
+                'x-ratelimit-remaining': '0',
+                'x-ratelimit-reset': '12',
+            },
+        },
+    );
+    const { client, pacer, sent } = resolveOver({ refusal });
 
     await assert.rejects(
-        readSeries(byteStream(cut, 16), [...keys], years, 'EUR'),
-        /no observations for gross/,
+        fetchBasis({ ...FRANCE_EUR, client, lane: pacer, perRequest: live.maxEntries }),
+        RateLimitError,
     );
+    assert.equal(pacer.allowance()?.remaining, 0);
+    // No retry: each request went out once.
+    assert.equal(sent.length, resolveRequests(live, 'country/FRA', EUR_2023).length);
+});
+
+test('fetchBasis rejects a redirect the client returns', async () => {
+    const redirect = {
+        request: async () => ({ status: 302, json: () => ({}) }),
+    };
+
     await assert.rejects(
-        readSeries(byteStream(stream('USD'), 16), [...keys], years, 'EUR'),
-        /in USD, not EUR/,
+        fetchBasis({
+            ...FRANCE_EUR,
+            client: redirect,
+            lane: createLane(4),
+            perRequest: 1,
+        }),
+        refused('status'),
     );
+});
+
+/** A resolver that answers each request after `ms`, or fails the `failAt`th request it sends. */
+const timedResolver = ({ ms = 1, failAt }: { ms?: number; failAt?: number } = {}) => {
+    const sent: AbortSignal[] = [];
+
+    return {
+        sent,
+        client: {
+            request: async (
+                _method: 'POST',
+                _path: string,
+                { json, signal }: { json: unknown; signal: AbortSignal },
+            ) => {
+                sent.push(signal);
+                const index = sent.length;
+
+                await new Promise<void>((resolve, reject) => {
+                    const timer = setTimeout(resolve, ms);
+
+                    signal.addEventListener('abort', () => {
+                        clearTimeout(timer);
+                        reject(signal.reason);
+                    });
+                });
+
+                if (index === failAt) {
+                    throw new Error('connection reset');
+                }
+
+                const { entries } = (json as Body).input;
+
+                return {
+                    status: 200,
+                    json: () => ({ kind: 'resolution', parts: entries.map(() => part()) }),
+                };
+            },
+        },
+    };
+};
+
+test('fetchBasis sends none of its queued requests after one fails, and aborts those in flight', async () => {
+    const { client, sent } = timedResolver({ ms: 5, failAt: 1 });
+
+    await assert.rejects(
+        fetchBasis({ ...FRANCE_EUR, client, lane: createLane(2), perRequest: 1 }),
+        /connection reset/,
+    );
+    // Nine requests, two at a time. The first fails, the second is aborted, and the queued
+    // seven are not sent.
+    assert.equal(sent.length, 2);
+    assert.ok(sent.every((signal) => signal.aborted));
+});
+
+test("fetchBasis times each request from when it leaves the lane's queue", async () => {
+    const lane = createLane(1);
+    let release = () => {};
+    const held = lane.run(
+        () =>
+            new Promise<void>((resolve) => {
+                release = resolve;
+            }),
+    );
+    const { client } = timedResolver({ ms: 1 });
+    const fetched = fetchBasis({ ...FRANCE_EUR, client, lane, perRequest: 6, timeoutMs: 20 });
+
+    // Queued for longer than the timeout, each request still has its whole 20 ms.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    release();
+    await held;
+
+    const basis = await fetched;
+
+    assert.deepEqual(
+        Object.keys(basis),
+        live.identities.map(({ key }) => key),
+    );
+
+    // A request that outlasts its own timeout fails the pick.
+    const slow = timedResolver({ ms: 50 });
+
+    await assert.rejects(
+        fetchBasis({ ...FRANCE_EUR, client: slow.client, lane, perRequest: 6, timeoutMs: 10 }),
+        (error) => error instanceof DOMException && error.name === 'TimeoutError',
+    );
+});
+
+test('fetchBasis takes an aborted pick out of the queue at once', async () => {
+    const lane = createLane(1);
+    let release = () => {};
+    const held = lane.run(
+        () =>
+            new Promise<void>((resolve) => {
+                release = resolve;
+            }),
+    );
+    const { client, sent } = timedResolver();
+    const controller = new AbortController();
+    const fetched = fetchBasis({
+        ...FRANCE_EUR,
+        client,
+        lane,
+        perRequest: 1,
+        signal: controller.signal,
+    });
+    const reason = new Error('superseded');
+
+    controller.abort(reason);
+    await assert.rejects(fetched, (error) => error === reason);
+
+    release();
+    await held;
+    assert.equal(sent.length, 0);
 });
 
 test('maskTo and liveDonor keep every null counts.json holds, at each price basis', () => {

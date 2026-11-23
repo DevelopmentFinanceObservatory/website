@@ -103,3 +103,11 @@ test('every forwarding route with a dynamic segment refuses or encodes it before
         assert.doesNotMatch(source, /\.join\(['"]\/['"]\)|\$\{(path|id|revision)\}/, file);
     }
 });
+
+test('the Datasets API routes below /api/v1/datasets/ count on the datasets allowance, the mint door on api', () => {
+    const read = (file: string) => readFileSync(join(V1, file), 'utf8');
+
+    assert.match(read('datasets/[...path]/route.ts'), /surface: 'datasets'/);
+    assert.match(read('datasets/route.ts'), /surface: 'api'/);
+    assert.doesNotMatch(read('datasets/route.ts'), /surface: 'datasets'/);
+});

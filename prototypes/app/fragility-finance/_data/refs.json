@@ -1,0 +1,5492 @@
+{
+ "provenance": {
+  "sdk": "development-finance==0.4.1",
+  "query": "fragility-finance pinned reads",
+  "retrieved": "2026-11-19T22:44:40.999Z"
+ },
+ "data": {
+  "aid-1": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_347500caf49a6928898430717a0d778a",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_347500caf49a6928898430717a0d778a",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AFG",
+           "country/BDI",
+           "country/CAF",
+           "country/COD",
+           "country/COG",
+           "country/ERI",
+           "country/GNQ",
+           "country/HTI",
+           "country/MDG",
+           "country/PNG",
+           "country/SDN",
+           "country/SOM",
+           "country/SSD",
+           "country/SYR",
+           "country/TCD",
+           "country/YEM"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_d65586647fb6327d47edb8af345f72ee",
+      "artifact": {
+       "digest": "sha256:bcd76de3cd5c363a6f11953c993684666e816e40ef5b20b3fa59b59737112bdc",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:19:28Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_347500caf49a6928898430717a0d778a",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_347500caf49a6928898430717a0d778a",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AFG",
+            "country/BDI",
+            "country/CAF",
+            "country/COD",
+            "country/COG",
+            "country/ERI",
+            "country/GNQ",
+            "country/HTI",
+            "country/MDG",
+            "country/PNG",
+            "country/SDN",
+            "country/SOM",
+            "country/SSD",
+            "country/SYR",
+            "country/TCD",
+            "country/YEM"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_d65586647fb6327d47edb8af345f72ee",
+       "artifact": {
+        "digest": "sha256:bcd76de3cd5c363a6f11953c993684666e816e40ef5b20b3fa59b59737112bdc",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_347500caf49a6928898430717a0d778a",
+      "content_version": "cv_d65586647fb6327d47edb8af345f72ee",
+      "digest": "sha256:bcd76de3cd5c363a6f11953c993684666e816e40ef5b20b3fa59b59737112bdc",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "aid-2": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AGO",
+           "country/BFA",
+           "country/CMR",
+           "country/COM",
+           "country/GIN",
+           "country/GNB",
+           "country/IRQ",
+           "country/LBR",
+           "country/LBY",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/NER",
+           "country/TJK",
+           "country/UGA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_69c99f8e8c118df4ffea9d841675189d",
+      "artifact": {
+       "digest": "sha256:2fb358f7515a5de0009feabeaddfb999b889ae624d0cb9451c250a3313ed3156",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:20:12Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AGO",
+            "country/BFA",
+            "country/CMR",
+            "country/COM",
+            "country/GIN",
+            "country/GNB",
+            "country/IRQ",
+            "country/LBR",
+            "country/LBY",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/NER",
+            "country/TJK",
+            "country/UGA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_69c99f8e8c118df4ffea9d841675189d",
+       "artifact": {
+        "digest": "sha256:2fb358f7515a5de0009feabeaddfb999b889ae624d0cb9451c250a3313ed3156",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_196aeb9df012b9b4315ac149c005fa92",
+      "content_version": "cv_69c99f8e8c118df4ffea9d841675189d",
+      "digest": "sha256:2fb358f7515a5de0009feabeaddfb999b889ae624d0cb9451c250a3313ed3156",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "aid-3": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/BGD",
+           "country/DJI",
+           "country/ETH",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/RWA",
+           "country/SLE",
+           "country/SWZ",
+           "country/TKM",
+           "country/VEN",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_31c1863f3a36253ce4e2b0936eed2b9c",
+      "artifact": {
+       "digest": "sha256:36da2190f2f506831b1095fa01a009090338cea36f9e2ea84eeb5521fdcc8103",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:20:56Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/BGD",
+            "country/DJI",
+            "country/ETH",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/RWA",
+            "country/SLE",
+            "country/SWZ",
+            "country/TKM",
+            "country/VEN",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_31c1863f3a36253ce4e2b0936eed2b9c",
+       "artifact": {
+        "digest": "sha256:36da2190f2f506831b1095fa01a009090338cea36f9e2ea84eeb5521fdcc8103",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_6683f2eb9984c5045425adcde75bda82",
+      "content_version": "cv_31c1863f3a36253ce4e2b0936eed2b9c",
+      "digest": "sha256:36da2190f2f506831b1095fa01a009090338cea36f9e2ea84eeb5521fdcc8103",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "aid-4": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow10",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/CIV",
+           "country/GAB",
+           "country/GMB",
+           "country/GTM",
+           "country/HND",
+           "country/IRN",
+           "country/KEN",
+           "country/MWI",
+           "country/PRK",
+           "country/PSE",
+           "country/SLB",
+           "country/TGO",
+           "country/TLS",
+           "country/TZA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2",
+      "artifact": {
+       "digest": "sha256:6587a0e6d2e80f9ee0237ccac124e9bef07aad511c2ccfefdb839320e0dbd523",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:37Z",
+    "question": "ODA to Mozambique by sector",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "ODA by sector"
+       ],
+       "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow10",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/CIV",
+            "country/GAB",
+            "country/GMB",
+            "country/GTM",
+            "country/HND",
+            "country/IRN",
+            "country/KEN",
+            "country/MWI",
+            "country/PRK",
+            "country/PSE",
+            "country/SLB",
+            "country/TGO",
+            "country/TLS",
+            "country/TZA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2",
+       "artifact": {
+        "digest": "sha256:6587a0e6d2e80f9ee0237ccac124e9bef07aad511c2ccfefdb839320e0dbd523",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_2c290bb17c5fa188ea5a9ec38c1114a3",
+      "content_version": "cv_b2cb61bedca3fcccf5ccfd08cfc2f8d2",
+      "digest": "sha256:6587a0e6d2e80f9ee0237ccac124e9bef07aad511c2ccfefdb839320e0dbd523",
+      "parts": [
+       "ODA by sector"
+      ],
+      "sentence": "Gross ODA disbursements to 14 recipients from 97 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-1": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AFG",
+           "country/BDI",
+           "country/CAF",
+           "country/COD",
+           "country/COG",
+           "country/ERI",
+           "country/GNQ",
+           "country/HTI",
+           "country/MDG",
+           "country/PNG",
+           "country/SDN",
+           "country/SOM",
+           "country/SSD",
+           "country/SYR",
+           "country/TCD",
+           "country/YEM"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_89ec96a64e39f5e26865df08718a7a57",
+      "artifact": {
+       "digest": "sha256:583f78461a22339d22abfe1c18e078b21bf6fa09ccfea33727f65fdb530bd1da",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:45Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AFG",
+            "country/BDI",
+            "country/CAF",
+            "country/COD",
+            "country/COG",
+            "country/ERI",
+            "country/GNQ",
+            "country/HTI",
+            "country/MDG",
+            "country/PNG",
+            "country/SDN",
+            "country/SOM",
+            "country/SSD",
+            "country/SYR",
+            "country/TCD",
+            "country/YEM"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_89ec96a64e39f5e26865df08718a7a57",
+       "artifact": {
+        "digest": "sha256:583f78461a22339d22abfe1c18e078b21bf6fa09ccfea33727f65fdb530bd1da",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_96cfa41e9633bb921ff5acd665689443",
+      "content_version": "cv_89ec96a64e39f5e26865df08718a7a57",
+      "digest": "sha256:583f78461a22339d22abfe1c18e078b21bf6fa09ccfea33727f65fdb530bd1da",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 26 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-2": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AGO",
+           "country/BFA",
+           "country/CMR",
+           "country/COM",
+           "country/GIN",
+           "country/GNB",
+           "country/IRQ",
+           "country/LBR",
+           "country/LBY",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/NER",
+           "country/TJK",
+           "country/UGA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_bfc7553508009fb7fd7aed26d2a749fd",
+      "artifact": {
+       "digest": "sha256:c6dd2a3e5ba3c78022fa60593d21fd5b3b19b86c6af101c1ac6b8f379a828a50",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:48Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AGO",
+            "country/BFA",
+            "country/CMR",
+            "country/COM",
+            "country/GIN",
+            "country/GNB",
+            "country/IRQ",
+            "country/LBR",
+            "country/LBY",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/NER",
+            "country/TJK",
+            "country/UGA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_bfc7553508009fb7fd7aed26d2a749fd",
+       "artifact": {
+        "digest": "sha256:c6dd2a3e5ba3c78022fa60593d21fd5b3b19b86c6af101c1ac6b8f379a828a50",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_a8db4d726d73bd49509ac97ad51b1a2b",
+      "content_version": "cv_bfc7553508009fb7fd7aed26d2a749fd",
+      "digest": "sha256:c6dd2a3e5ba3c78022fa60593d21fd5b3b19b86c6af101c1ac6b8f379a828a50",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 29 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-3": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/BGD",
+           "country/DJI",
+           "country/ETH",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/RWA",
+           "country/SLE",
+           "country/SWZ",
+           "country/TKM",
+           "country/VEN",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_ba6e9e88b79dd836e406b8e59fb4bf92",
+      "artifact": {
+       "digest": "sha256:e1fe836f606d0728718eedf0de4b257fe6632efe112e10fe8fc7e86951f188cb",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:52Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/BGD",
+            "country/DJI",
+            "country/ETH",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/RWA",
+            "country/SLE",
+            "country/SWZ",
+            "country/TKM",
+            "country/VEN",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_ba6e9e88b79dd836e406b8e59fb4bf92",
+       "artifact": {
+        "digest": "sha256:e1fe836f606d0728718eedf0de4b257fe6632efe112e10fe8fc7e86951f188cb",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_3246d45833bfa7a94b5093548962372b",
+      "content_version": "cv_ba6e9e88b79dd836e406b8e59fb4bf92",
+      "digest": "sha256:e1fe836f606d0728718eedf0de4b257fe6632efe112e10fe8fc7e86951f188cb",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 16 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "oof-4": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "spec": {
+       "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsCooperationModality"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsPurpose"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "crsTypeOfFinance"
+          },
+          {
+           "binding": {
+            "ref": "CRSTypeOfFlow21",
+            "state": "value"
+           },
+           "property": "crsTypeOfFlow"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/CIV",
+           "country/GAB",
+           "country/GMB",
+           "country/GTM",
+           "country/HND",
+           "country/IRN",
+           "country/KEN",
+           "country/MWI",
+           "country/PRK",
+           "country/PSE",
+           "country/SLB",
+           "country/TGO",
+           "country/TLS",
+           "country/TZA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_5e31fa611e43335300457d44c07cd93d",
+      "artifact": {
+       "digest": "sha256:567e083f038f6398a79bb42f470fff3c4682420541df33151d1db9267286805e",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "citation": {
+     "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDCreditorReportingSystem",
+       "label": "OECD Creditor Reporting System (CRS)",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:21:55Z",
+    "question": "gross other official flows (OOF) disbursements to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "gross other official flows (OOF) disbursements"
+       ],
+       "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+       "spec": {
+        "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsCooperationModality"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsPurpose"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "crsTypeOfFinance"
+           },
+           {
+            "binding": {
+             "ref": "CRSTypeOfFlow21",
+             "state": "value"
+            },
+            "property": "crsTypeOfFlow"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/CIV",
+            "country/GAB",
+            "country/GMB",
+            "country/GTM",
+            "country/HND",
+            "country/IRN",
+            "country/KEN",
+            "country/MWI",
+            "country/PRK",
+            "country/PSE",
+            "country/SLB",
+            "country/TGO",
+            "country/TLS",
+            "country/TZA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_5e31fa611e43335300457d44c07cd93d",
+       "artifact": {
+        "digest": "sha256:567e083f038f6398a79bb42f470fff3c4682420541df33151d1db9267286805e",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. No observations were served for 1 requested entity.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_b83bf1d9ec9341ec7f87941d0c0e951d",
+      "content_version": "cv_5e31fa611e43335300457d44c07cd93d",
+      "digest": "sha256:567e083f038f6398a79bb42f470fff3c4682420541df33151d1db9267286805e",
+      "parts": [
+       "gross other official flows (OOF) disbursements"
+      ],
+      "sentence": "Gross OOF disbursements to 14 recipients from 34 providers, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+      "citation": {
+       "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDCreditorReportingSystem",
+         "label": "OECD Creditor Reporting System (CRS)",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "donors2025": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "total ODA"
+      ],
+      "sentence": "Grant equivalents from the 32 DAC members for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+      "spec": {
+       "spec_id": "spec_655ba7e5f4a4780661347a726ef01cef",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_655ba7e5f4a4780661347a726ef01cef",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "grantEquivalent",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "DAC1AidType1010",
+            "state": "value"
+           },
+           "property": "dac1AidType"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          }
+         ],
+         "entities": {
+          "origin": [
+           "country/AUS",
+           "country/AUT",
+           "country/BEL",
+           "country/CAN",
+           "country/CHE",
+           "country/CZE",
+           "country/DEU",
+           "country/DNK",
+           "country/ESP",
+           "country/EST",
+           "country/FIN",
+           "country/FRA",
+           "country/GBR",
+           "country/GRC",
+           "country/HUN",
+           "country/IRL",
+           "country/ISL",
+           "country/ITA",
+           "country/JPN",
+           "country/KOR",
+           "country/LTU",
+           "country/LUX",
+           "country/LVA",
+           "country/NLD",
+           "country/NOR",
+           "country/NZL",
+           "country/POL",
+           "country/PRT",
+           "country/SVK",
+           "country/SVN",
+           "country/SWE",
+           "country/USA"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2025,
+          "start_year": 2024
+         }
+        }
+       }
+      },
+      "content_version": "cv_eba1cfff8716860572dcdc224df654bd",
+      "artifact": {
+       "digest": "sha256:579673cdaf1f0efabfcdc6ec8732d78eedd64b353625d8723ac2dc729008ed88",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Grant equivalents from the 32 DAC members for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+    "citation": {
+     "text": "OECD DAC1 (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDDAC1",
+       "label": "OECD DAC1",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?fs[0]=Topic,0%7CDevelopment%23DEV%23&fs[1]=Topic,1%7CDevelopment%23DEV%23%7COfficial%20Development%20Assistance%20%28ODA%29%23DEV_ODA%23&pg=0&fc=Topic&snb=23&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_DAC1%40DF_DAC1&df[ag]=OECD.DCD.FSD&df[vs]=1.7&dq=._Z.....&pd=,&to[TIME_PERIOD]=false&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:06Z",
+    "question": "total ODA of each DAC donor in 2024 and 2025",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "total ODA"
+       ],
+       "sentence": "Grant equivalents from the 32 DAC members for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+       "spec": {
+        "spec_id": "spec_655ba7e5f4a4780661347a726ef01cef",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_655ba7e5f4a4780661347a726ef01cef",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "grantEquivalent",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "DAC1AidType1010",
+             "state": "value"
+            },
+            "property": "dac1AidType"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           }
+          ],
+          "entities": {
+           "origin": [
+            "country/AUS",
+            "country/AUT",
+            "country/BEL",
+            "country/CAN",
+            "country/CHE",
+            "country/CZE",
+            "country/DEU",
+            "country/DNK",
+            "country/ESP",
+            "country/EST",
+            "country/FIN",
+            "country/FRA",
+            "country/GBR",
+            "country/GRC",
+            "country/HUN",
+            "country/IRL",
+            "country/ISL",
+            "country/ITA",
+            "country/JPN",
+            "country/KOR",
+            "country/LTU",
+            "country/LUX",
+            "country/LVA",
+            "country/NLD",
+            "country/NOR",
+            "country/NZL",
+            "country/POL",
+            "country/PRT",
+            "country/SVK",
+            "country/SVN",
+            "country/SWE",
+            "country/USA"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2025,
+           "start_year": 2024
+          }
+         }
+        }
+       },
+       "content_version": "cv_eba1cfff8716860572dcdc224df654bd",
+       "artifact": {
+        "digest": "sha256:579673cdaf1f0efabfcdc6ec8732d78eedd64b353625d8723ac2dc729008ed88",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_655ba7e5f4a4780661347a726ef01cef",
+      "content_version": "cv_eba1cfff8716860572dcdc224df654bd",
+      "digest": "sha256:579673cdaf1f0efabfcdc6ec8732d78eedd64b353625d8723ac2dc729008ed88",
+      "parts": [
+       "total ODA"
+      ],
+      "sentence": "Grant equivalents from the 32 DAC members for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+      "citation": {
+       "text": "OECD DAC1 (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDDAC1",
+         "label": "OECD DAC1",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?fs[0]=Topic,0%7CDevelopment%23DEV%23&fs[1]=Topic,1%7CDevelopment%23DEV%23%7COfficial%20Development%20Assistance%20%28ODA%29%23DEV_ODA%23&pg=0&fc=Topic&snb=23&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_DAC1%40DF_DAC1&df[ag]=OECD.DCD.FSD&df[vs]=1.7&dq=._Z.....&pd=,&to[TIME_PERIOD]=false&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "donors2025-eu": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "total ODA"
+      ],
+      "sentence": "European Union institutions' grant equivalents for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+      "spec": {
+       "spec_id": "spec_acf829e1146f4e8c56d689b406a331cc",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_acf829e1146f4e8c56d689b406a331cc",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "grantEquivalent",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "DAC1AidType1010",
+            "state": "value"
+           },
+           "property": "dac1AidType"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          }
+         ],
+         "entities": {
+          "origin": [
+           "EuropeanUnionInstitutions"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2025,
+          "start_year": 2024
+         }
+        }
+       }
+      },
+      "content_version": "cv_fae1d85e15de231ca3fabb33f623a8af",
+      "artifact": {
+       "digest": "sha256:f84f96618ece39c9aa340f08c7c6455fcc3d3b3105d9a8440180f6c9154bca49",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "European Union institutions' grant equivalents for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+    "citation": {
+     "text": "OECD DAC1 (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/OECDDAC1",
+       "label": "OECD DAC1",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://data-explorer.oecd.org/vis?fs[0]=Topic,0%7CDevelopment%23DEV%23&fs[1]=Topic,1%7CDevelopment%23DEV%23%7COfficial%20Development%20Assistance%20%28ODA%29%23DEV_ODA%23&pg=0&fc=Topic&snb=23&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_DAC1%40DF_DAC1&df[ag]=OECD.DCD.FSD&df[vs]=1.7&dq=._Z.....&pd=,&to[TIME_PERIOD]=false&isAvailabilityDisabled=false&page=0"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:07Z",
+    "question": "total ODA of each DAC donor in 2024 and 2025",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "total ODA"
+       ],
+       "sentence": "European Union institutions' grant equivalents for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+       "spec": {
+        "spec_id": "spec_acf829e1146f4e8c56d689b406a331cc",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_acf829e1146f4e8c56d689b406a331cc",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "grantEquivalent",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "DAC1AidType1010",
+             "state": "value"
+            },
+            "property": "dac1AidType"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           }
+          ],
+          "entities": {
+           "origin": [
+            "EuropeanUnionInstitutions"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2025,
+           "start_year": 2024
+          }
+         }
+        }
+       },
+       "content_version": "cv_fae1d85e15de231ca3fabb33f623a8af",
+       "artifact": {
+        "digest": "sha256:f84f96618ece39c9aa340f08c7c6455fcc3d3b3105d9a8440180f6c9154bca49",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_acf829e1146f4e8c56d689b406a331cc",
+      "content_version": "cv_fae1d85e15de231ca3fabb33f623a8af",
+      "digest": "sha256:f84f96618ece39c9aa340f08c7c6455fcc3d3b3105d9a8440180f6c9154bca49",
+      "parts": [
+       "total ODA"
+      ],
+      "sentence": "European Union institutions' grant equivalents for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+      "citation": {
+       "text": "OECD DAC1 (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/OECDDAC1",
+         "label": "OECD DAC1",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://data-explorer.oecd.org/vis?fs[0]=Topic,0%7CDevelopment%23DEV%23&fs[1]=Topic,1%7CDevelopment%23DEV%23%7COfficial%20Development%20Assistance%20%28ODA%29%23DEV_ODA%23&pg=0&fc=Topic&snb=23&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_DAC1%40DF_DAC1&df[ag]=OECD.DCD.FSD&df[vs]=1.7&dq=._Z.....&pd=,&to[TIME_PERIOD]=false&isAvailabilityDisabled=false&page=0"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "remittances": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "inward remittances"
+      ],
+      "sentence": "Inward remittances in 62 places, 2015 to 2024. Current US dollars · World Development Indicators.",
+      "spec": {
+       "spec_id": "spec_687b64e965fa455c26e43b8263791a3a",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_687b64e965fa455c26e43b8263791a3a",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "Remittance",
+          "measured_property": "amount"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "InwardRemittance",
+            "state": "value"
+           },
+           "property": "transferType"
+          }
+         ],
+         "facets": {
+          "unit": {
+           "state": "value",
+           "request": {
+            "prices": "current",
+            "currency": "USD"
+           }
+          }
+         },
+         "entities": {
+          "observationAbout": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_9353bcd852dbe8f6d43944f895d79850",
+      "artifact": {
+       "digest": "sha256:4b15d1a1f759cc7671a9dda94bc5faaf5e7405a06be3d956d684959a1340db05",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Inward remittances in 62 places, 2015 to 2024. Current US dollars · World Development Indicators.",
+    "citation": {
+     "text": "World Development Indicators (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "dc/base/WorldDevelopmentIndicators",
+       "label": "World Development Indicators",
+       "licence": "Creative Commons Attribution License",
+       "licence_url": "https://datacatalog.worldbank.org/search/dataset/0037712",
+       "url": "https://datatopics.worldbank.org/world-development-indicators/"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:15Z",
+    "question": "inward remittances to Mozambique in US dollars",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "inward remittances"
+       ],
+       "sentence": "Inward remittances in 62 places, 2015 to 2024. Current US dollars · World Development Indicators.",
+       "spec": {
+        "spec_id": "spec_687b64e965fa455c26e43b8263791a3a",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_687b64e965fa455c26e43b8263791a3a",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "Remittance",
+           "measured_property": "amount"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "InwardRemittance",
+             "state": "value"
+            },
+            "property": "transferType"
+           }
+          ],
+          "facets": {
+           "unit": {
+            "state": "value",
+            "request": {
+             "prices": "current",
+             "currency": "USD"
+            }
+           }
+          },
+          "entities": {
+           "observationAbout": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_9353bcd852dbe8f6d43944f895d79850",
+       "artifact": {
+        "digest": "sha256:4b15d1a1f759cc7671a9dda94bc5faaf5e7405a06be3d956d684959a1340db05",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. No observations were served for 9 requested entities.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_687b64e965fa455c26e43b8263791a3a",
+      "content_version": "cv_9353bcd852dbe8f6d43944f895d79850",
+      "digest": "sha256:4b15d1a1f759cc7671a9dda94bc5faaf5e7405a06be3d956d684959a1340db05",
+      "parts": [
+       "inward remittances"
+      ],
+      "sentence": "Inward remittances in 62 places, 2015 to 2024. Current US dollars · World Development Indicators.",
+      "citation": {
+       "text": "World Development Indicators (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "dc/base/WorldDevelopmentIndicators",
+         "label": "World Development Indicators",
+         "licence": "Creative Commons Attribution License",
+         "licence_url": "https://datacatalog.worldbank.org/search/dataset/0037712",
+         "url": "https://datatopics.worldbank.org/world-development-indicators/"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "fdi": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "foreign direct investment inflows"
+      ],
+      "sentence": "Foreign direct investment (FDI) inflows in 62 places, 2015 to 2024. US dollars · SDG Global Database.",
+      "spec": {
+       "spec_id": "spec_6127ffa6a8b6ea3944e243794a524703",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_6127ffa6a8b6ea3944e243794a524703",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "undata/sdg/SERIES-GF_FRN_FDI",
+          "measured_property": "value"
+         },
+         "slots": [],
+         "entities": {
+          "observationAbout": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_3d0ccb1188ff393fa25e41ff552c5cce",
+      "artifact": {
+       "digest": "sha256:679f4c9ab4485cab0caec13aae92790988071d4688c7d0018d0151f43b69ffc7",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Foreign direct investment (FDI) inflows in 62 places, 2015 to 2024. US dollars · SDG Global Database.",
+    "citation": {
+     "text": "SDG Global Database (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "undata/p/SDG",
+       "label": "SDG Global Database",
+       "licence": null,
+       "licence_url": null,
+       "url": "https://unstats.un.org/sdgs/dataportal"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:22Z",
+    "question": "foreign direct investment inflows to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "foreign direct investment inflows"
+       ],
+       "sentence": "Foreign direct investment (FDI) inflows in 62 places, 2015 to 2024. US dollars · SDG Global Database.",
+       "spec": {
+        "spec_id": "spec_6127ffa6a8b6ea3944e243794a524703",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_6127ffa6a8b6ea3944e243794a524703",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "undata/sdg/SERIES-GF_FRN_FDI",
+           "measured_property": "value"
+          },
+          "slots": [],
+          "entities": {
+           "observationAbout": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_3d0ccb1188ff393fa25e41ff552c5cce",
+       "artifact": {
+        "digest": "sha256:679f4c9ab4485cab0caec13aae92790988071d4688c7d0018d0151f43b69ffc7",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. No observations were served for 2 requested entities.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_6127ffa6a8b6ea3944e243794a524703",
+      "content_version": "cv_3d0ccb1188ff393fa25e41ff552c5cce",
+      "digest": "sha256:679f4c9ab4485cab0caec13aae92790988071d4688c7d0018d0151f43b69ffc7",
+      "parts": [
+       "foreign direct investment inflows"
+      ],
+      "sentence": "Foreign direct investment (FDI) inflows in 62 places, 2015 to 2024. US dollars · SDG Global Database.",
+      "citation": {
+       "text": "SDG Global Database (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "undata/p/SDG",
+         "label": "SDG Global Database",
+         "licence": null,
+         "licence_url": null,
+         "url": "https://unstats.un.org/sdgs/dataportal"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "debtService": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "DT.TDS.DPPG.CD"
+      ],
+      "sentence": "External debt service of 62 debtors for public or publicly guaranteed, 2015 to 2033. Current US dollars · World Bank International Debt Statistics (IDS).",
+      "spec": {
+       "spec_id": "spec_28b8fcab43889698eec3d100375d82f5",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_28b8fcab43889698eec3d100375d82f5",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "ServicingPayment",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "PublicOrPubliclyGuaranteed",
+            "state": "value"
+           },
+           "property": "guaranteeStatus"
+          }
+         ],
+         "entities": {
+          "destination": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2033,
+          "start_year": 2015
+         }
+        }
+       }
+      },
+      "content_version": "cv_389397e1f0abc3a2350ca9b1a9e9d353",
+      "artifact": {
+       "digest": "sha256:ece32331873b7c36433a9e22e71877b2d47f620283506e739fc6c9abbf32d9ec",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "External debt service of 62 debtors for public or publicly guaranteed, 2015 to 2033. Current US dollars · World Bank International Debt Statistics (IDS).",
+    "citation": {
+     "text": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/WorldBankInternationalDebtStatistics",
+       "label": "World Bank International Debt Statistics (IDS)",
+       "licence": "Creative Commons Attribution License",
+       "licence_url": "https://datacatalog.worldbank.org/public-licenses?fragment=cc",
+       "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:24Z",
+    "question": null,
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "DT.TDS.DPPG.CD"
+       ],
+       "sentence": "External debt service of 62 debtors for public or publicly guaranteed, 2015 to 2033. Current US dollars · World Bank International Debt Statistics (IDS).",
+       "spec": {
+        "spec_id": "spec_28b8fcab43889698eec3d100375d82f5",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_28b8fcab43889698eec3d100375d82f5",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "ServicingPayment",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "PublicOrPubliclyGuaranteed",
+             "state": "value"
+            },
+            "property": "guaranteeStatus"
+           }
+          ],
+          "entities": {
+           "destination": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2033,
+           "start_year": 2015
+          }
+         }
+        }
+       },
+       "content_version": "cv_389397e1f0abc3a2350ca9b1a9e9d353",
+       "artifact": {
+        "digest": "sha256:ece32331873b7c36433a9e22e71877b2d47f620283506e739fc6c9abbf32d9ec",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. No observations were served for 5 requested entities.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_28b8fcab43889698eec3d100375d82f5",
+      "content_version": "cv_389397e1f0abc3a2350ca9b1a9e9d353",
+      "digest": "sha256:ece32331873b7c36433a9e22e71877b2d47f620283506e739fc6c9abbf32d9ec",
+      "parts": [
+       "DT.TDS.DPPG.CD"
+      ],
+      "sentence": "External debt service of 62 debtors for public or publicly guaranteed, 2015 to 2033. Current US dollars · World Bank International Debt Statistics (IDS).",
+      "citation": {
+       "text": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/WorldBankInternationalDebtStatistics",
+         "label": "World Bank International Debt Statistics (IDS)",
+         "licence": "Creative Commons Attribution License",
+         "licence_url": "https://datacatalog.worldbank.org/public-licenses?fragment=cc",
+         "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "climate-total": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "climate finance"
+      ],
+      "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+      "spec": {
+       "spec_id": "spec_f8d7e96c0ead0026de60931a42d51667",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_f8d7e96c0ead0026de60931a42d51667",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "ClimateChangePolicyObjective",
+            "state": "value"
+           },
+           "property": "climatePolicyObjective"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "facets": {
+          "measurementMethod": {
+           "ref": "MarkerScoreWeightingHighestMarkerAssignment",
+           "state": "value"
+          }
+         },
+         "entities": {
+          "destination": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2024
+         }
+        }
+       }
+      },
+      "content_version": "cv_df043409885d298466cc827dbcea962e",
+      "artifact": {
+       "digest": "sha256:bca297f2edf9211807579b3956be306ae8ec9ee583e19cc22dda17688f80ffc1",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+    "citation": {
+     "text": "ONE Data Climate Finance (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/ONEClimateFinance",
+       "label": "ONE Data Climate Finance",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://docs.one.org/methodologies/deep-dives/climate-finance-files-2026/"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:28Z",
+    "question": "climate finance to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "climate finance"
+       ],
+       "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+       "spec": {
+        "spec_id": "spec_f8d7e96c0ead0026de60931a42d51667",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_f8d7e96c0ead0026de60931a42d51667",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "ClimateChangePolicyObjective",
+             "state": "value"
+            },
+            "property": "climatePolicyObjective"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "facets": {
+           "measurementMethod": {
+            "ref": "MarkerScoreWeightingHighestMarkerAssignment",
+            "state": "value"
+           }
+          },
+          "entities": {
+           "destination": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2024
+          }
+         }
+        }
+       },
+       "content_version": "cv_df043409885d298466cc827dbcea962e",
+       "artifact": {
+        "digest": "sha256:bca297f2edf9211807579b3956be306ae8ec9ee583e19cc22dda17688f80ffc1",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_f8d7e96c0ead0026de60931a42d51667",
+      "content_version": "cv_df043409885d298466cc827dbcea962e",
+      "digest": "sha256:bca297f2edf9211807579b3956be306ae8ec9ee583e19cc22dda17688f80ffc1",
+      "parts": [
+       "climate finance"
+      ],
+      "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+      "citation": {
+       "text": "ONE Data Climate Finance (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/ONEClimateFinance",
+         "label": "ONE Data Climate Finance",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://docs.one.org/methodologies/deep-dives/climate-finance-files-2026/"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "climate-adaptation": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "climate adaptation finance"
+      ],
+      "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for adaptation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+      "spec": {
+       "spec_id": "spec_f0d1143adc0eeb71ec55d37ceb372145",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_f0d1143adc0eeb71ec55d37ceb372145",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "AdaptationOnlyClimateChangePolicyObjective",
+            "state": "value"
+           },
+           "property": "climatePolicyObjective"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "facets": {
+          "measurementMethod": {
+           "ref": "MarkerScoreWeightingHighestMarkerAssignment",
+           "state": "value"
+          }
+         },
+         "entities": {
+          "destination": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2024
+         }
+        }
+       }
+      },
+      "content_version": "cv_370ccd8790e8fe5ff760b7e7d0cefdb6",
+      "artifact": {
+       "digest": "sha256:506fa7acd35a67b6ddb94442dd7c404cb656e7c29607ee2b0c4b2ae68c3fc4e5",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for adaptation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+    "citation": {
+     "text": "ONE Data Climate Finance (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/ONEClimateFinance",
+       "label": "ONE Data Climate Finance",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://docs.one.org/methodologies/deep-dives/climate-finance-files-2026/"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:31Z",
+    "question": "climate adaptation finance to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "climate adaptation finance"
+       ],
+       "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for adaptation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+       "spec": {
+        "spec_id": "spec_f0d1143adc0eeb71ec55d37ceb372145",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_f0d1143adc0eeb71ec55d37ceb372145",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "AdaptationOnlyClimateChangePolicyObjective",
+             "state": "value"
+            },
+            "property": "climatePolicyObjective"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "facets": {
+           "measurementMethod": {
+            "ref": "MarkerScoreWeightingHighestMarkerAssignment",
+            "state": "value"
+           }
+          },
+          "entities": {
+           "destination": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2024
+          }
+         }
+        }
+       },
+       "content_version": "cv_370ccd8790e8fe5ff760b7e7d0cefdb6",
+       "artifact": {
+        "digest": "sha256:506fa7acd35a67b6ddb94442dd7c404cb656e7c29607ee2b0c4b2ae68c3fc4e5",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_f0d1143adc0eeb71ec55d37ceb372145",
+      "content_version": "cv_370ccd8790e8fe5ff760b7e7d0cefdb6",
+      "digest": "sha256:506fa7acd35a67b6ddb94442dd7c404cb656e7c29607ee2b0c4b2ae68c3fc4e5",
+      "parts": [
+       "climate adaptation finance"
+      ],
+      "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for adaptation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+      "citation": {
+       "text": "ONE Data Climate Finance (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/ONEClimateFinance",
+         "label": "ONE Data Climate Finance",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://docs.one.org/methodologies/deep-dives/climate-finance-files-2026/"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "climate-mitigation": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "climate mitigation finance"
+      ],
+      "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for mitigation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+      "spec": {
+       "spec_id": "spec_5f1674dd63493f5e0cbaf00d2ebf1443",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_5f1674dd63493f5e0cbaf00d2ebf1443",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "FinancialFlow",
+          "measured_property": "amount",
+          "measurement_qualifier": "Nominal"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "MitigationOnlyClimateChangePolicyObjective",
+            "state": "value"
+           },
+           "property": "climatePolicyObjective"
+          },
+          {
+           "binding": {
+            "ref": "Disbursement",
+            "state": "value"
+           },
+           "property": "financialFlowType"
+          },
+          {
+           "binding": {
+            "ref": "Gross",
+            "state": "value"
+           },
+           "property": "nettingBasis"
+          }
+         ],
+         "facets": {
+          "measurementMethod": {
+           "ref": "MarkerScoreWeightingHighestMarkerAssignment",
+           "state": "value"
+          }
+         },
+         "entities": {
+          "destination": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2024
+         }
+        }
+       }
+      },
+      "content_version": "cv_795571303323e39e7e6deb0158f0b9e0",
+      "artifact": {
+       "digest": "sha256:f3ab2b50d20f9afba960ddb2ce5da5903a100bdfaac00aacf2d19e518c7ef1cd",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for mitigation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+    "citation": {
+     "text": "ONE Data Climate Finance (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "provenance/ONEClimateFinance",
+       "label": "ONE Data Climate Finance",
+       "licence": "OECD Terms and Conditions",
+       "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+       "url": "https://docs.one.org/methodologies/deep-dives/climate-finance-files-2026/"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:35Z",
+    "question": "climate mitigation finance to Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "climate mitigation finance"
+       ],
+       "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for mitigation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+       "spec": {
+        "spec_id": "spec_5f1674dd63493f5e0cbaf00d2ebf1443",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_5f1674dd63493f5e0cbaf00d2ebf1443",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "FinancialFlow",
+           "measured_property": "amount",
+           "measurement_qualifier": "Nominal"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "MitigationOnlyClimateChangePolicyObjective",
+             "state": "value"
+            },
+            "property": "climatePolicyObjective"
+           },
+           {
+            "binding": {
+             "ref": "Disbursement",
+             "state": "value"
+            },
+            "property": "financialFlowType"
+           },
+           {
+            "binding": {
+             "ref": "Gross",
+             "state": "value"
+            },
+            "property": "nettingBasis"
+           }
+          ],
+          "facets": {
+           "measurementMethod": {
+            "ref": "MarkerScoreWeightingHighestMarkerAssignment",
+            "state": "value"
+           }
+          },
+          "entities": {
+           "destination": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2024
+          }
+         }
+        }
+       },
+       "content_version": "cv_795571303323e39e7e6deb0158f0b9e0",
+       "artifact": {
+        "digest": "sha256:f3ab2b50d20f9afba960ddb2ce5da5903a100bdfaac00aacf2d19e518c7ef1cd",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_5f1674dd63493f5e0cbaf00d2ebf1443",
+      "content_version": "cv_795571303323e39e7e6deb0158f0b9e0",
+      "digest": "sha256:f3ab2b50d20f9afba960ddb2ce5da5903a100bdfaac00aacf2d19e518c7ef1cd",
+      "parts": [
+       "climate mitigation finance"
+      ],
+      "sentence": "Climate finance gross disbursements to 62 recipients from 69 providers for mitigation only in 2024. Current US dollars · ONE Data Climate Finance · Marker-score weighting, highest-marker assignment.",
+      "citation": {
+       "text": "ONE Data Climate Finance (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "provenance/ONEClimateFinance",
+         "label": "ONE Data Climate Finance",
+         "licence": "OECD Terms and Conditions",
+         "licence_url": "https://www.oecd.org/en/about/terms-conditions.html",
+         "url": "https://docs.one.org/methodologies/deep-dives/climate-finance-files-2026/"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "population": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "population"
+      ],
+      "sentence": "Total population in 62 places in 2024. United Nations Children's Fund (UNICEF).",
+      "spec": {
+       "spec_id": "spec_099cc5589608400eb1b897922a4311ff",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_099cc5589608400eb1b897922a4311ff",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "undata/unicef/SERIES-DM_POP",
+          "measured_property": "value"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "undataAge"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "undataSex"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "undataUrbanization"
+          }
+         ],
+         "entities": {
+          "observationAbout": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2024,
+          "start_year": 2024
+         }
+        }
+       }
+      },
+      "content_version": "cv_4a8ce86fdfaa1fea53f1480d9645add1",
+      "artifact": {
+       "digest": "sha256:2763328adc509f624b06aa1657ab4e3b5b8e74fe9496ff7af605aef7c9d4c40c",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Total population in 62 places in 2024. United Nations Children's Fund (UNICEF).",
+    "citation": {
+     "text": "United Nations Children's Fund (UNICEF) (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "undata/p/UNICEF",
+       "label": "United Nations Children's Fund (UNICEF)",
+       "licence": null,
+       "licence_url": null,
+       "url": "https://data.unicef.org/"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:42:48Z",
+    "question": "population of Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "population"
+       ],
+       "sentence": "Total population in 62 places in 2024. United Nations Children's Fund (UNICEF).",
+       "spec": {
+        "spec_id": "spec_099cc5589608400eb1b897922a4311ff",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_099cc5589608400eb1b897922a4311ff",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "undata/unicef/SERIES-DM_POP",
+           "measured_property": "value"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "undataAge"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "undataSex"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "undataUrbanization"
+           }
+          ],
+          "entities": {
+           "observationAbout": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2024,
+           "start_year": 2024
+          }
+         }
+        }
+       },
+       "content_version": "cv_4a8ce86fdfaa1fea53f1480d9645add1",
+       "artifact": {
+        "digest": "sha256:2763328adc509f624b06aa1657ab4e3b5b8e74fe9496ff7af605aef7c9d4c40c",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_099cc5589608400eb1b897922a4311ff",
+      "content_version": "cv_4a8ce86fdfaa1fea53f1480d9645add1",
+      "digest": "sha256:2763328adc509f624b06aa1657ab4e3b5b8e74fe9496ff7af605aef7c9d4c40c",
+      "parts": [
+       "population"
+      ],
+      "sentence": "Total population in 62 places in 2024. United Nations Children's Fund (UNICEF).",
+      "citation": {
+       "text": "United Nations Children's Fund (UNICEF) (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "undata/p/UNICEF",
+         "label": "United Nations Children's Fund (UNICEF)",
+         "licence": null,
+         "licence_url": null,
+         "url": "https://data.unicef.org/"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "stunting": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "share of children under five who are stunted"
+      ],
+      "sentence": "Proportion of children moderately or severely stunted (under 5 years old) in 62 places, 2010 to 2024. SDG Global Database.",
+      "spec": {
+       "spec_id": "spec_5ea3fa0b66e0e4d994e8ea9eec16252b",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_5ea3fa0b66e0e4d994e8ea9eec16252b",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "undata/sdg/SERIES-SH_STA_STNT",
+          "measured_property": "value"
+         },
+         "slots": [
+          {
+           "binding": {
+            "ref": "undata/AGE-Y0T4",
+            "state": "value"
+           },
+           "property": "undataAge"
+          },
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "undataSex"
+          }
+         ],
+         "entities": {
+          "observationAbout": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2025,
+          "start_year": 2010
+         }
+        }
+       }
+      },
+      "content_version": "cv_0c15bffd37fa4edcbdd17c6612bad8ff",
+      "artifact": {
+       "digest": "sha256:1eec9ffc5fd6efbcecfc0ff938f486faa9f2467af27e09862973a1611adc1a16",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Proportion of children moderately or severely stunted (under 5 years old) in 62 places, 2010 to 2024. SDG Global Database.",
+    "citation": {
+     "text": "SDG Global Database (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "undata/p/SDG",
+       "label": "SDG Global Database",
+       "licence": null,
+       "licence_url": null,
+       "url": "https://unstats.un.org/sdgs/dataportal"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:22:01Z",
+    "question": "share of children under five who are stunted in Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "share of children under five who are stunted"
+       ],
+       "sentence": "Proportion of children moderately or severely stunted (under 5 years old) in 62 places, 2010 to 2024. SDG Global Database.",
+       "spec": {
+        "spec_id": "spec_5ea3fa0b66e0e4d994e8ea9eec16252b",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_5ea3fa0b66e0e4d994e8ea9eec16252b",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "undata/sdg/SERIES-SH_STA_STNT",
+           "measured_property": "value"
+          },
+          "slots": [
+           {
+            "binding": {
+             "ref": "undata/AGE-Y0T4",
+             "state": "value"
+            },
+            "property": "undataAge"
+           },
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "undataSex"
+           }
+          ],
+          "entities": {
+           "observationAbout": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2025,
+           "start_year": 2010
+          }
+         }
+        }
+       },
+       "content_version": "cv_0c15bffd37fa4edcbdd17c6612bad8ff",
+       "artifact": {
+        "digest": "sha256:1eec9ffc5fd6efbcecfc0ff938f486faa9f2467af27e09862973a1611adc1a16",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. Requested 2010 to 2025; the data covers 2010 to 2024. No observations were served for 1 requested entity.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_5ea3fa0b66e0e4d994e8ea9eec16252b",
+      "content_version": "cv_0c15bffd37fa4edcbdd17c6612bad8ff",
+      "digest": "sha256:1eec9ffc5fd6efbcecfc0ff938f486faa9f2467af27e09862973a1611adc1a16",
+      "parts": [
+       "share of children under five who are stunted"
+      ],
+      "sentence": "Proportion of children moderately or severely stunted (under 5 years old) in 62 places, 2010 to 2024. SDG Global Database.",
+      "citation": {
+       "text": "SDG Global Database (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "undata/p/SDG",
+         "label": "SDG Global Database",
+         "licence": null,
+         "licence_url": null,
+         "url": "https://unstats.un.org/sdgs/dataportal"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "water": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "share of population using basic drinking water services"
+      ],
+      "sentence": "Proportion of population using basic drinking water services in 62 places, 2010 to 2024. SDG Global Database.",
+      "spec": {
+       "spec_id": "spec_7495fcdc8cff005d94525f9ed52556f6",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_7495fcdc8cff005d94525f9ed52556f6",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "undata/sdg/SERIES-SP_ACS_BSRVH2O",
+          "measured_property": "value"
+         },
+         "slots": [
+          {
+           "binding": {
+            "state": "unbound"
+           },
+           "property": "undataUrbanization"
+          }
+         ],
+         "entities": {
+          "observationAbout": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2025,
+          "start_year": 2010
+         }
+        }
+       }
+      },
+      "content_version": "cv_13386be16dc5162ce1d5b03bc5e3a962",
+      "artifact": {
+       "digest": "sha256:3e78eaa3f4aa759bb9ff24b2c2e5ecd221d496f56f003053dc5968c130543717",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Proportion of population using basic drinking water services in 62 places, 2010 to 2024. SDG Global Database.",
+    "citation": {
+     "text": "SDG Global Database (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "undata/p/SDG",
+       "label": "SDG Global Database",
+       "licence": null,
+       "licence_url": null,
+       "url": "https://unstats.un.org/sdgs/dataportal"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:22:07Z",
+    "question": "share of population using basic drinking water services in Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "share of population using basic drinking water services"
+       ],
+       "sentence": "Proportion of population using basic drinking water services in 62 places, 2010 to 2024. SDG Global Database.",
+       "spec": {
+        "spec_id": "spec_7495fcdc8cff005d94525f9ed52556f6",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_7495fcdc8cff005d94525f9ed52556f6",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "undata/sdg/SERIES-SP_ACS_BSRVH2O",
+           "measured_property": "value"
+          },
+          "slots": [
+           {
+            "binding": {
+             "state": "unbound"
+            },
+            "property": "undataUrbanization"
+           }
+          ],
+          "entities": {
+           "observationAbout": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2025,
+           "start_year": 2010
+          }
+         }
+        }
+       },
+       "content_version": "cv_13386be16dc5162ce1d5b03bc5e3a962",
+       "artifact": {
+        "digest": "sha256:3e78eaa3f4aa759bb9ff24b2c2e5ecd221d496f56f003053dc5968c130543717",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. Requested 2010 to 2025; the data covers 2010 to 2024. No observations were served for 1 requested entity.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_7495fcdc8cff005d94525f9ed52556f6",
+      "content_version": "cv_13386be16dc5162ce1d5b03bc5e3a962",
+      "digest": "sha256:3e78eaa3f4aa759bb9ff24b2c2e5ecd221d496f56f003053dc5968c130543717",
+      "parts": [
+       "share of population using basic drinking water services"
+      ],
+      "sentence": "Proportion of population using basic drinking water services in 62 places, 2010 to 2024. SDG Global Database.",
+      "citation": {
+       "text": "SDG Global Database (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "undata/p/SDG",
+         "label": "SDG Global Database",
+         "licence": null,
+         "licence_url": null,
+         "url": "https://unstats.un.org/sdgs/dataportal"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  },
+  "dtp3": {
+   "ref": {
+    "format_version": 1,
+    "members": [
+     {
+      "parts": [
+       "DTP3 immunisation coverage"
+      ],
+      "sentence": "Proportion of the target population who received 3 doses of diphtheria-tetanus-pertussis (DTP3) vaccine in 62 places, 2010 to 2024. SDG Global Database.",
+      "spec": {
+       "spec_id": "spec_57b17e28300183ee15cea9991fb2633e",
+       "definition": {
+        "schema_version": 1,
+        "spec_id": "spec_57b17e28300183ee15cea9991fb2633e",
+        "identity": {
+         "shape": {
+          "kind": "statvar_schema",
+          "stat_type": "measuredValue",
+          "population_type": "undata/sdg/SERIES-SH_ACS_DTP3",
+          "measured_property": "value"
+         },
+         "slots": [],
+         "entities": {
+          "observationAbout": [
+           "country/AFG",
+           "country/AGO",
+           "country/BDI",
+           "country/BFA",
+           "country/BGD",
+           "country/CAF",
+           "country/CIV",
+           "country/CMR",
+           "country/COD",
+           "country/COG",
+           "country/COM",
+           "country/DJI",
+           "country/ERI",
+           "country/ETH",
+           "country/GAB",
+           "country/GIN",
+           "country/GMB",
+           "country/GNB",
+           "country/GNQ",
+           "country/GTM",
+           "country/HND",
+           "country/HTI",
+           "country/IRN",
+           "country/IRQ",
+           "country/KEN",
+           "country/KHM",
+           "country/LAO",
+           "country/LBN",
+           "country/LBR",
+           "country/LBY",
+           "country/MDG",
+           "country/MLI",
+           "country/MMR",
+           "country/MOZ",
+           "country/MRT",
+           "country/MWI",
+           "country/NER",
+           "country/NGA",
+           "country/NIC",
+           "country/PAK",
+           "country/PNG",
+           "country/PRK",
+           "country/PSE",
+           "country/RWA",
+           "country/SDN",
+           "country/SLB",
+           "country/SLE",
+           "country/SOM",
+           "country/SSD",
+           "country/SWZ",
+           "country/SYR",
+           "country/TCD",
+           "country/TGO",
+           "country/TJK",
+           "country/TKM",
+           "country/TLS",
+           "country/TZA",
+           "country/UGA",
+           "country/VEN",
+           "country/YEM",
+           "country/ZMB",
+           "country/ZWE"
+          ]
+         },
+         "identity_version": "spec1",
+         "requested_window": {
+          "kind": "range",
+          "end_year": 2025,
+          "start_year": 2010
+         }
+        }
+       }
+      },
+      "content_version": "cv_c78fe14d8eb4846e776724d43febb5ce",
+      "artifact": {
+       "digest": "sha256:71d9f16f2f853325ff70c658f6d6baadb2e4d6b3c3e1bb82f6b4d452cb315e86",
+       "rendering": {
+        "format": "parquet",
+        "bundle": false,
+        "without_party_totals": true
+       }
+      }
+     }
+    ]
+   },
+   "provenance": {
+    "format_version": 1,
+    "sentence": "Proportion of the target population who received 3 doses of diphtheria-tetanus-pertussis (DTP3) vaccine in 62 places, 2010 to 2024. SDG Global Database.",
+    "citation": {
+     "text": "SDG Global Database (2026), via the Development Finance Observatory",
+     "sources": [
+      {
+       "ref": "undata/p/SDG",
+       "label": "SDG Global Database",
+       "licence": null,
+       "licence_url": null,
+       "url": "https://unstats.un.org/sdgs/dataportal"
+      }
+     ]
+    },
+    "fetched_at": "2026-11-19T22:22:14Z",
+    "question": "DTP3 immunisation coverage in Mozambique",
+    "ref": {
+     "format_version": 1,
+     "members": [
+      {
+       "parts": [
+        "DTP3 immunisation coverage"
+       ],
+       "sentence": "Proportion of the target population who received 3 doses of diphtheria-tetanus-pertussis (DTP3) vaccine in 62 places, 2010 to 2024. SDG Global Database.",
+       "spec": {
+        "spec_id": "spec_57b17e28300183ee15cea9991fb2633e",
+        "definition": {
+         "schema_version": 1,
+         "spec_id": "spec_57b17e28300183ee15cea9991fb2633e",
+         "identity": {
+          "shape": {
+           "kind": "statvar_schema",
+           "stat_type": "measuredValue",
+           "population_type": "undata/sdg/SERIES-SH_ACS_DTP3",
+           "measured_property": "value"
+          },
+          "slots": [],
+          "entities": {
+           "observationAbout": [
+            "country/AFG",
+            "country/AGO",
+            "country/BDI",
+            "country/BFA",
+            "country/BGD",
+            "country/CAF",
+            "country/CIV",
+            "country/CMR",
+            "country/COD",
+            "country/COG",
+            "country/COM",
+            "country/DJI",
+            "country/ERI",
+            "country/ETH",
+            "country/GAB",
+            "country/GIN",
+            "country/GMB",
+            "country/GNB",
+            "country/GNQ",
+            "country/GTM",
+            "country/HND",
+            "country/HTI",
+            "country/IRN",
+            "country/IRQ",
+            "country/KEN",
+            "country/KHM",
+            "country/LAO",
+            "country/LBN",
+            "country/LBR",
+            "country/LBY",
+            "country/MDG",
+            "country/MLI",
+            "country/MMR",
+            "country/MOZ",
+            "country/MRT",
+            "country/MWI",
+            "country/NER",
+            "country/NGA",
+            "country/NIC",
+            "country/PAK",
+            "country/PNG",
+            "country/PRK",
+            "country/PSE",
+            "country/RWA",
+            "country/SDN",
+            "country/SLB",
+            "country/SLE",
+            "country/SOM",
+            "country/SSD",
+            "country/SWZ",
+            "country/SYR",
+            "country/TCD",
+            "country/TGO",
+            "country/TJK",
+            "country/TKM",
+            "country/TLS",
+            "country/TZA",
+            "country/UGA",
+            "country/VEN",
+            "country/YEM",
+            "country/ZMB",
+            "country/ZWE"
+           ]
+          },
+          "identity_version": "spec1",
+          "requested_window": {
+           "kind": "range",
+           "end_year": 2025,
+           "start_year": 2010
+          }
+         }
+        }
+       },
+       "content_version": "cv_c78fe14d8eb4846e776724d43febb5ce",
+       "artifact": {
+        "digest": "sha256:71d9f16f2f853325ff70c658f6d6baadb2e4d6b3c3e1bb82f6b4d452cb315e86",
+        "rendering": {
+         "format": "parquet",
+         "bundle": false,
+         "without_party_totals": true
+        }
+       }
+      }
+     ]
+    },
+    "pinned": true,
+    "held_until": null,
+    "warnings": [
+     {
+      "code": "coverage_below_scope",
+      "severity": "warn",
+      "message": "The served coverage falls short of the requested scope. Requested 2010 to 2025; the data covers 2010 to 2024. No observations were served for 1 requested entity.",
+      "spec_id": null
+     }
+    ],
+    "complete": true,
+    "missing": [],
+    "members": [
+     {
+      "spec_id": "spec_57b17e28300183ee15cea9991fb2633e",
+      "content_version": "cv_c78fe14d8eb4846e776724d43febb5ce",
+      "digest": "sha256:71d9f16f2f853325ff70c658f6d6baadb2e4d6b3c3e1bb82f6b4d452cb315e86",
+      "parts": [
+       "DTP3 immunisation coverage"
+      ],
+      "sentence": "Proportion of the target population who received 3 doses of diphtheria-tetanus-pertussis (DTP3) vaccine in 62 places, 2010 to 2024. SDG Global Database.",
+      "citation": {
+       "text": "SDG Global Database (2026), via the Development Finance Observatory",
+       "sources": [
+        {
+         "ref": "undata/p/SDG",
+         "label": "SDG Global Database",
+         "licence": null,
+         "licence_url": null,
+         "url": "https://unstats.un.org/sdgs/dataportal"
+        }
+       ]
+      },
+      "pinned": true,
+      "held_until": null
+     }
+    ]
+   }
+  }
+ }
+}

@@ -11,6 +11,7 @@ import {
     type SharesBackend,
 } from './apisShares';
 import type { ShareKind } from './sharePrune';
+import { ownsShare } from './shareTokens';
 
 import { apisFetch } from '@/lib/apisAuth';
 import { db } from '@/lib/db';
@@ -35,17 +36,26 @@ import type { SlotDeps } from '@/lib/studio/slotCards';
 
 export type { ShareKind, ShareRecord };
 
-/** dfo-apis' share routes, naming the caller of `incoming`. */
+/** dfo-apis' share routes, naming the caller of `incoming`. Every call is
+ *  the site's own, made for a page or route it serves, so its surface is
+ *  `website`. */
 export const sharesBackendFor = (incoming: Headers): SharesBackend => ({
     base: searchApiBase(),
     fetch: apisFetch,
-    nameCaller: (outgoing) => setApisCaller(outgoing, incoming),
+    nameCaller: (outgoing) => setApisCaller(outgoing, incoming, 'website'),
 });
 
 /** A share by id, or null. One read per request, however many readers. */
 export const getShare = cache(async (id: string): Promise<ShareRecord | null> =>
     readShare(sharesBackendFor(await headers()), id),
 );
+
+/** Whether `userId` made the share, for the `viewer` prop of its view
+ *  events. A failed read rejects, so shareViewEvent records `unknown`. */
+export const viewerOwnsShare = (
+    shareId: string,
+    userId: string | null | undefined,
+): Promise<boolean> => ownsShare(db, { shareId, userId });
 
 /** Make a share for `userId` (null for a guest), keeping a signed-in
  *  maker's write token. */

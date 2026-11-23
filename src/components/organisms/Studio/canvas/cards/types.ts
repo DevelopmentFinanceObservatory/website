@@ -1,6 +1,7 @@
 import type { CardView } from '../layout';
 
 import type { CardLive } from '@/lib/studio/liveCards';
+import type { UnitChoice, UnitOffer } from '@/lib/studio/wire';
 
 // Everything a card renders besides its widget: its on-canvas state and the
 // actions the pin + kebab expose. Assembled per slot by the Whiteboard.
@@ -15,6 +16,11 @@ export type CardExtras = {
     onPin: () => void;
     onRemove: () => void;
     onAsk: () => void;
+    // The units the card can move to, and the menu's Change unit sending a
+    // pick. Null (or absent) on a card whose frame offers no other unit and
+    // on a sheet where no turn can run, and the row is hidden.
+    unitOffer?: UnitOffer | null;
+    onChangeUnit?: ((unit: UnitChoice) => void) | null;
     // Opens the Download Data dialog; null when the card has no rows to
     // give (a text card), and the download menu offers the image alone.
     onDownload: (() => void) | null;

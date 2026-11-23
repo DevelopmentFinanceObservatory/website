@@ -223,6 +223,14 @@ test('the sitemap lists docs, gallery and source pages, but no redirect', () => 
     assert.ok(paths.includes('/data?share=bbbbbbbb'));
     assert.ok(paths.includes('/data/sources/dc/d/WorldBank_IDS'));
     assert.equal(paths.includes('/insights/gallery/a-search'), false);
+    assert.ok(paths.includes('/insights/gallery'));
+
+    const empty = sitemapPaths({ docs, gallery: [], sourceIds: [] });
+
+    assert.deepEqual(
+        empty.filter((path) => path.startsWith('/insights/gallery')),
+        [],
+    );
 });
 
 test('every page the sitemap lists may be fetched and indexed', () => {

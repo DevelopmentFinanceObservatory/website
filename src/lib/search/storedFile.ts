@@ -21,8 +21,9 @@ import { searchApiBase } from '@/lib/searchApi';
 const VERSION_READ_TIMEOUT_MS = 20_000;
 
 /**
- * Counts the call against the proxy's `api` allowance, the one every
- * Datasets API call through the site shares. The X-RateLimit-* headers go
+ * Counts the call against the proxy's `api` allowance, which the site's
+ * /api routes share outside the Datasets API's routes below
+ * /api/v1/datasets/. The X-RateLimit-* headers go
  * on the response whenever the call was counted, with `Retry-After` added
  * when the call is over it.
  */

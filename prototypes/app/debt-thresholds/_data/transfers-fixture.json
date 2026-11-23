@@ -1,0 +1,822 @@
+{
+  "provenance": {
+    "sdk": "development-finance==0.4.2",
+    "query": "Net-transfers rows of seven countries, one without rows, from the transfers ref, with pipeline.transfers' output for them",
+    "retrieved": "2026-11-19T22:29:24.758Z"
+  },
+  "data": {
+    "rows": [
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2010,
+        "value": 91357358.3
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2011,
+        "value": 186845423.1
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2012,
+        "value": 344492814.7
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2013,
+        "value": 252457680.9
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2014,
+        "value": 346646707.5
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2015,
+        "value": 215507679.5
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2016,
+        "value": 284959220.7
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2017,
+        "value": 133731360.6
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2018,
+        "value": 75662428.2
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2019,
+        "value": 153797858.7
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2020,
+        "value": 410051735.3
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2021,
+        "value": 7544908.2
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2022,
+        "value": 85486913.4
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2023,
+        "value": 48578455.1
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2024,
+        "value": 162202416.1
+      },
+      {
+        "financingRecipient": "country/BTN",
+        "time_period": 2025,
+        "value": -38951137.4
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2010,
+        "value": 28838528605.8
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2011,
+        "value": 35269148203.5
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2012,
+        "value": 34762006720.7
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2013,
+        "value": 30967391845.8
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2014,
+        "value": 30054593102.0
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2015,
+        "value": 12666714348.6
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2016,
+        "value": -32635747243.2
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2017,
+        "value": 40640328975.2
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2018,
+        "value": -5121425456.2
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2019,
+        "value": 23347078508.9
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2020,
+        "value": -11894884913.8
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2021,
+        "value": 20313398050.8
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2022,
+        "value": -8267339248.0
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2023,
+        "value": 3187945926.5
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2024,
+        "value": 42480025945.5
+      },
+      {
+        "financingRecipient": "country/IND",
+        "time_period": 2025,
+        "value": 10248336395.8
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2010,
+        "value": 203242816.9
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2011,
+        "value": 1014865803.4
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2012,
+        "value": 1693029484.5
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2013,
+        "value": 1843375882.5
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2014,
+        "value": 3578446510.4
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2015,
+        "value": 2948243989.3
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2016,
+        "value": 1077280572.1
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2017,
+        "value": 4123727862.3
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2018,
+        "value": 3699199994.0
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2019,
+        "value": 2376358379.9
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2020,
+        "value": 1002526508.0
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2021,
+        "value": 2076483036.1
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2022,
+        "value": 444505013.0
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2023,
+        "value": -67793088.4
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2024,
+        "value": -646099615.8
+      },
+      {
+        "financingRecipient": "country/KEN",
+        "time_period": 2025,
+        "value": 490940369.2
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2010,
+        "value": -61756206.4
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2011,
+        "value": -106188624.8
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2012,
+        "value": 4107468902.9
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2013,
+        "value": 4233178927.8
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2014,
+        "value": 264078616.6
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2015,
+        "value": 1597000096.1
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2016,
+        "value": -1135934449.0
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2017,
+        "value": 1499763377.1
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2018,
+        "value": 1576656431.2
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2019,
+        "value": -9090601782.8
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2020,
+        "value": -7759622888.4
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2021,
+        "value": -5292396103.5
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2022,
+        "value": -2882096200.2
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2023,
+        "value": -4256632903.6
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2024,
+        "value": -2211633033.2
+      },
+      {
+        "financingRecipient": "country/LBN",
+        "time_period": 2025,
+        "value": -983652329.6
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2010,
+        "value": -228973.7
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2011,
+        "value": -78367.0
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2012,
+        "value": -220472.9
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2013,
+        "value": -585698.1
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2014,
+        "value": -34951.5
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2015,
+        "value": -32179.9
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2016,
+        "value": -54212.3
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2017,
+        "value": -34668.5
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2018,
+        "value": -62305.3
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2019,
+        "value": -638337.7
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2020,
+        "value": -462291885.8
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2021,
+        "value": -17392936.6
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2022,
+        "value": 8147074.4
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2023,
+        "value": 32109948.0
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2024,
+        "value": 3662560.7
+      },
+      {
+        "financingRecipient": "country/SOM",
+        "time_period": 2025,
+        "value": 24073642.8
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2010,
+        "value": 669930714.5
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2011,
+        "value": 430630054.6
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2012,
+        "value": 1136416110.8
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2013,
+        "value": 1403160809.7
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2014,
+        "value": 985877538.9
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2015,
+        "value": 1212746814.4
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2016,
+        "value": -75484717.7
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2017,
+        "value": 564281342.6
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2018,
+        "value": -37507937.8
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2019,
+        "value": -573763982.6
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2020,
+        "value": 121580549.2
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2021,
+        "value": 187607722.4
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2022,
+        "value": 58632317.0
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2023,
+        "value": -194571797.5
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2024,
+        "value": 368511722.9
+      },
+      {
+        "financingRecipient": "country/ZWE",
+        "time_period": 2025,
+        "value": 2442653.2
+      }
+    ],
+    "members": [
+      {
+        "iso3": "BTN",
+        "name": "Bhutan",
+        "group": "insolvent"
+      },
+      {
+        "iso3": "KEN",
+        "name": "Kenya",
+        "group": "illiquid-issuer"
+      },
+      {
+        "iso3": "IND",
+        "name": "India",
+        "group": "lower-risk"
+      },
+      {
+        "iso3": "LBN",
+        "name": "Lebanon",
+        "group": "not-in-dsa"
+      },
+      {
+        "iso3": "SOM",
+        "name": "Somalia",
+        "group": "not-in-dsa"
+      },
+      {
+        "iso3": "SSD",
+        "name": "South Sudan",
+        "group": "not-in-dsa"
+      },
+      {
+        "iso3": "ZWE",
+        "name": "Zimbabwe",
+        "group": "not-in-dsa"
+      }
+    ],
+    "expected": {
+      "valuesByCountry": {
+        "BTN": {
+          "2010": 91357358.3,
+          "2011": 186845423.1,
+          "2012": 344492814.7,
+          "2013": 252457680.9,
+          "2014": 346646707.5,
+          "2015": 215507679.5,
+          "2016": 284959220.7,
+          "2017": 133731360.6,
+          "2018": 75662428.2,
+          "2019": 153797858.7,
+          "2020": 410051735.3,
+          "2021": 7544908.2,
+          "2022": 85486913.4,
+          "2023": 48578455.1,
+          "2024": 162202416.1,
+          "2025": -38951137.4
+        },
+        "IND": {
+          "2010": 28838528605.8,
+          "2011": 35269148203.5,
+          "2012": 34762006720.7,
+          "2013": 30967391845.8,
+          "2014": 30054593102.0,
+          "2015": 12666714348.6,
+          "2016": -32635747243.2,
+          "2017": 40640328975.2,
+          "2018": -5121425456.2,
+          "2019": 23347078508.9,
+          "2020": -11894884913.8,
+          "2021": 20313398050.8,
+          "2022": -8267339248.0,
+          "2023": 3187945926.5,
+          "2024": 42480025945.5,
+          "2025": 10248336395.8
+        },
+        "KEN": {
+          "2010": 203242816.9,
+          "2011": 1014865803.4,
+          "2012": 1693029484.5,
+          "2013": 1843375882.5,
+          "2014": 3578446510.4,
+          "2015": 2948243989.3,
+          "2016": 1077280572.1,
+          "2017": 4123727862.3,
+          "2018": 3699199994.0,
+          "2019": 2376358379.9,
+          "2020": 1002526508.0,
+          "2021": 2076483036.1,
+          "2022": 444505013.0,
+          "2023": -67793088.4,
+          "2024": -646099615.8,
+          "2025": 490940369.2
+        },
+        "LBN": {
+          "2010": -61756206.4,
+          "2011": -106188624.8,
+          "2012": 4107468902.9,
+          "2013": 4233178927.8,
+          "2014": 264078616.6,
+          "2015": 1597000096.1,
+          "2016": -1135934449.0,
+          "2017": 1499763377.1,
+          "2018": 1576656431.2,
+          "2019": -9090601782.8,
+          "2020": -7759622888.4,
+          "2021": -5292396103.5,
+          "2022": -2882096200.2,
+          "2023": -4256632903.6,
+          "2024": -2211633033.2,
+          "2025": -983652329.6
+        },
+        "SOM": {
+          "2010": -228973.7,
+          "2011": -78367.0,
+          "2012": -220472.9,
+          "2013": -585698.1,
+          "2014": -34951.5,
+          "2015": -32179.9,
+          "2016": -54212.3,
+          "2017": -34668.5,
+          "2018": -62305.3,
+          "2019": -638337.7,
+          "2020": -462291885.8,
+          "2021": -17392936.6,
+          "2022": 8147074.4,
+          "2023": 32109948.0,
+          "2024": 3662560.7,
+          "2025": 24073642.8
+        },
+        "ZWE": {
+          "2010": 669930714.5,
+          "2011": 430630054.6,
+          "2012": 1136416110.8,
+          "2013": 1403160809.7,
+          "2014": 985877538.9,
+          "2015": 1212746814.4,
+          "2016": -75484717.7,
+          "2017": 564281342.6,
+          "2018": -37507937.8,
+          "2019": -573763982.6,
+          "2020": 121580549.2,
+          "2021": 187607722.4,
+          "2022": 58632317.0,
+          "2023": -194571797.5,
+          "2024": 368511722.9,
+          "2025": 2442653.2
+        }
+      },
+      "lastActualYear": 2025,
+      "years": [
+        2010,
+        2011,
+        2012,
+        2013,
+        2014,
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025
+      ],
+      "countries": [
+        {
+          "iso3": "BTN",
+          "name": "Bhutan",
+          "group": "insolvent",
+          "values": [
+            91357358.3,
+            186845423.1,
+            344492814.7,
+            252457680.9,
+            346646707.5,
+            215507679.5,
+            284959220.7,
+            133731360.6,
+            75662428.2,
+            153797858.7,
+            410051735.3,
+            7544908.2,
+            85486913.4,
+            48578455.1,
+            162202416.1,
+            -38951137.4
+          ]
+        },
+        {
+          "iso3": "KEN",
+          "name": "Kenya",
+          "group": "illiquid-issuer",
+          "values": [
+            203242816.9,
+            1014865803.4,
+            1693029484.5,
+            1843375882.5,
+            3578446510.4,
+            2948243989.3,
+            1077280572.1,
+            4123727862.3,
+            3699199994.0,
+            2376358379.9,
+            1002526508.0,
+            2076483036.1,
+            444505013.0,
+            -67793088.4,
+            -646099615.8,
+            490940369.2
+          ]
+        },
+        {
+          "iso3": "IND",
+          "name": "India",
+          "group": "lower-risk",
+          "values": [
+            28838528605.8,
+            35269148203.5,
+            34762006720.7,
+            30967391845.8,
+            30054593102.0,
+            12666714348.6,
+            -32635747243.2,
+            40640328975.2,
+            -5121425456.2,
+            23347078508.9,
+            -11894884913.8,
+            20313398050.8,
+            -8267339248.0,
+            3187945926.5,
+            42480025945.5,
+            10248336395.8
+          ]
+        },
+        {
+          "iso3": "LBN",
+          "name": "Lebanon",
+          "group": "not-in-dsa",
+          "values": [
+            -61756206.4,
+            -106188624.8,
+            4107468902.9,
+            4233178927.8,
+            264078616.6,
+            1597000096.1,
+            -1135934449.0,
+            1499763377.1,
+            1576656431.2,
+            -9090601782.8,
+            -7759622888.4,
+            -5292396103.5,
+            -2882096200.2,
+            -4256632903.6,
+            -2211633033.2,
+            -983652329.6
+          ]
+        },
+        {
+          "iso3": "SOM",
+          "name": "Somalia",
+          "group": "not-in-dsa",
+          "values": [
+            -228973.7,
+            -78367.0,
+            -220472.9,
+            -585698.1,
+            -34951.5,
+            -32179.9,
+            -54212.3,
+            -34668.5,
+            -62305.3,
+            -638337.7,
+            -462291885.8,
+            -17392936.6,
+            8147074.4,
+            32109948.0,
+            3662560.7,
+            24073642.8
+          ]
+        },
+        {
+          "iso3": "SSD",
+          "name": "South Sudan",
+          "group": "not-in-dsa",
+          "values": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "iso3": "ZWE",
+          "name": "Zimbabwe",
+          "group": "not-in-dsa",
+          "values": [
+            669930714.5,
+            430630054.6,
+            1136416110.8,
+            1403160809.7,
+            985877538.9,
+            1212746814.4,
+            -75484717.7,
+            564281342.6,
+            -37507937.8,
+            -573763982.6,
+            121580549.2,
+            187607722.4,
+            58632317.0,
+            -194571797.5,
+            368511722.9,
+            2442653.2
+          ]
+        }
+      ]
+    }
+  }
+}

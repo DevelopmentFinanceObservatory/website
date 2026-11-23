@@ -4,6 +4,7 @@ import { useId } from 'react';
 
 import styles from './Controls.module.scss';
 import { DonorSearch } from './DonorSearch';
+import type { Failure } from './LiveUnits';
 import { UnitPicker } from './UnitPicker';
 
 import type { Donor, Offer } from '../_data/types.ts';
@@ -38,7 +39,7 @@ export const Controls = ({
     offer: Offer;
     unit: Unit;
     onUnit: (unit: Unit) => void;
-    failed: boolean;
+    failed: Failure | null;
 }) => {
     const yearId = useId();
 
@@ -68,7 +69,9 @@ export const Controls = ({
                 <UnitPicker offer={offer} unit={unit} onPick={onUnit} />
             </div>
             <p className={styles.failure} role="status">
-                {failed && 'The figures could not be converted live.'}
+                {failed === 'rate_limited'
+                    ? 'Too many figures were converted in the last minute. Try again shortly.'
+                    : failed === 'error' && 'The figures could not be converted live.'}
             </p>
         </div>
     );

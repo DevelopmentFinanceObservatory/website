@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.12,<3.13"
 # dependencies = [
-#     "development-finance[pandas]==0.2.0",
+#     "development-finance[pandas]==0.4.2",
 #     "bblocks-data-importers==0.5.0",
 #     "python-calamine==0.9.1",
 #     "httpx==0.28.1",

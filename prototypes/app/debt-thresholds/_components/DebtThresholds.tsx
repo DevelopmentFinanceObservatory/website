@@ -6,10 +6,10 @@ import { CardFoot } from './CardFoot';
 import { CountryCard, DownloadCsv, EmptyCountryCard, SourceLine } from './CountryCard';
 import { CountrySearch } from './CountrySearch';
 import styles from './DebtThresholds.module.scss';
-import { NetTransfers } from './NetTransfers';
 import { Summary } from './Summary';
 import { urlSelectionStore } from './selection';
 import { GROUP_COLOURS, ThresholdScatter, type ScatterPoint } from './ThresholdScatter';
+import { TransfersSection } from './TransfersSection';
 
 import type { Capacity, Country, ThresholdsData } from '../_data/types.ts';
 import {
@@ -33,7 +33,7 @@ import {
     type Group,
 } from '../_lib/thresholds.ts';
 import { ticksTo } from '../_lib/scale.ts';
-import { groupTransfers, transfersHeading, type TransfersData } from '../_lib/transfers.ts';
+import type { TransfersMembers } from '../_lib/transfers.ts';
 
 const CAPACITY_OPTIONS = [
     { value: 'assessed', label: 'As assessed' },
@@ -111,7 +111,7 @@ const MoversSentence = ({ countries }: { countries: Country[] | null }) => {
 
 /**
  * Whose counts the summary shows and on which data. In FDL's view with assessed
- * capacity they are FDL's; otherwise the DFO's, with FDL's published count beside them
+ * capacity they are FDL's. Otherwise they are the DFO's, with FDL's published count beside them
  * and the capacity what-if named.
  */
 const ownerLine = (year: number, override: CapacityOverride, countries: Country[]): string => {
@@ -127,8 +127,8 @@ const ownerLine = (year: number, override: CapacityOverride, countries: Country[
 };
 
 /**
- * The tooltip line for a dot whose FDL colour sits on the other side of a threshold: in
- * FDL's view, where FDL's published group and the DFO's rebuild disagree.
+ * The tooltip line for a dot whose FDL colour sits on the other side of a threshold. It
+ * applies in FDL's view, where FDL's published group and the DFO's rebuild disagree.
  */
 const rebuildNote = (country: Country, year: number, override: CapacityOverride): string | null => {
     if (!isFdlView(country, year, override) || country.fdl2024 === null) {
@@ -225,23 +225,23 @@ const scatterTicks = (data: ThresholdsData): { x: number[]; y: number[] } => {
 /**
  * The interactive part of the page: group counts and the view switch, the scatter with
  * the capacity what-if, the selected country's card, and net transfers by group. FDL's
- * view (base year 2024) shows FDL's published groups; the latest view applies FDL's test
+ * view (base year 2024) shows FDL's published groups. The latest view applies FDL's test
  * to the newest base year. The page opens on the country in the query string (?country=,
- * an ISO3 code), and later picks stay in state (selection.ts); with none, the card asks
- * the reader to pick a country.
+ * an ISO3 code), and later picks stay in state (selection.ts). With no country, the card
+ * asks the reader to pick one.
  */
 export const DebtThresholds = ({
     data,
     transfers,
 }: {
     data: ThresholdsData;
-    transfers: TransfersData;
+    transfers: TransfersMembers;
 }) => {
     const { countries } = data;
     const ticks = scatterTicks(data);
     const [year, setYear] = useState(data.defaultYear);
     const [override, setOverride] = useState<CapacityOverride>('assessed');
-    // null until the visitor picks; a pick of '' clears the URL's country.
+    // null until the visitor picks. A pick of '' clears the URL's country.
     const [picked, setPicked] = useState<string | null>(null);
     const urlSelection = useSyncExternalStore(...urlSelectionStore);
     const selection = picked ?? urlSelection;
@@ -281,7 +281,7 @@ export const DebtThresholds = ({
     }
 
     const selected = countries.find((country) => country.iso3 === selection);
-    // The search always shows a country; a dot clicked again clears the selection.
+    // The search always shows a country. A dot clicked again clears the selection.
     const countrySlot = useRef<HTMLDivElement>(null);
     // The card sits under the scatter, so a dot clicked brings the card's top into view
     // when it starts below the window.
@@ -319,7 +319,6 @@ export const DebtThresholds = ({
             onChoose={choose}
         />
     );
-    const { lines: transferLines } = groupTransfers(transfers, groupOf);
     const groupSource = showsFdl
         ? `FDL, ${FDL_PUBLISHED}`
         : `DFO, ${year} data${override === 'assessed' ? '' : `, all ${override} capacity`}`;
@@ -428,23 +427,12 @@ export const DebtThresholds = ({
                     )}
                 </div>
 
-                <section className={styles.transfers} aria-labelledby="net-transfers">
-                    <h2 id="net-transfers" className={styles.sectionHeading}>
-                        {transfersHeading(transferLines, transfers.years)}
-                    </h2>
-                    <p className={styles.sectionLede}>
-                        Net transfers are loans received minus repayments and interest,{' '}
-                        {transfers.years[0]} to {transfers.years.at(-1)}. The lines group countries
-                        as the chart above does and follow its view and capacity controls. Below
-                        zero, a group pays its creditors more than it borrows.
-                    </p>
-                    <NetTransfers
-                        data={transfers}
-                        groupOf={groupOf}
-                        groupSource={groupSource}
-                        highlight={selected === undefined ? null : groupOf(selected.iso3)}
-                    />
-                </section>
+                <TransfersSection
+                    members={transfers}
+                    groupOf={groupOf}
+                    groupSource={groupSource}
+                    highlight={selected === undefined ? null : groupOf(selected.iso3)}
+                />
             </div>
         </div>
     );

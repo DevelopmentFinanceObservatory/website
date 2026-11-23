@@ -5,10 +5,10 @@ import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent } fro
 import styles from './PerPersonStrip.module.scss';
 import { useWidth } from './useWidth';
 
-import type { Country } from '../_data/types.ts';
 import { MEDIAN_CAVEAT } from '../_lib/copy.ts';
 import { perPerson } from '../_lib/format.ts';
 import { buildStrip, scalePosition, type StripDot } from '../_lib/strip.ts';
+import type { UnaidsCountry } from '../_lib/unaids.ts';
 
 const RADIUS = 4.5;
 /** Lanes sit one dot and a hairline apart. */
@@ -29,8 +29,8 @@ const tickText = (tick: number) => `$${Number(tick.toFixed(1))}`;
 /**
  * The ratio of last-year HIV aid to people living with HIV, one dot per country with 50,000
  * or more people living with HIV and some aid, on a fixed axis with the median marked. Dots stay
- * put; the selected country's dot gets a ring and a label and the others sit back.
- * Hovering or the arrow keys read a dot's name and value; a click or Enter selects its
+ * put. The selected country's dot gets a ring and a label and the others sit back.
+ * Hovering or the arrow keys read a dot's name and value, and a click or Enter selects its
  * country.
  */
 export const PerPersonStrip = ({
@@ -40,7 +40,7 @@ export const PerPersonStrip = ({
     selected,
     onSelect,
 }: {
-    countries: readonly Country[];
+    countries: readonly UnaidsCountry[];
     /** The year the aid figures are for. */
     year: number;
     /** Which countries the strip holds, under its title. */

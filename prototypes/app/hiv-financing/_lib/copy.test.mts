@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { readFileSync } from 'node:fs';
+
+import type { HivData } from '../_data/types.ts';
+
 import {
+    AID_CITED,
+    AID_TEXT,
+    aidSections,
     allSentence,
     codeChangeSentence,
     flagLegend,
@@ -21,6 +28,7 @@ import {
 } from './copy.ts';
 import {
     CONGO,
+    COUNTRIES,
     country,
     DATA,
     DR_CONGO,
@@ -45,7 +53,7 @@ test('the lede names the two providers and the majority split; the share note ca
 
 test('the all-countries sentence: allocated, recipients and table count, others now and then, the largest falls', () => {
     // Falls: IDA $86m, UNAIDS $57m, Australia $50m, Germany $23m, the UK $21.4m, against a
-    // total fall of $295m; France's rise is left out.
+    // total fall of $295m. France's rise is left out.
     assert.equal(
         allSentence(DATA),
         'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS; Australia; Germany; and the United Kingdom.',
@@ -76,10 +84,8 @@ test('the falls throw when a provider with a fixed fact is missing from the data
         ({ name }) => name !== 'International Development Association',
     );
 
-    assert.throws(
-        () => allSentence({ ...DATA, otherProviders }),
-        /"International Development Association"/,
-    );
+    assert.doesNotThrow(() => allSentence(DATA));
+    assert.throws(() => allSentence({ ...DATA, otherProviders }));
 });
 
 test('the unallocated note compares the US total with KFF and places the excess', () => {
@@ -133,15 +139,15 @@ test('the flag legend counts the multi-disease money to countries outside the ta
 
 test('the UNAIDS gap note names missing coverage and deaths outside the PLHIV gap', () => {
     assert.equal(
-        unaidsGapNote(DATA),
+        unaidsGapNote(COUNTRIES, YEARS),
         'The same data have no figures on treatment coverage for Côte d\'Ivoire. Missing cells show "–". With no 2015 AIDS-related deaths figure for Côte d\'Ivoire, its summary leaves out the 2015 comparison.',
     );
-    assert.equal(unaidsGapNote({ ...DATA, countries: [DR_CONGO, UKRAINE] }), null);
+    assert.equal(unaidsGapNote([DR_CONGO, UKRAINE], YEARS), null);
 });
 
 test('the strip caption counts from the data, and the table rule names the year', () => {
     assert.equal(
-        stripCaption(DATA),
+        stripCaption(COUNTRIES, 2024),
         '3 countries that received HIV aid in 2024 and have at least 50,000 people living with HIV',
     );
     assert.equal(tableRule(DATA), 'Every country that received HIV aid in 2024.');
@@ -240,11 +246,11 @@ test('a small share is named as the table prints it', () => {
     );
 });
 
-test('the lede throws when the two providers no longer disburse almost all', () => {
-    assert.throws(
-        () => ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
-        /almost all/,
-    );
+test("the lede gives the two providers' share when they no longer disburse almost all", () => {
+    const lede = ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } });
+
+    assert.match(lede, /the Global Fund disbursed \d+% of HIV aid recorded for countries\./);
+    assert.doesNotMatch(lede, /almost all/);
 });
 
 test('the fall sentence drops its share when the named falls exceed the net fall', () => {
@@ -271,7 +277,7 @@ test('the loans sentence names the lenders, with "from" only when they make up t
 
 test('the Notes line names the countries with no estimate of people living with HIV', () => {
     assert.equal(
-        plhivGapNote(DATA),
+        plhivGapNote(COUNTRIES),
         'The UNAIDS data here lack an estimate of people living with HIV for Ukraine, so aid per person is blank and the strip excludes it.',
     );
 });
@@ -338,4 +344,28 @@ test('other measures: the Global Fund share against countries and against the wi
     );
     // Nothing elsewhere: no wider-total sentence.
     assert.doesNotMatch(otherMeasures({ ...data, unallocated: series(0, 0, 0) }).text, /Including/);
+});
+
+test("the prose outside the island follows the figures it is given, the island's", () => {
+    const hiv = (
+        JSON.parse(readFileSync(new URL('../_data/hiv.json', import.meta.url), 'utf8')) as {
+            data: HivData;
+        }
+    ).data;
+    // Live figures a year on, with twice the loans and one country fewer.
+    const live: HivData = {
+        ...hiv,
+        years: hiv.years.map((year) => year + 1),
+        loans: {
+            total: hiv.loans.total * 2,
+            lenders: hiv.loans.lenders.map((lender) => ({ ...lender, value: lender.value * 2 })),
+        },
+        countries: hiv.countries.slice(1),
+    };
+
+    for (const [part, text] of Object.entries({ ...AID_TEXT, ...AID_CITED })) {
+        assert.notDeepEqual(text(live), text(hiv), part);
+    }
+    assert.equal(AID_TEXT.lastYear(live), String(hiv.years.at(-1)! + 1));
+    assert.notDeepEqual(aidSections(live), aidSections(hiv));
 });

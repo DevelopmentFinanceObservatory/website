@@ -28,6 +28,12 @@ html {
     // What shows behind the safe areas and on overscroll.
     background-color: var(--color-bg);
 
+    // Every scroll region inherits this, so a bar shows wherever content
+    // overflows. A region that pans by drag hides its own bar. The thumb
+    // keeps 3:1 contrast (WCAG non-text) against --color-bg and
+    // --color-popup, which show through the transparent track.
+    scrollbar-color: var(--color-stone-hover) transparent;
+
     @include breakpoint(tablet) {
         font-size: vw($browser-context, tablet);
     }
@@ -53,13 +59,18 @@ main {
 body {
     font-family: var(--font-outfit);
     background-color: var(--color-bg);
+
+    // On body alone, so it passes to the viewport. Set on html as well,
+    // html's value would win, and a dialog's scroll lock (overflow: hidden
+    // on body) would keep the page scrollbar while adding a margin in its
+    // place, shifting the page 15 px sideways.
+    overflow-x: clip;
 }
 
 html,
 body {
     -webkit-font-smoothing: subpixel-antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: clip;
 }
 
 * {
@@ -70,11 +81,6 @@ body {
     -webkit-text-size-adjust: none;
     text-size-adjust: none;
     box-sizing: border-box;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-        display: none;
-    }
 
     &:focus {
         outline: none;

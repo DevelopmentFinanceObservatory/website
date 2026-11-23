@@ -213,3 +213,16 @@
 .cardMenuDanger {
     color: var(--color-red);
 }
+
+// The card's Change unit panel (UnitPanel): the clarify picker's box, on
+// white and lifted as a dragged card is, beside the card.
+.unitPanel {
+    @include popup-motion;
+
+    z-index: $z-header;
+    width: rem(288);
+    max-width: calc(100vw - #{rem(32)});
+    max-height: var(--radix-popover-content-available-height);
+    background-color: var(--color-white);
+    box-shadow: 0 rem(14) rem(30) rgb(28 27 26 / 14%);
+}

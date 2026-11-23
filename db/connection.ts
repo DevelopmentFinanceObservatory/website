@@ -204,7 +204,7 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
 
 /**
  * Builds a runtime `pg.Pool`, shared by src/lib/db/index.ts, the export
- * Job (db/export-events.ts) and db/test/runtime-pool.test.ts so all
+ * Job's pools (exportPool in db/bounded.ts) and db/test/runtime-pool.test.ts so all
  * exercise the same construction path. Picks the pool kind from `isCloudSqlConfigured` alone -- a
  * non-throwing check -- rather than the full, throwing
  * `resolveRuntimeConnection`, because this must never throw when called at
@@ -218,8 +218,8 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
  *   only fails to connect with it later.
  *
  * `sizing` overrides the pool size and adds timeouts: src/lib/db/index.ts's
- * counter pool gives up fast, and the export Job's pool holds one
- * connection with a 5-minute `statement_timeout`.
+ * counter pool gives up fast, and each export Job pool holds one
+ * connection whose every statement is bounded on both sides.
  *
  * Every pool gets an `'error'` listener. pg-pool emits `'error'` when an
  * idle client fails (Cloud SQL or a proxy dropping the connection), and an

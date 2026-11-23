@@ -1,0 +1,132 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The unit choice: chips, the open chip's list under them, then Send and
+// Skip. The list is the plan ledger's radio list (PlanLedger.module.scss
+// `.options`); the chips are the follow-up chip (ChatPanel.module.scss
+// `.followupChip`) in charcoal with a chevron.
+.choice {
+    @include flex(column, flex-start, stretch);
+
+    min-width: 0;
+}
+
+.more {
+    @include flex(column, flex-start, stretch);
+
+    margin-bottom: rem(20);
+}
+
+.chips {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(4);
+}
+
+.chips .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: rem(5);
+    padding-inline: rem(9);
+    color: var(--color-charcoal);
+    white-space: nowrap;
+
+    &[aria-expanded="true"] {
+        border-color: var(--color-charcoal);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+// The 20px icon grid drawn at 11px puts the glyph near 7px.
+.chip .chevron {
+    width: rem(11);
+    height: rem(11);
+    color: var(--color-stone);
+    transition: rotate 0.3s $ease-custom;
+
+    .chip[aria-expanded="true"] & {
+        rotate: 180deg;
+    }
+}
+
+.row {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+
+// The rows under a filter field scroll, about six at a time.
+.scroll {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(2);
+    max-height: rem(157);
+    overflow-y: auto;
+    scrollbar-color: var(--color-stone-light) transparent;
+    scrollbar-width: thin;
+}
+
+// Indented to the row labels, past the radio.
+.filter {
+    @include font-size(11px, 1.34);
+
+    width: 100%;
+    padding: rem(6) rem(6) rem(6) rem(26);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    letter-spacing: -0.031em;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--color-net-light);
+    outline: none;
+
+    &::placeholder {
+        color: var(--color-stone-light);
+    }
+}
+
+.none {
+    @include font-size(11px, 1.34);
+
+    padding: rem(6) rem(6) rem(6) rem(26);
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
+    letter-spacing: -0.031em;
+}
+
+// "Change to any currency" takes the plan card's underlined link treatment.
+.all {
+    @include font-size(11px, 1.3);
+
+    align-self: flex-start;
+    margin: rem(2) rem(6) rem(6) rem(26);
+    padding: 0;
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    letter-spacing: -0.031em;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s;
+
+    &:hover {
+        opacity: 0.6;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.foot {
+    @include flex(row, flex-start, center);
+
+    gap: rem(10);
+}

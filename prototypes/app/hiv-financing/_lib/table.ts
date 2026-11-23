@@ -1,8 +1,9 @@
 // The country table's rows, their sort, and the CSV download of them.
-import type { Country, ProviderKey } from '../_data/types.ts';
+import type { ProviderKey } from '../_data/types.ts';
 
 import { mixPercents, roundDeaths } from './format.ts';
 import { aidPerPerson, gfMultiFlag, lastAid, lastShares } from './summary.ts';
+import type { UnaidsCountry } from './unaids.ts';
 
 export type TableRow = {
     iso3: string;
@@ -11,14 +12,14 @@ export type TableRow = {
     aid: number;
     /** last-year HIV aid by provider, in US dollars */
     byProvider: Record<ProviderKey, number>;
-    /** each provider's share of `aid`; all 0 where `aid` is 0 */
+    /** each provider's share of `aid`, all 0 where `aid` is 0 */
     shares: Record<ProviderKey, number>;
     /** `shares` as printed: whole percentages summing to 100, "<1%" for a small share above 0 */
     mixPercents: Record<ProviderKey, string>;
     /** last-year Global Fund multi-disease grants under codes 12110 and 12250, in US dollars,
      *  outside `aid` */
     globalFundMulti: number;
-    /** the row understates the Global Fund: it gave multi-disease grants in the last year */
+    /** the Global Fund gave multi-disease grants in the last year, so the row understates it */
     flagged: boolean;
     plhiv: number | null;
     /** last-year aid per person living with HIV, in US dollars; null under 5,000 people */
@@ -29,7 +30,7 @@ export type TableRow = {
     deaths: number | null;
 };
 
-export const tableRows = (countries: readonly Country[]): TableRow[] =>
+export const tableRows = (countries: readonly UnaidsCountry[]): TableRow[] =>
     countries.map((country) => {
         const shares = lastShares(country.aid);
 

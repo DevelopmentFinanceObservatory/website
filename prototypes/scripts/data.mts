@@ -2,15 +2,16 @@
 // fetch.mts runs under Node, fetch.py under `uv run`, which installs the SDK
 // its inline metadata pins. The build runs no data step. The page reads the
 // JSON the step wrote, which git keeps, so CI needs no DFO credentials.
+// Arguments after the slug go to every step: `pnpm data <slug> --refresh`.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const APP = path.join(import.meta.dirname, '..');
-const slug = process.argv[2];
+const [, , slug, ...stepArgs] = process.argv;
 
 if (!slug) {
-    console.error('data: usage: pnpm data <slug>');
+    console.error('data: usage: pnpm data <slug> [step arguments]');
     process.exit(1);
 }
 
@@ -28,7 +29,10 @@ if (steps.length === 0) {
 for (const step of steps) {
     console.log(`data: running ${path.relative(APP, step.file)}`);
 
-    const run = spawnSync(step.command, [...step.args, step.file], { cwd: APP, stdio: 'inherit' });
+    const run = spawnSync(step.command, [...step.args, step.file, ...stepArgs], {
+        cwd: APP,
+        stdio: 'inherit',
+    });
 
     if (run.error) {
         console.error(`data: could not start ${step.command}: ${run.error.message}`);

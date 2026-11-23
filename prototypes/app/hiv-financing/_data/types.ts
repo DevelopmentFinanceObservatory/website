@@ -16,16 +16,22 @@ export type Country = {
     /** the name the page prints, such as "Côte d'Ivoire" or "DR Congo" */
     name: string;
     aid: ProviderSeries;
+    /** Global Fund disbursements to the country under codes 12110 and 12250, one per year of
+     *  `HivData.years`, 0 where none is recorded. These multi-disease grants carry HIV money
+     *  together with TB, malaria and health-system money, so only part of each is for HIV. */
+    globalFundMulti: number[];
+};
+
+/** A country's UNAIDS figures. They are not in hiv.json: the page derives them in the browser
+ *  from the refs in _data/live-refs.json, as `unaids_by_country` in fetch.py does, and
+ *  _data/unaids-fixture.json holds real rows with the figures fetch.py gives for them. */
+export type UnaidsFigures = {
     /** UNAIDS estimate of people living with HIV in the last year; null where none is held */
     plhiv: number | null;
     /** UNAIDS antiretroviral therapy coverage in the last year, as a percentage; null where none is held */
     art: number | null;
     /** UNAIDS estimate of AIDS-related deaths, one per year of `HivData.years`; null where none is held */
     deaths: (number | null)[];
-    /** Global Fund disbursements to the country under codes 12110 and 12250, one per year of
-     *  `HivData.years`, 0 where none is recorded. These multi-disease grants carry HIV money
-     *  together with TB, malaria and health-system money, so only part of each is for HIV. */
-    globalFundMulti: number[];
 };
 
 /** A provider inside "all other providers", with its money to countries in the first and
