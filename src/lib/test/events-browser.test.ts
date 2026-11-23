@@ -8,6 +8,7 @@ test('POST /api/events takes the browser names and refuses server events', async
     const cases: [unknown, boolean][] = [
         ['search.query', true],
         ['studio.download', true],
+        ['data.view', false],
         ['share.copy', true],
         ['share.open', false],
         ['auth.signin', false],

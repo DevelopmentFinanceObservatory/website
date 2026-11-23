@@ -29,15 +29,18 @@ const visitorCountry = (headers: Headers | null): string | null => {
  * $raw_user_agent is the request's User-Agent, which PostHog's bot filter
  * reads. country is the visitor's country from Cloudflare. Every event sets
  * $geoip_disable, since PostHog would otherwise locate the server, and no
- * event carries the visitor's IP. An event with no browser request behind
- * it (who.headers null) has no user agent and a null country. Event props
- * cannot set PostHog's `$` properties.
+ * event carries the visitor's IP. data.view leaves out `caller`, a digest of
+ * the visitor's address that stays in the events table and the export. An
+ * event with no browser request behind it (who.headers null) has no user agent
+ * and a null country. Event props cannot set PostHog's `$` properties.
  */
 export const sendEventToPosthog = async (name: EventName, props: EventProps, who: Who) => {
     const person = who.visitorId ?? who.userId;
     const userAgent = who.headers?.get('user-agent');
     const ownProps = Object.fromEntries(
-        Object.entries(props).filter(([key]) => !key.startsWith('$')),
+        Object.entries(props).filter(
+            ([key]) => !key.startsWith('$') && !(name === 'data.view' && key === 'caller'),
+        ),
     );
 
     const response = await fetch(`${process.env.POSTHOG_HOST}/i/v0/e/`, {

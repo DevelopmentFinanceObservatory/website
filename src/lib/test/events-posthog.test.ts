@@ -159,3 +159,21 @@ test('a non-ok answer throws so track() can log it', async () => {
         /PostHog answered 500/,
     );
 });
+
+test('data.view leaves the caller digest out of the forward', async () => {
+    const captured: Captured[] = [];
+    stubFetch(200, captured);
+    const props = {
+        specIds: ['spec_a'],
+        via: 'share',
+        caller: 'ip:0123456789abcdef0123456789abcdef',
+    };
+
+    await sendEventToPosthog('data.view', props, { page: null, headers: null });
+    await sendEventToPosthog('search.query', props, { page: null, headers: null });
+
+    const [view, other] = captured.map(({ body }) => body.properties as Record<string, unknown>);
+    assert.deepEqual(view.specIds, ['spec_a']);
+    assert.equal('caller' in view, false);
+    assert.equal(other.caller, props.caller);
+});
