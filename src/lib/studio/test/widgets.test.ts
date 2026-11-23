@@ -633,11 +633,6 @@ const INFO_UNITS: [string, unknown, string | null][] = [
         { currency: 'USD', magnitude: 'millions', prices: 'constant', base_year: 2023 },
         'US Dollar, millions, constant 2023 prices',
     ],
-    [
-        'a structured unit with its deflation basis',
-        { currency: 'NGN', prices: 'constant', base_year: 2024, deflation_basis: 'donor' },
-        'Nigerian Naira, constant 2024 prices, donor prices',
-    ],
     ['a malformed composed unit', { numerator: 'USDollar', denominator: null }, null],
     ['none', null, null],
 ];

@@ -1134,7 +1134,7 @@ test('a composed unit reads its sides, and one unit over itself reads Ratio', ()
         ],
         [
             { numerator: { ...usd, prices: 'constant', base_year: 2021 }, denominator: usd },
-            'US dollars, constant 2021 prices per US dollars',
+            'US dollars (constant 2021 prices) per US dollars',
         ],
         [
             {
@@ -1163,7 +1163,7 @@ test('a composed unit reads its sides, and one unit over itself reads Ratio', ()
                     deflation_basis: 'recipient',
                 },
             },
-            'Nigerian naira, constant 2024 prices, donor prices per Nigerian naira, constant 2024 prices, recipient prices',
+            'Nigerian naira (constant 2024 prices, donor prices) per Nigerian naira (constant 2024 prices, recipient prices)',
         ],
         [
             { numerator: usd, denominator: { stat_var: 'Count_Person', label: 'population' } },
@@ -1179,7 +1179,7 @@ test('a composed unit reads its sides, and one unit over itself reads Ratio', ()
         describedPanel(described(vectorInput('description-unit-variable-side.json'))).rows.find(
             (row) => row.label === 'Unit',
         )?.value,
-        'US dollars, current prices per population',
+        'US dollars (current prices) per population',
     );
 });
 

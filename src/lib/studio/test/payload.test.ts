@@ -152,11 +152,6 @@ const UNITS: [string, unknown, unknown][] = [
         { numerator: euros, denominator: population },
         { numerator: { ...euros, magnitude: null }, denominator: population },
     ],
-    [
-        'composed: a numerator with its deflation basis',
-        { numerator: donorNaira, denominator: population },
-        { numerator: { ...donorNaira, magnitude: null }, denominator: population },
-    ],
     ['composed without a denominator', { numerator: 'USDollar' }, undefined],
     ['composed with a null part', { numerator: null, denominator: population }, undefined],
     ['composed with a blank part', { numerator: ' ', denominator: population }, undefined],

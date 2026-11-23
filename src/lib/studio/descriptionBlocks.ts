@@ -183,21 +183,11 @@ const sameSide = (left: UnitSide, right: UnitSide): boolean => {
     return identity(left) === identity(right);
 };
 
-const sideWords = (side: UnitSide): string => ('stat_var' in side ? side.label : unitWords(side));
-
-/** A unit in words: its label with its price basis ("US dollars, constant
- *  2021 prices") and whose prices deflated it where the unit says ("Nigerian
- *  naira, constant 2024 prices, donor prices"), a composed unit's sides ("US
- *  dollars per population"), or "Ratio" for a unit divided by itself. */
-export const unitWords = (unit: DescriptionUnit): string => {
-    if ('numerator' in unit) {
-        return sameSide(unit.numerator, unit.denominator)
-            ? 'Ratio'
-            : `${sideWords(unit.numerator)} per ${sideWords(unit.denominator)}`;
-    }
-
+// A unit's price basis and whose prices deflated it, where the unit says:
+// "constant 2024 prices, donor prices".
+const priceWords = (unit: SimpleUnit): string | null => {
     if (!unit.prices) {
-        return unit.label;
+        return null;
     }
 
     const prices =
@@ -205,9 +195,36 @@ export const unitWords = (unit: DescriptionUnit): string => {
             ? `constant ${unit.base_year} prices`
             : `${unit.prices} prices`;
 
-    return [unit.label, prices, unit.deflation_basis && `${unit.deflation_basis} prices`]
-        .filter(Boolean)
-        .join(', ');
+    return unit.deflation_basis ? `${prices}, ${unit.deflation_basis} prices` : prices;
+};
+
+// One side of a composed unit, its price basis in brackets so the words stay
+// with their side: "Nigerian naira (constant 2024 prices, donor prices)".
+const sideWords = (side: UnitSide): string => {
+    if ('stat_var' in side) {
+        return side.label;
+    }
+
+    const prices = priceWords(side);
+
+    return prices ? `${side.label} (${prices})` : side.label;
+};
+
+/** A unit in words: its label with its price basis ("US dollars, constant
+ *  2021 prices") and whose prices deflated it where the unit says ("Nigerian
+ *  naira, constant 2024 prices, donor prices"), a composed unit's sides with
+ *  each price basis in brackets ("US dollars (constant 2021 prices) per
+ *  population"), or "Ratio" for a unit divided by itself. */
+export const unitWords = (unit: DescriptionUnit): string => {
+    if ('numerator' in unit) {
+        return sameSide(unit.numerator, unit.denominator)
+            ? 'Ratio'
+            : `${sideWords(unit.numerator)} per ${sideWords(unit.denominator)}`;
+    }
+
+    const prices = priceWords(unit);
+
+    return prices ? `${unit.label}, ${prices}` : unit.label;
 };
 
 /** The licence of the description's source at `index` in words: as

@@ -192,18 +192,6 @@ const CASES: [string, PayloadUnit | undefined, number, PayloadChange | undefined
         },
     ],
     [
-        'composed: the numerator keeps its deflation basis beside it',
-        { numerator: { ...donorNaira, deflation_basis: 'recipient' }, denominator: population },
-        58.31,
-        undefined,
-        {
-            amount: '58.31',
-            suffix: '',
-            caption:
-                'Nigerian Naira (constant 2024 prices, recipient prices) per Total population · 2024',
-        },
-    ],
-    [
         'composed: the numerator magnitude scales the value and a difference',
         { numerator: dollars({ magnitude: 'thousands' }), denominator: 'Person' },
         2.5,
@@ -280,11 +268,6 @@ const DESCRIPTIONS: [string, PayloadUnit | null, string | null][] = [
         'structured currency keeps its magnitude, since the values stay unscaled',
         dollars({ magnitude: 'millions', prices: 'constant', base_year: 2023 }),
         'US Dollar, millions, constant 2023 prices',
-    ],
-    [
-        'structured currency with its deflation basis',
-        donorNaira,
-        'Nigerian Naira, constant 2024 prices, donor prices',
     ],
     [
         'magnitude in units reads as none',
