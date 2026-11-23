@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    CANVAS_EDIT_TURN_WAIT_MS,
     createCanvasEdits,
+    editedCanvasCards,
     pinEdit,
+    refusedRemoves,
     shownCanvas,
     shownPins,
     withCardsSent,
@@ -186,6 +189,64 @@ test('an edit refused as busy or briefly unavailable is sent again after the wai
     }
 });
 
+test("a busy edit is sent again while the page's own turn runs, then gets the busy sends left", async () => {
+    const busy = new CompositionRefusal(
+        409,
+        {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'busy',
+            retry_after_seconds: 4,
+        },
+        null,
+    );
+    // [name, busy answers before the manifest (Infinity: never answered),
+    //  sends during the turn, the edit lands]
+    const cases: [string, number, number, boolean][] = [
+        ['a long turn, then answered', 12, 10, true],
+        // The turn ends after 3 sends: 5 more busy sends, then the rollback.
+        ['the turn ends, still busy', Infinity, 3, false],
+        // A turn that outlasts CANVAS_EDIT_TURN_WAIT_MS stops holding the edit.
+        ['the turn never ends', Infinity, Infinity, false],
+    ];
+
+    for (const [name, busyAnswers, turnSends, lands] of cases) {
+        let clock = 0;
+        let sends = 0;
+        const failures: unknown[] = [];
+        const edits = createCanvasEdits({
+            mutate: async () => {
+                sends += 1;
+
+                if (sends <= busyAnswers) {
+                    throw busy;
+                }
+
+                return manifest;
+            },
+            onManifest: () => {},
+            onFailure: (_operations, error) => failures.push(error),
+            sleep: async (ms) => {
+                assert.equal(ms, 4000, name);
+                clock += ms;
+            },
+            ownTurn: () => sends <= turnSends,
+            now: () => clock,
+        });
+
+        assert.equal(await edits.enqueue('session', remove), lands, name);
+        assert.deepEqual(failures, lands ? [] : [busy], name);
+
+        if (!lands) {
+            const turnBusy = Number.isFinite(turnSends)
+                ? turnSends
+                : CANVAS_EDIT_TURN_WAIT_MS / 4000;
+
+            assert.equal(sends, turnBusy + 5, name);
+        }
+    }
+});
+
 test('leaving the conversation ends the wait of an edit to be sent again', async () => {
     const waking = deferred<void>();
     const calls: string[] = [];
@@ -264,6 +325,62 @@ test("a harness card's add or remove shows at once, and a refusal rolls it back"
         shown: ['cmp_2', 'cmp_3'],
         hidden: ['cmp_1'],
     });
+});
+
+test('only a "no block" refusal names cards the harness does not hold', () => {
+    const operations: MutationOperation[] = [...remove, { op: 'pin', component_id: 'cmp_2' }];
+    const noBlock = new CompositionRefusal(
+        404,
+        {
+            error: 'not_found',
+            retry: 'do_not_retry',
+            detail: 'no block',
+            pointer: '/operations/component_id',
+        },
+        null,
+    );
+    const busy = new CompositionRefusal(
+        409,
+        { error: 'transient_unavailable', retry: 'retry_after_delay', detail: 'busy' },
+        null,
+    );
+
+    assert.deepEqual(refusedRemoves(operations, noBlock), ['cmp_1']);
+
+    // Any other failure only rolls the edit back.
+    for (const failure of [busy, new Error('offline'), undefined]) {
+        assert.deepEqual(refusedRemoves(operations, failure), []);
+    }
+});
+
+test('with no manifest baseline, the edits show on the cards the page draws at each render', () => {
+    const widgets = [{ id: 'cmp_1' }, { id: 'cmp_2' }];
+    // The page's rule for a canvas: the held cards, or with none every card.
+    const visible = (canvas: CanvasBaseline | null) =>
+        canvas ? widgets.filter(({ id }) => canvas.ids.includes(id)) : widgets;
+    const ids = () => editedCanvasCards(null, withCardsSent(new Map(), remove), visible);
+
+    assert.deepEqual(
+        ids().map(({ id }) => id),
+        ['cmp_2'],
+    );
+
+    // A running turn draws a card while the remove is in flight.
+    widgets.push({ id: 'cmp_3' });
+    assert.deepEqual(
+        ids().map(({ id }) => id),
+        ['cmp_2', 'cmp_3'],
+    );
+
+    // With a baseline the manifest decides, and with nothing in flight the
+    // page's own rule does.
+    const canvas: CanvasBaseline = { compositionId: 'cps_1', revision: 1, ids: ['cmp_1', 'cmp_3'] };
+
+    assert.deepEqual(
+        editedCanvasCards(canvas, withCardsSent(new Map(), remove), visible).map(({ id }) => id),
+        ['cmp_3'],
+    );
+    assert.equal(editedCanvasCards(null, new Map(), visible), widgets);
 });
 
 test('pinning sends pin, and unpinning a pinned card sends unpin', () => {

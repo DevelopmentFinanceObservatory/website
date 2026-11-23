@@ -1,25 +1,36 @@
 import type { CanvasBaseline } from './composition.ts';
-import { abortableSleep, CompositionRefusal } from './studioClient.ts';
+import { abortableSleep, CompositionRefusal, isNoBlock } from './studioClient.ts';
 import type { CompositionManifest, MutationOperation } from './wire.ts';
 
 /** How many times a canvas edit is sent while the answer is 503
  *  `transient_unavailable`. */
 export const CANVAS_EDIT_ATTEMPTS = 3;
 
-/** How many times a canvas edit is sent while the answer is a busy 409.
- *  Each send counts against the proxy's per-address rate limit. */
+/** How many times a canvas edit is sent while the answer is a busy 409 and
+ *  the page has no turn running. Each send counts against the proxy's
+ *  per-address rate limit. */
 export const CANVAS_EDIT_BUSY_ATTEMPTS = 5;
+
+/** How long a canvas edit is sent again while the answer is a busy 409 and
+ *  the page's own turn holds the conversation, counted from its first send.
+ *  The harness stays busy for the whole turn. */
+export const CANVAS_EDIT_TURN_WAIT_MS = 180_000;
 
 /**
  * The seconds to wait before sending a canvas edit again after `failure`,
  * the `attempt`-th answer with its status: another request holds the
- * conversation (409 `transient_unavailable`, up to CANVAS_EDIT_BUSY_ATTEMPTS
- * sends), or the harness or the proxy is briefly unavailable (503
- * `transient_unavailable`, up to CANVAS_EDIT_ATTEMPTS sends). At least a
- * second. Null for any other failure, and once the sends run out, which is
- * final.
+ * conversation (409 `transient_unavailable`, sent again for as long as
+ * `ownTurn` says the page's own turn holds it, then up to
+ * CANVAS_EDIT_BUSY_ATTEMPTS sends), or the harness or the proxy is briefly
+ * unavailable (503 `transient_unavailable`, up to CANVAS_EDIT_ATTEMPTS
+ * sends). At least a second, and at least the wait the refusal names. Null
+ * for any other failure, and once the sends run out, which is final.
  */
-export const canvasEditRetryAfter = (failure: unknown, attempt: number): number | null => {
+export const canvasEditRetryAfter = (
+    failure: unknown,
+    attempt: number,
+    ownTurn = false,
+): number | null => {
     if (!(failure instanceof CompositionRefusal)) {
         return null;
     }
@@ -29,7 +40,7 @@ export const canvasEditRetryAfter = (failure: unknown, attempt: number): number 
         error?.error === 'transient_unavailable' || proxy?.code === 'transient_unavailable';
     const retried =
         transient &&
-        ((status === 409 && attempt < CANVAS_EDIT_BUSY_ATTEMPTS) ||
+        ((status === 409 && (ownTurn || attempt < CANVAS_EDIT_BUSY_ATTEMPTS)) ||
             (status === 503 && attempt < CANVAS_EDIT_ATTEMPTS));
 
     return retried
@@ -37,11 +48,29 @@ export const canvasEditRetryAfter = (failure: unknown, attempt: number): number 
         : null;
 };
 
+/** The cards an edit the harness refused says it holds no block for: the
+ *  removes of a "no block" refusal (isNoBlock), which the harness has taken
+ *  off already or never held. Empty for any other failure, which only rolls
+ *  the edit back. */
+export const refusedRemoves = (
+    operations: readonly MutationOperation[],
+    failure: unknown,
+): string[] =>
+    failure instanceof CompositionRefusal && isNoBlock(failure)
+        ? operations.flatMap((operation) =>
+              operation.op === 'remove' ? [operation.component_id] : [],
+          )
+        : [];
+
 /** Serialise each session's canvas edits, so a Remove then an Add land in
  *  order. An edit refused as busy or briefly unavailable
  *  (canvasEditRetryAfter) is sent again after the wait the refusal names,
  *  and holds the edits behind it meanwhile. Busy and unavailable answers
- *  count apart, so a long busy spell leaves the 503 sends intact. `reset`
+ *  count apart, so a long busy spell leaves the 503 sends intact. A busy
+ *  answer while `ownTurn` says the page's turn is running, within
+ *  CANVAS_EDIT_TURN_WAIT_MS of the edit's first send (by `now`), counts
+ *  toward no limit, so an edit made during a long turn lands once the turn
+ *  ends. `reset`
  *  drops the answers of edits sent before it, and ends the wait of an edit
  *  waiting to be sent again, which then stops. `enqueue` resolves true when
  *  the harness answered the edit with a manifest. */
@@ -50,6 +79,8 @@ export const createCanvasEdits = ({
     onManifest,
     onFailure,
     sleep = abortableSleep,
+    ownTurn = () => false,
+    now = Date.now,
 }: {
     mutate: (
         session: string,
@@ -58,6 +89,8 @@ export const createCanvasEdits = ({
     onManifest: (manifest: CompositionManifest) => void;
     onFailure: (operations: MutationOperation[], error: unknown) => void;
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+    ownTurn?: () => boolean;
+    now?: () => number;
 }) => {
     let generation = 0;
     // Aborted by `reset`, which ends the waits of the edits sent before it.
@@ -76,6 +109,7 @@ export const createCanvasEdits = ({
             const chain = (chains.get(session) ?? Promise.resolve()).then(async () => {
                 // The sends answered so far, by status.
                 const answered = new Map<number, number>();
+                const started = now();
 
                 for (;;) {
                     let failure: unknown;
@@ -95,11 +129,13 @@ export const createCanvasEdits = ({
                     }
 
                     const status = failure instanceof CompositionRefusal ? failure.status : 0;
-                    const attempt = (answered.get(status) ?? 0) + 1;
+                    const turnBusy =
+                        status === 409 && ownTurn() && now() - started < CANVAS_EDIT_TURN_WAIT_MS;
+                    const attempt = (answered.get(status) ?? 0) + (turnBusy ? 0 : 1);
 
                     answered.set(status, attempt);
 
-                    const wait = canvasEditRetryAfter(failure, attempt);
+                    const wait = canvasEditRetryAfter(failure, attempt, turnBusy);
 
                     if (wait !== null && queuedGeneration === generation) {
                         const woke = await sleep(wait * 1000, signal).then(
@@ -259,6 +295,27 @@ export const shownCanvas = (
 
     return { ...base, ids: [...kept, ...added] };
 };
+
+/** The cards the page shows with the user's unanswered adds and removes
+ *  (shownCanvas), where `visible` draws the cards a canvas shows
+ *  (canvasWidgetsOf). A page with no manifest baseline overlays the edits
+ *  on the cards it draws without one at each call, so a card a running turn
+ *  draws after an edit went out shows, and only the cards the edits name
+ *  change. */
+export const editedCanvasCards = <Card extends { id: string }>(
+    canvas: CanvasBaseline | null,
+    pending: PendingCards,
+    visible: (canvas: CanvasBaseline | null) => Card[],
+): Card[] =>
+    canvas || pending.size === 0
+        ? visible(shownCanvas(canvas, pending))
+        : visible(
+              shownCanvas(
+                  null,
+                  pending,
+                  visible(null).map(({ id }) => id),
+              ),
+          );
 
 /**
  * The harness cards the page shows pinned: the manifest's pins (`canvas`,

@@ -39,7 +39,7 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
-import { pinEdit } from '@/lib/studio/canvasEdits';
+import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
@@ -567,7 +567,9 @@ const Studio = ({
     // through untouched.
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
-        doc.visibleWidgets(chat.widgets, chat.canvas),
+        editedCanvasCards(chat.canvas, chat.pendingCards, (canvas) =>
+            doc.visibleWidgets(chat.widgets, canvas),
+        ),
     );
 
     useLayoutEffect(() => {

@@ -33,6 +33,7 @@ import {
 } from '@/lib/studio/chatLine';
 import {
     createCanvasEdits,
+    refusedRemoves,
     shownCanvas,
     shownPins,
     withCardsSent,
@@ -646,18 +647,14 @@ export const useChat = (
     // or for a refused edit the one held before it (shownPins).
     const [pendingPins, setPendingPins] = useState<PendingPins>(() => new Map());
     // The add and remove edits the harness has not answered yet, which show
-    // at once the same way (shownCanvas). The ref lets leaveSession keep
-    // them.
+    // at once the same way (editedCanvasCards). The ref lets leaveSession
+    // keep them.
     const [pendingCards, setPendingCardsState] = useState<PendingCards>(() => new Map());
     const pendingCardsRef = useRef<PendingCards>(pendingCards);
     const setPendingCards = useCallback((update: (prev: PendingCards) => PendingCards) => {
         pendingCardsRef.current = update(pendingCardsRef.current);
         setPendingCardsState(pendingCardsRef.current);
     }, []);
-    // The ids of the cards the page showed when it sent the first add or
-    // remove still in flight with no manifest baseline, on which shownCanvas
-    // overlays the edits.
-    const [editedPageIds, setEditedPageIds] = useState<readonly string[]>([]);
     const shownCardsRef = useRef(shownCards);
 
     useEffect(() => {
@@ -766,7 +763,7 @@ export const useChat = (
     // Add), sent to the harness, whose manifest then decides whether the
     // card shows and whether it is pinned, so the canvas the agent reads
     // matches this one. Nothing to send before the conversation has a
-    // session. The edit shows at once (shownPins, shownCanvas) until the
+    // session. The edit shows at once (shownPins, editedCanvasCards) until the
     // harness answers; a refusal rolls it back, and one saying the session is
     // gone keeps it, as the cards turn local (leaveSession). A refusal as
     // busy or briefly unavailable is sent again (createCanvasEdits).
@@ -781,10 +778,6 @@ export const useChat = (
             }
 
             const generation = generationRef.current;
-
-            if (!canvasRef.current && pendingCardsRef.current.size === 0) {
-                setEditedPageIds(shownCardsRef.current?.() ?? []);
-            }
 
             setPendingPins((prev) => withPinsSent(prev, operations));
             setPendingCards((prev) => withCardsSent(prev, operations));
@@ -803,6 +796,9 @@ export const useChat = (
 
             canvasEditsRef.current ??= createCanvasEdits({
                 mutate: mutateComposition,
+                // A busy answer while this page's turn runs is sent again
+                // until the turn ends.
+                ownTurn: () => inFlightRef.current > 0,
                 onManifest: applyManifest,
                 onFailure: (failedOperations, error) => {
                     editFailuresRef.current.set(failedOperations, error);
@@ -838,34 +834,36 @@ export const useChat = (
                     return;
                 }
 
-                const removed = operations
-                    .filter((operation) => operation.op === 'remove')
-                    .map((operation) => operation.component_id);
+                const removed = refusedRemoves(operations, error);
+
+                if (removed.length === 0) {
+                    if (!(refusal && isNoBlock(refusal))) {
+                        console.warn(
+                            'Studio: this canvas edit did not reach the harness',
+                            operations,
+                            error,
+                        );
+                    }
+
+                    return;
+                }
 
                 // A remove refused for a card the manifest held: the harness
                 // has taken it off already, so it goes from the baseline and
                 // the next manifest is taken.
-                if (refusal && isNoBlock(refusal)) {
-                    const next = withoutRemovedCards(canvasRef.current, removed);
+                const next = withoutRemovedCards(canvasRef.current, removed);
 
-                    if (next) {
-                        canvasRef.current = next;
-                        setCanvas(next);
+                if (next) {
+                    canvasRef.current = next;
+                    setCanvas(next);
 
-                        return;
-                    }
-                } else {
-                    console.warn(
-                        'Studio: this canvas edit did not reach the harness',
-                        operations,
-                        error,
-                    );
+                    return;
                 }
 
-                // A legacy canvas learns which removes the harness refused: a
-                // card it never held, such as a fork's inherited card, then
-                // stays on the page as a local card (createLegacyCanvas's
-                // `unheld`).
+                // A legacy canvas learns which removes the harness holds no
+                // block for: a card it never held, such as a fork's inherited
+                // card, then stays on the page as a local card
+                // (createLegacyCanvas's `unheld`).
                 for (const id of removed) {
                     legacy?.unheld(id);
                 }
@@ -876,11 +874,6 @@ export const useChat = (
     // The harness cards the page shows pinned, or null while the canvas
     // holds no manifest's pins and the save's pins stand.
     const pins = useMemo(() => shownPins(canvas, pendingPins), [canvas, pendingPins]);
-    // The canvas with the user's unanswered adds and removes showing.
-    const shown = useMemo(
-        () => shownCanvas(canvas, pendingCards, editedPageIds),
-        [canvas, pendingCards, editedPageIds],
-    );
     // Put a plan card up as the pending pause, whether from the stream or
     // from a refusal that answered a stale card with the current one.
     const offerPlan = useCallback((plan: PlanState) => {
@@ -2740,7 +2733,10 @@ export const useChat = (
         droppedRefunds,
         localCards,
         syncCanvas,
-        canvas: shown,
+        // The harness's manifest as the page holds it, and the user's
+        // unanswered adds and removes, which editedCanvasCards shows on it.
+        canvas,
+        pendingCards,
         pins,
         send,
         unqueue,
