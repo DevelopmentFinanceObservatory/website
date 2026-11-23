@@ -37,10 +37,18 @@ for (const kind of kinds) {
         assert.deepEqual(shared.componentRefs, []);
     });
 
-    test(`pruneForShare: a ${kind} share keeps no field outside SavedConversation`, () => {
-        const sent = { ...saved, padding: 'x'.repeat(1024) } as SavedConversation;
+    test(`pruneForShare: a ${kind} share keeps no field outside SavedConversation, nor the owner's save order`, () => {
+        const sent = {
+            ...saved,
+            padding: 'x'.repeat(1024),
+            saveWriter: 'writer_owner',
+            saveSeq: 7,
+        } as SavedConversation;
+        const shared = pruneForShare(sent, kind, 'note-1');
 
-        assert.equal('padding' in pruneForShare(sent, kind, 'note-1'), false);
+        assert.equal('padding' in shared, false);
+        assert.equal('saveWriter' in shared, false);
+        assert.equal('saveSeq' in shared, false);
     });
 }
 

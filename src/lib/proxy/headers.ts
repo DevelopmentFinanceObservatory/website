@@ -91,6 +91,16 @@ export const PRESENTATION_HEADERS: HeaderPass = {
     ],
 };
 
+/**
+ * The Studio harness's routes pass one response header beyond the defaults,
+ * x-dfo-turn-index, the index of the turn each stream carries, which the page
+ * keys its transcript on.
+ */
+export const STUDIO_HEADERS: HeaderPass = {
+    request: [],
+    response: ['x-dfo-turn-index'],
+};
+
 // Copy the named headers present on `source` onto `into`.
 export const pick = (source: Headers, names: readonly string[], into: Headers): void => {
     for (const name of names) {

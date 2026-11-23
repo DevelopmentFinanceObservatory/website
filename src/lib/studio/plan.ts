@@ -5,6 +5,7 @@
  * the approved plan the answer keeps.
  */
 
+import { isCountChoice } from './chips.ts';
 import type { Clarify } from './clarify';
 import type { StreamRefusal } from './studioClient';
 import { servesUnit, unitChanged, unitText } from './unitChoice.ts';
@@ -218,9 +219,15 @@ export const replansChoice = (choiceId: string): boolean =>
     isPlannerChoice(choiceId) && !choiceId.startsWith(UNIT_CHOICE_PREFIX);
 
 /** The chat line while a switch to `label` runs: "Switching to net
- *  disbursements", or "Replanning with top 10" when the switch replans. */
-export const switchLine = (label: string | null, replans: boolean): string => {
-    const [verb, link] = replans ? ['Replanning', 'with'] : ['Switching', 'to'];
+ *  disbursements", "Counting as net disbursements" on a count row, as its
+ *  chip words it (chipLine), or "Replanning with top 10" when the switch
+ *  replans (replansChoice). */
+export const switchLine = (choiceId: string, label: string | null): string => {
+    const [verb, link] = replansChoice(choiceId)
+        ? ['Replanning', 'with']
+        : isCountChoice(choiceId)
+          ? ['Counting', 'as']
+          : ['Switching', 'to'];
 
     return label ? `${verb} ${link} ${label}` : verb;
 };
@@ -832,15 +839,19 @@ export const approvedFromFrame = (frame: PlanApproved): ApprovedPlan => ({
     caveats: frame.caveats ?? [],
 });
 
-/** The transcript with `plan` kept on the reply the approve resumed: the
- *  last bot message, which the resumed stream writes into. */
+/** The transcript with `plan` kept on the reply the approve resumed, which
+ *  the resumed stream writes into: the message at `at` (pageTurnReplyAt),
+ *  by default the last. */
 export const withApprovedPlan = <TMessage extends { role: string }>(
     messages: TMessage[],
     plan: ApprovedPlan,
+    at: number = messages.length - 1,
 ): TMessage[] => {
-    const last = messages.at(-1);
+    const reply = messages[at];
 
-    return last?.role === 'bot' ? [...messages.slice(0, -1), { ...last, plan }] : messages;
+    return reply?.role === 'bot'
+        ? messages.map((message, other) => (other === at ? { ...reply, plan } : message))
+        : messages;
 };
 
 // --- What the card and the modal read --------------------------------------
