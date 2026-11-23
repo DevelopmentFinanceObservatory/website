@@ -5,11 +5,19 @@ import { Writable } from 'node:stream';
 
 import type { Job, JobLoadMetadata, Table } from '@google-cloud/bigquery';
 
+/**
+ * A load job's `configuration.load`, its destination table aside: the keys
+ * the client takes beside it for the job itself, or as an alias, are left out.
+ */
+export type LoadConfiguration = Omit<
+    JobLoadMetadata,
+    'jobId' | 'jobPrefix' | 'location' | 'projectId' | 'reservation' | 'format'
+>;
+
 /** One load job's insert, its file still to be written to the stream loadUpload returns. */
 export type LoadRequest = {
     table: Table;
-    /** The job's `configuration.load`, its destination table aside. */
-    metadata: JobLoadMetadata;
+    metadata: LoadConfiguration;
     jobId: string;
     /** The client's request headers, its credentials among them. */
     headers: Headers;
@@ -85,7 +93,10 @@ export const loadUpload = ({ table, metadata, jobId, headers }: LoadRequest): Wr
         signal: controller.signal,
     });
     let job: Job | undefined;
-    const stopPolling = () => job?.removeAllListeners('complete').removeAllListeners('error');
+    // The client stops reading the job once it has no `complete` listener.
+    // Its `error` listener stays, since a read already in flight still
+    // emits `error`, which throws with no listener.
+    const stopPolling = () => job?.removeAllListeners('complete');
 
     const stream = new Writable({
         write(chunk: Buffer, _encoding, done) {
@@ -114,6 +125,11 @@ export const loadUpload = ({ table, metadata, jobId, headers }: LoadRequest): Wr
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.on('error', (error) => stream.destroy(error));
         response.on('end', () => {
+            // An upload destroyed before its answer ended has no job to report.
+            if (stream.destroyed) {
+                return;
+            }
+
             const body = Buffer.concat(chunks).toString('utf8');
             const status = response.statusCode ?? 0;
 

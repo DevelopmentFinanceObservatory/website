@@ -7,7 +7,6 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
     BigQuery,
     type Job,
-    type JobLoadMetadata,
     type Table,
     type TableField,
     type TableMetadata,
@@ -15,7 +14,7 @@ import {
 import type { Pool } from 'pg';
 
 import { buildRuntimePool } from './connection.ts';
-import { type LoadRequest, loadUpload, uploadUrl } from './load-upload.ts';
+import { type LoadConfiguration, type LoadRequest, loadUpload, uploadUrl } from './load-upload.ts';
 
 /**
  * The export Job's clients (db/export-events.ts), every call on them bounded
@@ -374,7 +373,7 @@ export const loadWithin = async ({
 }: {
     table: Table;
     file: string;
-    metadata: JobLoadMetadata;
+    metadata: LoadConfiguration;
     timeoutMs?: number;
     cancelTimeoutMs?: number;
     confirmTimeoutMs?: number;
@@ -449,10 +448,13 @@ export const loadWithin = async ({
                 return { outcome: 'replaced', late: null };
             }
 
+            // The upload's request is aborted, or with its job inserted, its
+            // reads of the job stop: the cancel and the reads below own it.
+            source.destroy();
+            upload.destroy();
+
             if (!inserted) {
                 aborted = true;
-                source.destroy();
-                upload.destroy();
 
                 // An incomplete request creates no job, so there is none to cancel.
                 if (!sourceEnded) {
@@ -569,7 +571,7 @@ export type ExportBigQuery = {
      */
     query<T>(sql: string, params?: Record<string, string>): Promise<T[]>;
     /** Loads `file` into `table` (loadWithin). Never rejects. */
-    load(table: string, file: string, metadata: JobLoadMetadata): Promise<Load>;
+    load(table: string, file: string, metadata: LoadConfiguration): Promise<Load>;
 };
 
 /**
