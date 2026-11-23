@@ -2,7 +2,7 @@
  * The web behind the About page's prose, the same field the brochure site at
  * developmentfinance.org runs. Framework-free on purpose: the
  * starter takes a host element and its canvas, runs its own rAF loop while
- * the host is on screen and the tab is visible, and returns the stop
+ * the net can be seen and the tab is visible, and returns the stop
  * function React's effect cleanup calls.
  *
  * Many small dots that link to whatever is near them, herded by ONE cursor
@@ -53,8 +53,9 @@ const TEXT = {
 
 /**
  * `watchEl` bounds where the net can be seen: the frame loop runs only while
- * it overlaps the viewport. The host cannot be watched itself, because it is
- * fixed and taller than the viewport, so it always intersects.
+ * it overlaps the viewport and `host` has a non-zero size. The host cannot be
+ * watched for intersection, because it is fixed and taller than the viewport,
+ * so it always intersects; below desktop CSS hides it, which stops the loop.
  */
 export const startTextNet = (
     host: HTMLElement,
@@ -85,25 +86,37 @@ export const startTextNet = (
         canvas.height = h;
     };
 
-    setSize();
+    const cursor = { x: 0, y: 0, tx: 0, ty: 0 };
+    const nodes: Node[] = Array.from({ length: TEXT.nodeCount }, () => ({
+        x: 0,
+        y: 0,
+        ox: 0,
+        oy: 0,
+        vx: 0,
+        vy: 0,
+        color: TEXT_COLORS[Math.floor(Math.random() * TEXT_COLORS.length)],
+    }));
 
-    const cursor = { x: w * 0.5, y: h * 0.5, tx: w * 0.5, ty: h * 0.5 };
-    const nodes: Node[] = [];
-
-    for (let index = 0; index < TEXT.nodeCount; index += 1) {
-        const x = rand(0, w);
-        const y = rand(0, h);
-
-        nodes.push({
-            x,
-            y,
-            ox: x,
-            oy: y,
-            vx: 0,
-            vy: 0,
-            color: TEXT_COLORS[Math.floor(Math.random() * TEXT_COLORS.length)],
+    // Spreads the nodes over the canvas and centres the cursor. Runs on the
+    // first size the host reports, so a host that starts hidden (below
+    // desktop) lays its net out when it first shows.
+    const scatter = () => {
+        nodes.forEach((node) => {
+            node.x = rand(0, w);
+            node.y = rand(0, h);
+            node.ox = node.x;
+            node.oy = node.y;
+            node.vx = 0;
+            node.vy = 0;
         });
-    }
+        cursor.x = w * 0.5;
+        cursor.y = h * 0.5;
+        cursor.tx = cursor.x;
+        cursor.ty = cursor.y;
+    };
+
+    setSize();
+    scatter();
 
     // A wandering figure-eight: three sine terms detune the loop so it never
     // repeats the same path twice.
@@ -228,8 +241,15 @@ export const startTextNet = (
     };
 
     const resize = () => {
+        // A hidden host keeps the last layout, so the net comes back as it
+        // left when the host shows again.
+        if (host.clientWidth === 0 || host.clientHeight === 0) {
+            return;
+        }
+
         if (w === 0 || h === 0) {
             setSize();
+            scatter();
 
             return;
         }
@@ -341,10 +361,15 @@ export const startTextNet = (
         });
     };
 
-    const stopLoop = runWhileSeen(watchEl, (now) => {
-        update(now);
-        draw();
-    });
+    const stopLoop = runWhileSeen(
+        watchEl,
+        (now) => {
+            update(now);
+            draw();
+        },
+        undefined,
+        host,
+    );
 
     return () => {
         stopLoop();

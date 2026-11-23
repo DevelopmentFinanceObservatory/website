@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
+import type { Writable } from 'node:stream';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import {
     BigQuery,
     type Job,
-    type JobLoadMetadata,
     type Table,
     type TableField,
     type TableMetadata,
@@ -14,6 +14,7 @@ import {
 import type { Pool } from 'pg';
 
 import { buildRuntimePool } from './connection.ts';
+import { type LoadConfiguration, type LoadRequest, loadUpload, uploadUrl } from './load-upload.ts';
 
 /**
  * The export Job's clients (db/export-events.ts), every call on them bounded
@@ -304,23 +305,34 @@ const cancelJob = async (job: Job, ms: number): Promise<{ answer: string; absent
 };
 
 /**
+ * The job `jobId` of `table`'s project and location, as BigQuery's own
+ * reference `project:location.job` (`bq show -j` takes it), within its
+ * sentence of a load's error.
+ */
+const jobName = (table: Table, jobId: string): string =>
+    `job ${table.dataset.projectId}:${table.location === undefined ? '' : `${table.location}.`}${jobId}`;
+
+/**
  * Loads `file` into `table` under a job id of its own, and resolves with
  * what BigQuery confirms the load left in the table (Load), read for that
  * job id in the table's location. It never rejects.
  *
- * The job's insert and its file go in one request, which BigQuery acts on
- * only once it has the whole body, and the body ends only once the file has
- * been read to its end. The client exposes no sign of what it has sent
- * before BigQuery answers, and it and the kernel take in a file of up to
- * about 512 KiB whole before the server reads any of it, the size set by the
- * socket buffers, so the read of such a file ends at once and says nothing
- * of the send. A request that never connected, or that BigQuery refused for
- * its caller, created no job either. So, with `kept` at once and no cancel:
+ * The job's insert and its file go in one request (`send`, loadUpload by
+ * default), which BigQuery acts on only once it has the whole body, and the
+ * body ends only once the file has been read to its end. Nothing shows what
+ * the request has sent before BigQuery answers, and the request and the
+ * kernel take in a file of up to about 512 KiB whole before the server reads
+ * any of it, the size set by the socket buffers, so the read of such a file
+ * ends at once and says nothing of the send. A request that never
+ * connected, or that BigQuery refused for its caller, created no job either.
+ * So, with `kept` at once and no cancel:
  *
- * - a file that cannot be read, or credentials that cannot be had within
- *   `timeoutMs`, which the client needs before it sends any byte;
+ * - a file that cannot be read, or request headers with credentials that
+ *   cannot be had within `timeoutMs`, which the request needs before it
+ *   sends any byte;
  * - an upload that fails, or that BigQuery has not answered by
- *   `timeoutMs`, before the file was read to its end, which is aborted;
+ *   `timeoutMs`, before the file was read to its end, whose request is
+ *   aborted, which closes its connection;
  * - an upload whose host was not found or refused the connection
  *   (UNCONNECTED);
  * - a job insert BigQuery answered with a 401 or 403, or with a 400 or 404
@@ -343,6 +355,9 @@ const cancelJob = async (job: Job, ms: number): Promise<{ answer: string; absent
  *   answered or that half passes. A job with no confirmed final state by
  *   then is `unknown`, including one BigQuery creates after the last read.
  *
+ * The error of every outcome whose job may exist names the job (jobName),
+ * so its log line is enough to read or cancel it later.
+ *
  * One call thus takes at most `timeoutMs + cancelTimeoutMs +
  * confirmTimeoutMs`, LOAD_SLOT_MS by default.
  */
@@ -354,25 +369,31 @@ export const loadWithin = async ({
     cancelTimeoutMs = CANCEL_TIMEOUT_MS,
     confirmTimeoutMs = CONFIRM_TIMEOUT_MS,
     pollMs = CONFIRM_POLL_MS,
+    send = loadUpload,
 }: {
     table: Table;
     file: string;
-    metadata: JobLoadMetadata;
+    metadata: LoadConfiguration;
     timeoutMs?: number;
     cancelTimeoutMs?: number;
     confirmTimeoutMs?: number;
     pollMs?: number;
+    /** The upload's stream, which emits `job` and `complete` as loadUpload's does. */
+    send?: (request: LoadRequest) => Writable;
 }): Promise<Load> => {
     const deadline = Date.now() + timeoutMs;
+    const jobId = `website_export_${randomUUID()}`;
+    const named = jobName(table, jobId);
+    let headers: Headers;
 
-    // The client gets its credentials before it sends any byte, so a load
+    // The request needs its credentials before it sends any byte, so a load
     // whose file or credentials fail here, or whose credentials take past
     // the deadline, sent nothing.
     try {
         await fs.stat(file);
 
         const authorised = await within(
-            table.bigQuery.authClient.getAccessToken(),
+            table.bigQuery.authClient.getRequestHeaders(uploadUrl(table)),
             Math.max(0, deadline - Date.now()),
         );
 
@@ -382,6 +403,8 @@ export const loadWithin = async ({
                 error: new Error(`load not sent: no credentials after ${timeoutMs / 1000} s`),
             };
         }
+
+        headers = authorised;
     } catch (error) {
         return {
             outcome: 'kept',
@@ -390,14 +413,12 @@ export const loadWithin = async ({
     }
 
     try {
-        const jobId = `website_export_${randomUUID()}`;
         const job = table.bigQuery.job(jobId, { location: table.location });
         // BigQuery answered the insert with a job.
         let inserted = false;
         // The file was read to its end, so the pipe ended the request's body.
         let sourceEnded = false;
-        // The client deletes `jobId` from the metadata it is given.
-        const upload = table.createWriteStream({ ...metadata, jobId });
+        const upload = send({ table, metadata, jobId, headers });
         const source = createReadStream(file);
         const load = new Promise<void>((resolve, reject) => {
             source.on('end', () => {
@@ -407,8 +428,8 @@ export const loadWithin = async ({
             upload.on('job', () => {
                 inserted = true;
             });
-            // The client emits `complete` once the job is DONE without an
-            // error, and fails the stream on a job DONE with one.
+            // The upload emits `complete` once the job is DONE without an
+            // error, and fails on a job DONE with one.
             upload.on('complete', () => resolve());
             upload.on('error', reject);
         });
@@ -427,10 +448,13 @@ export const loadWithin = async ({
                 return { outcome: 'replaced', late: null };
             }
 
+            // The upload's request is aborted, or with its job inserted, its
+            // reads of the job stop: the cancel and the reads below own it.
+            source.destroy();
+            upload.destroy();
+
             if (!inserted) {
                 aborted = true;
-                source.destroy();
-                upload.destroy();
 
                 // An incomplete request creates no job, so there is none to cancel.
                 if (!sourceEnded) {
@@ -450,6 +474,11 @@ export const loadWithin = async ({
             const kept = (): Load => ({
                 outcome: 'kept',
                 error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
+            });
+            // A job read DONE with an error, which its error names.
+            const keptJob = (): Load => ({
+                outcome: 'kept',
+                error: new Error(`load failed: ${messageOf(error)}, ${named}`, { cause: error }),
             });
 
             // An incomplete or unconnected request, or one refused for its
@@ -476,7 +505,7 @@ export const loadWithin = async ({
             }
 
             if (outcome === 'kept') {
-                return kept();
+                return keptJob();
             }
         }
 
@@ -501,13 +530,13 @@ export const loadWithin = async ({
               : `load failed: ${messageOf(failure.error)}, its job unconfirmed after ${timeoutMs / 1000} s`;
         return {
             outcome,
-            error: new Error(`${ended}, ${cancel.answer}`, { cause: failure?.error }),
+            error: new Error(`${ended}, ${cancel.answer}, ${named}`, { cause: failure?.error }),
         };
     } catch (error) {
         // A fault once the request may have started, which can have created the job.
         return {
             outcome: 'unknown',
-            error: new Error(`load failed: ${messageOf(error)}`, { cause: error }),
+            error: new Error(`load failed: ${messageOf(error)}, ${named}`, { cause: error }),
         };
     }
 };
@@ -542,7 +571,7 @@ export type ExportBigQuery = {
      */
     query<T>(sql: string, params?: Record<string, string>): Promise<T[]>;
     /** Loads `file` into `table` (loadWithin). Never rejects. */
-    load(table: string, file: string, metadata: JobLoadMetadata): Promise<Load>;
+    load(table: string, file: string, metadata: LoadConfiguration): Promise<Load>;
 };
 
 /**

@@ -18,6 +18,7 @@ import {
     type Load,
     loadWithin,
 } from '../bounded.ts';
+import { type LoadRequest, loadUpload } from '../load-upload.ts';
 import { createTestDatabase } from './harness.ts';
 
 type JobState = { status: { state: string; errorResult?: { reason: string } } };
@@ -38,7 +39,7 @@ const refuse = (code: number) => async () =>
     Promise.reject(Object.assign(new Error('Refused'), { code }));
 
 type Fake = {
-    /** The client's credentials: a rejection is a failure before any request. */
+    /** The request headers with credentials: a rejection is a failure before any request. */
     auth?: () => Promise<unknown>;
     /**
      * BigQuery's answer to the upload once its body has ended: a rejection
@@ -63,13 +64,13 @@ type Fake = {
 };
 
 /**
- * A table whose load runs as `fake` says, the calls it gets (`load`,
- * `abort` of its upload, `cancel`, `state`), and the job ids it was given
- * and looked up. Its upload stream emits `job` and `complete` as the
- * client's does.
+ * A table and an upload (`send`) whose load runs as `fake` says, the calls
+ * they get (`load`, `abort` of its upload, `cancel`, `state`), and the job
+ * ids the upload was given and the table looked up. Its upload stream emits
+ * `job` and `complete` as loadUpload's does.
  */
 const fakeTable = ({
-    auth = async () => 'token',
+    auth = async () => new Headers({ authorization: 'Bearer token' }),
     upload = async () => undefined,
     stall = false,
     failWrite = false,
@@ -83,9 +84,12 @@ const fakeTable = ({
     const jobIds: { created?: string; looked?: string; location?: string } = {};
     let cancelled = false;
     const table = {
+        id: 't',
         location: 'EU',
+        dataset: { id: 'd', projectId: 'p' },
         bigQuery: {
-            authClient: { getAccessToken: auth },
+            apiEndpoint: 'https://bigquery.invalid',
+            authClient: { getRequestHeaders: auth },
             job: (id: string, { location }: { location?: string }) => {
                 jobIds.looked = id;
                 jobIds.location = location;
@@ -120,44 +124,44 @@ const fakeTable = ({
                 };
             },
         },
-        createWriteStream: (metadata: { jobId?: string }) => {
-            calls.push('load');
-            jobIds.created = metadata.jobId;
-
-            const stream: Writable = new Writable({
-                write: (_chunk, _encoding, done) => {
-                    if (failWrite) {
-                        done(new Error('socket hang up'));
-                    } else if (!stall) {
-                        done();
-                    }
-                },
-                final: () => {
-                    void (async () => {
-                        try {
-                            await upload();
-                            stream.emit('job', {});
-                            await promise();
-                            stream.emit('complete', {});
-                        } catch (error) {
-                            stream.destroy(error as Error);
-                        }
-                    })();
-                },
-                destroy: (error, done) => {
-                    if (error === null) {
-                        calls.push('abort');
-                    }
-
-                    done(error);
-                },
-            });
-
-            return stream;
-        },
     } as unknown as Table;
+    const send = ({ jobId }: LoadRequest) => {
+        calls.push('load');
+        jobIds.created = jobId;
 
-    return { table, calls, jobIds };
+        const stream: Writable = new Writable({
+            write: (_chunk, _encoding, done) => {
+                if (failWrite) {
+                    done(new Error('socket hang up'));
+                } else if (!stall) {
+                    done();
+                }
+            },
+            final: () => {
+                void (async () => {
+                    try {
+                        await upload();
+                        stream.emit('job', {});
+                        await promise();
+                        stream.emit('complete', {});
+                    } catch (error) {
+                        stream.destroy(error as Error);
+                    }
+                })();
+            },
+            destroy: (error, done) => {
+                if (error === null) {
+                    calls.push('abort');
+                }
+
+                done(error);
+            },
+        });
+
+        return stream;
+    };
+
+    return { table, send, calls, jobIds };
 };
 
 const BOUNDS = { timeoutMs: 40, cancelTimeoutMs: 20, confirmTimeoutMs: 60, pollMs: 5 };
@@ -171,17 +175,21 @@ const count = (calls: string[], call: string) => calls.filter((made) => made ===
 const FILE = path.join(os.tmpdir(), `bounded-test-${randomBytes(4).toString('hex')}.ndjson`);
 // A file larger than a stalled upload's buffers, so it is never read to its end.
 const LARGE_FILE = `${FILE}.large`;
+// A file larger than any socket buffers between a real client and a server that stops reading.
+const HUGE_FILE = `${FILE}.huge`;
 // A path that stats but fails on its first read (EISDIR), so its read never ends.
 const UNREADABLE = `${FILE}.dir`;
 
 test.before(async () => {
     await fs.writeFile(FILE, '{}\n');
     await fs.writeFile(LARGE_FILE, '{}\n'.repeat(400_000));
+    await fs.writeFile(HUGE_FILE, '{}\n'.repeat(10_000_000));
     await fs.mkdir(UNREADABLE);
 });
 test.after(async () => {
     await fs.rm(FILE, { force: true });
     await fs.rm(LARGE_FILE, { force: true });
+    await fs.rm(HUGE_FILE, { force: true });
     await fs.rm(UNREADABLE, { recursive: true, force: true });
 });
 
@@ -195,7 +203,7 @@ test(
                 'a load past its timeout whose cancel is refused and that then finishes',
                 { cancel: reject, states: [RUNNING, DONE] },
                 'timeout',
-                ['load', 'cancel', 'state', 'state'],
+                ['load', 'abort', 'cancel', 'state', 'state'],
             ],
             [
                 'a load whose client fails while its job runs on and finishes',
@@ -213,13 +221,16 @@ test(
 
         for (const [label, fake, late, calls] of cases) {
             await t.test(label, async () => {
-                const { table, calls: made } = fakeTable(fake);
+                const { table, send, calls: made } = fakeTable(fake);
                 const started = performance.now();
 
-                assert.deepEqual(await loadWithin({ table, file: FILE, metadata: {}, ...BOUNDS }), {
-                    outcome: 'replaced',
-                    late,
-                });
+                assert.deepEqual(
+                    await loadWithin({ table, send, file: FILE, metadata: {}, ...BOUNDS }),
+                    {
+                        outcome: 'replaced',
+                        late,
+                    },
+                );
                 assert.ok(performance.now() - started < SLOT_MS);
                 assert.deepEqual(made, calls);
             });
@@ -337,7 +348,7 @@ test(
                 'a load past its timeout that its cancel stops',
                 { states: [RUNNING, FAILED] },
                 'kept',
-                (calls) => assert.deepEqual(calls, ['load', 'cancel', 'state', 'state']),
+                (calls) => assert.deepEqual(calls, ['load', 'abort', 'cancel', 'state', 'state']),
             ],
             [
                 'a load past its timeout whose cancel hangs and whose job never ends',
@@ -421,10 +432,11 @@ test(
 
         for (const [label, fake, outcome, checkCalls] of cases) {
             await t.test(label, async () => {
-                const { table, calls } = fakeTable(fake);
+                const { table, send, calls, jobIds } = fakeTable(fake);
                 const started = performance.now();
                 const load = await loadWithin({
                     table,
+                    send,
                     file: fake.file ?? FILE,
                     metadata: {},
                     ...BOUNDS,
@@ -434,6 +446,11 @@ test(
                 assert.equal(load.outcome, outcome);
                 assert.ok('error' in load && load.error instanceof Error);
                 assert.ok(ms < SLOT_MS);
+
+                // An unknown outcome names the job it leaves to reconcile.
+                if (outcome === 'unknown') {
+                    assert.ok(load.error.message.includes(`job p:EU.${jobIds.created}`));
+                }
                 checkCalls(calls, ms);
             });
         }
@@ -446,7 +463,7 @@ test(
     async () => {
         const states: Fake['states'] = [RUNNING];
         let sent = 0;
-        const { table, calls } = fakeTable({
+        const { table, send, calls } = fakeTable({
             stall: true,
             states,
             readMs: 5,
@@ -466,6 +483,7 @@ test(
         // re-sent cancel can see the job DONE.
         const load = await loadWithin({
             table,
+            send,
             file: FILE,
             metadata: {},
             ...BOUNDS,
@@ -505,7 +523,6 @@ test(
                 apiEndpoint: `http://127.0.0.1:${port}`,
                 // Credentials that never leave the process.
                 authClient: {
-                    getAccessToken: async () => ({ token: 'token' }),
                     getRequestHeaders: async () => new Headers({ authorization: 'Bearer token' }),
                 } as never,
             });
@@ -525,19 +542,305 @@ test(
     },
 );
 
+test(
+    'an upload past its bound before its body ended closes its connection to a server that stopped reading',
+    { timeout: 5_000 },
+    async () => {
+        // The server takes the upload's connection and stops reading it.
+        const uploads: http.IncomingMessage[] = [];
+        const server = http.createServer((request) => {
+            if (request.url?.startsWith('/upload/')) {
+                request.pause();
+                uploads.push(request);
+            }
+        });
+
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+        try {
+            const { port } = server.address() as net.AddressInfo;
+            const bigquery = new BigQuery({
+                projectId: 'p',
+                apiEndpoint: `http://127.0.0.1:${port}`,
+                authClient: {
+                    getRequestHeaders: async () => new Headers({ authorization: 'Bearer token' }),
+                } as never,
+            });
+            const table = bigquery.dataset('d', { location: 'EU' }).table('t');
+            const load = await loadWithin({ table, file: HUGE_FILE, metadata: {}, ...BOUNDS });
+
+            assert.equal(load.outcome, 'kept');
+            assert.equal(uploads.length, 1);
+
+            // The server reads again, so it sees what the client did to the
+            // connection: closed, before this test closes anything, or the
+            // rest of the body arriving on it.
+            const upload = uploads[0]!;
+            const closed = new Promise<boolean>((resolve) =>
+                upload.socket.once('close', () => resolve(true)),
+            );
+
+            upload.socket.on('error', () => undefined);
+            upload.resume();
+            assert.ok(
+                await Promise.race([closed, sleep(1_000).then(() => false)]),
+                'the upload connection is still open',
+            );
+        } finally {
+            server.closeAllConnections();
+            server.close();
+        }
+    },
+);
+
+test(
+    'loadWithin sends the job insert and the file in one multipart upload and reads the job BigQuery answers with',
+    { timeout: 5_000 },
+    async (t) => {
+        const cases: [string, number, Load['outcome']][] = [
+            ['an insert BigQuery accepts, whose job finishes', 200, 'replaced'],
+            ['an insert BigQuery refuses for its caller', 403, 'kept'],
+        ];
+
+        for (const [label, status, outcome] of cases) {
+            await t.test(label, async () => {
+                // BigQuery as the upload and the job reads see it.
+                const requests: string[] = [];
+                let insert: { jobReference?: { jobId?: string; location?: string } } = {};
+                let file = '';
+                const server = http.createServer(async (request, response) => {
+                    const path = request.url?.split('?')[0] ?? '';
+                    const chunks: Buffer[] = [];
+
+                    for await (const chunk of request) {
+                        chunks.push(chunk as Buffer);
+                    }
+
+                    requests.push(`${request.method} ${path}`);
+                    response.setHeader('content-type', 'application/json');
+
+                    if (path.startsWith('/upload/')) {
+                        const contentType = request.headers['content-type'] ?? '';
+                        const boundary = contentType.slice(
+                            contentType.indexOf('boundary=') + 'boundary='.length,
+                        );
+                        const parts = Buffer.concat(chunks).toString('utf8').split(`--${boundary}`);
+
+                        insert = JSON.parse(parts[1]!.split('\r\n\r\n')[1]!);
+                        file = parts[2]!.split('\r\n\r\n')[1]!.slice(0, -2);
+                        response.writeHead(status);
+                        response.end(
+                            JSON.stringify(
+                                status === 200
+                                    ? { jobReference: { ...insert.jobReference, projectId: 'p' } }
+                                    : { error: { code: status, message: 'Forbidden' } },
+                            ),
+                        );
+                        return;
+                    }
+
+                    response.end(
+                        JSON.stringify({
+                            jobReference: { ...insert.jobReference, projectId: 'p' },
+                            ...DONE,
+                        }),
+                    );
+                });
+
+                await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+                try {
+                    const { port } = server.address() as net.AddressInfo;
+                    const bigquery = new BigQuery({
+                        projectId: 'p',
+                        apiEndpoint: `http://127.0.0.1:${port}`,
+                        authClient: {
+                            getRequestHeaders: async () =>
+                                new Headers({ authorization: 'Bearer token' }),
+                        } as never,
+                    });
+                    const table = bigquery.dataset('d', { location: 'EU' }).table('t');
+                    const load = await loadWithin({
+                        table,
+                        file: FILE,
+                        metadata: { sourceFormat: 'NEWLINE_DELIMITED_JSON' },
+                        ...BOUNDS,
+                        timeoutMs: 2_000,
+                    });
+
+                    assert.equal(load.outcome, outcome);
+                    assert.equal(requests[0], 'POST /upload/bigquery/v2/projects/p/jobs');
+                    assert.match(insert.jobReference?.jobId ?? '', /^website_export_/);
+                    assert.equal(insert.jobReference?.location, 'EU');
+                    assert.deepEqual(insert, {
+                        ...insert,
+                        configuration: {
+                            load: {
+                                sourceFormat: 'NEWLINE_DELIMITED_JSON',
+                                destinationTable: { projectId: 'p', datasetId: 'd', tableId: 't' },
+                            },
+                        },
+                    });
+                    assert.equal(file, '{}\n');
+
+                    if (status !== 200) {
+                        assert.deepEqual(requests, ['POST /upload/bigquery/v2/projects/p/jobs']);
+                    }
+                } finally {
+                    server.closeAllConnections();
+                    server.close();
+                }
+            });
+        }
+    },
+);
+
+/**
+ * A local BigQuery that answers every upload with its job and each read of
+ * that job with `readJob`'s answer, after `readMs`, and accepts every
+ * cancel. `requests` lists each request's method and path, as it arrives.
+ */
+const jobServer = async ({ readJob, readMs = 0 }: { readJob: JobState; readMs?: number }) => {
+    const requests: string[] = [];
+    let jobReference: unknown;
+    const server = http.createServer(async (request, response) => {
+        const path = request.url?.split('?')[0] ?? '';
+
+        requests.push(`${request.method} ${path}`);
+
+        for await (const chunk of request) {
+            if (path.startsWith('/upload/')) {
+                const insert = /"jobReference":(\{[^}]*\})/.exec(String(chunk))?.[1];
+
+                jobReference ??= insert === undefined ? undefined : JSON.parse(insert);
+            }
+        }
+
+        response.setHeader('content-type', 'application/json');
+
+        if (request.method === 'GET') {
+            await sleep(readMs);
+        }
+
+        const job = { jobReference, ...(request.method === 'GET' ? readJob : RUNNING) };
+
+        response.end(JSON.stringify(path.endsWith('/cancel') ? { job } : job));
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    const { port } = server.address() as net.AddressInfo;
+    const bigquery = new BigQuery({
+        projectId: 'p',
+        apiEndpoint: `http://127.0.0.1:${port}`,
+        authClient: {
+            getRequestHeaders: async () => new Headers({ authorization: 'Bearer token' }),
+        } as never,
+    });
+
+    return {
+        table: bigquery.dataset('d', { location: 'EU' }).table('t'),
+        requests,
+        close() {
+            server.closeAllConnections();
+            server.close();
+        },
+    };
+};
+
+test(
+    'an upload destroyed while a read of its job is in flight leaves no unhandled rejection when the read fails',
+    { timeout: 5_000 },
+    async (t) => {
+        // The read answers 100 ms after the upload is destroyed, with a job
+        // DONE with an error, which the client reports as a failed read.
+        const bigquery = await jobServer({ readJob: FAILED, readMs: 120 });
+        const rejections: unknown[] = [];
+        const onRejection = (reason: unknown) => rejections.push(reason);
+
+        process.on('unhandledRejection', onRejection);
+        t.after(() => {
+            process.off('unhandledRejection', onRejection);
+            bigquery.close();
+        });
+
+        const upload = loadUpload({
+            table: bigquery.table,
+            metadata: {},
+            jobId: 'website_export_test',
+            headers: new Headers(),
+        });
+
+        upload.on('error', () => undefined);
+        upload.once('job', () => setTimeout(() => upload.destroy(), 20));
+        upload.end('{}\n');
+
+        await sleep(400);
+        assert.equal(bigquery.requests.filter((request) => request.startsWith('GET')).length, 1);
+        assert.deepEqual(rejections, []);
+    },
+);
+
+test(
+    'a load past its bound with its job inserted reads the job no more once it returns',
+    { timeout: 5_000 },
+    async (t) => {
+        const bigquery = await jobServer({ readJob: RUNNING });
+
+        t.after(() => bigquery.close());
+
+        const load = await loadWithin({
+            table: bigquery.table,
+            file: FILE,
+            metadata: {},
+            ...BOUNDS,
+        });
+        const reads = () => bigquery.requests.filter((request) => request.startsWith('GET')).length;
+        const returned = reads();
+
+        assert.equal(load.outcome, 'unknown');
+        // The client reads a job it waits on every 500 ms.
+        await sleep(700);
+        assert.equal(reads(), returned);
+    },
+);
+
 test('loadWithin keeps the table without a request when its file cannot be read', async () => {
-    const { table, calls } = fakeTable({ promise: async () => [{}] });
-    const load = await loadWithin({ table, file: `${FILE}.missing`, metadata: {}, ...BOUNDS });
+    const { table, send, calls } = fakeTable({ promise: async () => [{}] });
+    const load = await loadWithin({
+        table,
+        send,
+        file: `${FILE}.missing`,
+        metadata: {},
+        ...BOUNDS,
+    });
 
     assert.equal(load.outcome, 'kept');
     assert.deepEqual(calls, []);
 });
 
+test('a load that faults once its upload may have started is unknown and names its job', async () => {
+    const { table, jobIds } = fakeTable({});
+    const load = await loadWithin({
+        table,
+        send: ({ jobId }) => {
+            jobIds.created = jobId;
+            throw new Error('boom');
+        },
+        file: FILE,
+        metadata: {},
+        ...BOUNDS,
+    });
+
+    assert.equal(load.outcome, 'unknown');
+    assert.ok('error' in load && load.error.message.includes(`job p:EU.${jobIds.created}`));
+});
+
 test('loadWithin reads back the job id it created the load under, in the table location', async () => {
-    const { table, jobIds } = fakeTable({ promise: reject, states: [FAILED] });
+    const { table, send, jobIds } = fakeTable({ promise: reject, states: [FAILED] });
 
     assert.equal(
-        (await loadWithin({ table, file: FILE, metadata: {}, ...BOUNDS })).outcome,
+        (await loadWithin({ table, send, file: FILE, metadata: {}, ...BOUNDS })).outcome,
         'kept',
     );
     assert.equal(typeof jobIds.created, 'string');
