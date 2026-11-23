@@ -45,6 +45,14 @@ const BUILD_MARKER = 'meta[name="dfo-build"]';
 const SETTLED =
     '[data-read-tier]:not([data-read-tier="loading"]):not([data-stored-check="checking"])';
 
+/** The product token the check's browser adds to its User-Agent, so DFO's analytics counts the
+ *  check's page reads as internal traffic and not as a new website visitor. */
+export const CHECK_USER_AGENT_TOKEN = 'dfo-prototypes-check/1';
+
+/** The check's User-Agent: the browser's own with the check's product token appended. */
+export const checkUserAgent = (browserUserAgent: string): string =>
+    `${browserUserAgent} ${CHECK_USER_AGENT_TOKEN}`;
+
 /** The live prototype pages, by slug. */
 export const PAGES = ['oda-counts', 'fragility-finance', 'hiv-financing', 'debt-thresholds'];
 
@@ -315,11 +323,18 @@ const main = async () => {
         args: insecure ? ['--disable-web-security'] : [],
     });
 
+    const probe = await browser.newPage();
+    const browserUserAgent = await probe.evaluate(() => navigator.userAgent);
+
+    await probe.close();
+
+    const context = await browser.newContext({ userAgent: checkUserAgent(browserUserAgent) });
+
     const attempt = async (): Promise<Result[]> => {
         const results: Result[] = [];
 
         for (const slug of PAGES) {
-            const page = await browser.newPage();
+            const page = await context.newPage();
 
             results.push(
                 await checkPage(

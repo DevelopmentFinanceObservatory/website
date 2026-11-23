@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    CHECK_USER_AGENT_TOKEN,
     checkPage,
+    checkUserAgent,
     exitCode,
     expectedTier,
     liveSwitch,
@@ -301,4 +303,11 @@ test('a failed stored-data check passes with a warning naming the page', async (
     assert.match(warnings(failed)[0] ?? '', /^hiv-financing: /);
     assert.ok(report(failed).some((line) => line.includes('warning: hiv-financing')));
     assert.deepEqual(warnings(unchanged), []);
+});
+
+test('the check appends its product token to the browser User-Agent', () => {
+    const sent = checkUserAgent('Mozilla/5.0 HeadlessChrome/130.0 Safari/537.36');
+
+    assert.equal(CHECK_USER_AGENT_TOKEN, 'dfo-prototypes-check/1');
+    assert.equal(sent, 'Mozilla/5.0 HeadlessChrome/130.0 Safari/537.36 dfo-prototypes-check/1');
 });

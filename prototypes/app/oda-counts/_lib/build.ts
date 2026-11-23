@@ -4,7 +4,7 @@
 // after (`readChecked`), the graph nodes the definitions come from, and the currencies Search
 // converts the series to. Any failed read or refused answer fails the build, so production keeps
 // the last good deploy. Runs on the server only; the client components take the result as props.
-import { Client } from '@developmentfinance/client';
+import type { Client } from '@developmentfinance/client';
 
 import liveRefs from '../_data/live-refs.json' with { type: 'json' };
 import type { Definition, LiveData } from '../_data/types.ts';
@@ -24,6 +24,7 @@ import {
     type BuildReadOptions,
     buildLanes,
     type CheckedRead,
+    createBuildClient,
     readChecked,
 } from '#lib/buildRead.ts';
 import type { Lane } from '#lib/pacing.ts';
@@ -108,7 +109,7 @@ export const readOdaCounts = async (
     refs: Readonly<Record<ReadKey, unknown>>,
     options: BuildReadOptions = {},
 ): Promise<Built> => {
-    const client = new Client({ apiKey: false });
+    const client = createBuildClient();
     const started = Date.now();
     const sources = countsSources(refs);
     const { reads } = options.lanes ?? buildLanes;

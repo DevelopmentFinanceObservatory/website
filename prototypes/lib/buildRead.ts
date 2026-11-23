@@ -90,11 +90,25 @@ export type BuildRead<K extends string, T> = {
     sources: Record<K, BuildSource>;
 };
 
+/**
+ * The User-Agent every client the build creates sends, so DFO's analytics counts the build's
+ * reads as internal traffic. The website's proxy forwards a caller's User-Agent and X-DFO-Client
+ * to DFO, and the SDKs refuse a caller-set X-DFO-Client, so the User-Agent carries the name. The
+ * Python half of the build sends the same value (BUILD_USER_AGENT in
+ * app/debt-thresholds/_data/pipeline/stored.py). A browser client sends none of it.
+ */
+export const BUILD_USER_AGENT = 'dfo-prototypes-build/1';
+
+/** An anonymous client on the production API that sends BUILD_USER_AGENT, as every client the
+ *  build creates is (`fetch` stands in for the platform's, as a test does). */
+export const createBuildClient = ({ fetch }: { fetch?: typeof globalThis.fetch } = {}): Client =>
+    new Client({ apiKey: false, headers: { 'User-Agent': BUILD_USER_AGENT }, fetch });
+
 let client: Client | undefined;
 
-/** The build's anonymous client on the production API. Built on first use. */
+/** The build's shared client. Built on first use. */
 const buildClient = (): Client => {
-    client ??= new Client({ apiKey: false });
+    client ??= createBuildClient();
 
     return client;
 };

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import test, { mock } from 'node:test';
 
 import { DatasetRef, recipe, StoredVersions } from '@developmentfinance/client';
@@ -8,14 +10,16 @@ import {
     CHECK_TIMEOUT_MS,
     CHECKED_READS,
     type Checker,
+    BUILD_USER_AGENT,
     checkOneVersionPerSpec,
+    createBuildClient,
     pendingBoundOf,
     PENDING_RETRY_MS,
     readChecked,
     readSettled,
 } from './buildRead.ts';
 import { ANALYSIS_CONCURRENCY, type Fetcher, READ_CONCURRENCY } from './liveRead.ts';
-import { createLane } from './pacing.ts';
+import { createLane, liveClient } from './pacing.ts';
 
 const SPEC = `spec_${'a'.repeat(32)}`;
 const ROOT = `spec_${'e'.repeat(32)}`;
@@ -545,4 +549,70 @@ test('fails the build, naming the page, when the check fails', async () => {
             error.cause instanceof Error &&
             error.cause.message === '503',
     );
+});
+
+test('every client the build creates sends the build User-Agent', async () => {
+    let sent: string | null = null;
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+        sent = new Request(input, init).headers.get('user-agent');
+
+        return Response.json({});
+    };
+
+    await createBuildClient({ fetch })
+        .request('GET', '/anything', { timeout: 1000 })
+        .catch(() => undefined);
+
+    assert.equal(BUILD_USER_AGENT, 'dfo-prototypes-build/1');
+    assert.equal(sent, BUILD_USER_AGENT);
+
+    // The stored-versions check `readChecked` takes before and after the reads, too.
+    sent = null;
+    await createBuildClient({ fetch })
+        .storedVersions([{ spec_id: SPEC, definition: {} }], { timeout: 1000 })
+        .catch(() => undefined);
+
+    assert.equal(sent, BUILD_USER_AGENT);
+
+    // A page's build reads create their client only through createBuildClient.
+    const app = path.join(import.meta.dirname, '..', 'app');
+    const builds = readdirSync(app, { withFileTypes: true })
+        .map((entry) => path.join(app, entry.name, '_lib', 'build.ts'))
+        .filter((file) => existsSync(file));
+
+    assert.ok(builds.length > 0);
+
+    for (const file of builds) {
+        assert.doesNotMatch(readFileSync(file, 'utf8'), /new Client\(/, file);
+    }
+
+    assert.equal(
+        readFileSync(path.join(import.meta.dirname, 'buildRead.ts'), 'utf8').match(/new Client\(/g)
+            ?.length,
+        1,
+    );
+});
+
+test('the browser live client does not send the build User-Agent', async () => {
+    const real = globalThis.fetch;
+    let sent: string | null = null;
+    let requested = false;
+
+    globalThis.fetch = async (input, init) => {
+        requested = true;
+        sent = new Request(input, init).headers.get('user-agent');
+
+        return Response.json({});
+    };
+
+    try {
+        await liveClient()
+            .request('GET', '/anything', { timeout: 1000 })
+            .catch(() => undefined);
+    } finally {
+        globalThis.fetch = real;
+    }
+
+    assert.ok(requested, 'the live client sent a request');
+    assert.notEqual(sent, BUILD_USER_AGENT);
 });
