@@ -1,3 +1,0 @@
-# The workers.dev host has no route prefix, so its root would 404. On
-# developmentfinance.org the route never receives /, so this rule is inert there.
-/ /prototypes/ 302

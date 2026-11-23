@@ -1,10 +1,21 @@
 // A constellation of squares linked by distance, stirred by a
 // virtual cursor on a wavy infinity path. Hex colors on purpose (canvas, no CSS vars).
 
-import { NetNode, NodeBounds, rand, lerp, sizeCanvas } from '@/utils/net';
+import {
+    NetNode,
+    NodeBounds,
+    createLinkBatches,
+    lerp,
+    rand,
+    runWhileSeen,
+    sizeCanvas,
+} from '@/utils/net';
 
 const COLORS = ['#79796B', '#D8D8CA', '#B4B4A6'];
 const NET_LINK_RGB = '178,178,164';
+const NET_LINK_ALPHA = 0.24;
+// Alpha levels a link can take with its length.
+const LINK_LEVELS = 10;
 
 export interface DatasetNetConfig {
     nodeCount: number;
@@ -47,6 +58,10 @@ interface VirtualCursor {
     ty: number;
 }
 
+/**
+ * Starts the constellation in `canvasEl`, sized to `innerEl`. The loop runs
+ * only while `innerEl` is on screen and the tab is visible.
+ */
 export function startDatasetNet(
     innerEl: HTMLElement,
     canvasEl: HTMLCanvasElement,
@@ -231,8 +246,7 @@ export function startDatasetNet(
         cursor.y = lerp(cursor.y, cursor.ty, follow);
     }
 
-    function updateCursor(): void {
-        const now = performance.now();
+    function updateCursor(now: number): void {
         const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
 
         lastFrameTime = now;
@@ -336,8 +350,8 @@ export function startDatasetNet(
 
     resizeObserver.observe(innerEl);
 
-    function update(): void {
-        updateCursor();
+    function update(now: number): void {
+        updateCursor(now);
 
         nodes.forEach((n) => {
             const dx = cursor.x - n.x;
@@ -365,6 +379,9 @@ export function startDatasetNet(
         });
     }
 
+    const linkBatches = createLinkBatches(NET_LINK_RGB, NET_LINK_ALPHA, LINK_LEVELS);
+    const linkDistSq = config.linkDist * config.linkDist;
+
     function drawLinks(): void {
         for (let i = 0; i < nodes.length; i++) {
             const nodeA = nodes[i]!;
@@ -373,31 +390,35 @@ export function startDatasetNet(
                 const nodeB = nodes[j]!;
                 const dx = nodeA.x - nodeB.x;
                 const dy = nodeA.y - nodeB.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                const distSq = dx * dx + dy * dy;
 
-                if (dist >= config.linkDist) continue;
+                if (distSq >= linkDistSq) continue;
 
-                const alpha = (1 - dist / config.linkDist) * 0.24;
+                const strength = 1 - Math.sqrt(distSq) / config.linkDist;
 
-                context.strokeStyle = `rgba(${NET_LINK_RGB},${alpha})`;
-                context.lineWidth = 0.5;
-                context.beginPath();
-                context.moveTo(nodeA.x, nodeA.y);
-                context.lineTo(nodeB.x, nodeB.y);
-                context.stroke();
+                linkBatches.add(strength, nodeA.x, nodeA.y, nodeB.x, nodeB.y);
             }
         }
+
+        context.lineWidth = 0.5;
+        linkBatches.stroke(context);
     }
 
+    // The squares are small and rarely touch, so they paint grouped by
+    // colour: one fillStyle per colour per frame.
+    const nodesByColor = COLORS.map((color) => ({
+        color,
+        nodes: nodes.filter((n) => n.color === color),
+    }));
+
     function drawNodes(): void {
-        nodes.forEach((n) => {
-            context.fillStyle = n.color;
-            context.fillRect(
-                n.x - config.nodeSize * 0.5,
-                n.y - config.nodeSize * 0.5,
-                config.nodeSize,
-                config.nodeSize,
-            );
+        const half = config.nodeSize * 0.5;
+
+        nodesByColor.forEach(({ color, nodes: group }) => {
+            context.fillStyle = color;
+            group.forEach((n) => {
+                context.fillRect(n.x - half, n.y - half, config.nodeSize, config.nodeSize);
+            });
         });
     }
 
@@ -407,24 +428,21 @@ export function startDatasetNet(
         drawNodes();
     }
 
-    let frame = 0;
-
-    function loop(): void {
-        update();
-        draw();
-        frame = requestAnimationFrame(loop);
-    }
-
     // Under reduced motion the field is one still frame: the squares sit at
     // their home spots and nothing drifts.
     if (reducedMotion) {
         draw();
-    } else {
-        frame = requestAnimationFrame(loop);
+
+        return () => resizeObserver.disconnect();
     }
 
+    const stopLoop = runWhileSeen(innerEl, (now) => {
+        update(now);
+        draw();
+    });
+
     return () => {
-        cancelAnimationFrame(frame);
+        stopLoop();
         resizeObserver.disconnect();
     };
 }

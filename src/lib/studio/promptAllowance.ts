@@ -12,8 +12,8 @@ export const GUEST_PROMPTS = 5;
 export const USER_DAILY_PROMPTS = 75;
 
 /** What a Studio prompt asks: the first question, a follow-up, an edit of a
- *  card, or a clicked `apply_choice` chip. */
-export type PromptIntent = 'new' | 'follow_up' | 'edit' | 'apply_choice';
+ *  card, a clicked `apply_choice` chip, or a card's unit change. */
+export type PromptIntent = 'new' | 'follow_up' | 'edit' | 'apply_choice' | 'apply_unit';
 
 export type PromptEvent = {
     turn: number;

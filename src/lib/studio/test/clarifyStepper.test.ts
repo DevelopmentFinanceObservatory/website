@@ -15,6 +15,7 @@ import {
     tabStopId,
     type Stepper,
 } from '../clarifyStepper.ts';
+import type { UnitOffer } from '../wire.ts';
 
 const question = (id: string, skippable = true) => ({
     id,
@@ -100,11 +101,24 @@ test('blank text, a disallowed skip and an unanswered reopen leave the stepper u
     assert.equal(reopen(strict, stepper, 1), stepper);
 });
 
-test('the rail shows the option label, the typed text, or Skipped', () => {
+test('the rail shows the option label, the unit, the typed text, or Skipped', () => {
     const [first] = three.questions;
+    const unit: UnitOffer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current'] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' },
+    };
 
     assert.ok(first);
     assert.equal(answerText(first, { kind: 'option', option_id: 'q1-b' }), 'q1 B');
+    assert.equal(
+        answerText({ ...first, unit }, { kind: 'unit', currency: 'USD', prices: 'current' }),
+        'Current US dollars',
+    );
+    assert.equal(
+        answerText(first, { kind: 'options', option_ids: ['q1-a', 'q1-b'] }),
+        'q1 A, q1 B',
+    );
     assert.equal(answerText(first, { kind: 'text', text: 'grants only' }), 'grants only');
     assert.equal(answerText(first, { kind: 'skipped' }), 'Skipped');
 });

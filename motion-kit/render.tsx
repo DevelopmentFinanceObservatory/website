@@ -286,6 +286,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         respondPlan: noop,
         switchChoice: noop,
         applyChoice: noop,
+        applyUnit: noop,
         stop: noop,
         reset: noop,
         hydrate: noop,
@@ -590,14 +591,6 @@ const chatHooks = (html: string, spec: DemoSpec): string => {
                 hook(line, `activity-${index}-${step}`),
             );
         });
-
-    // The app's entrance reveals start hidden until an observer marks them;
-    // the film shows them revealed.
-    for (const element of all) {
-        if ('data-reveal' in element.attrs || 'data-reveal-group' in element.attrs) {
-            additions.push({ element, name: 'data-revealed', value: '' });
-        }
-    }
 
     return addAttributes(html, additions);
 };

@@ -23,6 +23,34 @@ const eslintConfig = defineConfig([
     "prototypes/dist/**",
     "prototypes/node_modules/**",
   ]),
+  // The export Job reaches Postgres and BigQuery only through db/bounded.ts,
+  // whose clients bound every call in time. It imports the Cloud SQL
+  // connector's setup from db/connection.ts and none of its pool builders,
+  // and imports no module at run time, where these rules cannot follow it.
+  {
+    files: ["db/event-export.ts", "db/account-export.ts", "db/export-events.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["pg", "pg/**", "pg-*", "@google-cloud/*"] },
+            {
+              group: ["**/connection", "**/connection.*"],
+              importNames: ["buildRuntimePool", "buildCounterPool", "buildMigratorPool"],
+            },
+          ].map((pattern) => ({ ...pattern, message: "Use the bounded clients in db/bounded.ts." })),
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression",
+          message: "Import statically, so no-restricted-imports checks the module.",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

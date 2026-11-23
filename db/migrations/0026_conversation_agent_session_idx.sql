@@ -1,1 +1,0 @@
-CREATE INDEX "conversation_agent_session_idx" ON "conversation" USING btree ("agent_session_id");

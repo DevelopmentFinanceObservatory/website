@@ -87,44 +87,23 @@ const Hero = ({
     );
 
     useEffect(() => {
-        if (!innerRef.current || !canvasRef.current) {
+        if (!innerRef.current || !canvasRef.current || !sectionRef.current) {
             return;
         }
 
-        const net = startHeroNet(innerRef.current, canvasRef.current);
-
         // The CSS entrances replay by themselves (the reveal system resets
-        // off-screen elements); the canvas intro must be re-armed by hand —
-        // whenever the section comes back after having fully left.
-        let wasOut = false;
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (!entry.isIntersecting) {
-                    wasOut = true;
-                } else if (wasOut) {
-                    wasOut = false;
-                    net.replay();
-                }
-            });
-        });
-
-        if (sectionRef.current) {
-            observer.observe(sectionRef.current);
-        }
-
-        return () => {
-            observer.disconnect();
-            net.stop();
-        };
+        // off-screen elements); the net replays its own entrance when the
+        // section comes back after having fully left, and pauses while away.
+        return startHeroNet(innerRef.current, canvasRef.current, sectionRef.current);
         // The net reads the motion preference itself when it starts (a still
         // frame, or the live field); it restarts whenever the reader flips it.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- sectionRef is stable (useReveal's ref)
     }, [reducedMotion]);
 
     // One reveal GROUP for the whole hero: the observer watches the
-    // full-viewport section (the telescoping panels start at scale 0 —
-    // zero-size boxes their own observers could never see), and every child
-    // rides the section's data-revealed on its own delay.
+    // full-viewport section (the telescoping panels start at scale 0, boxes
+    // too small for their own observers), and every child's entrance plays on
+    // its own delay and replays when the section's parking comes off.
     return (
         <section
             ref={sectionRef}

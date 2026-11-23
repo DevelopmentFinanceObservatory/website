@@ -81,11 +81,11 @@ export const priceBases = (conversion: UnitConversion, code: string | null): Pri
     };
 };
 
-/** The offer's entry for `code` with what every other offer serves of it:
- *  current prices when all convert at them, constant prices when all do,
- *  over the base years all take. The years shown stay the first offer's,
- *  since each part converts its own window. Null when the parts share
- *  neither basis. */
+/** The first offer's entry for a currency, narrowed to what every other
+ *  offer serves of it: current prices when all convert at them, constant
+ *  prices when all do, over the base years all take. The years shown stay
+ *  the first offer's, since each part converts its own window. Null when
+ *  the parts share neither basis. */
 const sharedCurrency = (
     first: ConversionCurrency,
     others: UnitConversion[],
@@ -120,8 +120,8 @@ const sharedCurrency = (
 };
 
 /** What every offer serves: the currencies all hold, each at the price
- *  bases all convert it at, and the role currencies all agree on. The
- *  first offer's default base year. Null when no currency is common. */
+ *  bases all convert it at, and the role currencies all agree on. It keeps
+ *  the first offer's default base year. Null when no currency is common. */
 export const sharedOffer = (offers: UnitConversion[]): UnitConversion | null => {
     const [first, ...others] = offers;
 
@@ -278,7 +278,8 @@ export const stagedUnit = (
 ): CurrentUnit =>
     prices === 'constant' && baseYear != null ? { ...current, prices, baseYear } : current;
 
-const clamp = (year: number, { min, max }: { min: number; max: number }): number =>
+/** `year` moved to the nearer end of `min`..`max` when it lies outside. */
+export const clamp = (year: number, { min, max }: { min: number; max: number }): number =>
     Math.min(Math.max(year, min), max);
 
 /** The request a currency pick posts: the new currency at `staged`'s price

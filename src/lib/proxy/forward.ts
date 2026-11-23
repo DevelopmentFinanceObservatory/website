@@ -22,7 +22,8 @@ import { hit, type Surface } from './rateLimit';
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
  * must not reach a client). An /api/*, /openapi.json or /mcp call, and a
- * /codes call the route forwards, is rate-limited per IP: /mcp on its own
+ * /codes call the route forwards, is rate-limited per IP: /mcp and the
+ * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
  * headers go out only on a counted call). A call is forwarded with its
  * method, query, body, content headers, user-agent, x-dfo-client and every

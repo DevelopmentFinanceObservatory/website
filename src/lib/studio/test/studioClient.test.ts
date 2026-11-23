@@ -10,12 +10,15 @@ import {
     cancelTurn,
     fetchComponentRevision,
     runApplyChoice,
+    runApplyUnit,
     runInterrupt,
     runTurn,
     whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
-import type { ApplyChoiceSuggestion, StudioFrame } from '../wire.ts';
+import { cardUnitChange } from '../cardUnit.ts';
+import { widgetFromComponent } from '../widgets.ts';
+import type { ApplyChoiceSuggestion, ComponentCreated, StudioFrame, TurnRequest } from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -115,6 +118,7 @@ test('runInterrupt: a switch posts exactly the interrupt members and the switch 
         conversation_id: 'conv',
         interrupt_id: 'int-1',
         ...switchReply,
+        client_features: ['unit_question', 'multi_select'],
     });
 });
 
@@ -324,9 +328,54 @@ test('runApplyChoice: a chip posts the harness fixture request, with no message'
     assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
     const body = JSON.parse(init.body as string) as { apply_choice: Record<string, unknown> };
 
-    assert.deepEqual(body, request);
+    assert.deepEqual(body, { ...request, client_features: ['unit_question', 'multi_select'] });
     assert.equal(body.apply_choice.turn, chip.turn);
     assert.equal(body.apply_choice.spec_id, chip.spec_id);
+});
+
+test('runApplyUnit: a card pick posts the harness fixture request, with no message', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+    // The harness's wire fixtures, copied: the card the frame draws, in turn
+    // 2, moved to current Kenyan shillings.
+    const read = (name: string): unknown =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const request = read('request-16-turn-apply-unit.json') as TurnRequest;
+    const widget = widgetFromComponent(
+        read('event-19-component-unit-change.json') as ComponentCreated,
+    );
+
+    assert.ok(widget);
+    const change = cardUnitChange({ ...widget, turn: 2 }, 'Debt service', {
+        currency: 'KES',
+        prices: 'current',
+    });
+
+    assert.ok(change);
+    await runApplyUnit(request.conversation_id, change.request, { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
+    assert.deepEqual(JSON.parse(init.body as string), {
+        ...request,
+        client_features: ['unit_question', 'multi_select'],
+    });
+});
+
+test('runTurn: a message turn posts the harness fixture request, with the client features', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+    const request = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/request-19-turn-client-features.json', import.meta.url),
+            'utf8',
+        ),
+    ) as TurnRequest;
+
+    await runTurn(request.conversation_id, request.message ?? '', { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.deepEqual(JSON.parse(init.body as string), request);
 });
 
 test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame', async (t) => {

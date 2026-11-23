@@ -20,6 +20,7 @@ import {
     isActiveOption,
     isSelectable,
     ledgerSections,
+    optionLabel,
     PLANNER_HEAD,
     planFromFrame,
     planView,
@@ -32,13 +33,13 @@ import {
     startSwitch,
     stoppedQueuedSwitch,
     switchEnded,
-    optionLabel,
     switchLine,
     switchOutcome,
     switchPendingText,
     switchReply,
     SCOPE_HEAD,
     UNREACHABLE_NOTICE,
+    unitOptionId,
     unreachableSwitch,
     withApprovedPlan,
     withQuestion,
@@ -48,8 +49,15 @@ import {
 } from '../plan.ts';
 import { clarifyFromFrame } from '../clarify.ts';
 import { withoutChips } from '../chips.ts';
-import type { StreamRefusal } from '../studioClient.ts';
-import type { PlanApproved, PlanDecision, PlanProposed, RetryMode } from '../wire.ts';
+import { runInterrupt, type StreamRefusal } from '../studioClient.ts';
+import { unitText, withBaseYear, withCurrency } from '../unitChoice.ts';
+import type {
+    InterruptResponse,
+    PlanApproved,
+    PlanDecision,
+    PlanProposed,
+    RetryMode,
+} from '../wire.ts';
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 
 const countDecision: PlanDecision = {
@@ -1559,9 +1567,9 @@ test('the ledger heads scope choices and planner decisions apart', async (t) => 
 });
 
 test("a planner decision's switch says it is replanning", () => {
-    assert.equal(switchPendingText(DONORS_PICK.choiceId), 'Replanning');
+    assert.equal(switchPendingText(true), 'Replanning');
     assert.equal(switchLine(DONORS_PICK.choiceId, 'Top 10'), 'Replanning with Top 10');
-    assert.equal(switchPendingText(PICK.choiceId), 'Updating plan');
+    assert.equal(switchPendingText(false), 'Updating plan');
     assert.equal(switchLine(PICK.choiceId, 'Net disbursements'), 'Switching to Net disbursements');
 });
 
@@ -1723,4 +1731,118 @@ test('a count row renders and switches as a scope row does', () => {
         ),
         'Counting as net disbursements',
     );
+});
+
+/** The harness's unit-row fixtures (`services/harness/tests/wire_fixtures/
+ *  studio` in dfo-ai), copied. */
+const unitFixture = (name: string): unknown =>
+    JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+
+test('a unit row switches to any unit its offer serves, posting the harness fixture request', async (t) => {
+    const unitFrame = unitFixture('event-22-plan-proposed-unit.json') as PlanProposed;
+    const request = unitFixture('request-20-interrupt-switch-unit.json') as InterruptResponse;
+    const plan = planFromFrame(unitFrame);
+    const [row] = planView(plan).choices;
+    const offer = row?.decision?.unit;
+
+    assert.ok(row && offer && request.choice_id);
+    assert.deepEqual(offer.start, { currency: 'EUR', prices: 'constant', base_year: 2020 });
+    // The unit re-reads the parts it covers, as a scope choice does.
+    assert.deepEqual(
+        ledgerSections(planView(plan)).map((section) => section.head),
+        [SCOPE_HEAD],
+    );
+    assert.equal(row.planner, false);
+
+    const picked = withBaseYear(withCurrency(offer, offer.start, 'USD'), 2015);
+    const reply = switchReply(plan, request.choice_id, unitOptionId(picked));
+
+    assert.ok(reply);
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+
+    await runInterrupt(request.conversation_id, request.interrupt_id, reply, {
+        onFrame: () => {},
+    });
+    assert.deepEqual(
+        JSON.parse((fetch.mock.calls[0]?.arguments[1] as RequestInit).body as string),
+        { ...request, client_features: ['unit_question', 'multi_select'] },
+    );
+
+    // The unit it starts on, and units the offer does not serve, send
+    // nothing.
+    for (const optionId of [
+        'EUR-constant-2020',
+        'KES-constant-2015',
+        'USD-constant-1900',
+        'USD',
+        'USD-constant-02015',
+    ]) {
+        assert.equal(switchReply(plan, request.choice_id, optionId), null, optionId);
+    }
+
+    // A failed switch names the unit on the row, and Try again resends it.
+    const failed = planFromFrame({
+        ...unitFrame,
+        switch_failed: {
+            choice_id: request.choice_id,
+            option_id: 'USD-constant-2015',
+            code: 'switch_option_unavailable',
+            reason: 'Search could not re-read the 2010-2014 part.',
+            retryable: true,
+        },
+    });
+
+    assert.equal(failed.notice?.choiceId, request.choice_id);
+    assert.equal(failed.notice?.optionId, 'USD-constant-2015');
+    assert.equal(
+        optionLabel(failed.decisions, request.choice_id, 'USD-constant-2015'),
+        unitText(offer, picked),
+    );
+    assert.deepEqual(switchReply(failed, request.choice_id, 'USD-constant-2015'), reply);
+});
+
+test('an approved plan files a unit row under the scope choices, as the live card does', () => {
+    const unitFrame = unitFixture('event-22-plan-proposed-unit.json') as PlanProposed;
+    const [live] = planView(planFromFrame(unitFrame)).choices;
+    const unitId = live?.key;
+
+    assert.ok(unitId);
+
+    const approved = approvedView({
+        ...approvedFromFrame(approvedFrame),
+        choices: [
+            { choice_id: unitId, question: 'Unit', chosen: 'US dollars' },
+            { choice_id: 'decision/donor_count', question: 'Donors', chosen: 'Top 5' },
+        ],
+    });
+
+    assert.deepEqual(
+        approved.choices.map((choice) => choice.planner),
+        [live.planner, true],
+    );
+    assert.equal(live.planner, false);
+});
+
+test('a unit row refuses a listed option marked unavailable', () => {
+    const unitFrame = unitFixture('event-22-plan-proposed-unit.json') as PlanProposed;
+    const plan = planFromFrame(unitFrame);
+    const [row] = planView(plan).choices;
+    const choiceId = row?.key;
+
+    assert.ok(choiceId && row.decision?.unit);
+    assert.ok(switchReply(plan, choiceId, 'EUR-current'));
+
+    const blocked: PlanState = {
+        ...plan,
+        decisions: plan.decisions.map((decision) => ({
+            ...decision,
+            options: decision.options?.map((option) =>
+                option.option_id === 'EUR-current'
+                    ? { ...option, status: 'unavailable', reason: 'No data' }
+                    : option,
+            ),
+        })),
+    };
+
+    assert.equal(switchReply(blocked, choiceId, 'EUR-current'), null);
 });

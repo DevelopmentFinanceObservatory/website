@@ -249,6 +249,12 @@
     }
 }
 
+// A unit row's chips, list and Send, spanning the row as the options do.
+.unit {
+    grid-column: 1 / -1;
+    margin-top: rem(8);
+}
+
 // The notice's live region, mounted empty, spanning the row.
 .live {
     grid-column: 1 / -1;

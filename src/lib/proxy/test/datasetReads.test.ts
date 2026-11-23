@@ -23,6 +23,9 @@ const { dropPerRequestHeaders, forwardDatasets, isDfoOrigin } = await import('..
 
 const SPEC = 'spec_abc';
 const CV = 'cv_123';
+// A derived frame's ids, shaped as dfo-apis mints them.
+const OPS = 'ops_0123456789abcdef0123456789abcdef';
+const OCV = 'ocv_fedcba9876543210fedcba9876543210';
 const PARQUET = Buffer.concat([Buffer.from('PAR1'), Buffer.alloc(4096, 7), Buffer.from('PAR1')]);
 const STORED_ETAG = '"stored-etag"';
 const MANIFEST_ETAG = '"manifest-etag"';
@@ -32,11 +35,17 @@ const FILE_TRACE = 'trace-of-a-file-link';
 const CLIENT_ADDRESS = '203.0.113.7';
 // What dfo-apis sends on a route the gateway does not handle as a read.
 const OTHER_CACHE_CONTROL = 'private, max-age=5';
+// What dfo-apis sends on a heads 200: unlike any lifetime the gateway sets itself.
+const HEADS_CACHE_CONTROL = 'public, max-age=300';
+const HEADS_TRACE = 'trace-of-a-heads-check';
+const OTHER_SPEC = 'spec_other';
 
 // Storage responses held open, for the streaming test to finish.
 const held: ServerResponse[] = [];
 const storageRequests: Record<string, string | string[] | undefined>[] = [];
 const apisRequests: Record<string, string | string[] | undefined>[] = [];
+// The query string of each heads read dfo-apis received.
+const headsQueries: string[] = [];
 
 // One server plays dfo-apis under /api/datasets/ and storage under /bucket/.
 // A file digest picks the upstream's answer: `<tier>` redirects to a stored
@@ -46,10 +55,14 @@ const apisRequests: Record<string, string | string[] | undefined>[] = [];
 // chunk and never more, and `hang` to one that never answers. The stored
 // object answers 304 to its own ETag. The selector redirects, or answers
 // itself for `format=rendered`. A path that is not a known spec and a cv_
-// version answers 200 with OTHER_CACHE_CONTROL.
+// version answers 200 with OTHER_CACHE_CONTROL. A derived path answers as a
+// spec's does with OPS and an ocv_ version in place of SPEC and a cv_ one,
+// for its files route only.
 const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://upstream.test');
-    const parts = url.pathname.split('/');
+    const derived = url.pathname.startsWith('/api/datasets/derived/');
+    // A derived path read as the spec path it mirrors.
+    const parts = url.pathname.split('/').filter((_, i) => !derived || i !== 3);
     const [, api, , spec, cv, selector, digest] = parts;
 
     if (api === 'bucket') {
@@ -82,6 +95,39 @@ const server = createServer((req, res) => {
     }
 
     apisRequests.push(req.headers);
+
+    if (spec === 'heads' && cv === undefined && ['GET', 'HEAD'].includes(req.method ?? '')) {
+        // The heads check: a spec_ id names its version, SPEC's CV and null for
+        // any other; no id, or an id that is not spec_, is refused.
+        const ids = url.searchParams.getAll('spec_id');
+
+        headsQueries.push(url.search);
+
+        if (ids.length === 0 || ids.some((id) => !id.startsWith('spec_'))) {
+            res.writeHead(400, {
+                'content-type': 'application/problem+json',
+                'cache-control': 'no-store',
+                'x-dfo-trace-id': HEADS_TRACE,
+            }).end('{"code": "request_invalid"}');
+        } else {
+            res.writeHead(200, {
+                'content-type': 'application/json',
+                'cache-control': HEADS_CACHE_CONTROL,
+                'x-dfo-trace-id': HEADS_TRACE,
+                'server-timing': 'db;dur=3',
+            });
+            res.end(
+                JSON.stringify({
+                    heads: ids.map((id) => ({
+                        spec_id: id,
+                        content_version: id === SPEC ? CV : null,
+                    })),
+                }),
+            );
+        }
+
+        return;
+    }
 
     if (spec === SPEC && cv === undefined) {
         // The spec's current read. `mode` picks the answer: `legacy` sends
@@ -121,13 +167,18 @@ const server = createServer((req, res) => {
         return;
     }
 
-    if (spec !== SPEC || !cv?.startsWith('cv_') || parts.length > 7) {
+    if (
+        spec !== (derived ? OPS : SPEC) ||
+        !cv?.startsWith(derived ? 'ocv_' : 'cv_') ||
+        parts.length > 7 ||
+        (derived && selector !== 'files')
+    ) {
         res.writeHead(200, {
             'content-type': 'application/json',
             'cache-control': OTHER_CACHE_CONTROL,
         });
         res.end('{}');
-    } else if (cv !== CV) {
+    } else if (cv !== (derived ? OCV : CV)) {
         res.writeHead(404, { 'content-type': 'application/problem+json' }).end('{}');
     } else if (selector === undefined && req.headers['if-none-match'] === MANIFEST_ETAG) {
         res.writeHead(304, { etag: MANIFEST_ETAG }).end();
@@ -208,6 +259,7 @@ const call = (
     );
 
 const file = (digest: string) => `${SPEC}/${CV}/files/${digest}`;
+const derivedFile = (digest: string) => `derived/${OPS}/${OCV}/files/${digest}`;
 
 const SHORT_BOUNDS = { headersMs: 100, stallMs: 100 };
 
@@ -245,15 +297,39 @@ test('file: follows the storage redirect and relays the bytes and their headers'
     assert.equal(storageRequests.at(-1)?.['x-dfo-client'], undefined);
 });
 
-for (const digest of ['pinned', 'working', 'none']) {
-    test(`file: a ${digest} tier is cached publicly and tagged`, async () => {
-        const res = await call(file(digest));
+test('derived file: follows the storage redirect and logs its own door', async () => {
+    logged.mock.resetCalls();
+    const res = await call(derivedFile('working'));
 
-        assert.equal(res.status, 200);
-        assert.ok(directives(res.headers.get('cache-control')).has('public'));
-        assert.equal(res.headers.get('cache-tag'), CV);
-        await res.body?.cancel();
-    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), PARQUET);
+    assert.equal(res.headers.get('etag'), STORED_ETAG);
+    assert.equal(res.headers.get('location'), null);
+
+    const [entry] = loggedReads();
+
+    assert.equal(entry.door, 'derived_files');
+    assert.equal(entry.spec_id, OPS);
+    assert.equal(entry.content_version, OCV);
+    assert.equal(entry.digest, 'working');
+    assert.equal(entry.trace_id, FILE_TRACE);
+    assert.equal(entry.tier, 'working');
+});
+
+for (const [name, path, version] of [
+    ['file', file, CV],
+    ['derived file', derivedFile, OCV],
+] as const) {
+    for (const digest of ['pinned', 'working', 'none']) {
+        test(`${name}: a ${digest} tier is cached publicly and tagged`, async () => {
+            const res = await call(path(digest));
+
+            assert.equal(res.status, 200);
+            assert.ok(directives(res.headers.get('cache-control')).has('public'));
+            assert.equal(res.headers.get('cache-tag'), version);
+            await res.body?.cancel();
+        });
+    }
 }
 
 test('file: a pinned file is held longer than a working or untiered one', async () => {
@@ -265,8 +341,24 @@ test('file: a pinned file is held longer than a working or untiered one', async 
     assert.ok(Number(pinned.get('max-age')) > Number(directives(working).get('max-age')));
 });
 
+test('derived file: every tier is held as a working dataset file, and the line keeps the tier', async () => {
+    const working = await cacheControlOf(file('working'));
+
+    logged.mock.resetCalls();
+
+    for (const tier of ['pinned', 'working', 'none']) {
+        assert.equal(await cacheControlOf(derivedFile(tier)), working);
+    }
+
+    assert.deepEqual(
+        loggedReads().map((entry) => entry.tier),
+        ['pinned', 'working', null],
+    );
+});
+
 for (const [name, rest, status] of [
     ['a file redirect off storage', file('elsewhere'), 302],
+    ['a derived file redirect off storage', derivedFile('elsewhere'), 302],
     ['a file storage refuses', file('denied'), 302],
     ['the selector', `${SPEC}/${CV}/file?format=csv`, 302],
     ['a selector that answers itself', `${SPEC}/${CV}/file?format=rendered`, 200],
@@ -279,6 +371,7 @@ for (const [name, rest, status] of [
         assert.equal(res.status, status);
         assert.equal(res.headers.get('cache-control'), 'no-store');
         assert.equal(res.headers.get('cache-tag'), null);
+        assert.equal(res.headers.get('vary'), 'Origin');
 
         if (status === 302) {
             assert.ok(res.headers.get('location'));
@@ -304,6 +397,14 @@ for (const [name, rest] of [
     ['an options list', `${SPEC}/options`],
     ['a path below a file', `${file('pinned')}/extra`],
     ['a spec id in the wrong case', `Spec_abc/${CV}`],
+    ['a derived manifest', `derived/${OPS}/${OCV}`],
+    ['a derived file selector', `derived/${OPS}/${OCV}/file?format=csv`],
+    ['a path below a derived file', `${derivedFile('pinned')}/extra`],
+    ['a derived id in the wrong case', `derived/Ops_${OPS.slice(4)}/${OCV}/files/pinned`],
+    ['a spec id where a derived id goes', `derived/${SPEC}/${OCV}/files/pinned`],
+    ['a derived version in the wrong case', `derived/${OPS}/Ocv_${OCV.slice(4)}/files/pinned`],
+    ['a dataset version where a derived version goes', `derived/${OPS}/${CV}/files/pinned`],
+    ['a path below heads', `heads/extra?spec_id=${SPEC}`],
 ] as const) {
     test(`other routes: ${name} is forwarded with no read handling`, async () => {
         logged.mock.resetCalls();
@@ -358,17 +459,22 @@ test('revalidation: a manifest relays dfo-apis 304 with the 200 cache headers', 
     await fresh.body?.cancel();
 });
 
-test('revalidation: a file sends If-None-Match to storage and relays its 304', async () => {
-    const fresh = await call(file('pinned'));
-    const res = await call(file('pinned'), { headers: { 'if-none-match': STORED_ETAG } });
+for (const [name, path, version] of [
+    ['file', file, CV],
+    ['derived file', derivedFile, OCV],
+] as const) {
+    test(`revalidation: a ${name} sends If-None-Match to storage and relays its 304`, async () => {
+        const fresh = await call(path('pinned'));
+        const res = await call(path('pinned'), { headers: { 'if-none-match': STORED_ETAG } });
 
-    assert.equal(storageRequests.at(-1)?.['if-none-match'], STORED_ETAG);
-    assert.equal(res.status, 304);
-    assert.equal(res.headers.get('etag'), STORED_ETAG);
-    assert.equal(res.headers.get('cache-control'), fresh.headers.get('cache-control'));
-    assert.equal(res.headers.get('cache-tag'), CV);
-    await fresh.body?.cancel();
-});
+        assert.equal(storageRequests.at(-1)?.['if-none-match'], STORED_ETAG);
+        assert.equal(res.status, 304);
+        assert.equal(res.headers.get('etag'), STORED_ETAG);
+        assert.equal(res.headers.get('cache-control'), fresh.headers.get('cache-control'));
+        assert.equal(res.headers.get('cache-tag'), version);
+        await fresh.body?.cancel();
+    });
+}
 
 test(
     'storage: no headers in time falls back to the 302, no-store, and logs an error',
@@ -763,4 +869,101 @@ test('log: a current read is a definition line with the content version dfo-apis
     assert.equal('digest' in entry, false);
     assert.equal(entry.served_by, 'gateway');
     assert.equal(entry.status, 200);
+});
+
+const HEADS = `heads?spec_id=${SPEC}&spec_id=${OTHER_SPEC}&spec_id=${SPEC}`;
+
+test('heads: a 200 keeps dfo-apis Cache-Control, varies on Origin, is open to a DFO origin and drops per-request headers', async () => {
+    const res = await call(HEADS, { headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), HEADS_CACHE_CONTROL);
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('cache-tag'), null);
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.doesNotMatch(res.headers.get('access-control-expose-headers')!, /Trace|RateLimit/i);
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    assert.equal(res.headers.get('server-timing'), null);
+    assert.deepEqual(await res.json(), {
+        heads: [
+            { spec_id: SPEC, content_version: CV },
+            { spec_id: OTHER_SPEC, content_version: null },
+            { spec_id: SPEC, content_version: CV },
+        ],
+    });
+});
+
+test('heads: a HEAD is read as a GET', async () => {
+    const res = await call(HEADS, { method: 'HEAD', headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('cache-control'), HEADS_CACHE_CONTROL);
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    await res.body?.cancel();
+});
+
+test('heads: a 400 is no-store and keeps its per-request headers', async () => {
+    const res = await call('heads?spec_id=nope', { headers: { origin: ORIGIN } });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.equal(res.headers.get('x-dfo-trace-id'), HEADS_TRACE);
+    assert.match(res.headers.get('access-control-expose-headers')!, /\bX-DFO-Trace-Id\b/);
+    await res.arrayBuffer();
+});
+
+test('heads: the preflight is answered and a foreign origin gets no CORS headers and is logged', async () => {
+    logged.mock.resetCalls();
+    const preflight = await call(HEADS, {
+        method: 'OPTIONS',
+        headers: { origin: ORIGIN, 'access-control-request-method': 'GET' },
+    });
+    const foreign = await call(HEADS, { headers: { origin: 'https://example.org' } });
+
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), ORIGIN);
+    assert.equal(preflight.headers.get('vary'), 'Origin');
+    assert.equal(foreign.status, 200);
+    assert.equal(foreign.headers.get('access-control-allow-origin'), null);
+    assert.equal(foreign.headers.get('vary'), 'Origin');
+    await foreign.arrayBuffer();
+
+    const refused = lines(logged.mock.calls).filter((e) => e.message === 'gateway.cors_refused');
+
+    assert.deepEqual(
+        refused.map((e) => [e.door, e.method]),
+        [['heads', 'GET']],
+    );
+});
+
+test('heads: repeated spec_id parameters reach dfo-apis in order, and the line names them', async () => {
+    logged.mock.resetCalls();
+    await (await call(HEADS)).arrayBuffer();
+
+    assert.equal(headsQueries.at(-1), `?spec_id=${SPEC}&spec_id=${OTHER_SPEC}&spec_id=${SPEC}`);
+
+    const [entry] = loggedReads();
+
+    assert.equal(entry.door, 'heads');
+    assert.equal(entry.trace_id, HEADS_TRACE);
+    assert.equal(entry.spec_id, null);
+    assert.deepEqual(entry.spec_ids, [SPEC, OTHER_SPEC, SPEC]);
+    assert.equal(entry.content_version, null);
+    assert.equal(entry.status, 200);
+    assert.equal(entry.served_by, 'gateway');
+});
+
+test('heads: another method is forwarded with no read handling', async () => {
+    logged.mock.resetCalls();
+    const res = await call(HEADS, { method: 'POST', headers: { origin: ORIGIN } });
+
+    assert.equal(res.headers.get('cache-control'), OTHER_CACHE_CONTROL);
+    assert.equal(res.headers.get('vary'), null);
+    assert.equal(res.headers.get('access-control-allow-origin'), null);
+    await res.arrayBuffer();
+    assert.equal(loggedReads().length, 0);
 });
