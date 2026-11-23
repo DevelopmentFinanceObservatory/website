@@ -7,11 +7,14 @@ import type { ForwardOptions } from './forward';
 // on the turn: the visitor's x-dfo-caller (src/lib/proxy/caller) and, for a
 // signed-in user, the account digest the event export also writes
 // (src/lib/proxy/account).
-const IDENTIFIED_ROUTES = new Set(['turn', 'interrupt']);
+const IDENTIFIED_ROUTES = new Set(['turn', 'interrupt', 'resume']);
 
 // How long forward() waits on the session read before it sends the call
-// without an account. An interrupt reads the session only for the account,
-// so a slow session store must not hold the interrupt back.
+// without an account. The Studio proxy's ownership check reads the session
+// first, through the same once-per-request read, waits up to its own
+// OWNERSHIP_TIMEOUT_MS and refuses the call with 503 when the read does not
+// answer (src/lib/studio/studioAccess), so a call that reaches this wait
+// finds the read already settled.
 const ACCOUNT_TIMEOUT_MS = 1_000;
 
 // Built once, so an unset EXPORT_ID_HMAC_KEY logs its warning once per process.

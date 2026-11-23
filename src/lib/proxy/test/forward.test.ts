@@ -28,9 +28,14 @@ const held = new Map<string, ServerResponse>();
 // The upstream, one behaviour per path. /gzip gzips its body and labels it,
 // as dfo-apis may. /reset sends headers and closes before any body byte.
 // /fails-later and /stalls send one chunk and are held. /empty sends no body.
-// /events sends event-stream headers and is held.
+// /events sends event-stream headers and is held. /echo answers with the
+// request body it received.
 const upstream = createServer((req, res) => {
     switch (req.url) {
+        case '/echo':
+            res.writeHead(200, { 'content-type': 'application/json' });
+            req.pipe(res);
+            break;
         case '/gzip': {
             const encoded = gzipSync(JSON_BODY);
 
@@ -82,6 +87,37 @@ const call = (path: string, headers: Record<string, string> = {}): Promise<Respo
         target: `${base}${path}`,
         unreachable: 'The API is unreachable.',
     });
+
+test('forward: sends the body option in place of a client body already read', async () => {
+    const req = new Request('http://site.test/api/v1/echo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"conversation_id":"conv-a","conversation_id":"conv-b"}',
+    });
+
+    await req.text();
+
+    const res = await forward(req as NextRequest, {
+        target: `${base}/echo`,
+        unreachable: 'The API is unreachable.',
+        body: '{"conversation_id":"conv-b"}',
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), '{"conversation_id":"conv-b"}');
+});
+
+test('forward: takes the verdict of a call already counted and counts nothing more', async () => {
+    const res = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
+        surface: 'api',
+        counted: { allowed: false, limit: 120, remaining: 0, reset: 30, counted: true },
+        target: `${base}/empty`,
+        unreachable: 'The API is unreachable.',
+    });
+
+    assert.equal(res.status, 429);
+    assert.equal((await res.json()).code, 'rate_limited');
+});
 
 for (const acceptEncoding of ['gzip, deflate, br', null]) {
     test(`forward: relays a JSON body unencoded, Accept-Encoding ${acceptEncoding}`, async () => {
