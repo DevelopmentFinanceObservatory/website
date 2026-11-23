@@ -470,11 +470,12 @@ const DAY_MS = 86_400_000;
 export const EVENT_STATEMENT_MS = 5 * 60_000;
 
 /**
- * How long the page queries of one day may take together, from the day's
- * start. No page starts past it, and a read past it fails its day
- * (pgEventSource). The busiest day so far holds 1,434 events, one page of
- * an index range scan on `created_at`, so 90 s leaves room for days a
- * hundred times busier.
+ * The latest time after a day's start that one of its page queries may
+ * start (pgEventSource). A page due later fails its day, and a page that
+ * starts before then runs to its own bound, so the day's last page can end
+ * past it, as DAY_WORST_MS counts. The busiest day so far holds 1,434
+ * events, one page of an index range scan on `created_at`, so 90 s leaves
+ * room for days a hundred times busier.
  */
 const DAY_READ_MS = 90_000;
 
@@ -581,9 +582,9 @@ const PAGE_SIZE = 5_000;
  * The event table over `db`, whose pool bounds each statement
  * (EVENT_STATEMENT_MS). A day's pages run as separate statements: events
  * are only ever added, and each page starts after the last row of the one
- * before, so the pages need no shared snapshot. No page starts once
- * `readMs` have passed since the day's start, so a day's read ends within
- * `readMs` and one page's bound.
+ * before, so the pages need no shared snapshot. `readMs` after the day's
+ * start is the latest time a page may start, and a page due later fails
+ * the read, so a day's read ends within `readMs` and one page's bound.
  */
 export const pgEventSource = (
     db: ExportDb,
