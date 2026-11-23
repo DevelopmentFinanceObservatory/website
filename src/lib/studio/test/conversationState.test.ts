@@ -26,6 +26,7 @@ import {
     takeApproval,
     widgetFromRead,
     withMovedQuestion,
+    withOwedQuestion,
     withTurnApprovals,
     type AttachStep,
 } from '../conversationState.ts';
@@ -43,6 +44,7 @@ import {
     withHarnessTurn,
     withInherited,
     withSessionLeft,
+    offeredQuestionPageTurns,
     offeredQuestionTurn,
     pageTurnReplyAt,
     turnReplyAt,
@@ -834,7 +836,7 @@ test("a fork's first turn is keyed from 1, whatever the source's prompts held", 
         reply: 'the answer',
         component_ids: [],
     };
-    const confirmed = withReadPrompts(fork, first);
+    const confirmed = withReadPrompts(fork, [first]);
 
     assert.equal(heldTurns(confirmed), 1);
 
@@ -856,7 +858,7 @@ test("a prompt the harness never confirmed holds no turn another tab's reply can
     assert.equal(readSince(page), 0);
 
     // The read's latest turn is theirs, so `mine` shows as unsent.
-    const read = withReadPrompts(page, theirs);
+    const read = withReadPrompts(page, [theirs]);
     const { messages, appended } = mergeClosedTurns(read, [closed(1), theirs], 3);
 
     assert.deepEqual(messages.slice(2), [
@@ -880,28 +882,32 @@ test("the page's last prompt takes the harness's next turn only when the harness
         { role: 'bot', text: '' },
     ];
 
-    await t.test('the next turn with its text confirms it', () =>
-        assert.deepEqual(
-            [
-                ...promptTurns(
-                    withReadPrompts(page, { turn_index: 2, user_message: 'ODA to Ghana' }),
-                ),
-            ],
-            [
-                [0, 1],
-                [2, 2],
-            ],
-        ),
-    );
+    await t.test('the next turn with its text confirms it, with or without a later turn', () => {
+        const next = { turn_index: 2, user_message: 'ODA to Ghana' };
+
+        for (const turns of [[next], [next, { turn_index: 3, user_message: 'question 3' }]]) {
+            const read = withReadPrompts(page, turns);
+
+            assert.deepEqual(
+                [...promptTurns(read)],
+                [
+                    [0, 1],
+                    [2, 2],
+                ],
+            );
+            // The closed turn it holds is not appended again.
+            assert.deepEqual(mergeClosedTurns(read, [{ ...closed(2), ...next }], 3).appended, []);
+        }
+    });
 
     await t.test('a later turn, or another text, leaves it unsent', () => {
-        for (const latest of [
-            { turn_index: 3, user_message: 'ODA to Ghana' },
-            { turn_index: 2, user_message: 'ODA to Kenya' },
-            { turn_index: 1, user_message: 'question 1' },
-            null,
+        for (const turns of [
+            [{ turn_index: 3, user_message: 'ODA to Ghana' }],
+            [{ turn_index: 2, user_message: 'ODA to Kenya' }],
+            [{ turn_index: 1, user_message: 'question 1' }],
+            [],
         ]) {
-            const read = withReadPrompts(page, latest);
+            const read = withReadPrompts(page, turns);
 
             assert.deepEqual([...promptTurns(read)], [[0, 1]]);
             assert.deepEqual(read.slice(2), [
@@ -918,7 +924,7 @@ test("the page's last prompt takes the harness's next turn only when the harness
             { role: 'user', text: 'ODA to Ghana', turn: 2 },
             { role: 'bot', text: '' },
         ];
-        const read = withReadPrompts(earlier, { turn_index: 1, user_message: 'ODA to Ghana' });
+        const read = withReadPrompts(earlier, [{ turn_index: 1, user_message: 'ODA to Ghana' }]);
 
         assert.deepEqual(read, [
             { role: 'user', text: 'lost', turn: 1, unkeyed: true },
@@ -931,8 +937,28 @@ test("the page's last prompt takes the harness's next turn only when the harness
     await t.test('a transcript whose prompts all hold their turns is unchanged', () => {
         const held = keyed([1, 2]);
 
-        assert.equal(withReadPrompts(held, { turn_index: 3, user_message: 'question 3' }), held);
+        assert.equal(withReadPrompts(held, [{ turn_index: 3, user_message: 'question 3' }]), held);
     });
+});
+
+test("an owed new question closes its own turn's reply, past a later unsent prompt", () => {
+    // Turn 1's plan took the typed text as a new question; the page then
+    // sent `later`, which the harness never admitted.
+    const page: ChatMessage[] = [
+        { role: 'user', text: 'question 1', turn: 1, harnessTurn: 1 },
+        { role: 'user', text: 'Since 2018.', answer: true },
+        { role: 'bot', text: '' },
+        { role: 'user', text: 'later', turn: 2, unkeyed: true },
+        { role: 'bot', text: UNSENT_NOTE },
+    ];
+
+    assert.deepEqual(withOwedQuestion(page, 1, 'Since 2018.', true), [
+        page[0],
+        { role: 'bot', text: NEW_QUESTION_NOTE },
+        ...page.slice(3),
+    ]);
+    // A turn the page did not hold keeps its reply as the read wrote it.
+    assert.equal(withOwedQuestion(page, 1, 'Since 2018.', false), page);
 });
 
 test("a paused turn the page's later unsent prompt does not hold joins the transcript last", () => {
@@ -948,10 +974,12 @@ test("a paused turn the page's later unsent prompt does not hold joins the trans
         pause: { interrupt_id: 'int-7', kind: 'plan', frames: [PLAN] },
         closed_since: [closed(1)],
     });
-    const confirmed = withReadPrompts(page, {
-        turn_index: 2,
-        user_message: read.turn!.user_message!,
-    });
+    const confirmed = withReadPrompts(page, [
+        {
+            turn_index: 2,
+            user_message: read.turn!.user_message!,
+        },
+    ]);
     const step = attachStep(read);
 
     assert.equal(step.kind, 'pause');
@@ -1507,12 +1535,16 @@ test('a card a state read draws during a failed legacy reconcile joins the legac
 test("a refused new question is offered on the last reply, which the turn's reply then is", () => {
     // Turn 3 handed back the question; the page's send was refused 429.
     const refused: ChatMessage[] = [
-        { role: 'user', text: 'question 3', harnessTurn: 3 },
+        { role: 'user', text: 'question 3', harnessTurn: 3, turn: 3 },
         { role: 'bot', text: NEW_QUESTION_NOTE },
-        { role: 'user', text: 'ODA to Ghana', refunded: true, fromNewQuestion: 3 },
+        { role: 'user', text: 'ODA to Ghana', refunded: true, fromNewQuestion: 3, turn: 4 },
         { role: 'bot', text: '_You have used your prompts for today._' },
     ];
     const offered = withOfferedQuestion(refused, 3, 'ODA to Ghana');
+
+    // Page turn 4 leaves with its prompt, and its Activity entry with it.
+    assert.deepEqual(offeredQuestionPageTurns(refused, 3), [4]);
+    assert.deepEqual(offeredQuestionPageTurns(offered, 3), []);
 
     assert.deepEqual(offered, [
         refused[0],

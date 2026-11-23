@@ -25,6 +25,7 @@ import {
     NEW_QUESTION_NOTE,
     promptTurns,
     turnReplyAt,
+    withNewQuestion,
     withOfferedQuestion,
     withoutUnsentQuestion,
 } from './transcript.ts';
@@ -336,6 +337,24 @@ export const withMovedQuestion = (
     readsState
         ? withoutUnsentQuestion(messages, turnIndex)
         : withOfferedQuestion(messages, turnIndex, text);
+
+/**
+ * The transcript once a state read owes harness turn `turnIndex`'s new
+ * question `text` (owedNewQuestion) and the page asks it as the next turn:
+ * any unsent send of it leaves (withoutUnsentQuestion), and a turn the page
+ * held (`held`) closes its plan card on its own reply (withNewQuestion at
+ * turnReplyAt), so a later unsent prompt's reply is left as it is.
+ */
+export const withOwedQuestion = (
+    messages: ChatMessage[],
+    turnIndex: number,
+    text: string,
+    held: boolean,
+): ChatMessage[] => {
+    const kept = withoutUnsentQuestion(messages, turnIndex);
+
+    return held ? withNewQuestion(kept, text, turnReplyAt(kept, turnIndex)) : kept;
+};
 
 // An approval's key: its turn and its plan's revision. Two turns can approve
 // plans of the same content, and so the same revision.

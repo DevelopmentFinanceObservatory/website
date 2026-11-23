@@ -79,6 +79,7 @@ import {
     turnApprovalKeys,
     widgetFromRead,
     withMovedQuestion,
+    withOwedQuestion,
     withTurnApprovals,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
@@ -113,12 +114,12 @@ import {
     readSince,
     pageTurnReplyAt,
     withAnswer,
+    offeredQuestionPageTurns,
     offeredQuestionTurn,
     withFollowup,
     withHarnessTurn,
     withNewQuestion,
     withOfferedQuestion,
-    withoutUnsentQuestion,
     withReadPrompts,
     withRefundedPrompt,
     withReplyAt,
@@ -401,8 +402,11 @@ export const useChat = (
         readsState?: boolean;
     } = {},
 ) => {
+    // The saved transcript as restored, computed once for the refs and the
+    // state seeded from it.
+    const [restored] = useState(() => (initial ? restoredMessages(initial) : []));
     const [state, setState] = useState<ChatState>(() => ({
-        messages: initial ? restoredMessages(initial) : [],
+        messages: restored,
         widgets: initial ? restoredWidgets(initial) : [],
         queued: [],
         activity: restoreActivity(initial?.activity),
@@ -430,9 +434,7 @@ export const useChat = (
     const generationRef = useRef(0);
     // Set below: the settle handler reaches send() through it.
     const drainRef = useRef<() => void>(() => {});
-    const turnCount = useRef(
-        initial ? restoredTurnCount(initial.turnCount, restoredMessages(initial)) : 0,
-    );
+    const turnCount = useRef(initial ? restoredTurnCount(initial.turnCount, restored) : 0);
     // The transcript as last rendered, for the callbacks that read which
     // harness turns it holds (heldTurns) outside a state update.
     const messagesRef = useRef<ChatMessage[]>([]);
@@ -442,7 +444,8 @@ export const useChat = (
     }, [state.messages]);
     // The revisions of the approved plans the page holds, so a repeated
     // plan.approved, or a state read's, attaches none again.
-    const approvalsRef = useRef(approvalKeys(initial ? restoredMessages(initial) : []));
+    const [restoredApprovals] = useState(() => approvalKeys(restored));
+    const approvalsRef = useRef(restoredApprovals);
     // The cards as last rendered, for the state reads that draw the cards a
     // manifest names and the page lacks (drawCards).
     const widgetsRef = useRef<TurnWidget[]>([]);
@@ -662,12 +665,25 @@ export const useChat = (
     // (refused, never reached, stopped, or taken out of the queue) is offered
     // on the reply of the turn that asked it, for the user to send, and is
     // never sent on its own again (owedNewQuestion reads the offer). Its
-    // unsent prompt leaves the transcript with its reply.
+    // unsent prompt leaves the transcript with its reply and its Activity
+    // entry, and its page turn is free again when it was the latest.
     const offerNewQuestion = useCallback((turnIndex: number, text: string) => {
         const offer = (messages: ChatMessage[]) => withOfferedQuestion(messages, turnIndex, text);
+        const dropped = new Set(offeredQuestionPageTurns(messagesRef.current, turnIndex));
+
+        while (dropped.has(turnCount.current)) {
+            turnCount.current -= 1;
+        }
 
         messagesRef.current = offer(messagesRef.current);
-        setState((prev) => ({ ...prev, messages: offer(prev.messages) }));
+        setState((prev) => ({
+            ...prev,
+            messages: offer(prev.messages),
+            activity:
+                dropped.size === 0
+                    ? prev.activity
+                    : prev.activity.filter((entry) => !dropped.has(entry.turn)),
+        }));
     }, []);
     // A canvas edit the user made to a card the harness holds (Remove, Pin,
     // Add), sent to the harness, whose manifest then decides whether the
@@ -2227,14 +2243,10 @@ export const useChat = (
                 // until the next turn opens with it.
                 const held = owed.turnIndex <= heldTurns(before);
 
-                setState((prev) => {
-                    const messages = withoutUnsentQuestion(prev.messages, owed.turnIndex);
-
-                    return {
-                        ...prev,
-                        messages: held ? withNewQuestion(messages, owed.text) : messages,
-                    };
-                });
+                setState((prev) => ({
+                    ...prev,
+                    messages: withOwedQuestion(prev.messages, owed.turnIndex, owed.text, held),
+                }));
                 askNewQuestion(owed.turnIndex, owed.text);
             }
 
@@ -2313,25 +2325,6 @@ export const useChat = (
                 read = answer;
 
                 const open = answer.turn;
-
-                if (!unkeyed) {
-                    // A prompt saved before its stream named its turn takes
-                    // the harness's latest turn only where the read confirms
-                    // it; the rest the harness lacks show as unsent.
-                    const latest = open
-                        ? { turn_index: open.index, user_message: open.user_message ?? '' }
-                        : null;
-
-                    messagesRef.current = withReadPrompts(messagesRef.current, latest);
-                    setState((prev) => ({
-                        ...prev,
-                        messages: withReadPrompts(prev.messages, latest),
-                    }));
-                    produced?.(producedCards(answer, openTurnCards(answer)));
-
-                    return;
-                }
-
                 const recorded = [
                     ...answer.closed_since,
                     ...(open &&
@@ -2340,6 +2333,21 @@ export const useChat = (
                         ? [{ turn_index: open.index, user_message: open.user_message }]
                         : []),
                 ];
+
+                if (!unkeyed) {
+                    // A prompt saved before its stream named its turn takes
+                    // the turn after the ones the page holds only where the
+                    // read confirms it; the rest the harness lacks show as
+                    // unsent.
+                    messagesRef.current = withReadPrompts(messagesRef.current, recorded);
+                    setState((prev) => ({
+                        ...prev,
+                        messages: withReadPrompts(prev.messages, recorded),
+                    }));
+                    produced?.(producedCards(answer, openTurnCards(answer)));
+
+                    return;
+                }
 
                 messagesRef.current = keyUnkeyedSave(messagesRef.current, recorded);
                 setState((prev) => ({

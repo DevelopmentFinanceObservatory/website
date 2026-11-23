@@ -386,11 +386,12 @@ export const ensureTurn = (
 export const UNSENT_NOTE = '_This message was not sent._';
 
 /**
- * The transcript against a state read whose latest turn is `latest` (null
- * when the harness holds none). The page's last own prompt, saved before
- * its stream named its turn, takes that turn when it is the one after the
- * latest the transcript holds and the harness recorded its text
- * (recordsPrompt, or the text after a fork's recap on turn 1). Every other
+ * The transcript against a state read whose turns, closed and open, are
+ * `turns`. The page's last own prompt, saved before its stream named its
+ * turn, takes the turn after the latest the transcript holds when the read
+ * holds that turn and the harness recorded its text (recordsPrompt, or the
+ * text after a fork's recap on turn 1), whether or not a later turn
+ * followed it. Every other
  * own prompt with no turn is one the read shows the harness lacks: it is
  * marked `unkeyed`, so it numbers no turn, and an empty reply says it was
  * not sent. The turns it may have been come in from the harness's record
@@ -398,14 +399,14 @@ export const UNSENT_NOTE = '_This message was not sent._';
  */
 export const withReadPrompts = (
     messages: ChatMessage[],
-    latest: RecordedPrompt | null,
+    turns: readonly RecordedPrompt[],
 ): ChatMessage[] => {
     const held = heldTurns(messages);
     const last = messages.findLastIndex(isOwnPrompt);
     const lastPrompt = messages[last];
-    const recorded = latest?.turn_index === held + 1 ? latest.user_message : null;
+    const recorded = turns.find((turn) => turn.turn_index === held + 1)?.user_message;
     const confirmed =
-        recorded !== null &&
+        recorded !== undefined &&
         lastPrompt?.role === 'user' &&
         lastPrompt.harnessTurn === undefined &&
         (recordsPrompt(recorded, lastPrompt.text) ||
@@ -555,6 +556,30 @@ export const withoutUnsentQuestion = (
     return kept.length === messages.length ? messages : kept;
 };
 
+// A prompt sent for harness turn `turnIndex`'s new question that opened no
+// turn of this conversation, refused or unsent (withOfferedQuestion).
+const sentForQuestion = (message: ChatMessage, turnIndex: number): boolean =>
+    message.role === 'user' &&
+    message.fromNewQuestion === turnIndex &&
+    message.harnessTurn === undefined &&
+    !message.inherited;
+
+/** The page turns of the prompts withOfferedQuestion takes off the
+ *  transcript for harness turn `turnIndex`'s new question, whose Activity
+ *  entries go with them. */
+export const offeredQuestionPageTurns = (
+    messages: readonly ChatMessage[],
+    turnIndex: number,
+): number[] =>
+    messages.flatMap((message) =>
+        message.role === 'user' &&
+        message.turn !== undefined &&
+        isPrompt(message) &&
+        sentForQuestion(message, turnIndex)
+            ? [message.turn]
+            : [],
+    );
+
 /**
  * The transcript with harness turn `turnIndex`'s new question `text` offered
  * for the user to send, after the page's send of it was never admitted:
@@ -569,15 +594,10 @@ export const withOfferedQuestion = (
     turnIndex: number,
     text: string,
 ): ChatMessage[] => {
-    const sent = (message: ChatMessage) =>
-        message.role === 'user' &&
-        message.fromNewQuestion === turnIndex &&
-        message.harnessTurn === undefined &&
-        !message.inherited;
     let dropping = false;
     const kept = messages.filter((message) => {
         if (isPrompt(message)) {
-            dropping = sent(message);
+            dropping = sentForQuestion(message, turnIndex);
         }
 
         return !dropping;
