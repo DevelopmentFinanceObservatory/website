@@ -130,4 +130,11 @@
     @include flex(row, flex-end, center);
 
     gap: rem(10);
+
+    // Send while its unit applies: dimmed like a disabled button, but kept
+    // focusable (`aria-disabled`) so focus stays on it.
+    > button[aria-disabled="true"] {
+        pointer-events: none;
+        opacity: 0.45;
+    }
 }

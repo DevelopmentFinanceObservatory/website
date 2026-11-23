@@ -56,6 +56,7 @@ import {
     stoppedQueuedSwitch,
     switchEnded,
     endedSwitch,
+    replansChoice,
     switchLine,
     switchReply,
     unreachableSwitch,
@@ -1321,7 +1322,7 @@ export const useChat = (
             pendingInterruptRef.current = { interruptId: pending.interruptId, plan: waiting };
             turnPlanRef.current = waiting;
             setState((prev) => ({
-                ...withLine(prev, switchLine(choiceId, label)),
+                ...withLine(prev, switchLine(label, replansChoice(choiceId))),
                 thinking: true,
                 plan: waiting,
             }));

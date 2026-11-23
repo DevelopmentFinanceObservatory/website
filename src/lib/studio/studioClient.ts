@@ -288,7 +288,7 @@ export const runInterrupt = (
     interruptId: string,
     reply: Pick<
         InterruptResponse,
-        'decision' | 'payload' | 'answers' | 'choice_id' | 'option_id' | 'plan_revision'
+        'decision' | 'payload' | 'answers' | 'choice_id' | 'option_id' | 'plan_revision' | 'unit'
     >,
     handlers: StreamHandlers,
     signal?: AbortSignal,

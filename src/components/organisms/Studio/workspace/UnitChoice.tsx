@@ -26,11 +26,20 @@ import Icon from '@/components/atoms/Icon/Icon';
 
 type UnitChoiceProps = {
     offer: UnitOffer;
+    // The unit the chips open on, `offer.start` when not given: on the plan
+    // card, the unit a switch in flight or its failure names.
+    initial?: Unit | null;
     onSend: (unit: Unit) => void;
     // Skip renders only when given.
     onSkip?: () => void;
     // Send stays dimmed until a chip moves off `offer.start`.
     sendDisabledUntilChanged?: boolean;
+    // Send and the lists' rows ignore clicks while what Send sends elsewhere
+    // waits, and keep focus (`aria-disabled`).
+    busy?: boolean;
+    // What the sent unit says while it applies (the plan card's switch),
+    // beside Send.
+    pendingText?: string | null;
 };
 
 // Where focus goes after the next render: a chip, once its list closes, or
@@ -45,6 +54,7 @@ const UnitList = <TValue extends string | number>({
     rows,
     picked,
     onPick,
+    busy,
     field,
     children,
 }: {
@@ -53,6 +63,7 @@ const UnitList = <TValue extends string | number>({
     rows: UnitRow<TValue>[];
     picked: TValue;
     onPick: (value: TValue) => void;
+    busy?: boolean;
     field?: {
         placeholder: string;
         none: string;
@@ -71,8 +82,9 @@ const UnitList = <TValue extends string | number>({
                 key={row.value}
                 type="button"
                 aria-pressed={on}
+                aria-disabled={(busy && !on) || undefined}
                 className={classNames(ledgerStyles.option, styles.row, on && ledgerStyles.optionOn)}
-                onClick={() => onPick(row.value)}
+                onClick={() => !busy && onPick(row.value)}
             >
                 <span className={ledgerStyles.radio} />
                 <span className={ledgerStyles.optionLabel}>{row.label}</span>
@@ -108,11 +120,20 @@ const UnitList = <TValue extends string | number>({
     );
 };
 
-// The unit choice a unit question shows: three chips (currency, prices, and
-// the base year on constant prices), each opening its list below them, then
-// Send and an optional Skip. The pure rules live in lib/studio/unitChoice.ts.
-const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitChoiceProps) => {
-    const [unit, setUnit] = useState<Unit>(offer.start);
+// The unit choice a unit question, a card's Change unit and a plan card's
+// unit row show: three chips (currency, prices, and the base year on
+// constant prices), each opening its list below them, then Send and an
+// optional Skip. The pure rules live in lib/studio/unitChoice.ts.
+const UnitChoice = ({
+    offer,
+    initial,
+    onSend,
+    onSkip,
+    sendDisabledUntilChanged,
+    busy,
+    pendingText,
+}: UnitChoiceProps) => {
+    const [unit, setUnit] = useState<Unit>(initial ?? offer.start);
     const [open, setOpen] = useState<UnitChipKey | null>(null);
     const [all, setAll] = useState(false);
     const [query, setQuery] = useState('');
@@ -137,7 +158,9 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
     const chips = unitChips(offer, unit);
     // The base-year list closes when the prices move off constant.
     const shownList = open === 'year' && unit.prices !== 'constant' ? null : open;
-    const live =
+    // Send is natively disabled only when it has nothing to send; while busy
+    // it stays focusable and ignores clicks.
+    const sendable =
         servesUnit(offer, unit) && (!sendDisabledUntilChanged || unitChanged(offer.start, unit));
     const listId = useId();
 
@@ -161,6 +184,7 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
                 return (
                     <UnitList
                         id={listId}
+                        busy={busy}
                         label="Currency"
                         rows={currencyRows(offer, unit, all)}
                         picked={unit.currency}
@@ -196,6 +220,7 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
                 return (
                     <UnitList
                         id={listId}
+                        busy={busy}
                         label="Prices"
                         rows={priceRows(offer, unit)}
                         picked={unit.prices}
@@ -208,6 +233,7 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
                 return (
                     <UnitList
                         id={listId}
+                        busy={busy}
                         label="Base year"
                         rows={years.map((year) => ({ value: year, label: String(year) }))}
                         picked={unit.base_year ?? 0}
@@ -250,12 +276,24 @@ const UnitChoice = ({ offer, onSend, onSkip, sendDisabledUntilChanged }: UnitCho
                 {list()}
             </div>
             <div className={styles.foot}>
+                {pendingText && (
+                    <span className={ledgerStyles.optionTag}>
+                        <span className={ledgerStyles.spin} />
+                        {pendingText}
+                    </span>
+                )}
                 {onSkip && (
                     <Button variant="bordered" onClick={onSkip}>
                         Skip
                     </Button>
                 )}
-                <Button variant="dark" disabled={!live} onClick={() => onSend(unit)}>
+                <Button
+                    variant="dark"
+                    disabled={!sendable}
+                    aria-disabled={busy || undefined}
+                    aria-busy={busy || undefined}
+                    onClick={() => !busy && onSend(unit)}
+                >
                     Send
                 </Button>
             </div>
