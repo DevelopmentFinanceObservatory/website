@@ -46,7 +46,7 @@ import { hit, type Surface } from './rateLimit';
  *   /openapi.json, /codes/{code}     → SEARCH_API_BASE, the same paths; the
  *                                    document is cut to this host's paths
  *                                    (src/lib/proxy/openapi)
- *   /api/v1/studio/turn|interrupt|cancel|composition
+ *   /api/v1/studio/turn|interrupt|cancel|composition|state|resume
  *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *
  * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
@@ -95,6 +95,9 @@ export type ForwardOptions = {
     pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
     unreachable: string;
+    // The request body to send in place of the client's, which the caller has
+    // already read (the Studio proxy's canonical call body).
+    body?: string;
     // Runs after the rate limit and before the upstream call; a Response it
     // returns is the answer instead (the Studio's prompt allowance).
     admit?: () => Promise<Response | null>;
@@ -177,15 +180,16 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     }
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+    const streamed = hasBody && options.body === undefined;
     let upstream: Response;
 
     try {
         upstream = await apisFetch(options.target, {
             method: req.method,
             headers,
-            body: hasBody ? req.body : undefined,
+            body: hasBody ? (options.body ?? req.body) : undefined,
             // A streamed request body needs this in Node's fetch.
-            ...(hasBody ? { duplex: 'half' } : {}),
+            ...(streamed ? { duplex: 'half' } : {}),
             cache: 'no-store',
             redirect: 'manual',
             // A client that leaves takes the upstream call with it, a body

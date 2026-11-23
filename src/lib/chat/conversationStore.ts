@@ -5,6 +5,7 @@ import {
     searchConversations as searchIn,
     type ConversationMeta,
 } from './conversationSearch';
+import { claimSessionOwner, saveConversation, sessionOwners } from './conversationSave';
 import type { SavedConversation } from './history';
 
 import { db } from '@/lib/db';
@@ -50,37 +51,23 @@ export const getConversation = async (
     return row ? (row.data as SavedConversation) : null;
 };
 
-/** Insert or replace — the client owns the id and sends the full document. */
-export const upsertConversation = async (
-    userId: string,
-    saved: SavedConversation,
-): Promise<void> => {
-    const values = {
-        id: saved.id,
-        userId,
-        title: saved.title,
-        agentSessionId: saved.sessionId,
-        turnCount: saved.turnCount,
-        data: saved,
-        updatedAt: new Date(saved.updatedAt),
-    };
+/** The account the harness conversation `agentSessionId` belongs to, as a
+ *  list of none or one, null for a deleted account
+ *  (src/lib/studio/studioAccess). */
+export const conversationOwners = (agentSessionId: string): Promise<(string | null)[]> =>
+    sessionOwners(db, agentSessionId);
 
-    await db
-        .insert(conversation)
-        .values(values)
-        .onConflictDoUpdate({
-            target: conversation.id,
-            set: {
-                title: values.title,
-                agentSessionId: values.agentSessionId,
-                turnCount: values.turnCount,
-                data: values.data,
-                updatedAt: values.updatedAt,
-            },
-            // A conflict on someone else's id must not overwrite their row.
-            setWhere: eq(conversation.userId, userId),
-        });
-};
+/** Make `userId` the owner of a harness conversation no account owns, and
+ *  answer its owner (claimSessionOwner). */
+export const claimConversationOwner = (
+    agentSessionId: string,
+    userId: string,
+): Promise<(string | null)[]> => claimSessionOwner(db, agentSessionId, userId);
+
+/** Insert or replace; see saveConversation for who a harness conversation
+ *  belongs to. */
+export const upsertConversation = (userId: string, saved: SavedConversation): Promise<void> =>
+    saveConversation(db, userId, saved);
 
 export const deleteConversation = async (userId: string, id: string): Promise<void> => {
     await db

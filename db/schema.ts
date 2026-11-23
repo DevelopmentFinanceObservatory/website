@@ -23,7 +23,9 @@ export * from './auth-schema.ts';
  * with their CSV, activity, pins, layout, theme, notes…) as one JSON
  * document, plus the columns the history list needs without unpacking it.
  * `agentSessionId` is the agent's server-side conversation, so a reopened
- * conversation resumes with its context.
+ * conversation resumes with its context. It is part of the saved document,
+ * which the account rewrites on every save, so it grants nothing: which
+ * account the harness conversation belongs to is `studioSessionOwner`.
  */
 export const conversation = pgTable(
     'conversation',
@@ -44,6 +46,23 @@ export const conversation = pgTable(
 );
 
 export type ConversationRow = typeof conversation.$inferSelect;
+
+/**
+ * The account a harness conversation (`agentSessionId`) belongs to, which the
+ * Studio proxy (src/lib/studio/studioProxy) reads in its `admit` hook, after
+ * the rate limit, on each call that names a conversation
+ * (src/lib/studio/studioAccess). The first save naming the harness
+ * conversation writes the row (src/lib/chat/conversationSave). No later save
+ * changes it, so a save by another account, or the owner's save naming a
+ * different harness conversation, leaves the owner as it was. Deleting the
+ * account keeps the row with a null `userId`: the conversation then belongs
+ * to nobody, and the proxy refuses every call about it.
+ */
+export const studioSessionOwner = pgTable('studio_session_owner', {
+    agentSessionId: text('agent_session_id').primaryKey(),
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 /**
  * A public share: a pruned copy of a conversation (or its canvas, or one
