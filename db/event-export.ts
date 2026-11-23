@@ -7,6 +7,7 @@ import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
 import type { ShareCopied } from '../src/lib/events/shareCopy.ts';
+import type { DataViewVia } from '../src/lib/events/dataView.ts';
 import type { ShareViewer } from '../src/lib/events/shareView.ts';
 import type { StudioDownloadSource } from '../src/lib/events/studioDownload.ts';
 import type { EventName } from '../src/lib/events/track.ts';
@@ -74,6 +75,8 @@ type PropRule =
     | 'token'
     // a token that leaves as its HMAC-SHA256 digest
     | 'digest'
+    // the caller digest `ip:` plus 32 lower-case hex, kept as it is
+    | 'caller'
     // a list of up to MAX_LIST_IDS tokens, each a token or NO_ID
     | 'tokens'
     // a list of up to MAX_LIST_IDS measure tokens (MEASURE_PATTERN, which
@@ -84,6 +87,7 @@ type PropRule =
 
 const TOKEN = TOKEN_PATTERN;
 const MEASURE = MEASURE_PATTERN;
+const CALLER = /^ip:[0-9a-f]{32}$/;
 
 // Every member of the union T, so tsc fails when the site adds a member
 // that the list lacks and the export would drop. Known<> keeps the named
@@ -141,6 +145,7 @@ const PROMPT_INTENTS = every<PromptIntent>()([
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
+const DATA_VIEW_VIA = every<DataViewVia>()(['share']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
 const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
@@ -271,6 +276,15 @@ export const PROP_RULES = {
         viewer: SHARE_VIEWERS,
     },
     'gallery.open': { ...EVERY_EVENT, slug: 'token', kind: GALLERY_KINDS },
+    // An embed the site served (embedDataView in src/lib/events/dataView.ts).
+    'data.view': {
+        ...EVERY_EVENT,
+        specIds: 'tokens',
+        contentVersions: 'tokens',
+        via: DATA_VIEW_VIA,
+        host: 'token',
+        caller: 'caller',
+    },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest (or exportDigest), passes, exportProps, exportPage or
@@ -293,6 +307,8 @@ const passes = (rule: PropRule, value: unknown): boolean => {
         case 'token':
         case 'digest':
             return typeof value === 'string' && TOKEN.test(value);
+        case 'caller':
+            return typeof value === 'string' && CALLER.test(value);
         case 'tokens':
             return listOf(TOKEN, value);
         case 'measures':
@@ -392,7 +408,7 @@ const exportPage = (page: string | null): string | null => {
 // change reaches every day (exportRules). READ_DAY_SQL, which shapes the
 // rows they take, enters the digest as its text and needs no bump. The
 // golden rows in db/test/event-export.test.ts pin each version's output.
-export const ROW_SHAPE_VERSION = 2;
+export const ROW_SHAPE_VERSION = 3;
 
 /**
  * One page of a UTC day's events (pgEventSource's readDay), with
@@ -418,6 +434,7 @@ export const ROW_SHAPE = {
     PROP_RULES,
     TOKEN: TOKEN.source,
     MEASURE: MEASURE.source,
+    CALLER: CALLER.source,
     PAGE_PATH: PAGE_PATH.source,
     SHARE_PATH: SHARE_PATH.source,
     EXPORT_SCHEMA,

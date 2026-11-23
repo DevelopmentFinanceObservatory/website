@@ -6,9 +6,11 @@ import { after } from 'next/server';
 import EmbedView from '@/components/organisms/EmbedView/EmbedView';
 import { auth } from '@/lib/auth/auth';
 import { getShare, slotDepsFor, viewerOwnsShare } from '@/lib/chat/shareStore';
+import { embedDataView } from '@/lib/events/dataView';
 import { refererHost } from '@/lib/events/referer';
 import { shareViewEvent } from '@/lib/events/shareView';
 import { track } from '@/lib/events/track';
+import { requestCaller } from '@/lib/proxy/caller';
 import { sharedViewOfRecord } from '@/lib/studio/slotCards';
 
 type EmbedPageProps = { params: Promise<{ id: string }> };
@@ -36,13 +38,20 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
         notFound();
     }
 
-    // Counted here, server-side, with no identifier and nothing stored on the
-    // device, so it needs no consent. The event holds who viewed the share
-    // (`viewer`: owner, other, signed_out or unknown) and `internal_eng`, read from the domain of the session's
-    // verified email, and leaves off the user id (src/lib/events/shareView).
+    // Counted here, server-side, with nothing stored on the device, so it
+    // needs no consent. embed.view holds no address or id. data.view stores
+    // the caller digest (a keyed digest of the client address) in the events
+    // table, and the export keeps it, so the two rows of one render sit
+    // together in the export. embed.view holds who viewed the share
+    // (`viewer`: owner, other, signed_out or unknown) and `internal_eng`, read
+    // from the domain of the session's verified email, and leaves off the user
+    // id (src/lib/events/shareView).
     // Headers are read during render: inside after() they throw.
     const incoming = await headers();
     const host = refererHost(incoming.get('referer'));
+    const caller = requestCaller(incoming) ?? null;
+    const sharedView = sharedViewOfRecord(slotDepsFor(incoming), row);
+
     after(async () => {
         // The session is read here, after the response, so the render does not wait on it.
         const { props, who } = await shareViewEvent({
@@ -55,9 +64,28 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
         });
 
         await track('embed.view', props, { ...who, headers: incoming });
+
+        // One data.view per embed served, of the frames dfo-apis last recorded
+        // for the share, so the count rests on the site's own render and on
+        // nothing a browser reports. It uses the same anonymous `who` and
+        // carries no share id, which beside the caller digest would tie an
+        // owner's address to their account.
+        const shown = await sharedView.catch(() => null);
+        const dataView =
+            shown &&
+            embedDataView({
+                slots: row.slots,
+                shownSlots: Object.values(shown.slots),
+                host,
+                caller,
+            });
+
+        if (dataView) {
+            await track('data.view', dataView, { ...who, headers: incoming });
+        }
     });
 
-    return <EmbedView shared={await sharedViewOfRecord(slotDepsFor(incoming), row)} />;
+    return <EmbedView shared={await sharedView} />;
 };
 
 export default EmbedPage;
