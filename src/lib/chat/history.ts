@@ -64,6 +64,13 @@ export type SavedConversation = {
     // point" marker there (see shareMarkAfter). A share is a snapshot;
     // nothing after it ever reaches the link.
     shareMarks?: ShareMark[];
+    // The page that built this snapshot (a random id minted per page load)
+    // and the snapshot's sequence number on it. The server ignores a save
+    // whose stored row has the same writer and a higher number. A copy into
+    // another conversation (forkOf, pruneForShare) drops both. Optional:
+    // saves from before this didn't have them.
+    saveWriter?: string;
+    saveSeq?: number;
 };
 
 export type ShareMark = {

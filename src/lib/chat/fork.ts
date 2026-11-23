@@ -6,13 +6,19 @@ import type { SavedConversation } from './history.ts';
 /**
  * A fork of `saved`, a conversation with no harness session behind it. Its
  * messages are inherited, so none of their turn keys numbers the fork's own
- * session, and its cards are local (forkedCanvas).
+ * session, and its cards are local (forkedCanvas). It clears the source
+ * page's `saveWriter` and `saveSeq`, which order the source's saves only.
  */
 export const forkOf = (
     saved: SavedConversation,
-): Pick<SavedConversation, 'messages' | 'canvas' | 'localIds' | 'removedIds'> => ({
+): Pick<
+    SavedConversation,
+    'messages' | 'canvas' | 'localIds' | 'removedIds' | 'saveWriter' | 'saveSeq'
+> => ({
     messages: withInherited(saved.messages),
     ...forkedCanvas(saved),
+    saveWriter: undefined,
+    saveSeq: undefined,
 });
 
 /**

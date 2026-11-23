@@ -374,6 +374,23 @@ export const withMovedQuestion = (
     };
 };
 
+/** The transcript with harness turn `turnIndex`'s new question `text`
+ *  offered for the user to send (withOfferedQuestion), and how many
+ *  refunded prompts left with the sends it drops, for a guest's meter,
+ *  which counts refunds on the transcript. */
+export const withQuestionOffered = (
+    messages: ChatMessage[],
+    turnIndex: number,
+    text: string,
+): MovedQuestion => {
+    const kept = withOfferedQuestion(messages, turnIndex, text);
+    const refunds = messages.filter(
+        (message) => isRefundedPrompt(message) && !kept.includes(message),
+    ).length;
+
+    return { messages: kept, refunds };
+};
+
 /**
  * The transcript once a state read owes harness turn `turnIndex`'s new
  * question `text` (owedNewQuestion) and the page asks it as the next turn:

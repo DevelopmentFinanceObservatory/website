@@ -9,8 +9,7 @@ import { widgetTitle } from '../canvas/layout';
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
-import { createSaveQueue } from '@/lib/studio/saveQueue';
-import { createSaveWaiters } from '@/lib/studio/saveWaiters';
+import { createSaveStamp, createSaveWaiters } from '@/lib/studio/saveWaiters';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
 import { isPrompt } from '@/lib/studio/transcript';
 
@@ -70,6 +69,10 @@ export const useConversationSave = ({
         >;
     } | null>(null);
 
+    // This page's writer id and snapshot sequence number, by which the
+    // server keeps an older save that lands last from changing anything.
+    const [saveStamp] = useState(() => createSaveStamp());
+
     const buildSnapshot = useCallback((): SavedConversation | null => {
         const id = conversationIdRef.current;
         const snap = snapshotRef.current;
@@ -86,6 +89,7 @@ export const useConversationSave = ({
             // runaway prompt is cut, and well past what the header shows.
             title: (snap.doc.conversationTitle ?? firstUser.text).slice(0, 400),
             updatedAt: Date.now(),
+            ...saveStamp(),
             messages: snap.messages,
             widgets: snap.widgets,
             activity: snap.activity,
@@ -103,30 +107,18 @@ export const useConversationSave = ({
             notes: snap.doc.notes,
             shareMarks: snap.doc.shareMarks,
         };
-    }, [takeChatSnapshot]);
+    }, [takeChatSnapshot, saveStamp]);
 
     // Callers waiting on a conversation's next save (whenSaved).
     const [waiters] = useState(createSaveWaiters);
-
-    // Saves go one at a time (createSaveQueue), so an older save never
-    // lands after a newer one.
-    const [saves] = useState(() =>
-        createSaveQueue<SavedConversation>(pushConversation, (saved, ok) => {
-            if (ok) {
-                waiters.saved(saved.id);
-            } else {
-                waiters.failed(saved.id);
-            }
-        }),
-    );
 
     const persistNow = useCallback(() => {
         const saved = buildSnapshot();
 
         if (saved) {
-            saves.push(saved);
+            void pushConversation(saved).then(waiters.sending(saved.id));
         }
-    }, [buildSnapshot, saves]);
+    }, [buildSnapshot, waiters]);
 
     const scheduleSave = useCallback(() => {
         if (readOnly) {
@@ -137,26 +129,18 @@ export const useConversationSave = ({
         saveTimer.current = window.setTimeout(persistNow, 600);
     }, [persistNow, readOnly]);
 
-    // Flush the pending save (leaving the canvas must not lose it). It goes
-    // out at once, past a save in flight, since the page may unload before
-    // that save settles.
+    // Send the debounced save at once, for a page leaving the canvas.
     const flush = useCallback(() => {
         window.clearTimeout(saveTimer.current);
-
-        const saved = buildSnapshot();
-
-        if (saved) {
-            saves.sendNow(saved);
-        }
-    }, [buildSnapshot, saves]);
+        persistNow();
+    }, [persistNow]);
 
     useEffect(() => () => window.clearTimeout(saveTimer.current), []);
 
     // The prompts the last snapshot held, and how many carry their harness
     // turn. A turn's stream changes the transcript faster than the save
     // debounce, so a new prompt, and the turn index its stream names, are
-    // saved at once. A page that leaves mid-turn then holds the turn it
-    // opened, keyed on the harness's index.
+    // saved at once, keyed on the harness's index.
     const promptsRef = useRef(0);
 
     // Any change worth keeping (a message, a widget, a pin) refreshes the

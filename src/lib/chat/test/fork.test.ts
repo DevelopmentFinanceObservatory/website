@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canvasWidgetsOf, isHarnessCard, savedCanvasWidgetsOf } from '../canvas.ts';
-import { openedSave } from '../fork.ts';
+import { forkOf, openedSave } from '../fork.ts';
 import type { SavedConversation } from '../history.ts';
 
 // A fork saved before forks named their local cards: no session, the
@@ -51,6 +51,19 @@ test('Remove and Add work on the inherited cards of a fork saved before forks na
     );
     // Its messages answer the source's turns, not the fork's session.
     assert.ok(opened.messages.every((message) => message.inherited));
+});
+
+test("a fork drops the source page's save order", () => {
+    const source: SavedConversation = {
+        ...devFork,
+        sessionId: 'conversation_1',
+        saveWriter: 'writer_source',
+        saveSeq: 12,
+    };
+    const copy = JSON.parse(JSON.stringify({ ...source, ...forkOf(source) })) as SavedConversation;
+
+    assert.equal('saveWriter' in copy, false);
+    assert.equal('saveSeq' in copy, false);
 });
 
 test('a fork saved before forks named their local cards keeps its inherited cards once its own thread draws', () => {

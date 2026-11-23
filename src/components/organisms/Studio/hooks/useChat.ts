@@ -87,6 +87,7 @@ import {
     widgetFromRead,
     withMovedQuestion,
     withOwedQuestion,
+    withQuestionOffered,
     withTurnApprovals,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
@@ -653,6 +654,10 @@ export const useChat = (
         pendingCardsRef.current = update(pendingCardsRef.current);
         setPendingCardsState(pendingCardsRef.current);
     }, []);
+    // The ids of the cards the page showed when it sent the first add or
+    // remove still in flight with no manifest baseline, on which shownCanvas
+    // overlays the edits.
+    const [editedPageIds, setEditedPageIds] = useState<readonly string[]>([]);
     const shownCardsRef = useRef(shownCards);
 
     useEffect(() => {
@@ -677,10 +682,13 @@ export const useChat = (
     // queue it held back is free to go.
     const leaveSession = useCallback(
         (turn?: number, { refused }: { refused?: number } = {}) => {
+            const pageIds = shownCardsRef.current?.() ?? [];
+            const shownIds =
+                shownCanvas(canvasRef.current, pendingCardsRef.current, pageIds)?.ids ?? pageIds;
             const cards = sessionLeftCards(
-                shownCanvas(canvasRef.current, pendingCardsRef.current)?.ids ?? null,
+                canvasRef.current ? shownIds : null,
                 widgetsRef.current,
-                shownCardsRef.current?.() ?? [],
+                shownIds,
             );
             const left = (messages: ChatMessage[]) => withoutChips(withSessionLeft(messages, turn));
 
@@ -723,15 +731,28 @@ export const useChat = (
     // page sends it only on that click (owedNewQuestion reads the offer). Its
     // unsent prompt leaves the transcript with its reply and its Activity
     // entry, and its page turn is free again when it was the latest.
+    // `droppedRefunds` counts the refunded prompts that leave the transcript
+    // this way or with a moved question (dropMovedQuestion), for a guest's
+    // meter, which counts refunds on the transcript.
+    const [droppedRefunds, setDroppedRefunds] = useState(0);
     const offerNewQuestion = useCallback((turnIndex: number, text: string) => {
         const offer = (messages: ChatMessage[]) => withOfferedQuestion(messages, turnIndex, text);
         const dropped = new Set(offeredQuestionPageTurns(messagesRef.current, turnIndex));
+        const { messages: kept, refunds } = withQuestionOffered(
+            messagesRef.current,
+            turnIndex,
+            text,
+        );
 
         while (dropped.has(turnCount.current)) {
             turnCount.current -= 1;
         }
 
-        messagesRef.current = offer(messagesRef.current);
+        if (refunds > 0) {
+            setDroppedRefunds((prev) => prev + refunds);
+        }
+
+        messagesRef.current = kept;
         setState((prev) => ({
             ...prev,
             messages: offer(prev.messages),
@@ -760,6 +781,10 @@ export const useChat = (
             }
 
             const generation = generationRef.current;
+
+            if (!canvasRef.current && pendingCardsRef.current.size === 0) {
+                setEditedPageIds(shownCardsRef.current?.() ?? []);
+            }
 
             setPendingPins((prev) => withPinsSent(prev, operations));
             setPendingCards((prev) => withCardsSent(prev, operations));
@@ -852,7 +877,10 @@ export const useChat = (
     // holds no manifest's pins and the save's pins stand.
     const pins = useMemo(() => shownPins(canvas, pendingPins), [canvas, pendingPins]);
     // The canvas with the user's unanswered adds and removes showing.
-    const shown = useMemo(() => shownCanvas(canvas, pendingCards), [canvas, pendingCards]);
+    const shown = useMemo(
+        () => shownCanvas(canvas, pendingCards, editedPageIds),
+        [canvas, pendingCards, editedPageIds],
+    );
     // Put a plan card up as the pending pause, whether from the stream or
     // from a refusal that answered a stale card with the current one.
     const offerPlan = useCallback((plan: PlanState) => {
@@ -1620,10 +1648,9 @@ export const useChat = (
     // keeps the question offered on the turn's reply (withMovedQuestion).
     // The prompt leaves refunded, as the site's meter gave it back, and
     // `droppedRefunds` counts the refunded prompts that left the transcript
-    // this way, for a guest's meter, which counts refunds on the transcript.
+    // this way.
     const reattachRef = useRef<() => void>(() => {});
     const readsStateRef = useRef(readsState);
-    const [droppedRefunds, setDroppedRefunds] = useState(0);
 
     useEffect(() => {
         readsStateRef.current = readsState;

@@ -138,8 +138,16 @@ test('an edit refused as busy or briefly unavailable is sent again after the wai
         null,
     );
     const cases: [string, unknown[], number[], unknown][] = [
-        // Busy for as long as it lasts, then answered.
-        ['busy', [busy, busy, busy, manifest], [4000, 4000, 4000], null],
+        ['busy, then answered', [busy, busy, busy, busy, manifest], [4000, 4000, 4000, 4000], null],
+        // A busy 409 is sent CANVAS_EDIT_BUSY_ATTEMPTS times in all.
+        ['busy throughout', [busy, busy, busy, busy, busy], [4000, 4000, 4000, 4000], busy],
+        // Busy answers spend none of the 503 sends.
+        [
+            'busy, then unavailable',
+            [busy, busy, unavailable, unavailable, manifest],
+            [4000, 4000, 1000, 1000],
+            null,
+        ],
         ['unavailable, then answered', [unavailable, manifest], [1000], null],
         // A 503 is sent CANVAS_EDIT_ATTEMPTS times in all.
         [
@@ -178,29 +186,45 @@ test('an edit refused as busy or briefly unavailable is sent again after the wai
     }
 });
 
-test('an edit waiting to be sent again stops when the page leaves the conversation', async () => {
+test('leaving the conversation ends the wait of an edit to be sent again', async () => {
     const waking = deferred<void>();
-    let calls = 0;
+    const calls: string[] = [];
     const edits = createCanvasEdits({
-        mutate: async () => {
-            calls += 1;
-            throw new CompositionRefusal(
-                409,
-                { error: 'transient_unavailable', retry: 'retry_after_delay', detail: 'busy' },
-                null,
-            );
+        mutate: async (_session, operations) => {
+            calls.push(operations[0].op);
+
+            if (operations === remove) {
+                throw new CompositionRefusal(
+                    409,
+                    { error: 'transient_unavailable', retry: 'retry_after_delay', detail: 'busy' },
+                    null,
+                );
+            }
+
+            return manifest;
         },
-        onManifest: () => assert.fail('a left conversation takes no manifest'),
+        onManifest: () => {},
         onFailure: () => assert.fail('a left conversation hears no failure'),
-        sleep: () => waking.promise,
+        // A wait that ends when aborted, or else when the test wakes it.
+        sleep: (_ms, signal) =>
+            new Promise((resolve, reject) => {
+                void waking.promise.then(resolve);
+                signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+            }),
     });
     const pending = edits.enqueue('session', remove);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     edits.reset();
+
+    // The next edit of the same session goes out without waiting on it.
+    const next = edits.enqueue('session', add);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(calls, ['remove', 'add']);
     waking.resolve();
     assert.equal(await pending, false);
-    assert.equal(calls, 1);
+    assert.equal(await next, true);
 });
 
 test("a harness card's add or remove shows at once, and a refusal rolls it back", () => {
@@ -222,10 +246,21 @@ test("a harness card's add or remove shows at once, and a refusal rolls it back"
     // Pins are not card edits.
     assert.equal(shownCanvas(canvas, withCardsSent(new Map(), [pinEdit([], 'cmp_1')])), canvas);
 
+    // With no manifest baseline, the edits show on the cards the page shows.
+    const pageIds = ['cmp_1', 'cmp_2', 'text_1'];
+
+    assert.deepEqual(shownCanvas(null, sent, pageIds)?.ids, ['cmp_2', 'text_1', 'cmp_3']);
+    assert.equal(shownCanvas(null, new Map(), pageIds), null);
+    assert.equal(shownCanvas(null, sent), null);
+
     // The session gone: the cards turn local as the user left them.
     const widgets = ['cmp_1', 'cmp_2', 'cmp_3'].map((id) => ({ id }));
 
     assert.deepEqual(sessionLeftCards(shownCanvas(canvas, sent)?.ids ?? null, widgets), {
+        shown: ['cmp_2', 'cmp_3'],
+        hidden: ['cmp_1'],
+    });
+    assert.deepEqual(sessionLeftCards(null, widgets, shownCanvas(null, sent, pageIds)?.ids), {
         shown: ['cmp_2', 'cmp_3'],
         hidden: ['cmp_1'],
     });

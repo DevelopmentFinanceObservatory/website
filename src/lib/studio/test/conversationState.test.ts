@@ -26,6 +26,7 @@ import {
     takeApproval,
     widgetFromRead,
     withMovedQuestion,
+    withQuestionOffered,
     withOwedQuestion,
     withTurnApprovals,
     type AttachStep,
@@ -1625,6 +1626,12 @@ test("a refused new question is offered on the last reply, which the turn's repl
         { role: 'bot', text: '_You have used your prompts for today._' },
     ];
     const offered = withOfferedQuestion(refused, 3, 'ODA to Ghana');
+
+    // The refunded prompt leaves, so a guest's meter hears its refund.
+    assert.deepEqual(withQuestionOffered(refused, 3, 'ODA to Ghana'), {
+        messages: offered,
+        refunds: 1,
+    });
 
     // Page turn 4 leaves with its prompt, and its Activity entry with it.
     assert.deepEqual(offeredQuestionPageTurns(refused, 3), [4]);
