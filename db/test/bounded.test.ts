@@ -18,7 +18,7 @@ import {
     type Load,
     loadWithin,
 } from '../bounded.ts';
-import type { LoadRequest } from '../load-upload.ts';
+import { type LoadRequest, loadUpload } from '../load-upload.ts';
 import { createTestDatabase } from './harness.ts';
 
 type JobState = { status: { state: string; errorResult?: { reason: string } } };
@@ -203,7 +203,7 @@ test(
                 'a load past its timeout whose cancel is refused and that then finishes',
                 { cancel: reject, states: [RUNNING, DONE] },
                 'timeout',
-                ['load', 'cancel', 'state', 'state'],
+                ['load', 'abort', 'cancel', 'state', 'state'],
             ],
             [
                 'a load whose client fails while its job runs on and finishes',
@@ -348,7 +348,7 @@ test(
                 'a load past its timeout that its cancel stops',
                 { states: [RUNNING, FAILED] },
                 'kept',
-                (calls) => assert.deepEqual(calls, ['load', 'cancel', 'state', 'state']),
+                (calls) => assert.deepEqual(calls, ['load', 'abort', 'cancel', 'state', 'state']),
             ],
             [
                 'a load past its timeout whose cancel hangs and whose job never ends',
@@ -691,6 +691,116 @@ test(
                 }
             });
         }
+    },
+);
+
+/**
+ * A local BigQuery that answers every upload with its job and each read of
+ * that job with `readJob`'s answer, after `readMs`, and accepts every
+ * cancel. `requests` lists each request's method and path, as it arrives.
+ */
+const jobServer = async ({ readJob, readMs = 0 }: { readJob: JobState; readMs?: number }) => {
+    const requests: string[] = [];
+    let jobReference: unknown;
+    const server = http.createServer(async (request, response) => {
+        const path = request.url?.split('?')[0] ?? '';
+
+        requests.push(`${request.method} ${path}`);
+
+        for await (const chunk of request) {
+            if (path.startsWith('/upload/')) {
+                const insert = /"jobReference":(\{[^}]*\})/.exec(String(chunk))?.[1];
+
+                jobReference ??= insert === undefined ? undefined : JSON.parse(insert);
+            }
+        }
+
+        response.setHeader('content-type', 'application/json');
+
+        if (request.method === 'GET') {
+            await sleep(readMs);
+        }
+
+        const job = { jobReference, ...(request.method === 'GET' ? readJob : RUNNING) };
+
+        response.end(JSON.stringify(path.endsWith('/cancel') ? { job } : job));
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    const { port } = server.address() as net.AddressInfo;
+    const bigquery = new BigQuery({
+        projectId: 'p',
+        apiEndpoint: `http://127.0.0.1:${port}`,
+        authClient: {
+            getRequestHeaders: async () => new Headers({ authorization: 'Bearer token' }),
+        } as never,
+    });
+
+    return {
+        table: bigquery.dataset('d', { location: 'EU' }).table('t'),
+        requests,
+        close() {
+            server.closeAllConnections();
+            server.close();
+        },
+    };
+};
+
+test(
+    'an upload destroyed while a read of its job is in flight leaves no unhandled rejection when the read fails',
+    { timeout: 5_000 },
+    async (t) => {
+        // The read answers 100 ms after the upload is destroyed, with a job
+        // DONE with an error, which the client reports as a failed read.
+        const bigquery = await jobServer({ readJob: FAILED, readMs: 120 });
+        const rejections: unknown[] = [];
+        const onRejection = (reason: unknown) => rejections.push(reason);
+
+        process.on('unhandledRejection', onRejection);
+        t.after(() => {
+            process.off('unhandledRejection', onRejection);
+            bigquery.close();
+        });
+
+        const upload = loadUpload({
+            table: bigquery.table,
+            metadata: {},
+            jobId: 'website_export_test',
+            headers: new Headers(),
+        });
+
+        upload.on('error', () => undefined);
+        upload.once('job', () => setTimeout(() => upload.destroy(), 20));
+        upload.end('{}\n');
+
+        await sleep(400);
+        assert.equal(bigquery.requests.filter((request) => request.startsWith('GET')).length, 1);
+        assert.deepEqual(rejections, []);
+    },
+);
+
+test(
+    'a load past its bound with its job inserted reads the job no more once it returns',
+    { timeout: 5_000 },
+    async (t) => {
+        const bigquery = await jobServer({ readJob: RUNNING });
+
+        t.after(() => bigquery.close());
+
+        const load = await loadWithin({
+            table: bigquery.table,
+            file: FILE,
+            metadata: {},
+            ...BOUNDS,
+        });
+        const reads = () => bigquery.requests.filter((request) => request.startsWith('GET')).length;
+        const returned = reads();
+
+        assert.equal(load.outcome, 'unknown');
+        // The client reads a job it waits on every 500 ms.
+        await sleep(700);
+        assert.equal(reads(), returned);
     },
 );
 
