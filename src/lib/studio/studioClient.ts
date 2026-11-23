@@ -372,50 +372,118 @@ export const busyRetryAfter = (refusal: StreamRefusal): number | null =>
         : null;
 
 /**
- * `handlers` with a record of whether the harness has admitted the request:
- * it named the stream's turn (`onTurnIndex`) or sent a frame. Until then the
- * page holds no stream of its own. The request has not started, waits while
- * another stream holds the conversation (whileBusy), or is on its way and
- * may yet be refused as busy.
+ * Where a stream's request stands, which decides what Stop does
+ * (stopAction). `unsent`: the request has not started, or it sleeps in
+ * whileBusy because another stream holds the conversation. `sent`: a send is
+ * on its way and the harness has not answered it. `admitted`: the harness
+ * named the stream's turn (`onTurnIndex`) or sent a frame.
+ */
+export type RequestPhase = 'unsent' | 'sent' | 'admitted';
+
+/**
+ * What Stop does to a stream. `cancel` says when the harness is asked to
+ * cancel the turn: `now`, `on-admit` (once the response names the turn), or
+ * `none`. `abort` says when the request is closed: `now`, or `after-grace`,
+ * reading the stream until the harness ends it (STOP_GRACE_MS). `refunded`
+ * marks the prompt of a `metered` request (a POST turn) the site's meter
+ * gives back, since a turn the harness never admitted was refused or never
+ * sent.
+ */
+export type StopAction = {
+    cancel: 'now' | 'on-admit' | 'none';
+    abort: 'now' | 'after-grace';
+    refunded: boolean;
+};
+
+/**
+ * What Stop does in `phase` (see RequestPhase). An admitted turn is
+ * cancelled at once. A sent request is left open: a harness that admits it
+ * after the client has gone holds the turn open with no stream, so the
+ * cancel goes out once the response names the turn, and a refusal gives the
+ * prompt back then. An unsent request ends at once with no cancel, since the
+ * turn running may be another stream's.
+ */
+export const stopAction = ({
+    phase,
+    metered,
+}: {
+    phase: RequestPhase;
+    metered: boolean;
+}): StopAction => {
+    switch (phase) {
+        case 'admitted':
+            return { cancel: 'now', abort: 'after-grace', refunded: false };
+        case 'sent':
+            return { cancel: 'on-admit', abort: 'after-grace', refunded: false };
+        case 'unsent':
+            return { cancel: 'none', abort: 'now', refunded: metered };
+    }
+};
+
+/**
+ * `handlers` with a record of where the request stands (`phase`) and what
+ * a Stop does to it. The caller calls `start` as the request starts,
+ * and `stop` on Stop, which returns the StopAction to carry out. A Stop
+ * while the request was `sent` is decided again when the harness answers:
+ * `onStopChange` hears the action for `admitted` once the response names
+ * the turn, and the one for `unsent` when the answer is to wait while
+ * another stream holds the conversation (whileBusy).
  */
 export const watchAdmission = (
     handlers: StreamHandlers,
-): { handlers: StreamHandlers; admitted: () => boolean } => {
-    let admitted = false;
+    { onStopChange }: { onStopChange?: (action: StopAction) => void } = {},
+): {
+    handlers: StreamHandlers;
+    phase: () => RequestPhase;
+    start: () => void;
+    stop: (metered: boolean) => StopAction;
+} => {
+    let phase: RequestPhase = 'unsent';
+    // Set by a Stop that waits on the harness's answer to decide again.
+    let waiting: { metered: boolean } | null = null;
+
+    const enter = (next: RequestPhase) => {
+        if (phase === 'admitted') {
+            return;
+        }
+
+        phase = next;
+
+        if (waiting && next !== 'sent') {
+            const action = stopAction({ phase: next, metered: waiting.metered });
+
+            waiting = null;
+            onStopChange?.(action);
+        }
+    };
 
     return {
         handlers: {
             ...handlers,
             onTurnIndex: (index) => {
-                admitted = true;
+                enter('admitted');
                 handlers.onTurnIndex?.(index);
             },
             onFrame: (frame) => {
-                admitted = true;
+                enter('admitted');
                 handlers.onFrame(frame);
             },
+            onBusyWait: (seconds) => {
+                enter(seconds === null ? 'sent' : 'unsent');
+                handlers.onBusyWait?.(seconds);
+            },
         },
-        admitted: () => admitted,
+        phase: () => phase,
+        start: () => enter('sent'),
+        stop: (metered) => {
+            const action = stopAction({ phase, metered });
+
+            waiting = action.cancel === 'on-admit' ? { metered } : null;
+
+            return action;
+        },
     };
 };
-
-/**
- * What Stop does to a stream. When the harness admitted the request
- * (watchAdmission), `cancel` is true, the harness is asked to cancel the turn
- * and the stream is read to its end. Otherwise the request ends at once and
- * no cancel goes out, since the turn running may be another stream's. A
- * `metered` request (a POST turn) ended so is `refunded`: the site's meter
- * gives back the prompt of a refused turn, and a turn the harness never
- * admitted was refused or never sent.
- */
-export const stopAction = ({
-    admitted,
-    metered,
-}: {
-    admitted: boolean;
-    metered: boolean;
-}): { cancel: boolean; refunded: boolean } =>
-    admitted ? { cancel: true, refunded: false } : { cancel: false, refunded: metered };
 
 /** Whether a turn request naming `after_turn` was refused because a later
  *  turn began first (409 `edit_conflict`, `constraint_id: "turn_moved"`). */

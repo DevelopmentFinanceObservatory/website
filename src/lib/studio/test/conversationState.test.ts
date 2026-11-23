@@ -37,6 +37,7 @@ import {
     UNSENT_NOTE,
     withReadPrompts,
     heldTurns,
+    isUnkeyedSave,
     keyUnkeyedSave,
     NEW_QUESTION_NOTE,
     promptTurns,
@@ -1185,6 +1186,43 @@ test('an unkeyed save keys repeated prompts only where their order settles them'
     );
     // A keyed or a marked transcript is no unkeyed save.
     assert.equal(keyUnkeyedSave(keyed, turns), keyed);
+});
+
+test('an unkeyed save that gained a keyed turn keys the prompts before it', () => {
+    // The first read of an old save failed, then the page ran turn 3, which
+    // its stream keyed. The prompt after it was saved before its turn came.
+    const save: ChatMessage[] = [
+        ...unkeyedPairs([
+            ['ODA to Kenya', 'Kenya answer'],
+            ['and Ghana', 'Ghana answer'],
+        ]),
+        { role: 'user', text: 'and Rwanda', harnessTurn: 3, turn: 3 },
+        { role: 'bot', text: 'Rwanda answer' },
+        { role: 'user', text: 'and Uganda', turn: 4 },
+        { role: 'bot', text: '' },
+    ];
+    const turns = [
+        recorded(1, 'ODA to Kenya', 'Kenya answer'),
+        recorded(2, 'and Ghana', 'Ghana answer'),
+        recorded(3, 'and Rwanda', 'Rwanda answer'),
+    ];
+
+    assert.equal(isUnkeyedSave(save), true);
+
+    const keyed = keyUnkeyedSave(save, turns);
+
+    assert.deepEqual(
+        [...promptTurns(keyed)],
+        [
+            [0, 1],
+            [2, 2],
+            [4, 3],
+        ],
+    );
+    // The prompt after the keyed turn is left for withReadPrompts.
+    assert.deepEqual(keyed[6], save[6]);
+    assert.deepEqual(mergeClosedTurns(keyed, turns, 5).appended, []);
+    assert.equal(isUnkeyedSave(keyed), false);
 });
 
 test("a fork owes its own turn's new question despite the source's", () => {

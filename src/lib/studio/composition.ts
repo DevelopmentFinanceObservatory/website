@@ -1,3 +1,5 @@
+import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
+
 import { withHarnessPins } from './canvasEdits.ts';
 import type { CompositionManifest, MutationOperation } from './wire';
 
@@ -18,14 +20,18 @@ export type CanvasBaseline = {
 
 /** The canvas a save reopens with: its saved baseline, else, for a save
  *  from before the page kept the manifest, a legacy canvas of the harness
- *  cards it showed. A fork's inherited cards (`localIds`) are no harness
- *  cards, so the baseline leaves them out. */
+ *  cards it showed. Such a save is one whose prompts carry no turn, page or
+ *  harness, since the page that kept the manifest stamps both; a later save
+ *  with no baseline saw no manifest and starts with none. A fork's inherited
+ *  cards (`localIds`) are no harness cards, so the baseline leaves them
+ *  out. */
 export const restoreCanvas = (
     saved:
-        | ({ sessionId: string | null; canvas?: CanvasBaseline | null } & Pick<
-              CanvasState,
-              'widgets'
-          > &
+        | ({
+              sessionId: string | null;
+              canvas?: CanvasBaseline | null;
+              messages: readonly ChatMessage[];
+          } & Pick<CanvasState, 'widgets'> &
               Partial<Omit<CanvasState, 'widgets'>>)
         | undefined,
 ): CanvasBaseline | null => {
@@ -35,6 +41,16 @@ export const restoreCanvas = (
 
     if (saved.canvas) {
         return saved.canvas;
+    }
+
+    if (
+        saved.messages.some(
+            (message) =>
+                message.role === 'user' &&
+                (message.turn !== undefined || message.harnessTurn !== undefined),
+        )
+    ) {
+        return null;
     }
 
     const removed = new Set([...(saved.removedIds ?? []), ...(saved.localIds ?? [])]);
@@ -174,9 +190,10 @@ export const sessionLeftCards = (
  * (`expected_revision`). A card the save never held, such as one another
  * tab's turn drew since, one revised since the save, and one whose saved
  * revision is unknown, stays.
- * The same request sends a `pin` for each card the save showed pinned
- * (`pinned`) that the manifest holds unpinned, since the page that saved it
- * kept its pins to itself. `onTake` hears the manifest that
+ * The same request sends a `pin` for each card the page shows pinned that
+ * the manifest holds unpinned, since the page that saved it kept its pins to
+ * itself: the save's pins (`pinned`), changed by each `pin` and `unpin` the
+ * page has sent since, so the take undoes no unpin the user made meanwhile. `onTake` hears the manifest that
  * answers, then any later one offered meanwhile, as the canvas to take from
  * then on. Before it, `onLocal` hears the cards the save held that no
  * harness turn produced, such as a fork's inherited ones, which stay on the
@@ -213,6 +230,8 @@ export const createLegacyCanvas = ({
     onChange: (ids: string[]) => void;
 }) => {
     const shown = new Set(ids);
+    // The cards the page shows pinned.
+    const pins = new Set(pinned);
     // The cards the user took off whose `remove` the harness refused, since
     // it never held them (a fork's inherited card). Each stays local and off
     // the canvas.
@@ -267,17 +286,15 @@ export const createLegacyCanvas = ({
                 );
             })
             .map((block) => block.component_id);
-        const pins = manifest.blocks
+        const pinning = manifest.blocks
             .filter(
                 (block) =>
-                    !block.pinned &&
-                    pinned.includes(block.component_id) &&
-                    shown.has(block.component_id),
+                    !block.pinned && pins.has(block.component_id) && shown.has(block.component_id),
             )
             .map((block) => block.component_id);
         const operations: MutationOperation[] = [
             ...removed.map((id) => ({ op: 'remove' as const, component_id: id })),
-            ...pins.map((id) => ({ op: 'pin' as const, component_id: id })),
+            ...pinning.map((id) => ({ op: 'pin' as const, component_id: id })),
         ];
 
         if (operations.length === 0) {
@@ -315,6 +332,13 @@ export const createLegacyCanvas = ({
             if (state !== 'taken' && shown.delete(id)) {
                 onChange([...shown]);
             }
+        },
+        // The page sent a `pin` or an `unpin` of card `id`.
+        pin: (id: string) => {
+            pins.add(id);
+        },
+        unpin: (id: string) => {
+            pins.delete(id);
         },
         // The harness refused the `remove` of card `id`, which it never held.
         // Before the take, the take makes it local; after it, a card the

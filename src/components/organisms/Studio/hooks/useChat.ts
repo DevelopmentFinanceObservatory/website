@@ -21,6 +21,7 @@ import {
     type CardUnitChange,
 } from '@/lib/studio/cardUnit';
 import {
+    busyWaitLine,
     createStallWatch,
     createStepLine,
     createWorkingGrace,
@@ -28,6 +29,7 @@ import {
     preambleLine,
     stoppedReply,
     WORKING,
+    type ChatLine,
 } from '@/lib/studio/chatLine';
 import {
     createCanvasEdits,
@@ -139,13 +141,14 @@ import {
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
-    stopAction,
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
     whileBusy,
+    type StopAction,
     type StreamHandlers,
     type StreamRefusal,
 } from '@/lib/studio/studioClient';
+import { sessionLeftChat, sessionRecap } from '@/lib/studio/sessionLeft';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
 import type {
     ApplyChoiceSuggestion,
@@ -303,10 +306,6 @@ const SESSION_GONE_NOTE =
 
 const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
 
-// The chat line while another stream holds the conversation and a turn waits
-// for it.
-const BUSY_LINE = 'Waiting for the conversation to be free';
-
 // The state with the chat line set; `statusSince` moves only when the label
 // changes.
 const withLine = (prev: ChatState, status: string, statusDetail: string | null = null) => ({
@@ -315,6 +314,16 @@ const withLine = (prev: ChatState, status: string, statusDetail: string | null =
     statusDetail,
     statusSince: status === prev.status ? prev.statusSince : Date.now(),
 });
+
+// The chat line the state shows, null for none.
+const lineOf = (state: ChatState): ChatLine | null =>
+    state.status === null ? null : { label: state.status, detail: state.statusDetail };
+
+// The state showing `line`, or no line.
+const withChatLine = (prev: ChatState, line: ChatLine | null): ChatState =>
+    line
+        ? withLine(prev, line.label, line.detail)
+        : { ...prev, status: null, statusDetail: null, statusSince: null };
 
 // How a stream ended: its error frame, whether `done` arrived, whether the
 // user stopped it, whether it broke, and whether its request started (a Stop
@@ -419,9 +428,8 @@ export const useChat = (
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
     const abortRef = useRef<AbortController | null>(null);
-    // Stops the running stream's turn (set while a request runs); true for
-    // the stream's first Stop.
-    const haltRef = useRef<(() => boolean) | null>(null);
+    // Stops the running stream's turn (set while a request runs).
+    const haltRef = useRef<(() => void) | null>(null);
     // The queue itself; `queued` in state mirrors it for rendering.
     const queueRef = useRef<QueuedMessage[]>([]);
     // Requests run one after another on this chain (the harness serves one
@@ -626,8 +634,12 @@ export const useChat = (
     // canvas edits sent to the old session are dropped. With `turn`, the
     // page turn of the prompt the new session admitted, that turn stays the
     // session's own and the id stays. Without it the next turn opens a new id
-    // with a recap of the transcript (forkRecap).
-    const leaveSession = useCallback((turn?: number) => {
+    // with a recap of the transcript (sessionRecap), which stops before the
+    // prompt of `refused`, the page turn the harness refused for want of the
+    // session, since the user sends that prompt again. A plan or question
+    // card goes, since the pause it answers went with the session, and the
+    // queue it held back is free to go.
+    const leaveSession = useCallback((turn?: number, { refused }: { refused?: number } = {}) => {
         const cards = sessionLeftCards(canvasRef.current?.ids ?? [], widgetsRef.current);
         const left = (messages: ChatMessage[]) => withoutChips(withSessionLeft(messages, turn));
 
@@ -638,8 +650,11 @@ export const useChat = (
 
         if (turn === undefined) {
             sessionRef.current = null;
-            recapRef.current = forkRecap(messagesRef.current);
+            recapRef.current = sessionRecap(messagesRef.current, refused);
         }
+
+        pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
 
         approvalsRef.current = approvalKeys(messagesRef.current);
         askedRef.current.clear();
@@ -655,11 +670,8 @@ export const useChat = (
             setLocalCards(cards);
         }
 
-        setState((prev) => ({
-            ...prev,
-            messages: left(prev.messages),
-            widgets: withoutUnitChanges(prev.widgets),
-        }));
+        setState((prev) => sessionLeftChat(prev, turn));
+        drainRef.current();
     }, []);
     // A new question the page sent once and the harness never admitted
     // (refused, never reached, stopped, or taken out of the queue) is offered
@@ -810,6 +822,20 @@ export const useChat = (
     // line on "Stopping". `metered` marks a POST turn, whose prompt the
     // site's meter gives back when the response is a refusal (meterTurn), so
     // a refusal marks the turn's prompt refunded.
+    // Ask the harness to cancel the conversation's turn. Requests queued
+    // behind the stream also wait for the cancel request to answer.
+    const requestCancel = useCallback(() => {
+        const conversation = sessionRef.current;
+
+        if (!conversation) {
+            return;
+        }
+
+        const cancelled = cancelTurn(conversation);
+
+        chainRef.current = chainRef.current.then(() => cancelled);
+    }, []);
+
     const stream = useCallback(
         (
             turn: number,
@@ -1194,31 +1220,30 @@ export const useChat = (
                 }
             };
 
-            // Stop ends the turn on screen at once and keeps what arrived (an
-            // empty answer takes the preamble, else a note). The stream is
-            // read until the harness ends it, so the request counts as in
-            // flight, and queued sends wait, until the conversation is free.
-            // A caller that ends the turn itself keeps the frames (a switch's
-            // stream may re-offer the plan). A Stop before the harness
-            // admitted the request (admission) ends it at once and sends
-            // nothing more, and a metered turn's prompt is refunded
-            // (stopAction). Returns whether to send the cancel, which is true
-            // on the stream's first Stop once the harness admitted it.
-            const halt = (): boolean => {
-                if (stopped || generationRef.current !== generation) {
-                    return false;
+            // Carries out what Stop does to the request (stopAction), at
+            // the Stop and again when the harness answers a request the
+            // Stop left open (watchAdmission's `onStopChange`): it gives a
+            // metered prompt back, asks the harness to cancel the turn, and
+            // closes the request at once or after the grace.
+            const carryOut = (action: StopAction) => {
+                if (generationRef.current !== generation) {
+                    return;
                 }
-
-                const action = stopAction({ admitted: admission.admitted(), metered });
-
-                stopped = true;
-                grace.cancel();
 
                 if (action.refunded) {
                     setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
                 }
 
-                if (!action.cancel) {
+                if (action.cancel === 'now') {
+                    requestCancel();
+                }
+
+                if (stopGrace !== null) {
+                    clearTimeout(stopGrace);
+                    stopGrace = null;
+                }
+
+                if (action.abort === 'now') {
                     controller.abort();
                 } else {
                     stopGrace = setTimeout(
@@ -1226,9 +1251,31 @@ export const useChat = (
                         onEnd ? SWITCH_STOP_GRACE_MS : STOP_GRACE_MS,
                     );
                 }
+            };
+
+            // Stop ends the turn on screen at once and keeps what arrived (an
+            // empty answer takes the preamble, else a note). The stream is
+            // read until the harness ends it, so the request counts as in
+            // flight, and queued sends wait, until the conversation is free.
+            // A caller that ends the turn itself keeps the frames (a switch's
+            // stream may re-offer the plan). A Stop before the request left,
+            // or while it waits on another stream (whileBusy), ends it at once
+            // and sends nothing more. A Stop once it left asks the harness to
+            // cancel the turn as soon as the harness has named it
+            // (stopAction).
+            const halt = () => {
+                if (stopped || generationRef.current !== generation) {
+                    return;
+                }
+
+                const action = admission.stop(metered);
+
+                stopped = true;
+                grace.cancel();
+                carryOut(action);
 
                 if (onEnd) {
-                    if (!action.cancel) {
+                    if (action.abort === 'now') {
                         // Stop is free for the next stream queued behind this
                         // one, which the chain has not reached yet.
                         if (haltRef.current === halt) {
@@ -1237,12 +1284,12 @@ export const useChat = (
 
                         finish();
 
-                        return false;
+                        return;
                     }
 
                     setState((prev) => withLine(prev, 'Stopping'));
 
-                    return true;
+                    return;
                 }
 
                 muted = true;
@@ -1258,8 +1305,6 @@ export const useChat = (
 
                     return endTurn({ ...prev, messages }, turn, 'skipped');
                 });
-
-                return action.cancel;
             };
 
             // The end of a turn whose caller leaves it to the stream: `done`
@@ -1325,7 +1370,7 @@ export const useChat = (
                 const gone = isSessionGone(refusal);
 
                 if (gone) {
-                    leaveSession();
+                    leaveSession(undefined, { refused: turn });
                 }
 
                 if (muted || stopped) {
@@ -1362,26 +1407,40 @@ export const useChat = (
             // A request another stream's turn holds back says so on the
             // chat line while it waits, and the refusal stays out of the
             // transcript (whileBusy).
+            // When the wait ends the line goes back to the turn's own.
+            let heldLine: ChatLine | null = null;
             const busy = (seconds: number | null) => {
-                if (seconds !== null && generationRef.current === generation && !stopped) {
-                    setState((prev) => withLine(prev, BUSY_LINE));
+                if (generationRef.current !== generation || stopped) {
+                    return;
                 }
+
+                setState((prev) => {
+                    const next = busyWaitLine(lineOf(prev), heldLine, seconds);
+
+                    heldLine = next.held;
+
+                    return withChatLine(prev, next.line);
+                });
             };
             const unreachable = (): boolean =>
                 generationRef.current !== generation ||
                 muted ||
                 stopped ||
                 (onUnreachable?.() ?? false);
-            // Whether the harness has admitted the request, which decides
-            // what Stop does (halt).
-            const admission = watchAdmission({
-                onFrame: handle,
-                onTurnIndex: keyTurn,
-                onKeepAlive: stall.beat,
-                onRefusal: refuse,
-                onUnreachable: unreachable,
-                onBusyWait: busy,
-            });
+            // Where the request stands, which decides what Stop does
+            // (halt), and what a Stop that waited on the harness's answer
+            // does once it comes (carryOut).
+            const admission = watchAdmission(
+                {
+                    onFrame: handle,
+                    onTurnIndex: keyTurn,
+                    onKeepAlive: stall.beat,
+                    onRefusal: refuse,
+                    onUnreachable: unreachable,
+                    onBusyWait: busy,
+                },
+                { onStopChange: carryOut },
+            );
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
@@ -1403,6 +1462,7 @@ export const useChat = (
                     }
 
                     sent = true;
+                    admission.start();
                     abortRef.current = controller;
                     haltRef.current = halt;
                     stall.beat();
@@ -1441,7 +1501,7 @@ export const useChat = (
                     }
                 });
         },
-        [applyManifest, askNewQuestion, leaveSession, offerPlan, patchWidget],
+        [applyManifest, askNewQuestion, leaveSession, offerPlan, patchWidget, requestCancel],
     );
 
     // While a request is in flight a new turn waits its turn; the settle
@@ -1760,6 +1820,21 @@ export const useChat = (
             const after = answeredPause(pending);
             const turn = pauseTurnRef.current;
 
+            // With no session there is no pause to answer: the card goes and
+            // no line says the turn goes on.
+            if (!conversation) {
+                pendingInterruptRef.current = null;
+                setState((prev) => ({
+                    ...prev,
+                    ...NO_LINE,
+                    thinking: false,
+                    clarify: null,
+                    plan: null,
+                }));
+
+                return;
+            }
+
             pendingInterruptRef.current = after;
 
             setState((prev) => ({
@@ -1776,7 +1851,7 @@ export const useChat = (
                 plan: after?.plan ?? null,
             }));
 
-            if (!conversation || !pending) {
+            if (!pending) {
                 return;
             }
 
@@ -2092,21 +2167,12 @@ export const useChat = (
         };
     }, [applyChoice, applyUnit, send]);
 
-    // The Stop control: end the running turn (see `halt` in stream()) and
-    // ask the harness to cancel, once per stream whose request started. On a
-    // switch, a second cancel would end the stream before the harness
-    // re-offers the plan. Requests queued behind it also wait for the cancel
-    // request to answer.
+    // The Stop control: end the running turn (see `halt` in stream()), which
+    // asks the harness to cancel once per stream, as soon as the harness has
+    // named the turn. On a switch, a second cancel would end the stream
+    // before the harness re-offers the plan.
     const stop = useCallback(() => {
-        const conversation = sessionRef.current;
-
-        if (!conversation || !haltRef.current?.()) {
-            return;
-        }
-
-        const cancelled = cancelTurn(conversation);
-
-        chainRef.current = chainRef.current.then(() => cancelled);
+        haltRef.current?.();
     }, []);
 
     // The card reads in flight (drawCards), by id and revision, so reads

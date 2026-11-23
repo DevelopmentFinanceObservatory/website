@@ -69,6 +69,7 @@ test('another composition, a legacy canvas or no baseline starts afresh', () => 
 
 const legacy = {
     sessionId: 'conversation_1',
+    messages: [],
     widgets: [
         { kind: 'text' as const, id: 'cmp_hidden', title: 'Hidden', body: '', turn: 1 },
         { kind: 'text' as const, id: 'cmp_pinned', title: 'Pinned', body: '', turn: 1 },
@@ -87,6 +88,19 @@ test('forks and fresh conversations cannot inherit a legacy baseline', () => {
     assert.equal(restoreCanvas({ ...legacy, sessionId: null, canvas: base }), null);
     assert.equal(restoreCanvas(undefined), null);
     assert.deepEqual(restoreCanvas({ ...legacy, canvas: base }), base);
+    // A save whose prompts carry their turns saw no manifest, as with an
+    // answer that drew no card, so no legacy canvas reads its turns.
+    assert.equal(
+        restoreCanvas({ ...legacy, messages: [{ role: 'user', text: 'ODA to Kenya', turn: 1 }] }),
+        null,
+    );
+    assert.equal(
+        restoreCanvas({
+            ...legacy,
+            messages: [{ role: 'user', text: 'ODA to Kenya', harnessTurn: 1 }],
+        }),
+        null,
+    );
 });
 
 test("a fork's inherited cards are no harness cards of its legacy baseline", () => {
@@ -100,6 +114,7 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     const drawn = Array.from({ length: 12 }, (_, at) => `cmp_${at}`);
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: drawn.map((id, at) => ({
             kind: 'text' as const,
             id,
@@ -180,11 +195,42 @@ test('a legacy save showing 3 of 12 cards opens with 3 and leaves a 3-block mani
     assert.equal(taken.length, 1);
 });
 
+test("a legacy canvas's take sends the pins the page shows, not the save's", async () => {
+    const sent: MutationOperation[][] = [];
+    const legacy = createLegacyCanvas({
+        ids: ['cmp_1', 'cmp_2', 'cmp_3'],
+        hidden: new Map(),
+        pinned: ['cmp_1', 'cmp_2'],
+        produced: NONE_DRAWN,
+        mutate: async (operations) => {
+            sent.push(operations);
+
+            return manifest(6, ['cmp_1', 'cmp_2', 'cmp_3']);
+        },
+        onTake: () => {},
+        onLocal: () => {},
+        onChange: () => {},
+    });
+
+    // The user unpins one saved pin and pins another card before the take.
+    legacy.unpin('cmp_2');
+    legacy.pin('cmp_3');
+    await legacy.offer(manifest(5, ['cmp_1', 'cmp_2', 'cmp_3']));
+
+    assert.deepEqual(sent, [
+        [
+            { op: 'pin', component_id: 'cmp_1' },
+            { op: 'pin', component_id: 'cmp_3' },
+        ],
+    ]);
+});
+
 test('a legacy canvas keeps the inherited cards its session never held as local cards', async () => {
     // A fork saved before forks named their local cards, after it went on: a
     // pinned inherited card and its own.
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [
             { kind: 'text' as const, id: 'cmp_inherited', title: 'Old', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
@@ -223,6 +269,7 @@ test('a legacy canvas removes only the cards its save hid, at the revision it hi
     // card of its own.
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [
             { kind: 'text' as const, id: 'cmp_hidden', title: 'Hidden', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_revised', title: 'Revised', body: '', turn: 1 },
@@ -277,6 +324,7 @@ test("a legacy fork's hidden inherited cards become local and stay off the canva
     // the legacy rule hid, one it showed, and the fork's own.
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [
             { kind: 'text' as const, id: 'cmp_old_hidden', title: 'Old', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_old_pinned', title: 'Old', body: '', turn: 1 },
@@ -324,6 +372,7 @@ test("a legacy fork's hidden inherited cards become local and stay off the canva
 test("a legacy canvas pins the harness cards its save showed pinned, against the manifest's revision", async () => {
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [
             { kind: 'text' as const, id: 'cmp_hidden', title: '', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_pinned', title: '', body: '', turn: 1 },
@@ -401,6 +450,7 @@ test('takeManifest keeps which harness cards the manifest pins', () => {
 test('an inherited card taken off a legacy fork stays local once the harness refuses its remove', async () => {
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [
             { kind: 'text' as const, id: 'cmp_inherited', title: 'Old', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_own', title: 'New', body: '', turn: 2 },
@@ -481,6 +531,7 @@ test('a legacy canvas leaves off a shown card a harness turn drew and the manife
     // then the user, in another tab, took cmp_removed off.
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [
             { kind: 'text' as const, id: 'cmp_inherited', title: '', body: '', turn: 1 },
             { kind: 'text' as const, id: 'cmp_removed', title: '', body: '', turn: 2 },
@@ -517,6 +568,7 @@ test('a legacy canvas leaves off a shown card a harness turn drew and the manife
 test('a legacy canvas takes no manifest before the cards its turns drew are read', async () => {
     const save = {
         sessionId: 'conversation_1',
+        messages: [],
         widgets: [{ kind: 'text' as const, id: 'cmp_own', title: '', body: '', turn: 1 }],
         pinnedIds: [],
         removedIds: [],

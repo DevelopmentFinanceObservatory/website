@@ -66,3 +66,33 @@ test('a fork saved before forks named their local cards keeps its inherited card
 
     assert.deepEqual(shown(drawn), ['cmp_pinned', 'cmp_latest', 'cmp_new']);
 });
+
+test('a save whose baseline predates manifest pins keeps the pinned and grace cards it showed', () => {
+    // The harness's manifest held only the latest turn's card; the page
+    // showed the pinned and grace cards beside it by the turn rule.
+    const save: SavedConversation = {
+        ...devFork,
+        sessionId: 'conversation_1',
+        widgets: [
+            ...devFork.widgets,
+            { kind: 'text', id: 'cmp_grace', title: 'Grace', body: '', turn: 1 },
+        ],
+        graceIds: ['cmp_grace'],
+        graceTurn: 2,
+        canvas: { compositionId: 'cps_1', revision: 3, ids: ['cmp_latest'] },
+    };
+    const opened = openedSave(save);
+
+    assert.deepEqual(shown(opened), ['cmp_pinned', 'cmp_latest', 'cmp_grace']);
+    assert.equal(isHarnessCard(opened, 'cmp_pinned'), false);
+    assert.equal(isHarnessCard(opened, 'cmp_latest'), true);
+    // A card the user removed stays off.
+    assert.deepEqual(shown(openedSave({ ...save, removedIds: ['cmp_grace'] })), [
+        'cmp_pinned',
+        'cmp_latest',
+    ]);
+    // A baseline that carries the manifest's pins shows what it holds.
+    const pinned = { ...save, canvas: { ...save.canvas!, pinned: [] } };
+
+    assert.equal(openedSave(pinned), pinned);
+});

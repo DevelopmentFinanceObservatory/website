@@ -145,15 +145,34 @@ export const forkRecap = (messages: readonly ChatMessage[]): string | null => {
         : `${RECAP_HEAD} (summary of the transcript so far):\n${lines.join('\n')}${RECAP_TAIL}`;
 };
 
-/** A transcript saved before prompts carried their turn: no message is
- *  keyed, marked inherited, or marked unkeyed. */
-export const isUnkeyedSave = (messages: readonly ChatMessage[]): boolean =>
-    messages.some(isPrompt) &&
-    !messages.some(
-        (message) =>
-            message.inherited ||
-            (message.role === 'user' && (message.harnessTurn !== undefined || message.unkeyed)),
+// The positions of the own prompts saved before prompts carried their turn:
+// those with no turn that come before the first prompt holding one. A page
+// that saves a prompt before its stream names the turn saves it last, so a
+// prompt with no turn ahead of a keyed one predates keying. A transcript with
+// an inherited message is a fork made since prompts carried their turn, so
+// none of its prompts does.
+const unkeyedPrompts = (messages: readonly ChatMessage[]): number[] => {
+    if (messages.some((message) => message.inherited)) {
+        return [];
+    }
+
+    const keyed = messages.findIndex(
+        (message) => isOwnPrompt(message) && message.harnessTurn !== undefined,
     );
+
+    return [...messages.entries()].flatMap(([at, message]) =>
+        isOwnPrompt(message) && message.harnessTurn === undefined && (keyed === -1 || at < keyed)
+            ? [at]
+            : [],
+    );
+};
+
+/** A transcript holding prompts saved before prompts carried their turn
+ *  (keyUnkeyedSave): an own prompt with no turn, not marked unkeyed, ahead
+ *  of every prompt that holds one. A save from before keying whose first
+ *  state read failed can have gained keyed turns since. */
+export const isUnkeyedSave = (messages: readonly ChatMessage[]): boolean =>
+    unkeyedPrompts(messages).length > 0;
 
 /** One harness turn as a state read words its prompt. */
 export type RecordedPrompt = { turn_index: number; user_message: string };
@@ -194,9 +213,11 @@ const afterRecap = (recorded: string): string | null => {
 };
 
 /**
- * A save from before prompts carried their turn (isUnkeyedSave) keyed
- * against every turn its harness session holds, `turns`, read from turn 0.
- * A prompt takes a turn only where the match is unambiguous:
+ * A save holding prompts from before prompts carried their turn
+ * (isUnkeyedSave) keyed against every turn its harness session holds,
+ * `turns`, read from turn 0. Only those prompts are keyed, against the turns
+ * no prompt holds that come before the first turn a prompt holds. A prompt
+ * takes a turn only where the match is unambiguous:
  *
  * - A turn whose recorded prompt matches one page prompt, and that prompt no
  *   other turn, pairs them, in order. A chip's turn, recorded as
@@ -211,21 +232,26 @@ const afterRecap = (recorded: string): string | null => {
  * its prompt are a fork's copied transcript and become `inherited`. Every
  * other prompt left without a turn is kept with its reply and marked
  * `unkeyed`, so it numbers no turn; the turns it may have been are merged in
- * from the harness's record (ensureTurn). Unchanged for any other
- * transcript.
+ * from the harness's record (ensureTurn). Every other message is unchanged,
+ * and so is a transcript with no such prompt.
  */
 export const keyUnkeyedSave = (
     messages: ChatMessage[],
     turns: readonly RecordedPrompt[],
 ): ChatMessage[] => {
-    if (!isUnkeyedSave(messages)) {
+    const unkeyed = new Set(unkeyedPrompts(messages));
+
+    if (unkeyed.size === 0) {
         return messages;
     }
 
-    const ordered = [...turns].sort((a, b) => a.turn_index - b.turn_index);
-    const prompts = [...messages.entries()].filter(
-        ([, message]) => isPrompt(message) && !isRefundedPrompt(message),
-    );
+    const held = promptTurns(messages);
+    const firstHeld = Math.min(...held.values());
+    const taken = new Set(held.values());
+    const ordered = turns
+        .filter((turn) => turn.turn_index < firstHeld && !taken.has(turn.turn_index))
+        .sort((a, b) => a.turn_index - b.turn_index);
+    const prompts = [...messages.entries()].filter(([at]) => unkeyed.has(at));
     const first = ordered[0];
     const forked = first?.turn_index === 1 && afterRecap(first.user_message) !== null;
 
@@ -311,7 +337,7 @@ export const keyUnkeyedSave = (
             return { ...message, inherited: true };
         }
 
-        if (message.role !== 'user' || !isPrompt(message) || message.refunded) {
+        if (message.role !== 'user' || !unkeyed.has(at)) {
             return message;
         }
 

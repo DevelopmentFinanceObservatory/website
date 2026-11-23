@@ -20,6 +20,7 @@ import {
     STATE_READ_ATTEMPTS,
     stopAction,
     watchAdmission,
+    type StopAction,
     whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
@@ -478,7 +479,7 @@ test('whileBusy: a Stop while a send waits on another stream ends the wait, send
     const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
     const controller = new AbortController();
     const waits: (number | null)[] = [];
-    let action: ReturnType<typeof stopAction> | null = null;
+    let action: StopAction | null = null;
     const admission = watchAdmission({
         onFrame: () => {},
         onBusyWait: (seconds) => {
@@ -486,15 +487,16 @@ test('whileBusy: a Stop while a send waits on another stream ends the wait, send
 
             // The user presses Stop as the wait begins.
             if (seconds !== null) {
-                action = stopAction({ admitted: admission.admitted(), metered: true });
+                action = admission.stop(true);
 
-                if (!action.cancel) {
+                if (action.abort === 'now') {
                     controller.abort();
                 }
             }
         },
     });
 
+    admission.start();
     await assert.rejects(
         whileBusy(
             (handlers) => runTurn('conv', 'and in 2021?', handlers, controller.signal),
@@ -508,12 +510,12 @@ test('whileBusy: a Stop while a send waits on another stream ends the wait, send
         { name: 'AbortError' },
     );
 
-    assert.deepEqual(action, { cancel: false, refunded: true });
+    assert.deepEqual(action, { cancel: 'none', abort: 'now', refunded: true });
     assert.equal(fetch.mock.callCount(), 1);
     assert.deepEqual(waits, [30]);
 });
 
-test('whileBusy: Stop cancels a turn only once the harness admits the request, and refunds a metered prompt until then', async (t) => {
+test('whileBusy: Stop cancels a turn the harness admitted at once, one on its way once the harness names it, and refunds a metered prompt only while unsent', async (t) => {
     const answers = [
         busyAnswer(4),
         new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n', {
@@ -524,9 +526,9 @@ test('whileBusy: Stop cancels a turn only once the harness admits the request, a
     t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
 
     // What Stop would do at each point the stream reports.
-    const stops: [string, ReturnType<typeof stopAction>][] = [];
+    const stops: [string, StopAction][] = [];
     const stop = (at: string) =>
-        stops.push([at, stopAction({ admitted: admission.admitted(), metered: true })]);
+        stops.push([at, stopAction({ phase: admission.phase(), metered: true })]);
     const admission = watchAdmission({
         onFrame: () => stop('frame'),
         onTurnIndex: () => stop('turn index'),
@@ -534,6 +536,7 @@ test('whileBusy: Stop cancels a turn only once the harness admits the request, a
     });
 
     stop('queued');
+    admission.start();
     await whileBusy(
         (handlers) => runTurn('conv', 'and in 2021?', handlers),
         admission.handlers,
@@ -541,24 +544,90 @@ test('whileBusy: Stop cancels a turn only once the harness admits the request, a
         { sleep: async () => {} },
     );
 
-    const ends = { cancel: false, refunded: true };
-    const cancels = { cancel: true, refunded: false };
+    const ends = { cancel: 'none', abort: 'now', refunded: true };
+    const cancelsOnAdmit = { cancel: 'on-admit', abort: 'after-grace', refunded: false };
+    const cancels = { cancel: 'now', abort: 'after-grace', refunded: false };
 
-    // The send that follows a wait may itself find another tab's turn
-    // running, so Stop cancels nothing until the harness names this turn.
     assert.deepEqual(stops, [
         ['queued', ends],
         ['waiting', ends],
-        ['sent again', ends],
+        ['sent again', cancelsOnAdmit],
         ['turn index', cancels],
         ['frame', cancels],
     ]);
-    // A free request ended before admission had no prompt to give back.
-    assert.deepEqual(stopAction({ admitted: false, metered: false }), {
-        cancel: false,
-        refunded: false,
-    });
+    // A free request ended before it left had no prompt to give back.
+    assert.equal(stopAction({ phase: 'unsent', metered: false }).refunded, false);
 });
+
+// A Stop after the turn's POST left and before its response headers: the
+// harness may admit the turn after the client has gone and then hold it open
+// with no stream, which a later reopen would resume.
+for (const [name, answer, change] of [
+    [
+        'the harness names the turn',
+        () =>
+            new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n', {
+                headers: { 'x-dfo-turn-index': '3' },
+            }),
+        { cancel: 'now', abort: 'after-grace', refunded: false },
+    ],
+    [
+        'the harness answers that another stream holds the conversation',
+        () => busyAnswer(4),
+        { cancel: 'none', abort: 'now', refunded: true },
+    ],
+] as const) {
+    test(`watchAdmission: a Stop while the request is on its way waits, and acts once ${name}`, async (t) => {
+        let release: () => void = () => {};
+        const answered = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+
+        t.mock.method(globalThis, 'fetch', async () => {
+            await answered;
+
+            return answer();
+        });
+
+        const changes: StopAction[] = [];
+        const controller = new AbortController();
+        const admission = watchAdmission(
+            { onFrame: () => {} },
+            {
+                onStopChange: (action) => {
+                    changes.push(action);
+
+                    if (action.abort === 'now') {
+                        controller.abort();
+                    }
+                },
+            },
+        );
+
+        admission.start();
+
+        const running = whileBusy(
+            (handlers) => runTurn('conv', 'and in 2021?', handlers, controller.signal),
+            admission.handlers,
+            controller.signal,
+            { sleep: async (_ms, signal) => signal?.throwIfAborted() },
+        ).catch((error: Error) => error.name);
+
+        // Stop before the response arrives: no cancel yet, no refund, and
+        // the request stays open.
+        assert.deepEqual(admission.stop(true), {
+            cancel: 'on-admit',
+            abort: 'after-grace',
+            refunded: false,
+        });
+        assert.deepEqual(changes, []);
+
+        release();
+        await running;
+
+        assert.deepEqual(changes, [change]);
+    });
+}
 
 test('whileBusy: any other refusal reaches onRefusal once and is not retried', async (t) => {
     const fetch = t.mock.method(globalThis, 'fetch', async () =>
