@@ -9,8 +9,10 @@
 // The build is often the first reader after DFO takes in new data, so it meets cold computes,
 // which the client waits through. Each read may take BUILD_TIMEOUT_MS. While any dataset's
 // `freshness` is `pending`, DFO is checking for newer data, so the read runs again every
-// PENDING_RETRY_MS until none is, for at most BUILD_PENDING_BOUND_S seconds (an environment
-// variable, default 0: take what DFO serves), then takes what it has.
+// PENDING_RETRY_MS until none is, ending by BUILD_PENDING_BOUND_S seconds from the first read's
+// start (an environment variable, default 0: take what DFO serves), then takes what it has. A
+// read again gets only the time left to that bound, and if it fails the build takes the last
+// complete read.
 //
 // Build reads use their own anonymous client on the production API and their own lanes, at
 // most READ_CONCURRENCY reads and ANALYSIS_CONCURRENCY recipes at once across every page, so a
@@ -129,9 +131,11 @@ export type BuildReadOptions = {
 
 /**
  * Reads `sources` at DFO's newest stored versions and derives the page's figures, reading again
- * while any dataset's freshness is `pending`, within `pendingBound`.
+ * while any dataset's freshness is `pending`, within `pendingBound`. A read again that fails or
+ * times out leaves the last complete read, which the build takes with a warning.
  *
- * @throws An error naming `page`, whose cause is the failed read or the derivation's refusal.
+ * @throws An error naming `page`, whose cause is the first read's failure or the derivation's
+ *  refusal.
  */
 export const readSettled = async <K extends string, T>(
     page: string,
@@ -148,47 +152,69 @@ export const readSettled = async <K extends string, T>(
     }: BuildReadOptions = {},
 ): Promise<BuildRead<K, T>> => {
     const start = now();
+    // Object.keys widens to string. These are the keys of `sources`.
+    const keys = Object.keys(sources) as K[];
+    let read: StoredRead<K, T>;
+
+    try {
+        read = await readStored(sources, derive, { client, timeout, lanes });
+    } catch (error) {
+        throw new Error(`The build read of ${page} failed, so the build stops.`, {
+            cause: error,
+        });
+    }
+
+    let retrieved = now();
+    let retryFailure = '';
 
     for (;;) {
-        let read: StoredRead<K, T>;
-
-        try {
-            read = await readStored(sources, derive, { client, timeout, lanes });
-        } catch (error) {
-            throw new Error(`The build read of ${page} failed, so the build stops.`, {
-                cause: error,
-            });
-        }
-
-        // Object.keys widens to string. These are the keys of `sources`.
-        const keys = Object.keys(sources) as K[];
         const pending = keys.filter((key) => read.datasets[key].freshness === 'pending');
 
-        if (pending.length > 0 && now() - start + retryDelay <= pendingBound) {
-            await sleep(retryDelay);
-            continue;
+        if (pending.length === 0) {
+            break;
         }
 
-        if (pending.length > 0) {
-            const message = `${page}: ${pending.join(', ')} still pending after ${Math.round((now() - start) / 1000)} s; the build takes the versions it has.`;
-
-            console.warn(message);
-
-            // A workflow command on stdout, which GitHub Actions shows on the run's summary, so a
-            // green daily run that took unconfirmed data says so where people look.
-            if (process.env.GITHUB_ACTIONS) {
-                console.log(`::warning::${message}`);
-            }
+        // The bound is a deadline: a read again starts after retryDelay and may take only the
+        // time left to the bound, and one left less than retryDelay is not started.
+        if (retryFailure !== '' || pendingBound - (now() - start) - retryDelay < retryDelay) {
+            warnPending(
+                `${page}: ${pending.join(', ')} still pending after ${Math.round((now() - start) / 1000)} s${retryFailure}; the build takes the versions it has.`,
+            );
+            break;
         }
 
-        return {
-            value: read.value,
-            retrieved: new Date(now()).toISOString(),
-            sources: recordOf(keys, (key) => ({
-                versions: versionsOf(read.datasets[key]),
-                freshness: read.datasets[key].freshness,
-            })),
-        };
+        await sleep(retryDelay);
+
+        try {
+            read = await readStored(sources, derive, {
+                client,
+                timeout: Math.min(timeout, pendingBound - (now() - start)),
+                lanes,
+            });
+            retrieved = now();
+        } catch (error) {
+            retryFailure = `, and the read again failed (${error instanceof Error ? error.message : String(error)})`;
+        }
+    }
+
+    return {
+        value: read.value,
+        retrieved: new Date(retrieved).toISOString(),
+        sources: recordOf(keys, (key) => ({
+            versions: versionsOf(read.datasets[key]),
+            freshness: read.datasets[key].freshness,
+        })),
+    };
+};
+
+/** Warns that the build takes data DFO has not confirmed as its newest. */
+const warnPending = (message: string): void => {
+    console.warn(message);
+
+    // A workflow command on stdout, which GitHub Actions shows on the run's summary, so a green
+    // daily run that took unconfirmed data says so where people look.
+    if (process.env.GITHUB_ACTIONS) {
+        console.log(`::warning::${message}`);
     }
 };
 

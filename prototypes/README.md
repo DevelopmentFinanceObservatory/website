@@ -13,7 +13,7 @@ pnpm install
 pnpm dev                # http://localhost:3000/prototypes/
 ```
 
-Work on prototypes from the `prototypes` branch, which is dev plus `prototypes/`. Branch from it and open the pull request into it.
+Work on prototypes from the `prototypes` branch, which is dev plus `prototypes/`. Branch from it and open the pull request into it. `prototypes/` lives on `prototypes` alone: dev holds none of it, and the sync workflow refuses a dev change that adds or edits a file there.
 
 ## Start a prototype
 
@@ -170,7 +170,7 @@ pnpm preview --port 8798   # when 8787 is taken
 - A push to `prototypes` that touches `prototypes/`, `src/`, the root manifest or the workflow deploys to `developmentfinance.org/prototypes` with `wrangler deploy`, then checks that `/prototypes/` serves this app, that the site root still serves the website, and that each page in `scripts/check-live.mts` serves this run's build on its expected tier. There is no approval step.
 - A ready pull request into `prototypes` that touches the same paths builds the app and runs the checks. When the secrets are set it uploads a preview version under the alias `pr-<number>` and writes its workers.dev URL to the job summary. Draft pull requests skip.
 - `.github/workflows/prototypes-daily.yml` dispatches the deploy on `prototypes` at 05:17 UTC every day with a 600-second pending bound, so the pages carry DFO's newest stored data. A failed read fails the build without deploying, and the last deploy stays live. GitHub mails a failed scheduled run to whoever last edited its schedule.
-- `.github/workflows/prototypes-sync.yml` merges every push to dev into `prototypes` and dispatches the deploy, so the build uses dev's `src/`. When the merge conflicts, or changes a workflow file, which the workflow's token may not push, it opens a pull request from `sync/dev-into-prototypes` into `prototypes` for a person to finish.
+- `.github/workflows/prototypes-sync.yml` merges every push to dev into `prototypes`, keeping `prototypes/` as `prototypes` has it, and dispatches the deploy, so the build uses dev's `src/`. A rerun dispatches the deploy again unless one of the head is queued, running or succeeded. When the merge conflicts outside `prototypes/`, or changes a workflow file, which the workflow's token may not push, it opens a pull request from `sync/dev-into-prototypes` into `prototypes` for a person to finish. Merge that pull request with "Create a merge commit": it makes dev's commits ancestors of `prototypes`, so later syncs merge from a current base and meet fewer of the same conflicts.
 
 The daily and sync workflows run from dev, since GitHub runs schedules and dispatches only from workflow files on the default branch, and dev holds `deploy-prototypes.yml` identical to the copy on `prototypes`. The deploy workflow reads two repository secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit on the account, Workers Routes edit and Zone read on `developmentfinance.org`) and `CLOUDFLARE_ACCOUNT_ID`. Without them, previews are skipped and a deploy fails naming the missing secret. `wrangler.jsonc` holds the Worker's name, route and assets settings.
 

@@ -191,7 +191,8 @@ test('stops reading again at the bound and takes the pending read it has', async
             pendingBound: PENDING_BOUND_MS,
             ...time,
         });
-        const reads = Math.floor(PENDING_BOUND_MS / PENDING_RETRY_MS) + 1;
+        // A read again starts only with at least PENDING_RETRY_MS left to the bound.
+        const reads = PENDING_BOUND_MS / PENDING_RETRY_MS;
 
         assert.equal(calls.length, reads);
         assert.deepEqual(read.value, [reads - 1]);
@@ -213,6 +214,95 @@ test('stops reading again at the bound and takes the pending read it has', async
         warn.mock.restore();
         log.mock.restore();
     }
+});
+
+/** Runs `body` with console.warn and console.log stubbed and GITHUB_ACTIONS set, and returns
+ *  the warning lines it printed. */
+const withWarnings = async (body: () => Promise<void>): Promise<string[]> => {
+    const warn = mock.method(console, 'warn', () => {});
+    const log = mock.method(console, 'log', () => {});
+    const actions = process.env.GITHUB_ACTIONS;
+
+    process.env.GITHUB_ACTIONS = 'true';
+
+    try {
+        await body();
+
+        return log.mock.calls.map(({ arguments: [line] }) => String(line));
+    } finally {
+        if (actions === undefined) {
+            delete process.env.GITHUB_ACTIONS;
+        } else {
+            process.env.GITHUB_ACTIONS = actions;
+        }
+
+        warn.mock.restore();
+        log.mock.restore();
+    }
+};
+
+test('a read again late in the bound gets only the time left, and one that times out leaves the last complete read', async () => {
+    const time = fakeTime();
+    const timeouts: number[] = [];
+    // The first read takes 520 s and finds the dataset pending. The read again starts at 550 s
+    // and runs to its timeout.
+    const client = {
+        fetch: async (_target: unknown, { timeout = 0 }: { timeout?: number }) => {
+            timeouts.push(timeout);
+
+            if (timeouts.length === 1) {
+                await time.sleep(520_000);
+
+                return dataset(1, 'pending');
+            }
+
+            await time.sleep(timeout);
+            throw new Error('timed out');
+        },
+    } as unknown as Fetcher;
+    let read: Awaited<ReturnType<typeof readSettled<'a', unknown[]>>> | undefined;
+
+    const lines = await withWarnings(async () => {
+        read = await readSettled('p', { a: { ref: refJson } }, valueOf, {
+            client,
+            lanes: freshLanes(),
+            pendingBound: PENDING_BOUND_MS,
+            ...time,
+        });
+    });
+
+    assert.deepEqual(timeouts, [BUILD_TIMEOUT_MS, PENDING_BOUND_MS - 550_000]);
+    assert.ok(time.now() <= PENDING_BOUND_MS + PENDING_RETRY_MS);
+    assert.deepEqual(read?.value, [1]);
+    assert.equal(read?.sources.a.freshness, 'pending');
+    assert.equal(read?.retrieved, new Date(520_000).toISOString());
+    assert.equal(lines.length, 1);
+    assert.match(
+        lines[0] ?? '',
+        /^::warning::p: a still pending .*read again failed \(timed out\)/,
+    );
+});
+
+test('a read again that fails leaves the last complete read, with a warning', async () => {
+    const { calls, client } = stubClient(dataset(1, 'pending'), new Error('503'), dataset(3));
+    const time = fakeTime();
+    let read: Awaited<ReturnType<typeof readSettled<'a', unknown[]>>> | undefined;
+
+    const lines = await withWarnings(async () => {
+        read = await readSettled('p', { a: { ref: refJson } }, valueOf, {
+            client,
+            lanes: freshLanes(),
+            pendingBound: PENDING_BOUND_MS,
+            ...time,
+        });
+    });
+
+    assert.equal(calls.length, 2);
+    assert.deepEqual(read?.value, [1]);
+    assert.equal(read?.sources.a.freshness, 'pending');
+    assert.equal(read?.retrieved, new Date(0).toISOString());
+    assert.equal(lines.length, 1);
+    assert.match(lines[0] ?? '', /^::warning::p: a still pending .*read again failed \(503\)/);
 });
 
 test('runs at most ANALYSIS_CONCURRENCY recipes and READ_CONCURRENCY reads at once', async () => {
