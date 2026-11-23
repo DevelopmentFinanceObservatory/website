@@ -31,7 +31,8 @@ type UnitChoiceProps = {
     onSkip?: () => void;
     // Send stays dimmed until a chip moves off `offer.start`.
     sendDisabledUntilChanged?: boolean;
-    // Send stays dimmed while what it sends elsewhere waits.
+    // Send and the lists' rows ignore clicks while what Send sends elsewhere
+    // waits, and keep focus (`aria-disabled`).
     busy?: boolean;
     // What the sent unit says while it applies (the plan card's switch),
     // beside Send.
@@ -50,6 +51,7 @@ const UnitList = <TValue extends string | number>({
     rows,
     picked,
     onPick,
+    busy,
     field,
     children,
 }: {
@@ -58,6 +60,7 @@ const UnitList = <TValue extends string | number>({
     rows: UnitRow<TValue>[];
     picked: TValue;
     onPick: (value: TValue) => void;
+    busy?: boolean;
     field?: {
         placeholder: string;
         none: string;
@@ -76,8 +79,9 @@ const UnitList = <TValue extends string | number>({
                 key={row.value}
                 type="button"
                 aria-pressed={on}
+                aria-disabled={(busy && !on) || undefined}
                 className={classNames(ledgerStyles.option, styles.row, on && ledgerStyles.optionOn)}
-                onClick={() => onPick(row.value)}
+                onClick={() => !busy && onPick(row.value)}
             >
                 <span className={ledgerStyles.radio} />
                 <span className={ledgerStyles.optionLabel}>{row.label}</span>
@@ -150,10 +154,10 @@ const UnitChoice = ({
     const chips = unitChips(offer, unit);
     // The base-year list closes when the prices move off constant.
     const shownList = open === 'year' && unit.prices !== 'constant' ? null : open;
-    const live =
-        !busy &&
-        servesUnit(offer, unit) &&
-        (!sendDisabledUntilChanged || unitChanged(offer.start, unit));
+    // Send is natively disabled only when it has nothing to send; while busy
+    // it stays focusable and ignores clicks.
+    const sendable =
+        servesUnit(offer, unit) && (!sendDisabledUntilChanged || unitChanged(offer.start, unit));
     const listId = useId();
 
     const toggle = (key: UnitChipKey) => {
@@ -176,6 +180,7 @@ const UnitChoice = ({
                 return (
                     <UnitList
                         id={listId}
+                        busy={busy}
                         label="Currency"
                         rows={currencyRows(offer, unit, all)}
                         picked={unit.currency}
@@ -211,6 +216,7 @@ const UnitChoice = ({
                 return (
                     <UnitList
                         id={listId}
+                        busy={busy}
                         label="Prices"
                         rows={priceRows(offer, unit)}
                         picked={unit.prices}
@@ -223,6 +229,7 @@ const UnitChoice = ({
                 return (
                     <UnitList
                         id={listId}
+                        busy={busy}
                         label="Base year"
                         rows={years.map((year) => ({ value: year, label: String(year) }))}
                         picked={unit.base_year ?? 0}
@@ -276,7 +283,13 @@ const UnitChoice = ({
                         Skip
                     </Button>
                 )}
-                <Button variant="dark" disabled={!live} onClick={() => onSend(unit)}>
+                <Button
+                    variant="dark"
+                    disabled={!sendable}
+                    aria-disabled={busy || undefined}
+                    aria-busy={busy || undefined}
+                    onClick={() => !busy && onSend(unit)}
+                >
                     Send
                 </Button>
             </div>

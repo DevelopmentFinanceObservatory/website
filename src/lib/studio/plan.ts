@@ -179,7 +179,9 @@ export const unitFromOptionId = (offer: UnitOffer, optionId: string): UnitChoice
               ? { currency, prices, base_year: Number(year) }
               : null;
 
-    return unit && rest.length === 0 && servesUnit(offer, unit) ? unit : null;
+    return unit && rest.length === 0 && unitOptionId(unit) === optionId && servesUnit(offer, unit)
+        ? unit
+        : null;
 };
 
 /** The label of one option of a scope choice, or null when the plan has no
@@ -205,27 +207,26 @@ export const PLANNER_CHOICE_PREFIX = 'decision/';
 export const isPlannerChoice = (choiceId: string): boolean =>
     choiceId.startsWith(PLANNER_CHOICE_PREFIX);
 
-/** Switching `choiceId` on `decisions` replans. A unit row's id is a
- *  planner decision's, but its switch re-reads the parts it covers, as a
- *  scope choice's does. */
-export const replansChoice = (decisions: PlanDecision[], choiceId: string): boolean =>
-    isPlannerChoice(choiceId) &&
-    !decisions.find((decision) => decision.choice_id === choiceId)?.unit;
+/** The `choice_id` prefix of a unit row, a planner decision's id whose
+ *  switch re-reads the parts it covers. */
+export const UNIT_CHOICE_PREFIX = `${PLANNER_CHOICE_PREFIX}user_unit_`;
+
+/** Switching `choiceId` replans. A unit row's id is a planner decision's,
+ *  but its switch re-reads the parts it covers, as a scope choice's does, so
+ *  the row files under the scope choices on a live plan and an approved one. */
+export const replansChoice = (choiceId: string): boolean =>
+    isPlannerChoice(choiceId) && !choiceId.startsWith(UNIT_CHOICE_PREFIX);
 
 /** The chat line while a switch to `label` runs: "Switching to net
  *  disbursements", or "Replanning with top 10" when the switch replans. */
-export const switchLine = (
-    choiceId: string,
-    label: string | null,
-    replans = isPlannerChoice(choiceId),
-): string => {
+export const switchLine = (label: string | null, replans: boolean): string => {
     const [verb, link] = replans ? ['Replanning', 'with'] : ['Switching', 'to'];
 
     return label ? `${verb} ${link} ${label}` : verb;
 };
 
 /** What the picked option says while its switch runs. */
-export const switchPendingText = (choiceId: string, replans = isPlannerChoice(choiceId)): string =>
+export const switchPendingText = (replans: boolean): string =>
     replans ? 'Replanning' : 'Updating plan';
 
 /** The `switch_failed.code` of a switch the user stopped through `/cancel`,
@@ -469,8 +470,13 @@ export const switchReply = (
 
     if (decision?.unit && switchOptions(decision)) {
         const unit = unitFromOptionId(decision.unit, optionId);
+        const listed = decision.options?.find((candidate) => candidate.option_id === optionId);
 
-        return unit && unitChanged(decision.unit.start, unit) ? { ...reply, unit } : null;
+        return unit &&
+            unitChanged(decision.unit.start, unit) &&
+            (!listed || isSelectable(decision, listed))
+            ? { ...reply, unit }
+            : null;
     }
 
     const option = decision?.options?.find((candidate) => candidate.option_id === optionId);
@@ -540,7 +546,7 @@ const stillCounts = (plan: PlanState, pick: PlanSwitch): string => {
         return '';
     }
 
-    const verb = isPlannerChoice(pick.choiceId) ? 'keeps' : 'still counts';
+    const verb = replansChoice(pick.choiceId) ? 'keeps' : 'still counts';
 
     return ` The plan ${verb} ${activeLabel(decision)}.`;
 };
@@ -849,7 +855,7 @@ export type PlanStepView = {
 /** One switchable choice as a row: its name, the value it holds, what it
  *  held before a switch, why the plan holds it, the decision behind it when
  *  the row can switch, and whether it is a planner decision rather than a
- *  scope choice (isPlannerChoice). */
+ *  scope choice (replansChoice). */
 export type PlanChoiceView = {
     key: string;
     name: string;
@@ -898,7 +904,7 @@ export const planView = (plan: PlanState): PlanView => {
                 changedReason: change?.reason ?? null,
                 reason: decision.reason || null,
                 decision,
-                planner: replansChoice(plan.decisions, choiceId),
+                planner: replansChoice(choiceId),
             });
         } else {
             others.push({
@@ -959,7 +965,7 @@ export const approvedView = (plan: ApprovedPlan): PlanView => {
             // scope. The production harness then listed only scope choices;
             // a development harness before dfo-ai#106 also listed planner
             // decisions without ids, so chats saved there file them as scope.
-            planner: choice.choice_id !== undefined && isPlannerChoice(choice.choice_id),
+            planner: choice.choice_id !== undefined && replansChoice(choice.choice_id),
         })),
         moved: [],
         others: [],

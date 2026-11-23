@@ -204,7 +204,7 @@ const ChoiceRow = ({
                         offer={decision.unit}
                         sendDisabledUntilChanged
                         busy={busy}
-                        pendingText={pending ? switchPendingText(choiceId, choice.planner) : null}
+                        pendingText={pending ? switchPendingText(choice.planner) : null}
                         onSend={(unit) => onSwitch?.(choiceId, unitOptionId(unit))}
                     />
                 </div>
@@ -246,7 +246,7 @@ const ChoiceRow = ({
                                 {isPending && (
                                     <span className={styles.optionTag}>
                                         <span className={styles.spin} />
-                                        {switchPendingText(choiceId, choice.planner)}
+                                        {switchPendingText(choice.planner)}
                                     </span>
                                 )}
                             </button>
