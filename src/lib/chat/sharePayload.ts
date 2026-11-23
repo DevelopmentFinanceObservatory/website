@@ -1,5 +1,5 @@
 import { asRecord } from '../asRecord.ts';
-import { canvasWidgetsOf } from './canvas.ts';
+import { savedCanvasWidgetsOf } from './canvas.ts';
 import type { SavedConversation } from './history.ts';
 import type { ShareMode, StudioShareKind } from './shareMode.ts';
 import { pruneForShare } from './sharePrune.ts';
@@ -95,7 +95,7 @@ export type SlottedCanvas =
 
 /**
  * The slots of a canvas or card share and its payload widgets. The data
- * cards the canvas shows (`canvasWidgetsOf`) get a slot each, in that order,
+ * cards the canvas shows (`savedCanvasWidgetsOf`) get a slot each, in that order,
  * when they have a ref. Two cards drawing the same revision get one each. A
  * live share needs a slot for every shown data card, and holds every data
  * card, shown or not, because live share pages show none of the numbers
@@ -107,9 +107,9 @@ export const slotCanvas = (saved: SavedConversation, mode: ShareMode): SlottedCa
     const slotIndex = new Map<StoredWidget, number>();
     const unslotted: string[] = [];
 
-    // canvasWidgetsOf hands back the stored widget objects, so each slot is
+    // savedCanvasWidgetsOf hands back the stored widget objects, so each slot is
     // tied to its own widget even when two cards draw the same revision.
-    for (const widget of canvasWidgetsOf(saved)) {
+    for (const widget of savedCanvasWidgetsOf(saved)) {
         if (widget.kind === 'text') {
             continue;
         }
