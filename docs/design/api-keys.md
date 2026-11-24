@@ -109,7 +109,7 @@ Some services accept more than one: Stripe takes Bearer or HTTP Basic, and api.d
 
 **Compatibility with MCP Clients**
 
-The MCP specification defines authorization as OAuth, with the token sent as `Authorization: Bearer`. It has no API-key concept, and clients differ in whether they can send a custom header at all. `/mcp` ignores a `dfo_` key, so no MCP client needs to send one, and a key one sends is stripped before the call goes upstream. Signed-in MCP access is a separate future feature that would use OAuth (see [Future Features][]).
+The MCP specification defines authorisation as OAuth, with the token sent as `Authorization: Bearer`. It has no API-key concept, and clients differ in whether they can send a custom header at all. `/mcp` ignores a `dfo_` key, so no MCP client needs to send one, and a key one sends is stripped before the call goes upstream. Signed-in MCP access is a separate future feature that would use OAuth (see [Future Features][]).
 
 **Compatibility with the Proxy as Built**
 
@@ -203,12 +203,12 @@ Below Enterprise, a rate limiting rule's own match expression cannot reference r
 
 ### Where Keys Apply
 
-| Surface                                                                          | Key honored? | Notes                                                                                                                                                                                                                                |
-| -------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/api/v1/search`, `datasets`, `graph`, `presentation`; `/openapi.json`; `/codes` | Yes          | Counted at the account's per-minute limit, on the `datasets` count for `/api/v1/datasets/*` and the `api` count for the rest, and against the account's daily quota. A dataset read the edge cache answers is not counted or checked |
-| `/mcp`                                                                           | No           | A key is removed and ignored. The call is anonymous, counted per address at the MCP limit of 300 a minute. A `dfo_` bearer is not passed to the harness                                                                              |
-| `/api/v1/studio/*`                                                               | No           | The Studio is the site's own chat UI. A key never replaces or bypasses its daily prompt allowance. A key sent there is removed and otherwise ignored                                                                                 |
-| `/api/download-pin`, MCP theme stylesheets                                       | No           | These do not pass through the key check today and stay as they are                                                                                                                                                                   |
+| Surface                                                                          | Key honoured? | Notes                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/v1/search`, `datasets`, `graph`, `presentation`; `/openapi.json`; `/codes` | Yes           | Counted at the account's per-minute limit, on the `datasets` count for `/api/v1/datasets/*` and the `api` count for the rest, and against the account's daily quota. A dataset read the edge cache answers is not counted or checked |
+| `/mcp`                                                                           | No            | A key is removed and ignored. The call is anonymous, counted per address at the MCP limit of 300 a minute. A `dfo_` bearer is not passed to the harness                                                                              |
+| `/api/v1/studio/*`                                                               | No            | The Studio is the site's own chat UI. A key never replaces or bypasses its daily prompt allowance. A key sent there is removed and otherwise ignored                                                                                 |
+| `/api/download-pin`, MCP theme stylesheets                                       | No            | These do not pass through the key check today and stay as they are                                                                                                                                                                   |
 
 Keys exist for scripts and pipelines that call the API directly or through the Python and TypeScript SDKs. On every surface, a `dfo_` value is consumed by the proxy and never copied upstream. On the API it is verified, and it is consumed even when verification fails. Elsewhere, `/mcp` included, it is dropped unread, so a bad key there is not refused. dfo-apis gets no caller `Authorization` at all. Other upstreams get any other value as they do today.
 
@@ -239,7 +239,7 @@ A new `api_key` table in the website's Postgres, beside the accounts and the lim
 | ------------------------ | --------------------------------------------------------------------------- |
 | id                       | Short public identifier, used in logs and as the caller name                |
 | key_hash                 | SHA-256 of the key, unique                                                  |
-| prefix                   | First characters of the key, so its owner can recognize it in a list        |
+| prefix                   | First characters of the key, so its owner can recognise it in a list        |
 | label                    | What the key is for, unique among the account's keys without regard to case |
 | user_id                  | Owning account                                                              |
 | daily_limit              | Optional daily API quota for this key, empty meaning the deployment default |
@@ -280,11 +280,11 @@ In this option the key store is the [API key plugin][better-auth-api-key] of Bet
 
 | Area                         | What it does                                                                                                                  |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Storage                      | An `apikey` table. Keys are hashed by default, and the first characters are kept so an owner can recognize a key              |
+| Storage                      | An `apikey` table. Keys are hashed by default, and the first characters are kept so an owner can recognise a key              |
 | Key format                   | A configurable prefix and length (64 characters by default), or our own generator                                             |
 | Create, list, update, delete | Server methods and matching client methods. A signed-in user can manage only their own keys                                   |
 | Verify                       | `auth.api.verifyApiKey({ body: { key } })` returns whether the key is valid, why not, and the key's record without the secret |
-| Ownership                    | Every key belongs to a user, or to an organization if we adopt that plugin. A user can hold several keys                      |
+| Ownership                    | Every key belongs to a user, or to an organisation if we adopt that plugin. A user can hold several keys                      |
 | Expiry                       | Optional per key, with expired keys removed automatically                                                                     |
 | Rate limit                   | One limit per key: a window and a maximum, counted on the key's row at each verification                                      |
 | Quotas                       | An optional count of remaining requests per key, with periodic refill                                                         |
@@ -484,7 +484,7 @@ Most of the work is in the website. This split holds for both options: Use and B
 | docs       | Small      | The API quickstart, which says no key is needed, gains a note that a key raises limits and a link to the `build/api-keys` page. That page covers the 52-character key format, the daily quota and its 00:00 UTC reset, and says `/mcp` ignores keys                                                                                                                                       |
 | Cloudflare | Small      | Keyed calls pass the data API's per-address rule (600 a minute), which equals the keyed default. Raise it, or skip it for keyed requests, before an account's limit passes 600                                                                                                                                                                                                            |
 
-Order matters. dfo-apis refuses a caller form it does not recognize with a 400 when it arrives with the shared secret. So dfo-apis ships first, and the website starts sending keyed callers last. An end-to-end test should show a keyed API call spending the account's own allowance in dfo-apis.
+Order matters. dfo-apis refuses a caller form it does not recognise with a 400 when it arrives with the shared secret. So dfo-apis ships first, and the website starts sending keyed callers last. An end-to-end test should show a keyed API call spending the account's own allowance in dfo-apis.
 
 ## Alternatives Considered
 
@@ -495,17 +495,17 @@ Besides [Build][] and [Use][Use: Better Auth API Key Plugin] above, we looked at
 | Static list in a secret                        | No table in Phase 1: a list of hashed keys and limits in deploy configuration, changed by redeploying | The least to build for one partner                                                                                         | Revoking a key or changing a limit would need a redeploy, and the emergency switch depends on not needing one. A small table costs one migration                         |
 | Hosted key service, for example [Unkey][unkey] | A service that issues and verifies keys; the proxy calls it on each request                           | Key management, per-key limits and usage analytics with no tables of our own. A free tier of 150,000 verifications a month | A network call to a third party on every keyed request, and a new vendor holding our callers' keys. Cost grows with traffic, which is the thing we are trying to control |
 | Hosted API gateway, for example [Zuplo][zuplo] | A managed gateway in front of the APIs, with keys, rate limits and a developer portal                 | The whole feature, including self-service sign-up and docs                                                                 | It replaces the proxy we already have. Streaming (SSE and MCP), caller naming and the harness token would all need to be rebuilt in its terms                            |
-| Google Cloud API Gateway or Apigee             | Google's gateways, in the cloud the backends already run in                                           | API Gateway: keys and quotas. Apigee: a full product with developer portal and monetization                                | API Gateway keys are Google Cloud API keys, which suits internal consumers more than outside sign-ups. Apigee is priced and sized for a larger API program than ours     |
+| Google Cloud API Gateway or Apigee             | Google's gateways, in the cloud the backends already run in                                           | API Gateway: keys and quotas. Apigee: a full product with developer portal and monetisation                                | API Gateway keys are Google Cloud API keys, which suits internal consumers more than outside sign-ups. Apigee is priced and sized for a larger API program than ours     |
 | Cloudflare                                     | Already in front of the site                                                                          | Edge rate limiting per key header on the Enterprise Advanced Rate Limiting plan                                            | It does not issue or validate keys, so it cannot replace the proxy check. See [Cloudflare Integration][]                                                                 |
 
-If monetization becomes real, the calculation changes: metering, billing and a developer portal are where the gateway products earn their cost. Nothing in this design blocks moving to one later, since keys are checked in one place.
+If monetisation becomes real, the calculation changes: metering, billing and a developer portal are where the gateway products earn their cost. Nothing in this design blocks moving to one later, since keys are checked in one place.
 
 ## Future Features
 
 Not planned for any phase yet. The design should not rule them out.
 
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
-- **Keys owned by an organization.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0029_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organization.
+- **Keys owned by an organisation.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0029_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organisation.
 - **Usage history.** The usage bar shows today's count. Counts for earlier days exist only in log lines.
 - **Signed-in MCP access** ([#176][issue-176]). `/mcp` accepts OAuth sign-in, so a signed-in user's calls count against their account. It is separate from API keys, which `/mcp` ignores. It includes how an MCP client shows a refusal: a 429 on a tool call reaches most clients as a raw transport error, so a refused `tools/call` would be better answered as a tool result with `isError: true`, as the MCP specification's own rate-limit example and the GitHub MCP server do.
 - **Terms of use at key creation.**

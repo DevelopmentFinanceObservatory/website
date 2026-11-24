@@ -95,7 +95,7 @@ export const verification = pgTable(
  * The `@better-auth/api-key` plugin's table (its columns, as the plugin
  * writes them). Differences from the plugin's own schema: `reference_id` has
  * a foreign key to `user` that deletes an account's keys with the account
- * (the plugin's owner may also be an organization, so it has none), and the
+ * (the plugin's owner may also be an organisation, so it has none), and the
  * index on `key`, the SHA-256 of the key, is unique. The proxy reads this
  * table itself (src/lib/proxy/keyVerifier).
  */

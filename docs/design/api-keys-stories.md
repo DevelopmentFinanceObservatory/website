@@ -245,7 +245,7 @@ _As a DFO admin, I want a Sentry event for every key-management operation, so I 
 - [ ] Create, delete, limit and quota changes each send an event, from both the panel and the admin page.
 - [ ] Each event carries the operation, the key's public id, the owning account id, the actor's account id and whether the actor was an admin.
 - [ ] No event ever carries the key, its hash, or request headers ([design][design-key-format]). A test pins this.
-- [ ] Failed operations (not found, cap reached, not authorized) are recorded with their reason.
+- [ ] Failed operations (not found, cap reached, not authorised) are recorded with their reason.
 
 Status: not built. Log lines exist for admin changes; Sentry events do not.
 
