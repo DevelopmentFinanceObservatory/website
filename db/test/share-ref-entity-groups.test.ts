@@ -70,8 +70,8 @@ const cases: { name: string; from: number; rows: StoredRef[]; groups: (object | 
 for (const { name, from, rows: stored, groups } of cases) {
     test(name, async (t) => {
         const database = await createTestDatabase();
-        const start = migrationsThrough(from);
         t.after(() => database.teardown());
+        const start = migrationsThrough(from);
         t.after(() => fs.rmSync(start, { recursive: true, force: true }));
 
         const migrate = (migrationsFolder: string) =>

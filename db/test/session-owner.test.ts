@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { SavedConversation } from '../../src/lib/chat/history.ts';
@@ -13,7 +13,6 @@ import {
 } from '../../src/lib/chat/conversationSave.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { conversation, user } from '../schema.ts';
-import { isConversationId } from '../../src/lib/studio/studioAccess.ts';
 import { createTestDatabase, migrationsThrough } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
@@ -258,20 +257,11 @@ test('migration 0027 and every claim give a session to its oldest saver', async 
     assert.deepEqual(await sessionOwners(db, 'harness-shared'), ['user-ana']);
 });
 
-/**
- * Saves before migration 0027 stored any harness id. Migration 0027 clears
- * each one isConversationId refuses before it indexes the column, so an id
- * too long for a btree key cannot fail the migration, and gives an owner
- * only to the ids it keeps. The ids cover each side of the length bound in
- * UTF-16 code units, which count a character above U+FFFF twice, and of the
- * Cc control range, which runs from U+0000 to U+001F and U+007F to U+009F.
- * The 4,400-character id barely compresses, so its index key stays over the
- * btree limit, where a repeated character would compress under it.
- */
-test('migration 0027 clears every harness id the Studio refuses', async (t) => {
+/** A database at migration 0026, with an account `user-ana`, and a way to apply the rest. */
+const atMigration26 = async (t: TestContext) => {
     const database = await createTestDatabase();
-    const start = migrationsThrough(26);
     t.after(() => database.teardown());
+    const start = migrationsThrough(26);
     t.after(() => fs.rmSync(start, { recursive: true, force: true }));
 
     const migrate = (migrationsFolder: string) =>
@@ -282,31 +272,53 @@ test('migration 0027 clears every harness id the Studio refuses', async (t) => {
         });
 
     await migrate(start);
+    await database
+        .adminPool()
+        .query(
+            `insert into "user" (id, name, email) values ('user-ana', 'Ana', 'ana@example.org')`,
+        );
 
-    const incompressible = Array.from({ length: 100 }, (_, index) =>
-        createHash('sha256').update(String(index)).digest('base64'),
-    ).join('');
-    const ids = [
-        'harness-ok',
-        '',
-        'a'.repeat(256),
-        'a'.repeat(257),
-        incompressible,
-        '\u{1F600}'.repeat(128),
-        '\u{1F600}'.repeat(129),
-        'tab\tid',
-        'del\u007fid',
-        'nel\u0085id',
-        'apc\u009fid',
-        'nbsp\u00a0id',
-        'zero\u200bwidth',
+    return { database, migrateRest: () => migrate(MIGRATIONS_FOLDER) };
+};
+
+// 100 SHA-256 digests in base64, 4,400 characters. A repeated character
+// compresses under the 2,704-byte btree limit; these bytes barely compress.
+const incompressible = Array.from({ length: 100 }, (_, index) =>
+    createHash('sha256').update(String(index)).digest('base64'),
+).join('');
+
+/**
+ * Saves before migration 0027_studio_session_owner stored any harness id.
+ * Migration 0027_clear_refused_harness_ids clears each one the Studio refused
+ * when it ran, so an id too long for a btree key cannot fail the index, and
+ * only the ids it keeps get an owner. The ids sit on each side of the length
+ * bound in UTF-16 code units, where a character above U+FFFF counts twice,
+ * and of each end of the Cc ranges U+0001 to U+001F and U+007F to U+009F.
+ */
+test('migration 0027 clears every harness id the Studio refuses', async (t) => {
+    const { database, migrateRest } = await atMigration26(t);
+    const cases: [id: string, kept: boolean][] = [
+        ['harness-ok', true],
+        ['', false],
+        ['a'.repeat(256), true],
+        ['a'.repeat(257), false],
+        [incompressible, false],
+        ['\u{1F600}'.repeat(128), true],
+        ['\u{1F600}'.repeat(129), false],
+        ['soh\u0001id', false],
+        ['tab\tid', false],
+        ['us\u001fid', false],
+        ['space id', true],
+        ['tilde~id', true],
+        ['del\u007fid', false],
+        ['nel\u0085id', false],
+        ['apc\u009fid', false],
+        ['nbsp\u00a0id', true],
+        ['zero\u200bwidth', true],
     ];
     const pool = database.adminPool();
 
-    await pool.query(
-        `insert into "user" (id, name, email) values ('user-ana', 'Ana', 'ana@example.org')`,
-    );
-    for (const [index, id] of ids.entries()) {
+    for (const [index, [id]] of cases.entries()) {
         await pool.query(
             `insert into conversation (id, user_id, title, agent_session_id, data)
                 values ($1, 'user-ana', 'Chat', $2, '{}')`,
@@ -314,7 +326,7 @@ test('migration 0027 clears every harness id the Studio refuses', async (t) => {
         );
     }
 
-    await migrate(MIGRATIONS_FOLDER);
+    await migrateRest();
 
     const stored = await pool.query<{ id: string; agent_session_id: string | null }>(
         'select id, agent_session_id from conversation',
@@ -322,8 +334,8 @@ test('migration 0027 clears every harness id the Studio refuses', async (t) => {
     const kept = new Map(stored.rows.map((row) => [row.id, row.agent_session_id]));
 
     assert.deepEqual(
-        ids.map((_, index) => kept.get(`conv-${index}`)),
-        ids.map((id) => (isConversationId(id) ? id : null)),
+        cases.map((_, index) => kept.get(`conv-${index}`)),
+        cases.map(([id, keep]) => (keep ? id : null)),
     );
 
     const owners = await pool.query<{ agent_session_id: string }>(
@@ -332,8 +344,58 @@ test('migration 0027 clears every harness id the Studio refuses', async (t) => {
 
     assert.deepEqual(
         owners.rows.map((row) => row.agent_session_id).sort(),
-        ids.filter(isConversationId).sort(),
+        cases
+            .filter(([, keep]) => keep)
+            .map(([id]) => id)
+            .sort(),
     );
+});
+
+/**
+ * The old service keeps saving while the migration runs. A save that commits
+ * after the clear and before the index build would put a refused id under the
+ * index, so the clear first locks `conversation` against writes until the
+ * migrations commit. Here a save holding a 4,400-character id is open when
+ * the migration starts; the migration waits for it, then clears it.
+ */
+test('migration 0027 clears a refused id saved while it waits', async (t) => {
+    const { database, migrateRest } = await atMigration26(t);
+    const writer = await database.adminPool().connect();
+    const pool = database.adminPool();
+
+    try {
+        await writer.query('begin');
+        await writer.query(
+            `insert into conversation (id, user_id, title, agent_session_id, data)
+                values ('conv-late', 'user-ana', 'Chat', $1, '{}')`,
+            [incompressible],
+        );
+
+        const migrated = migrateRest();
+        const waiting = async () => {
+            const { rowCount } = await pool.query(
+                `select 1 from pg_locks join pg_class on pg_class.oid = pg_locks.relation
+                 where pg_class.relname = 'conversation' and not pg_locks.granted`,
+            );
+            return rowCount !== 0;
+        };
+        const deadline = Date.now() + 10_000;
+
+        while (!(await waiting())) {
+            assert.ok(Date.now() < deadline, 'the migration never waited on the open save');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        await writer.query('commit');
+        await migrated;
+    } finally {
+        writer.release();
+    }
+
+    const { rows } = await pool.query<{ agent_session_id: string | null }>(
+        `select agent_session_id from conversation where id = 'conv-late'`,
+    );
+
+    assert.deepEqual(rows, [{ agent_session_id: null }]);
 });
 
 /**

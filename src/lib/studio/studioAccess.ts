@@ -76,8 +76,9 @@ export const MAX_CONVERSATION_ID_CHARS = 256;
 /**
  * Whether `id` can name a conversation: not empty, at most
  * MAX_CONVERSATION_ID_CHARS long, and free of control characters (U+0000
- * makes a Postgres read throw). Migration 0027 applies the same rule in SQL
- * to the harness ids saved before it.
+ * makes a Postgres read throw). Migration 0027_clear_refused_harness_ids
+ * cleared every stored harness id that failed this rule as it stood when that
+ * migration ran.
  */
 export const isConversationId = (id: string): boolean =>
     id.length > 0 && id.length <= MAX_CONVERSATION_ID_CHARS && !/\p{Cc}/u.test(id);
