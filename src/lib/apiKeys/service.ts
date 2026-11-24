@@ -14,7 +14,7 @@
  * so they query the plugin's table themselves; the caller has passed the
  * admin gate and passes the actor in.
  *
- * Rules, from docs/design/api-keys.md ("How It Would Fit"):
+ * Rules, from docs/design/api-keys.md ("How it would fit"):
  *   - the prefix is ours (`dfo_k_`), never taken from a request
  *   - a key's owner is the id passed in; expiry, metadata, permissions and
  *     limits are never passed on, so every key has the plugin's defaults. The

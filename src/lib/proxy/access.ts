@@ -8,8 +8,8 @@
  * counted against the account that owns the key at the account's limit,
  * against the account's daily quota, which every key of the account spends,
  * and against the key's own daily cap when it has one
- * (docs/design/api-keys.md, "The Proxy Check"). Keys are honoured on the 'api' and 'datasets' surfaces
- * (`honorsKeys`). Every key carries a tag signed by a server secret
+ * (docs/design/api-keys.md, "The proxy check"). Keys are honoured on the
+ * 'api' and 'datasets' surfaces (`honorsKeys`). Every key carries a tag signed by a server secret
  * (src/lib/auth/keyTag), checked first, so a made-up key costs no read and no
  * count:
  *
