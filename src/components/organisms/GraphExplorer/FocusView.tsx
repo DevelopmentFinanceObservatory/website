@@ -136,7 +136,7 @@ const Centred = ({ centre, show, line, onRetry, completeness, headingRef }: Cent
     if (heading === null) {
         return (
             <div className={styles.missing} role="status">
-                <p>
+                <p tabIndex={-1} data-view-heading>
                     The model has no dataset{' '}
                     <code>
                         <BreakableId text={centre.id} />
@@ -432,7 +432,7 @@ export const Refused = ({
     const { go } = useExplore();
     return (
         <div className={styles.missing} role="status">
-            <p ref={textRef} tabIndex={-1}>
+            <p ref={textRef} tabIndex={-1} data-view-heading>
                 <RefusalText refusal={refusal} id={id} drawn={false} />
             </p>
             <div>
