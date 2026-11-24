@@ -29,6 +29,9 @@ type PromptFormProps = {
     // a growing one would push its results around as you type.
     grow?: boolean;
     inputRef?: RefObject<PromptField | null>;
+    // The text is past what can be sent: the field is marked invalid and
+    // Send is off.
+    invalid?: boolean;
 } & Omit<FormHTMLAttributes<HTMLFormElement>, 'onSubmit' | 'onChange'>;
 
 /**
@@ -46,6 +49,7 @@ const PromptForm = ({
     variant = 'landing',
     grow = false,
     inputRef,
+    invalid = false,
     className,
     ...rest
 }: PromptFormProps) => {
@@ -74,6 +78,7 @@ const PromptForm = ({
         value,
         placeholder,
         'aria-label': label,
+        'aria-invalid': invalid || undefined,
     };
 
     return (
@@ -112,7 +117,12 @@ const PromptForm = ({
                     onChange={(event) => onChange(event.target.value)}
                 />
             )}
-            <button type="submit" className={styles.promptSubmit} aria-label={submitLabel}>
+            <button
+                type="submit"
+                className={styles.promptSubmit}
+                aria-label={submitLabel}
+                disabled={invalid}
+            >
                 <Icon name="arrow" className={styles.promptSubmitIcon} />
             </button>
         </form>

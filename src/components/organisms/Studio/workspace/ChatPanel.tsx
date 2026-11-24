@@ -12,12 +12,14 @@ import StatusLine from './StatusLine';
 import { iconOf } from './WidgetChips';
 import { widgetTitle, type CardView } from '../canvas/layout';
 import type { useChat } from '../hooks/useChat';
+import CharCount from '../prompt/CharCount';
 import PromptForm, { type PromptField } from '../prompt/PromptForm';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
 import { messageTurns, plansByTurn } from '@/lib/studio/activityView';
+import { interruptTextCount } from '@/lib/studio/interruptText';
 import { shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
@@ -114,9 +116,13 @@ const ChatPanel = ({
         }
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
+    // The text of a plan's "Propose changes" travels as an amendment, which
+    // the harness caps; a follow-up turn has no such cap here.
+    const amendmentCount = interruptTextCount(chat.plan?.live ? follow : '');
+
     const sendFollow = () => {
         // A plan switch in flight has the pause, so the text waits in the input.
-        if (!follow.trim() || chat.plan?.switching) {
+        if (!follow.trim() || chat.plan?.switching || amendmentCount.over) {
             return;
         }
 
@@ -302,7 +308,9 @@ const ChatPanel = ({
                                                   : 'Ask a follow up'
                                         }
                                         submitLabel="Send"
+                                        invalid={amendmentCount.over}
                                     />
+                                    <CharCount text={amendmentCount} />
                                 </>
                             )}
                             <p className={styles.chatNote}>
