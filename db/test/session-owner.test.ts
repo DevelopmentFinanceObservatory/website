@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import type { Pool } from 'pg';
 import type { SavedConversation } from '../../src/lib/chat/history.ts';
 import {
     claimSessionOwner,
@@ -13,7 +14,7 @@ import {
 } from '../../src/lib/chat/conversationSave.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { conversation, user } from '../schema.ts';
-import { createTestDatabase, migrationsThrough } from './harness.ts';
+import { createTestDatabase, migrationsWhere } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 
@@ -257,11 +258,17 @@ test('migration 0027 and every claim give a session to its oldest saver', async 
     assert.deepEqual(await sessionOwners(db, 'harness-shared'), ['user-ana']);
 });
 
-/** A database at migration 0026, with an account `user-ana`, and a way to apply the rest. */
-const atMigration26 = async (t: TestContext) => {
+/**
+ * A database migrated through the journal entries `keep` accepts, with an
+ * account `user-ana`, and a way to apply the full journal.
+ */
+const migratedTo = async (
+    t: TestContext,
+    keep: (entry: { idx: number; tag: string }) => boolean,
+) => {
     const database = await createTestDatabase();
     t.after(() => database.teardown());
-    const start = migrationsThrough(26);
+    const start = migrationsWhere(keep);
     t.after(() => fs.rmSync(start, { recursive: true, force: true }));
 
     const migrate = (migrationsFolder: string) =>
@@ -281,6 +288,25 @@ const atMigration26 = async (t: TestContext) => {
     return { database, migrateRest: () => migrate(MIGRATIONS_FOLDER) };
 };
 
+const through26 = (entry: { idx: number }) => entry.idx <= 26;
+
+/** Resolves once some transaction waits for a lock on `table`. */
+const untilBlocked = async (pool: Pool, table: string) => {
+    const deadline = Date.now() + 10_000;
+
+    for (;;) {
+        const { rowCount } = await pool.query(
+            `select 1 from pg_locks join pg_class on pg_class.oid = pg_locks.relation
+             where pg_class.relname = $1 and not pg_locks.granted`,
+            [table],
+        );
+
+        if (rowCount !== 0) return;
+        assert.ok(Date.now() < deadline, `nothing waited on ${table}`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+};
+
 // 100 SHA-256 digests in base64, 4,400 characters. A repeated character
 // compresses under the 2,704-byte btree limit; these bytes barely compress.
 const incompressible = Array.from({ length: 100 }, (_, index) =>
@@ -296,7 +322,7 @@ const incompressible = Array.from({ length: 100 }, (_, index) =>
  * and of each end of the Cc ranges U+0001 to U+001F and U+007F to U+009F.
  */
 test('migration 0027 clears every harness id the Studio refuses', async (t) => {
-    const { database, migrateRest } = await atMigration26(t);
+    const { database, migrateRest } = await migratedTo(t, through26);
     const cases: [id: string, kept: boolean][] = [
         ['harness-ok', true],
         ['', false],
@@ -359,7 +385,7 @@ test('migration 0027 clears every harness id the Studio refuses', async (t) => {
  * the migration starts; the migration waits for it, then clears it.
  */
 test('migration 0027 clears a refused id saved while it waits', async (t) => {
-    const { database, migrateRest } = await atMigration26(t);
+    const { database, migrateRest } = await migratedTo(t, through26);
     const writer = await database.adminPool().connect();
     const pool = database.adminPool();
 
@@ -372,23 +398,12 @@ test('migration 0027 clears a refused id saved while it waits', async (t) => {
         );
 
         const migrated = migrateRest();
-        const waiting = async () => {
-            const { rowCount } = await pool.query(
-                `select 1 from pg_locks join pg_class on pg_class.oid = pg_locks.relation
-                 where pg_class.relname = 'conversation' and not pg_locks.granted`,
-            );
-            return rowCount !== 0;
-        };
-        const deadline = Date.now() + 10_000;
 
-        while (!(await waiting())) {
-            assert.ok(Date.now() < deadline, 'the migration never waited on the open save');
-            await new Promise((resolve) => setTimeout(resolve, 20));
-        }
+        await untilBlocked(pool, 'conversation');
         await writer.query('commit');
         await migrated;
     } finally {
-        writer.release();
+        writer.release(true);
     }
 
     const { rows } = await pool.query<{ agent_session_id: string | null }>(
@@ -396,6 +411,67 @@ test('migration 0027 clears a refused id saved while it waits', async (t) => {
     );
 
     assert.deepEqual(rows, [{ agent_session_id: null }]);
+});
+
+/**
+ * Account deletion locks `user`, then `conversation` through its cascade.
+ * Migration 0027_studio_session_owner adds a foreign key to `user`, so a clear
+ * that locked `conversation` alone would hold it while waiting on `user`, and
+ * a deletion in between would deadlock with it. Here a deletion has locked
+ * `user` when the migration starts, then deletes the account's conversations.
+ */
+test('migration 0027 waits behind an account deletion without deadlock', async (t) => {
+    const { database, migrateRest } = await migratedTo(t, through26);
+    const deleter = await database.adminPool().connect();
+    const pool = database.adminPool();
+
+    try {
+        await deleter.query('begin');
+        await deleter.query(`update "user" set name = name where id = 'user-ana'`);
+
+        const migrated = migrateRest();
+
+        await untilBlocked(pool, 'user');
+        await deleter.query(`delete from conversation where user_id = 'user-ana'`);
+        await deleter.query('commit');
+        await migrated;
+    } finally {
+        deleter.release(true);
+    }
+});
+
+/**
+ * The dev database applied 0027_studio_session_owner before
+ * 0027_clear_refused_harness_ids existed. drizzle-orm applies only journal
+ * entries newer than the last one it recorded, so that database skips the
+ * clear, whose `when` is earlier, and keeps the ids it stored.
+ */
+test('a database that applied 0027_studio_session_owner skips the clear', async (t) => {
+    const { database, migrateRest } = await migratedTo(
+        t,
+        (entry) => entry.tag !== '0027_clear_refused_harness_ids',
+    );
+    const pool = database.adminPool();
+    const applied = async () =>
+        (await pool.query<{ n: number }>('select count(*)::int as n from __drizzle_migrations'))
+            .rows[0]?.n;
+
+    await pool.query(
+        `insert into conversation (id, user_id, title, agent_session_id, data)
+            values ('conv-old', 'user-ana', 'Chat', '', '{}')`,
+    );
+
+    const before = await applied();
+
+    await migrateRest();
+
+    assert.equal(await applied(), before);
+
+    const { rows } = await pool.query<{ agent_session_id: string | null }>(
+        `select agent_session_id from conversation where id = 'conv-old'`,
+    );
+
+    assert.deepEqual(rows, [{ agent_session_id: '' }]);
 });
 
 /**
