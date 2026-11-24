@@ -23,6 +23,7 @@ import {
     producedCards,
     readConversation,
     RESUME_ATTEMPTS,
+    reconcileStoredCards,
     sendNewQuestion,
     storedCards,
     takeApproval,
@@ -1533,6 +1534,66 @@ test('a card a missed unit change drew takes the slot of the card it replaced, w
         placeCard(page, { ...drawn!, turn: 3 }, { replaces: from }).map((card) => card.id),
         ['cmp_a', CARD, 'cmp_b'],
     );
+});
+
+test('the read that closes a turn corrects the cards drawn from it while it ran', () => {
+    const offer: UnitOffer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current'] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' },
+    };
+    const chart = (id: string): Widget & { turn: number } =>
+        ({
+            kind: 'chart',
+            id,
+            title: id,
+            series: [],
+            turn: 1,
+        }) as unknown as Widget & { turn: number };
+    // The page holds cmp_a (its slot), and drew cmp_c from a poll while
+    // another tab's turn ran: two Change unit swaps, cmp_a to cmp_b to cmp_c.
+    const page = [chart('cmp_a'), chart('cmp_other'), { ...chart('cmp_c'), turn: 3 }];
+    const stored = storedCards([
+        {
+            ...closed(2),
+            cards: [
+                {
+                    component_id: 'cmp_b',
+                    type: 'line_chart',
+                    title: 'B',
+                    revision: 1,
+                    replaces: 'cmp_a',
+                },
+            ],
+        },
+        {
+            ...closed(3),
+            cards: [
+                {
+                    component_id: 'cmp_c',
+                    type: 'line_chart',
+                    title: 'C',
+                    revision: 1,
+                    replaces: 'cmp_b',
+                    unit_change: { spec_id: 'spec_1', offer },
+                },
+            ],
+        },
+    ]);
+    const onCanvas = new Set(['cmp_other', 'cmp_c']);
+    const { widgets, replaced } = reconcileStoredCards(page, stored, ['cmp_c'], onCanvas);
+
+    assert.deepEqual(
+        widgets.map((widget) => widget.id),
+        ['cmp_c', 'cmp_other'],
+    );
+    assert.deepEqual(replaced, [['cmp_a', 'cmp_c']]);
+    assert.deepEqual(widgets[0]?.kind !== 'text' && widgets[0]?.unitChange, {
+        spec_id: 'spec_1',
+        offer,
+    });
+    // Corrected once, the card stays as it is.
+    assert.equal(reconcileStoredCards(widgets, stored, ['cmp_c'], onCanvas).widgets, widgets);
 });
 
 // A plan.approved frame of revision `revision`, titled after it.

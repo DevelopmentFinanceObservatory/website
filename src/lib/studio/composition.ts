@@ -1,7 +1,6 @@
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 
-import { canvasEditRetryAfter, withHarnessPins } from './canvasEdits.ts';
-import { abortableSleep, CompositionRefusal, isStaleRevision } from './studioClient.ts';
+import { withHarnessPins } from './canvasEdits.ts';
 import type { CompositionManifest, MutationOperation } from './wire';
 
 import { isHarnessCard, legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
@@ -68,114 +67,6 @@ export const restoreCanvas = (
             .filter((widget) => !removed.has(widget.id))
             .map((widget) => widget.id),
     };
-};
-
-/**
- * The `remove` edits that hand a save's removals to the harness when its
- * baseline names a composition but carries no `pinned`: one for each card
- * the baseline holds that the save lists in `removedIds`, a fork's inherited
- * cards (`localIds`) aside. The page that saved it took such cards off on
- * the page alone, and canvasWidgetsOf keeps them off only while the baseline
- * lacks pins, which the first manifest the page takes gives it. Once the
- * harness takes them (bringPinlessRemovals), its manifest keeps them off.
- * Empty for any other save.
- */
-export const pinlessRemovals = (
-    saved: Partial<Pick<CanvasState, 'canvas' | 'localIds' | 'removedIds'>>,
-): RemoveOperation[] => {
-    const { canvas } = saved;
-
-    if (canvas?.compositionId == null || canvas.pinned) {
-        return [];
-    }
-
-    const removed = new Set(saved.removedIds ?? []);
-    const local = new Set(saved.localIds ?? []);
-
-    return canvas.ids
-        .filter((id) => removed.has(id) && !local.has(id))
-        .map((id) => ({ op: 'remove', component_id: id }));
-};
-
-export type RemoveOperation = Extract<MutationOperation, { op: 'remove' }>;
-
-// The sends bringPinlessRemovals makes before it gives up.
-export const PINLESS_ATTEMPTS = 5;
-
-/**
- * Hand a pinless save's removals (pinlessRemovals, the cards `ids`) to the
- * harness, against `manifest`, the state read's. Each send removes the cards
- * the manifest holds at no newer revision than the save held them
- * (`saved`), in one request against the manifest's revision
- * (`expected_revision`), which the harness applies whole. A card the
- * manifest lacks is off already. A card revised since the save, or whose
- * saved revision is unknown, stays, as createLegacyCanvas keeps it. A
- * refusal of a stale revision (isStaleRevision) reads the manifest again
- * (`read`) and sends again, and a busy or briefly unavailable answer waits
- * as canvasEditRetryAfter says, up to PINLESS_ATTEMPTS sends in all. Resolves
- * with the manifest that answered, `manifest` when it holds none of the
- * cards, and null when the manifest is unknown or the sends ran out or were
- * refused otherwise.
- */
-export const bringPinlessRemovals = async ({
-    ids,
-    saved,
-    manifest,
-    read,
-    mutate,
-    sleep = abortableSleep,
-}: {
-    ids: readonly string[];
-    saved: ReadonlyMap<string, number>;
-    manifest: CompositionManifest | null;
-    read: () => Promise<CompositionManifest | null>;
-    mutate: (
-        operations: RemoveOperation[],
-        expectedRevision: number,
-    ) => Promise<CompositionManifest>;
-    sleep?: (ms: number) => Promise<void>;
-}): Promise<CompositionManifest | null> => {
-    const owed = new Set(ids);
-    let current = manifest;
-
-    for (let attempt = 1; current && attempt <= PINLESS_ATTEMPTS; attempt += 1) {
-        const operations: RemoveOperation[] = current.blocks
-            .filter((block) => {
-                const revision = saved.get(block.component_id);
-
-                return (
-                    owed.has(block.component_id) &&
-                    revision !== undefined &&
-                    block.revision <= revision
-                );
-            })
-            .map((block) => ({ op: 'remove', component_id: block.component_id }));
-
-        if (operations.length === 0) {
-            return current;
-        }
-
-        try {
-            return await mutate(operations, current.revision);
-        } catch (error) {
-            if (error instanceof CompositionRefusal && isStaleRevision(error)) {
-                current = await read();
-                continue;
-            }
-
-            const wait = canvasEditRetryAfter(error, attempt);
-
-            if (wait === null) {
-                console.warn('Studio: the removes of a save were not handed to the harness', error);
-
-                return null;
-            }
-
-            await sleep(wait * 1000);
-        }
-    }
-
-    return null;
 };
 
 /** A manifest taken as the new baseline (takeManifest), with the cards the

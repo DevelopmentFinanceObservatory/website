@@ -32,6 +32,7 @@ import {
     withoutUnsentQuestion,
 } from './transcript.ts';
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
+import { placeCard } from './cardReplace.ts';
 import type {
     ClosedTurn,
     CompositionBlock,
@@ -543,6 +544,80 @@ export const storedCards = (closed: readonly ClosedTurn[]): Map<string, StoredCa
             .flatMap((turn) => turn.cards ?? [])
             .map((card) => [card.component_id, card] as const),
     );
+
+/**
+ * The card whose slot card `id` takes, as its frame's `replaces` would have
+ * named it: its stored card's `replaces`, followed through `stored` while
+ * the card named is one the page does not hold (`held`), as when another
+ * tab changed a card's unit twice. Null when the chain reaches no held card.
+ */
+export const replacedCard = (
+    id: string,
+    stored: ReadonlyMap<string, StoredCard>,
+    held: (id: string) => boolean,
+): string | null => {
+    const seen = new Set([id]);
+
+    for (let from = stored.get(id)?.replaces; from && !seen.has(from);) {
+        if (held(from)) {
+            return from;
+        }
+
+        seen.add(from);
+        from = stored.get(from)?.replaces;
+    }
+
+    return null;
+};
+
+/**
+ * `widgets` with the cards `ids`, which the page drew from a read before
+ * their turn closed and so without their stored cards, brought to what
+ * their frames would have drawn once a read carries those cards (`stored`):
+ * a card with no unit offer takes its stored card's, and a card that
+ * replaced a card the page holds off the canvas (`onCanvas` lacks it,
+ * replacedCard) takes that card's slot. `replaced` lists each swap, old card
+ * first, so the canvas moves the old card's settings. The same array when
+ * nothing changed.
+ */
+export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
+    widgets: TWidget[],
+    stored: ReadonlyMap<string, StoredCard>,
+    ids: Iterable<string>,
+    onCanvas: ReadonlySet<string>,
+): { widgets: TWidget[]; replaced: [string, string][] } => {
+    let next = widgets;
+    const replaced: [string, string][] = [];
+
+    for (const id of ids) {
+        const card = stored.get(id);
+        const held = next.find((widget) => widget.id === id);
+
+        if (!card || !held) {
+            continue;
+        }
+
+        let drawn = held;
+
+        if (card.unit_change && drawn.kind !== 'text' && !drawn.unitChange) {
+            drawn = { ...drawn, unitChange: card.unit_change };
+            next = next.map((widget) => (widget.id === id ? drawn : widget));
+        }
+
+        const from = replacedCard(
+            id,
+            stored,
+            (other) => !onCanvas.has(other) && next.some((widget) => widget.id === other),
+        );
+
+        if (from) {
+            next = placeCard(next, drawn, { replaces: from });
+            replaced.push([from, id]);
+        }
+    }
+
+    return { widgets: next, replaced };
+};
 
 /**
  * Draw the cards a state read's manifest names that the page lacks

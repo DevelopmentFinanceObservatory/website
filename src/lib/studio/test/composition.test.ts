@@ -2,9 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canvasWidgetsOf, isHarnessCard } from '../../chat/canvas.ts';
-import { CompositionRefusal } from '../studioClient.ts';
 import {
-    bringPinlessRemovals,
     createLegacyCanvas,
     legacyHiddenCards,
     restoreCanvas,
@@ -688,82 +686,4 @@ test('a page that leaves its harness session keeps its canvas, with every card l
             ['cmp_pinned', 'cmp_new'],
         );
     });
-});
-
-test("a pinless save's removals go against the read manifest, card by card it still holds, and again after a stale revision", async () => {
-    const refusal = (status: number, error: string, retry: string) =>
-        new CompositionRefusal(status, { error, retry, detail: error } as never, null);
-    const stale = refusal(409, 'edit_conflict', 'refresh_then_retry');
-    const busy = refusal(409, 'transient_unavailable', 'retry_after_delay');
-    // The save held each card at revision 1.
-    const saved = new Map([
-        ['cmp_x1', 1],
-        ['cmp_x2', 1],
-        ['cmp_x3', 1],
-    ]);
-    // The read: cmp_x2 is off already, cmp_x3 was revised since the save.
-    const read = manifest(4, ['cmp_a', 'cmp_x1', 'cmp_x3'], 'cps_1', { cmp_x3: 2 });
-    const newer = manifest(5, ['cmp_a', 'cmp_x1', 'cmp_x3'], 'cps_1', { cmp_x3: 2 });
-    const answered = manifest(6, ['cmp_a', 'cmp_x3'], 'cps_1', { cmp_x3: 2 });
-    const cases: [string, unknown[], [string[], number][], CompositionManifest | null][] = [
-        ['taken at once', [answered], [[['cmp_x1'], 4]], answered],
-        [
-            'after a stale revision',
-            [stale, answered],
-            [
-                [['cmp_x1'], 4],
-                [['cmp_x1'], 5],
-            ],
-            answered,
-        ],
-        [
-            'after a busy answer',
-            [busy, answered],
-            [
-                [['cmp_x1'], 4],
-                [['cmp_x1'], 4],
-            ],
-            answered,
-        ],
-        ['refused', [refusal(422, 'request_invalid', 'do_not_retry')], [[['cmp_x1'], 4]], null],
-    ];
-
-    for (const [label, answers, sends, expected] of cases) {
-        const sent: [string[], number][] = [];
-        const result = await bringPinlessRemovals({
-            ids: ['cmp_x1', 'cmp_x2', 'cmp_x3'],
-            saved,
-            manifest: read,
-            read: async () => newer,
-            mutate: async (operations, expectedRevision) => {
-                sent.push([operations.map((op) => op.component_id), expectedRevision]);
-
-                const answer = answers.shift();
-
-                if (answer instanceof CompositionRefusal) {
-                    throw answer;
-                }
-
-                return answer as CompositionManifest;
-            },
-            sleep: async () => {},
-        });
-
-        assert.deepEqual(sent, sends, label);
-        assert.equal(result, expected, label);
-    }
-
-    // A manifest that holds none of them sends nothing.
-    const none = manifest(4, ['cmp_a']);
-
-    assert.equal(
-        await bringPinlessRemovals({
-            ids: ['cmp_x1'],
-            saved,
-            manifest: none,
-            read: async () => null,
-            mutate: async () => assert.fail('nothing to send'),
-        }),
-        none,
-    );
 });

@@ -116,11 +116,34 @@ test('cancelTurn names its turn, and a turn the conversation moved past stopped 
             'an older harness',
             4,
             [
-                Response.json({ detail: 'extra' }, { status: 422 }),
+                Response.json(
+                    { detail: [{ type: 'extra_forbidden', loc: ['body', 'turn_index'] }] },
+                    { status: 422 },
+                ),
                 new Response(null, { status: 204 }),
             ],
             'stopped',
             [4, undefined],
+        ],
+        // Any other refusal goes no further.
+        [
+            'another refusal',
+            4,
+            [Response.json({ detail: [{ loc: ['body', 'kind'] }] }, { status: 422 })],
+            'unanswered',
+            [4],
+        ],
+        // A cancel that met the turn's claim mid-way names the same turn,
+        // and goes once more.
+        [
+            'the same turn moved',
+            4,
+            [
+                Response.json({ code: 'turn_moved', turn_index: 4 }),
+                new Response(null, { status: 204 }),
+            ],
+            'stopped',
+            [4, 4],
         ],
     ];
 

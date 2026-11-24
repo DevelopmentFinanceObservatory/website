@@ -1,4 +1,5 @@
 import type { CardView } from '@/components/organisms/Studio/canvas/layout';
+import type { OwedRemoval } from '@/lib/studio/owedRemovals';
 import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
 import type { CardRef, TextWidget } from '@/lib/chat/widgets';
 import type { ActivityEntry } from '@/lib/studio/activity';
@@ -35,11 +36,14 @@ export type SavedConversation = {
     // A fork's inherited cards, which the harness session never held and no
     // manifest of the fork names. Optional: only a fork has them.
     localIds?: string[];
+    // The harness cards the user took off whose removal the harness has not
+    // confirmed (src/lib/studio/owedRemovals.ts). Each stays off the canvas.
+    // Optional: saves from before this didn't have it.
+    owedRemovals?: OwedRemoval[];
     pinnedIds: string[];
     // The cards the harness never held (`localIds`, text cards) that the
-    // user took off the canvas. A save from before `canvas`, or whose
-    // `canvas` has no `pinned`, also lists harness cards here, and they stay
-    // off its canvas (canvasWidgetsOf).
+    // user took off the canvas. A save from before `canvas`, or from before
+    // `owedRemovals`, also lists harness cards here (owedRemovalsOf).
     removedIds: string[];
     // In a save from before `canvas`, the unpinned cards of older turns its
     // canvas still showed, and the turn that set belongs to (a later turn

@@ -63,8 +63,6 @@ import {
 import {
     createLegacyCanvas,
     legacyHiddenCards,
-    bringPinlessRemovals,
-    pinlessRemovals,
     restoreCanvas,
     sessionLeftCards,
     takeManifest,
@@ -72,8 +70,16 @@ import {
     type CanvasBaseline,
     type LegacyCanvas,
     type LegacyLocal,
-    type RemoveOperation,
 } from '@/lib/studio/composition';
+import {
+    forgive,
+    owe,
+    owedIds,
+    owedRemovalsOf,
+    removalsToSend,
+    settle,
+    type OwedRemoval,
+} from '@/lib/studio/owedRemovals';
 import {
     approvalKeys,
     attachStep,
@@ -84,6 +90,8 @@ import {
     owedNewQuestion,
     producedCards,
     readConversation,
+    reconcileStoredCards,
+    replacedCard,
     drawManifestCards,
     sendNewQuestion,
     storedCards,
@@ -300,6 +308,7 @@ export type ChatSnapshot = {
     // canvasRef). Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;
     localIds?: string[];
+    owedRemovals?: OwedRemoval[];
     pinnedIds?: string[];
     removedIds?: string[];
     graceIds?: string[];
@@ -359,7 +368,9 @@ type StreamControl = { stopped: () => boolean; carry: (own: boolean) => void };
 // hydrate) sees it: `leave` does to its turn what a Stop would, when this
 // page carries the turn, asking the harness to cancel it in `session`.
 // True when the request stays open until the harness names its turn, which
-// is then cancelled; the caller must not close it.
+// is then cancelled; the caller must not close it. A carried-on turn whose
+// resume the harness has not granted yet is not this page's, so leaving
+// closes the request with no cancel and the turn stays as the page found it.
 type RunningStream = { leave: (session: string) => boolean };
 
 // Whether page turn `turn`'s reply (pageTurnReplyAt) has text.
@@ -468,13 +479,19 @@ export const useChat = (
     const haltRef = useRef<(() => void) | null>(null);
     // The stream whose request runs, which leaving the conversation stops.
     const runningRef = useRef<RunningStream | null>(null);
-    // The removes a save from before manifest pins owes the harness
-    // (pinlessRemovals), with the revision the save held each card at,
-    // until the state read sends them (bringPinless).
-    const pinlessRef = useRef<{
-        removals: RemoveOperation[];
-        saved: ReadonlyMap<string, number>;
-    } | null>(null);
+    // The harness cards the user took off whose removal the harness has not
+    // confirmed (owedRemovals.ts), which stay off the canvas and its saves,
+    // and the ones with a `remove` in flight. The ref lets callbacks read the
+    // set between renders.
+    const [owedRemovals, setOwedRemovals] = useState<OwedRemoval[]>(() =>
+        initial ? owedRemovalsOf(initial) : [],
+    );
+    const owedRef = useRef(owedRemovals);
+    const setOwed = useCallback((update: (prev: OwedRemoval[]) => OwedRemoval[]) => {
+        owedRef.current = update(owedRef.current);
+        setOwedRemovals(owedRef.current);
+    }, []);
+    const removingRef = useRef(new Set<string>());
     // The queue itself; `queued` in state mirrors it for rendering.
     const queueRef = useRef<QueuedMessage[]>([]);
     // Requests run one after another on this chain (the harness serves one
@@ -581,8 +598,15 @@ export const useChat = (
             canvasRef.current = taken.baseline;
             setCanvas(taken.baseline);
 
+            // The cards of a composition left behind turn local, the ones
+            // owed removal off the canvas.
             if (taken.local.length > 0) {
-                setLocalCards({ shown: taken.local, hidden: [] });
+                const owed = owedIds(owedRef.current);
+
+                setLocalCards({
+                    shown: taken.local.filter((id) => !owed.has(id)),
+                    hidden: taken.local.filter((id) => owed.has(id)),
+                });
             }
         }
     }, []);
@@ -707,8 +731,10 @@ export const useChat = (
     const leaveSession = useCallback(
         (turn?: number, { refused }: { refused?: number } = {}) => {
             const pageIds = shownCardsRef.current?.() ?? [];
-            const shownIds =
-                shownCanvas(canvasRef.current, pendingCardsRef.current, pageIds)?.ids ?? pageIds;
+            const owed = owedIds(owedRef.current);
+            const shownIds = (
+                shownCanvas(canvasRef.current, pendingCardsRef.current, pageIds)?.ids ?? pageIds
+            ).filter((id) => !owed.has(id));
             const cards = sessionLeftCards(
                 canvasRef.current ? shownIds : null,
                 widgetsRef.current,
@@ -739,6 +765,9 @@ export const useChat = (
             canvasEditsRef.current?.reset();
             setPendingPins(new Map());
             setPendingCards(() => new Map());
+            // The cards owed removal are local now, and off the canvas.
+            setOwed(() => []);
+            removingRef.current.clear();
 
             if (cards.shown.length > 0 || cards.hidden.length > 0) {
                 setLocalCards(cards);
@@ -747,7 +776,7 @@ export const useChat = (
             setState((prev) => sessionLeftChat(prev, turn));
             drainRef.current();
         },
-        [setPendingCards],
+        [setOwed, setPendingCards],
     );
     // A new question the page sent once and the harness never admitted
     // (refused, never reached, stopped, or taken out of the queue) is offered
@@ -821,6 +850,30 @@ export const useChat = (
                 }
             }
 
+            // A Remove is owed until the harness confirms it, and an Add
+            // takes the card out of the owed set first, so a late remove
+            // cannot take an added card off.
+            const removes = operations.flatMap((operation) =>
+                operation.op === 'remove' ? [operation.component_id] : [],
+            );
+
+            setOwed((prev) =>
+                operations.reduce(
+                    (owed, operation) =>
+                        operation.op === 'remove'
+                            ? owe(
+                                  owed,
+                                  operation.component_id,
+                                  revisionsRef.current.get(operation.component_id) ?? null,
+                              )
+                            : operation.op === 'add'
+                              ? forgive(owed, operation.component_id)
+                              : owed,
+                    prev,
+                ),
+            );
+            removes.forEach((id) => removingRef.current.add(id));
+
             canvasEditsRef.current ??= createCanvasEdits({
                 mutate: mutateComposition,
                 // A busy answer while this page's turn runs is sent again
@@ -836,6 +889,8 @@ export const useChat = (
             const sessionLeft = sessionLeftRef.current;
 
             void canvasEditsRef.current.enqueue(session, operations).then((answered) => {
+                removes.forEach((id) => removingRef.current.delete(id));
+
                 if (
                     generationRef.current !== generation ||
                     sessionLeftRef.current !== sessionLeft
@@ -896,8 +951,27 @@ export const useChat = (
                 }
             });
         },
-        [applyManifest, leaveSession, setPendingCards],
+        [applyManifest, leaveSession, setOwed, setPendingCards],
     );
+    // Each canvas the page takes settles the owed removals it confirms
+    // (settle), and the ones the harness still holds go again (syncCanvas),
+    // one card to a request, so one card the harness has dropped since
+    // refuses no other card's removal.
+    useEffect(() => {
+        const settled = settle(owedRef.current, canvas, revisionsRef.current);
+
+        if (settled !== owedRef.current) {
+            setOwed(() => settled);
+        }
+
+        if (!sessionRef.current) {
+            return;
+        }
+
+        for (const id of removalsToSend(settled, canvas, removingRef.current)) {
+            syncCanvas([{ op: 'remove', component_id: id }]);
+        }
+    }, [canvas, owedRemovals, setOwed, syncCanvas]);
     // The harness cards the page shows pinned, or null while the canvas
     // holds no manifest's pins and the save's pins stand.
     const pins = useMemo(() => shownPins(canvas, pendingPins), [canvas, pendingPins]);
@@ -1477,10 +1551,10 @@ export const useChat = (
                 }
             };
 
-            // The turn no longer counts as this stream's for leaving the
-            // conversation (leaveCancels): it ended, or it waits on the user.
-            // The cancel names only the conversation, so one sent now would
-            // end whatever turn another tab begins next.
+            // The turn stops counting as this stream's for leaving the
+            // conversation (RunningStream's `leave`) once it ends or waits on
+            // the user, since a turn that ended or paused is not this
+            // stream's to cancel.
             const release = () => {
                 if (runningRef.current === running) {
                     runningRef.current = null;
@@ -2446,11 +2520,21 @@ export const useChat = (
                 onDrawn: (block, read) => {
                     const id = block.component_id;
                     const card = stored.get(id);
+                    const isNew = !widgetsRef.current.some((widget) => widget.id === id);
                     // The card a new card took the slot of, as its frame's
-                    // `replaces` would have said (takenOver).
-                    const from = widgetsRef.current.some((widget) => widget.id === id)
-                        ? null
-                        : takenOver(id, { replaces: card?.replaces ?? null });
+                    // `replaces` would have said (replacedCard).
+                    const from = isNew
+                        ? replacedCard(id, stored, (other) =>
+                              widgetsRef.current.some((widget) => widget.id === other),
+                          )
+                        : null;
+
+                    // A card of a turn still open has no stored card yet;
+                    // the read that closes the turn brings it
+                    // (reconcileStoredCards).
+                    if (isNew && !card) {
+                        awaitingStoredRef.current.add(id);
+                    }
 
                     setState((prev) => {
                         const held = prev.widgets.find((widget) => widget.id === id);
@@ -2486,6 +2570,43 @@ export const useChat = (
         [],
     );
 
+    // The cards drawn from a read before their turn closed, which wait for
+    // the stored card a later read brings (reconcileCards).
+    const awaitingStoredRef = useRef(new Set<string>());
+    // Bring the cards drawn from a read before their turn closed to what
+    // their frames would have drawn, once `read` carries their stored cards
+    // (`stored`, reconcileStoredCards): the unit offer, and the slot and
+    // settings of the card each replaced.
+    const reconcileCards = useCallback(
+        (read: ConversationRead, stored: ReadonlyMap<string, StoredCard>) => {
+            const ids = [...awaitingStoredRef.current].filter((id) => stored.has(id));
+
+            if (ids.length === 0) {
+                return;
+            }
+
+            const onCanvas = new Set(
+                read.manifest?.blocks.map((block) => block.component_id) ??
+                    canvasRef.current?.ids ??
+                    [],
+            );
+            const { replaced } = reconcileStoredCards(widgetsRef.current, stored, ids, onCanvas);
+
+            ids.forEach((id) => awaitingStoredRef.current.delete(id));
+            setState((prev) => {
+                const { widgets } = reconcileStoredCards(prev.widgets, stored, ids, onCanvas);
+
+                return widgets === prev.widgets ? prev : { ...prev, widgets };
+            });
+
+            for (const [from, to] of replaced) {
+                legacyRef.current?.drop(from);
+                onCardReplacedRef.current?.(from, to);
+            }
+        },
+        [],
+    );
+
     // Merge a state read into the conversation. The harness's closed turns
     // the page does not hold join the transcript (mergeClosedTurns), each
     // with a closed Activity entry, and its manifest says which cards are on
@@ -2511,6 +2632,9 @@ export const useChat = (
             // Each card a closed turn made is filed under that turn, whether
             // the page held it or the read appended it.
             const turnOf = cardTurns(merged, read.closed_since);
+            const stored = storedCards(read.closed_since);
+
+            reconcileCards(read, stored);
 
             // The approvals of the turns the read names, the open one's
             // included when the page holds it (reattach adds one it lacks).
@@ -2577,58 +2701,12 @@ export const useChat = (
 
             if (read.manifest) {
                 applyManifest(read.manifest);
-                drawCards(read.manifest, turnOf, storedCards(read.closed_since));
+                drawCards(read.manifest, turnOf, stored);
             }
 
             return merged;
         },
-        [applyManifest, askNewQuestion, drawCards, offerNewQuestion],
-    );
-
-    // Send the removes a save from before manifest pins owes the harness
-    // (pinlessRef) against `manifest`, the state read's
-    // (bringPinlessRemovals), and take the manifest that answers. The removes
-    // show in flight until then.
-    const bringPinless = useCallback(
-        (conversation: string, manifest: CompositionManifest | null) => {
-            const owed = pinlessRef.current;
-            const generation = generationRef.current;
-
-            pinlessRef.current = null;
-
-            if (!owed) {
-                return;
-            }
-
-            const { removals, saved } = owed;
-
-            void bringPinlessRemovals({
-                ids: removals.map((operation) => operation.component_id),
-                saved,
-                manifest,
-                read: async () => {
-                    const answer = await readConversation(
-                        conversation,
-                        readSince(messagesRef.current),
-                    );
-
-                    return answer && !isStateRefusal(answer) ? (answer.manifest ?? null) : null;
-                },
-                mutate: (operations, expectedRevision) =>
-                    mutateComposition(conversation, operations, expectedRevision),
-            }).then((answer) => {
-                if (generationRef.current !== generation) {
-                    return;
-                }
-
-                if (answer) {
-                    applyManifest(answer);
-                }
-
-                setPendingCards((prev) => withCardsSettled(prev, removals));
-            });
-        },
-        [applyManifest, setPendingCards],
+        [applyManifest, askNewQuestion, drawCards, offerNewQuestion, reconcileCards],
     );
 
     // Bring a reopened conversation up to the harness's copy (see
@@ -2829,7 +2907,6 @@ export const useChat = (
 
                     if (read) {
                         follow(read, takeRead(read));
-                        bringPinless(conversation, read.manifest ?? null);
                     }
 
                     drainRef.current();
@@ -2840,7 +2917,7 @@ export const useChat = (
         chainRef.current = chainRef.current.then(readHarness).catch((error: unknown) => {
             console.error('studio: the harness state read failed', error);
         });
-    }, [bringPinless, leaveSession, stream, takeRead]);
+    }, [leaveSession, stream, takeRead]);
 
     useEffect(() => {
         reattachRef.current = reattach;
@@ -2853,7 +2930,6 @@ export const useChat = (
         const session = sessionRef.current;
 
         runningRef.current = null;
-        pinlessRef.current = null;
 
         return running !== null && session !== null && running.leave(session);
     }, []);
@@ -2865,9 +2941,11 @@ export const useChat = (
         // chain. A turn this page only watches, or a state read, ends here
         // alone. A request the harness has not answered stays open until it
         // names its turn, which is then cancelled (RunningStream).
-        const kept = leaveStream();
-
-        if (!kept) {
+        // A kept request closes itself (RunningStream), so a later leave
+        // must not close it first.
+        if (leaveStream()) {
+            abortRef.current = null;
+        } else {
             abortRef.current?.abort();
         }
 
@@ -2883,6 +2961,9 @@ export const useChat = (
         setLocalCards(NO_LOCAL);
         setPendingPins(new Map());
         setPendingCards(() => new Map());
+        setOwed(() => []);
+        removingRef.current.clear();
+        awaitingStoredRef.current.clear();
         askedRef.current.clear();
         cardReadsRef.current.clear();
         canvasEditsRef.current?.reset();
@@ -2903,15 +2984,15 @@ export const useChat = (
             clarify: null,
             plan: null,
         });
-    }, [leaveStream, setPendingCards]);
+    }, [leaveStream, setOwed, setPendingCards]);
 
     const hydrate = useCallback(
         (saved: ChatSnapshot) => {
             // As in reset(): ask the harness to stop the turn this page
             // carries, abandon the old chain and queue.
-            const kept = leaveStream();
-
-            if (!kept) {
+            if (leaveStream()) {
+                abortRef.current = null;
+            } else {
                 abortRef.current?.abort();
             }
 
@@ -2949,18 +3030,13 @@ export const useChat = (
                 plan: null,
             });
 
-            // A save from before manifest pins took cards the harness holds
-            // off on the page alone. They leave the harness's canvas too once
-            // the state is read (bringPinless), so its manifest keeps them off
-            // once it gains pins, and show as removes in flight meanwhile.
-            const removals = pinlessRemovals({ ...saved, canvas: canvasRef.current });
-
-            if (removals.length > 0) {
-                pinlessRef.current = { removals, saved: new Map(revisionsRef.current) };
-                setPendingCards((prev) => withCardsSent(prev, removals));
-            }
+            // The removals the save owes the harness (owedRemovalsOf), which
+            // go again once the page holds the canvas (the effect above).
+            removingRef.current.clear();
+            awaitingStoredRef.current.clear();
+            setOwed(() => owedRemovalsOf(saved));
         },
-        [leaveStream, setPendingCards, startLegacy],
+        [leaveStream, setOwed, setPendingCards, startLegacy],
     );
 
     const snapshot = useCallback(
@@ -2972,6 +3048,7 @@ export const useChat = (
             })),
             turnCount: turnCount.current,
             canvas: canvasRef.current,
+            owedRemovals: owedRef.current,
         }),
         [],
     );
@@ -2985,6 +3062,9 @@ export const useChat = (
         // unanswered adds and removes, which editedCanvasCards shows on it.
         canvas,
         pendingCards,
+        // The harness cards owed removal, which every canvas this page draws
+        // or saves leaves off (canvasWidgetsOf).
+        owedRemovals,
         pins,
         send,
         unqueue,

@@ -704,15 +704,6 @@ export const isNoBlock = (refusal: CompositionRefusal): boolean =>
     refusal.error?.error === 'not_found' &&
     refusal.error.pointer === '/operations/component_id';
 
-/** Whether a refused canvas edit named a revision the composition has moved
- *  past (409 `edit_conflict`, retry `refresh_then_retry`, no constraint):
- *  read the manifest again and send the edit against its revision. */
-export const isStaleRevision = (refusal: CompositionRefusal): boolean =>
-    refusal.status === 409 &&
-    refusal.error?.error === 'edit_conflict' &&
-    refusal.error.retry === 'refresh_then_retry' &&
-    !refusal.error.constraint_id;
-
 /** Mutate the canvas; resolves with the new (or unchanged) manifest, and
  *  rejects with a CompositionRefusal when the request is refused. */
 export const mutateComposition = async (
@@ -743,21 +734,38 @@ export const mutateComposition = async (
     return (await res.json()) as CompositionManifest;
 };
 
-/** How a cancel went: the harness `stopped` the turn named, or the
- *  conversation's turn when none was named; the turn named was not the
- *  conversation's latest (`moved`), so nothing of this page's was running and
- *  nothing stopped; or no answer came (`unanswered`). */
+/** How a cancel went: the harness took it (`stopped`), it answered that the
+ *  conversation's latest turn is another than the one named (`moved`), or
+ *  no answer came (`unanswered`). */
 export type CancelAnswer = 'stopped' | 'moved' | 'unanswered';
+
+// Whether a 422 answer refuses `turn_index` as a member the request may not
+// carry: FastAPI's validation answer of a harness from before it, whose
+// `detail` entries name the member's location.
+const refusesTurnIndex = (body: unknown): boolean => {
+    const detail = asRecord(body)?.['detail'];
+
+    return (
+        Array.isArray(detail) &&
+        detail.some((entry) => {
+            const loc = asRecord(entry)?.['loc'];
+
+            return Array.isArray(loc) && loc.at(-1) === 'turn_index';
+        })
+    );
+};
 
 /**
  * Stop the conversation's in-flight stream (the Stop button, or leaving the
  * conversation). `turnIndex` names the turn to stop, as the harness named it
  * (the stream's `x-dfo-turn-index` header, or the state read a carried-on
- * turn came from), so a cancel that reaches the harness after another turn
- * began stops nothing (`moved`). Null stops whatever turn the conversation
- * runs. A harness that predates `turn_index` refuses the request 422, and
- * the cancel goes again without it. Best-effort and bounded: it always
- * settles, within `timeoutMs` in all, because queued turns wait on it.
+ * turn came from). The harness answers `turn_moved` and stops nothing when
+ * the conversation's latest turn is another. One that names the turn sent
+ * met the turn's claim mid-way, so the cancel goes once more. Null stops
+ * whatever turn the conversation runs. A harness from before `turn_index`
+ * refuses the member 422 (refusesTurnIndex), and the cancel goes again
+ * without it. Best-effort and bounded: it always settles, within
+ * `timeoutMs` in all, because queued turns wait on it.
  */
 export const cancelTurn = async (
     conversationId: string,
@@ -781,20 +789,41 @@ export const cancelTurn = async (
         });
     };
 
+    // The answer to one send: how it went, and for `moved` the latest turn
+    // the harness named.
+    const answerOf = async (res: Response): Promise<[CancelAnswer, unknown]> => {
+        if (!res.ok) {
+            return ['unanswered', null];
+        }
+
+        const body = res.status === 200 ? asRecord(await res.json().catch(() => null)) : null;
+
+        return body?.['code'] === 'turn_moved' ? ['moved', body['turn_index']] : ['stopped', null];
+    };
+
     try {
         let res = await send(turnIndex);
 
-        if (res.status === 422 && turnIndex !== null) {
+        if (
+            res.status === 422 &&
+            turnIndex !== null &&
+            refusesTurnIndex(
+                await res
+                    .clone()
+                    .json()
+                    .catch(() => null),
+            )
+        ) {
             res = await send(null);
         }
 
-        if (!res.ok) {
-            return 'unanswered';
+        const [answer, latest] = await answerOf(res);
+
+        if (answer === 'moved' && latest === turnIndex) {
+            return (await answerOf(await send(turnIndex)))[0];
         }
 
-        const answer = res.status === 200 ? asRecord(await res.json().catch(() => null)) : null;
-
-        return answer?.['code'] === 'turn_moved' ? 'moved' : 'stopped';
+        return answer;
     } catch {
         // Cancel is best-effort (a timeout lands here too); closing the
         // stream also stops the turn.

@@ -23,6 +23,7 @@ const SAVED_FIELDS: Record<keyof SavedConversation, boolean> = {
     turnCount: true,
     canvas: true,
     localIds: true,
+    owedRemovals: true,
     pinnedIds: true,
     removedIds: true,
     graceIds: true,
@@ -84,6 +85,7 @@ export const pruneForShare = (
         // only turn, since no manifest or inherited set names it.
         canvas: null,
         localIds: [],
+        owedRemovals: [],
         pinnedIds: widget ? [widget.id] : [],
         removedIds: [],
         graceIds: [],

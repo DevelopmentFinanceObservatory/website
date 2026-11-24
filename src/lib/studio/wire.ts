@@ -727,10 +727,6 @@ export type TurnState = {
     retry_after_seconds?: number | null;
 };
 
-/** One closed turn: the user's message as the turn recorded it, the reply it
- *  closed on (empty when none), the cards it made or changed, the code a
- *  turn that did not end cleanly closed on, and the question a turn ended by
- *  a new question set its plan aside for (see `done`'s `new_question`). */
 /** A card a closed turn made or changed, as the conversation stores it.
  *  `unit_change` and `replaces` are its `component.created` frame's: the
  *  offer its Change unit opens on, and the card whose canvas slot it took.
@@ -745,6 +741,10 @@ export type StoredCard = {
     replaces?: string | null;
 };
 
+/** One closed turn: the user's message as the turn recorded it, the reply it
+ *  closed on (empty when none), the cards it made or changed, the code a
+ *  turn that did not end cleanly closed on, and the question a turn ended by
+ *  a new question set its plan aside for (see `done`'s `new_question`). */
 export type ClosedTurn = {
     turn_index: number;
     user_message: string;
