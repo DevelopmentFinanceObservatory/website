@@ -90,8 +90,8 @@
     // One line at rest. field-sizing sizes the box to its text in CSS, so the
     // height follows late web fonts and width changes. The cap is two lines
     // (the design's limit) plus the padding, since the box is border-box. A
-    // browser without field-sizing (Safari before 26.2, Firefox before 152)
-    // keeps one row and scrolls.
+    // browser without field-sizing grows the field through useGrowFallback,
+    // under the same cap.
     field-sizing: content;
     max-height: calc(2lh + 0.1em + var(--data-prompt-pad-end));
 

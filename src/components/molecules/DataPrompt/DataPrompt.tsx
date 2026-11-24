@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import styles from './DataPrompt.module.scss';
 
 import TryChips from '@/components/molecules/TryChips/TryChips';
+import { useGrowFallback } from '@/hooks/useGrowFallback';
 import { revealIndex } from '@/hooks/useReveal';
 
 export type DataPromptProps = {
@@ -39,6 +40,8 @@ const DataPrompt = ({
 }: DataPromptProps) => {
     const [value, setValue] = useState(() => (initial ?? '').replace(/\s+/g, ' '));
     const inputRef = useRef<HTMLTextAreaElement>(null);
+
+    useGrowFallback(inputRef, value);
 
     useEffect(() => {
         const input = inputRef.current;

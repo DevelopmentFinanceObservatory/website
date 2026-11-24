@@ -6,6 +6,7 @@ import { type FormHTMLAttributes, type RefObject, useRef } from 'react';
 import styles from './PromptForm.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import { useGrowFallback } from '@/hooks/useGrowFallback';
 
 export type PromptField = HTMLInputElement | HTMLTextAreaElement;
 
@@ -47,6 +48,8 @@ const PromptForm = ({
 }: PromptFormProps) => {
     const ownRef = useRef<PromptField>(null);
     const field = inputRef ?? ownRef;
+
+    useGrowFallback(field, value, grow);
 
     const shared = {
         className: styles.promptInput,

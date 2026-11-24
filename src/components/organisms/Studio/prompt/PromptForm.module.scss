@@ -32,8 +32,8 @@
     // padding holds the font's overhang (outfit-overhang), or every one-line
     // field would draw a scrollbar, and sits at both ends so the text stays
     // centred in the bar.
-    // A browser without field-sizing (Safari before 26.2, Firefox before 152)
-    // keeps one row and scrolls.
+    // A browser without field-sizing grows the field through
+    // useGrowFallback, under the same cap.
     .promptInput {
         --prompt-input-pad: #{outfit-overhang()};
 
