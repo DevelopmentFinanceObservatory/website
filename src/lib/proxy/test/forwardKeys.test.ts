@@ -109,8 +109,8 @@ const fakes = (answer: KeyVerdict, cached = false) => {
 
         return verdictOf(limit);
     };
-    accessDeps.hitDaily = async (keyId, limit) => {
-        log.push(`daily:${keyId}`);
+    accessDeps.hitDaily = async (counterKey, limit) => {
+        log.push(`daily:${counterKey}`);
 
         return verdictOf(limit);
     };
@@ -128,6 +128,7 @@ const VALID: KeyVerdict = {
     keyId: 'key-public-1',
     accountId: ACCOUNT,
     rateLimit: null,
+    accountDailyLimit: null,
     dailyLimit: null,
     expiresAt: null,
 };
@@ -204,7 +205,12 @@ test('forward: a key on the Datasets API counts against the account and its dail
 
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('x-ratelimit-limit'), '600');
-    assert.deepEqual(log, ['cache', 'lookup', `account:datasets:${ACCOUNT}`, `daily:key-public-1`]);
+    assert.deepEqual(log, [
+        'cache',
+        'lookup',
+        `account:datasets:${ACCOUNT}`,
+        `daily:apiday:user:${ACCOUNT}`,
+    ]);
     assert.equal(seen[0]!['x-dfo-caller'], accountCaller);
     assert.equal(seen[0]!['x-api-key'], undefined);
 
@@ -515,18 +521,19 @@ test('forward on a real key store and counter', async (t) => {
         ['default', null],
         ['spare', 10],
         ['quota', 10],
+        ['capped', 10],
     ] as const) {
         await admin.query(
-            `insert into "user" (id, name, email, email_verified, created_at, updated_at, api_rate_limit)
-             values ($1, $1, $1 || '@a.example', true, now(), now(), $2)`,
-            [id, limit],
+            `insert into "user" (id, name, email, email_verified, created_at, updated_at, api_rate_limit, api_daily_limit)
+             values ($1, $1, $1 || '@a.example', true, now(), now(), $2, $3)`,
+            [id, limit, id === 'quota' ? 2 : null],
         );
 
         keys[id] = signKey(`dfo_k_${id.padEnd(32, 'z')}`, [SECRET]);
         await admin.query(
             `insert into apikey (id, reference_id, key, created_at, updated_at, daily_limit)
              values ($1, $3, $2, now(), now(), $4)`,
-            [`key-${id}`, await defaultKeyHasher(keys[id]), id, id === 'quota' ? 2 : null],
+            [`key-${id}`, await defaultKeyHasher(keys[id]), id, id === 'capped' ? 1 : null],
         );
     }
 
@@ -537,7 +544,7 @@ test('forward on a real key store and counter', async (t) => {
                 limiter.hitKey(surface, ip, { api: 3, mcp: 3, pin: 3 }[surface]),
             hitAccount: (surface: 'api' | 'mcp' | 'pin', accountId: string, limit: number) =>
                 limiter.hitKey(surface, `acct:${accountId}`, limit),
-            hitDaily: (keyId: string, limit: number) => limiter.hitDaily(keyId, limit),
+            hitDaily: (counterKey: string, limit: number) => limiter.hitDaily(counterKey, limit),
             defaultLimit: 5,
             defaultDailyLimit: 1000,
         });
@@ -563,7 +570,7 @@ test('forward on a real key store and counter', async (t) => {
     });
 
     await t.test(
-        "a key's daily quota refuses the call after it, with the quota's reset",
+        "the account's daily quota refuses the call after it, with the quota's reset, and a new key does not start it again",
         async () => {
             const statuses = [];
             const answers: Response[] = [];
@@ -583,15 +590,36 @@ test('forward on a real key store and counter', async (t) => {
             assert.equal((await answers[2]!.json()).code, 'rate_limited');
             assert.ok(Number(answers[2]!.headers.get('retry-after')) <= 86_400);
 
+            // Deleting the key and making another leaves the count where it is.
+            const replacement = signKey(`dfo_k_${'quotatwo'.padEnd(32, 'y')}`, [SECRET]);
+
+            await admin.query('delete from apikey where id = $1', ['key-quota']);
+            await admin.query(
+                `insert into apikey (id, reference_id, key, created_at, updated_at)
+                 values ('key-quota-2', 'quota', $1, now(), now())`,
+                [await defaultKeyHasher(replacement)],
+            );
+            assert.equal((await call({ 'x-api-key': replacement })).status, 429);
+
             const [row] = (
-                await admin.query('select count, window_start from limit_counter where key = $1', [
-                    'apiday:key:key-quota',
+                await admin.query('select count from limit_counter where key = $1', [
+                    'apiday:user:quota',
                 ])
             ).rows;
 
-            assert.equal(row.count, 3);
+            assert.equal(row.count, 4);
         },
     );
+
+    await t.test("a key's own cap refuses the call after it", async () => {
+        const statuses = [];
+
+        for (let i = 0; i < 2; i++) {
+            statuses.push((await call({ 'x-api-key': keys.capped! })).status);
+        }
+
+        assert.deepEqual(statuses, [200, 429]);
+    });
 
     await t.test('an account with no limit of its own gets the default', async () => {
         const statuses = [];

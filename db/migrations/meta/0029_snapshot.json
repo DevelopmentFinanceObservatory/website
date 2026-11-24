@@ -1,5 +1,5 @@
 {
-  "id": "9ade80d7-5793-40ad-834b-ca51c5ff26a8",
+  "id": "28cf98a2-5f41-4da6-b23f-a9d15075fa95",
   "prevId": "1530b0e0-7ea7-4a31-8ee1-27824604469c",
   "version": "7",
   "dialect": "postgresql",
@@ -1294,6 +1294,12 @@
         },
         "api_rate_limit": {
           "name": "api_rate_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "api_daily_limit": {
+          "name": "api_daily_limit",
           "type": "integer",
           "primaryKey": false,
           "notNull": false

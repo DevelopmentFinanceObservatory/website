@@ -12,14 +12,15 @@ import { hasKeyPrefix } from './apiKey.ts';
  * here: it writes to the key's row on every call and reports a database
  * outage as an invalid key. This reads the row itself, keyed by the plugin's
  * own hash of the key (`defaultKeyHasher`: base64url SHA-256), joined to the
- * owning account's limit (`user.api_rate_limit`), and checks `enabled` and
- * `expires_at` itself.
+ * owning account's limits (`user.api_rate_limit`, `user.api_daily_limit`),
+ * and checks `enabled` and `expires_at` itself.
  *
  * The answer is one of three, so the proxy can tell a bad key from a store it
  * cannot reach:
- *   valid        the key's public id, its account, the account's own limit
- *                and the key's own daily limit (each null for the deployment
- *                default) and when the key expires
+ *   valid        the key's public id, its account, the account's own
+ *                per-minute limit and daily quota (each null for the
+ *                deployment default), the key's own daily cap (null for
+ *                none) and when the key expires
  *   invalid      no such key, disabled, or expired
  *   unavailable  the read threw or timed out; the proxy fails open
  *
@@ -49,7 +50,9 @@ export type KeyVerdict =
           accountId: string;
           // The account's own calls per window, or null for the default.
           rateLimit: number | null;
-          // The key's own calls per UTC day on the API, or null for the default.
+          // The account's own API calls per UTC day, or null for the default.
+          accountDailyLimit: number | null;
+          // The key's own cap on API calls per UTC day, or null for none.
           dailyLimit: number | null;
           expiresAt: Date | null;
       }
@@ -92,6 +95,7 @@ type Row = {
     enabled: boolean | null;
     expiresAt: Date | null;
     apiRateLimit: number | null;
+    apiDailyLimit: number | null;
     dailyLimit: number | null;
 };
 
@@ -222,6 +226,7 @@ export const createKeyVerifier = (
                     enabled: apikey.enabled,
                     expiresAt: apikey.expiresAt,
                     apiRateLimit: user.apiRateLimit,
+                    apiDailyLimit: user.apiDailyLimit,
                     dailyLimit: apikey.dailyLimit,
                 })
                 .from(apikey)
@@ -248,6 +253,7 @@ export const createKeyVerifier = (
             keyId: row.id,
             accountId: row.referenceId,
             rateLimit: ownLimit(row.apiRateLimit),
+            accountDailyLimit: ownLimit(row.apiDailyLimit),
             dailyLimit: ownLimit(row.dailyLimit),
             expiresAt: row.expiresAt,
         };

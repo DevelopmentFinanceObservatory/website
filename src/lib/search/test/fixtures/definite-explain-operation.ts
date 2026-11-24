@@ -41,60 +41,60 @@ const sentence = (place: string, year: number) =>
 const query = 'Why did the population of Ethiopia fall in 2023?';
 
 export const definiteExplainOperation: unknown = {
-  "schema_version": source.schema_version,
-  "kind": "resolution",
-  "query_echo": {
-    ...source.query_echo,
-    "raw_query": query,
-    "normalized_query": query
-  },
-  "diagnostics": source.diagnostics,
-  "parts": [
-    {
-      "variable_text": sourcePart.variable_text,
-      "warnings": [],
-      "restatement": {
-        "variable_text": "population",
-        "entities": [{ "text": "Ethiopia" }],
-        "time_text": "2023"
-      },
-      "operations": [explain],
-      "status": "definite",
-      "spec": populationAt(
-        "spec_explain_ethiopia_2023",
-        { dcid: "country/ETH", label: "Ethiopia" },
-        2023
-      )
-    }
-  ],
-  "status": "definite",
-  "rendered_sentence": sentence("Ethiopia", 2023),
-  "sentence_plan": [{ "kind": "text", "text": sentence("Ethiopia", 2023), "segment": "heading" }]
+    schema_version: source.schema_version,
+    kind: 'resolution',
+    query_echo: {
+        ...source.query_echo,
+        raw_query: query,
+        normalized_query: query,
+    },
+    diagnostics: source.diagnostics,
+    parts: [
+        {
+            variable_text: sourcePart.variable_text,
+            warnings: [],
+            restatement: {
+                variable_text: 'population',
+                entities: [{ text: 'Ethiopia' }],
+                time_text: '2023',
+            },
+            operations: [explain],
+            status: 'definite',
+            spec: populationAt(
+                'spec_explain_ethiopia_2023',
+                { dcid: 'country/ETH', label: 'Ethiopia' },
+                2023,
+            ),
+        },
+    ],
+    status: 'definite',
+    rendered_sentence: sentence('Ethiopia', 2023),
+    sentence_plan: [{ kind: 'text', text: sentence('Ethiopia', 2023), segment: 'heading' }],
 };
 
 export const definiteExplainEdited: unknown = {
-  "schema_version": source.schema_version,
-  "kind": "resolution",
-  "query_echo": {
-    "entry_path": "dataset_resubmit",
-    "extract_skipped": true
-  },
-  "diagnostics": source.diagnostics,
-  "parts": [
-    {
-      "variable_text": sourcePart.variable_text,
-      "warnings": [],
-      "restatement": null,
-      "operations": [explain],
-      "status": "definite",
-      "spec": populationAt(
-        "spec_explain_kenya_2022",
-        { dcid: "country/KEN", label: "Kenya" },
-        2022
-      )
-    }
-  ],
-  "status": "definite",
-  "rendered_sentence": sentence("Kenya", 2022),
-  "sentence_plan": [{ "kind": "text", "text": sentence("Kenya", 2022), "segment": "heading" }]
+    schema_version: source.schema_version,
+    kind: 'resolution',
+    query_echo: {
+        entry_path: 'dataset_resubmit',
+        extract_skipped: true,
+    },
+    diagnostics: source.diagnostics,
+    parts: [
+        {
+            variable_text: sourcePart.variable_text,
+            warnings: [],
+            restatement: null,
+            operations: [explain],
+            status: 'definite',
+            spec: populationAt(
+                'spec_explain_kenya_2022',
+                { dcid: 'country/KEN', label: 'Kenya' },
+                2022,
+            ),
+        },
+    ],
+    status: 'definite',
+    rendered_sentence: sentence('Kenya', 2022),
+    sentence_plan: [{ kind: 'text', text: sentence('Kenya', 2022), segment: 'heading' }],
 };

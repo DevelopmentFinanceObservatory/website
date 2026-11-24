@@ -5,18 +5,20 @@
  * with a fake limiter and key verifier.
  *
  * A call is anonymous, counted against its address as before, or keyed,
- * counted against the account that owns the key at the account's limit and
- * against the key's own daily quota (docs/design/api-keys.md, "The Proxy
- * Check"). Keys are honoured on the 'api' and 'datasets' surfaces
+ * counted against the account that owns the key at the account's limit,
+ * against the account's daily quota, which every key of the account spends,
+ * and against the key's own daily cap when it has one
+ * (docs/design/api-keys.md, "The Proxy Check"). Keys are honoured on the 'api' and 'datasets' surfaces
  * (`honorsKeys`). Every key carries a tag signed by a server secret
  * (src/lib/auth/keyTag), checked first, so a made-up key costs no read and no
  * count:
  *
  *   no key                       anonymous
  *   bad tag                      401, no lookup, no count (outcome `forged`)
- *   good tag, valid in the cache counted against the account, then the key's
- *                                daily quota; the headers report the account's
- *                                count, or the quota's when it refuses
+ *   good tag, valid in the cache counted against the account, then its
+ *                                daily quota, then the key's cap if any; the
+ *                                headers report the account's per-minute
+ *                                count, or the daily count that refuses
  *   good tag, otherwise looked up:
  *     valid                      counted against the account, never the
  *                                address, so keyed callers behind a shared
@@ -38,6 +40,7 @@ import {
     rateLimitedProblem,
 } from './problem.ts';
 import { readApiKey } from './apiKey.ts';
+import { accountDailyCounterKey, keyDailyCounterKey } from './limitCounter.ts';
 import type { KeyVerifier, ValidKey } from './keyVerifier.ts';
 import type { RateVerdict } from './rateHeaders.ts';
 import type { Surface } from './rateLimit.ts';
@@ -69,11 +72,12 @@ export type AccessDeps = {
     hitAddress: (surface: Surface, ip: string) => Promise<RateVerdict>;
     // Count a call from an account against `limit`.
     hitAccount: (surface: Surface, accountId: string, limit: number) => Promise<RateVerdict>;
-    // Count a call by a key against its daily quota of `limit`.
-    hitDaily: (keyId: string, limit: number) => Promise<RateVerdict>;
+    // Count a call on a daily counter (accountDailyCounterKey,
+    // keyDailyCounterKey) against `limit`.
+    hitDaily: (counterKey: string, limit: number) => Promise<RateVerdict>;
     // The account's limit when it has none of its own.
     defaultLimit: number;
-    // A key's daily quota when it has none of its own.
+    // An account's daily quota when it has none of its own.
     defaultDailyLimit: number;
 };
 
@@ -151,16 +155,30 @@ export const decideAccess = async (
             };
         }
 
-        const daily = await deps.hitDaily(key.keyId, key.dailyLimit ?? deps.defaultDailyLimit);
+        const spent = (daily: RateVerdict, scope: 'account' | 'key'): Access => ({
+            refusal: dailyQuotaProblem(daily, rateHeaders(daily), scope),
+            identity,
+            verdict: daily,
+            outcome: 'limited',
+        });
+        const daily = await deps.hitDaily(
+            accountDailyCounterKey(key.accountId),
+            key.accountDailyLimit ?? deps.defaultDailyLimit,
+        );
 
-        return daily.allowed
-            ? { identity, verdict, outcome: 'allowed' }
-            : {
-                  refusal: dailyQuotaProblem(daily, rateHeaders(daily)),
-                  identity,
-                  verdict: daily,
-                  outcome: 'limited',
-              };
+        if (!daily.allowed) {
+            return spent(daily, 'account');
+        }
+
+        if (key.dailyLimit !== null) {
+            const capped = await deps.hitDaily(keyDailyCounterKey(key.keyId), key.dailyLimit);
+
+            if (!capped.allowed) {
+                return spent(capped, 'key');
+            }
+        }
+
+        return { identity, verdict, outcome: 'allowed' };
     };
 
     if (!deps.tagValid(read.key)) {

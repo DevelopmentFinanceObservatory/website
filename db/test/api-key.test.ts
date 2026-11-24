@@ -45,6 +45,7 @@ test('API key table and plugin setup', async (t) => {
         user: {
             additionalFields: {
                 apiRateLimit: { type: 'number', required: false, input: false, returned: false },
+                apiDailyLimit: { type: 'number', required: false, input: false, returned: false },
             },
         },
         plugins: [apiKeyPlugin({}, { secrets: () => [TAG_SECRET] })],

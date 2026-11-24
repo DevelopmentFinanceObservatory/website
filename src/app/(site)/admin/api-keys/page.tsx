@@ -4,7 +4,8 @@ import {
     adminCreateKey,
     adminDeleteKey,
     adminLoadKeys,
-    adminResetKeyUsage,
+    adminResetUsage,
+    adminSetDailyLimit,
     adminSetKeyLimit,
     adminSetLimit,
 } from './actions';
@@ -14,7 +15,7 @@ import { ADMIN_PAGE_SIZE } from '@/components/organisms/ApiKeys/AdminState';
 import { keyService, requireAdmin } from '@/lib/apiKeys/server';
 import { isAdmin, parseAdminEmails } from '@/lib/apiKeys/settings';
 import { keysEnabled } from '@/lib/proxy/forward';
-import { KEYED_LIMIT } from '@/lib/proxy/rateLimit';
+import { ACCOUNT_DAILY_LIMIT, KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
 export const metadata: Metadata = {
     title: 'User management — DFO',
@@ -29,8 +30,9 @@ const actions = {
     createKey: adminCreateKey,
     deleteKey: adminDeleteKey,
     setKeyLimit: adminSetKeyLimit,
-    resetKeyUsage: adminResetKeyUsage,
+    resetUsage: adminResetUsage,
     setAccountLimit: adminSetLimit,
+    setAccountDailyLimit: adminSetDailyLimit,
 };
 
 /**
@@ -69,6 +71,7 @@ const AdminApiKeysPage = async ({
             query={query}
             page={page}
             defaultLimit={KEYED_LIMIT}
+            defaultDailyLimit={ACCOUNT_DAILY_LIMIT}
             keysEnabled={keysEnabled()}
             actions={actions}
         />

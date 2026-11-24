@@ -81,7 +81,10 @@ function compareRichnessDesc(a: number[], b: number[]): number {
     return 0;
 }
 
-export function partitionOptions<T>(items: T[], accessors: CoverageAccessors<T>): PartitionedOptions<T> {
+export function partitionOptions<T>(
+    items: T[],
+    accessors: CoverageAccessors<T>,
+): PartitionedOptions<T> {
     // No option carries a probed verdict at all -- leave order/behavior untouched.
     if (!items.some((item) => accessors.state(item) !== 'unknown')) {
         return { main: items, hidden: [] };

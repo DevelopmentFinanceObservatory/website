@@ -3,7 +3,7 @@ import 'server-only';
 import { counterDb } from '@/lib/db';
 
 import { limiterBucket } from './caller';
-import { countHit, DAY_S, dailyCounterKey, pruneCounters, type CounterDb } from './limitCounter';
+import { countHit, DAY_S, pruneCounters, type CounterDb } from './limitCounter';
 import { createFallbackCounter, type FallbackCounter } from './limitFallback';
 import type { RateVerdict } from './rateHeaders';
 
@@ -32,10 +32,15 @@ import type { RateVerdict } from './rateHeaders';
  *   RATE_LIMIT_KEYED      calls per window per account on each of the 'api'
  *                         and 'datasets' surfaces, for an account with no
  *                         limit of its own (default 600)
- *   API_KEY_DAILY_LIMIT   API calls per UTC day per API key, for a key with
- *                         no limit of its own (`apikey.daily_limit`; default
- *                         1000). Counted apart from the window above, in a
- *                         one-day window (hitDaily).
+ *   API_KEY_DAILY_LIMIT   API calls per UTC day per account, every key's
+ *                         calls together, for an account with no quota of
+ *                         its own (`user.api_daily_limit`; default 1000).
+ *                         Counted apart from the window above, in a one-day
+ *                         window (hitDaily). A key may also carry a lower
+ *                         cap of its own (`apikey.daily_limit`).
+ *
+ * The daily quota is the account's, so deleting a key and making another
+ * does not start the count again.
  */
 /** The rate-limit window in seconds, which the key pages show too. */
 export const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
@@ -71,8 +76,8 @@ export const LIMITS = {
  */
 export const KEYED_LIMIT = Number(process.env.RATE_LIMIT_KEYED) || 600;
 
-/** A key's API calls per UTC day when it sets none of its own (`apikey.daily_limit`). */
-export const KEY_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 1000;
+/** An account's API calls per UTC day when it sets none of its own (`user.api_daily_limit`). */
+export const ACCOUNT_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 1000;
 
 export type Surface = keyof typeof LIMITS;
 
@@ -84,10 +89,11 @@ export type Limiter = {
      */
     hitKey(surface: Surface, callerKey: string, limit: number): Promise<RateVerdict>;
     /**
-     * Count one API call by the key `keyId` against its quota of `limit`
-     * calls in the current UTC day (`dailyCounterKey`).
+     * Count one API call on the daily counter `counterKey`
+     * (accountDailyCounterKey or keyDailyCounterKey) against `limit` calls in
+     * the current UTC day.
      */
-    hitDaily(keyId: string, limit: number): Promise<RateVerdict>;
+    hitDaily(counterKey: string, limit: number): Promise<RateVerdict>;
 };
 
 export const createLimiter = (
@@ -143,7 +149,7 @@ export const createLimiter = (
     return {
         hitKey: (surface, callerKey, limit) =>
             count(fallback, `${surface}:${callerKey}`, limit, windowS),
-        hitDaily: (keyId, limit) => count(dailyFallback, dailyCounterKey(keyId), limit, DAY_S),
+        hitDaily: (counterKey, limit) => count(dailyFallback, counterKey, limit, DAY_S),
     };
 };
 
@@ -157,6 +163,6 @@ export const hitKey = (surface: Surface, callerKey: string, limit: number): Prom
 export const hit = (surface: Surface, ip: string): Promise<RateVerdict> =>
     hitKey(surface, limiterBucket(ip), LIMITS[surface]);
 
-/** Count one API call by the key `keyId` against its daily quota (see Limiter). */
-export const hitDaily = (keyId: string, limit: number): Promise<RateVerdict> =>
-    limiter.hitDaily(keyId, limit);
+/** Count one API call on a daily counter (see Limiter). */
+export const hitDaily = (counterKey: string, limit: number): Promise<RateVerdict> =>
+    limiter.hitDaily(counterKey, limit);

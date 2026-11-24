@@ -10,7 +10,9 @@ import { normaliseMkdocs } from '../mkdocs.ts';
 
 test('an admonition becomes an alert blockquote, body dedented', () => {
     const out = normaliseMkdocs(
-        ['!!! warning "Reporting as both"', '    A provider name resolves.', '', 'After.'].join('\n'),
+        ['!!! warning "Reporting as both"', '    A provider name resolves.', '', 'After.'].join(
+            '\n',
+        ),
     );
 
     assert.equal(
@@ -49,7 +51,21 @@ test('an unknown kind is left alone rather than guessed at', () => {
 
 test('a run of Material labels becomes one directive tab set', () => {
     const out = normaliseMkdocs(
-        ['=== "uv"', '', '    ```bash', '    uv add x', '    ```', '', '=== "pip"', '', '    ```bash', '    pip install x', '    ```', '', 'After.'].join('\n'),
+        [
+            '=== "uv"',
+            '',
+            '    ```bash',
+            '    uv add x',
+            '    ```',
+            '',
+            '=== "pip"',
+            '',
+            '    ```bash',
+            '    pip install x',
+            '    ```',
+            '',
+            'After.',
+        ].join('\n'),
     );
 
     assert.match(out, /^:::tabs$/m);
@@ -67,7 +83,9 @@ test('markers inside a fenced sample are never rewritten', () => {
 });
 
 test('the directive tabs already in the corpus pass through', () => {
-    const source = [':::tabs', '', '::tab{label="Claude Code"}', '', 'Run this.', '', ':::'].join('\n');
+    const source = [':::tabs', '', '::tab{label="Claude Code"}', '', 'Run this.', '', ':::'].join(
+        '\n',
+    );
 
     assert.equal(normaliseMkdocs(source), source);
 });
@@ -84,7 +102,9 @@ test('an HTML comment is dropped, on its own line or at the end of one', () => {
 });
 
 test('a comment spanning lines takes all of them', () => {
-    const out = normaliseMkdocs(['Before.', '<!-- TODO: confirm', 'the scheme. -->', 'After.'].join('\n'));
+    const out = normaliseMkdocs(
+        ['Before.', '<!-- TODO: confirm', 'the scheme. -->', 'After.'].join('\n'),
+    );
 
     assert.equal(out, 'Before.\nAfter.');
 });

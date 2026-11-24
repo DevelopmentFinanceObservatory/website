@@ -44,8 +44,7 @@ export type ShareMint = (ShareAnswer & { cards: SharedCard[] }) | { refusal: Sha
 /** Why a live link is not offered. `cards` names the ones that cannot
  *  show live data. `limit` is the cap on a live share's data cards. */
 export type Withdrawal =
-    | { reason: 'cards'; cards: SharedCard[] }
-    | { reason: 'limit'; limit: number; count: number };
+    { reason: 'cards'; cards: SharedCard[] } | { reason: 'limit'; limit: number; count: number };
 
 /**
  * One link of the dialog. A key with no entry is being made. `ready`: the

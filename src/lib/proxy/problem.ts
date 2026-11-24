@@ -165,18 +165,23 @@ export const rateLimitedProblem = (
     });
 
 /**
- * A 429 `rate_limited` problem document: the API key's daily quota of
- * `limit` calls is used up. `reset` is the seconds to 00:00 UTC, when the
- * count starts over.
+ * A 429 `rate_limited` problem document: a daily count of `limit` API calls
+ * is used up, the account's quota, which all its keys share, or the key's
+ * own cap (`scope`). `reset` is the seconds to 00:00 UTC, when the count
+ * starts over.
  */
 export const dailyQuotaProblem = (
     { limit, reset }: { limit: number; reset: number },
     headers: Record<string, string>,
+    scope: 'account' | 'key' = 'account',
 ): Response =>
     problem({
         status: 429,
         code: 'rate_limited',
-        detail: `This API key's daily quota of ${limit} calls is used up. It resets at 00:00 UTC, in ${reset}s.`,
+        detail:
+            scope === 'account'
+                ? `This account's daily quota of ${limit} API calls, shared by all its keys, is used up. It resets at 00:00 UTC, in ${reset}s.`
+                : `This API key's daily cap of ${limit} calls is used up. It resets at 00:00 UTC, in ${reset}s.`,
         retryable: true,
         headers: { ...headers, 'Retry-After': String(reset) },
     });

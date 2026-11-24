@@ -12,13 +12,19 @@ export type KeyView = {
     tail: string | null;
     createdAt: string;
     lastRequest: string | null;
-    dailyLimit: number;
-    usedToday: number;
+    // The key's own cap on API calls per UTC day and today's count of it,
+    // both null when the key has none.
+    dailyCap: number | null;
+    capUsedToday: number | null;
 };
 
-/** What the account panel loads: who is signed in, their keys and the key cap. */
+/**
+ * What the account panel loads: who is signed in, the account's daily API
+ * quota, which every key spends, their keys and the key cap.
+ */
 export type ApiKeysData = {
     user: { name: string; email: string };
+    quota: { dailyLimit: number; usedToday: number };
     keys: KeyView[];
     maxKeys: number;
     // False while the emergency switch (API_KEYS_ENABLED) is off.

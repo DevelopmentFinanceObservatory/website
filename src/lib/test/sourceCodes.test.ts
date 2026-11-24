@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { groupSourceCodes, sourceCodeChips, sourceCodeParts, sourceCodeText } from '../sourceCodes.ts';
+import {
+    groupSourceCodes,
+    sourceCodeChips,
+    sourceCodeParts,
+    sourceCodeText,
+} from '../sourceCodes.ts';
 
 const WB = 'dc/base/WorldBankInternationalDebtStatistics';
 const publisherOf = (dcid: string): string | null => (dcid === WB ? 'World Bank' : null);
@@ -35,7 +40,7 @@ test('the codes read as one sentence, each code its own part', () => {
     assert.equal(groupSourceCodes([], publisherOf), null);
 });
 
-test('the chips list each publisher\'s first codes and count the rest across publishers', () => {
+test("the chips list each publisher's first codes and count the rest across publishers", () => {
     const groups = groupSourceCodes(
         [
             ...['A', 'B', 'C', 'D', 'E'].map((code) => ({ provenance: WB, code })),

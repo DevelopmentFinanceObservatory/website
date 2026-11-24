@@ -71,10 +71,10 @@ test('limiter: counts an address and an account apart, per surface, at the limit
         assert.equal((await limiter.hitKey('api', 'acct:b', 3)).remaining, 2);
     });
 
-    await t.test('a key is counted in a one-day window under apiday:key:<id>', async () => {
-        const first = await limiter.hitDaily('k1', 2);
-        const second = await limiter.hitDaily('k1', 2);
-        const third = await limiter.hitDaily('k1', 2);
+    await t.test('a daily counter is counted in a one-day window under its own key', async () => {
+        const first = await limiter.hitDaily('apiday:user:k1', 2);
+        const second = await limiter.hitDaily('apiday:user:k1', 2);
+        const third = await limiter.hitDaily('apiday:user:k1', 2);
 
         assert.deepEqual(
             [first, second, third].map(({ allowed, remaining }) => [allowed, remaining]),
@@ -88,7 +88,7 @@ test('limiter: counts an address and an account apart, per surface, at the limit
         assert.ok(first.reset > 3600 && first.reset <= 86_400);
 
         const { rows } = await pool.query(
-            "select count from limit_counter where key = 'apiday:key:k1'",
+            "select count from limit_counter where key = 'apiday:user:k1'",
         );
 
         assert.equal(rows[0].count, 3);

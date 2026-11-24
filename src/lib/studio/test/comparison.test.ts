@@ -46,10 +46,18 @@ test('the period moves into the title, and is not repeated', () => {
 });
 
 test('several periods stay a time series, read along the bottom', () => {
-    const base: ChartWidget = { ...chart(), categories: ['2022', '2023'], series: [entry('Kenya', 62.9, 63.6)] };
+    const base: ChartWidget = {
+        ...chart(),
+        categories: ['2022', '2023'],
+        series: [entry('Kenya', 62.9, 63.6)],
+    };
     const next = comparison(base, ['2022', '2023'], base.series);
 
-    assert.equal(next.horizontal, false, 'a redrawn chart loses the shape as readily as it gains it');
+    assert.equal(
+        next.horizontal,
+        false,
+        'a redrawn chart loses the shape as readily as it gains it',
+    );
     assert.deepEqual(next.categories, ['2022', '2023']);
 });
 
@@ -68,13 +76,22 @@ test('the platform may transpose it for us; then it only needs marking', () => {
     const next = comparison(already, already.categories, already.series, '2023');
 
     assert.equal(next.horizontal, true);
-    assert.deepEqual(next.categories, ['Kenya', 'Egypt'], 'the plot is left as the payload drew it');
+    assert.deepEqual(
+        next.categories,
+        ['Kenya', 'Egypt'],
+        'the plot is left as the payload drew it',
+    );
     assert.match(next.title, /, 2023$/);
 });
 
 test('a line chart is never transposed', () => {
     const entries = [entry('Kenya', 63.6), entry('Egypt', 71.6)];
-    const line: ChartWidget = { ...chart(), chartType: 'line', categories: ['2023'], series: entries };
+    const line: ChartWidget = {
+        ...chart(),
+        chartType: 'line',
+        categories: ['2023'],
+        series: entries,
+    };
 
     assert.deepEqual(comparison(line, ['2023'], entries).categories, ['2023']);
 });

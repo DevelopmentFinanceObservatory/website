@@ -26,6 +26,10 @@ export const user = pgTable('user', {
     // The account's own calls-per-window limit for API keys (`user.additionalFields`
     // in src/lib/auth/auth.ts). Null is the deployment default (RATE_LIMIT_KEYED).
     apiRateLimit: integer('api_rate_limit'),
+    // The account's own API calls per UTC day, every key's calls together
+    // (`user.additionalFields` in src/lib/auth/auth.ts). Null is the
+    // deployment default (API_KEY_DAILY_LIMIT).
+    apiDailyLimit: integer('api_daily_limit'),
 });
 
 export const session = pgTable(
@@ -122,6 +126,8 @@ export const apikey = pgTable(
         updatedAt: timestamp('updated_at').notNull(),
         permissions: text('permissions'),
         metadata: text('metadata'),
+        // The key's own cap on API calls per UTC day, below the account's
+        // daily quota. Null is no cap of its own.
         dailyLimit: integer('daily_limit'),
         // The key's last four characters, kept in the clear beside `start` so a
         // key can be shown as `dfo_k_RCd…Qjsd`. Null for keys made before it.

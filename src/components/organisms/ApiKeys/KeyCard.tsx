@@ -16,7 +16,7 @@ type KeyCardProps = {
     onDelete: () => void;
 };
 
-/** One key: name, prefix, dates, today's usage, and Delete (confirmed in place). */
+/** One key: name, prefix, dates, today's use of its own cap if it has one, and Delete (confirmed in place). */
 const KeyCard = ({ item, busy, onDelete }: KeyCardProps) => {
     const [confirming, setConfirming] = useState(false);
 
@@ -31,15 +31,20 @@ const KeyCard = ({ item, busy, onDelete }: KeyCardProps) => {
                 {item.lastRequest ? `Last used ${formatIsoDate(item.lastRequest)}` : 'Never used'}
             </p>
 
-            <UsageMeter
-                used={item.usedToday}
-                limit={item.dailyLimit}
-                label="API calls today"
-                className={styles.meter}
-            />
-            <p className={styles.caption}>
-                of {item.dailyLimit.toLocaleString('en-GB')} calls today · resets 00:00 UTC
-            </p>
+            {item.dailyCap !== null && (
+                <>
+                    <UsageMeter
+                        used={item.capUsedToday ?? 0}
+                        limit={item.dailyCap}
+                        label="API calls today with this key"
+                        className={styles.meter}
+                    />
+                    <p className={styles.caption}>
+                        of {item.dailyCap.toLocaleString('en-GB')} calls today with this key ·
+                        resets 00:00 UTC
+                    </p>
+                </>
+            )}
 
             {confirming ? (
                 <div className={styles.confirm}>

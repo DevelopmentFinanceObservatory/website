@@ -29,6 +29,7 @@ const VALID: ValidKey = {
     keyId: 'key-1',
     accountId: 'acct-1',
     rateLimit: null,
+    accountDailyLimit: null,
     dailyLimit: null,
     expiresAt: null,
 };
@@ -48,6 +49,7 @@ const world = ({
     addressUsed = 0,
     accountUsed = 0,
     dailyUsed = 0,
+    capUsed = 0,
     defaultLimit = 600,
     defaultDailyLimit = 1000,
     addressLimit = 120,
@@ -57,6 +59,7 @@ const world = ({
     addressUsed?: number;
     accountUsed?: number;
     dailyUsed?: number;
+    capUsed?: number;
     defaultLimit?: number;
     defaultDailyLimit?: number;
     addressLimit?: number;
@@ -90,10 +93,13 @@ const world = ({
 
             return verdict(limit, accountUsed + 1);
         },
-        hitDaily: async (keyId, limit) => {
-            calls.push(`daily:${keyId}:${limit}`);
+        hitDaily: async (counterKey, limit) => {
+            calls.push(`daily:${counterKey}:${limit}`);
 
-            return verdict(limit, dailyUsed + 1);
+            return verdict(
+                limit,
+                (counterKey.startsWith('apiday:user:') ? dailyUsed : capUsed) + 1,
+            );
         },
     };
 
@@ -154,7 +160,7 @@ test('a valid key in the cache is counted against its account alone, at the defa
     const { calls, deps } = world({ cached: true });
     const access = await decide(deps, { authorization: `Bearer ${KEY}` });
 
-    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600', 'daily:apiday:user:acct-1:1000']);
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
     assert.equal(access.outcome, 'allowed');
     assert.equal(access.verdict?.limit, 600);
@@ -166,7 +172,7 @@ test('an account with a limit of its own is counted at that limit', async () => 
 
     await decide(deps, { 'x-api-key': KEY });
 
-    assert.deepEqual(calls, ['cache', 'account:api:acct-1:200', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:200', 'daily:apiday:user:acct-1:1000']);
 });
 
 test('a key on the datasets surface is counted against the account there', async () => {
@@ -174,7 +180,11 @@ test('a key on the datasets surface is counted against the account there', async
     const access = await decide(deps, { 'x-api-key': KEY }, { surface: 'datasets' });
 
     assert.equal(access.outcome, 'allowed');
-    assert.deepEqual(calls, ['cache', 'account:datasets:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, [
+        'cache',
+        'account:datasets:acct-1:600',
+        'daily:apiday:user:acct-1:1000',
+    ]);
 });
 
 test('a key on mcp or pin is anonymous, counted by address, never looked up', async () => {
@@ -189,15 +199,36 @@ test('a key on mcp or pin is anonymous, counted by address, never looked up', as
     }
 });
 
-test('a key with a daily limit of its own is counted against it, one without against the default', async () => {
-    const own = world({ cached: true, answer: { ...VALID, dailyLimit: 50 } });
+test("the daily quota is the account's: its own, else the default, whichever key calls", async () => {
+    const own = world({ cached: true, answer: { ...VALID, accountDailyLimit: 5000 } });
     const plain = world({ cached: true, defaultDailyLimit: 7 });
+    const another = world({ cached: true, answer: { ...VALID, keyId: 'key-2' } });
 
     await decide(own.deps, { 'x-api-key': KEY });
     await decide(plain.deps, { 'x-api-key': KEY });
+    await decide(another.deps, { 'x-api-key': KEY });
 
-    assert.equal(own.calls.at(-1), 'daily:key-1:50');
-    assert.equal(plain.calls.at(-1), 'daily:key-1:7');
+    assert.equal(own.calls.at(-1), 'daily:apiday:user:acct-1:5000');
+    assert.equal(plain.calls.at(-1), 'daily:apiday:user:acct-1:7');
+    assert.equal(another.calls.at(-1), 'daily:apiday:user:acct-1:1000');
+});
+
+test("a key with a cap of its own is counted against it after the account's quota", async () => {
+    const capped = world({ cached: true, answer: { ...VALID, dailyLimit: 50 }, capUsed: 50 });
+    const access = await decide(capped.deps, { 'x-api-key': KEY });
+
+    assert.deepEqual(capped.calls.slice(-2), [
+        'daily:apiday:user:acct-1:1000',
+        'daily:apiday:key:key-1:50',
+    ]);
+    assert.equal(access.refusal?.status, 429);
+    assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '50');
+
+    // A spent account quota refuses before the cap is counted.
+    const spent = world({ cached: true, answer: { ...VALID, dailyLimit: 50 }, dailyUsed: 1000 });
+
+    await decide(spent.deps, { 'x-api-key': KEY });
+    assert.equal(spent.calls.at(-1), 'daily:apiday:user:acct-1:1000');
 });
 
 test('an allowed keyed call reports the per-minute verdict, not the daily one', async () => {
@@ -209,7 +240,7 @@ test('an allowed keyed call reports the per-minute verdict, not the daily one', 
     assert.equal(access.verdict?.remaining, 599);
 });
 
-test('a key past its daily quota is a 429 that reports the quota', async () => {
+test('an account past its daily quota is a 429 that reports the quota', async () => {
     const { calls, deps } = world({ cached: true, dailyUsed: 1000 });
     const access = await decide(deps, { 'x-api-key': KEY });
 
@@ -221,7 +252,7 @@ test('a key past its daily quota is a 429 that reports the quota', async () => {
     assert.equal(access.refusal?.headers.get('retry-after'), '30');
     assert.equal(access.verdict?.limit, 1000);
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
-    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600', 'daily:apiday:user:acct-1:1000']);
 });
 
 test('a call over the per-minute account limit is refused before the daily quota is counted', async () => {
@@ -236,7 +267,12 @@ test('a key not in the cache is looked up and counted against its account, not i
     const { calls, deps } = world();
     const access = await decide(deps, { 'x-api-key': KEY });
 
-    assert.deepEqual(calls, ['cache', 'lookup', 'account:api:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, [
+        'cache',
+        'lookup',
+        'account:api:acct-1:600',
+        'daily:apiday:user:acct-1:1000',
+    ]);
     assert.equal(access.outcome, 'allowed');
     // The headers describe the account's allowance, not the address's.
     assert.equal(access.verdict?.limit, 600);
@@ -261,7 +297,12 @@ test('a valid key from an address past its anonymous limit is served on a cache 
 
     assert.equal(access.refusal, undefined);
     assert.equal(access.outcome, 'allowed');
-    assert.deepEqual(calls, ['cache', 'lookup', 'account:api:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, [
+        'cache',
+        'lookup',
+        'account:api:acct-1:600',
+        'daily:apiday:user:acct-1:1000',
+    ]);
 });
 
 test('a key with a bad tag is a 401 with no lookup and no count', async () => {

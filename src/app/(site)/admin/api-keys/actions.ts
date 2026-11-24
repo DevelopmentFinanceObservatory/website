@@ -10,8 +10,11 @@ import {
     parseLimitInput,
 } from '@/lib/apiKeys/settings';
 
-import type { AdminDoneResult, AdminKeyResult } from '@/components/organisms/ApiKeys/AdminState';
-import type { AdminKey } from '@/lib/apiKeys/service';
+import type {
+    AdminAccountKeys,
+    AdminDoneResult,
+    AdminKeyResult,
+} from '@/components/organisms/ApiKeys/AdminState';
 
 /*
  * Admin actions. A server action is a POST anyone can send, so each one runs
@@ -35,11 +38,20 @@ const REFUSALS = {
 
 const LIMIT_INVALID = 'Enter a positive whole number, or leave it empty for the default.';
 
-/** One account's keys, with today's API usage; null when the id is not a string. */
-export const adminLoadKeys = async (userId: unknown): Promise<AdminKey[] | null> => {
+/** One account's keys and daily quota, with today's API usage; null when the id is not a string. */
+export const adminLoadKeys = async (userId: unknown): Promise<AdminAccountKeys | null> => {
     await requireAdmin();
 
-    return typeof userId === 'string' && userId ? keyService.adminUserKeys(userId) : null;
+    if (typeof userId !== 'string' || !userId) {
+        return null;
+    }
+
+    const [keys, quota] = await Promise.all([
+        keyService.adminUserKeys(userId),
+        keyService.accountQuota(userId),
+    ]);
+
+    return { keys, quota };
 };
 
 /** Creates a key for the account with the given email and answers with it, once. */
@@ -75,7 +87,7 @@ export const adminDeleteKey = async (keyId: unknown): Promise<AdminDoneResult> =
     return { ok: true };
 };
 
-/** Sets a key's own daily limit, or clears it (empty text) to put the key on the default. */
+/** Sets a key's own daily cap, or clears it (empty text) so the key spends only its account's quota. */
 export const adminSetKeyLimit = async (
     keyId: unknown,
     limit: unknown,
@@ -92,13 +104,13 @@ export const adminSetKeyLimit = async (
         : { ok: false, error: REFUSALS.not_found };
 };
 
-/** Sets a key's API call count for today back to 0. */
-export const adminResetKeyUsage = async (keyId: unknown): Promise<AdminDoneResult> => {
+/** Sets an account's API call count for today back to 0, its keys' caps included. */
+export const adminResetUsage = async (userId: unknown): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();
 
-    return typeof keyId === 'string' && (await keyService.adminResetKeyUsage(admin.email, keyId))
+    return typeof userId === 'string' && (await keyService.adminResetUsage(admin.email, userId))
         ? { ok: true }
-        : { ok: false, error: REFUSALS.not_found };
+        : { ok: false, error: REFUSALS.no_such_account };
 };
 
 /** Sets or clears an account's per-minute limit (empty text clears it). */
@@ -112,6 +124,28 @@ export const adminSetLimit = async (email: unknown, limit: unknown): Promise<Adm
     }
 
     const done = await keyService.adminSetLimit(admin.email, address, parsed.limit);
+
+    revalidatePath(PATH);
+
+    return done
+        ? { ok: true, message: limitNotice(parsed.limit === null ? 'cleared' : 'saved') }
+        : { ok: false, error: limitNotice('no-account') ?? 'No account has that email.' };
+};
+
+/** Sets or clears an account's daily API quota (empty text clears it). */
+export const adminSetDailyLimit = async (
+    email: unknown,
+    limit: unknown,
+): Promise<AdminDoneResult> => {
+    const admin = await requireAdmin();
+    const address = parseEmailInput(email);
+    const parsed = parseDailyLimitInput(limit);
+
+    if (!address || !parsed.ok) {
+        return { ok: false, error: LIMIT_INVALID };
+    }
+
+    const done = await keyService.adminSetDailyLimit(admin.email, address, parsed.limit);
 
     revalidatePath(PATH);
 

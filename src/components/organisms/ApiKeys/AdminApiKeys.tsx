@@ -18,6 +18,8 @@ type AdminApiKeysProps = {
     page: number;
     // The per-minute limit an account without its own is held to.
     defaultLimit: number;
+    // The daily quota an account without its own is held to.
+    defaultDailyLimit: number;
     keysEnabled: boolean;
     actions: AdminActions;
 };
@@ -54,6 +56,7 @@ const AdminApiKeys = ({
     query,
     page,
     defaultLimit,
+    defaultDailyLimit,
     keysEnabled,
     actions,
 }: AdminApiKeysProps) => {
@@ -113,6 +116,7 @@ const AdminApiKeys = ({
                                             key={user.id}
                                             user={user}
                                             defaultLimit={defaultLimit}
+                                            defaultDailyLimit={defaultDailyLimit}
                                             actions={actions}
                                         />
                                     ))}

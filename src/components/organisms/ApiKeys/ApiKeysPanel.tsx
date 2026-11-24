@@ -11,6 +11,7 @@ import RevealedKey from './RevealedKey';
 import type { ApiKeysData, KeyIssued } from './state';
 
 import Button from '@/components/atoms/Button/Button';
+import UsageMeter from '@/components/atoms/UsageMeter/UsageMeter';
 import Modal from '@/components/molecules/Modal/Modal';
 import { docsHref } from '@/lib/docs/href';
 
@@ -126,6 +127,20 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
                     <div className={styles.who}>
                         {data.user.name && <span className={styles.name}>{data.user.name}</span>}
                         <span className={styles.muted}>{data.user.email}</span>
+                    </div>
+
+                    {/* The daily quota is the account's: every key's calls count
+                        against it, so a new key does not start a new count. */}
+                    <div>
+                        <UsageMeter
+                            used={data.quota.usedToday}
+                            limit={data.quota.dailyLimit}
+                            label="API calls today, all keys"
+                        />
+                        <p className={styles.caption}>
+                            of {data.quota.dailyLimit.toLocaleString('en-GB')} calls today across
+                            all your keys · resets 00:00 UTC
+                        </p>
                     </div>
 
                     <div className={styles.sectionHead}>

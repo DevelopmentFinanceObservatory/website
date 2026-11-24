@@ -31,11 +31,14 @@ export type ReservationVerdict =
     | { admitted: true; receipt: Reservation; limit: number; remaining: number; reset: number }
     | { admitted: false; limit: number; remaining: 0; reset: number };
 
-/** The window of a key's daily API quota in seconds: a UTC day, epoch-aligned. */
+/** The window of a daily API quota in seconds: a UTC day, epoch-aligned. */
 export const DAY_S = 86_400;
 
-/** The counter key of an API key's daily API quota. */
-export const dailyCounterKey = (keyId: string): string => `apiday:key:${keyId}`;
+/** The counter key of an account's daily API quota, which every key of the account spends. */
+export const accountDailyCounterKey = (accountId: string): string => `apiday:user:${accountId}`;
+
+/** The counter key of one API key's own daily cap. */
+export const keyDailyCounterKey = (keyId: string): string => `apiday:key:${keyId}`;
 
 // Rows whose window started this long ago are dead for any window of a day
 // or less, the longest the site uses.
@@ -173,17 +176,17 @@ export const pruneCounters = async (db: CounterDb): Promise<void> => {
 };
 
 /**
- * How many API calls each of the keys `keyIds` has made in the current UTC
- * day, counted refused calls included. A key with no counter, or a counter
- * from an earlier day, is 0.
+ * The current UTC day's count of each daily counter in `counterKeys`
+ * (accountDailyCounterKey, keyDailyCounterKey), refused calls included, by
+ * counter key. A counter that does not exist, or is from an earlier day, is 0.
  */
 export const dailyUsage = async (
     db: Pick<NodePgDatabase, 'select'>,
-    keyIds: string[],
+    counterKeys: string[],
 ): Promise<Map<string, number>> => {
-    const used = new Map(keyIds.map((id) => [id, 0]));
+    const used = new Map(counterKeys.map((key) => [key, 0]));
 
-    if (keyIds.length === 0) {
+    if (counterKeys.length === 0) {
         return used;
     }
 
@@ -191,12 +194,12 @@ export const dailyUsage = async (
         .select({ key: limitCounter.key, count: limitCounter.count })
         .from(limitCounter)
         .where(
-            sql`${inArray(limitCounter.key, keyIds.map(dailyCounterKey))}
+            sql`${inArray(limitCounter.key, counterKeys)}
                 and ${limitCounter.windowStart} >= date_bin(make_interval(secs => ${DAY_S}), now(), timestamptz 'epoch')`,
         );
 
     for (const { key, count } of rows) {
-        used.set(key.slice(dailyCounterKey('').length), count);
+        used.set(key, count);
     }
 
     return used;

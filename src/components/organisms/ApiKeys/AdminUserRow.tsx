@@ -13,6 +13,8 @@ type AdminUserRowProps = {
     user: AdminUserView;
     // The per-minute limit an account without its own is held to.
     defaultLimit: number;
+    // The daily quota an account without its own is held to.
+    defaultDailyLimit: number;
     actions: AdminActions;
 };
 
@@ -21,7 +23,7 @@ type AdminUserRowProps = {
  * once opened, its keys. Each row opens on its own, and a user's keys load
  * the first time it opens.
  */
-const AdminUserRow = ({ user, defaultLimit, actions }: AdminUserRowProps) => {
+const AdminUserRow = ({ user, defaultLimit, defaultDailyLimit, actions }: AdminUserRowProps) => {
     const [open, setOpen] = useState(false);
     const panelId = useId();
 
@@ -70,7 +72,12 @@ const AdminUserRow = ({ user, defaultLimit, actions }: AdminUserRowProps) => {
             {open && (
                 <tr id={panelId} className={styles.detail}>
                     <td colSpan={5}>
-                        <AdminUserKeys user={user} defaultLimit={defaultLimit} actions={actions} />
+                        <AdminUserKeys
+                            user={user}
+                            defaultLimit={defaultLimit}
+                            defaultDailyLimit={defaultDailyLimit}
+                            actions={actions}
+                        />
                     </td>
                 </tr>
             )}

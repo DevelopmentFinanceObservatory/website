@@ -16,14 +16,14 @@ const ambiguous = entityAmbiguous as any;
 const query = 'Population of Kenya in 2020 and ODA to Congo from France in 2022';
 
 export const twoPartAmbiguous: unknown = {
-  "schema_version": definite.schema_version,
-  "kind": "resolution",
-  "query_echo": {
-    ...definite.query_echo,
-    "raw_query": query,
-    "normalized_query": query
-  },
-  "diagnostics": definite.diagnostics,
-  "parts": [definite.parts[0], ambiguous.parts[0]],
-  "status": "mixed"
+    schema_version: definite.schema_version,
+    kind: 'resolution',
+    query_echo: {
+        ...definite.query_echo,
+        raw_query: query,
+        normalized_query: query,
+    },
+    diagnostics: definite.diagnostics,
+    parts: [definite.parts[0], ambiguous.parts[0]],
+    status: 'mixed',
 };

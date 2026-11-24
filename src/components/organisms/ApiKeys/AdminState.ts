@@ -1,4 +1,4 @@
-import type { AdminKey } from '@/lib/apiKeys/service';
+import type { AccountQuota, AdminKey } from '@/lib/apiKeys/service';
 
 /** Users per page of the admin table. */
 export const ADMIN_PAGE_SIZE = 50;
@@ -9,6 +9,9 @@ export type AdminRevealedKey = { id: string; key: string };
 /** What the create action answers with: the new key, once, or why there is none. */
 export type AdminKeyResult = { ok: true; created: AdminRevealedKey } | { ok: false; error: string };
 
+/** One account's keys and its daily API quota, as the opened row loads them. */
+export type AdminAccountKeys = { keys: AdminKey[]; quota: AccountQuota };
+
 /** What the other actions answer with. */
 export type AdminDoneResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -17,16 +20,20 @@ export type AdminDoneResult = { ok: true; message?: string } | { ok: false; erro
  * handed down as props so the organism does not import from the app folder.
  */
 export type AdminActions = {
-    // The keys of one account, or null when the lookup fails.
-    loadKeys: (userId: string) => Promise<AdminKey[] | null>;
+    // The keys and daily quota of one account, or null when the lookup fails.
+    loadKeys: (userId: string) => Promise<AdminAccountKeys | null>;
     createKey: (email: string, label: string) => Promise<AdminKeyResult>;
     deleteKey: (keyId: string) => Promise<AdminDoneResult>;
-    // Empty text clears the key's own limit, which puts it back on the default.
+    // A key's own daily cap; empty text clears it, so the key spends only
+    // its account's quota.
     setKeyLimit: (keyId: string, limit: string) => Promise<AdminDoneResult>;
-    // Sets the key's API call count for today back to 0.
-    resetKeyUsage: (keyId: string) => Promise<AdminDoneResult>;
+    // Sets the account's API call count for today back to 0, its keys' caps
+    // included.
+    resetUsage: (userId: string) => Promise<AdminDoneResult>;
     // The account's per-minute limit; empty text clears it.
     setAccountLimit: (email: string, limit: string) => Promise<AdminDoneResult>;
+    // The account's daily quota; empty text clears it.
+    setAccountDailyLimit: (email: string, limit: string) => Promise<AdminDoneResult>;
 };
 
 /**
@@ -49,6 +56,7 @@ export type AdminUserView = {
     createdAt: Date;
     activeKeys: number;
     accountLimit: number | null;
+    accountDailyLimit: number | null;
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

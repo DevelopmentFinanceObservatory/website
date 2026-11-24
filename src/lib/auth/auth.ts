@@ -106,6 +106,9 @@ export const auth = betterAuth({
             // The account's API-key limit, calls per window, set by an
             // operator. Null is the default (RATE_LIMIT_KEYED).
             apiRateLimit: { type: 'number', required: false, input: false, returned: false },
+            // The account's API calls per UTC day, set by an operator. Null
+            // is the default (API_KEY_DAILY_LIMIT).
+            apiDailyLimit: { type: 'number', required: false, input: false, returned: false },
         },
         // Delete account (account menu). With no password to confirm with,
         // Better Auth asks for a fresh session instead (session.freshAge).

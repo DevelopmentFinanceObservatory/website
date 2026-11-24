@@ -41,10 +41,9 @@ test('registerDefinitions posts one definition per call and never a members list
 test('registerDefinitions stops at the first refusal and throws the platform code', async () => {
     const { calls, fetchImpl } = registerApi((call) => (call === 2 ? 422 : 200));
 
-    await assert.rejects(
-        registerDefinitions({ base: 'https://api', definitions, fetchImpl }),
-        { message: 'spec_id_mismatch' },
-    );
+    await assert.rejects(registerDefinitions({ base: 'https://api', definitions, fetchImpl }), {
+        message: 'spec_id_mismatch',
+    });
     assert.equal(calls.length, 2);
 });
 

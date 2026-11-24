@@ -26,7 +26,7 @@ import {
 import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
 import { rateLimitedProblem, unreachableProblem } from './problem';
 import { rateHeaders, type RateVerdict } from './rateHeaders';
-import { hit, hitDaily, hitKey, KEY_DAILY_LIMIT, KEYED_LIMIT, type Surface } from './rateLimit';
+import { hit, hitDaily, hitKey, ACCOUNT_DAILY_LIMIT, KEYED_LIMIT, type Surface } from './rateLimit';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -120,7 +120,7 @@ export const accessDeps: AccessDeps = {
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
     hitDaily,
     defaultLimit: KEYED_LIMIT,
-    defaultDailyLimit: KEY_DAILY_LIMIT,
+    defaultDailyLimit: ACCOUNT_DAILY_LIMIT,
 };
 
 // API_KEYS_ENABLED is the emergency switch: set to `false` (or `0`, `off`,

@@ -124,6 +124,7 @@ test('keyVerifier on the key store', async (t) => {
             keyId: 'id-live',
             accountId: 'acct-default',
             rateLimit: null,
+            accountDailyLimit: null,
             dailyLimit: null,
             expiresAt: null,
         });

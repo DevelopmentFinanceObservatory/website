@@ -49,7 +49,10 @@ test('coverageRichness uses dimensions in their fixed [facet, obs] order when pr
 });
 
 test('coverageRichness falls back to observation_count when there are no dimensions', () => {
-    assert.deepEqual(coverageRichness({ kind: 'exact', has_data: true, observation_count: 42 }), [42]);
+    assert.deepEqual(
+        coverageRichness({ kind: 'exact', has_data: true, observation_count: 42 }),
+        [42],
+    );
 });
 
 test('coverageRichness falls back to 0 when neither dimensions nor observation_count is present (bare)', () => {
@@ -110,11 +113,11 @@ test('partitionOptions collapses probed-zero options into `hidden`, out of the m
     ];
     const { main, hidden } = partitionOptions(options, accessors());
 
-    assert.deepEqual(main.map((o) => o.label), ['Germany']);
     assert.deepEqual(
-        hidden.map((o) => o.label).sort(),
-        ['Czech Republic', 'Latvia'],
+        main.map((o) => o.label),
+        ['Germany'],
     );
+    assert.deepEqual(hidden.map((o) => o.label).sort(), ['Czech Republic', 'Latvia']);
 });
 
 test('partitionOptions keeps unprobed (unknown) options in main, after observed, in original relative order', () => {
@@ -141,6 +144,12 @@ test('partitionOptions pins a selected option into main even when it is probed-z
     ];
     const { main, hidden } = partitionOptions(options, accessors(new Set(['CZE'])));
 
-    assert.deepEqual(main.map((o) => o.label), ['Germany', 'Czech Republic']);
-    assert.deepEqual(hidden.map((o) => o.label), ['Latvia']);
+    assert.deepEqual(
+        main.map((o) => o.label),
+        ['Germany', 'Czech Republic'],
+    );
+    assert.deepEqual(
+        hidden.map((o) => o.label),
+        ['Latvia'],
+    );
 });

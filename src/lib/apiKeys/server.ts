@@ -6,7 +6,7 @@ import { auth } from '@/lib/auth/auth';
 import { getUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 
-import { KEY_DAILY_LIMIT } from '@/lib/proxy/rateLimit';
+import { ACCOUNT_DAILY_LIMIT } from '@/lib/proxy/rateLimit';
 
 import { createKeyService } from './service';
 import { adminFrom, maxKeysPerAccount } from './settings';
@@ -16,7 +16,7 @@ export const keyService = createKeyService({
     auth,
     db,
     maxPerAccount: () => maxKeysPerAccount(process.env.API_KEYS_MAX_PER_ACCOUNT),
-    defaultDailyLimit: () => KEY_DAILY_LIMIT,
+    defaultDailyLimit: () => ACCOUNT_DAILY_LIMIT,
 });
 
 /**

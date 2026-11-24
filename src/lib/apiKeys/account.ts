@@ -60,7 +60,7 @@ const REFUSALS = {
 
 const issued = (key: string) => Response.json({ key }, { headers: NO_STORE });
 
-/** The signed-in user's name, email, keys and key cap. */
+/** The signed-in user's name, email, daily quota, keys and key cap. */
 export const listKeys = async (request: Request): Promise<Response> => {
     const user = await getUser();
 
@@ -68,9 +68,13 @@ export const listKeys = async (request: Request): Promise<Response> => {
         return signedOut();
     }
 
-    const keys = await keyService.listOwn({ userId: user.id, headers: request.headers });
+    const [keys, quota] = await Promise.all([
+        keyService.listOwn({ userId: user.id, headers: request.headers }),
+        keyService.accountQuota(user.id),
+    ]);
     const data: ApiKeysData = {
         user: { name: user.name, email: user.email },
+        quota: { dailyLimit: quota.dailyLimit, usedToday: quota.usedToday },
         keys: keys.map((key): KeyView => ({
             id: key.id,
             name: key.name,
@@ -78,8 +82,8 @@ export const listKeys = async (request: Request): Promise<Response> => {
             tail: key.tail,
             createdAt: key.createdAt.toISOString(),
             lastRequest: key.lastRequest?.toISOString() ?? null,
-            dailyLimit: key.dailyLimit,
-            usedToday: key.usedToday,
+            dailyCap: key.dailyCap,
+            capUsedToday: key.capUsedToday,
         })),
         maxKeys: maxKeysPerAccount(process.env.API_KEYS_MAX_PER_ACCOUNT),
         keysEnabled: keysEnabled(),

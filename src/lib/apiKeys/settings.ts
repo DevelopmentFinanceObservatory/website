@@ -8,9 +8,11 @@ const DEFAULT_MAX_PER_ACCOUNT = 5;
 
 /**
  * How many keys one account may hold, from `API_KEYS_MAX_PER_ACCOUNT`.
- * Limits are per account, so this is housekeeping and not a security
- * control: a second key buys no more calls. A value that is not a whole
- * number of at least 1 gives the default.
+ * The per-minute limit and the daily quota both belong to the account, and
+ * every key's calls count against them, so this is housekeeping and not a
+ * security control: a second key, or a key deleted and made again, buys no
+ * more calls. A value that is not a whole number of at least 1 gives the
+ * default.
  */
 export const maxKeysPerAccount = (value: string | undefined): number => {
     const parsed = Number(value?.trim());
@@ -105,9 +107,10 @@ export const parseLimitInput = (value: unknown): LimitInput => {
 };
 
 /**
- * A key's daily limit as typed in the admin form: a positive whole number,
- * or empty to clear it (the deployment default, API_KEY_DAILY_LIMIT,
- * applies). The rule is the account limit's.
+ * A daily limit as typed in the admin form, an account's quota or a key's
+ * cap: a positive whole number, or empty to clear it (an account is then on
+ * the deployment default, API_KEY_DAILY_LIMIT, and a key has no cap of its
+ * own). The rule is the account limit's.
  */
 export const parseDailyLimitInput = (value: unknown): LimitInput => parseLimitInput(value);
 

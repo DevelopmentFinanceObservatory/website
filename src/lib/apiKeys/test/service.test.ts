@@ -52,6 +52,7 @@ test('API key service', async (t) => {
         user: {
             additionalFields: {
                 apiRateLimit: { type: 'number', required: false, input: false, returned: false },
+                apiDailyLimit: { type: 'number', required: false, input: false, returned: false },
             },
         },
         plugins: [apiKeyPlugin({}, { secrets: () => ['a-key-tag-secret-for-the-tests-0000'] })],
@@ -135,15 +136,14 @@ test('API key service', async (t) => {
         const row = await rowOf(made.id);
 
         assert.deepEqual(Object.keys(listed[0]!).sort(), [
+            'capUsedToday',
             'createdAt',
-            'customDailyLimit',
-            'dailyLimit',
+            'dailyCap',
             'id',
             'lastRequest',
             'name',
             'start',
             'tail',
-            'usedToday',
         ]);
         assert.ok(row?.key && row.key !== made.key);
 
@@ -419,80 +419,124 @@ test('API key service', async (t) => {
     });
 
     await t.test(
-        'the daily limit is the default until an operator sets one, and reads back',
+        "the account's daily quota is the default until an operator sets one, and reads back",
         async () => {
             const ida = await account('ida@i.example');
+
+            assert.deepEqual(await service.accountQuota(ida), {
+                dailyLimit: 1000,
+                customDailyLimit: null,
+                usedToday: 0,
+            });
+
+            assert.equal(
+                await service.adminSetDailyLimit('ops@example.org', 'ida@i.example', 25),
+                true,
+            );
+            assert.equal((await service.accountQuota(ida)).dailyLimit, 25);
+            assert.equal((await service.accountQuota(ida)).customDailyLimit, 25);
+
             const made = await service.createOwn(ida, 'daily');
 
             assert.ok(made.ok);
-
-            const read = async () =>
-                (await service.listOwn(await as(ida))).find((k) => k.id === made.id)!;
-
-            assert.deepEqual(
-                [
-                    (await read()).dailyLimit,
-                    (await read()).customDailyLimit,
-                    (await read()).usedToday,
-                ],
-                [1000, null, 0],
-            );
-
-            assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', made.id, 25), true);
-            assert.equal((await read()).dailyLimit, 25);
-            assert.equal((await read()).customDailyLimit, 25);
 
             // The proxy's verifier reads the same column.
             const verdict = await createKeyVerifier(db).verify(made.key);
 
             assert.ok(verdict.kind === 'valid');
-            assert.equal(verdict.dailyLimit, 25);
+            assert.equal(verdict.accountDailyLimit, 25);
+            assert.equal(verdict.dailyLimit, null);
 
-            // Clearing returns the key to the default, which is read per call.
+            // Clearing returns the account to the default, which is read per call.
             assert.equal(
-                await service.adminSetKeyDailyLimit('ops@example.org', made.id, null),
+                await service.adminSetDailyLimit('ops@example.org', 'ida@i.example', null),
                 true,
             );
             defaultDaily = 400;
-            assert.equal((await read()).dailyLimit, 400);
-            assert.equal((await read()).customDailyLimit, null);
+            assert.equal((await service.accountQuota(ida)).dailyLimit, 400);
+            assert.equal((await service.accountQuota(ida)).customDailyLimit, null);
             defaultDaily = 1000;
 
             assert.equal(
-                await service.adminSetKeyDailyLimit('ops@example.org', 'no-such-key', 5),
+                await service.adminSetDailyLimit('ops@example.org', 'nobody@n.example', 5),
                 false,
             );
         },
     );
 
-    await t.test("usedToday is today's count only: an older day counts as zero", async () => {
-        const joe = await account('joe@j.example');
-        const made = await service.createOwn(joe, 'counted');
+    await t.test('a key has no daily cap until an operator sets one, and reads back', async () => {
+        const kim = await account('kim@k.example');
+        const made = await service.createOwn(kim, 'capped');
 
         assert.ok(made.ok);
 
-        const usedToday = async () =>
-            (await service.listOwn(await as(joe))).find((k) => k.id === made.id)!.usedToday;
-        const set = (windowStart: string, n: number) =>
-            pool.query(
-                `insert into limit_counter (key, window_start, count)
-                 values ($1, ${windowStart}, $2)
-                 on conflict (key) do update set window_start = excluded.window_start, count = excluded.count`,
-                [`apiday:key:${made.id}`, n],
+        const read = async () =>
+            (await service.listOwn(await as(kim))).find((k) => k.id === made.id)!;
+
+        assert.deepEqual([(await read()).dailyCap, (await read()).capUsedToday], [null, null]);
+
+        assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', made.id, 25), true);
+        assert.deepEqual([(await read()).dailyCap, (await read()).capUsedToday], [25, 0]);
+
+        const verdict = await createKeyVerifier(db).verify(made.key);
+
+        assert.ok(verdict.kind === 'valid');
+        assert.equal(verdict.dailyLimit, 25);
+
+        assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', made.id, null), true);
+        assert.equal((await read()).dailyCap, null);
+        assert.equal(
+            await service.adminSetKeyDailyLimit('ops@example.org', 'no-such-key', 5),
+            false,
+        );
+    });
+
+    await t.test(
+        "usedToday is the account's count today only, and a reset clears it and its keys' caps",
+        async () => {
+            const joe = await account('joe@j.example');
+            const made = await service.createOwn(joe, 'counted');
+
+            assert.ok(made.ok);
+            assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', made.id, 50), true);
+
+            const usedToday = async () => (await service.accountQuota(joe)).usedToday;
+            const capUsed = async () =>
+                (await service.listOwn(await as(joe))).find((k) => k.id === made.id)!.capUsedToday;
+            const set = (key: string, windowStart: string, n: number) =>
+                pool.query(
+                    `insert into limit_counter (key, window_start, count)
+                     values ($1, ${windowStart}, $2)
+                     on conflict (key) do update set window_start = excluded.window_start, count = excluded.count`,
+                    [key, n],
+                );
+            const today = "date_bin('86400 s', now(), timestamptz 'epoch')";
+
+            assert.equal(await usedToday(), 0);
+
+            await set(`apiday:user:${joe}`, today, 7);
+            await set(`apiday:key:${made.id}`, today, 3);
+            assert.equal(await usedToday(), 7);
+            assert.equal(await capUsed(), 3);
+
+            // Deleting the key and making another leaves the account's count.
+            const other = await service.createOwn(joe, 'second');
+
+            assert.ok(other.ok);
+            assert.equal(await usedToday(), 7);
+
+            assert.equal(await service.adminResetUsage('ops@example.org', joe), true);
+            assert.equal(await usedToday(), 0);
+            assert.equal(await capUsed(), 0);
+            assert.equal(
+                await service.adminResetUsage('ops@example.org', 'no-such-account'),
+                false,
             );
 
-        assert.equal(await usedToday(), 0);
-
-        await set("date_bin('86400 s', now(), timestamptz 'epoch')", 7);
-        assert.equal(await usedToday(), 7);
-
-        assert.equal(await service.adminResetKeyUsage('ops@example.org', made.id), true);
-        assert.equal(await usedToday(), 0);
-        assert.equal(await service.adminResetKeyUsage('ops@example.org', 'no-such-key'), false);
-
-        await set("date_bin('86400 s', now(), timestamptz 'epoch') - interval '1 day'", 900);
-        assert.equal(await usedToday(), 0);
-    });
+            await set(`apiday:user:${joe}`, `${today} - interval '1 day'`, 900);
+            assert.equal(await usedToday(), 0);
+        },
+    );
 
     await t.test(
         'admin: users, newest first, with a search, a page and their key counts',
@@ -567,9 +611,10 @@ test('API key service', async (t) => {
 
         assert.deepEqual(keys.map((k) => k.id).sort(), [first.id, second.id].sort());
         assert.ok(keys.every((k) => k.ownerId === rae && k.ownerEmail === 'rae@r.example'));
-        assert.equal(keys.find((k) => k.id === first.id)?.dailyLimit, 9);
-        assert.equal(keys.find((k) => k.id === second.id)?.dailyLimit, 1000);
-        assert.equal(keys[0]!.usedToday, 0);
+        assert.equal(keys.find((k) => k.id === first.id)?.dailyCap, 9);
+        assert.equal(keys.find((k) => k.id === first.id)?.capUsedToday, 0);
+        assert.equal(keys.find((k) => k.id === second.id)?.dailyCap, null);
+        assert.equal(keys.find((k) => k.id === second.id)?.capUsedToday, null);
         assert.deepEqual(await service.adminUserKeys('no-such-account'), []);
     });
 
@@ -584,11 +629,13 @@ test('API key service', async (t) => {
 
         assert.deepEqual([...actions].sort(), [
             'clear-daily-limit',
+            'clear-daily-quota',
             'clear-limit',
             'create',
             'delete',
             'reset-usage',
             'set-daily-limit',
+            'set-daily-quota',
             'set-limit',
         ]);
 

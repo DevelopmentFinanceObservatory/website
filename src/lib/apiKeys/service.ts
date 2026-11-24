@@ -18,9 +18,11 @@
  *   - the prefix is ours (`dfo_k_`), never taken from a request
  *   - a key's owner is the id passed in; expiry, metadata, permissions and
  *     limits are never passed on, so every key has the plugin's defaults. The
- *     account's own limit (user.api_rate_limit) is the per-minute limit, and
- *     the key's `daily_limit` column, set only by an operator, is its daily
- *     API quota (src/lib/proxy/access)
+ *     account's own limits, set only by an operator, are the per-minute limit
+ *     (user.api_rate_limit) and the daily API quota every key of the account
+ *     spends (user.api_daily_limit). A key's `daily_limit` column, also set
+ *     only by an operator, is a cap of its own below that quota
+ *     (src/lib/proxy/access)
  *   - revoking deletes the row: a disabled key could be switched back on
  *   - the full key is returned by the create call and nowhere else. Only its
  *     hash is stored, and neither the key nor the hash is logged
@@ -34,7 +36,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { apikey, limitCounter, user } from '../../../db/schema.ts';
 import { API_KEY_PREFIX, API_KEY_TAIL_LENGTH } from '../auth/apiKeyOptions.ts';
 import { likeContaining } from '../likePattern.ts';
-import { dailyCounterKey, dailyUsage } from '../proxy/limitCounter.ts';
+import { accountDailyCounterKey, dailyUsage, keyDailyCounterKey } from '../proxy/limitCounter.ts';
 import { parseLabel } from './settings.ts';
 
 /** The parts of the Better Auth instance this module uses. */
@@ -51,7 +53,10 @@ export type KeyAuth = {
     };
     $context: PromiseLike<{
         internalAdapter: {
-            updateUser(id: string, data: { apiRateLimit: number | null }): Promise<unknown>;
+            updateUser(
+                id: string,
+                data: { apiRateLimit: number | null } | { apiDailyLimit: number | null },
+            ): Promise<unknown>;
         };
     }>;
 };
@@ -77,7 +82,7 @@ export type KeyServiceOptions = {
     db: KeyDb;
     /** How many keys an account may hold; read per call so a change needs no restart. */
     maxPerAccount: () => number;
-    /** A key's daily API calls when it sets none of its own; read per call. */
+    /** An account's daily API calls when it sets none of its own; read per call. */
     defaultDailyLimit: () => number;
     /** One structured line per mutation. Never receives a key or a hash. */
     log?: (line: Record<string, unknown>) => void;
@@ -96,11 +101,21 @@ export type OwnKey = {
     // cache miss), so up to about a minute behind the last call. Null until
     // the key is first used.
     lastRequest: Date | null;
-    // The key's daily API calls: its own, else the deployment default.
+    // The key's own cap on API calls per UTC day, null when it has none.
+    dailyCap: number | null;
+    // API calls counted against the cap in the current UTC day, refused
+    // calls included; null when the key has no cap, as such a key's calls
+    // are counted only against its account.
+    capUsedToday: number | null;
+};
+
+/** An account's daily API quota, which every one of its keys spends. */
+export type AccountQuota = {
+    // The account's API calls per UTC day: its own, else the deployment default.
     dailyLimit: number;
-    // The key's own daily limit, null when it has none.
+    // The account's own daily quota, null when it has none.
     customDailyLimit: number | null;
-    // API calls counted against the key in the current UTC day, refused
+    // API calls counted against the account in the current UTC day, refused
     // calls included.
     usedToday: number;
 };
@@ -128,6 +143,8 @@ export type AdminUser = {
     activeKeys: number;
     // The account's own per-minute limit, null for the default.
     accountLimit: number | null;
+    // The account's own daily quota, null for the default.
+    accountDailyLimit: number | null;
 };
 
 export const defaultLog = (line: Record<string, unknown>): void => {
@@ -148,7 +165,7 @@ const ADMIN_LIST_LIMIT = 500;
 const ADMIN_USERS_DEFAULT_LIMIT = 50;
 const ADMIN_USERS_MAX_LIMIT = 500;
 
-/** A positive whole number is a key's own daily limit; anything else is the default. */
+/** A positive whole number is a daily limit of its own; anything else is none. */
 const ownDaily = (value: number | null): number | null =>
     typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 ? value : null;
 
@@ -238,17 +255,12 @@ export const createKeyService = ({
         return true;
     };
 
-    // The tail, daily quota and today's count of each key, which the plugin's
-    // own list knows nothing of.
-    const withQuota = async <T extends { id: string }>(
+    // The tail, daily cap and the cap's count today of each key, which the
+    // plugin's own list knows nothing of.
+    const withCaps = async <T extends { id: string }>(
         keys: T[],
     ): Promise<
-        (T & {
-            tail: string | null;
-            dailyLimit: number;
-            customDailyLimit: number | null;
-            usedToday: number;
-        })[]
+        (T & { tail: string | null; dailyCap: number | null; capUsedToday: number | null })[]
     > => {
         if (keys.length === 0) {
             return [];
@@ -260,22 +272,41 @@ export const createKeyService = ({
                 .select({ id: apikey.id, custom: apikey.dailyLimit, tail: apikey.tail })
                 .from(apikey)
                 .where(inArray(apikey.id, ids)),
-            dailyUsage(db, ids),
+            dailyUsage(db, ids.map(keyDailyCounterKey)),
         ]);
-        const custom = new Map(limits.map(({ id, custom }) => [id, ownDaily(custom)]));
+        const caps = new Map(limits.map(({ id, custom }) => [id, ownDaily(custom)]));
         const tails = new Map(limits.map(({ id, tail }) => [id, tail]));
 
         return keys.map((key) => {
-            const own = custom.get(key.id) ?? null;
+            const cap = caps.get(key.id) ?? null;
 
             return {
                 ...key,
                 tail: tails.get(key.id) ?? null,
-                dailyLimit: own ?? defaultDailyLimit(),
-                customDailyLimit: own,
-                usedToday: used.get(key.id) ?? 0,
+                dailyCap: cap,
+                capUsedToday: cap === null ? null : (used.get(keyDailyCounterKey(key.id)) ?? 0),
             };
         });
+    };
+
+    // The account's daily quota and today's count of it.
+    const quotaOf = async (userId: string): Promise<AccountQuota> => {
+        const counter = accountDailyCounterKey(userId);
+        const [[row], used] = await Promise.all([
+            db
+                .select({ custom: user.apiDailyLimit })
+                .from(user)
+                .where(eq(user.id, userId))
+                .limit(1),
+            dailyUsage(db, [counter]),
+        ]);
+        const own = ownDaily(row?.custom ?? null);
+
+        return {
+            dailyLimit: own ?? defaultDailyLimit(),
+            customDailyLimit: own,
+            usedToday: used.get(counter) ?? 0,
+        };
     };
 
     return {
@@ -286,7 +317,7 @@ export const createKeyService = ({
                 query: { sortBy: 'createdAt', sortDirection: 'desc' },
             });
 
-            return withQuota(
+            return withCaps(
                 apiKeys.map(({ id, name, start, createdAt, lastRequest }) => ({
                     id,
                     name,
@@ -380,6 +411,9 @@ export const createKeyService = ({
             return 'deleted';
         },
 
+        /** The account's daily API quota and today's count of it. */
+        accountQuota: quotaOf,
+
         /** The account's own limit, or null for the default. */
         async accountLimit(userId: string): Promise<number | null> {
             const [row] = await db
@@ -409,7 +443,7 @@ export const createKeyService = ({
                 .orderBy(desc(apikey.createdAt))
                 .limit(ADMIN_LIST_LIMIT);
 
-            return withQuota(rows);
+            return withCaps(rows);
         },
 
         /**
@@ -439,6 +473,7 @@ export const createKeyService = ({
                         name: user.name,
                         createdAt: user.createdAt,
                         accountLimit: user.apiRateLimit,
+                        accountDailyLimit: user.apiDailyLimit,
                     })
                     .from(user)
                     .where(where)
@@ -487,7 +522,7 @@ export const createKeyService = ({
                 .orderBy(desc(apikey.createdAt), desc(apikey.id))
                 .limit(ADMIN_LIST_LIMIT);
 
-            return withQuota(rows);
+            return withCaps(rows);
         },
 
         /**
@@ -551,9 +586,9 @@ export const createKeyService = ({
         },
 
         /**
-         * Sets the daily API limit of one key, or clears it with null so the
-         * deployment default applies. False when there is no such key. The
-         * proxy's key cache holds the old limit for up to a minute.
+         * Sets the daily API cap of one key, or clears it with null so the
+         * key spends only its account's quota. False when there is no such
+         * key. The proxy's key cache holds the old cap for up to a minute.
          */
         async adminSetKeyDailyLimit(
             actor: string,
@@ -583,29 +618,67 @@ export const createKeyService = ({
         },
 
         /**
-         * Sets a key's API call count for the current UTC day back to 0, so a key
-         * that used its daily quota works again at once. False when there is
-         * no such key.
+         * Sets an account's API call count for the current UTC day back to 0,
+         * and the count of each of its keys' caps, so an account that used
+         * its daily quota works again at once. False when there is no such
+         * account.
          */
-        async adminResetKeyUsage(actor: string, keyId: string): Promise<boolean> {
+        async adminResetUsage(actor: string, userId: string): Promise<boolean> {
             const [row] = await db
-                .select({ accountId: apikey.referenceId })
-                .from(apikey)
-                .where(eq(apikey.id, keyId))
+                .select({ id: user.id })
+                .from(user)
+                .where(eq(user.id, userId))
                 .limit(1);
 
             if (!row) {
                 return false;
             }
 
-            await db.delete(limitCounter).where(eq(limitCounter.key, dailyCounterKey(keyId)));
+            const keys = await db
+                .select({ id: apikey.id })
+                .from(apikey)
+                .where(eq(apikey.referenceId, userId));
 
+            await db
+                .delete(limitCounter)
+                .where(
+                    inArray(limitCounter.key, [
+                        accountDailyCounterKey(userId),
+                        ...keys.map(({ id }) => keyDailyCounterKey(id)),
+                    ]),
+                );
+
+            log({ message: 'api key admin', action: 'reset-usage', actor, accountId: userId });
+
+            return true;
+        },
+
+        /**
+         * Sets the daily API quota of the account with this email, or clears
+         * it with null so the deployment default applies. False when there is
+         * no such account. The proxy's key cache holds the old quota for up
+         * to a minute.
+         */
+        async adminSetDailyLimit(
+            actor: string,
+            email: string,
+            limit: number | null,
+        ): Promise<boolean> {
+            const accountId = await userIdByEmail(email);
+
+            if (!accountId) {
+                return false;
+            }
+
+            const context = await auth.$context;
+
+            await context.internalAdapter.updateUser(accountId, { apiDailyLimit: limit });
             log({
                 message: 'api key admin',
-                action: 'reset-usage',
+                action: limit === null ? 'clear-daily-quota' : 'set-daily-quota',
                 actor,
-                keyId,
-                accountId: row.accountId,
+                accountId,
+                limit,
             });
 
             return true;

@@ -47,8 +47,7 @@ export const downloadCardImage = async (node: HTMLElement, name: string): Promis
         // The card paints its own face; without this the PNG would carry
         // the sheet's grid showing through wherever the card is not opaque.
         backgroundColor: getComputedStyle(node).backgroundColor,
-        filter: (child) =>
-            !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
+        filter: (child) => !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
     });
 
     if (!blob) {

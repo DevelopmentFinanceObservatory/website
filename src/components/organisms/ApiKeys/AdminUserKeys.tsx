@@ -5,29 +5,47 @@ import { type FormEvent, useCallback, useEffect, useRef, useState, useTransition
 import styles from './AdminApiKeys.module.scss';
 import AdminKeyRow from './AdminKeyRow';
 import AdminLimitInput from './AdminLimitInput';
-import type { AdminActions, AdminRevealedKey, AdminUserView } from './AdminState';
+import type { AdminAccountKeys, AdminActions, AdminRevealedKey, AdminUserView } from './AdminState';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
-import type { AdminKey } from '@/lib/apiKeys/service';
+import Spinner from '@/components/atoms/Spinner/Spinner';
+import UsageMeter from '@/components/atoms/UsageMeter/UsageMeter';
 
 type AdminUserKeysProps = {
     user: AdminUserView;
     defaultLimit: number;
+    defaultDailyLimit: number;
     actions: AdminActions;
 };
 
 type Revealed = { title: string; key: AdminRevealedKey };
 
+const ResetIcon = () => (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={styles.iconSvg}>
+        <path
+            d="M15.5 10a5.5 5.5 0 1 1-1.8-4.07M15 3.5v3h-3"
+            stroke="currentColor"
+            strokeLinecap="square"
+            strokeWidth="1.2"
+        />
+    </svg>
+);
+
 /**
- * The opened part of a user's row: their keys and what to do with them. The
- * keys load when it mounts and again after every change. A new key is held
+ * The opened part of a user's row: their keys, the account's daily quota and
+ * what to do with them. The keys and the quota load when it mounts and again
+ * after every change. A new key is held
  * here, in this component's state, and nowhere else: close the row or leave
  * the page and it is gone. Only a hash is stored.
  */
-const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
+const AdminUserKeys = ({ user, defaultLimit, defaultDailyLimit, actions }: AdminUserKeysProps) => {
     const { loadKeys, createKey } = actions;
-    const [keys, setKeys] = useState<AdminKey[] | null>(null);
+    const [loaded, setLoaded] = useState<AdminAccountKeys | null>(null);
+    const keys = loaded?.keys ?? null;
+    const quota = loaded?.quota ?? null;
+    const [resetError, setResetError] = useState<string | null>(null);
+    const [resetting, startReset] = useTransition();
     const [failed, setFailed] = useState(false);
     const [revealed, setRevealed] = useState<Revealed | null>(null);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -38,7 +56,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
     const reload = useCallback(async () => {
         const list = await loadKeys(user.id);
 
-        setKeys(list);
+        setLoaded(list);
         setFailed(list === null);
     }, [loadKeys, user.id]);
 
@@ -47,7 +65,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
 
         void loadKeys(user.id).then((list) => {
             if (current) {
-                setKeys(list);
+                setLoaded(list);
                 setFailed(list === null);
             }
         });
@@ -80,6 +98,21 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
 
             form.reset();
             reveal(`New key for ${user.email}`, result.created);
+            await reload();
+        });
+    };
+
+    const reset = () => {
+        setResetError(null);
+        startReset(async () => {
+            const result = await actions.resetUsage(user.id);
+
+            if (!result.ok) {
+                setResetError(result.error);
+
+                return;
+            }
+
             await reload();
         });
     };
@@ -137,13 +170,42 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                     The keys did not load. Close the row and open it again.
                 </p>
             )}
+            {quota && (
+                <div className={styles.usage}>
+                    <UsageMeter
+                        used={quota.usedToday}
+                        limit={quota.dailyLimit}
+                        label="API calls today, all keys"
+                        layout="inline"
+                        className={styles.meter}
+                    />
+                    <span className={styles.of}>
+                        of {quota.dailyLimit.toLocaleString('en-GB')} today, all keys
+                    </span>
+                    <button
+                        type="button"
+                        className={styles.iconButton}
+                        aria-label={`Reset today's usage for ${user.email}`}
+                        title="Reset today's usage to 0"
+                        disabled={resetting}
+                        onClick={reset}
+                    >
+                        {resetting ? <Spinner size={16} label="Resetting usage" /> : <ResetIcon />}
+                    </button>
+                    {resetError && (
+                        <span className={styles.noteError} role="alert">
+                            {resetError}
+                        </span>
+                    )}
+                </div>
+            )}
             {keys?.length === 0 && <p className={styles.hint}>No keys yet.</p>}
             {keys && keys.length > 0 && (
                 <table className={styles.keyTable}>
                     <thead className={styles.visuallyHidden}>
                         <tr>
                             <th scope="col">Key</th>
-                            <th scope="col">API calls today</th>
+                            <th scope="col">Daily cap</th>
                             <th scope="col">
                                 <span className={styles.visuallyHidden}>Actions</span>
                             </th>
@@ -156,7 +218,6 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                                 keyData={key}
                                 actions={actions}
                                 onChanged={() => void reload()}
-                                reload={reload}
                             />
                         ))}
                     </tbody>
@@ -186,8 +247,8 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                         </span>
                     )}
                 </form>
-                {/* The account's limit is apart from the keys: every key's calls
-                    count against it, beside each key's own daily quota. */}
+                {/* The account's limits are apart from the keys: every key's
+                    calls count against them, and against a key's own cap. */}
                 <label className={styles.accountLimit}>
                     <span className={styles.toolLabel}>Rate limit for this account</span>
                     <span className={styles.accountLimitRow}>
@@ -199,6 +260,21 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                         />
                         <span className={styles.accountLimitUnit}>
                             calls a minute, shared by all of this account&apos;s keys
+                        </span>
+                    </span>
+                </label>
+                <label className={styles.accountLimit}>
+                    <span className={styles.toolLabel}>Daily quota for this account</span>
+                    <span className={styles.accountLimitRow}>
+                        <AdminLimitInput
+                            value={user.accountDailyLimit}
+                            placeholder={`${defaultDailyLimit.toLocaleString('en-GB')} default`}
+                            label={`Daily API call quota for ${user.email}`}
+                            save={(limit) => actions.setAccountDailyLimit(user.email, limit)}
+                            onSaved={() => void reload()}
+                        />
+                        <span className={styles.accountLimitUnit}>
+                            calls a UTC day, shared by all of this account&apos;s keys
                         </span>
                     </span>
                 </label>
