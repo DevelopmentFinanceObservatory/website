@@ -2860,11 +2860,15 @@ export const useChat = (
     const [owedRetryTick, setOwedRetryTick] = useState(0);
 
     useEffect(() => {
+        // One object for the hook's life, whose latest timer the cleanup
+        // clears.
+        const retry = owedRetryRef.current;
+
         unmountedRef.current = false;
 
         return () => {
             unmountedRef.current = true;
-            clearTimeout(owedRetryRef.current.timer);
+            clearTimeout(retry.timer);
         };
     }, []);
 
@@ -2877,6 +2881,9 @@ export const useChat = (
 
         const session = sessionRef.current;
         const generation = generationRef.current;
+        // The session the run sends in, which leaveSession ends whether or
+        // not it keeps the id.
+        const sessionLeft = sessionLeftRef.current;
 
         if (!session || owedHeld || drainingRef.current === generation) {
             return;
@@ -2889,6 +2896,7 @@ export const useChat = (
                 if (
                     unmountedRef.current ||
                     generationRef.current !== generation ||
+                    sessionLeftRef.current !== sessionLeft ||
                     sessionRef.current !== session
                 ) {
                     return null;
@@ -2930,7 +2938,13 @@ export const useChat = (
             },
         })
             .then((left) => {
-                if (unmountedRef.current || generationRef.current !== generation) {
+                // A page that left the session, by this run's own resend
+                // among others, owes the harness nothing more there.
+                if (
+                    unmountedRef.current ||
+                    generationRef.current !== generation ||
+                    sessionLeftRef.current !== sessionLeft
+                ) {
                     return;
                 }
 

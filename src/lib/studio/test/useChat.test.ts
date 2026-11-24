@@ -17,6 +17,7 @@ import type {
     ChatSnapshot,
     useChat as UseChat,
 } from '../../../components/organisms/Studio/hooks/useChat.ts';
+import { OWED_RETRY_MS } from '../owedRemovals.ts';
 import type { renderHook as RenderHook } from './hookRuntime.ts';
 
 const REPO = join(import.meta.dirname, '../../../..');
@@ -65,7 +66,8 @@ type Block = { id: string; revision: number };
  * lands, as another writer would. `stateFails` answers the state route 500,
  * and the route starts failing after `failStateAfter` reads. The first
  * `busyEdits` edits are answered busy (409 `transient_unavailable`), as
- * while a turn runs.
+ * while a turn runs. With `sessionGone`, every edit is answered as for a
+ * conversation the harness no longer holds (404 at `/conversation_id`).
  */
 const fakeHarness = ({
     revision,
@@ -73,12 +75,14 @@ const fakeHarness = ({
     beforeEdit,
     failStateAfter,
     busyEdits = 0,
+    sessionGone = false,
 }: {
     revision: number;
     blocks: Block[];
     beforeEdit?: (harness: { revision: number; blocks: Block[] }, edit: number) => void;
     failStateAfter?: number;
     busyEdits?: number;
+    sessionGone?: boolean;
 }) => {
     const edits: { remove: string; expected?: number; composition?: string }[] = [];
     const harness = {
@@ -140,6 +144,18 @@ const fakeHarness = ({
                 expected: body.expected_revision,
                 composition: body.composition_id,
             });
+
+            if (sessionGone) {
+                return Response.json(
+                    {
+                        error: 'not_found',
+                        retry: 'do_not_retry',
+                        detail: "no conversation 'conv_1'",
+                        pointer: '/conversation_id',
+                    },
+                    { status: 404 },
+                );
+            }
 
             if (harness.edits.length <= busyEdits) {
                 return Response.json(
@@ -337,5 +353,26 @@ test('a resend whose re-read fails is left for the run and sent again after a wa
         ['cmp_a'],
     );
     assert.deepEqual(page.result().owedRemovals, []);
+    page.unmount();
+});
+
+test('a resend answered as a conversation the harness lost leaves the session and arms no retry', async (t) => {
+    const { harness, fetch } = fakeHarness({
+        revision: 5,
+        blocks: [
+            { id: 'cmp_a', revision: 1 },
+            { id: 'cmp_x', revision: 1 },
+        ],
+        sessionGone: true,
+    });
+    const timers = t.mock.method(globalThis, 'setTimeout');
+    const page = await reopen(t, pinlessSave(5, ['cmp_a', 'cmp_x'], ['cmp_x']), fetch);
+
+    assert.equal(harness.edits.length, 1);
+    assert.equal(page.result().canvas, null);
+    assert.deepEqual(
+        timers.mock.calls.filter((call) => call.arguments[1] === OWED_RETRY_MS),
+        [],
+    );
     page.unmount();
 });
