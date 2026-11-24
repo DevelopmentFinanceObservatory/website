@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { Client, Pool } from 'pg';
 import { ensureDatabaseRoles, type AdminConnection } from '../local-roles.ts';
 
@@ -137,4 +140,21 @@ export async function createTestDatabase(): Promise<TestDatabase> {
             }
         },
     };
+}
+
+const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
+
+/** A copy of the migrations folder whose journal stops after migration `last`. */
+export function migrationsThrough(last: number): string {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'website-migrations-through-'));
+    const journalPath = path.join(folder, 'meta', '_journal.json');
+
+    fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
+
+    journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx <= last);
+    fs.writeFileSync(journalPath, JSON.stringify(journal));
+
+    return folder;
 }
