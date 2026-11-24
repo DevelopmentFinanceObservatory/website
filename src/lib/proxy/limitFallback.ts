@@ -9,7 +9,9 @@
  * Each shared count that succeeds is recorded here too, so a fallback goes on
  * from the caller's shared count in the current window rather than from zero:
  * a caller already refused in the window stays refused when the database
- * then fails.
+ * then fails. The shared count sent last is the one kept, a lower one
+ * included, so a counter an operator deletes (an account's daily usage
+ * reset) is followed here on the caller's next shared count.
  *
  * Windows are aligned to the Unix epoch, as the shared counters' are. The
  * memory is bounded: a full map first drops the windows that have ended and
@@ -28,7 +30,9 @@ export type FallbackCounter = {
      * crosses a window boundary on its way back is filed under the window it
      * was sent in: a count the database made in the later window then lapses
      * early, which errs lenient, and never carries a spent allowance into a
-     * fresh window.
+     * fresh window. A count sent after the one held replaces it, so a
+     * shared counter that went down (an operator's reset) is followed; one
+     * sent earlier only raises it.
      */
     record(key: string, verdict: Verdict, sentAt: number): void;
     size(): number;
@@ -39,11 +43,13 @@ export const createFallbackCounter = (
     { now = Date.now, maxKeys = FALLBACK_MAX_KEYS }: { now?: () => number; maxKeys?: number } = {},
 ): FallbackCounter => {
     const windowMs = windowS * 1000;
-    // The window a key was last counted in, and how many calls it held.
-    const counts = new Map<string, { window: number; count: number }>();
+    // The window a key was last counted in, how many calls it held, and when
+    // the count it holds was taken: the send time of the shared count
+    // recorded, or the time of a hit counted here.
+    const counts = new Map<string, { window: number; count: number; at: number }>();
 
     // Re-inserted, so insertion order stays the order of last use.
-    const store = (key: string, window: number, count: number): void => {
+    const store = (key: string, window: number, count: number, at: number): void => {
         counts.delete(key);
 
         if (counts.size >= maxKeys) {
@@ -58,7 +64,7 @@ export const createFallbackCounter = (
             counts.delete(counts.keys().next().value!);
         }
 
-        counts.set(key, { window, count });
+        counts.set(key, { window, count, at });
     };
 
     return {
@@ -68,7 +74,7 @@ export const createFallbackCounter = (
             const known = counts.get(key);
             const count = known && known.window === window ? known.count + 1 : 1;
 
-            store(key, window, count);
+            store(key, window, count, at);
 
             return {
                 allowed: count <= limit,
@@ -88,12 +94,17 @@ export const createFallbackCounter = (
             }
 
             // A refusal carries no count past the limit, and one past it is
-            // enough to keep refusing. Replies can arrive out of order, and
-            // between them this instance may have counted in memory, so a
-            // count never goes down within a window.
+            // enough to keep refusing. A count sent after the one held, and
+            // after any hit counted here, replaces it, a lower one included.
+            // Replies can arrive out of order, so one sent no later than the
+            // count held only raises it.
             const count = allowed ? limit - remaining : limit + 1;
 
-            store(key, window, known?.window === window ? Math.max(known.count, count) : count);
+            if (known?.window === window && known.at >= sentAt) {
+                store(key, window, Math.max(known.count, count), known.at);
+            } else {
+                store(key, window, count, sentAt);
+            }
         },
         size: () => counts.size,
     };

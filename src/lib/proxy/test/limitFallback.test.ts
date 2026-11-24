@@ -120,3 +120,18 @@ test('fallback: a reply never lowers a count within its window, nor touches a ne
     counter.record('api:g', { allowed: true, limit: 1, remaining: 1, reset: 1 }, now - 60_000);
     assert.equal(counter.hit('api:g', 1).allowed, false);
 });
+
+test('fallback: a lower shared count sent later replaces the one held, as after a reset', () => {
+    let now = 1_000_000 * 60_000;
+    const counter = createFallbackCounter(60, { now: () => now });
+    const refused = { allowed: false, limit: 3, remaining: 0, reset: 60 };
+
+    counter.record('apiday:user:a', refused, now);
+
+    // An operator deletes the shared counter; the next call's shared count is 1.
+    now += 1_000;
+    counter.record('apiday:user:a', { allowed: true, limit: 3, remaining: 2, reset: 59 }, now);
+
+    // The database then fails: the fallback goes on from 1, not from the refusal.
+    assert.equal(counter.hit('apiday:user:a', 3).allowed, true);
+});
