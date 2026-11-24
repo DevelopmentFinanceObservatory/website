@@ -42,6 +42,13 @@
         padding-block: var(--prompt-input-pad);
         resize: none;
         overflow-y: auto;
+
+        // An empty field sizes to its placeholder, which wraps in the
+        // narrow chat panel. It rests at one line, the placeholder clipped.
+        &:placeholder-shown {
+            max-height: calc(1lh + 2 * var(--prompt-input-pad));
+            overflow-y: hidden;
+        }
     }
 }
 

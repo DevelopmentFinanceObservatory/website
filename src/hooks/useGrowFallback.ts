@@ -5,7 +5,7 @@ import { type RefObject, useEffect } from 'react';
 /**
  * Grows a textarea to its text in browsers without `field-sizing` (Safari
  * before 26.2, Firefox before 152), which keep it at its `rows`. The
- * stylesheet's `max-height` still caps it. The text, a web font that loads
+ * stylesheet's `max-height` caps it. The text, a web font that loads
  * after mount and a window resize (the root font scales with the viewport)
  * each change the height, so each one re-measures. Browsers with
  * `field-sizing` skip it, since an inline height would override the CSS.
@@ -26,9 +26,14 @@ export function useGrowFallback(
             return;
         }
 
+        // A hidden field measures 0, so it keeps `auto` (its `rows`) until
+        // the next measure finds it laid out.
         const measure = () => {
             el.style.height = 'auto';
-            el.style.height = `${el.scrollHeight}px`;
+
+            if (el.scrollHeight > 0) {
+                el.style.height = `${el.scrollHeight}px`;
+            }
         };
 
         measure();
