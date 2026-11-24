@@ -63,6 +63,7 @@ import {
 import {
     createLegacyCanvas,
     legacyHiddenCards,
+    pinlessRemovals,
     restoreCanvas,
     sessionLeftCards,
     takeManifest,
@@ -345,6 +346,12 @@ type StreamEnding = {
     failed: boolean;
     sent: boolean;
 };
+
+// What a stream's request can ask of its stream: whether the user stopped
+// it, and to mark an observed turn (`observe`) as this page's own while the
+// page carries it (`carry(true)`), so leaving the conversation cancels it,
+// or as another stream's while that one holds it (`carry(false)`).
+type StreamControl = { stopped: () => boolean; carry: (own: boolean) => void };
 
 // Whether page turn `turn`'s reply (pageTurnReplyAt) has text.
 const hasAnswer = (messages: ChatMessage[], turn: number): boolean => {
@@ -922,12 +929,17 @@ export const useChat = (
     // `metered` marks a POST turn, whose prompt the site's meter gives back
     // when the response is a refusal (meterTurn), so a refusal marks the
     // turn's prompt refunded. `observe` marks a stream that carries on a turn
-    // this page did not start, which leaving the conversation ends here
-    // without asking the harness to cancel it.
+    // the harness admitted already (a reopened page's), which leaving the
+    // conversation ends here without asking the harness to cancel it while
+    // `start` does not carry it itself (its `control`).
     const stream = useCallback(
         (
             turn: number,
-            start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>,
+            start: (
+                handlers: StreamHandlers,
+                signal: AbortSignal,
+                control: StreamControl,
+            ) => Promise<void>,
             {
                 onRefusal,
                 onUnreachable,
@@ -1193,6 +1205,7 @@ export const useChat = (
                             haltRef.current = null;
                         }
 
+                        release();
                         break;
                     }
                     case 'plan.approved': {
@@ -1429,9 +1442,21 @@ export const useChat = (
                 }
             };
 
+            // The turn no longer counts as this stream's for leaving the
+            // conversation (leaveCancels): it ended, or it waits on the user.
+            // The cancel names only the conversation, so one sent now would
+            // end whatever turn another tab begins next.
+            const release = () => {
+                if (runningRef.current === running) {
+                    runningRef.current = null;
+                }
+            };
+
             // The turn's end on screen, once: at the `done` or `error` frame,
             // or else when the stream closes.
             const finish = () => {
+                release();
+
                 if (!finished) {
                     finished = true;
                     (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed, sent });
@@ -1529,9 +1554,15 @@ export const useChat = (
                     onUnreachable: unreachable,
                     onBusyWait: busy,
                 },
-                { onStopChange: carryOut },
+                { onStopChange: carryOut, admitted: observe },
             );
             const running = { own: !observe, phase: admission.phase };
+            const control: StreamControl = {
+                stopped: () => stopped,
+                carry: (own) => {
+                    running.own = own;
+                },
+            };
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
@@ -1559,11 +1590,16 @@ export const useChat = (
                     runningRef.current = running;
                     stall.beat();
 
-                    return start(admission.handlers, controller.signal).catch((error: Error) => {
-                        if (error.name !== 'AbortError' && generationRef.current === generation) {
-                            failed = true;
-                        }
-                    });
+                    return start(admission.handlers, controller.signal, control).catch(
+                        (error: Error) => {
+                            if (
+                                error.name !== 'AbortError' &&
+                                generationRef.current === generation
+                            ) {
+                                failed = true;
+                            }
+                        },
+                    );
                 })
                 .finally(() => {
                     stall.stop();
@@ -1577,9 +1613,7 @@ export const useChat = (
                         haltRef.current = null;
                     }
 
-                    if (runningRef.current === running) {
-                        runningRef.current = null;
-                    }
+                    release();
 
                     if (generationRef.current !== generation) {
                         return;
@@ -2494,10 +2528,12 @@ export const useChat = (
         // Carry on the read's open turn (carryOnTurn) in a stream bound to
         // the reply of the prompt that holds it, `merged` being the
         // transcript with the read's closed turns in. An open turn the
-        // transcript lacks joins it first. The stream observes a turn this
-        // page did not start (`observe`). When another tab closes that turn
-        // and begins the next, the stream ends its own turn and the next one
-        // comes back here, so each turn's frames reach its own reply.
+        // transcript lacks joins it first. The turn counts as this page's own
+        // while the stream resumes it, and as observed (`observe`) while it
+        // waits on another tab's stream. A poll that finds a later turn open, begun by another tab once
+        // this one closed, ends this turn and comes back here for that one,
+        // unless the user stopped the stream. A poll that finds this turn
+        // closed and no later one open yet ends the stream.
         const follow = (read: ConversationRead, merged: ChatMessage[]) => {
             const step = attachStep(read);
 
@@ -2556,7 +2592,7 @@ export const useChat = (
 
             stream(
                 streamTurn ?? turnCount.current,
-                (handlers, signal) => {
+                (handlers, signal, { stopped, carry }) => {
                     // The transcript with the stream's latest read merged in.
                     let latest = merged;
 
@@ -2569,7 +2605,12 @@ export const useChat = (
                         onRead: (next) => {
                             latest = takeRead(next);
                         },
-                        onNextTurn: (next) => follow(next, latest),
+                        onNextTurn: (next) => {
+                            if (!stopped() && !signal.aborted) {
+                                follow(next, latest);
+                            }
+                        },
+                        onCarry: carry,
                     });
                 },
                 { observe: true },
@@ -2752,8 +2793,17 @@ export const useChat = (
                 clarify: null,
                 plan: null,
             });
+
+            // A save from before manifest pins took cards the harness holds
+            // off on the page alone. They leave the harness's canvas too, so
+            // its manifest keeps them off once it gains pins.
+            const removals = pinlessRemovals({ ...saved, canvas: canvasRef.current });
+
+            if (removals.length > 0) {
+                syncCanvas(removals);
+            }
         },
-        [setPendingCards, startLegacy],
+        [setPendingCards, startLegacy, syncCanvas],
     );
 
     const snapshot = useCallback(

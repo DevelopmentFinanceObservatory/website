@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { takeManifest, type CanvasBaseline } from '../../studio/composition.ts';
+import { pinlessRemovals, takeManifest, type CanvasBaseline } from '../../studio/composition.ts';
 import type { CompositionManifest } from '../../studio/wire.ts';
 import {
     canvasWidgetsOf,
@@ -107,6 +107,39 @@ test('a save from before manifest pins keeps a card the user removed off, though
         'cmp_second',
         'text_local',
     ]);
+});
+
+test("a save from before manifest pins hands its removals to the harness, so the owner's next edit keeps them off", () => {
+    const saved = state({
+        widgets: [card('cmp_a', 2), card('cmp_x', 2), card('cmp_fork', 1)],
+        canvas: { compositionId: 'cps_1', revision: 2, ids: ['cmp_a', 'cmp_x'] },
+        localIds: ['cmp_fork'],
+        // A fork's card and a text card leave on the page alone.
+        removedIds: ['cmp_x', 'cmp_fork', 'text_local'],
+    });
+    const removals = pinlessRemovals(saved);
+
+    assert.deepEqual(removals, [{ op: 'remove', component_id: 'cmp_x' }]);
+
+    // The harness takes them, then the owner pins A: revision 3.
+    const gone = new Set(removals.map((op) => op.component_id));
+    const held = saved.canvas!.ids.filter((id) => !gone.has(id));
+    const pinned = manifest(3, held);
+
+    pinned.blocks[0]!.pinned = true;
+
+    const taken = takeManifest(saved.canvas ?? null, pinned)?.baseline;
+
+    assert.deepEqual(ids({ ...saved, canvas: taken }), ['cmp_a']);
+    // A baseline with pins hands nothing on, and neither does a legacy one.
+    assert.deepEqual(pinlessRemovals({ ...saved, canvas: taken }), []);
+    assert.deepEqual(
+        pinlessRemovals({
+            ...saved,
+            canvas: { compositionId: null, revision: -1, ids: ['cmp_x'] },
+        }),
+        [],
+    );
 });
 
 test("a fork's inherited cards show beside the manifest of its own session", () => {

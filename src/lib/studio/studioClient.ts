@@ -423,14 +423,15 @@ export const stopAction = ({
 /**
  * Whether leaving the conversation (New Chat, opening another) asks the
  * harness to cancel the turn of the stream that runs (`running`, null when
- * none does): only a turn this page started (`own`) whose request has left
- * (`phase`, watchAdmission's, is `sent` or `admitted`). A stream observing a turn another tab started and
- * a request waiting on another stream's turn end on this page alone, since
- * the cancel would end that other stream's turn.
+ * none does): only a turn this page started or resumed (`own`) that the
+ * harness has named (`phase`, watchAdmission's, is `admitted`). A stream
+ * observing a turn another tab runs, a request on its way, and one waiting
+ * on another stream's turn end on this page alone: the cancel names only
+ * the conversation, so it would end whatever turn runs there.
  */
 export const leaveCancels = (
     running: { own: boolean; phase: () => RequestPhase } | null,
-): boolean => running !== null && running.own && running.phase() !== 'unsent';
+): boolean => running !== null && running.own && running.phase() === 'admitted';
 
 /**
  * `handlers` with a record of where the request stands (`phase`) and what
@@ -439,11 +440,17 @@ export const leaveCancels = (
  * while the request was `sent` is decided again when the harness answers:
  * `onStopChange` hears the action for `admitted` once the response names
  * the turn, and the one for `unsent` when the answer is to wait while
- * another stream holds the conversation (whileBusy).
+ * another stream holds the conversation (whileBusy). A stream that carries
+ * on a turn the harness admitted already (`admitted`, a reopened page's)
+ * is `admitted` from its start, so its Stop cancels at once and never
+ * waits for a later frame, which may come after another turn has begun.
  */
 export const watchAdmission = (
     handlers: StreamHandlers,
-    { onStopChange }: { onStopChange?: (action: StopAction) => void } = {},
+    {
+        onStopChange,
+        admitted = false,
+    }: { onStopChange?: (action: StopAction) => void; admitted?: boolean } = {},
 ): {
     handlers: StreamHandlers;
     phase: () => RequestPhase;
@@ -486,7 +493,7 @@ export const watchAdmission = (
             },
         },
         phase: () => phase,
-        start: () => enter('sent'),
+        start: () => enter(admitted ? 'admitted' : 'sent'),
         stop: (metered) => {
             const action = stopAction({ phase, metered });
 

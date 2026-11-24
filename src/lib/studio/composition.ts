@@ -69,6 +69,32 @@ export const restoreCanvas = (
     };
 };
 
+/**
+ * The `remove` edits that hand a save's removals to the harness when its
+ * baseline names a composition but carries no `pinned`: one for each card
+ * the baseline holds that the save lists in `removedIds`, a fork's inherited
+ * cards (`localIds`) aside. The page that saved it took such cards off on
+ * the page alone, and canvasWidgetsOf keeps them off only while the baseline
+ * lacks pins, which the first manifest the page takes gives it. Once the
+ * harness answers, its manifest keeps them off. Empty for any other save.
+ */
+export const pinlessRemovals = (
+    saved: Partial<Pick<CanvasState, 'canvas' | 'localIds' | 'removedIds'>>,
+): { op: 'remove'; component_id: string }[] => {
+    const { canvas } = saved;
+
+    if (canvas?.compositionId == null || canvas.pinned) {
+        return [];
+    }
+
+    const removed = new Set(saved.removedIds ?? []);
+    const local = new Set(saved.localIds ?? []);
+
+    return canvas.ids
+        .filter((id) => removed.has(id) && !local.has(id))
+        .map((id) => ({ op: 'remove', component_id: id }));
+};
+
 /** A manifest taken as the new baseline (takeManifest), with the cards the
  *  page should keep as local cards (`local`). */
 export type TakenManifest = { baseline: CanvasBaseline; local: string[] };

@@ -405,23 +405,27 @@ test('attachStep decides from the turn status and the lease', () => {
 
 // A carryOnTurn run with recorded calls: `resumes` answers each resume in
 // turn (frames, or a refusal), `reads` each state read, and `onRefusal`
-// stands for the stream's own refusal handler.
+// stands for the stream's own refusal handler. `merged` collects the reads
+// merged, also for a run that rejects.
 const run = async (
     first: AttachStep,
     {
         resumes = [],
         reads = [],
         onRefusal,
+        merged = [],
     }: {
         resumes?: (StudioFrame[] | StreamRefusal)[];
         reads?: (ConversationRead | StateRefusal | null)[];
         onRefusal?: StreamHandlers['onRefusal'];
+        merged?: ConversationRead[];
     } = {},
 ) => {
     const frames: StudioFrame[] = [];
     const calls: string[] = [];
-    const merged: ConversationRead[] = [];
     const handedOn: ConversationRead[] = [];
+    // Whether this page carried the turn itself, as onCarry heard it.
+    const claimed: boolean[] = [];
 
     await carryOnTurn({
         conversationId: 'conv',
@@ -431,6 +435,7 @@ const run = async (
         since: () => 1,
         onRead: (read) => merged.push(read),
         onNextTurn: (read) => handedOn.push(read),
+        onCarry: (own) => claimed.push(own),
         resume: async (conversationId, turnIndex, handlers: StreamHandlers) => {
             calls.push(`resume ${conversationId} ${turnIndex}`);
             const answer = resumes.shift();
@@ -451,17 +456,19 @@ const run = async (
         },
     });
 
-    return { frames, calls, merged, handedOn };
+    return { frames, calls, merged, handedOn, claimed };
 };
 
 test('carryOnTurn resumes a running turn nobody holds and streams it', async () => {
     const done: StudioFrame = { event: 'done', seq: 40, trace_id: 'tr_1', composition: null };
-    const { frames, calls } = await run(
+    const { frames, calls, claimed } = await run(
         { kind: 'resume', turnIndex: 2 },
         { resumes: [[{ event: 'message.complete', seq: 39, text: 'The answer.' }, done]] },
     );
 
     assert.deepEqual(calls, ['resume conv 2']);
+    // The page carries the turn from the resume on.
+    assert.deepEqual(claimed, [true]);
     assert.deepEqual(
         frames.map((frame) => frame.event),
         ['message.complete', 'done'],
@@ -505,46 +512,63 @@ test('carryOnTurn waits out a held turn, then shows the pause it reached', async
     assert.deepEqual(frames, [PLAN]);
 });
 
-test('carryOnTurn ends the turn once the harness has closed it', async () => {
-    const { frames, calls } = await run(
-        { kind: 'wait', turnIndex: 2, seconds: 3 },
-        { reads: [readOf({ turn: turnState({ status: 'done' }), closed_since: [closed(2)] })] },
-    );
-
-    assert.deepEqual(calls, ['sleep 3000', 'read conv 1']);
-    assert.deepEqual(
-        frames.map((frame) => frame.event),
-        ['done'],
-    );
-});
-
-test('carryOnTurn ends its turn and hands on the next one another tab began', async () => {
-    // Another tab closed turn 2 and began turn 3 while this page waited.
-    const cases: [string, TurnState][] = [
+test('carryOnTurn ends its turn once the harness closed it, and hands on a later turn another tab began', async () => {
+    const cases: [string, ConversationRead, boolean][] = [
         [
-            'held by the other tab',
-            turnState({ index: 3, lease_live: true, retry_after_seconds: 4 }),
+            'closed',
+            readOf({ turn: turnState({ status: 'done' }), closed_since: [closed(2)] }),
+            false,
         ],
-        ['held by nobody', turnState({ index: 3 })],
+        // Another tab closed turn 2 and began turn 3 while this page waited.
+        [
+            'next turn held by the other tab',
+            readOf({
+                turn: turnState({ index: 3, lease_live: true, retry_after_seconds: 4 }),
+                closed_since: [closed(2)],
+            }),
+            true,
+        ],
+        [
+            'next turn held by nobody',
+            readOf({ turn: turnState({ index: 3 }), closed_since: [closed(2)] }),
+            true,
+        ],
     ];
 
-    for (const [label, turn] of cases) {
-        const next = readOf({ turn, closed_since: [closed(2)] });
-        const { frames, calls, merged, handedOn } = await run(
+    for (const [label, next, handsOn] of cases) {
+        const { frames, calls, merged, handedOn, claimed } = await run(
             { kind: 'wait', turnIndex: 2, seconds: 3 },
             { reads: [next] },
         );
 
-        // Turn 2's reply comes from the read; its stream ends there, and
-        // turn 3 goes on under handlers of its own.
+        // Turn 2's reply comes from the read, and its stream ends there.
         assert.deepEqual(calls, ['sleep 3000', 'read conv 1'], label);
+        // It only waits on another stream's turn.
+        assert.deepEqual(claimed, [false], label);
         assert.deepEqual(merged, [next], label);
         assert.deepEqual(
             frames.map((frame) => frame.event),
             ['done'],
             label,
         );
-        assert.deepEqual(handedOn, [next], label);
+        assert.deepEqual(handedOn, handsOn ? [next] : [], label);
+    }
+});
+
+test('carryOnTurn rejects a read of a session the harness began afresh, and merges nothing from it', async () => {
+    const cases: [string, ConversationRead][] = [
+        ['a lower turn', readOf({ turn: turnState({ index: 1 }) })],
+        ['no turn', readOf({})],
+    ];
+
+    for (const [label, restarted] of cases) {
+        const merged: ConversationRead[] = [];
+
+        await assert.rejects(
+            run({ kind: 'wait', turnIndex: 2, seconds: 3 }, { reads: [restarted], merged }),
+            label,
+        );
+        assert.deepEqual(merged, [], label);
     }
 });
 

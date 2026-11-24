@@ -561,12 +561,34 @@ test('whileBusy: Stop cancels a turn the harness admitted at once, one on its wa
     assert.equal(stopAction({ phase: 'unsent', metered: false }).refunded, false);
 });
 
-test('leaving a conversation cancels only a turn this page started and sent', () => {
+test("watchAdmission: a carried-on turn's Stop cancels at once, and a later frame changes nothing", () => {
+    const changes: StopAction[] = [];
+    const admission = watchAdmission(
+        { onFrame: () => {} },
+        { onStopChange: (action) => changes.push(action), admitted: true },
+    );
+
+    admission.start();
+    assert.equal(admission.phase(), 'admitted');
+    assert.deepEqual(admission.stop(false), {
+        cancel: 'now',
+        abort: 'after-grace',
+        refunded: false,
+    });
+
+    // The `done` that ends the stream after a hand-off to another turn.
+    admission.handlers.onFrame({ event: 'done', seq: -1, trace_id: '', composition: null });
+    assert.deepEqual(changes, []);
+});
+
+test('leaving a conversation cancels only a turn this page carries that the harness named', () => {
     const cases: [{ own: boolean; phase: RequestPhase } | null, boolean][] = [
         // No stream runs: a state read, or nothing at all.
         [null, false],
         [{ own: true, phase: 'admitted' }, true],
-        [{ own: true, phase: 'sent' }, true],
+        // A send on its way, which the harness may yet answer busy while
+        // another tab's turn runs.
+        [{ own: true, phase: 'sent' }, false],
         // A send waiting on another stream's turn.
         [{ own: true, phase: 'unsent' }, false],
         // A reopened page carrying on or watching another tab's turn.

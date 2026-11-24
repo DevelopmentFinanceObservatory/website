@@ -732,18 +732,24 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * Carry on the harness's open turn from `first` as one stream into
  * `handlers`: resume a running turn nobody holds (`resume`), wait while
  * another stream holds it, show a pause by its frames, and end with a `done`
- * once the harness has closed it. A resume refused 409 (the turn was taken or
- * paused meanwhile) or 503 `transient_unavailable` reads the state again,
- * after the wait the refusal names and at least DEFAULT_WAIT_SECONDS.
- * Each read goes to `onRead`, which merges it, and is asked with `since()`.
- * A read whose open turn is a later one than this stream carries (another
- * tab closed this turn and began the next) ends this turn with a `done`, as
- * a closed one does, and goes to `onNextTurn`, which carries that turn on
- * under handlers of its own. Any other refused resume, and a read refused
- * as a StateRefusal (the session is gone, or a guest must sign in), goes to
- * `handlers.onRefusal` and ends the turn when it deals with it. Rejects when that refusal is not
- * dealt with, a resume is refused RESUME_ATTEMPTS times, or a read fails,
- * and with an AbortError when `signal` aborts.
+ * once the harness has closed it. `onCarry` hears whether this page carries
+ * the turn itself, true before each resume and false before each wait while
+ * another stream holds it. A resume refused 409
+ * (the turn was taken or paused meanwhile) or 503 `transient_unavailable`
+ * reads the state again, after the wait the refusal names and at least
+ * DEFAULT_WAIT_SECONDS. Each read is asked with `since()`. A read whose open
+ * turn is later than the one this stream carries (another tab closed this
+ * turn and began the next) goes to `onRead`, which merges it, ends this turn
+ * with a `done` and goes to `onNextTurn`, which carries the later turn on
+ * under handlers of its own. A read that finds this turn closed and no later
+ * turn open yet ends the stream with a `done`. A read whose latest turn is
+ * earlier than this one, or that holds no turn, comes from a session the
+ * harness began afresh under the same id: it is not merged, and the stream
+ * rejects. Any other refused resume, and a read refused as a StateRefusal
+ * (the session is gone, or a guest must sign in), goes to
+ * `handlers.onRefusal` and ends the turn when it deals with it. Rejects when
+ * that refusal is not dealt with, a resume is refused RESUME_ATTEMPTS times,
+ * or a read fails, and with an AbortError when `signal` aborts.
  */
 export const carryOnTurn = async ({
     conversationId,
@@ -753,6 +759,7 @@ export const carryOnTurn = async ({
     since,
     onRead,
     onNextTurn,
+    onCarry,
     resume = runResume,
     read = readConversation,
     sleep = abortableSleep,
@@ -764,6 +771,7 @@ export const carryOnTurn = async ({
     since: () => number;
     onRead: (read: ConversationRead) => void;
     onNextTurn: (read: ConversationRead) => void;
+    onCarry?: (own: boolean) => void;
     resume?: typeof runResume;
     read?: (
         conversationId: string,
@@ -791,6 +799,7 @@ export const carryOnTurn = async ({
             // Set by the refusal handler during the request.
             let refused: StreamRefusal | null = null;
 
+            onCarry?.(true);
             await resume(
                 conversationId,
                 step.turnIndex,
@@ -824,6 +833,7 @@ export const carryOnTurn = async ({
 
             await sleep(wait * 1000, signal);
         } else {
+            onCarry?.(false);
             await sleep(step.seconds * 1000, signal);
         }
 
@@ -837,12 +847,16 @@ export const carryOnTurn = async ({
             throw new Error('the conversation state could not be read');
         }
 
+        if ((answer.turn?.index ?? 0) < step.turnIndex) {
+            throw new Error('the harness began the conversation afresh');
+        }
+
         handlers.onKeepAlive?.();
         onRead(answer);
 
         const next = attachStep(answer);
 
-        if (next.kind !== 'none' && next.turnIndex !== step.turnIndex) {
+        if (next.kind !== 'none' && next.turnIndex > step.turnIndex) {
             handlers.onFrame(CLOSED_FRAME);
             onNextTurn(answer);
 
