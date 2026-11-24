@@ -62,8 +62,8 @@ The scripts below reach the APIs the same way.
 `just stack` runs the dev apis proxy (8083) and the Studio harness (8080)
 from an `ai` checkout beside this one, Mailpit, and the dev server, in one
 terminal. Each output line starts with its service's name (`apis`, `ai`,
-`mail`, `web`), in its own color on a terminal, with lines that look like
-errors in red (`NO_COLOR=1` turns color off). Ctrl-C stops them all:
+`mail`, `web`), in its own colour on a terminal, with lines that look like
+errors in red (`NO_COLOR=1` turns colour off). Ctrl-C stops them all:
 
 ```bash
 gcloud auth login   # the proxy cannot prompt for it under `stack`
@@ -81,8 +81,9 @@ expires, leaves the others running. Postgres runs outside `stack` (see
 
 Mailpit catches the site's mail locally (`brew install mailpit`); `just
 stack` starts it when it is installed and port 1025 is free, and its inbox
-is at <http://localhost:8025>. Like the dev server, it listens on every
-interface, so another machine on the network can open the inbox too. Point the site at it in `.env.local`:
+is at <http://localhost:8025>. It listens on 127.0.0.1 only, since the
+inbox holds sign-in codes that anyone on the network could otherwise read.
+Point the site at it in `.env.local`:
 
 ```bash
 SMTP_HOST=localhost

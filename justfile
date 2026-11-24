@@ -118,7 +118,7 @@ stack: mail-cert
     fi
     # Prefix each output line with the service name, flushed line by line.
     # On a terminal (and without NO_COLOR) each service's prefix has its own
-    # color, and a line that looks like an error is shown in red.
+    # colour, and a line that looks like an error is shown in red.
     color=0
     if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then color=1; fi
     run() {
@@ -143,7 +143,7 @@ stack: mail-cert
     elif lsof -nP -iTCP:{{MAIL_SMTP}} -sTCP:LISTEN >/dev/null 2>&1; then
         echo "warning: port {{MAIL_SMTP}} is taken, so Mailpit isn't started. Stop the other mail catcher to use this one." >&2
     else
-        run mail 33 mailpit --smtp "[::]:{{MAIL_SMTP}}" --listen "[::]:{{MAIL_UI}}" \
+        run mail 33 mailpit --smtp 127.0.0.1:{{MAIL_SMTP}} --listen 127.0.0.1:{{MAIL_UI}} \
             --smtp-tls-cert "{{MAIL_DIR}}/cert.pem" --smtp-tls-key "{{MAIL_DIR}}/key.pem" --smtp-require-starttls
     fi
     run web  32 just dev
