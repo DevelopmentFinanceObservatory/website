@@ -76,8 +76,11 @@ export const MAX_CONVERSATION_ID_CHARS = 256;
 /**
  * Whether `id` can name a conversation: not empty, at most
  * MAX_CONVERSATION_ID_CHARS long, and free of control characters (U+0000
- * makes a Postgres read throw). Migration 0027 applies the same rule in SQL
- * to the harness ids saved before it.
+ * makes a Postgres read throw). `conversation.agent_session_id` and a saved
+ * conversation's `sessionId` can still hold ids this refuses. Migration
+ * 0027_clear_refused_harness_ids cleared the column only on databases that ran
+ * it, which excludes the dev database, and the previous revision stores any id
+ * while a deploy rolls out. readSavedConversation reads such an id as none.
  */
 export const isConversationId = (id: string): boolean =>
     id.length > 0 && id.length <= MAX_CONVERSATION_ID_CHARS && !/\p{Cc}/u.test(id);
