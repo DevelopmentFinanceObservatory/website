@@ -1,5 +1,9 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useMemo } from 'react';
+
+import SourceSearch from './SourceSearch';
 import styles from './Sources.module.scss';
 import { SOURCE_SWATCHES } from './sourcesData';
 
@@ -9,18 +13,25 @@ import PageFade from '@/components/molecules/PageFade/PageFade';
 import PageHero from '@/components/molecules/PageHero/PageHero';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { useUrlParam } from '@/hooks/useUrlParam';
-import { filterGroups, filterId, orderCards } from '@/lib/sources/filters';
 import type { SourceCard } from '@/lib/sources/graph';
+import {
+    filterCards,
+    legacyFilter,
+    parseQuery,
+    parseVia,
+    type Provenance,
+    provenanceGroups,
+    publisherOptions,
+    summaryLine,
+} from '@/lib/sources/search';
 
-const parseFilter = (raw: string | null, known: Set<string>): string[] =>
-    (raw ?? '').split(',').filter((id) => known.has(id));
-
-const serializeFilter = (selected: string[]) => (selected.length ? selected.join(',') : null);
+const serializeQuery = (q: string) => (q.trim() ? q : null);
+const serializeVia = (via: Provenance | null) => via;
 
 /**
  * Data → Sources: where the data comes from. The dark hero (title, count,
- * lead, the filters), then the source cards on the light ground,
- * three to a row.
+ * lead, the filters, the summary line), then the source cards on the light
+ * ground, three to a row.
  *
  * Cards come from the graph (see lib/sources/graph.ts) in one server-side
  * read of the source catalogue: each Dataset row carries the name,
@@ -28,40 +39,62 @@ const serializeFilter = (selected: string[]) => (selected.length ? selected.join
  * card shows, under its publisher and Data Commons. A card shows only what
  * its row declares: a good share of the graph's Datasets carry a name and a
  * publisher and nothing else, so those render in a short form with no empty
- * fields. The selection lives in the URL (?filter=dc/s/WorldBank) so a
- * filtered view is shareable and survives a reload.
+ * fields.
  *
- * The filters (lib/sources/filters.ts) are one chip per publisher the
- * Observatory brings itself, then one chip for every Data Commons by Google
- * source (`base`) and one for every UN System Data Commons source
- * (`un_system`). Within an origin chip, cards sort by publisher then title, and each card's
- * org line reads "<publisher> via <origin>", or "via <origin>" alone when the
- * title is the publisher's own name.
+ * Two filters (lib/sources/search.ts), both in the URL so a filtered view
+ * is shareable and survives a reload, Back and Forward. The search box
+ * (`?q=`, SourceSearch) matches part of a title or a publisher's name and
+ * offers the matching publishers to pick, so "World Bank" lists every World
+ * Bank source, the one the Observatory imports itself alongside the ones
+ * that arrive via Google. The chips (`?via=`) narrow by
+ * provenance: the Observatory's own imports, or the Data Commons that
+ * delivered the data. Each federated card's org line says which; a card
+ * the Observatory imports itself carries no "via". With a filter on, the
+ * summary line reports how many sources are showing and their split by
+ * provenance.
  */
 const Sources = ({ sources }: { sources: SourceCard[] }) => {
     const sectionRef = useReveal<HTMLElement>();
 
-    // The chips' colours are the page's own content colours, and a card's
-    // swatch follows its chip.
-    const groups = filterGroups(sources).map((group, index) => ({
+    // The chips' colours are the page's own content colours, one per
+    // provenance, and a card's swatch follows its provenance's chip.
+    const groups = provenanceGroups(sources).map((group, index) => ({
         ...group,
-        color: SOURCE_SWATCHES[index % SOURCE_SWATCHES.length],
+        color: SOURCE_SWATCHES[index % SOURCE_SWATCHES.length]!,
     }));
-    const groupIds = new Set(groups.map((group) => group.id));
 
-    const [selected, setSelected] = useUrlParam(
-        'filter',
-        (raw) => parseFilter(raw, groupIds),
-        serializeFilter,
+    // The data drawer's `?filter=` link fills whichever filter it names,
+    // unless the URL carries that filter itself. Read through Next's params
+    // so the server render and the hydration agree.
+    const params = useSearchParams();
+    const legacy = useMemo(() => legacyFilter(params.get('filter'), sources), [params, sources]);
+
+    const [q, setQ] = useUrlParam(
+        'q',
+        useCallback((raw: string | null) => parseQuery(raw ?? legacy.q ?? null), [legacy]),
+        serializeQuery,
+    );
+    const [via, setVia] = useUrlParam(
+        'via',
+        useCallback(
+            (raw: string | null) => parseVia(raw ?? legacy.via ?? null, sources),
+            [legacy, sources],
+        ),
+        serializeVia,
+        { history: 'push' },
     );
 
-    const counts = Object.fromEntries(groups.map((group) => [group.id, group.count]));
-    const ordered = orderCards(sources);
-    const visible =
-        selected.length === 0
-            ? ordered
-            : ordered.filter((source) => selected.includes(filterId(source)));
-    const colorOf = (id: string) => groups.find((group) => group.id === id)?.color;
+    const visible = filterCards(sources, { q, via });
+    // Each chip counts the cards the search field leaves it, so the counts
+    // say what picking the chip would show.
+    const searched = filterCards(sources, { q, via: null });
+    const counts = Object.fromEntries(
+        groups.map((group) => [
+            group.id,
+            searched.filter((source) => source.dataCommons.id === group.id).length,
+        ]),
+    );
+    const colorOf = (id: Provenance) => groups.find((group) => group.id === id)?.color;
 
     return (
         <section ref={sectionRef} className={styles.section}>
@@ -77,21 +110,31 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                 <p className={styles.filtersLabel} data-reveal="text" style={revealIndex(2)}>
                     Filters
                 </p>
-                <div data-reveal style={revealIndex(3)}>
-                    {/* One publisher at a time: a source belongs to exactly
-                        one group, so stacking chips widened the list where a
-                        filter is read as narrowing it (QA-15). */}
+                <div className={styles.controls} data-reveal style={revealIndex(3)}>
+                    <SourceSearch
+                        value={q}
+                        onChange={setQ}
+                        options={publisherOptions(sources, q)}
+                    />
+                    {/* One provenance at a time: a source has exactly one, so
+                        stacking chips would widen the list where a filter is
+                        read as narrowing it (QA-15). */}
                     <FilterChips
                         groups={groups}
                         counts={counts}
-                        selected={selected}
-                        onChange={setSelected}
+                        selected={via ? [via] : []}
+                        onChange={(next) => setVia(next[0] ?? null)}
                         mode="single"
                     />
                 </div>
+                {/* Filled only with a filter on: with none, the chips' counts
+                    already say the split. */}
+                <p className={styles.summary} aria-live="polite">
+                    {q.trim() !== '' || via ? summaryLine(visible) : null}
+                </p>
             </PageHero>
 
-            <ul className={styles.grid} key={selected.join(',') || 'all'}>
+            <ul className={styles.grid} key={`${via ?? 'all'}:${q}`}>
                 {visible.map((source, index) => (
                     <li key={source.id} className={styles.card} style={revealIndex(index)}>
                         {/* The whole card opens the source's page. */}
@@ -103,7 +146,7 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                         <h2 className={styles.cardTitle}>
                             <span
                                 className={styles.swatch}
-                                style={{ backgroundColor: colorOf(filterId(source)) }}
+                                style={{ backgroundColor: colorOf(source.dataCommons.id) }}
                                 aria-hidden="true"
                             />
                             {source.title}
