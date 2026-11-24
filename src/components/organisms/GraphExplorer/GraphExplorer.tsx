@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+
 import { BreakableId } from './BreakableId';
 import {
     FullModelProvider,
@@ -31,6 +33,7 @@ import {
     type ExploreView,
 } from '@/lib/graphExplorer/explore';
 import { LOADING } from '@/lib/graphExplorer/load';
+import { navigationFocus } from '@/lib/graphExplorer/navFocus';
 import type { DatasetFilter, ListScope, Model } from '@/lib/graphExplorer/model';
 import {
     awaitedDataset,
@@ -189,6 +192,10 @@ const GraphExplorer = () => {
     const model = data.model.status === 'ready' ? data.model.value : null;
     const { view } = navigation.state;
     const { show } = navigation.state;
+    const mainRef = useRef<HTMLElement>(null);
+    const [focusAfterMove] = useState(navigationFocus);
+    const viewKey = exploreQuery({ view, ...NO_CARRIED });
+    useEffect(() => focusAfterMove.settle(viewKey, mainRef.current));
     const awaitedOf = (id: string | null) =>
         data.full === null ? null : awaitedDataset(data.full, [id], data.usage);
     const awaited = awaitedOf(view.kind === 'dataset' ? view.id : null);
@@ -215,10 +222,7 @@ const GraphExplorer = () => {
                     <TermSourcesProvider>
                         <div className={styles.explorer}>
                             <TopBar />
-                            <main
-                                className={styles.main}
-                                key={exploreQuery({ view, ...NO_CARRIED })}
-                            >
+                            <main className={styles.main} key={viewKey} ref={mainRef}>
                                 {/* The full model is in whenever the scoped one is, since both build from the DFO pair. */}
                                 {data.model.status === 'ready' && data.full !== null ? (
                                     awaited !== null ? (

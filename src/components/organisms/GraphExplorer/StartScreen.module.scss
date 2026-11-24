@@ -9,6 +9,13 @@
     max-width: rem(900);
 }
 
+.title {
+    @include font-size(20px, 1.1);
+
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
 .columns {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, #{rem(260)}), 1fr));
