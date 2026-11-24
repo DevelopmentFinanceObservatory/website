@@ -81,6 +81,8 @@ import {
     owedRemovalsOf,
     drainOwedRemovals,
     nextResend,
+    owedRetryAfter,
+    againstWhenSent,
     settle,
     type OwedRemoval,
     type ResendOutcome,
@@ -334,6 +336,9 @@ const SESSION_GONE_NOTE =
     '_The server no longer holds this conversation. Send your message again to continue it._';
 
 const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
+// How long the read after a stale resend of an owed removal may take before
+// the drain leaves the card for the run (rereadCanvas).
+const REREAD_TIMEOUT_MS = 15_000;
 
 // The state with the chat line set; `statusSince` moves only when the label
 // changes.
@@ -498,7 +503,7 @@ export const useChat = (
         owedRef.current = update(owedRef.current);
         setOwedRemovals(owedRef.current);
     }, []);
-    const removingRef = useRef(new Set<string>());
+    const removingRef = useRef(new Map<string, number>());
     // The cards drawn from a read before their turn closed, which wait for
     // the stored card a later read brings (reconcileCards).
     const awaitingStoredRef = useRef(new Set<string>());
@@ -907,7 +912,9 @@ export const useChat = (
                     prev,
                 ),
             );
-            removes.forEach((id) => removingRef.current.add(id));
+            removes.forEach((id) =>
+                removingRef.current.set(id, (removingRef.current.get(id) ?? 0) + 1),
+            );
 
             // The entries these removes owe, which the harness's answer
             // settles (confirm). A later Remove of the same card owes its own.
@@ -936,7 +943,15 @@ export const useChat = (
             return canvasEditsRef.current
                 .enqueue(session, operations, against)
                 .then((answered): ResendOutcome => {
-                    removes.forEach((id) => removingRef.current.delete(id));
+                    removes.forEach((id) => {
+                        const left = (removingRef.current.get(id) ?? 1) - 1;
+
+                        if (left > 0) {
+                            removingRef.current.set(id, left);
+                        } else {
+                            removingRef.current.delete(id);
+                        }
+                    });
 
                     if (
                         generationRef.current !== generation ||
@@ -2548,6 +2563,7 @@ export const useChat = (
             turnOpen: boolean,
         ) => {
             const generation = generationRef.current;
+            const sessionLeft = sessionLeftRef.current;
             const onCanvas = new Set(manifest.blocks.map((block) => block.component_id));
 
             void drawManifestCards({
@@ -2555,7 +2571,8 @@ export const useChat = (
                 held: revisionsRef.current,
                 seen: new Set(widgetsRef.current.map((widget) => widget.id)),
                 inFlight: cardReadsRef.current,
-                isCurrent: () => generationRef.current === generation,
+                isCurrent: () =>
+                    generationRef.current === generation && sessionLeftRef.current === sessionLeft,
                 keep: (id) => legacyRef.current?.keep(id),
                 onDrawn: (block, read) => {
                     const id = block.component_id;
@@ -2621,20 +2638,18 @@ export const useChat = (
     // settings of the card each replaced.
     const reconcileCards = useCallback(
         (read: ConversationRead, stored: ReadonlyMap<string, StoredCard>) => {
-            // A read with no open turn closed every turn, so a card it does
-            // not carry waits for nothing.
-            if (!isOpenTurn(read)) {
-                for (const id of awaitingStoredRef.current) {
-                    if (!stored.has(id)) {
-                        awaitingStoredRef.current.delete(id);
-                    }
-                }
-            }
-
-            // A card whose drawn widget the page does not hold yet waits on.
+            // A card whose drawn widget the page does not hold yet waits on
+            // while a turn is open. A read with no open turn closed every
+            // turn, so after it no card waits: one it carries is reconciled
+            // here or drawn from its stored card, and one it does not carry
+            // gets none.
             const ids = [...awaitingStoredRef.current].filter(
                 (id) => stored.has(id) && widgetsRef.current.some((widget) => widget.id === id),
             );
+
+            if (!isOpenTurn(read)) {
+                awaitingStoredRef.current.clear();
+            }
 
             if (ids.length === 0) {
                 return;
@@ -2771,40 +2786,74 @@ export const useChat = (
         },
         [syncCanvas],
     );
-    // Read the harness's canvas again and take it, drawing the cards the
-    // page lacks or holds at an older revision, after an owed removal's
-    // resend met a canvas that had moved on.
+    // Read the harness's state again after an owed removal's resend met a
+    // canvas that had moved on, and take it (takeRead). While a request is
+    // in flight, a read can lack the turn a prompt's POST is opening, so the
+    // page takes only the manifest and draws the cards the page holds or
+    // whose turn the transcript holds, leaving the rest to the next read.
+    // True when the page took a newer canvas.
     const rereadCanvas = useCallback(
-        async (session: string) => {
+        async (session: string): Promise<boolean> => {
             const generation = generationRef.current;
-            const answer = await readConversation(session, readSince(messagesRef.current));
+            const sessionLeft = sessionLeftRef.current;
+            const before = canvasRef.current;
+            const answer = await readConversation(
+                session,
+                readSince(messagesRef.current),
+                AbortSignal.timeout(REREAD_TIMEOUT_MS),
+            ).catch(() => null);
 
             if (
-                generationRef.current === generation &&
-                sessionRef.current === session &&
-                answer &&
-                !isStateRefusal(answer) &&
-                answer.manifest
+                generationRef.current !== generation ||
+                sessionLeftRef.current !== sessionLeft ||
+                sessionRef.current !== session ||
+                !answer ||
+                isStateRefusal(answer)
             ) {
+                return false;
+            }
+
+            if (inFlightRef.current === 0) {
+                takeRead(answer);
+            } else if (answer.manifest) {
+                const turnOf = cardTurns(messagesRef.current, answer.closed_since);
+                const held = new Set(widgetsRef.current.map((widget) => widget.id));
+
                 applyManifest(answer.manifest);
                 drawCards(
-                    answer.manifest,
-                    cardTurns(messagesRef.current, answer.closed_since),
+                    {
+                        ...answer.manifest,
+                        blocks: answer.manifest.blocks.filter(
+                            (block) =>
+                                held.has(block.component_id) || turnOf.has(block.component_id),
+                        ),
+                    },
+                    turnOf,
                     storedCards(answer.closed_since),
                     isOpenTurn(answer),
                 );
             }
+
+            return canvasRef.current !== before;
         },
-        [applyManifest, drawCards],
+        [applyManifest, drawCards, takeRead],
     );
     // Each canvas the page takes settles the owed removals it confirms
     // (settle), and the ones the harness still holds go again, one card at a
-    // time and each against the canvas's revision when it goes
-    // (drainOwedRemovals), so one card the harness has dropped since refuses
-    // no other card's removal. One run goes at a time per conversation, and
-    // it reads the set and the canvas afresh before each send. A reopened
-    // page holds them until it has taken the harness's state (`owedHeld`).
+    // time and each against the canvas's revision when the edit queue
+    // reaches it (drainOwedRemovals), so one card the harness has dropped
+    // since refuses no other card's removal. One run goes at a time per
+    // conversation, and it reads the set and the canvas afresh before each
+    // send. A run that left cards behind runs again after a wait that
+    // doubles with each such run in a row (owedRetryAfter). A reopened page
+    // holds them until it has taken the harness's state (`owedHeld`).
     const drainingRef = useRef<number | null>(null);
+    const owedRetryRef = useRef<{ runs: number; timer?: ReturnType<typeof setTimeout> }>({
+        runs: 0,
+    });
+    const [owedRetryTick, setOwedRetryTick] = useState(0);
+
+    useEffect(() => () => clearTimeout(owedRetryRef.current.timer), []);
 
     useEffect(() => {
         const settled = settle(owedRef.current, canvas, revisionsRef.current);
@@ -2821,6 +2870,7 @@ export const useChat = (
         }
 
         drainingRef.current = generation;
+        clearTimeout(owedRetryRef.current.timer);
         void drainOwedRemovals({
             next: (skip) => {
                 if (generationRef.current !== generation || sessionRef.current !== session) {
@@ -2842,7 +2892,10 @@ export const useChat = (
                     skip,
                 });
             },
-            send: ({ id, against }) => syncCanvas([{ op: 'remove', component_id: id }], against),
+            send: ({ id, against }) =>
+                syncCanvas([{ op: 'remove', component_id: id }], () =>
+                    againstWhenSent(against, canvasRef.current),
+                ),
             reread: () => rereadCanvas(session),
             sent: resentRef.current,
             onCapped: (id, outcome) => {
@@ -2852,12 +2905,28 @@ export const useChat = (
                     outcome,
                 );
             },
-        }).finally(() => {
-            if (drainingRef.current === generation) {
-                drainingRef.current = null;
-            }
-        });
-    }, [canvas, owedHeld, owedRemovals, rereadCanvas, setOwed, syncCanvas]);
+        })
+            .then((left) => {
+                if (generationRef.current !== generation) {
+                    return;
+                }
+
+                const retry = owedRetryRef.current;
+
+                retry.runs = left.length === 0 ? 0 : retry.runs + 1;
+
+                const wait = owedRetryAfter(retry.runs);
+
+                if (wait !== null) {
+                    retry.timer = setTimeout(() => setOwedRetryTick((tick) => tick + 1), wait);
+                }
+            })
+            .finally(() => {
+                if (drainingRef.current === generation) {
+                    drainingRef.current = null;
+                }
+            });
+    }, [canvas, owedHeld, owedRemovals, owedRetryTick, rereadCanvas, setOwed, syncCanvas]);
 
     // Bring a reopened conversation up to the harness's copy (see
     // conversationState.ts). Its closed turns, read from the lowest one the
@@ -3147,6 +3216,8 @@ export const useChat = (
         setOwed(() => []);
         removingRef.current.clear();
         resentRef.current.clear();
+        clearTimeout(owedRetryRef.current.timer);
+        owedRetryRef.current.runs = 0;
         setOwedHeld(false);
         awaitingStoredRef.current.clear();
         askedRef.current.clear();
@@ -3219,6 +3290,8 @@ export const useChat = (
             // go again once the page holds the canvas (the effect above).
             removingRef.current.clear();
             resentRef.current.clear();
+            clearTimeout(owedRetryRef.current.timer);
+            owedRetryRef.current.runs = 0;
             awaitingStoredRef.current.clear();
             setOwed(() => owedRemovalsOf(saved));
             // The saved canvas can be older than the harness's, so the owed

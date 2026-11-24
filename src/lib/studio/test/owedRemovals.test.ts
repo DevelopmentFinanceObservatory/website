@@ -10,11 +10,14 @@ import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { createCanvasEdits } from '../canvasEdits.ts';
 import { takeManifest, withoutRemovedCards, type CanvasBaseline } from '../composition.ts';
 import {
+    againstWhenSent,
     confirm,
     drainOwedRemovals,
     forgive,
     owe,
     OWED_RESENDS,
+    OWED_RETRY_MAX_MS,
+    owedRetryAfter,
     nextResend,
     owedRemovalsOf,
     settle,
@@ -139,7 +142,13 @@ const page = ({
 
                 return 'answered';
             },
-            reread: async () => take(),
+            reread: async () => {
+                const before = state.canvas;
+
+                take();
+
+                return state.canvas !== before;
+            },
             sent: counts,
             onCapped: (id, outcome) => capped.push([id, outcome]),
         });
@@ -315,6 +324,55 @@ test('a card refused as stale on every send stops at OWED_RESENDS and is named o
     assert.equal(run.sent.length, OWED_RESENDS);
     assert.deepEqual(run.capped, [['cmp_x', 'stale']]);
     assert.deepEqual(run.harness.held, ['cmp_a', 'cmp_x']);
+});
+
+test('a resend goes against the revision the canvas holds when the edit queue reaches it', async () => {
+    let canvas: CanvasBaseline = baseline(['cmp_a', 'cmp_x']);
+    const seen: [string, number | undefined][] = [];
+    const edits = createCanvasEdits({
+        mutate: async (_session, operations, against) => {
+            seen.push([operations[0]!.op, against?.revision]);
+            canvas = { ...canvas, revision: canvas.revision + 1 };
+
+            return manifest(canvas.revision, [['cmp_a', 1]]);
+        },
+        onManifest: () => {},
+        onFailure: () => assert.fail('the harness answered'),
+    });
+    const resend = nextResend({
+        owed: owe([], 'cmp_x', 1),
+        baseline: canvas,
+        inFlight: new Set(),
+        sent: new Map(),
+        held: false,
+    })!;
+
+    // The user's pin is queued ahead of the resend and moves the canvas to 4.
+    const pinned = edits.enqueue('conv', [{ op: 'pin', component_id: 'cmp_a' }]);
+    const removed = edits.enqueue('conv', [{ op: 'remove', component_id: 'cmp_x' }], () =>
+        againstWhenSent(resend.against, canvas),
+    );
+
+    assert.deepEqual(await Promise.all([pinned, removed]), [true, true]);
+    assert.deepEqual(seen, [
+        ['pin', undefined],
+        ['remove', 4],
+    ]);
+    // A page that holds another composition by then sends the one picked,
+    // which the harness refuses.
+    assert.deepEqual(
+        againstWhenSent(resend.against, { ...canvas, compositionId: 'cps_2' }),
+        resend.against,
+    );
+});
+
+test('a run that leaves cards behind runs again after a wait that doubles', () => {
+    assert.equal(owedRetryAfter(0), null);
+    assert.deepEqual(
+        [1, 2, 3].map((runs) => owedRetryAfter(runs)),
+        [2_000, 4_000, 8_000],
+    );
+    assert.equal(owedRetryAfter(20), OWED_RETRY_MAX_MS);
 });
 
 test('a resend goes with the composition and revision it is against, so a canvas changed since refuses it', async (t) => {

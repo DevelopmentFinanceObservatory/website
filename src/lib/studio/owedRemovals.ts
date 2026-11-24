@@ -171,7 +171,7 @@ export const nextResend = ({
 }: {
     owed: readonly OwedRemoval[];
     baseline: CanvasBaseline | null;
-    inFlight: ReadonlySet<string>;
+    inFlight: { has: (id: string) => boolean };
     sent: ReadonlyMap<string, number>;
     held: boolean;
     skip?: ReadonlySet<string>;
@@ -203,13 +203,41 @@ export const nextResend = ({
 export type ResendOutcome = 'answered' | 'gone' | 'stale' | 'failed';
 
 /**
+ * The composition and revision a resend goes against when the edit queue
+ * reaches it: `against`'s composition at the revision `baseline` holds by
+ * then, so the edits queued ahead of it do not make it stale. `against`
+ * itself once the page holds another composition or none, which the
+ * harness then refuses.
+ */
+export const againstWhenSent = (
+    against: OwedResend['against'],
+    baseline: CanvasBaseline | null,
+): OwedResend['against'] =>
+    baseline?.compositionId === against.compositionId
+        ? { compositionId: against.compositionId, revision: baseline.revision }
+        : against;
+
+/** The first wait before a drain run that left cards behind runs again,
+ *  in milliseconds. Each such run in a row doubles it, up to
+ *  OWED_RETRY_MAX_MS. */
+export const OWED_RETRY_MS = 2_000;
+export const OWED_RETRY_MAX_MS = 60_000;
+
+/** The wait before the drain runs again after `runs` runs in a row left
+ *  cards behind (drainOwedRemovals), or null after a run that left none. */
+export const owedRetryAfter = (runs: number): number | null =>
+    runs === 0 ? null : Math.min(OWED_RETRY_MS * 2 ** (runs - 1), OWED_RETRY_MAX_MS);
+
+/**
  * Send the owed removals again, one card at a time and in order, until
  * `next` (nextResend over the page's current set and canvas) names none.
- * Each send waits for the answer before the next goes, so it goes against
- * the revision the previous answer left. A `stale` answer reads the canvas
- * again (`reread`) and goes on. A card that fails is left for the rest of
- * this run. Each send counts against its card in `sent`, and `onCapped`
- * hears a card that reaches OWED_RESENDS without the harness taking it off.
+ * Each send waits for the answer before the next goes. A `stale` answer
+ * reads the canvas again (`reread`, true when it took a newer canvas) and
+ * goes on. A card that fails, or whose re-read brought nothing newer, is
+ * left for the rest of this run. Each send counts against its card in
+ * `sent`, and `onCapped` hears a card that reaches OWED_RESENDS without the
+ * harness taking it off. Resolves with the cards left behind, which a later
+ * run sends again (owedRetryAfter).
  */
 export const drainOwedRemovals = async ({
     next,
@@ -220,10 +248,10 @@ export const drainOwedRemovals = async ({
 }: {
     next: (skip: ReadonlySet<string>) => OwedResend | null;
     send: (resend: OwedResend) => Promise<ResendOutcome>;
-    reread: () => Promise<void>;
+    reread: () => Promise<boolean>;
     sent: Map<string, number>;
     onCapped: (id: string, outcome: ResendOutcome) => void;
-}): Promise<void> => {
+}): Promise<string[]> => {
     const skip = new Set<string>();
 
     for (let resend = next(skip); resend; resend = next(skip)) {
@@ -233,9 +261,7 @@ export const drainOwedRemovals = async ({
 
         const outcome = await send(resend);
 
-        if (outcome === 'stale') {
-            await reread();
-        } else if (outcome === 'failed') {
+        if (outcome === 'failed' || (outcome === 'stale' && !(await reread()))) {
             skip.add(resend.id);
         }
 
@@ -243,4 +269,6 @@ export const drainOwedRemovals = async ({
             onCapped(resend.id, outcome);
         }
     }
+
+    return [...skip].filter((id) => (sent.get(id) ?? 0) < OWED_RESENDS);
 };

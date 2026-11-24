@@ -64,8 +64,10 @@ export const refusedRemoves = (
 
 /** The composition and revision an edit is sent against (`composition_id`,
  *  `expected_revision`), which the harness refuses once the canvas has
- *  moved on. */
-export type EditAgainst = { compositionId: string; revision: number };
+ *  moved on. A function is read when the edit goes, each time it goes. */
+export type EditAgainst =
+    | { compositionId: string; revision: number }
+    | (() => { compositionId: string; revision: number });
 
 /** Serialise each session's canvas edits, so a Remove then an Add land in
  *  order. An edit refused as busy or briefly unavailable
@@ -91,7 +93,7 @@ export const createCanvasEdits = ({
     mutate: (
         session: string,
         operations: MutationOperation[],
-        against?: EditAgainst,
+        against?: { compositionId: string; revision: number },
     ) => Promise<CompositionManifest | null>;
     onManifest: (manifest: CompositionManifest) => void;
     onFailure: (operations: MutationOperation[], error: unknown) => void;
@@ -126,7 +128,11 @@ export const createCanvasEdits = ({
                     let failure: unknown;
 
                     try {
-                        const manifest = await mutate(session, operations, against);
+                        const manifest = await mutate(
+                            session,
+                            operations,
+                            typeof against === 'function' ? against() : against,
+                        );
 
                         if (manifest) {
                             if (queuedGeneration === generation) {
