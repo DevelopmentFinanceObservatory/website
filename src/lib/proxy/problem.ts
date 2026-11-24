@@ -15,6 +15,7 @@ export const TITLES = {
     401: 'Unauthorized',
     403: 'Forbidden',
     404: 'Not Found',
+    405: 'Method Not Allowed',
     413: 'Content Too Large',
     422: 'Unprocessable Content',
     429: 'Too Many Requests',
@@ -96,13 +97,19 @@ export const notFoundProblem = (path: string): Response =>
 /**
  * A 400 `request_invalid` problem document. `pointer` names the invalid
  * member of the request body, such as `/mode`, when one is at fault.
+ * `headers` go out with the document.
  */
-export const requestInvalidProblem = (detail: string, pointer?: string): Response =>
+export const requestInvalidProblem = (
+    detail: string,
+    pointer?: string,
+    headers?: Record<string, string>,
+): Response =>
     problem({
         status: 400,
         code: 'request_invalid',
         detail,
         retryable: false,
+        headers,
         extra: pointer ? { pointer } : undefined,
     });
 

@@ -343,15 +343,19 @@ test('forward: the Studio strips a key and otherwise ignores it', async () => {
     ] as Record<string, string>[]) {
         seen.length = 0;
 
-        const res = await call(headers, { surface: 'api', keys: false, bearer: 'studio-token' });
+        const res = await call(headers, {
+            counted: verdictOf(120),
+            surface: undefined,
+            bearer: 'studio-token',
+        });
 
         assert.equal(res.status, 200);
         assert.equal(seen[0]!.authorization, 'Bearer studio-token');
         assert.equal(seen[0]!['x-api-key'], undefined);
     }
 
-    // Counted by address only, never looked up.
-    assert.ok(log.every((entry) => entry === 'address:api'));
+    // Counted once by the Studio proxy itself, never looked up here.
+    assert.deepEqual(log, []);
 });
 
 test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anonymous', async () => {
@@ -379,7 +383,7 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
     // /mcp ignores keys, so there is nothing to count.
     await call({ 'x-api-key': KEY }, { surface: 'mcp' });
     // The Studio ignores keys whatever the switch says.
-    await call({ 'x-api-key': KEY }, { keys: false });
+    await call({ 'x-api-key': KEY }, { counted: verdictOf(120), surface: undefined });
 
     assert.deepEqual(
         lines.map((line) => JSON.parse(line)),

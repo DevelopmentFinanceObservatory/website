@@ -9,6 +9,16 @@
     max-width: rem(900);
 }
 
+// The screen's title for focus and screen readers, which the sections below already state to the eye.
+.title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    white-space: nowrap;
+    clip-path: inset(50%);
+}
+
 .columns {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, #{rem(260)}), 1fr));

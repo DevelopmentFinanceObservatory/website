@@ -14,6 +14,7 @@ import {
     spanText,
     triesText,
     turnView,
+    withTurnStamps,
     type StepRow,
     type TurnViewInput,
 } from '../activityView.ts';
@@ -616,4 +617,55 @@ test('message turns count back from the last Activity entry', async (t) => {
     await t.test('a restore with no prompts has no turns or plans', () =>
         assert.deepEqual(read([], turns(1)), { turns: [], plans: {} }),
     );
+
+    // A state read placed another tab's turn, page turn 4, before page
+    // turn 3: each prompt keeps the turn it was stamped with.
+    await t.test('a stamped prompt keeps its turn wherever a read placed it', () =>
+        assert.deepEqual(
+            read(
+                [
+                    { role: 'user', text: 'one', turn: 1 },
+                    { role: 'bot', text: '' },
+                    { role: 'user', text: 'two', turn: 2 },
+                    { role: 'bot', text: '' },
+                    { role: 'user', text: 'other tab', turn: 4 },
+                    { role: 'bot', text: '', plan: plan('D') },
+                    { role: 'user', text: 'three', turn: 3 },
+                    { role: 'bot', text: '', plan: plan('C') },
+                ],
+                turns(4),
+                [
+                    { id: 'c', turn: 3 },
+                    { id: 'd', turn: 4 },
+                ],
+            ),
+            {
+                turns: [1, 1, 2, 2, 4, 4, 3, 3],
+                plans: { 3: plan('C'), 4: plan('D') },
+                cards: [[], [], ['d'], ['c']],
+            },
+        ),
+    );
+
+    // Stamping a save from before stamps numbers it as it rendered, so a
+    // fork of a canvas share keeps the turns it counted back from Activity.
+    await t.test('an unstamped save renders as before once stamped', () => {
+        const saved: ChatMessage[] = [
+            { role: 'bot', text: 'Ask about development finance.' },
+            ...exchange('six', 'F'),
+            { role: 'user', text: 'Kenya', answer: true },
+            ...exchange('seven'),
+        ];
+        const activity = [{ ...entry([]), turn: 7 }];
+        const restored = withTurnStamps(saved, activity);
+
+        assert.deepEqual(read(restored, activity), read(saved, activity));
+        assert.deepEqual(
+            restored.flatMap((message) =>
+                message.role === 'user' && !message.answer ? [message.turn] : [],
+            ),
+            [6, 7],
+        );
+        assert.equal(withTurnStamps(restored, activity), restored);
+    });
 });

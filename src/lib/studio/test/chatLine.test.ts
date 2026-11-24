@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    BUSY_LINE,
+    busyWaitLine,
     createStallWatch,
     createStepLine,
     createWorkingGrace,
@@ -14,6 +16,7 @@ import {
     WORKING,
     WORKING_GRACE_MS,
     withEllipsis,
+    type ChatLine,
 } from '../chatLine.ts';
 import type { ActivityStepFrame } from '../wire.ts';
 
@@ -109,10 +112,7 @@ test('step line: each frame leaves the line the chat rule gives', async (t) => {
 
 // Drives the step line and the grace together, as useChat does, and returns
 // the labels the line shows after each tick of a timeline.
-const shown = (
-    t: test.TestContext,
-    timeline: ([at: number, ...step: Step] | [at: number])[],
-) => {
+const shown = (t: test.TestContext, timeline: ([at: number, ...step: Step] | [at: number])[]) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const apply = createStepLine();
     let label = 'start';
@@ -221,7 +221,11 @@ test('preamble line: the first sentence, on one line, capped', async (t) => {
 test('with ellipsis: one trailing ellipsis, however the label ends', async (t) => {
     const cases: [name: string, label: string, expected: string][] = [
         ['a plain label gains one', 'Searching', 'Searching…'],
-        ['a truncated preamble keeps its one', 'Checking the growth of…', 'Checking the growth of…'],
+        [
+            'a truncated preamble keeps its one',
+            'Checking the growth of…',
+            'Checking the growth of…',
+        ],
         ['three dots collapse to one', 'Searching...', 'Searching…'],
         ['a sentence period gives way to it', 'Checking GDP.', 'Checking GDP…'],
     ];
@@ -281,4 +285,30 @@ test('stopped reply: the preamble that arrived, else the stopped note', async (t
     for (const { name, preamble, expected } of cases) {
         await t.test(name, () => assert.equal(stoppedReply(preamble), expected));
     }
+});
+
+test("busy wait line: the wait shows the busy line, and its end gives back the turn's own line", () => {
+    const own: ChatLine = { label: 'Resolving the question', detail: null };
+    const busy: ChatLine = { label: BUSY_LINE, detail: null };
+    // A state updater may run twice with the same arguments (React's strict
+    // mode), so each call is made twice.
+    const twice = (current: ChatLine | null, held: ChatLine | null, seconds: number | null) => {
+        const first = busyWaitLine(current, held, seconds);
+
+        assert.deepEqual(busyWaitLine(current, first.held, seconds), first);
+
+        return first;
+    };
+
+    const waiting = twice(own, null, 4);
+
+    assert.deepEqual(waiting, { line: busy, held: own });
+    // A second wait keeps the turn's line held, not the busy line.
+    assert.deepEqual(twice(busy, waiting.held, 4), { line: busy, held: own });
+    assert.deepEqual(twice(busy, waiting.held, null).line, own);
+    // A line a frame set during the wait stands at its end.
+    assert.deepEqual(twice({ label: 'Working', detail: null }, own, null).line, {
+        label: 'Working',
+        detail: null,
+    });
 });

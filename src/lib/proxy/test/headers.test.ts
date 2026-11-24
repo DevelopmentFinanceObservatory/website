@@ -3,7 +3,8 @@
  * `mcp-*` header goes either way whatever its case, the cleaned x-dfo-client
  * label goes up, and the public x-dfo-trace-id and x-dfo-commit come back;
  * credentials, the caller headers and the other `x-dfo-*` headers are never
- * copied, bar the write token a route asks for in PRESENTATION_HEADERS.
+ * copied, bar the write token a route asks for in PRESENTATION_HEADERS and
+ * the turn index a Studio stream names (STUDIO_HEADERS).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -12,6 +13,7 @@ import {
     clientResponseHeaders,
     pick,
     PRESENTATION_HEADERS,
+    STUDIO_HEADERS,
     upstreamRequestHeaders,
 } from '../headers.ts';
 
@@ -154,6 +156,18 @@ test('clientResponseHeaders: carries the PRESENTATION_HEADERS a route asks for',
             'x-dfo-checked-at': '2026-10-29T09:00:00+00:00',
             'x-dfo-freshness': 'current',
         },
+    );
+});
+
+test('clientResponseHeaders: carries the turn index a Studio stream names', () => {
+    const upstream = new Headers({ 'x-dfo-turn-index': '4' });
+
+    assert.deepEqual([...clientResponseHeaders(upstream)], []);
+    assert.equal(
+        clientResponseHeaders(upstream, new Headers(), STUDIO_HEADERS.response).get(
+            'x-dfo-turn-index',
+        ),
+        '4',
     );
 });
 

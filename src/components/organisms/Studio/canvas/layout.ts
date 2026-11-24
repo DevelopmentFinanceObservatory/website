@@ -100,8 +100,8 @@ export const FILTER_KIND: Record<string, Widget['kind']> = {
 export type Rect = { col: number; row: number; w: number; h: number };
 export type Spot = { col: number; row: number };
 
-// A placed card. The slot carries its widget's data, so a card replaced by a
-// newer turn (`leaving`) can keep rendering while it fades out.
+// A placed card. The slot carries its widget's data, so a card taken off the
+// canvas (`leaving`) can keep rendering while it fades out.
 export type Slot = Rect & { z: number; widget: Widget; leaving?: boolean };
 export type Slots = Record<string, Slot>;
 

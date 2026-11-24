@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import { Fragment, useEffect, useRef, useState, type RefObject } from 'react';
 
 import styles from './PlanLedger.module.scss';
+import UnitChoice from './UnitChoice';
 
 import {
     canSwitch,
@@ -13,6 +14,8 @@ import {
     stepCount,
     switchPendingText,
     switchReply,
+    unitFromOptionId,
+    unitOptionId,
     yearsText,
     type PlanChoiceView,
     type PlanNotice,
@@ -101,16 +104,19 @@ const NoticeRegion = ({ notice, onRetry }: { notice: PlanNotice | null; onRetry?
 );
 
 /**
- * One scope choice or planner decision: its name, the value the plan holds,
- * "Changed" and the value it held when a switch moved it, and "Change",
- * which opens the options in place, drawn as a radio list: buttons in a
+ * One scope choice, unit row or planner decision: its name, the value the
+ * plan holds, "Changed" and the value it held when a switch moved it, and
+ * "Change", which opens the options in place, drawn as a radio list: buttons in a
  * group, the active one pressed, each picking its option at once. A partial
  * option names the years it covers and an unavailable one says why. While a
  * switch is in flight every option ignores clicks but keeps focus
  * (`aria-disabled`), and the picked one says the plan is updating, or
- * replanning on a planner decision, until the harness answers. When the plan
- * this row's switch produced arrives and the option that held focus is gone,
- * focus moves to "Change".
+ * replanning on a planner decision, until the harness answers. A unit row
+ * opens the unit chips instead, starting on the row's unit, with Send
+ * dimmed until the unit differs and while a switch is in flight, and the
+ * sent unit's pending words beside Send. When the plan this row's switch
+ * produced arrives and the option that held focus is gone, focus moves to
+ * "Change".
  */
 const ChoiceRow = ({
     choice,
@@ -190,7 +196,24 @@ const ChoiceRow = ({
                 </span>
             )}
             {reasons && choice.reason && <span className={styles.why}>{choice.reason}</span>}
-            {switchable && open && decision?.options && (
+            {switchable && open && choiceId && decision?.unit && (
+                <div className={styles.unit}>
+                    <UnitChoice
+                        // A plan that moves the row's unit starts the chips
+                        // over on it.
+                        key={unitOptionId(decision.unit.start)}
+                        offer={decision.unit}
+                        // Reopened while a switch runs or after it failed,
+                        // the chips show the unit that switch names.
+                        initial={unitFromOptionId(decision.unit, pending ?? failedOption ?? '')}
+                        sendDisabledUntilChanged
+                        busy={busy}
+                        pendingText={pending ? switchPendingText(choice.planner) : null}
+                        onSend={(unit) => onSwitch?.(choiceId, unitOptionId(unit))}
+                    />
+                </div>
+            )}
+            {switchable && open && !decision?.unit && decision?.options && (
                 <div className={styles.options} role="group" aria-label={choice.name}>
                     {decision.options.map((option) => {
                         const active = isActiveOption(decision, option);
@@ -227,7 +250,7 @@ const ChoiceRow = ({
                                 {isPending && (
                                     <span className={styles.optionTag}>
                                         <span className={styles.spin} />
-                                        {switchPendingText(choiceId)}
+                                        {switchPendingText(choice.planner)}
                                     </span>
                                 )}
                             </button>

@@ -16,7 +16,10 @@
  *
  * A composed unit's magnitude and price basis sit in brackets beside the
  * part they belong to ("Euro (constant 2020 prices) per Total population"),
- * so each stays with its own part.
+ * so each stays with its own part. A price basis names whose prices
+ * deflated the amount where the unit says ("constant 2024 prices, donor
+ * prices"), so a donor's and a recipient's amounts in one currency and base
+ * year read apart.
  *
  * The value is scaled by the unit's magnitude ("441.9 in millions" is
  * 441,900,000) before it is compacted once, so the face never says "M" and
@@ -81,14 +84,19 @@ const unitName = (unit: string): string => {
     return iso ? (CURRENCY_NAMES.of(iso) ?? iso) : spaceCamel(unit);
 };
 
-const priceBasis = (prices: string | null, baseYear: number | null): string | null => {
+// The price basis, then whose prices deflated the amount as its own phrase,
+// as the platform words it: "constant 2024 prices, donor prices".
+const priceBasis = ({ prices, base_year, deflation_basis }: StructuredUnit): string | null => {
     if (!prices) {
         return null;
     }
 
-    return prices === 'constant' && baseYear != null
-        ? `constant ${baseYear} prices`
-        : `${prices} prices`;
+    const basis =
+        prices === 'constant' && base_year != null
+            ? `constant ${base_year} prices`
+            : `${prices} prices`;
+
+    return deflation_basis ? `${basis}, ${deflation_basis} prices` : basis;
 };
 
 /** Whether a unit is a percentage: "Percent", "Percentage" or "%". */
@@ -111,7 +119,7 @@ const readStructured = (unit: StructuredUnit): UnitReading => {
         ...NO_UNIT,
         words: unit.currency ? unitName(unit.currency) : null,
         magnitude: scale === 1 ? null : unit.magnitude,
-        basis: priceBasis(unit.prices, unit.base_year),
+        basis: priceBasis(unit),
         scale,
     };
 };

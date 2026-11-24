@@ -45,7 +45,7 @@ type UseSlotsArgs = {
 
 /**
  * Where every card sits. Places widgets as they stream in; widgets that
- * vanished (replaced by a newer turn, or a reset) fade out in place before
+ * vanished (taken off the canvas, or a reset) fade out in place before
  * their slot is pruned. Newcomers get PRIORITY: they take the highest spot
  * honouring only pinned cards, and any unpinned veteran they crowd slides to
  * the nearest place that still fits. Also owns the content-fit of every card

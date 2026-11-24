@@ -14,7 +14,7 @@ import { useLiveCards } from '@/components/organisms/Studio/hooks/useLiveCards';
 import CardInfoPanel from '@/components/organisms/Studio/modals/CardInfoPanel';
 import { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import { useGridCell } from '@/hooks/useGridCell';
-import { canvasWidgetsOf } from '@/lib/chat/canvas';
+import { savedCanvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
@@ -86,7 +86,7 @@ const SingleCard = ({
  * The embeddable view (/embed/<id>), in the theme it was shared with. A card
  * share is that one card filling the frame; a canvas or conversation share
  * is the whiteboard alone, read-only, with the cards its canvas shows
- * (`canvasWidgetsOf`, as on /s/<id>) laid out as saved (panning and card
+ * (`savedCanvasWidgetsOf`, as on /s/<id>) laid out as saved (panning and card
  * tooltips work; nothing can be changed). Either way a card's
  * source line opens its More Info panel. A live share's data cards arrive
  * held and are filled here from the refresh route (see useLiveCards), and
@@ -103,7 +103,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const theme = deriveTheme(saved.theme ?? DEFAULT_THEME);
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const [infoCardId, setInfoCardId] = useState<string | null>(null);
-    const { widgets, live } = useLiveCards(shared, canvasWidgetsOf(saved));
+    const { widgets, live } = useLiveCards(shared, savedCanvasWidgetsOf(saved));
     const infoWidget = widgets.find((widget) => widget.id === infoCardId) ?? null;
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);

@@ -275,11 +275,12 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         thinking: false,
         clarify: null,
         plan: spec.plan ?? null,
-        agentRemovals: 0,
-        takeAgentRemoved: () => [],
+        droppedRefunds: 0,
+        localCards: { shown: [], hidden: [] },
+        pins: null,
         syncCanvas: noop,
-        reportHidden: noop,
-        canvasVersion: 0,
+        canvas: null,
+        pendingCards: new Map(),
         send: noop,
         unqueue: noop,
         answerClarify: noop,
@@ -291,7 +292,13 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         stop: noop,
         reset: noop,
         hydrate: noop,
-        snapshot: () => ({ sessionId: null, componentRefs: [], turnCount: turn, canvas: null }),
+        reattach: noop,
+        snapshot: () => ({
+            sessionId: null,
+            componentRefs: [],
+            turnCount: turn,
+            canvas: null,
+        }),
     };
 };
 
@@ -378,6 +385,8 @@ const Workspace = ({ spec, placed }: { spec: DemoSpec; placed: Placed[] }) => {
                     onShare={noop}
                 />
                 <ChatPanel
+                    draft=""
+                    onDraftChange={noop}
                     editTarget={null}
                     onClearEditTarget={noop}
                     chat={chatOf(spec)}

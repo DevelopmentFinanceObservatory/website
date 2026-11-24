@@ -441,7 +441,7 @@
 }
 
 .pickerSkip {
-    align-self: flex-start;
+    align-self: flex-end;
 }
 
 // Several questions: the open one sits in a step, answered ones on a dot
@@ -569,7 +569,7 @@
 }
 
 .pickerSend {
-    align-self: flex-start;
+    align-self: flex-end;
 }
 
 @keyframes picker-step-in {
@@ -597,7 +597,7 @@
 // and Safari would otherwise fade with it, taking the thumb at a thread's
 // resting bottom.
 .chatScroll {
-    @include scrollbar-visible(var(--color-stone));
+    @include scrollbar-visible;
 
     display: flex;
     flex: 1;
@@ -785,7 +785,7 @@
 
     // A code block scrolls sideways on its own; .chatScroll never does.
     pre {
-        @include scrollbar-visible(var(--color-stone), x);
+        @include scrollbar-visible($axis: x);
 
         max-width: 100%;
     }
@@ -803,7 +803,7 @@
     // `table` component), not the thread. Cells wrap only at spaces, so
     // .botText's overflow-wrap does not squeeze the columns to fit.
     .tableScroll {
-        @include scrollbar-visible(var(--color-stone), x);
+        @include scrollbar-visible($axis: x);
 
         max-width: 100%;
         overflow-wrap: normal;

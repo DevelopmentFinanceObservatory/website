@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
-import { createRemovalHold, placeCard, renameId, renameKey, takenOver } from '../cardReplace.ts';
+import { placeCard, renameId, renameKey, takenOver } from '../cardReplace.ts';
 import { widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated } from '../wire.ts';
 
@@ -111,38 +111,6 @@ test('takenOver: the replaced card, else the edited one, never the card itself',
     assert.equal(takenOver(id, { replaces: id, editing: replaced }), null);
     assert.equal(takenOver(id, { editing: id }), null);
     assert.equal(takenOver(id, {}), null);
-});
-
-test('createRemovalHold: a removal before its replacement frame is dropped at the end', () => {
-    const hold = createRemovalHold();
-
-    hold.begin();
-    assert.deepEqual(hold.remove([replaced]), []);
-    hold.replace(replaced);
-    assert.deepEqual(hold.end(), []);
-    assert.deepEqual(hold.remove([replaced]), [], 'a replaced card is never removed later');
-});
-
-test('createRemovalHold: an edited card removed and not redrawn goes at the end', () => {
-    const hold = createRemovalHold();
-
-    hold.begin();
-    assert.deepEqual(hold.remove([replaced, 'cmp_sibling']), []);
-    assert.deepEqual(hold.remove([replaced]), []);
-    assert.deepEqual(hold.end(), [replaced, 'cmp_sibling']);
-    assert.deepEqual(hold.end(), [], 'each removal goes once');
-});
-
-test('createRemovalHold: outside a turn a removal goes at once; reset forgets', () => {
-    const hold = createRemovalHold();
-
-    assert.deepEqual(hold.remove(['cmp_sibling']), ['cmp_sibling']);
-    hold.replace(replaced);
-    hold.begin();
-    hold.remove(['cmp_sibling']);
-    hold.reset();
-    assert.deepEqual(hold.end(), []);
-    assert.deepEqual(hold.remove([replaced]), [replaced]);
 });
 
 test('placeCard: an edit with no `replaces` moves the card into the new turn', () => {

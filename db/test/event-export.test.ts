@@ -149,6 +149,20 @@ test('exportRow drops a value its rule refuses', async (t) => {
     }
 });
 
+test('exportRow keeps the intent of every prompt Studio sends', async (t) => {
+    for (const intent of ['new', 'follow_up', 'edit', 'apply_choice', 'apply_unit']) {
+        await t.test(intent, () => {
+            const row = exportRow(
+                sourceEvent({ name: 'studio.prompt', props: { intent } }),
+                KEY,
+                RULES,
+            );
+
+            assert.deepEqual(row.props, { intent });
+        });
+    }
+});
+
 test('exportRow keeps a measures entry joined with `|`', () => {
     const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
     const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);
@@ -330,6 +344,31 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
         name: 'search.query',
         props: { measures: Array.from({ length: 11 }, (_, at) => `sv:Ind_${at}`) },
     }),
+    sourceEvent({
+        id: 10,
+        name: 'data.view',
+        page: '/embed/aB3dE5fG7h',
+        props: {
+            specIds: ['spec_a1', '-'],
+            contentVersions: ['cv_9f2e', '-'],
+            via: 'share',
+            host: 'blog.example',
+            caller: 'ip:0123456789abcdef0123456789abcdef',
+            internal_eng: false,
+        },
+    }),
+    sourceEvent({
+        id: 11,
+        name: 'data.view',
+        props: {
+            specIds: ['spec_a1'],
+            contentVersions: ['cv_9f2e'],
+            via: 'embedded',
+            shareId: 'aB3dE5fG7h',
+            caller: 'ip:ABC',
+            internal_eng: true,
+        },
+    }),
 ];
 
 // Version 1 pinned the first four sample rows, which version 2 leaves as they were.
@@ -393,74 +432,115 @@ const VERSION_1_ROWS: ExportRow[] = [
     },
 ];
 
+// Rows 5 to 9 are the version 2 rows, and version 3 exports them unchanged.
+const VERSION_2_ROWS: ExportRow[] = [
+    ...VERSION_1_ROWS,
+    {
+        id: 5,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `measures` holds a token with a space, so the whole list is dropped.
+        props: { specIds: ['spec_a1', 'spec_b2'], internal_eng: true },
+        export_rules: 'r',
+    },
+    {
+        id: 6,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'embed.view',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: {
+            shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+            kind: 'card',
+            viewer: 'other',
+            internal_eng: false,
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 7,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'studio.download',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { format: 'xlsx', bundle: true, kind: 'chart', cardId: 'c-1', shared: false },
+        export_rules: 'r',
+    },
+    {
+        id: 8,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `-` stands for a part with no measure and passes.
+        props: { measures: ['sv:Count_Person', '-'] },
+        export_rules: 'r',
+    },
+    {
+        id: 9,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // Eleven measures is over the list cap, so the list is dropped.
+        props: {},
+        export_rules: 'r',
+    },
+];
+
 // Each ROW_SHAPE_VERSION's rows for GOLDEN_SAMPLE under KEY, with rules
 // `r`. A change to the rows adds the next version with its rows, and an
 // entry never changes.
 const GOLDEN_ROWS: Record<number, ExportRow[]> = {
     1: VERSION_1_ROWS,
-    2: [
-        ...VERSION_1_ROWS,
+    2: VERSION_2_ROWS,
+    3: [
+        ...VERSION_2_ROWS,
         {
-            id: 5,
+            id: 10,
             created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'search.query',
-            page: null,
-            signed_in: false,
-            visitor_hash: null,
-            user_hash: null,
-            // `measures` holds a token with a space, so the whole list is dropped.
-            props: { specIds: ['spec_a1', 'spec_b2'], internal_eng: true },
-            export_rules: 'r',
-        },
-        {
-            id: 6,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'embed.view',
-            page: null,
+            name: 'data.view',
+            page: '/embed/:id',
             signed_in: false,
             visitor_hash: null,
             user_hash: null,
             props: {
-                shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
-                kind: 'card',
-                viewer: 'other',
+                specIds: ['spec_a1', '-'],
+                contentVersions: ['cv_9f2e', '-'],
+                via: 'share',
+                host: 'blog.example',
+                caller: 'ip:0123456789abcdef0123456789abcdef',
                 internal_eng: false,
             },
             export_rules: 'r',
         },
         {
-            id: 7,
+            id: 11,
             created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'studio.download',
+            name: 'data.view',
             page: null,
             signed_in: false,
             visitor_hash: null,
             user_hash: null,
-            props: { format: 'xlsx', bundle: true, kind: 'chart', cardId: 'c-1', shared: false },
-            export_rules: 'r',
-        },
-        {
-            id: 8,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'search.query',
-            page: null,
-            signed_in: false,
-            visitor_hash: null,
-            user_hash: null,
-            // `-` stands for a part with no measure and passes.
-            props: { measures: ['sv:Count_Person', '-'] },
-            export_rules: 'r',
-        },
-        {
-            id: 9,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'search.query',
-            page: null,
-            signed_in: false,
-            visitor_hash: null,
-            user_hash: null,
-            // Eleven measures is over the list cap, so the list is dropped.
-            props: {},
+            // A `via` the site never sends, a share id the rule does not take
+            // and a malformed `caller` are dropped.
+            props: {
+                specIds: ['spec_a1'],
+                contentVersions: ['cv_9f2e'],
+                internal_eng: true,
+            },
             export_rules: 'r',
         },
     ],
