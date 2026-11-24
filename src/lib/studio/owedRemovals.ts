@@ -9,9 +9,15 @@
  * conversation's composition lacks the card, when the harness holds the
  * card at a newer revision than the one removed (the model drew it again),
  * and when the user adds the card back. Whenever its canvas changes, the
- * page sends a `remove` again for each entry the harness still holds,
- * against that canvas's revision (resendsOf). Each tab keeps its own set,
- * and the last tab to save decides the saved one.
+ * page sends a `remove` again for each entry the harness still holds, one
+ * card at a time, each against the revision the canvas holds when it goes
+ * (drainOwedRemovals).
+ *
+ * Two limits stay. Each tab keeps its own set, and the last tab to save
+ * decides the saved one. And when the answer to a `remove` the harness
+ * committed is lost, and the model then puts the card back at the revision
+ * the entry recorded, the resend takes it off again. The page cannot tell
+ * that case from a `remove` that never landed.
  */
 
 import type { CardRef } from '../chat/widgets.ts';
@@ -91,14 +97,14 @@ export const knownRevision = (
 export const owe = (owed: OwedRemoval[], id: string, revision: number | null): OwedRemoval[] =>
     owed.some((entry) => entry.id === id) ? owed : [...owed, { id, revision }];
 
-/** `owed` without card `id`, which the user put back (Add); `owed` itself
- *  when it does not owe the card. */
+/** `owed` without card `id`, which the user put back (Add). `owed` itself
+ *  comes back when it does not owe the card. */
 export const forgive = (owed: OwedRemoval[], id: string): OwedRemoval[] =>
     owed.some((entry) => entry.id === id) ? owed.filter((entry) => entry.id !== id) : owed;
 
 /** `owed` without `entry`, whose `remove` the harness answered with a
  *  manifest, so the harness took the card off. A later Remove of the same
- *  card owes an entry of its own, which stays; `owed` itself comes back
+ *  card owes an entry of its own, which stays. `owed` itself comes back
  *  when it lacks `entry`. */
 export const confirm = (owed: OwedRemoval[], entry: OwedRemoval): OwedRemoval[] =>
     owed.includes(entry) ? owed.filter((other) => other !== entry) : owed;
@@ -135,50 +141,106 @@ export const settle = (
 };
 
 /** How many times one page load sends one owed removal again before it
- *  leaves it for the next load. */
+ *  leaves it for the next load, counted per card. */
 export const OWED_RESENDS = 5;
 
-/** A resend of owed removals: the cards, each its own `remove`, and the
- *  composition and revision each is sent against (`expected_revision`), so
- *  a canvas changed since is refused and read again. */
+/** A resend of one owed removal: the card, and the composition and
+ *  revision it is sent against (`composition_id`, `expected_revision`), so
+ *  a canvas changed since refuses it. */
 export type OwedResend = {
-    ids: string[];
+    id: string;
     against: { compositionId: string; revision: number };
 };
 
 /**
- * The owed removals to send again against `baseline`, a manifest of the
- * conversation's composition: the cards it holds, less the ones with a
- * `remove` in flight (`inFlight`) and the ones sent OWED_RESENDS times this
- * page load (`sent`). Null while `held` (a reopened page that has not taken
- * the harness's state yet, whose saved baseline can be older than the
- * harness's canvas), for a legacy baseline, and when nothing is left.
+ * The next owed removal to send again against `baseline`, a manifest of the
+ * conversation's composition, in the set's order: the first card it holds,
+ * less the ones with a `remove` in flight (`inFlight`), the ones sent
+ * OWED_RESENDS times this page load (`sent`), and the ones `skip` names.
+ * Null while `held` (a reopened page that has not taken the harness's state
+ * yet, whose saved baseline can be older than the harness's canvas), for a
+ * legacy baseline, and when nothing is left.
  */
-export const resendsOf = ({
+export const nextResend = ({
     owed,
     baseline,
     inFlight,
     sent,
     held,
+    skip = new Set(),
 }: {
     owed: readonly OwedRemoval[];
     baseline: CanvasBaseline | null;
     inFlight: ReadonlySet<string>;
     sent: ReadonlyMap<string, number>;
     held: boolean;
+    skip?: ReadonlySet<string>;
 }): OwedResend | null => {
     if (held || baseline?.compositionId == null) {
         return null;
     }
 
     const onCanvas = new Set(baseline.ids);
-    const ids = owed
-        .map((entry) => entry.id)
-        .filter(
-            (id) => onCanvas.has(id) && !inFlight.has(id) && (sent.get(id) ?? 0) < OWED_RESENDS,
-        );
+    const entry = owed.find(
+        ({ id }) =>
+            onCanvas.has(id) &&
+            !inFlight.has(id) &&
+            !skip.has(id) &&
+            (sent.get(id) ?? 0) < OWED_RESENDS,
+    );
 
-    return ids.length === 0
-        ? null
-        : { ids, against: { compositionId: baseline.compositionId, revision: baseline.revision } };
+    return entry
+        ? {
+              id: entry.id,
+              against: { compositionId: baseline.compositionId, revision: baseline.revision },
+          }
+        : null;
+};
+
+/** How the harness answered one resend: with a manifest (`answered`), with
+ *  no block for the card (`gone`), as sent against a revision the canvas
+ *  has moved past (`stale`), or not at all (`failed`). */
+export type ResendOutcome = 'answered' | 'gone' | 'stale' | 'failed';
+
+/**
+ * Send the owed removals again, one card at a time and in order, until
+ * `next` (nextResend over the page's current set and canvas) names none.
+ * Each send waits for the answer before the next goes, so it goes against
+ * the revision the previous answer left. A `stale` answer reads the canvas
+ * again (`reread`) and goes on. A card that fails is left for the rest of
+ * this run. Each send counts against its card in `sent`, and `onCapped`
+ * hears a card that reaches OWED_RESENDS without the harness taking it off.
+ */
+export const drainOwedRemovals = async ({
+    next,
+    send,
+    reread,
+    sent,
+    onCapped,
+}: {
+    next: (skip: ReadonlySet<string>) => OwedResend | null;
+    send: (resend: OwedResend) => Promise<ResendOutcome>;
+    reread: () => Promise<void>;
+    sent: Map<string, number>;
+    onCapped: (id: string, outcome: ResendOutcome) => void;
+}): Promise<void> => {
+    const skip = new Set<string>();
+
+    for (let resend = next(skip); resend; resend = next(skip)) {
+        const count = (sent.get(resend.id) ?? 0) + 1;
+
+        sent.set(resend.id, count);
+
+        const outcome = await send(resend);
+
+        if (outcome === 'stale') {
+            await reread();
+        } else if (outcome === 'failed') {
+            skip.add(resend.id);
+        }
+
+        if ((outcome === 'stale' || outcome === 'failed') && count === OWED_RESENDS) {
+            onCapped(resend.id, outcome);
+        }
+    }
 };

@@ -102,6 +102,10 @@ export const readConversation = async (
     return { ...answer, closed_since: closed };
 };
 
+/** Whether `read` finds the latest turn open, paused or running. */
+export const isOpenTurn = (read: ConversationRead): boolean =>
+    read.turn?.status === 'paused' || read.turn?.status === 'running';
+
 /**
  * The cards the harness session's turns drew, from a state read of every
  * closed turn since turn 0: each closed turn's `component_ids`, and while
@@ -109,11 +113,9 @@ export const readConversation = async (
  * holds from that turn, since a read lists no open turn's cards.
  */
 export const producedCards = (read: ConversationRead, openCards: Iterable<string>): Set<string> => {
-    const open = read.turn?.status === 'paused' || read.turn?.status === 'running';
-
     return new Set([
         ...read.closed_since.flatMap((turn) => turn.component_ids),
-        ...(open ? openCards : []),
+        ...(isOpenTurn(read) ? openCards : []),
     ]);
 };
 

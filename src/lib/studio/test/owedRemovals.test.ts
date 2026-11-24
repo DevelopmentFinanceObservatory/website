@@ -8,16 +8,18 @@ import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { createCanvasEdits } from '../canvasEdits.ts';
-import { takeManifest, type CanvasBaseline } from '../composition.ts';
+import { takeManifest, withoutRemovedCards, type CanvasBaseline } from '../composition.ts';
 import {
     confirm,
+    drainOwedRemovals,
     forgive,
     owe,
     OWED_RESENDS,
+    nextResend,
     owedRemovalsOf,
-    resendsOf,
     settle,
     type OwedRemoval,
+    type ResendOutcome,
 } from '../owedRemovals.ts';
 import { mutateComposition } from '../studioClient.ts';
 import type { CompositionManifest } from '../wire.ts';
@@ -44,15 +46,107 @@ const manifest = (revision: number, blocks: [string, number][]): CompositionMani
     counts: { all: blocks.length, stats: 0, charts: blocks.length, tables: 0, notes: 0 },
 });
 
-// The cards a page with `owed` sends a `remove` for against `canvas`.
+// The cards a page with `owed` sends a `remove` for against `canvas`, in
+// the order they go.
 const resent = (
     owed: OwedRemoval[],
     canvas: CanvasBaseline | null,
     inFlight: string[] = [],
     sent = new Map<string, number>(),
-) =>
-    resendsOf({ owed, baseline: canvas, inFlight: new Set(inFlight), sent, held: false })?.ids ??
-    [];
+) => {
+    const skip = new Set<string>();
+    const next = () =>
+        nextResend({
+            owed,
+            baseline: canvas,
+            inFlight: new Set(inFlight),
+            sent,
+            held: false,
+            skip,
+        });
+
+    for (let resend = next(); resend; resend = next()) {
+        skip.add(resend.id);
+    }
+
+    return [...skip];
+};
+
+// A page and a harness for drainOwedRemovals: the page's owed set and
+// canvas, settled before each send as useChat does, and a harness at
+// `revision` holding `held`, which refuses a send against another revision
+// as stale and a remove of a card it lacks as no block. `moves` revisions
+// land on the harness before each send, as another tab or the model would.
+const page = ({
+    owed,
+    canvas,
+    revision,
+    held,
+    moves = 0,
+}: {
+    owed: OwedRemoval[];
+    canvas: CanvasBaseline;
+    revision: number;
+    held: string[];
+    moves?: number;
+}) => {
+    const harness = { revision, held: [...held] };
+    const state = { owed, canvas };
+    const sent: [string, number][] = [];
+    const capped: [string, ResendOutcome][] = [];
+    const take = () => {
+        state.canvas =
+            takeManifest(
+                state.canvas,
+                manifest(
+                    harness.revision,
+                    harness.held.map((id) => [id, 1]),
+                ),
+            )?.baseline ?? state.canvas;
+    };
+    const drain = () =>
+        drainOwedRemovals({
+            next: (skip) => {
+                state.owed = settle(state.owed, state.canvas, new Map());
+
+                return nextResend({
+                    owed: state.owed,
+                    baseline: state.canvas,
+                    inFlight: new Set(),
+                    sent: counts,
+                    held: false,
+                    skip,
+                });
+            },
+            send: async ({ id, against }) => {
+                harness.revision += moves;
+                sent.push([id, against.revision]);
+
+                if (against.revision !== harness.revision) {
+                    return 'stale';
+                }
+
+                if (!harness.held.includes(id)) {
+                    state.canvas = withoutRemovedCards(state.canvas, [id]) ?? state.canvas;
+
+                    return 'gone';
+                }
+
+                harness.held = harness.held.filter((other) => other !== id);
+                harness.revision += 1;
+                take();
+                state.owed = state.owed.filter((entry) => entry.id !== id);
+
+                return 'answered';
+            },
+            reread: async () => take(),
+            sent: counts,
+            onCapped: (id, outcome) => capped.push([id, outcome]),
+        });
+    const counts = new Map<string, number>();
+
+    return { harness, state, sent, capped, drain };
+};
 
 test('Add takes a card out of the owed set, so it shows and no remove goes for it', () => {
     const canvas = baseline(['cmp_a', 'cmp_x']);
@@ -141,13 +235,86 @@ test("a reopened page holds its resends until it has read the harness's state, t
     const owed = owe([], 'cmp_x', 2);
     const saved = baseline(['cmp_a', 'cmp_x']);
     const resend = (held: boolean) =>
-        resendsOf({ owed, baseline: saved, inFlight: new Set(), sent: new Map(), held });
+        nextResend({ owed, baseline: saved, inFlight: new Set(), sent: new Map(), held });
 
     assert.equal(resend(true), null);
     assert.deepEqual(resend(false), {
-        ids: ['cmp_x'],
+        id: 'cmp_x',
         against: { compositionId: 'cps_1', revision: 3 },
     });
+});
+
+test('owed removals go one at a time, each against the revision the previous answer left', async () => {
+    // A save from before manifest pins reopens owing three cards, which the
+    // harness holds at revision 5.
+    const ids = ['cmp_x', 'cmp_y', 'cmp_z'];
+    const run = page({
+        owed: ids.map((id) => ({ id, revision: 1 })),
+        canvas: { compositionId: 'cps_1', revision: 5, ids: ['cmp_a', ...ids], pinned: [] },
+        revision: 5,
+        held: ['cmp_a', ...ids],
+    });
+
+    await run.drain();
+
+    assert.deepEqual(run.sent, [
+        ['cmp_x', 5],
+        ['cmp_y', 6],
+        ['cmp_z', 7],
+    ]);
+    assert.deepEqual(run.harness.held, ['cmp_a']);
+    assert.deepEqual(run.state.owed, []);
+});
+
+test('a resend whose answer was lost settles once the harness says the card is gone', async (t) => {
+    // The harness committed the remove of cmp_x and the answer was lost. A
+    // resend against the page's older revision is stale, and the read that
+    // follows lacks the card. One the harness lacks at the page's revision
+    // is refused as no block.
+    const cases: [string, number][] = [
+        ['stale revision', 6],
+        ['no block', 5],
+    ];
+
+    for (const [name, revision] of cases) {
+        await t.test(name, async () => {
+            const run = page({
+                owed: owe([], 'cmp_x', 1),
+                canvas: {
+                    compositionId: 'cps_1',
+                    revision: 5,
+                    ids: ['cmp_a', 'cmp_x'],
+                    pinned: [],
+                },
+                revision,
+                held: ['cmp_a'],
+            });
+
+            await run.drain();
+
+            assert.deepEqual(run.sent, [['cmp_x', 5]]);
+            assert.deepEqual(run.state.owed, []);
+            assert.deepEqual(run.capped, []);
+        });
+    }
+});
+
+test('a card refused as stale on every send stops at OWED_RESENDS and is named once', async () => {
+    // Another writer moves the canvas before each send.
+    const run = page({
+        owed: owe([], 'cmp_x', 1),
+        canvas: { compositionId: 'cps_1', revision: 5, ids: ['cmp_a', 'cmp_x'], pinned: [] },
+        revision: 5,
+        held: ['cmp_a', 'cmp_x'],
+        moves: 1,
+    });
+
+    await run.drain();
+    await run.drain();
+
+    assert.equal(run.sent.length, OWED_RESENDS);
+    assert.deepEqual(run.capped, [['cmp_x', 'stale']]);
+    assert.deepEqual(run.harness.held, ['cmp_a', 'cmp_x']);
 });
 
 test('a resend goes with the composition and revision it is against, so a canvas changed since refuses it', async (t) => {
@@ -165,7 +332,7 @@ test('a resend goes with the composition and revision it is against, so a canvas
         onManifest: () => {},
         onFailure: () => assert.fail('the harness answered'),
     });
-    const resend = resendsOf({
+    const resend = nextResend({
         owed: owe([], 'cmp_x', 2),
         baseline: baseline(['cmp_a', 'cmp_x']),
         inFlight: new Set(),

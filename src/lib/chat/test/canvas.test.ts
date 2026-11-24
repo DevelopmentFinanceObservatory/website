@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { takeManifest, type CanvasBaseline } from '../../studio/composition.ts';
-import { owedRemovalsOf, resendsOf, settle } from '../../studio/owedRemovals.ts';
+import { nextResend, owedRemovalsOf, settle } from '../../studio/owedRemovals.ts';
 import type { CompositionManifest } from '../../studio/wire.ts';
 import {
     canvasWidgetsOf,
@@ -137,14 +137,14 @@ test('an owed removal survives a failed request, a reload and a save, and keeps 
 
     assert.equal(kept, owed);
     assert.deepEqual(
-        resendsOf({
+        nextResend({
             owed: kept,
             baseline: taken,
             inFlight: new Set(),
             sent: new Map(),
             held: false,
-        })?.ids,
-        ['cmp_x'],
+        })?.id,
+        'cmp_x',
     );
 
     // The page saves the pinned baseline with the owed set, and a reload
