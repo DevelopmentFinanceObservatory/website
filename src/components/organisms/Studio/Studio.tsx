@@ -599,12 +599,16 @@ const Studio = ({
     const harnessCard = (id: string) =>
         isHarnessCard({ widgets: chat.widgets, localIds: doc.localIds }, id);
 
-    // Chat chip → Add: back on the canvas.
+    // Chat chip → Add: back on the canvas. A save from before manifest pins
+    // can list a harness card among its removals, which keep it off while
+    // its baseline lacks pins (canvasWidgetsOf), so Add clears that too.
     const addWidget = (id: string) => {
+        if (!harnessCard(id) || doc.removedIds.includes(id)) {
+            doc.addWidget(id);
+        }
+
         if (harnessCard(id)) {
             chat.syncCanvas([{ op: 'add', component_id: id }]);
-        } else {
-            doc.addWidget(id);
         }
     };
 

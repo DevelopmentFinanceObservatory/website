@@ -736,9 +736,12 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * paused meanwhile) or 503 `transient_unavailable` reads the state again,
  * after the wait the refusal names and at least DEFAULT_WAIT_SECONDS.
  * Each read goes to `onRead`, which merges it, and is asked with `since()`.
- * Any other refused resume, and a read refused as a StateRefusal (the
- * session is gone, or a guest must sign in), goes to `handlers.onRefusal`
- * and ends the turn when it deals with it. Rejects when that refusal is not
+ * A read whose open turn is a later one than this stream carries (another
+ * tab closed this turn and began the next) ends this turn with a `done`, as
+ * a closed one does, and goes to `onNextTurn`, which carries that turn on
+ * under handlers of its own. Any other refused resume, and a read refused
+ * as a StateRefusal (the session is gone, or a guest must sign in), goes to
+ * `handlers.onRefusal` and ends the turn when it deals with it. Rejects when that refusal is not
  * dealt with, a resume is refused RESUME_ATTEMPTS times, or a read fails,
  * and with an AbortError when `signal` aborts.
  */
@@ -749,6 +752,7 @@ export const carryOnTurn = async ({
     signal,
     since,
     onRead,
+    onNextTurn,
     resume = runResume,
     read = readConversation,
     sleep = abortableSleep,
@@ -759,6 +763,7 @@ export const carryOnTurn = async ({
     signal: AbortSignal;
     since: () => number;
     onRead: (read: ConversationRead) => void;
+    onNextTurn: (read: ConversationRead) => void;
     resume?: typeof runResume;
     read?: (
         conversationId: string,
@@ -834,6 +839,16 @@ export const carryOnTurn = async ({
 
         handlers.onKeepAlive?.();
         onRead(answer);
-        step = attachStep(answer);
+
+        const next = attachStep(answer);
+
+        if (next.kind !== 'none' && next.turnIndex !== step.turnIndex) {
+            handlers.onFrame(CLOSED_FRAME);
+            onNextTurn(answer);
+
+            return;
+        }
+
+        step = next;
     }
 };

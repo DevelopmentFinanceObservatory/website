@@ -421,6 +421,18 @@ export const stopAction = ({
 };
 
 /**
+ * Whether leaving the conversation (New Chat, opening another) asks the
+ * harness to cancel the turn of the stream that runs (`running`, null when
+ * none does): only a turn this page started (`own`) whose request has left
+ * (`phase`, watchAdmission's, is `sent` or `admitted`). A stream observing a turn another tab started and
+ * a request waiting on another stream's turn end on this page alone, since
+ * the cancel would end that other stream's turn.
+ */
+export const leaveCancels = (
+    running: { own: boolean; phase: () => RequestPhase } | null,
+): boolean => running !== null && running.own && running.phase() !== 'unsent';
+
+/**
  * `handlers` with a record of where the request stands (`phase`) and what
  * a Stop does to it. The caller calls `start` as the request starts,
  * and `stop` on Stop, which returns the StopAction to carry out. A Stop

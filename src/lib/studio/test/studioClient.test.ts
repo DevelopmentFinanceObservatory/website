@@ -11,6 +11,7 @@ import {
     CompositionRefusal,
     fetchComponentRevision,
     isNoBlock,
+    leaveCancels,
     mutateComposition,
     readState,
     runApplyChoice,
@@ -20,6 +21,7 @@ import {
     STATE_READ_ATTEMPTS,
     stopAction,
     watchAdmission,
+    type RequestPhase,
     type StopAction,
     whileBusy,
     type StreamRefusal,
@@ -557,6 +559,28 @@ test('whileBusy: Stop cancels a turn the harness admitted at once, one on its wa
     ]);
     // A free request ended before it left had no prompt to give back.
     assert.equal(stopAction({ phase: 'unsent', metered: false }).refunded, false);
+});
+
+test('leaving a conversation cancels only a turn this page started and sent', () => {
+    const cases: [{ own: boolean; phase: RequestPhase } | null, boolean][] = [
+        // No stream runs: a state read, or nothing at all.
+        [null, false],
+        [{ own: true, phase: 'admitted' }, true],
+        [{ own: true, phase: 'sent' }, true],
+        // A send waiting on another stream's turn.
+        [{ own: true, phase: 'unsent' }, false],
+        // A reopened page carrying on or watching another tab's turn.
+        [{ own: false, phase: 'admitted' }, false],
+        [{ own: false, phase: 'sent' }, false],
+    ];
+
+    for (const [running, cancels] of cases) {
+        assert.equal(
+            leaveCancels(running && { own: running.own, phase: () => running.phase }),
+            cancels,
+            JSON.stringify(running),
+        );
+    }
 });
 
 // A Stop after the turn's POST left and before its response headers: the

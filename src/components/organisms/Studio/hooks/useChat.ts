@@ -141,6 +141,7 @@ import {
     isSessionGone,
     isSignInRequired,
     isStateRefusal,
+    leaveCancels,
     mutateComposition,
     runApplyChoice,
     runApplyUnit,
@@ -150,6 +151,7 @@ import {
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
     whileBusy,
+    type RequestPhase,
     type StopAction,
     type StreamHandlers,
     type StreamRefusal,
@@ -448,6 +450,10 @@ export const useChat = (
     const abortRef = useRef<AbortController | null>(null);
     // Stops the running stream's turn (set while a request runs).
     const haltRef = useRef<(() => void) | null>(null);
+    // The stream whose request runs: whether this page started its turn
+    // (`own`) and where its request stands, which decide whether leaving
+    // the conversation cancels that turn (leaveCancels).
+    const runningRef = useRef<{ own: boolean; phase: () => RequestPhase } | null>(null);
     // The queue itself; `queued` in state mirrors it for rendering.
     const queueRef = useRef<QueuedMessage[]>([]);
     // Requests run one after another on this chain (the harness serves one
@@ -915,7 +921,9 @@ export const useChat = (
     // screen, unless reset or hydrate has walked away from the stream.
     // `metered` marks a POST turn, whose prompt the site's meter gives back
     // when the response is a refusal (meterTurn), so a refusal marks the
-    // turn's prompt refunded.
+    // turn's prompt refunded. `observe` marks a stream that carries on a turn
+    // this page did not start, which leaving the conversation ends here
+    // without asking the harness to cancel it.
     const stream = useCallback(
         (
             turn: number,
@@ -926,12 +934,14 @@ export const useChat = (
                 onEnd,
                 onSettled,
                 metered = false,
+                observe = false,
             }: {
                 onRefusal?: (refusal: StreamRefusal) => boolean;
                 onUnreachable?: () => boolean;
                 onEnd?: (ending: StreamEnding) => void;
                 onSettled?: () => void;
                 metered?: boolean;
+                observe?: boolean;
             } = {},
         ) => {
             const controller = new AbortController();
@@ -1521,6 +1531,7 @@ export const useChat = (
                 },
                 { onStopChange: carryOut },
             );
+            const running = { own: !observe, phase: admission.phase };
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
@@ -1545,6 +1556,7 @@ export const useChat = (
                     admission.start();
                     abortRef.current = controller;
                     haltRef.current = halt;
+                    runningRef.current = running;
                     stall.beat();
 
                     return start(admission.handlers, controller.signal).catch((error: Error) => {
@@ -1563,6 +1575,10 @@ export const useChat = (
 
                     if (haltRef.current === halt) {
                         haltRef.current = null;
+                    }
+
+                    if (runningRef.current === running) {
+                        runningRef.current = null;
                     }
 
                     if (generationRef.current !== generation) {
@@ -2475,6 +2491,91 @@ export const useChat = (
 
         const generation = generationRef.current;
 
+        // Carry on the read's open turn (carryOnTurn) in a stream bound to
+        // the reply of the prompt that holds it, `merged` being the
+        // transcript with the read's closed turns in. An open turn the
+        // transcript lacks joins it first. The stream observes a turn this
+        // page did not start (`observe`). When another tab closes that turn
+        // and begins the next, the stream ends its own turn and the next one
+        // comes back here, so each turn's frames reach its own reply.
+        const follow = (read: ConversationRead, merged: ChatMessage[]) => {
+            const step = attachStep(read);
+
+            if (generationRef.current !== generation || step.kind === 'none') {
+                return;
+            }
+
+            const held = heldTurns(merged);
+            // The page turn of the prompt that holds the open turn.
+            const holding = [...promptTurns(merged)].findLast(
+                ([, index]) => index === step.turnIndex,
+            )?.[0];
+            const holder = holding === undefined ? undefined : merged[holding];
+            let streamTurn = holder?.role === 'user' ? holder.turn : undefined;
+
+            // A held open turn streams into its own reply, also when an
+            // unsent prompt follows it (pageTurnReplyAt).
+            if (step.turnIndex > held) {
+                const prompt = recordedPromptText(read.turn?.user_message ?? '');
+
+                turnCount.current += 1;
+
+                const turn = turnCount.current;
+
+                streamTurn = turn;
+
+                // The turn's approvals ride on its reply, as the stream
+                // would have put them.
+                const approved = read.turn?.approved;
+
+                approvalsRef.current = new Set([
+                    ...approvalsRef.current,
+                    ...turnApprovalKeys(step.turnIndex, approved),
+                ]);
+                setState((prev) => ({
+                    ...prev,
+                    messages: withTurnApprovals(
+                        ensureTurn(prev.messages, step.turnIndex, prompt, turn),
+                        step.turnIndex,
+                        approved,
+                        new Set(),
+                    ),
+                    activity: [
+                        ...prev.activity,
+                        { turn, prompt, startedAt: Date.now(), tools: [] },
+                    ],
+                }));
+            }
+
+            if (step.kind !== 'pause') {
+                setState((prev) => ({
+                    ...withLine(prev, WORKING),
+                    thinking: true,
+                }));
+            }
+
+            stream(
+                streamTurn ?? turnCount.current,
+                (handlers, signal) => {
+                    // The transcript with the stream's latest read merged in.
+                    let latest = merged;
+
+                    return carryOnTurn({
+                        conversationId: conversation,
+                        first: step,
+                        handlers,
+                        signal,
+                        since: () => readSince(messagesRef.current),
+                        onRead: (next) => {
+                            latest = takeRead(next);
+                        },
+                        onNextTurn: (next) => follow(next, latest),
+                    });
+                },
+                { observe: true },
+            );
+        };
+
         // The read waits behind any request in flight, as a turn does, so it
         // never reads the harness while a prompt's POST is on its way: such a
         // read lacks that turn and would mark its prompt unsent. Counting it
@@ -2544,72 +2645,7 @@ export const useChat = (
                     inFlightRef.current -= 1;
 
                     if (read) {
-                        const merged = takeRead(read);
-                        const held = heldTurns(merged);
-                        const step = attachStep(read);
-                        // The page turn of the prompt that holds the open turn.
-                        const holding =
-                            step.kind === 'none'
-                                ? undefined
-                                : [...promptTurns(merged)].findLast(
-                                      ([, index]) => index === step.turnIndex,
-                                  )?.[0];
-                        const holder = holding === undefined ? undefined : merged[holding];
-                        let streamTurn = holder?.role === 'user' ? holder.turn : undefined;
-
-                        // A held open turn streams into its own reply, also when
-                        // an unsent prompt follows it (pageTurnReplyAt).
-                        if (step.kind !== 'none') {
-                            if (step.turnIndex > held) {
-                                const prompt = recordedPromptText(read.turn?.user_message ?? '');
-
-                                turnCount.current += 1;
-
-                                const turn = turnCount.current;
-
-                                streamTurn = turn;
-
-                                // The turn's approvals ride on its reply, as the
-                                // stream would have put them.
-                                const approved = read.turn?.approved;
-
-                                approvalsRef.current = new Set([
-                                    ...approvalsRef.current,
-                                    ...turnApprovalKeys(step.turnIndex, approved),
-                                ]);
-                                setState((prev) => ({
-                                    ...prev,
-                                    messages: withTurnApprovals(
-                                        ensureTurn(prev.messages, step.turnIndex, prompt, turn),
-                                        step.turnIndex,
-                                        approved,
-                                        new Set(),
-                                    ),
-                                    activity: [
-                                        ...prev.activity,
-                                        { turn, prompt, startedAt: Date.now(), tools: [] },
-                                    ],
-                                }));
-                            }
-
-                            if (step.kind !== 'pause') {
-                                setState((prev) => ({
-                                    ...withLine(prev, WORKING),
-                                    thinking: true,
-                                }));
-                            }
-
-                            stream(streamTurn ?? turnCount.current, (handlers, signal) =>
-                                carryOnTurn({
-                                    conversationId: conversation,
-                                    first: step,
-                                    handlers,
-                                    signal,
-                                    since: () => readSince(messagesRef.current),
-                                    onRead: takeRead,
-                                }),
-                            );
-                        }
+                        follow(read, takeRead(read));
                     }
 
                     drainRef.current();
@@ -2627,12 +2663,15 @@ export const useChat = (
     }, [reattach]);
 
     const reset = useCallback(() => {
-        // Ask the harness to stop (closing the fetch reaches it late, or
-        // not at all, through the proxy), then leave the old request and
-        // its queue behind on a fresh chain.
-        if (inFlightRef.current > 0 && sessionRef.current) {
+        // Ask the harness to stop a turn this page started (closing the
+        // fetch reaches it late, or not at all, through the proxy), then
+        // leave the old request and its queue behind on a fresh chain. A
+        // turn this page only observes, or a state read, ends here alone.
+        if (leaveCancels(runningRef.current) && sessionRef.current) {
             void cancelTurn(sessionRef.current);
         }
+
+        runningRef.current = null;
 
         abortRef.current?.abort();
         generationRef.current += 1;
@@ -2671,11 +2710,13 @@ export const useChat = (
 
     const hydrate = useCallback(
         (saved: ChatSnapshot) => {
-            // As in reset(): ask the harness to stop, abandon the old chain and
-            // queue.
-            if (inFlightRef.current > 0 && sessionRef.current) {
+            // As in reset(): ask the harness to stop a turn this page
+            // started, abandon the old chain and queue.
+            if (leaveCancels(runningRef.current) && sessionRef.current) {
                 void cancelTurn(sessionRef.current);
             }
+
+            runningRef.current = null;
 
             abortRef.current?.abort();
             generationRef.current += 1;

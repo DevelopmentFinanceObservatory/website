@@ -421,6 +421,7 @@ const run = async (
     const frames: StudioFrame[] = [];
     const calls: string[] = [];
     const merged: ConversationRead[] = [];
+    const handedOn: ConversationRead[] = [];
 
     await carryOnTurn({
         conversationId: 'conv',
@@ -429,6 +430,7 @@ const run = async (
         signal: new AbortController().signal,
         since: () => 1,
         onRead: (read) => merged.push(read),
+        onNextTurn: (read) => handedOn.push(read),
         resume: async (conversationId, turnIndex, handlers: StreamHandlers) => {
             calls.push(`resume ${conversationId} ${turnIndex}`);
             const answer = resumes.shift();
@@ -449,7 +451,7 @@ const run = async (
         },
     });
 
-    return { frames, calls, merged };
+    return { frames, calls, merged, handedOn };
 };
 
 test('carryOnTurn resumes a running turn nobody holds and streams it', async () => {
@@ -514,6 +516,36 @@ test('carryOnTurn ends the turn once the harness has closed it', async () => {
         frames.map((frame) => frame.event),
         ['done'],
     );
+});
+
+test('carryOnTurn ends its turn and hands on the next one another tab began', async () => {
+    // Another tab closed turn 2 and began turn 3 while this page waited.
+    const cases: [string, TurnState][] = [
+        [
+            'held by the other tab',
+            turnState({ index: 3, lease_live: true, retry_after_seconds: 4 }),
+        ],
+        ['held by nobody', turnState({ index: 3 })],
+    ];
+
+    for (const [label, turn] of cases) {
+        const next = readOf({ turn, closed_since: [closed(2)] });
+        const { frames, calls, merged, handedOn } = await run(
+            { kind: 'wait', turnIndex: 2, seconds: 3 },
+            { reads: [next] },
+        );
+
+        // Turn 2's reply comes from the read; its stream ends there, and
+        // turn 3 goes on under handlers of its own.
+        assert.deepEqual(calls, ['sleep 3000', 'read conv 1'], label);
+        assert.deepEqual(merged, [next], label);
+        assert.deepEqual(
+            frames.map((frame) => frame.event),
+            ['done'],
+            label,
+        );
+        assert.deepEqual(handedOn, [next], label);
+    }
 });
 
 test('carryOnTurn rejects when the state cannot be read, so the turn ends failed', async () => {
@@ -614,6 +646,7 @@ test('carryOnTurn waits after any refused resume it may retry, and gives up afte
             signal: new AbortController().signal,
             since: () => 1,
             onRead: () => {},
+            onNextTurn: () => {},
             resume: async (_id, _turn, handlers: StreamHandlers) => {
                 resumes += 1;
                 handlers.onRefusal?.(resumes > 50 ? { ...conflict, status: 500 } : conflict);

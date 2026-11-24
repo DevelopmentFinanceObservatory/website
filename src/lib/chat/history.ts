@@ -37,8 +37,9 @@ export type SavedConversation = {
     localIds?: string[];
     pinnedIds: string[];
     // The cards the harness never held (`localIds`, text cards) that the
-    // user took off the canvas. A save from before `canvas` also lists
-    // harness cards here.
+    // user took off the canvas. A save from before `canvas`, or whose
+    // `canvas` has no `pinned`, also lists harness cards here, and they stay
+    // off its canvas (canvasWidgetsOf).
     removedIds: string[];
     // In a save from before `canvas`, the unpinned cards of older turns its
     // canvas still showed, and the turn that set belongs to (a later turn

@@ -8,7 +8,13 @@ import test from 'node:test';
 
 import { takeManifest, type CanvasBaseline } from '../../studio/composition.ts';
 import type { CompositionManifest } from '../../studio/wire.ts';
-import { canvasWidgetsOf, forkedCanvas, isHarnessCard, type CanvasState } from '../canvas.ts';
+import {
+    canvasWidgetsOf,
+    forkedCanvas,
+    isHarnessCard,
+    savedCanvasWidgetsOf,
+    type CanvasState,
+} from '../canvas.ts';
 import type { TextWidget } from '../widgets.ts';
 
 const card = (id: string, turn: number) => ({
@@ -27,10 +33,12 @@ const manifest = (revision: number, ids: string[]): CompositionManifest => ({
     counts: { all: ids.length, stats: 0, charts: ids.length, tables: 0, notes: 0 },
 });
 
+// A baseline as the current page saves it, with the manifest's pins.
 const baseline = (ids: string[]): CanvasBaseline => ({
     compositionId: 'cps_1',
     revision: 2,
     ids,
+    pinned: [],
 });
 
 const textCard: TextWidget = { kind: 'text', id: 'text_local', title: 'Local', body: '' };
@@ -77,6 +85,28 @@ test('a save without a manifest keeps the latest turn, its pins and its grace', 
 
     assert.deepEqual(ids(legacy), ['cmp_pinned', 'cmp_grace', 'cmp_new', 'text_local']);
     assert.deepEqual(ids({ ...legacy, canvas: null }), ids(legacy));
+});
+
+test('a save from before manifest pins keeps a card the user removed off, though the manifest holds it', () => {
+    // The page that saved it took the card off locally before the harness
+    // dropped it, as the share and embed it made showed it.
+    const saved = state({
+        widgets: [card('cmp_first', 2), card('cmp_second', 2)],
+        canvas: { compositionId: 'cps_1', revision: 2, ids: ['cmp_first', 'cmp_second'] },
+        removedIds: ['cmp_second'],
+    });
+
+    assert.deepEqual(ids(saved), ['cmp_first', 'text_local']);
+    assert.deepEqual(
+        savedCanvasWidgetsOf(saved).map((widget) => widget.id),
+        ['cmp_first', 'text_local'],
+    );
+    // A baseline with the manifest's pins lets the manifest decide.
+    assert.deepEqual(ids({ ...saved, canvas: baseline(['cmp_first', 'cmp_second']) }), [
+        'cmp_first',
+        'cmp_second',
+        'text_local',
+    ]);
 });
 
 test("a fork's inherited cards show beside the manifest of its own session", () => {
