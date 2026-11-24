@@ -107,6 +107,12 @@
 // scrolling column and hides its summary. Without JavaScript the summary
 // stays available at every width.
 .tree {
+    // .itemLink's 1.15 leading is tighter than Outfit's ascent plus descent,
+    // so the last line's glyphs spill about 0.8 px below its line box at a
+    // 14 px design size. Scrollable overflow counts that spill, so without
+    // this padding a column that fits draws a bar. The padding has headroom
+    // and scales with the fluid root font, as the spill does.
+    padding-bottom: rem(2);
     max-height: calc(100svh - #{rem(140)});
     overflow-y: auto;
 }
