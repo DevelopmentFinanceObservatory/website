@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, useEffect, useId, useRef } from 'react';
 
 import ActivityLog from './ActivityLog';
 import ChatMessage from './ChatMessage';
@@ -89,6 +89,7 @@ const ChatPanel = ({
     const scrollRef = useRef<HTMLDivElement>(null);
     // The follow-up field, focused on mount when asked (autoFocus).
     const followRef = useRef<PromptField>(null);
+    const countId = useId();
 
     useEffect(() => {
         const field = followRef.current;
@@ -118,7 +119,7 @@ const ChatPanel = ({
 
     // The text of a plan's "Propose changes" travels as an amendment, which
     // the harness caps; a follow-up turn has no such cap here.
-    const amendmentCount = interruptTextCount(chat.plan?.live ? follow : '');
+    const amendmentCount = interruptTextCount(chat.plan?.live ? follow.trim() : '');
 
     const sendFollow = () => {
         // A plan switch in flight has the pause, so the text waits in the input.
@@ -309,8 +310,9 @@ const ChatPanel = ({
                                         }
                                         submitLabel="Send"
                                         invalid={amendmentCount.over}
+                                        describedBy={countId}
                                     />
-                                    <CharCount text={amendmentCount} />
+                                    <CharCount id={countId} text={amendmentCount} />
                                 </>
                             )}
                             <p className={styles.chatNote}>

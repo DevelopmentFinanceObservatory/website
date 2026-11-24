@@ -169,7 +169,7 @@ const streamStudio = async (
         try {
             const parsed = (await res.json()) as { detail?: unknown };
 
-            tooLong = isTextTooLong(res.status, parsed);
+            tooLong = endpoint === 'interrupt' && isTextTooLong(res.status, parsed);
 
             error = asToolError(parsed);
             proxy = asProxyProblem(parsed, res.headers);

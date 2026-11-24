@@ -71,10 +71,11 @@ const TextAnswer = ({
     onSubmit: (text: string) => void;
 }) => {
     const [text, setText] = useState(initial);
-    const count = interruptTextCount(text);
+    const count = interruptTextCount(text.trim());
+    const countId = useId();
 
     return (
-        <>
+        <div className={styles.pickerTextWrap}>
             <form
                 className={styles.pickerText}
                 onSubmit={(event) => {
@@ -98,6 +99,7 @@ const TextAnswer = ({
                     placeholder="Type your answer..."
                     aria-labelledby={labelledBy}
                     aria-invalid={count.over || undefined}
+                    aria-describedby={countId}
                 />
                 <Button
                     type="submit"
@@ -109,8 +111,8 @@ const TextAnswer = ({
                     Send
                 </Button>
             </form>
-            <CharCount text={count} />
-        </>
+            <CharCount id={countId} text={count} />
+        </div>
     );
 };
 
