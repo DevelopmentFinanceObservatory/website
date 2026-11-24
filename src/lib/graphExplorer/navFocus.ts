@@ -41,9 +41,17 @@ const MODIFIER_KEYS: ReadonlySet<string> = new Set([
     'AltGraph',
     'Meta',
     'CapsLock',
+    'Insert',
+    'NumLock',
+    'ScrollLock',
+    'Fn',
+    'FnLock',
+    'Super',
+    'Hyper',
+    'OS',
 ]);
 
-/** The part of a `keydown`, `pointerdown` or `focusin` event `input` reads. */
+/** The part of a `keydown`, `pointerdown`, `focusin` or window `blur` event `input` reads. */
 export type ReaderEvent = { readonly type: string; readonly key?: string };
 
 /**
@@ -55,12 +63,15 @@ export type ReaderEvent = { readonly type: string; readonly key?: string };
  * loads first is focused only if the reader does nothing meanwhile: `input`,
  * called on each `keydown`, `pointerdown` and `focusin`, drops the debt and
  * returns true when the event is the reader taking over. A lone modifier key
- * moves nothing, and the focus `pay` makes itself is not the reader's.
+ * moves nothing, and the focus `pay` makes itself is not the reader's. Nor is
+ * the `focusin` that follows the window losing focus (a window `blur`) and
+ * getting it back, which the browser fires on the element that held focus.
  */
 export const navigationFocus = () => {
     let shown: string | null = null;
     let owed = false;
     let paying = false;
+    let away = false;
     return {
         arrive(key: string) {
             if (shown !== null && key !== shown) owed = true;
@@ -77,7 +88,13 @@ export const navigationFocus = () => {
             return owed;
         },
         input(event: ReaderEvent): boolean {
-            if (!owed || paying) return false;
+            if (event.type === 'blur') away = true;
+            if (!owed || paying || event.type === 'blur') return false;
+            if (event.type === 'focusin' && away) {
+                away = false;
+                return false;
+            }
+            away = false;
             if (event.type === 'keydown' && MODIFIER_KEYS.has(event.key ?? '')) return false;
             owed = false;
             return true;

@@ -232,9 +232,13 @@ const GraphExplorer = () => {
         const stop = () => {
             observer.disconnect();
             for (const type of events) document.removeEventListener(type, onInput, true);
+            window.removeEventListener('blur', onBlur);
         };
+        // Only the window's own blur reaches this listener, since an element's does not bubble.
+        const onBlur = (event: Event) => void focusAfterMove.input(event);
         observer.observe(main, { childList: true, subtree: true });
         for (const type of events) document.addEventListener(type, onInput, true);
+        window.addEventListener('blur', onBlur);
         return stop;
     }, [focusAfterMove, viewKey]);
     const awaitedOf = (id: string | null) =>

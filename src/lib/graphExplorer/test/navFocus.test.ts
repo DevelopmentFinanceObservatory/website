@@ -135,7 +135,22 @@ test('a key, press or focus move during a load cancels the deferred focus', () =
 });
 
 test('a lone modifier key keeps the deferred focus', () => {
-    for (const key of ['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'CapsLock']) {
+    for (const key of [
+        'Shift',
+        'Control',
+        'Alt',
+        'AltGraph',
+        'Meta',
+        'CapsLock',
+        'Insert',
+        'NumLock',
+        'ScrollLock',
+        'Fn',
+        'FnLock',
+        'Super',
+        'Hyper',
+        'OS',
+    ]) {
         const nav = navigationFocus();
         nav.arrive('start');
         nav.arrive('node:B');
@@ -155,6 +170,42 @@ test('the focus the explorer makes itself is not the reader taking over', () => 
     const landed = page([h1('B')], { onFocus: () => nav.input({ type: 'focusin' }) });
     assert.equal(nav.pay(landed.root, landed.document), false);
     assert.equal(landed.focused()?.attributes.text, 'B');
+});
+
+test('the focusin after the window regains focus does not cancel the deferred focus', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:B');
+    const loading = page([{ tag: 'div', attributes: {} }]);
+    assert.equal(nav.pay(loading.root, loading.document), true);
+    assert.equal(nav.input({ type: 'blur' }), false);
+    assert.equal(nav.input({ type: 'focusin' }), false);
+    const landed = page([h1('B')]);
+    assert.equal(nav.pay(landed.root, landed.document), false);
+    assert.equal(landed.focused()?.attributes.text, 'B');
+});
+
+test('a focus move after the window returns still cancels the deferred focus', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:B');
+    nav.input({ type: 'blur' });
+    assert.equal(nav.input({ type: 'focusin' }), false);
+    assert.equal(nav.input({ type: 'focusin' }), true);
+});
+
+test('a focusin nested in the explorer own focus leaves the debt open when focus lands elsewhere', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:B');
+    const landed = page([h1('B')], {
+        onFocus: () => {
+            nav.input({ type: 'focusin' });
+            landed.focusOutside(input);
+        },
+    });
+    assert.equal(nav.pay(landed.root, landed.document), true);
+    assert.equal(landed.focused(), input);
 });
 
 test('an element whose focus does not move leaves the debt open', () => {
