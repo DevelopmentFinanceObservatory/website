@@ -33,29 +33,54 @@ export const focusViewHeading = (root: ViewRoot, page: FocusPage): boolean => {
     return page.activeElement === target;
 };
 
+/** Keys that move no focus and type nothing, such as the Ctrl a screen reader uses to stop speech. */
+const MODIFIER_KEYS: ReadonlySet<string> = new Set([
+    'Shift',
+    'Control',
+    'Alt',
+    'AltGraph',
+    'Meta',
+    'CapsLock',
+]);
+
+/** The part of a `keydown`, `pointerdown` or `focusin` event `input` reads. */
+export type ReaderEvent = { readonly type: string; readonly key?: string };
+
 /**
  * Tracks the view on show. `arrive` records its key and owes the view a focus
  * after a move; the first key of a page load owes none. `pay` takes the focus
  * the first time the view draws a heading and returns whether the debt is
  * still open. The move itself is the reader's input, so a view that draws at
  * once is focused wherever focus sat, in the search box included. A view that
- * loads first is focused only if the reader does nothing meanwhile: `cancel`,
- * called on the reader's next key or pointer press, drops the debt.
+ * loads first is focused only if the reader does nothing meanwhile: `input`,
+ * called on each `keydown`, `pointerdown` and `focusin`, drops the debt and
+ * returns true when the event is the reader taking over. A lone modifier key
+ * moves nothing, and the focus `pay` makes itself is not the reader's.
  */
 export const navigationFocus = () => {
     let shown: string | null = null;
     let owed = false;
+    let paying = false;
     return {
         arrive(key: string) {
             if (shown !== null && key !== shown) owed = true;
             shown = key;
         },
         pay(root: ViewRoot, page: FocusPage): boolean {
-            if (owed && focusViewHeading(root, page)) owed = false;
+            if (!owed) return false;
+            paying = true;
+            try {
+                if (focusViewHeading(root, page)) owed = false;
+            } finally {
+                paying = false;
+            }
             return owed;
         },
-        cancel() {
+        input(event: ReaderEvent): boolean {
+            if (!owed || paying) return false;
+            if (event.type === 'keydown' && MODIFIER_KEYS.has(event.key ?? '')) return false;
             owed = false;
+            return true;
         },
     };
 };

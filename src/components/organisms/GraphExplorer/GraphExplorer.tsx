@@ -224,19 +224,17 @@ const GraphExplorer = () => {
         const observer = new MutationObserver(() => {
             if (!focusAfterMove.pay(main, document)) stop();
         });
-        // The reader's next key or press ends the wait, so the heading never takes focus from them.
-        const cancel = () => {
-            focusAfterMove.cancel();
-            stop();
+        // The reader's next key, press or focus move ends the wait, so the heading never takes focus from them.
+        const events = ['keydown', 'pointerdown', 'focusin'] as const;
+        const onInput = (event: Event) => {
+            if (focusAfterMove.input(event)) stop();
         };
         const stop = () => {
             observer.disconnect();
-            document.removeEventListener('keydown', cancel, true);
-            document.removeEventListener('pointerdown', cancel, true);
+            for (const type of events) document.removeEventListener(type, onInput, true);
         };
         observer.observe(main, { childList: true, subtree: true });
-        document.addEventListener('keydown', cancel, true);
-        document.addEventListener('pointerdown', cancel, true);
+        for (const type of events) document.addEventListener(type, onInput, true);
         return stop;
     }, [focusAfterMove, viewKey]);
     const awaitedOf = (id: string | null) =>

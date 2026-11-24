@@ -12,7 +12,12 @@ import { navigationFocus } from '../navFocus.ts';
 
 type Attributes = Readonly<Record<string, string>>;
 
-type Element = { readonly tag: string; readonly attributes: Attributes };
+type Element = {
+    readonly tag: string;
+    readonly attributes: Attributes;
+    /** Focus on it does nothing, as on a hidden or disabled element. */
+    readonly inert?: true;
+};
 
 /** One compound selector such as `h1[tabindex="-1"]` or `[data-view-heading]`, against an element. */
 const matches = (element: Element, compound: string): boolean => {
@@ -24,7 +29,7 @@ const matches = (element: Element, compound: string): boolean => {
 };
 
 /** The page: the view's elements in document order, the focused one, and what `focus()` does. */
-const page = (views: readonly Element[]) => {
+const page = (views: readonly Element[], options: { onFocus?: () => void } = {}) => {
     const state = { active: null as Element | null };
     const body = { tag: 'body', attributes: {} };
     // The DOM hands out one object per element, so focus compares by identity.
@@ -34,7 +39,10 @@ const page = (views: readonly Element[]) => {
             {
                 element,
                 focus: () => {
-                    if ('tabindex' in element.attributes) state.active = element;
+                    if ('tabindex' in element.attributes && element.inert !== true) {
+                        state.active = element;
+                        options.onFocus?.();
+                    }
                 },
             },
         ]),
@@ -106,27 +114,65 @@ test('a search-result pick focuses the new heading although focus sat in the sea
     assert.equal(drawn.focused()?.attributes.text, 'S');
 });
 
-test('a key or press during a load cancels the deferred focus', () => {
+test('a key, press or focus move during a load cancels the deferred focus', () => {
+    for (const event of [
+        { type: 'keydown', key: 'Tab' },
+        { type: 'pointerdown' },
+        { type: 'focusin' },
+    ]) {
+        const nav = navigationFocus();
+        nav.arrive('start');
+        nav.arrive('node:B');
+        const loading = page([{ tag: 'div', attributes: {} }]);
+        assert.equal(nav.pay(loading.root, loading.document), true);
+        loading.focusOutside(input);
+        assert.equal(nav.input(event), true, event.type);
+        const landed = page([h1('B')]);
+        landed.focusOutside(input);
+        assert.equal(nav.pay(landed.root, landed.document), false);
+        assert.equal(landed.focused(), input, event.type);
+    }
+});
+
+test('a lone modifier key keeps the deferred focus', () => {
+    for (const key of ['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'CapsLock']) {
+        const nav = navigationFocus();
+        nav.arrive('start');
+        nav.arrive('node:B');
+        const loading = page([{ tag: 'div', attributes: {} }]);
+        assert.equal(nav.pay(loading.root, loading.document), true);
+        assert.equal(nav.input({ type: 'keydown', key }), false, key);
+        const landed = page([h1('B')]);
+        assert.equal(nav.pay(landed.root, landed.document), false);
+        assert.equal(landed.focused()?.attributes.text, 'B', key);
+    }
+});
+
+test('the focus the explorer makes itself is not the reader taking over', () => {
     const nav = navigationFocus();
     nav.arrive('start');
     nav.arrive('node:B');
-    const loading = page([{ tag: 'div', attributes: {} }]);
-    assert.equal(nav.pay(loading.root, loading.document), true);
-    loading.focusOutside(input);
-    nav.cancel();
-    const landed = page([h1('B')]);
-    landed.focusOutside(input);
+    const landed = page([h1('B')], { onFocus: () => nav.input({ type: 'focusin' }) });
     assert.equal(nav.pay(landed.root, landed.document), false);
-    assert.equal(landed.focused(), input);
+    assert.equal(landed.focused()?.attributes.text, 'B');
 });
 
-test('an element that cannot take focus does not count as the heading', () => {
+test('an element whose focus does not move leaves the debt open', () => {
     const nav = navigationFocus();
     nav.arrive('start');
     nav.arrive('node:C');
-    const failed = page([{ tag: 'h1', attributes: {} }]);
+    const failed = page([{ tag: 'h1', attributes: { tabindex: '-1' }, inert: true }]);
     assert.equal(nav.pay(failed.root, failed.document), true);
     assert.equal(failed.focused(), null);
+});
+
+test('an h1 without tabindex gives way to the marked text after it', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:C');
+    const failed = page([{ tag: 'h1', attributes: {} }, refusal]);
+    assert.equal(nav.pay(failed.root, failed.document), false);
+    assert.equal(failed.focused(), refusal);
 });
 
 test('a refusal with no title takes focus on its marked text', () => {
