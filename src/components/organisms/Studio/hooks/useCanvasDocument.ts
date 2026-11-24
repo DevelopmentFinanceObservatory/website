@@ -15,6 +15,7 @@ import {
     withLocalCards,
     withManifestPins,
 } from '@/lib/studio/composition';
+import type { OwedRemoval } from '@/lib/studio/owedRemovals';
 import { DEFAULT_THEME, type StudioTheme } from '@/lib/studio/theme';
 import { uuid } from '@/lib/uuid';
 
@@ -238,12 +239,18 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     );
 
     // What the canvas shows, through the same rule a share's live checks
-    // use, from the harness canvas the chat last saw.
+    // use, from the harness canvas the chat last saw, less the harness cards
+    // owed removal (owedRemovals.ts).
     const visibleWidgets = useCallback(
-        (chatWidgets: TurnWidget[], canvas: CanvasBaseline | null): Widget[] =>
+        (
+            chatWidgets: TurnWidget[],
+            canvas: CanvasBaseline | null,
+            owedRemovals: OwedRemoval[],
+        ): Widget[] =>
             canvasWidgetsOf({
                 widgets: chatWidgets,
                 canvas,
+                owedRemovals,
                 localIds,
                 pinnedIds,
                 removedIds,

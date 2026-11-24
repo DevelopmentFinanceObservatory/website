@@ -185,8 +185,10 @@ export const useConversationSave = ({
         chat.messages,
         chat.widgets,
         chat.activity,
-        // The harness canvas rides in the chat's snapshot (takeChatSnapshot).
+        // The harness canvas and the removals owed it ride in the chat's
+        // snapshot (takeChatSnapshot).
         chat.canvas,
+        chat.owedRemovals,
         doc.pinnedIds,
         doc.removedIds,
         doc.localIds,

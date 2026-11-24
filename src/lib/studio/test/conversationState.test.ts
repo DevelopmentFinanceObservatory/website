@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
+import type { ChartWidget, Widget } from '@/lib/chat/widgets';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { createLegacyCanvas, takeManifest } from '../composition.ts';
@@ -22,7 +23,9 @@ import {
     producedCards,
     readConversation,
     RESUME_ATTEMPTS,
+    reconcileStoredCards,
     sendNewQuestion,
+    storedCards,
     takeApproval,
     widgetFromRead,
     withMovedQuestion,
@@ -31,6 +34,7 @@ import {
     withTurnApprovals,
     type AttachStep,
 } from '../conversationState.ts';
+import { placeCard, takenOver } from '../cardReplace.ts';
 import { approvedFromFrame, planFromFrame, withApprovedPlan } from '../plan.ts';
 import {
     ensureTurn,
@@ -73,6 +77,7 @@ import type {
     PlanProposed,
     StudioFrame,
     TurnState,
+    UnitOffer,
 } from '../wire.ts';
 import { bodyOf } from './fixtures/recorded-wire.ts';
 
@@ -405,30 +410,39 @@ test('attachStep decides from the turn status and the lease', () => {
 
 // A carryOnTurn run with recorded calls: `resumes` answers each resume in
 // turn (frames, or a refusal), `reads` each state read, and `onRefusal`
-// stands for the stream's own refusal handler.
+// stands for the stream's own refusal handler. `merged` collects the reads
+// merged, also for a run that rejects.
 const run = async (
     first: AttachStep,
     {
         resumes = [],
         reads = [],
         onRefusal,
+        onSessionGone,
+        merged = [],
     }: {
         resumes?: (StudioFrame[] | StreamRefusal)[];
         reads?: (ConversationRead | StateRefusal | null)[];
         onRefusal?: StreamHandlers['onRefusal'];
+        onSessionGone?: StreamHandlers['onSessionGone'];
+        merged?: ConversationRead[];
     } = {},
 ) => {
     const frames: StudioFrame[] = [];
     const calls: string[] = [];
-    const merged: ConversationRead[] = [];
+    const handedOn: ConversationRead[] = [];
+    // Whether this page carried the turn itself, as onCarry heard it.
+    const claimed: boolean[] = [];
 
     await carryOnTurn({
         conversationId: 'conv',
         first,
-        handlers: { onFrame: (frame) => frames.push(frame), onRefusal },
+        handlers: { onFrame: (frame) => frames.push(frame), onRefusal, onSessionGone },
         signal: new AbortController().signal,
         since: () => 1,
         onRead: (read) => merged.push(read),
+        onNextTurn: (read) => handedOn.push(read),
+        onCarry: (own) => claimed.push(own),
         resume: async (conversationId, turnIndex, handlers: StreamHandlers) => {
             calls.push(`resume ${conversationId} ${turnIndex}`);
             const answer = resumes.shift();
@@ -449,17 +463,19 @@ const run = async (
         },
     });
 
-    return { frames, calls, merged };
+    return { frames, calls, merged, handedOn, claimed };
 };
 
 test('carryOnTurn resumes a running turn nobody holds and streams it', async () => {
     const done: StudioFrame = { event: 'done', seq: 40, trace_id: 'tr_1', composition: null };
-    const { frames, calls } = await run(
+    const { frames, calls, claimed } = await run(
         { kind: 'resume', turnIndex: 2 },
         { resumes: [[{ event: 'message.complete', seq: 39, text: 'The answer.' }, done]] },
     );
 
     assert.deepEqual(calls, ['resume conv 2']);
+    // The page carries the turn from the resume on.
+    assert.deepEqual(claimed, [true]);
     assert.deepEqual(
         frames.map((frame) => frame.event),
         ['message.complete', 'done'],
@@ -493,7 +509,7 @@ test('carryOnTurn waits out a held turn, then shows the pause it reached', async
         turn: turnState({ status: 'paused' }),
         pause: { interrupt_id: 'int-7', kind: 'plan', frames: [PLAN] },
     });
-    const { frames, calls, merged } = await run(
+    const { frames, calls, merged, claimed } = await run(
         { kind: 'resume', turnIndex: 2 },
         { resumes: [busy], reads: [paused] },
     );
@@ -501,19 +517,77 @@ test('carryOnTurn waits out a held turn, then shows the pause it reached', async
     assert.deepEqual(calls, ['resume conv 2', 'sleep 7000', 'read conv 1']);
     assert.deepEqual(merged, [paused]);
     assert.deepEqual(frames, [PLAN]);
+    // The refused resume left the turn another stream's.
+    assert.deepEqual(claimed, [false]);
 });
 
-test('carryOnTurn ends the turn once the harness has closed it', async () => {
-    const { frames, calls } = await run(
-        { kind: 'wait', turnIndex: 2, seconds: 3 },
-        { reads: [readOf({ turn: turnState({ status: 'done' }), closed_since: [closed(2)] })] },
-    );
+test('carryOnTurn ends its turn once the harness closed it, and hands on a later turn another tab began', async () => {
+    const cases: [string, ConversationRead, boolean][] = [
+        [
+            'closed',
+            readOf({ turn: turnState({ status: 'done' }), closed_since: [closed(2)] }),
+            false,
+        ],
+        // Another tab closed turn 2 and began turn 3 while this page waited.
+        [
+            'next turn held by the other tab',
+            readOf({
+                turn: turnState({ index: 3, lease_live: true, retry_after_seconds: 4 }),
+                closed_since: [closed(2)],
+            }),
+            true,
+        ],
+        [
+            'next turn held by nobody',
+            readOf({ turn: turnState({ index: 3 }), closed_since: [closed(2)] }),
+            true,
+        ],
+    ];
 
-    assert.deepEqual(calls, ['sleep 3000', 'read conv 1']);
-    assert.deepEqual(
-        frames.map((frame) => frame.event),
-        ['done'],
-    );
+    for (const [label, next, handsOn] of cases) {
+        const { frames, calls, merged, handedOn, claimed } = await run(
+            { kind: 'wait', turnIndex: 2, seconds: 3 },
+            { reads: [next] },
+        );
+
+        // Turn 2's reply comes from the read, and its stream ends there.
+        assert.deepEqual(calls, ['sleep 3000', 'read conv 1'], label);
+        // It only waits on another stream's turn.
+        assert.deepEqual(claimed, [false], label);
+        assert.deepEqual(merged, [next], label);
+        assert.deepEqual(
+            frames.map((frame) => frame.event),
+            ['done'],
+            label,
+        );
+        assert.deepEqual(handedOn, handsOn ? [next] : [], label);
+    }
+});
+
+test('carryOnTurn hands a read of a session the harness began afresh to the stream, and merges nothing from it', async () => {
+    const cases: [string, ConversationRead][] = [
+        ['a lower turn', readOf({ turn: turnState({ index: 1 }) })],
+        ['no turn', readOf({})],
+    ];
+
+    for (const [label, restarted] of cases) {
+        const merged: ConversationRead[] = [];
+        let gone = 0;
+        const { frames } = await run(
+            { kind: 'wait', turnIndex: 2, seconds: 3 },
+            { reads: [restarted], merged, onSessionGone: () => (gone += 1) },
+        );
+
+        assert.equal(gone, 1, label);
+        assert.deepEqual(frames, [], label);
+        assert.deepEqual(merged, [], label);
+
+        // A stream with no handler for it rejects.
+        await assert.rejects(
+            run({ kind: 'wait', turnIndex: 2, seconds: 3 }, { reads: [restarted] }),
+            label,
+        );
+    }
 });
 
 test('carryOnTurn rejects when the state cannot be read, so the turn ends failed', async () => {
@@ -614,6 +688,7 @@ test('carryOnTurn waits after any refused resume it may retry, and gives up afte
             signal: new AbortController().signal,
             since: () => 1,
             onRead: () => {},
+            onNextTurn: () => {},
             resume: async (_id, _turn, handlers: StreamHandlers) => {
                 resumes += 1;
                 handlers.onRefusal?.(resumes > 50 ? { ...conflict, status: 500 } : conflict);
@@ -1410,6 +1485,120 @@ test("a state read draws the card another tab made, and a held card's newer revi
         cardsToRead(manifestOf([[CARD, 2]]), new Map([[CARD, 2]]), new Set([CARD])),
         [],
     );
+});
+
+test('a card a missed unit change drew takes the slot of the card it replaced, with its unit offer', async (t) => {
+    t.mock.method(globalThis, 'fetch', async (url: string) => {
+        const revision = Number(new URL(url, 'https://site.example').searchParams.get('revision'));
+
+        return Response.json({ ...bodyOf('component_read.at_revision'), revision });
+    });
+
+    const offer: UnitOffer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current'] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' },
+    };
+    const turn: ClosedTurn = {
+        ...closed(3),
+        component_ids: [CARD],
+        cards: [
+            {
+                component_id: CARD,
+                type: 'line_chart',
+                title: 'ODA',
+                revision: 1,
+                unit_change: { spec_id: 'spec_1', offer },
+                replaces: 'cmp_old',
+            },
+        ],
+    };
+    const stored = storedCards([closed(2), turn]).get(CARD);
+    const read = await readComponent(CARD, 1);
+    const drawn = widgetFromRead(manifestOf([[CARD, 1]]).blocks[0]!, read!, undefined, stored);
+
+    assert.deepEqual(drawn?.kind !== 'text' && drawn?.unitChange, { spec_id: 'spec_1', offer });
+
+    // The page holds the old card between two others.
+    const page: (Widget & { turn: number })[] = ['cmp_a', 'cmp_old', 'cmp_b'].map((id) => ({
+        kind: 'text',
+        id,
+        title: id,
+        body: '',
+        turn: 1,
+    }));
+    const from = takenOver(CARD, { replaces: stored?.replaces ?? null });
+
+    assert.equal(from, 'cmp_old');
+    assert.deepEqual(
+        placeCard(page, { ...drawn!, turn: 3 }, { replaces: from }).map((card) => card.id),
+        ['cmp_a', CARD, 'cmp_b'],
+    );
+});
+
+test('the read that closes a turn corrects the cards drawn from it while it ran', () => {
+    const offer: UnitOffer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current'] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' },
+    };
+    const chart = (id: string): ChartWidget & { turn: number } => ({
+        kind: 'chart',
+        id,
+        chartType: 'line',
+        title: id,
+        categories: [],
+        series: [],
+        turn: 1,
+    });
+    // The page holds cmp_a (its slot), and drew cmp_c from a poll while
+    // another tab's turn ran: two Change unit swaps, cmp_a to cmp_b to cmp_c.
+    const page: (Widget & { turn: number })[] = [
+        chart('cmp_a'),
+        chart('cmp_other'),
+        { ...chart('cmp_c'), turn: 3 },
+    ];
+    const stored = storedCards([
+        {
+            ...closed(2),
+            cards: [
+                {
+                    component_id: 'cmp_b',
+                    type: 'line_chart',
+                    title: 'B',
+                    revision: 1,
+                    replaces: 'cmp_a',
+                },
+            ],
+        },
+        {
+            ...closed(3),
+            cards: [
+                {
+                    component_id: 'cmp_c',
+                    type: 'line_chart',
+                    title: 'C',
+                    revision: 1,
+                    replaces: 'cmp_b',
+                    unit_change: { spec_id: 'spec_1', offer },
+                },
+            ],
+        },
+    ]);
+    const onCanvas = new Set(['cmp_other', 'cmp_c']);
+    const { widgets, replaced } = reconcileStoredCards(page, stored, ['cmp_c'], onCanvas);
+
+    assert.deepEqual(
+        widgets.map((widget) => widget.id),
+        ['cmp_c', 'cmp_other'],
+    );
+    assert.deepEqual(replaced, [['cmp_a', 'cmp_c']]);
+    assert.deepEqual(widgets[0]?.kind !== 'text' && widgets[0]?.unitChange, {
+        spec_id: 'spec_1',
+        offer,
+    });
+    // Corrected once, the card stays as it is.
+    assert.equal(reconcileStoredCards(widgets, stored, ['cmp_c'], onCanvas).widgets, widgets);
 });
 
 // A plan.approved frame of revision `revision`, titled after it.

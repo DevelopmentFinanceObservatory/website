@@ -568,7 +568,7 @@ const Studio = ({
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
         editedCanvasCards(chat.canvas, chat.pendingCards, (canvas) =>
-            doc.visibleWidgets(chat.widgets, canvas),
+            doc.visibleWidgets(chat.widgets, canvas, chat.owedRemovals),
         ),
     );
 
