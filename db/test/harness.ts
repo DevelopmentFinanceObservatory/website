@@ -144,17 +144,26 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 
-/** A copy of the migrations folder whose journal stops after migration `last`. */
-export function migrationsThrough(last: number): string {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'website-migrations-through-'));
+interface JournalEntry {
+    idx: number;
+    tag: string;
+}
+
+/** A copy of the migrations folder whose journal lists only the entries `keep` accepts. */
+export function migrationsWhere(keep: (entry: JournalEntry) => boolean): string {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'website-migrations-where-'));
     const journalPath = path.join(folder, 'meta', '_journal.json');
 
     fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
 
     const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
 
-    journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx <= last);
+    journal.entries = journal.entries.filter(keep);
     fs.writeFileSync(journalPath, JSON.stringify(journal));
 
     return folder;
 }
+
+/** A copy of the migrations folder whose journal stops after migration `last`. */
+export const migrationsThrough = (last: number): string =>
+    migrationsWhere((entry) => entry.idx <= last);
