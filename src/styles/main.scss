@@ -32,7 +32,7 @@ html {
     // overflows. A region that pans by drag hides its own bar. The thumb
     // keeps 3:1 contrast (WCAG non-text) against --color-bg and
     // --color-popup, which show through the transparent track.
-    scrollbar-color: var(--color-stone-hover) transparent;
+    scrollbar-color: var(--color-scrollbar) transparent;
 
     @include breakpoint(tablet) {
         font-size: vw($browser-context, tablet);

@@ -29,6 +29,15 @@ $browser-context: 16px;
     }
 }
 
+/// How far Outfit's glyph box hangs below the last line of a text box set
+/// at a line height under its 1.26em font box (ascent 1, descent 0.26).
+/// Scrollable overflow counts that overhang, so a text area that pads its
+/// end by this much draws no scrollbar while its text fits. The 0.5px covers
+/// Chrome rounding the ascent and descent to whole pixels.
+@function outfit-overhang() {
+    @return max(0px, (1.26em - 1lh) / 2 + 0.5px);
+}
+
 /// $max-at-ref = vh cap at $ref-height (Figma hero ref: 75vh at 524px).
 @function vh-max($size, $max-at-ref: 75, $ref-height: 524) {
     @return math.div(strip-units($max-at-ref) * strip-units($size), strip-units($ref-height)) * 1vh;
@@ -104,8 +113,9 @@ $scrollbar-width: rem(8);
 // bar takes layout width, so its gutter is always reserved and content that
 // takes the region in and out of overflow keeps its width. The other axis
 // is clipped, so children of a `y` region must end at the padding edge,
-// since a subpixel remainder would otherwise draw a second bar.
-@mixin scrollbar-visible($thumb, $axis: y) {
+// since a subpixel remainder would otherwise draw a second bar. The thumb
+// defaults to --color-scrollbar, which the root gives every other bar.
+@mixin scrollbar-visible($thumb: var(--color-scrollbar), $axis: y) {
     @if $axis == y {
         overflow: hidden auto;
         scrollbar-gutter: stable;

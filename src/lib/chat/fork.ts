@@ -13,7 +13,7 @@ export const forkOf = (
     saved: SavedConversation,
 ): Pick<
     SavedConversation,
-    'messages' | 'canvas' | 'localIds' | 'removedIds' | 'saveWriter' | 'saveSeq'
+    'messages' | 'canvas' | 'localIds' | 'removedIds' | 'owedRemovals' | 'saveWriter' | 'saveSeq'
 > => ({
     messages: withInherited(saved.messages),
     ...forkedCanvas(saved),

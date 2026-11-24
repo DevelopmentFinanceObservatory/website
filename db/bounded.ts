@@ -239,7 +239,8 @@ const readState = async (
  * The job's final state, read every `pollMs` until it is DONE or `ms`
  * pass: `kept` when the job failed, since a failed WRITE_TRUNCATE load
  * leaves its table as it was, `replaced` when it succeeded, and `unknown`
- * when no read by `ms` found it DONE. `onRunning` runs after each read that
+ * when no read by `ms` found it DONE, with no read after one left
+ * unanswered at `ms`. `onRunning` runs after each read that
  * finds the job running, given half the time left, and when it says it
  * acted the job is read again at once, in the other half.
  */
@@ -256,6 +257,13 @@ const finalState = async (
 
         if (state === 'replaced' || state === 'kept') {
             return state;
+        }
+
+        // A read still unanswered when its timer ends has spent the time
+        // left, though Date.now() can still read short of `until`: a timer
+        // runs on the event loop's cached clock, which lags Date.now().
+        if (state === TIMED_OUT) {
+            return 'unknown';
         }
 
         if (

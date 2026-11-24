@@ -32,6 +32,7 @@ import {
     withoutUnsentQuestion,
 } from './transcript.ts';
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
+import { placeCard } from './cardReplace.ts';
 import type {
     ClosedTurn,
     CompositionBlock,
@@ -39,6 +40,7 @@ import type {
     ConversationRead,
     PlanApproved,
     Provenance,
+    StoredCard,
     StudioFrame,
 } from './wire.ts';
 
@@ -100,6 +102,10 @@ export const readConversation = async (
     return { ...answer, closed_since: closed };
 };
 
+/** Whether `read` finds the latest turn open, paused or running. */
+export const isOpenTurn = (read: ConversationRead): boolean =>
+    read.turn?.status === 'paused' || read.turn?.status === 'running';
+
 /**
  * The cards the harness session's turns drew, from a state read of every
  * closed turn since turn 0: each closed turn's `component_ids`, and while
@@ -107,11 +113,9 @@ export const readConversation = async (
  * holds from that turn, since a read lists no open turn's cards.
  */
 export const producedCards = (read: ConversationRead, openCards: Iterable<string>): Set<string> => {
-    const open = read.turn?.status === 'paused' || read.turn?.status === 'running';
-
     return new Set([
         ...read.closed_since.flatMap((turn) => turn.component_ids),
-        ...(open ? openCards : []),
+        ...(isOpenTurn(read) ? openCards : []),
     ]);
 };
 
@@ -533,6 +537,90 @@ export const cardTurns = (
     return filed;
 };
 
+/** The stored cards of a read's closed turns (`cards`), by component id,
+ *  the latest turn's where two turns changed one card. */
+export const storedCards = (closed: readonly ClosedTurn[]): Map<string, StoredCard> =>
+    new Map(
+        [...closed]
+            .sort((a, b) => a.turn_index - b.turn_index)
+            .flatMap((turn) => turn.cards ?? [])
+            .map((card) => [card.component_id, card] as const),
+    );
+
+/**
+ * The card whose slot card `id` takes, as its frame's `replaces` would have
+ * named it: its stored card's `replaces`, followed through `stored` while
+ * the card named is one the page does not hold (`held`), as when another
+ * tab changed a card's unit twice. Null when the chain reaches no held card.
+ */
+export const replacedCard = (
+    id: string,
+    stored: ReadonlyMap<string, StoredCard>,
+    held: (id: string) => boolean,
+): string | null => {
+    const seen = new Set([id]);
+
+    for (let from = stored.get(id)?.replaces; from && !seen.has(from);) {
+        if (held(from)) {
+            return from;
+        }
+
+        seen.add(from);
+        from = stored.get(from)?.replaces;
+    }
+
+    return null;
+};
+
+/**
+ * `widgets` with the cards `ids`, which the page drew from a read before
+ * their turn closed and so without their stored cards, brought to what
+ * their frames would have drawn once a read carries those cards (`stored`):
+ * a card with no unit offer takes its stored card's, and a card that
+ * replaced a card the page holds off the canvas (`onCanvas` lacks it,
+ * replacedCard) takes that card's slot. `replaced` lists each swap, old card
+ * first, so the canvas moves the old card's settings. The same array when
+ * nothing changed.
+ */
+export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
+    widgets: TWidget[],
+    stored: ReadonlyMap<string, StoredCard>,
+    ids: Iterable<string>,
+    onCanvas: ReadonlySet<string>,
+): { widgets: TWidget[]; replaced: [string, string][] } => {
+    let next = widgets;
+    const replaced: [string, string][] = [];
+
+    for (const id of ids) {
+        const card = stored.get(id);
+        const held = next.find((widget) => widget.id === id);
+
+        if (!card || !held) {
+            continue;
+        }
+
+        let drawn = held;
+
+        if (card.unit_change && drawn.kind !== 'text' && !drawn.unitChange) {
+            drawn = { ...drawn, unitChange: card.unit_change };
+            next = next.map((widget) => (widget.id === id ? drawn : widget));
+        }
+
+        const from = replacedCard(
+            id,
+            stored,
+            (other) => !onCanvas.has(other) && next.some((widget) => widget.id === other),
+        );
+
+        if (from) {
+            next = placeCard(next, drawn, { replaces: from });
+            replaced.push([from, id]);
+        }
+    }
+
+    return { widgets: next, replaced };
+};
+
 /**
  * Draw the cards a state read's manifest names that the page lacks
  * (cardsToRead): each is read (`read`), dropped when a newer revision
@@ -639,7 +727,8 @@ const provenanceOfRead = (read: ComponentRead): Provenance => {
 
 /**
  * A manifest card drawn from its component read: a card the page never saw
- * as the widget its `component.created` frame would have drawn, and a card
+ * as the widget its `component.created` frame would have drawn, with the
+ * unit offer its stored card (`stored`, a state read's) keeps, and a card
  * the page holds (`held`) redrawn at the read's revision as a
  * `component.revised` frame with its payload would. dfo-apis' fact summary
  * becomes the stream's (factsOf). Null for a card of a type the canvas does
@@ -649,6 +738,7 @@ export const widgetFromRead = (
     block: CompositionBlock,
     read: ComponentRead,
     held?: Widget,
+    stored?: StoredCard,
 ): Widget | null => {
     try {
         const description = payloadDescription(read.payload);
@@ -679,6 +769,7 @@ export const widgetFromRead = (
                   payload: read.payload,
                   fact_summary: facts,
                   provenance: provenanceOfRead(read),
+                  unit_change: stored?.unit_change ?? null,
               });
     } catch {
         return null;
@@ -732,15 +823,26 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * Carry on the harness's open turn from `first` as one stream into
  * `handlers`: resume a running turn nobody holds (`resume`), wait while
  * another stream holds it, show a pause by its frames, and end with a `done`
- * once the harness has closed it. A resume refused 409 (the turn was taken or
- * paused meanwhile) or 503 `transient_unavailable` reads the state again,
- * after the wait the refusal names and at least DEFAULT_WAIT_SECONDS.
- * Each read goes to `onRead`, which merges it, and is asked with `since()`.
- * Any other refused resume, and a read refused as a StateRefusal (the
- * session is gone, or a guest must sign in), goes to `handlers.onRefusal`
- * and ends the turn when it deals with it. Rejects when that refusal is not
- * dealt with, a resume is refused RESUME_ATTEMPTS times, or a read fails,
- * and with an AbortError when `signal` aborts.
+ * once the harness has closed it. `onCarry` hears whether this page carries
+ * the turn itself: true once the harness grants a resume (its turn index or
+ * first frame), and false when it refuses one and before each wait while
+ * another stream holds the turn. A resume refused 409
+ * (the turn was taken or paused meanwhile) or 503 `transient_unavailable`
+ * reads the state again, after the wait the refusal names and at least
+ * DEFAULT_WAIT_SECONDS. Each read is asked with `since()`. A read whose open
+ * turn is later than the one this stream carries (another tab closed this
+ * turn and began the next) goes to `onRead`, which merges it, ends this turn
+ * with a `done` and goes to `onNextTurn`, which carries the later turn on
+ * under handlers of its own. A read that finds this turn closed and no later
+ * turn open yet ends the stream with a `done`. A read whose latest turn is
+ * earlier than this one, or that holds no turn, comes from a session the
+ * harness began afresh under the same id: it is not merged, and goes to
+ * `handlers.onSessionGone`, which ends the turn (the stream rejects without
+ * one). Any other refused resume, and a read refused as a StateRefusal
+ * (the session is gone, or a guest must sign in), goes to
+ * `handlers.onRefusal` and ends the turn when it deals with it. Rejects when
+ * that refusal is not dealt with, a resume is refused RESUME_ATTEMPTS times,
+ * or a read fails, and with an AbortError when `signal` aborts.
  */
 export const carryOnTurn = async ({
     conversationId,
@@ -749,6 +851,8 @@ export const carryOnTurn = async ({
     signal,
     since,
     onRead,
+    onNextTurn,
+    onCarry,
     resume = runResume,
     read = readConversation,
     sleep = abortableSleep,
@@ -759,6 +863,8 @@ export const carryOnTurn = async ({
     signal: AbortSignal;
     since: () => number;
     onRead: (read: ConversationRead) => void;
+    onNextTurn: (read: ConversationRead) => void;
+    onCarry?: (own: boolean) => void;
     resume?: typeof runResume;
     read?: (
         conversationId: string,
@@ -785,12 +891,28 @@ export const carryOnTurn = async ({
         if (step.kind === 'resume') {
             // Set by the refusal handler during the request.
             let refused: StreamRefusal | null = null;
+            // Set once the harness grants the resume.
+            let granted = false;
+            const grant = () => {
+                if (!granted) {
+                    granted = true;
+                    onCarry?.(true);
+                }
+            };
 
             await resume(
                 conversationId,
                 step.turnIndex,
                 {
                     ...handlers,
+                    onTurnIndex: (index) => {
+                        grant();
+                        handlers.onTurnIndex?.(index);
+                    },
+                    onFrame: (frame) => {
+                        grant();
+                        handlers.onFrame(frame);
+                    },
                     onRefusal: (refusal) => {
                         refused = refusal;
 
@@ -803,6 +925,8 @@ export const carryOnTurn = async ({
             if (refused === null) {
                 return;
             }
+
+            onCarry?.(false);
 
             const final: StreamRefusal = refused;
             const wait = resumeRetryAfter(final);
@@ -819,6 +943,7 @@ export const carryOnTurn = async ({
 
             await sleep(wait * 1000, signal);
         } else {
+            onCarry?.(false);
             await sleep(step.seconds * 1000, signal);
         }
 
@@ -832,8 +957,28 @@ export const carryOnTurn = async ({
             throw new Error('the conversation state could not be read');
         }
 
+        if ((answer.turn?.index ?? 0) < step.turnIndex) {
+            if (handlers.onSessionGone) {
+                handlers.onSessionGone();
+
+                return;
+            }
+
+            throw new Error('the harness began the conversation afresh');
+        }
+
         handlers.onKeepAlive?.();
         onRead(answer);
-        step = attachStep(answer);
+
+        const next = attachStep(answer);
+
+        if (next.kind !== 'none' && next.turnIndex > step.turnIndex) {
+            handlers.onFrame(CLOSED_FRAME);
+            onNextTurn(answer);
+
+            return;
+        }
+
+        step = next;
     }
 };

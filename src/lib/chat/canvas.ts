@@ -1,3 +1,4 @@
+import { owedIds, owedRemovalsOf } from '../studio/owedRemovals.ts';
 import type { SavedConversation } from './history.ts';
 import type { Widget } from './widgets.ts';
 
@@ -12,6 +13,7 @@ export type CanvasState = Pick<
     | 'textCards'
     | 'canvas'
     | 'localIds'
+    | 'owedRemovals'
 >;
 
 /**
@@ -46,7 +48,9 @@ export const legacyCanvasWidgetsOf = ({
  * cards. A save with neither `canvas` nor `localIds`, one from before the
  * page kept the manifest or a one-card share, keeps the rule it was drawn
  * under (`legacyCanvasWidgetsOf`), so an old conversation does not show every
- * card it ever drew. The owner's Studio, a share viewer, an embed and the
+ * card it ever drew. A harness card owed removal (owedRemovalsOf) stays off
+ * whatever the manifest holds, until the harness confirms the removal. The
+ * owner's Studio, a share viewer, an embed, a share's slots and the
  * live-share checks all read the canvas through this function.
  */
 export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
@@ -55,12 +59,17 @@ export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
     const shown = (widget: Widget) => !removed.has(widget.id);
     const local = new Set(localIds);
     const held = new Set(canvas?.ids ?? []);
+    const owed = owedIds(owedRemovalsOf(state));
     const cards =
         canvas || local.size > 0
             ? widgets.filter((widget) =>
-                  local.has(widget.id) ? shown(widget) : held.has(widget.id),
+                  local.has(widget.id)
+                      ? shown(widget)
+                      : held.has(widget.id) && !owed.has(widget.id),
               )
-            : legacyCanvasWidgetsOf(state).filter(shown);
+            : legacyCanvasWidgetsOf(state).filter(
+                  (widget) => shown(widget) && !owed.has(widget.id),
+              );
 
     return [...cards, ...textCards.filter(shown)];
 };
@@ -122,15 +131,17 @@ export const isHarnessCard = (
  */
 export const forkedCanvas = (
     saved: CanvasState,
-): Pick<CanvasState, 'canvas' | 'localIds' | 'removedIds'> => {
+): Pick<CanvasState, 'canvas' | 'localIds' | 'removedIds' | 'owedRemovals'> => {
     const shown = new Set(canvasWidgetsOf(saved).map((widget) => widget.id));
     const hidden = saved.widgets
         .filter((widget) => !shown.has(widget.id))
         .map((widget) => widget.id);
 
+    // A card the source shows stays shown, whatever its `removedIds` lists.
     return {
         canvas: null,
         localIds: saved.widgets.map((widget) => widget.id),
-        removedIds: [...new Set([...saved.removedIds, ...hidden])],
+        removedIds: [...new Set([...saved.removedIds.filter((id) => !shown.has(id)), ...hidden])],
+        owedRemovals: [],
     };
 };
