@@ -307,6 +307,22 @@ own `authorization` header goes through to the harness. A malformed
 running process (in dev), `/mcp` sends no caller and `/api` and `/mcp` rate-limit
 every client under one shared address, each with one error logged.
 
+## Order across repositories
+
+A website release that names a caller to dfo-apis in a new form deploys
+only after the dfo-apis release that accepts that form is live in the same
+tier. Nothing in code enforces this order.
+
+- API keys. A call with a valid key goes to dfo-apis as an account caller,
+  `user:` and a digest of the account (`accountCaller` in
+  `src/lib/proxy/caller.ts`). A dfo-apis release that predates account
+  callers refuses `x-dfo-caller: user:…` with a 400, so every keyed call
+  that resolves a caller there (shares, cards, pins, the Datasets API) fails
+  until it accepts them. Deploy the dfo-apis release that resolves `user:`
+  callers to the tier first, check a keyed call against it, then deploy the
+  website. Until then, `API_KEYS_ENABLED=false` keeps the website sending
+  address callers only.
+
 ## Repo-side prerequisites
 
 - The application itself, following the conventions in `docs/development.md`
