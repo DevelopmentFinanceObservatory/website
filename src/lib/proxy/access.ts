@@ -7,9 +7,10 @@
  * A call is anonymous, counted against its address as before, or keyed,
  * counted against the account that owns the key at the account's limit and
  * against the key's own daily quota (docs/design/api-keys.md, "The Proxy
- * Check"). Keys are honored on the 'api' surface only (`honorsKeys`). Every key carries a tag
- * signed by a server secret (src/lib/auth/keyTag), checked first, so a
- * made-up key costs no read and no count:
+ * Check"). Keys are honoured on the 'api' and 'datasets' surfaces
+ * (`honorsKeys`). Every key carries a tag signed by a server secret
+ * (src/lib/auth/keyTag), checked first, so a made-up key costs no read and no
+ * count:
  *
  *   no key                       anonymous
  *   bad tag                      401, no lookup, no count (outcome `forged`)
@@ -25,8 +26,7 @@
  *                                the address is over its limit)
  *     store unavailable          anonymous, counted against the address
  *
- * A key sent on a surface that does not honor keys (every one but 'api',
- * /mcp among them), or
+ * A key sent on a surface that does not honour keys ('mcp' and 'pin'), or
  * with keys switched off (API_KEYS_ENABLED), is ignored: the call is
  * anonymous and the key is stripped before the call goes upstream by
  * `forward`.
@@ -77,15 +77,21 @@ export type AccessDeps = {
     defaultDailyLimit: number;
 };
 
-/** Whether a call on `surface` may carry a key: the 'api' surface only. */
-export const honorsKeys = (surface: Surface | undefined): boolean => surface === 'api';
+// The surfaces a key counts on: the API and the Datasets API's document
+// routes, which the SDKs' dataset reads use. A read the edge cache answers
+// never reaches the proxy, so it is neither counted nor checked.
+const KEYED_SURFACES: ReadonlySet<Surface> = new Set(['api', 'datasets']);
+
+/** Whether a call on `surface` may carry a key: the 'api' and 'datasets' surfaces. */
+export const honorsKeys = (surface: Surface | undefined): boolean =>
+    surface !== undefined && KEYED_SURFACES.has(surface);
 
 const accountLimit = (key: ValidKey, defaultLimit: number): number => key.rateLimit ?? defaultLimit;
 
 /**
  * Decide the call. `keys` is whether the route and the deployment accept a
  * key at all (the route's `keys` option, and API_KEYS_ENABLED); the surface
- * must honor keys as well (`honorsKeys`). `surface` unset means the call has
+ * must honour keys as well (`honorsKeys`). `surface` unset means the call has
  * no limit and no key check.
  */
 export const decideAccess = async (

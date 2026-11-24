@@ -29,9 +29,9 @@ import type { RateVerdict } from './rateHeaders';
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
- *   RATE_LIMIT_KEYED      calls per window per account on the 'api' surface,
- *                         for an account with no limit of its own (default
- *                         600)
+ *   RATE_LIMIT_KEYED      calls per window per account on each of the 'api'
+ *                         and 'datasets' surfaces, for an account with no
+ *                         limit of its own (default 600)
  *   API_KEY_DAILY_LIMIT   API calls per UTC day per API key, for a key with
  *                         no limit of its own (`apikey.daily_limit`; default
  *                         1000). Counted apart from the window above, in a

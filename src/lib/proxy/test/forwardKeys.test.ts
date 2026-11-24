@@ -1,5 +1,5 @@
 /**
- * `forward()` with API keys, honored on the API only: what reaches the upstream
+ * `forward()` with API keys, honoured on the API and the Datasets API: what reaches the upstream
  * (never the key, the caller named as `user:` for an account), what a bad,
  * unavailable or ignored key does, a key on /mcp, the Studio and the kill
  * switch, the usage line, and the whole flow, the daily quota included, on a
@@ -194,6 +194,29 @@ test('forward: a valid key on the API goes to dfo-apis as the account, with no k
         assert.equal(seen[0]!.authorization, undefined);
         assert.equal(seen[0]!['x-api-key'], undefined);
     }
+});
+
+test('forward: a key on the Datasets API counts against the account and its daily quota, and a revoked one is refused', async () => {
+    fresh();
+
+    const log = fakes(VALID);
+    const res = await call({ 'x-api-key': KEY }, { surface: 'datasets' });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('x-ratelimit-limit'), '600');
+    assert.deepEqual(log, ['cache', 'lookup', `account:datasets:${ACCOUNT}`, `daily:key-public-1`]);
+    assert.equal(seen[0]!['x-dfo-caller'], accountCaller);
+    assert.equal(seen[0]!['x-api-key'], undefined);
+
+    fresh();
+    seen.length = 0;
+    fakes({ kind: 'invalid' });
+
+    const revoked = await call({ authorization: `Bearer ${KEY}` }, { surface: 'datasets' });
+
+    assert.equal(revoked.status, 401);
+    assert.equal((await revoked.json()).code, 'invalid_api_key');
+    assert.equal(seen.length, 0);
 });
 
 test('forward: an unavailable key store goes on as anonymous with the key still stripped', async () => {

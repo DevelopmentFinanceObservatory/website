@@ -2,7 +2,7 @@
  * `access.ts`: the decision for a call to the platform proxy, with a fake
  * limiter and key verifier so the order of counts and lookups can be seen.
  * An anonymous call is counted by address as before; a call with a key on
- * the API is checked for its signed tag, then counted against its account and
+ * the API or the Datasets API is checked for its signed tag, then counted against its account and
  * against its own daily quota, and never its address. Only a key with a good
  * tag that the store does not hold is counted against the address. A key on
  * any other surface, /mcp included, is ignored.
@@ -16,6 +16,7 @@ import { hasValidTag, signKey } from '../../auth/keyTag.ts';
 import type { AccessDeps } from '../access.ts';
 import type { KeyVerdict, KeyVerifier, ValidKey } from '../keyVerifier.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
+import type { Surface } from '../rateLimit.ts';
 
 const { decideAccess } = await import('../access.ts');
 
@@ -102,7 +103,7 @@ const world = ({
 const decide = (
     deps: AccessDeps,
     headers: Record<string, string> = {},
-    options: { surface?: 'api' | 'mcp' | 'pin'; keys?: boolean } = {},
+    options: { surface?: Surface; keys?: boolean } = {},
 ) =>
     decideAccess(deps, {
         surface: 'surface' in options ? options.surface : 'api',
@@ -168,7 +169,15 @@ test('an account with a limit of its own is counted at that limit', async () => 
     assert.deepEqual(calls, ['cache', 'account:api:acct-1:200', 'daily:key-1:1000']);
 });
 
-test('a key is honored on the api surface only: elsewhere it is anonymous, counted by address, never looked up', async () => {
+test('a key on the datasets surface is counted against the account there', async () => {
+    const { calls, deps } = world({ cached: true });
+    const access = await decide(deps, { 'x-api-key': KEY }, { surface: 'datasets' });
+
+    assert.equal(access.outcome, 'allowed');
+    assert.deepEqual(calls, ['cache', 'account:datasets:acct-1:600', 'daily:key-1:1000']);
+});
+
+test('a key on mcp or pin is anonymous, counted by address, never looked up', async () => {
     for (const surface of ['mcp', 'pin'] as const) {
         const { calls, deps } = world({ cached: true });
         const access = await decide(deps, { 'x-api-key': KEY }, { surface });

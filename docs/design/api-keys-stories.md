@@ -2,7 +2,7 @@
 
 [Issue #142][issue] · [Design][design]
 
-These stories set the UX for API keys and quotas, and each acceptance criterion is meant to become a test case. They sit beside the [design][design], which covers how keys and limits work. Where a story depends on a design rule (keys apply to the API only, one per-minute limit per account, a daily quota per key), it links to it rather than restating it.
+These stories set the UX for API keys and quotas, and each acceptance criterion is meant to become a test case. They sit beside the [design][design], which covers how keys and limits work. Where a story depends on a design rule (keys apply to the API, the Datasets API included, one per-minute limit per account, a daily quota per key), it links to it rather than restating it.
 
 ## Contents
 
@@ -29,7 +29,7 @@ These stories set the UX for API keys and quotas, and each acceptance criterion 
 
 - **Per-minute limit.** The number of API calls an account may make per 60-second window, shared by all of the account's keys. Empty on the account means the keyed default (`RATE_LIMIT_KEYED`, 600). See [Limits][design-limits].
 - **Daily quota.** The number of API calls one key may make per day, counted from 00:00 UTC. Empty on the key means the deployment default (`API_KEY_DAILY_LIMIT`, 1,000). See [Limits][design-limits].
-- **Surface.** API (`/api/v1/*`, `/openapi.json`, `/codes`) or MCP (`/mcp`). Keys apply to the API only. A key sent to `/mcp` or the Studio is stripped and ignored, and the call is anonymous.
+- **Surface.** API (`/api/v1/*`, `/openapi.json`, `/codes`) or MCP (`/mcp`). Keys apply to the API, the Datasets API included. A key sent to `/mcp` or the Studio is stripped and ignored, and the call is anonymous.
 - **Key.** A `dfo_k_…` secret in the client contract's key format, shown once at creation.
 - **Usage bar.** A key's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "500 of 1,000". Refused calls are included.
 - **Panel.** The right-side drawer that the account menu's "API keys" item opens on whatever page the user is on. It is the same drawer as the Studio's Customize panel.
@@ -297,7 +297,7 @@ Deliberately not part of this work. Some are listed in the design's [Future Feat
 5. **Detailed usage monitoring.** No graph of how much of the quota an account used over time, with a time-range selector (hour, day, week) and marks where limits were hit. Today's count against the daily quota is in scope (U1); history over days is not. This can be built later, on whatever store U11 settles on.
 6. **Outreach to current users.** No flow to find current anonymous callers and encourage them onto keys. Keys are for prospective partners who want or need higher access, offered as we talk to them. No current caller is near a level we'd consider unsustainable, so nobody needs to be moved yet.
 7. **Disabling a key.** Keys are created and deleted, nothing in between. A user who wants a key off deletes it and makes a new one later (U8).
-8. **Keys on MCP and the Studio.** Keys apply to the API only. A key sent to `/mcp` or the Studio is ignored and the call is anonymous, with no per-key or per-account allowance there. Signed-in MCP access, using OAuth, is a separate future feature ([design: Future Features][design-future]).
+8. **Keys on MCP and the Studio.** Keys apply to the API, the Datasets API included. A key sent to `/mcp` or the Studio is ignored and the call is anonymous, with no per-key or per-account allowance there. Signed-in MCP access, using OAuth, is a separate future feature ([design: Future Features][design-future]).
 9. **Rotating a key.** There is no rotate action, in the panel or on the admin page. A user rotates a key by creating a new one and deleting the old one. The new key starts its day at 0, so create-and-delete can stretch the daily quota only as far as the per-account key cap allows ([design: Limits][design-limits]).
 
 ## Open Questions

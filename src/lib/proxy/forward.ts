@@ -36,11 +36,13 @@ import { hit, hitDaily, hitKey, KEY_DAILY_LIMIT, KEYED_LIMIT, type Surface } fro
  * /codes call the route forwards, is rate-limited per IP: /mcp and the
  * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
- * headers go out only on a counted call). A call on the 'api' surface may
- * carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
+ * headers go out only on a counted call). A call on the 'api' or 'datasets'
+ * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
- * the account's limit and against the key's daily quota, or refused with a
- * 401 when the key is not valid (src/lib/proxy/access). On /mcp and on the
+ * the account's limit on that surface and against the account's daily quota,
+ * or refused with a 401 when the key is not valid (src/lib/proxy/access). A
+ * Datasets API read the edge cache answers never reaches the proxy, so it is
+ * neither counted nor checked. On /mcp and on the
  * Studio route a key is ignored: the call is anonymous and counted by
  * address. The key is never forwarded, on any route, in any header or scheme.
  * dfo-apis gets no caller Authorization at all. A call is forwarded with its
