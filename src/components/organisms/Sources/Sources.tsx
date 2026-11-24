@@ -17,12 +17,15 @@ import type { SourceCard } from '@/lib/sources/graph';
 import {
     filterCards,
     legacyFilter,
+    parsePublishers,
     parseQuery,
     parseVia,
     type Provenance,
     provenanceGroups,
     publisherOptions,
+    serializePublishers,
     summaryLine,
+    togglePublisher,
 } from '@/lib/sources/search';
 
 const serializeQuery = (q: string) => (q.trim() ? q : null);
@@ -41,12 +44,13 @@ const serializeVia = (via: Provenance | null) => via;
  * publisher and nothing else, so those render in a short form with no empty
  * fields.
  *
- * Two filters (lib/sources/search.ts), both in the URL so a filtered view
+ * Three filters (lib/sources/search.ts), all in the URL so a filtered view
  * is shareable and survives a reload, Back and Forward. The search box
- * (`?q=`, SourceSearch) matches part of a title or a publisher's name and
- * offers the matching publishers to pick, so "World Bank" lists every World
- * Bank source, the one the Observatory imports itself alongside the ones
- * that arrive via Google. The chips (`?via=`) narrow by
+ * (SourceSearch) matches part of a title or a publisher's name (`?q=`) and
+ * offers the matching publishers to pick (`?publisher=`), any number of
+ * them, so "World Bank" lists every World Bank source, the one the
+ * Observatory imports itself alongside the ones that arrive via Google. The
+ * chips (`?via=`) narrow by
  * provenance: the Observatory's own imports, or the Data Commons that
  * delivered the data. Each federated card's org line says which; a card
  * the Observatory imports itself carries no "via". With a filter on, the
@@ -83,11 +87,23 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
         serializeVia,
         { history: 'push' },
     );
+    const [publishers, setPublishers] = useUrlParam(
+        'publisher',
+        useCallback(
+            (raw: string | null) =>
+                raw === null && legacy.publishers
+                    ? [...legacy.publishers]
+                    : parsePublishers(raw, sources),
+            [legacy, sources],
+        ),
+        serializePublishers,
+        { history: 'push' },
+    );
 
-    const visible = filterCards(sources, { q, via });
-    // Each chip counts the cards the search field leaves it, so the counts
+    const visible = filterCards(sources, { q, via, publishers });
+    // Each chip counts the cards the search box leaves it, so the counts
     // say what picking the chip would show.
-    const searched = filterCards(sources, { q, via: null });
+    const searched = filterCards(sources, { q, via: null, publishers });
     const counts = Object.fromEntries(
         groups.map((group) => [
             group.id,
@@ -115,6 +131,9 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                         value={q}
                         onChange={setQ}
                         options={publisherOptions(sources, q)}
+                        selected={publishers}
+                        onToggle={(name) => setPublishers(togglePublisher(publishers, name))}
+                        onClearSelected={() => setPublishers([])}
                     />
                     {/* One provenance at a time: a source has exactly one, so
                         stacking chips would widen the list where a filter is
@@ -130,11 +149,17 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                 {/* Filled only with a filter on: with none, the chips' counts
                     already say the split. */}
                 <p className={styles.summary} aria-live="polite">
-                    {q.trim() !== '' || via ? summaryLine(visible) : null}
+                    {q.trim() !== '' || via || publishers.length > 0
+                        ? summaryLine(
+                              visible,
+                              publishers.length,
+                              groups.find((group) => group.id === via)?.label ?? null,
+                          )
+                        : null}
                 </p>
             </PageHero>
 
-            <ul className={styles.grid} key={`${via ?? 'all'}:${q}`}>
+            <ul className={styles.grid} key={`${via ?? 'all'}:${publishers.join('|')}:${q}`}>
                 {visible.map((source, index) => (
                     <li key={source.id} className={styles.card} style={revealIndex(index)}>
                         {/* The whole card opens the source's page. */}

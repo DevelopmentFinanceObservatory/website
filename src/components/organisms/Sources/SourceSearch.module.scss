@@ -41,6 +41,7 @@
 
     flex: 1 1 auto;
     min-width: 0;
+    height: rem(30);
     padding: 0;
     font-family: var(--font-dm-mono);
     font-weight: 300;
@@ -123,8 +124,29 @@
     background-color: var(--color-gray-2700);
 }
 
+.optionPicked {
+    color: var(--color-white);
+}
+
 .name {
+    @include flex(row, flex-start, center);
+
+    gap: rem(10);
     min-width: 0;
+}
+
+// The tick's place, kept while unpicked so the names line up.
+.mark {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(14);
+    height: rem(14);
+}
+
+.markIcon {
+    width: rem(12);
+    height: rem(12);
 }
 
 .count {

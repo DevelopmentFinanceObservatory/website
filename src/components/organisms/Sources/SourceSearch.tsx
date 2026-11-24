@@ -15,21 +15,36 @@ type SourceSearchProps = {
     onChange: (value: string) => void;
     // The publishers the list offers for the value, with their source counts.
     options: readonly PublisherOption[];
+    // The publishers picked so far, by name, in the order they were picked.
+    selected: readonly string[];
+    // Picks the named publisher, or unpicks it when it is picked.
+    onToggle: (name: string) => void;
+    // Unpicks every publisher.
+    onClearSelected: () => void;
 };
 
 /**
  * The Sources page's search box: a field on the dark ground with a list of
  * publishers under it while the field has focus. Typing narrows the list to
- * the publishers whose name holds the text, and picking one puts its name
- * in the field. A cross at the field's right clears it. Every row is
- * reachable by keyboard (arrows move, Enter picks, Escape closes the list,
- * then clears the field).
+ * the publishers whose name holds the text. Picking a row ticks the
+ * publisher, and picking it again unticks it; the list stays open for the
+ * next pick, and the field's placeholder counts the picks. A cross at the
+ * field's right clears the text and the picks. Every row is reachable by
+ * keyboard (arrows move, Enter picks, Escape closes the list, then clears
+ * the field).
  *
  * The list renders into the document body, placed under the field, because
  * the hero clips its overflow to keep the map inside and would cut the list
  * at its bottom edge.
  */
-const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
+const SourceSearch = ({
+    value,
+    onChange,
+    options,
+    selected,
+    onToggle,
+    onClearSelected,
+}: SourceSearchProps) => {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
     // Set when the arrow keys move the active row, so only they scroll the list.
@@ -61,19 +76,28 @@ const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
             return;
         }
 
+        // The field's size moves the list, as the viewport narrows.
+        const resized = new ResizeObserver(measure);
+
+        if (fieldRef.current) {
+            resized.observe(fieldRef.current);
+        }
+
         window.addEventListener('scroll', measure, true);
         window.addEventListener('resize', measure);
 
         return () => {
+            resized.disconnect();
             window.removeEventListener('scroll', measure, true);
             window.removeEventListener('resize', measure);
         };
     }, [shown, measure]);
 
     const pick = (option: PublisherOption) => {
-        onChange(option.label);
-        setOpen(false);
+        onToggle(option.label);
+        onChange('');
         setActive(-1);
+        inputRef.current?.focus();
     };
 
     const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -145,7 +169,11 @@ const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
                     aria-expanded={shown}
                     aria-controls={listId}
                     aria-activedescendant={shown && active >= 0 ? `${id}-${active}` : undefined}
-                    placeholder="Search and select sources..."
+                    placeholder={
+                        selected.length > 0
+                            ? `${selected.length} ${selected.length === 1 ? 'publisher' : 'publishers'} selected`
+                            : 'Search and select sources...'
+                    }
                     autoComplete="off"
                     spellCheck={false}
                     value={value}
@@ -158,7 +186,7 @@ const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
                     onBlur={() => setOpen(false)}
                     onKeyDown={onKeyDown}
                 />
-                {value !== '' && (
+                {(value !== '' || selected.length > 0) && (
                     <button
                         type="button"
                         className={styles.clear}
@@ -167,6 +195,7 @@ const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
                             onChange('');
+                            onClearSelected();
                             setActive(-1);
                             inputRef.current?.focus();
                         }}
@@ -182,28 +211,41 @@ const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
                         id={listId}
                         role="listbox"
                         aria-label="Publishers"
+                        aria-multiselectable="true"
                         className={styles.list}
                         style={place}
                     >
-                        {options.map((option, index) => (
-                            <li
-                                key={option.label}
-                                id={`${id}-${index}`}
-                                role="option"
-                                aria-selected={index === active}
-                                className={classNames(
-                                    styles.option,
-                                    index === active && styles.optionActive,
-                                )}
-                                // Keeps focus in the field so the blur does not close the list first.
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => pick(option)}
-                                onMouseMove={() => setActive(index)}
-                            >
-                                <span className={styles.name}>{option.label}</span>
-                                <span className={styles.count}>{option.count}</span>
-                            </li>
-                        ))}
+                        {options.map((option, index) => {
+                            const picked = selected.includes(option.label);
+
+                            return (
+                                <li
+                                    key={option.label}
+                                    id={`${id}-${index}`}
+                                    role="option"
+                                    aria-selected={picked}
+                                    className={classNames(
+                                        styles.option,
+                                        picked && styles.optionPicked,
+                                        index === active && styles.optionActive,
+                                    )}
+                                    // Keeps focus in the field so the blur does not close the list first.
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => pick(option)}
+                                    onMouseMove={() => setActive(index)}
+                                >
+                                    <span className={styles.name}>
+                                        <span className={styles.mark} aria-hidden="true">
+                                            {picked && (
+                                                <Icon name="check" className={styles.markIcon} />
+                                            )}
+                                        </span>
+                                        {option.label}
+                                    </span>
+                                    <span className={styles.count}>{option.count}</span>
+                                </li>
+                            );
+                        })}
                     </ul>,
                     document.body,
                 )}

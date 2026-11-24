@@ -6,11 +6,15 @@ import {
     filterCards,
     legacyFilter,
     matchesQuery,
+    parsePublishers,
     parseQuery,
     parseVia,
     provenanceGroups,
     publisherOptions,
+    serializePublishers,
+    type SourceFilters,
     summaryLine,
+    togglePublisher,
 } from '../search.ts';
 
 const DFO = { id: 'dfo', label: 'Development Finance Observatory' } as const;
@@ -39,6 +43,13 @@ const cards = [
 
 const titles = (list: readonly Filterable[]) => list.map((c) => c.title);
 
+const filters = (partial: Partial<SourceFilters>): SourceFilters => ({
+    q: '',
+    via: null,
+    publishers: [],
+    ...partial,
+});
+
 test('one chip per provenance with cards: DFO, then Google, then UN, each counting its cards', () => {
     assert.deepEqual(provenanceGroups(cards), [
         { id: 'dfo', label: 'DFO', count: 3 },
@@ -63,26 +74,44 @@ test('a query matches part of the title or the publisher, ignoring case and spac
 });
 
 test('"World Bank" lists every World Bank source: the DFO import, then the ones via Google', () => {
-    assert.deepEqual(titles(filterCards(cards, { q: 'World Bank', via: null })), [
+    assert.deepEqual(titles(filterCards(cards, filters({ q: 'World Bank' }))), [
         'International Debt Statistics (IDS)',
         'World Bank Datasets',
         'World Development Indicators',
     ]);
 });
 
-test('the two filters combine', () => {
-    assert.deepEqual(titles(filterCards(cards, { q: 'world', via: 'base' })), [
+test('picked publishers add up, and the other filters narrow their sources', () => {
+    assert.deepEqual(titles(filterCards(cards, filters({ publishers: ['OECD', 'Alpha'] }))), [
+        'CRS',
+        'DAC',
+        'Alpha 1',
+        'Alpha 2',
+    ]);
+    assert.deepEqual(
+        titles(filterCards(cards, filters({ publishers: ['World Bank'], via: 'base' }))),
+        ['World Bank Datasets', 'World Development Indicators'],
+    );
+    assert.deepEqual(
+        titles(filterCards(cards, filters({ publishers: ['World Bank', 'Alpha'], q: '1' }))),
+        ['Alpha 1'],
+    );
+    assert.deepEqual(filterCards(cards, filters({ publishers: ['Nobody'] })), []);
+});
+
+test('the text and the provenance combine', () => {
+    assert.deepEqual(titles(filterCards(cards, filters({ q: 'world', via: 'base' }))), [
         'World Bank Datasets',
         'World Development Indicators',
     ]);
-    assert.deepEqual(titles(filterCards(cards, { q: 'world', via: 'un_system' })), [
+    assert.deepEqual(titles(filterCards(cards, filters({ q: 'world', via: 'un_system' }))), [
         'World Food Programme',
     ]);
-    assert.deepEqual(filterCards(cards, { q: 'nothing here', via: 'dfo' }), []);
+    assert.deepEqual(filterCards(cards, filters({ q: 'nothing here', via: 'dfo' })), []);
 });
 
 test('with no filter, cards sort by provenance, DFO imports in their order, the rest by publisher then title', () => {
-    assert.deepEqual(titles(filterCards(cards, { q: '', via: null })), [
+    assert.deepEqual(titles(filterCards(cards, filters({}))), [
         'CRS',
         'International Debt Statistics (IDS)',
         'DAC',
@@ -96,20 +125,22 @@ test('with no filter, cards sort by provenance, DFO imports in their order, the 
     ]);
 });
 
-test('the summary line reports the split, a single share without it, and no match', () => {
+test('the summary line counts the sources, the picked publishers, and names the chosen provenance', () => {
+    assert.equal(summaryLine(cards), '10 sources.');
+    assert.equal(summaryLine(filterCards(cards, filters({ q: 'World Bank' }))), '3 sources.');
     assert.equal(
-        summaryLine(cards),
-        '10 sources: 3 ingested by DFO, 5 via Data Commons by Google, 2 via UN System Data Commons.',
+        summaryLine(filterCards(cards, filters({ publishers: ['OECD', 'Alpha'] })), 2),
+        '4 sources from 2 publishers.',
     );
+    assert.equal(summaryLine([cards[1]!], 1), '1 source from 1 publisher.');
     assert.equal(
-        summaryLine(filterCards(cards, { q: 'World Bank', via: null })),
-        '3 sources: 1 ingested by DFO, 2 via Data Commons by Google.',
-    );
-    assert.equal(
-        summaryLine(filterCards(cards, { q: '', via: 'base' })),
+        summaryLine(filterCards(cards, filters({ via: 'base' })), 0, 'Data Commons by Google'),
         '5 sources via Data Commons by Google.',
     );
-    assert.equal(summaryLine([cards[1]!]), '1 source ingested by DFO.');
+    assert.equal(
+        summaryLine(filterCards(cards, filters({ via: 'dfo', publishers: ['OECD'] })), 1, 'DFO'),
+        '2 sources from 1 publisher via DFO.',
+    );
     assert.equal(summaryLine([]), 'No sources match.');
 });
 
@@ -142,7 +173,13 @@ test('two graph nodes with one publisher name make one row, counting both', () =
     );
 });
 
-test('the URL values parse to a known provenance and the query as typed', () => {
+test('togglePublisher adds a name once and removes it again', () => {
+    assert.deepEqual(togglePublisher([], 'OECD'), ['OECD']);
+    assert.deepEqual(togglePublisher(['OECD'], 'Alpha'), ['OECD', 'Alpha']);
+    assert.deepEqual(togglePublisher(['OECD', 'Alpha'], 'OECD'), ['Alpha']);
+});
+
+test('the URL values parse to a known provenance, the query as typed, and known publishers', () => {
     assert.equal(parseVia('base', cards), 'base');
     assert.equal(parseVia('dfo', cards), 'dfo');
     assert.equal(parseVia('dfo', [cards[0]!]), null);
@@ -150,11 +187,26 @@ test('the URL values parse to a known provenance and the query as typed', () => 
     assert.equal(parseVia(null, cards), null);
     assert.equal(parseQuery('World Bank'), 'World Bank');
     assert.equal(parseQuery(null), '');
+    assert.deepEqual(parsePublishers('World Bank|OECD|World Bank|Nobody', cards), [
+        'World Bank',
+        'OECD',
+    ]);
+    assert.deepEqual(parsePublishers(null, cards), []);
+    assert.deepEqual(parsePublishers('', cards), []);
 });
 
-test("the drawer's ?filter= link reads as a provenance or a publisher's name", () => {
+test('picked publishers serialize bar-separated, since their names hold commas, and none as null', () => {
+    const cso = card('Census', 'dc/s/CSO', 'Central Statistics Office (CSO), Ireland', BASE);
+    const picked = ['Central Statistics Office (CSO), Ireland', 'OECD'];
+
+    assert.equal(serializePublishers(picked), 'Central Statistics Office (CSO), Ireland|OECD');
+    assert.deepEqual(parsePublishers(serializePublishers(picked), [...cards, cso]), picked);
+    assert.equal(serializePublishers([]), null);
+});
+
+test("the drawer's ?filter= link reads as a provenance or a picked publisher", () => {
     assert.deepEqual(legacyFilter('un_system', cards), { via: 'un_system' });
-    assert.deepEqual(legacyFilter('dc/s/WorldBank', cards), { q: 'World Bank' });
+    assert.deepEqual(legacyFilter('dc/s/WorldBank', cards), { publishers: ['World Bank'] });
     assert.deepEqual(legacyFilter('dc/s/Nobody', cards), {});
     assert.deepEqual(legacyFilter(null, cards), {});
 });
