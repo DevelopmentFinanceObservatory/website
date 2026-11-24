@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+
 import { BreakableId } from './BreakableId';
 import {
     FullModelProvider,
@@ -31,6 +33,7 @@ import {
     type ExploreView,
 } from '@/lib/graphExplorer/explore';
 import { LOADING } from '@/lib/graphExplorer/load';
+import { navigationFocus } from '@/lib/graphExplorer/navFocus';
 import type { DatasetFilter, ListScope, Model } from '@/lib/graphExplorer/model';
 import {
     awaitedDataset,
@@ -79,7 +82,7 @@ const Missing = ({
     textRef?: React.Ref<HTMLParagraphElement>;
 }) => (
     <div className={styles.missing} role="status">
-        <p ref={textRef} tabIndex={-1}>
+        <p ref={textRef} tabIndex={-1} data-view-heading>
             The model has no kind of thing{' '}
             <code>
                 <BreakableId text={id} />
@@ -164,7 +167,9 @@ const ListScreen = ({
             return line === null ? (
                 <Missing id={centre.id} onStart={() => go(START_VIEW)} textRef={text} />
             ) : (
-                notice
+                <div tabIndex={-1} data-view-heading>
+                    {notice}
+                </div>
             );
         }
     }
@@ -189,6 +194,53 @@ const GraphExplorer = () => {
     const model = data.model.status === 'ready' ? data.model.value : null;
     const { view } = navigation.state;
     const { show } = navigation.state;
+    const mainRef = useRef<HTMLElement>(null);
+    const [focusAfterMove] = useState(navigationFocus);
+    const fromHistory = useRef(false);
+    const viewKey = exploreQuery({ view, ...NO_CARRIED });
+
+    // The back and forward buttons move the view without `go`, which scrolls to the top.
+    useEffect(() => {
+        const onPopState = () => {
+            fromHistory.current = true;
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, []);
+
+    // Before paint, so no frame shows the offset the browser restored for the old view.
+    useLayoutEffect(() => {
+        if (!fromHistory.current) return;
+        fromHistory.current = false;
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    }, [viewKey]);
+
+    // A view that is still loading draws its heading later, so the debt is watched in the DOM.
+    useEffect(() => {
+        const main = mainRef.current;
+        if (main === null) return;
+        focusAfterMove.arrive(viewKey);
+        if (!focusAfterMove.pay(main, document)) return;
+        const observer = new MutationObserver(() => {
+            if (!focusAfterMove.pay(main, document)) stop();
+        });
+        // The reader's next key, press or focus move ends the wait, so the heading never takes focus from them.
+        const events = ['keydown', 'pointerdown', 'focusin'] as const;
+        const onInput = (event: Event) => {
+            if (focusAfterMove.input(event)) stop();
+        };
+        const stop = () => {
+            observer.disconnect();
+            for (const type of events) document.removeEventListener(type, onInput, true);
+            window.removeEventListener('blur', onBlur);
+        };
+        // Only the window's own blur reaches this listener, since an element's does not bubble.
+        const onBlur = (event: Event) => void focusAfterMove.input(event);
+        observer.observe(main, { childList: true, subtree: true });
+        for (const type of events) document.addEventListener(type, onInput, true);
+        window.addEventListener('blur', onBlur);
+        return stop;
+    }, [focusAfterMove, viewKey]);
     const awaitedOf = (id: string | null) =>
         data.full === null ? null : awaitedDataset(data.full, [id], data.usage);
     const awaited = awaitedOf(view.kind === 'dataset' ? view.id : null);
@@ -215,10 +267,7 @@ const GraphExplorer = () => {
                     <TermSourcesProvider>
                         <div className={styles.explorer}>
                             <TopBar />
-                            <main
-                                className={styles.main}
-                                key={exploreQuery({ view, ...NO_CARRIED })}
-                            >
+                            <main className={styles.main} key={viewKey} ref={mainRef}>
                                 {/* The full model is in whenever the scoped one is, since both build from the DFO pair. */}
                                 {data.model.status === 'ready' && data.full !== null ? (
                                     awaited !== null ? (
