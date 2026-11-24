@@ -38,7 +38,7 @@ const REFUSALS = {
 
 const LIMIT_INVALID = 'Enter a positive whole number, or leave it empty for the default.';
 
-/** One account's keys and daily quota, with today's API usage; null when the id is not a string. */
+/** One account's keys and daily quota, with today's API usage; null when the id is not a string or the read fails. */
 export const adminLoadKeys = async (userId: unknown): Promise<AdminAccountKeys | null> => {
     await requireAdmin();
 
@@ -46,12 +46,18 @@ export const adminLoadKeys = async (userId: unknown): Promise<AdminAccountKeys |
         return null;
     }
 
-    const [keys, quota] = await Promise.all([
-        keyService.adminUserKeys(userId),
-        keyService.accountQuota(userId),
-    ]);
+    try {
+        const [keys, quota] = await Promise.all([
+            keyService.adminUserKeys(userId),
+            keyService.accountQuota(userId),
+        ]);
 
-    return { keys, quota };
+        return { keys, quota };
+    } catch (error) {
+        console.error("admin: an account's keys did not load", error);
+
+        return null;
+    }
 };
 
 /** Creates a key for the account with the given email and answers with it, once. */

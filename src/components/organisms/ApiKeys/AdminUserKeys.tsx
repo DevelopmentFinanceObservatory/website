@@ -53,17 +53,21 @@ const AdminUserKeys = ({ user, defaultLimit, defaultDailyLimit, actions }: Admin
     const [createError, setCreateError] = useState<string | null>(null);
     const [creating, startCreate] = useTransition();
 
+    // A server action that throws (a database error) rejects; it reads as a
+    // failed load, so the row says so and a key just shown stays on screen.
+    const load = useCallback(() => loadKeys(user.id).catch(() => null), [loadKeys, user.id]);
+
     const reload = useCallback(async () => {
-        const list = await loadKeys(user.id);
+        const list = await load();
 
         setLoaded(list);
         setFailed(list === null);
-    }, [loadKeys, user.id]);
+    }, [load]);
 
     useEffect(() => {
         let current = true;
 
-        void loadKeys(user.id).then((list) => {
+        void load().then((list) => {
             if (current) {
                 setLoaded(list);
                 setFailed(list === null);
@@ -73,7 +77,7 @@ const AdminUserKeys = ({ user, defaultLimit, defaultDailyLimit, actions }: Admin
         return () => {
             current = false;
         };
-    }, [loadKeys, user.id]);
+    }, [load]);
 
     const reveal = (title: string, key: AdminRevealedKey) => {
         setCopyState('idle');
