@@ -23,6 +23,7 @@ import {
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
+import { renameKey } from '@/lib/studio/cardReplace';
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -37,11 +38,14 @@ type UseSlotsArgs = {
     viewCols: number;
     // Reports the live layout after every settle, for persistence.
     onLayoutChange?: (layout: CardLayout) => void;
+    // Cards that replaced another in its slot, new id → old id: the new
+    // card takes the old one's slot, place and size.
+    replacedIds?: Record<string, string>;
 };
 
 /**
  * Where every card sits. Places widgets as they stream in; widgets that
- * vanished (replaced by a newer turn, or a reset) fade out in place before
+ * vanished (taken off the canvas, or a reset) fade out in place before
  * their slot is pruned. Newcomers get PRIORITY: they take the highest spot
  * honouring only pinned cards, and any unpinned veteran they crowd slides to
  * the nearest place that still fits. Also owns the content-fit of every card
@@ -54,6 +58,7 @@ export const useSlots = ({
     initialLayout,
     viewCols,
     onLayoutChange,
+    replacedIds,
 }: UseSlotsArgs) => {
     const [slots, setSlots] = useState<Slots>({});
     const zRef = useRef(1);
@@ -74,9 +79,18 @@ export const useSlots = ({
             const ids = new Set(widgets.map((widget) => widget.id));
             const byId = new Map(widgets.map((widget) => [widget.id, widget]));
 
-            setSlots((prev) => {
+            setSlots((current) => {
+                // A replacement takes over its old card's slot, which stops
+                // fading if it had started.
+                const prev = Object.entries(replacedIds ?? {}).reduce((acc, [to, from]) => {
+                    const slot = acc[from];
+
+                    return slot && ids.has(to) && !acc[to]
+                        ? { ...renameKey(acc, from, to), [to]: { ...slot, leaving: false } }
+                        : acc;
+                }, current);
                 const next: Slots = {};
-                let changed = false;
+                let changed = prev !== current;
 
                 for (const [id, slot] of Object.entries(prev)) {
                     if (ids.has(id)) {
@@ -109,7 +123,7 @@ export const useSlots = ({
                 const newcomers = widgets.filter((widget) => !next[widget.id]);
 
                 if (newcomers.length === 0) {
-                    return changed ? next : prev;
+                    return changed ? next : current;
                 }
 
                 // Newcomers stack from the top, dodging the pinned cards…
@@ -189,7 +203,7 @@ export const useSlots = ({
         });
 
         return () => cancelAnimationFrame(frame);
-    }, [widgets, pinnedIds, views, viewCols, initialLayout]);
+    }, [widgets, pinnedIds, views, viewCols, initialLayout, replacedIds]);
 
     // Every settle (placement, drop, swap, resize) reports the live layout —
     // the parent persists it with the conversation.

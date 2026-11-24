@@ -1,0 +1,701 @@
+{
+    "provenances": [
+        {
+            "constraint_values": [
+                {
+                    "property": "dac1AidType",
+                    "values": [
+                        {
+                            "stat_var_count": 10,
+                            "value": "DAC1AidType1010"
+                        },
+                        {
+                            "stat_var_count": 8,
+                            "value": "DAC1AidType1015"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType1020"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType1030"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType1041"
+                        },
+                        {
+                            "stat_var_count": 2,
+                            "value": "DAC1AidType1042"
+                        },
+                        {
+                            "stat_var_count": 2,
+                            "value": "DAC1AidType1044"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType1045"
+                        },
+                        {
+                            "stat_var_count": 8,
+                            "value": "DAC1AidType1100"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType11016"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType11017"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC1AidType11018"
+                        }
+                    ]
+                },
+                {
+                    "property": "dacTypeOfFinance",
+                    "values": [
+                        {
+                            "stat_var_count": 146,
+                            "value": "DACTypeOfFinanceGrants"
+                        },
+                        {
+                            "stat_var_count": 118,
+                            "value": "DACTypeOfFinanceNonGrants"
+                        }
+                    ]
+                },
+                {
+                    "property": "financialFlowType",
+                    "values": [
+                        {
+                            "stat_var_count": 437,
+                            "value": "Disbursement"
+                        }
+                    ]
+                },
+                {
+                    "property": "financialObligationType",
+                    "values": [
+                        {
+                            "stat_var_count": 216,
+                            "value": "Commitment"
+                        }
+                    ]
+                },
+                {
+                    "property": "nettingBasis",
+                    "values": [
+                        {
+                            "stat_var_count": 216,
+                            "value": "Gross"
+                        },
+                        {
+                            "stat_var_count": 134,
+                            "value": "Net"
+                        }
+                    ]
+                }
+            ],
+            "description": "Donors' aggregate official and private flows reported to the OECD, as totals by donor without a breakdown by recipient.",
+            "facets": {
+                "currencies": ["USD"],
+                "measurement_methods": [],
+                "observation_periods": ["P1Y"],
+                "scaling_factors": [],
+                "units": ["CurrencyUSD", "Percent"]
+            },
+            "label": "OECD DAC1",
+            "patterns": [
+                {
+                    "constraint_properties": ["dac1AidType", "financialFlowType", "nettingBasis"],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC1AidType1010_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC1AidType1015_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC1AidType1100_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 209
+                },
+                {
+                    "constraint_properties": [
+                        "dac1AidType",
+                        "dacTypeOfFinance",
+                        "financialFlowType",
+                        "nettingBasis"
+                    ],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC1AidType1010_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC1AidType1015_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC1AidType1100_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 130
+                },
+                {
+                    "constraint_properties": [
+                        "dac1AidType",
+                        "dacTypeOfFinance",
+                        "financialObligationType"
+                    ],
+                    "examples": [
+                        "Amount_FinancialObligation_Commitment_DACTypeOfFinanceGrants_DAC1AidType1010_Nominal",
+                        "Amount_FinancialObligation_Commitment_DACTypeOfFinanceGrants_DAC1AidType1015_Nominal",
+                        "Amount_FinancialObligation_Commitment_DACTypeOfFinanceGrants_DAC1AidType1100_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider"],
+                    "population_type": "FinancialObligation",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 129
+                },
+                {
+                    "constraint_properties": ["dac1AidType", "financialFlowType"],
+                    "examples": [
+                        "GrantEquivalent_FinancialFlow_Disbursement_DAC1AidType1010_Nominal",
+                        "GrantEquivalent_FinancialFlow_Disbursement_DAC1AidType1015_Nominal",
+                        "GrantEquivalent_FinancialFlow_Disbursement_DAC1AidType1041_Nominal"
+                    ],
+                    "measured_property": "grantEquivalent",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 86
+                }
+            ],
+            "ref": "provenance/OECDDAC1",
+            "stat_var_count": 653
+        },
+        {
+            "constraint_values": [
+                {
+                    "property": "dac2aAidType",
+                    "values": [
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType106"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType201"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType205"
+                        },
+                        {
+                            "stat_var_count": 4,
+                            "value": "DAC2aAidType206"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType207"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType208"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType209"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType210"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType211"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType212"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType213"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType214"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType215"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType216"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType217"
+                        },
+                        {
+                            "stat_var_count": 2,
+                            "value": "DAC2aAidType218"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType219"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType221"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType250"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType255"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2aAidType299"
+                        }
+                    ]
+                },
+                {
+                    "property": "dacTypeOfFinance",
+                    "values": [
+                        {
+                            "stat_var_count": 5,
+                            "value": "DACTypeOfFinanceGrants"
+                        },
+                        {
+                            "stat_var_count": 7,
+                            "value": "DACTypeOfFinanceNonGrants"
+                        }
+                    ]
+                },
+                {
+                    "property": "financialFlowType",
+                    "values": [
+                        {
+                            "stat_var_count": 25,
+                            "value": "Disbursement"
+                        }
+                    ]
+                },
+                {
+                    "property": "nettingBasis",
+                    "values": [
+                        {
+                            "stat_var_count": 11,
+                            "value": "Gross"
+                        },
+                        {
+                            "stat_var_count": 11,
+                            "value": "Net"
+                        }
+                    ]
+                }
+            ],
+            "description": "Donors' official development assistance disbursements reported to the OECD, by recipient and type of aid.",
+            "facets": {
+                "currencies": ["USD"],
+                "measurement_methods": ["Modelled"],
+                "observation_periods": ["P1Y"],
+                "scaling_factors": [],
+                "units": ["CurrencyUSD", "Percent"]
+            },
+            "label": "OECD DAC2a",
+            "patterns": [
+                {
+                    "constraint_properties": [
+                        "dac2aAidType",
+                        "dacTypeOfFinance",
+                        "financialFlowType",
+                        "nettingBasis"
+                    ],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC2aAidType201_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC2aAidType208_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC2aAidType212_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 12
+                },
+                {
+                    "constraint_properties": ["dac2aAidType", "financialFlowType", "nettingBasis"],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC2aAidType206_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC2aAidType207_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC2aAidType213_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 7
+                },
+                {
+                    "constraint_properties": ["dac2aAidType", "financialFlowType"],
+                    "examples": [
+                        "Amount_FinancialFlow_Disbursement_DAC2aAidType210_Nominal",
+                        "Amount_FinancialFlow_Disbursement_DAC2aAidType211_Nominal",
+                        "Amount_FinancialFlow_Disbursement_DAC2aAidType299_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 3
+                },
+                {
+                    "constraint_properties": ["dac2aAidType", "financialFlowType", "nettingBasis"],
+                    "examples": [
+                        "Amount_FinancialFlow_Net_Disbursement_DAC2aAidType206_Nominal_AsAFractionOf_Count_Person"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": "Count_Person",
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 1
+                },
+                {
+                    "constraint_properties": ["dac2aAidType", "financialFlowType", "nettingBasis"],
+                    "examples": [
+                        "Amount_FinancialFlow_Net_Disbursement_DAC2aAidType206_Nominal_AsAFractionOf_PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": "PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal",
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 1
+                },
+                {
+                    "constraint_properties": ["dac2aAidType", "financialFlowType", "nettingBasis"],
+                    "examples": [
+                        "AttributedAmount_FinancialFlow_Gross_Disbursement_DAC2aAidType106_Nominal"
+                    ],
+                    "measured_property": "attributedAmount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 1
+                }
+            ],
+            "ref": "provenance/OECDDAC2A",
+            "stat_var_count": 25
+        },
+        {
+            "constraint_values": [
+                {
+                    "property": "dac2bAidType",
+                    "values": [
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType201"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType204"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType205"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType217"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType260"
+                        },
+                        {
+                            "stat_var_count": 2,
+                            "value": "DAC2bAidType292"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType293"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType295"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType296"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType297"
+                        },
+                        {
+                            "stat_var_count": 1,
+                            "value": "DAC2bAidType298"
+                        },
+                        {
+                            "stat_var_count": 2,
+                            "value": "DAC2bAidType972"
+                        }
+                    ]
+                },
+                {
+                    "property": "dacTypeOfFinance",
+                    "values": [
+                        {
+                            "stat_var_count": 1,
+                            "value": "DACTypeOfFinanceGrants"
+                        },
+                        {
+                            "stat_var_count": 9,
+                            "value": "DACTypeOfFinanceNonGrants"
+                        }
+                    ]
+                },
+                {
+                    "property": "financialFlowType",
+                    "values": [
+                        {
+                            "stat_var_count": 14,
+                            "value": "Disbursement"
+                        }
+                    ]
+                },
+                {
+                    "property": "nettingBasis",
+                    "values": [
+                        {
+                            "stat_var_count": 4,
+                            "value": "Gross"
+                        },
+                        {
+                            "stat_var_count": 10,
+                            "value": "Net"
+                        }
+                    ]
+                }
+            ],
+            "description": "Other official flows and officially supported export credits that providers report to the OECD, by recipient and type of flow.",
+            "facets": {
+                "currencies": ["USD"],
+                "measurement_methods": [],
+                "observation_periods": ["P1Y"],
+                "scaling_factors": [],
+                "units": ["CurrencyUSD"]
+            },
+            "label": "OECD DAC2b",
+            "patterns": [
+                {
+                    "constraint_properties": [
+                        "dac2bAidType",
+                        "dacTypeOfFinance",
+                        "financialFlowType",
+                        "nettingBasis"
+                    ],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceGrants_DAC2bAidType201_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceNonGrants_DAC2bAidType204_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_DACTypeOfFinanceNonGrants_DAC2bAidType292_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 10
+                },
+                {
+                    "constraint_properties": ["dac2bAidType", "financialFlowType", "nettingBasis"],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_DAC2bAidType972_Nominal",
+                        "Amount_FinancialFlow_Net_Disbursement_DAC2bAidType260_Nominal",
+                        "Amount_FinancialFlow_Net_Disbursement_DAC2bAidType296_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 4
+                }
+            ],
+            "ref": "provenance/OECDDAC2B",
+            "stat_var_count": 14
+        },
+        {
+            "constraint_values": [
+                {
+                    "property": "climatePolicyObjective",
+                    "values": [
+                        {
+                            "stat_var_count": 4,
+                            "value": "AdaptationOnlyClimateChangePolicyObjective"
+                        },
+                        {
+                            "stat_var_count": 4,
+                            "value": "ClimateChangePolicyObjective"
+                        },
+                        {
+                            "stat_var_count": 4,
+                            "value": "CrossCuttingClimateChangePolicyObjective"
+                        },
+                        {
+                            "stat_var_count": 4,
+                            "value": "MitigationOnlyClimateChangePolicyObjective"
+                        },
+                        {
+                            "stat_var_count": 3,
+                            "value": "UnspecifiedClimateChangePolicyObjective"
+                        }
+                    ]
+                },
+                {
+                    "property": "financialFlowType",
+                    "values": [
+                        {
+                            "stat_var_count": 10,
+                            "value": "Disbursement"
+                        }
+                    ]
+                },
+                {
+                    "property": "financialObligationType",
+                    "values": [
+                        {
+                            "stat_var_count": 9,
+                            "value": "Commitment"
+                        }
+                    ]
+                },
+                {
+                    "property": "nettingBasis",
+                    "values": [
+                        {
+                            "stat_var_count": 10,
+                            "value": "Gross"
+                        }
+                    ]
+                }
+            ],
+            "description": "Climate finance each provider committed and paid out, by recipient, as ONE Data estimates it from the OECD's CRS and climate-related development finance data.",
+            "facets": {
+                "currencies": ["USD"],
+                "measurement_methods": [
+                    "FullValueMarkerWeightingJointMarkerAssignment",
+                    "FullValueMarkerWeightingJointMarkerAssignmentFundingShareAttribution",
+                    "FullValueMarkerWeightingJointMarkerAssignmentSpendingShareAttribution",
+                    "MarkerScoreWeightingHighestMarkerAssignment",
+                    "MarkerScoreWeightingHighestMarkerAssignmentFundingShareAttribution",
+                    "MarkerScoreWeightingHighestMarkerAssignmentSpendingShareAttribution"
+                ],
+                "observation_periods": ["P1Y"],
+                "scaling_factors": [],
+                "units": ["CurrencyUSD"]
+            },
+            "label": "ONE Data Climate Finance",
+            "patterns": [
+                {
+                    "constraint_properties": [
+                        "climatePolicyObjective",
+                        "financialFlowType",
+                        "nettingBasis"
+                    ],
+                    "examples": [
+                        "Amount_FinancialFlow_Gross_Disbursement_AdaptationOnlyClimateChangePolicyObjective_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_ClimateChangePolicyObjective_Nominal",
+                        "Amount_FinancialFlow_Gross_Disbursement_CrossCuttingClimateChangePolicyObjective_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 5
+                },
+                {
+                    "constraint_properties": [
+                        "climatePolicyObjective",
+                        "financialFlowType",
+                        "nettingBasis"
+                    ],
+                    "examples": [
+                        "AttributedAmount_FinancialFlow_Gross_Disbursement_AdaptationOnlyClimateChangePolicyObjective_Nominal",
+                        "AttributedAmount_FinancialFlow_Gross_Disbursement_ClimateChangePolicyObjective_Nominal",
+                        "AttributedAmount_FinancialFlow_Gross_Disbursement_CrossCuttingClimateChangePolicyObjective_Nominal"
+                    ],
+                    "measured_property": "attributedAmount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialFlow",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 5
+                },
+                {
+                    "constraint_properties": ["climatePolicyObjective", "financialObligationType"],
+                    "examples": [
+                        "AttributedAmount_FinancialObligation_Commitment_AdaptationOnlyClimateChangePolicyObjective_Nominal",
+                        "AttributedAmount_FinancialObligation_Commitment_ClimateChangePolicyObjective_Nominal",
+                        "AttributedAmount_FinancialObligation_Commitment_CrossCuttingClimateChangePolicyObjective_Nominal"
+                    ],
+                    "measured_property": "attributedAmount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialObligation",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 5
+                },
+                {
+                    "constraint_properties": ["climatePolicyObjective", "financialObligationType"],
+                    "examples": [
+                        "Amount_FinancialObligation_Commitment_AdaptationOnlyClimateChangePolicyObjective_Nominal",
+                        "Amount_FinancialObligation_Commitment_ClimateChangePolicyObjective_Nominal",
+                        "Amount_FinancialObligation_Commitment_CrossCuttingClimateChangePolicyObjective_Nominal"
+                    ],
+                    "measured_property": "amount",
+                    "measurement_denominator": null,
+                    "measurement_qualifier": "Nominal",
+                    "observation_properties": ["financingProvider", "financingRecipient"],
+                    "population_type": "FinancialObligation",
+                    "stat_type": "measuredValue",
+                    "stat_var_count": 4
+                }
+            ],
+            "ref": "provenance/ONEClimateFinance",
+            "stat_var_count": 19
+        }
+    ]
+}

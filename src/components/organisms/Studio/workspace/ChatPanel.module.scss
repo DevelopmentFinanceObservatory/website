@@ -343,6 +343,36 @@
     border-color: var(--color-charcoal);
 }
 
+.pickerOptionRow {
+    @include flex(row, flex-start, flex-start);
+
+    gap: rem(8);
+}
+
+.pickerOptionBody {
+    @include flex(column, flex-start, stretch);
+
+    flex: 1;
+    gap: rem(4);
+    min-width: 0;
+}
+
+// The tick box of a multi-select row: the square twin of PlanLedger's radio.
+.pickerCheck {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    width: rem(12);
+    height: rem(12);
+    margin-top: rem(1);
+    border: 1px solid var(--color-charcoal);
+    border-radius: 0;
+
+    .pickerOptionChosen & {
+        background-color: var(--color-charcoal);
+        box-shadow: inset 0 0 0 rem(2.5) var(--color-white);
+    }
+}
+
 .pickerOptionLabel {
     @include flex(row, flex-start, center);
 
@@ -376,12 +406,16 @@
 // The free-text answer: styled like PromptForm's own bar (same height,
 // border and input treatment) so the picker's field reads as the same
 // control family as the follow-up input it stands in for.
+.pickerTextWrap {
+    position: relative;
+    margin-bottom: rem(20);
+}
+
 .pickerText {
     @include flex(row, space-between, center);
 
     gap: rem(10);
     height: rem(48);
-    margin-bottom: rem(20);
     padding: rem(10);
     background-color: var(--color-white);
     border: 1px solid var(--color-sage-light);
@@ -411,7 +445,7 @@
 }
 
 .pickerSkip {
-    align-self: flex-start;
+    align-self: flex-end;
 }
 
 // Several questions: the open one sits in a step, answered ones on a dot
@@ -539,7 +573,7 @@
 }
 
 .pickerSend {
-    align-self: flex-start;
+    align-self: flex-end;
 }
 
 @keyframes picker-step-in {
@@ -567,7 +601,7 @@
 // and Safari would otherwise fade with it, taking the thumb at a thread's
 // resting bottom.
 .chatScroll {
-    @include scrollbar-visible(var(--color-stone));
+    @include scrollbar-visible;
 
     display: flex;
     flex: 1;
@@ -755,7 +789,7 @@
 
     // A code block scrolls sideways on its own; .chatScroll never does.
     pre {
-        @include scrollbar-visible(var(--color-stone), x);
+        @include scrollbar-visible($axis: x);
 
         max-width: 100%;
     }
@@ -773,7 +807,7 @@
     // `table` component), not the thread. Cells wrap only at spaces, so
     // .botText's overflow-wrap does not squeeze the columns to fit.
     .tableScroll {
-        @include scrollbar-visible(var(--color-stone), x);
+        @include scrollbar-visible($axis: x);
 
         max-width: 100%;
         overflow-wrap: normal;

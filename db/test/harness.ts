@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { Client, Pool } from 'pg';
 import { ensureDatabaseRoles, type AdminConnection } from '../local-roles.ts';
 
@@ -138,3 +141,29 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         },
     };
 }
+
+const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
+
+interface JournalEntry {
+    idx: number;
+    tag: string;
+}
+
+/** A copy of the migrations folder whose journal lists only the entries `keep` accepts. */
+export function migrationsWhere(keep: (entry: JournalEntry) => boolean): string {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'website-migrations-where-'));
+    const journalPath = path.join(folder, 'meta', '_journal.json');
+
+    fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
+
+    journal.entries = journal.entries.filter(keep);
+    fs.writeFileSync(journalPath, JSON.stringify(journal));
+
+    return folder;
+}
+
+/** A copy of the migrations folder whose journal stops after migration `last`. */
+export const migrationsThrough = (last: number): string =>
+    migrationsWhere((entry) => entry.idx <= last);

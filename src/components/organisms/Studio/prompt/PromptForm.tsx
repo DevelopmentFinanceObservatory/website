@@ -1,17 +1,14 @@
 'use client';
 
 import classNames from 'classnames';
-import { type FormHTMLAttributes, type RefObject, useEffect, useRef } from 'react';
+import { type FormHTMLAttributes, type RefObject, useRef } from 'react';
 
 import styles from './PromptForm.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import { useGrowFallback } from '@/hooks/useGrowFallback';
 
 export type PromptField = HTMLInputElement | HTMLTextAreaElement;
-
-// How far a growing field may run before it scrolls instead. Long questions
-// are the point (QA-31); a field that grows without end is not.
-const MAX_LINES = 5;
 
 type PromptFormProps = {
     value: string;
@@ -29,6 +26,11 @@ type PromptFormProps = {
     // a growing one would push its results around as you type.
     grow?: boolean;
     inputRef?: RefObject<PromptField | null>;
+    // The text is past what can be sent: the field is marked invalid and
+    // Send is off.
+    invalid?: boolean;
+    // The id of the element that describes the field (its character count).
+    describedBy?: string;
 } & Omit<FormHTMLAttributes<HTMLFormElement>, 'onSubmit' | 'onChange'>;
 
 /**
@@ -46,34 +48,23 @@ const PromptForm = ({
     variant = 'landing',
     grow = false,
     inputRef,
+    invalid = false,
+    describedBy,
     className,
     ...rest
 }: PromptFormProps) => {
     const ownRef = useRef<PromptField>(null);
     const field = inputRef ?? ownRef;
 
-    // Measured rather than counted in rows: the bar's padding and the field's
-    // line height both ride the fluid root font, so the cap has to be read
-    // off the element every time the text changes.
-    useEffect(() => {
-        const el = field.current;
-
-        if (!grow || !el) {
-            return;
-        }
-
-        el.style.height = 'auto';
-
-        const line = parseFloat(getComputedStyle(el).lineHeight) || el.scrollHeight;
-
-        el.style.height = `${Math.min(el.scrollHeight, line * MAX_LINES)}px`;
-    }, [grow, value, field]);
+    useGrowFallback(field, value, grow);
 
     const shared = {
         className: styles.promptInput,
         value,
         placeholder,
         'aria-label': label,
+        'aria-invalid': invalid || undefined,
+        'aria-describedby': describedBy,
     };
 
     return (
@@ -112,7 +103,12 @@ const PromptForm = ({
                     onChange={(event) => onChange(event.target.value)}
                 />
             )}
-            <button type="submit" className={styles.promptSubmit} aria-label={submitLabel}>
+            <button
+                type="submit"
+                className={styles.promptSubmit}
+                aria-label={submitLabel}
+                disabled={invalid}
+            >
                 <Icon name="arrow" className={styles.promptSubmitIcon} />
             </button>
         </form>

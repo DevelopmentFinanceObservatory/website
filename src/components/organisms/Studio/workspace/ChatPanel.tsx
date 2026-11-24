@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef } from 'react';
 
 import ActivityLog from './ActivityLog';
 import ChatMessage from './ChatMessage';
@@ -12,12 +12,14 @@ import StatusLine from './StatusLine';
 import { iconOf } from './WidgetChips';
 import { widgetTitle, type CardView } from '../canvas/layout';
 import type { useChat } from '../hooks/useChat';
+import CharCount from '../prompt/CharCount';
 import PromptForm, { type PromptField } from '../prompt/PromptForm';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
 import { messageTurns, plansByTurn } from '@/lib/studio/activityView';
+import { interruptTextCount } from '@/lib/studio/interruptText';
 import { shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
@@ -51,6 +53,10 @@ type ChatPanelProps = {
     // component_ref, so the agent answers about (or reworks) that card.
     editTarget: { id: string; title: string } | null;
     onClearEditTarget: () => void;
+    // The follow-up field's text, held by the Studio so text typed into the
+    // landing as it leaves carries into it.
+    draft: string;
+    onDraftChange: (draft: string) => void;
 };
 
 /**
@@ -77,16 +83,23 @@ const ChatPanel = ({
     onRemove,
     editTarget,
     onClearEditTarget,
+    draft: follow,
+    onDraftChange: setFollow,
 }: ChatPanelProps) => {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const [follow, setFollow] = useState('');
     // The follow-up field, focused on mount when asked (autoFocus).
     const followRef = useRef<PromptField>(null);
+    const countId = useId();
 
     useEffect(() => {
-        if (autoFocus) {
+        const field = followRef.current;
+
+        if (autoFocus && field) {
             // The page is already placed, so focusing must not scroll it.
-            followRef.current?.focus({ preventScroll: true });
+            // Text typed while the landing left is already in the field, and
+            // what follows goes after it.
+            field.focus({ preventScroll: true });
+            field.setSelectionRange(field.value.length, field.value.length);
         }
         // Mount only. A later flip of `autoFocus` (a resize across the phone
         // breakpoint) must not pull focus from wherever the user has moved.
@@ -104,9 +117,13 @@ const ChatPanel = ({
         }
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
+    // The text of a plan's "Propose changes" travels as an amendment, which
+    // the harness caps; a follow-up turn has no such cap here.
+    const amendmentCount = interruptTextCount(chat.plan?.live ? follow.trim() : '');
+
     const sendFollow = () => {
         // A plan switch in flight has the pause, so the text waits in the input.
-        if (!follow.trim() || chat.plan?.switching) {
+        if (!follow.trim() || chat.plan?.switching || amendmentCount.over) {
             return;
         }
 
@@ -292,7 +309,10 @@ const ChatPanel = ({
                                                   : 'Ask a follow up'
                                         }
                                         submitLabel="Send"
+                                        invalid={amendmentCount.over}
+                                        describedBy={countId}
                                     />
+                                    <CharCount id={countId} text={amendmentCount} />
                                 </>
                             )}
                             <p className={styles.chatNote}>

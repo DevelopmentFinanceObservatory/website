@@ -34,6 +34,7 @@ import Reorder from '@/assets/svg/reorder.svg';
 import Search from '@/assets/svg/search.svg';
 import Share from '@/assets/svg/share.svg';
 import Thumb from '@/assets/svg/thumb.svg';
+import Unit from '@/assets/svg/unit.svg';
 import User from '@/assets/svg/user.svg';
 
 export type IconProps = {
@@ -74,6 +75,7 @@ export const icons = {
     search: Search,
     share: Share,
     thumb: Thumb,
+    unit: Unit,
     user: User,
 };
 

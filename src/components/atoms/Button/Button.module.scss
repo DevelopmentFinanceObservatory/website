@@ -103,6 +103,16 @@
 
 // The label's word-roll is DETACHED (arrows keep their swap): the word
 // markup and the hidden copies stay in place, no animation rides them.
+// Both are hidden from assistive technology, which reads `.spoken`.
+.spoken {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .word {
     display: inline-block;
 }
@@ -134,6 +144,37 @@
 @keyframes fly-up-right {
     100% {
         translate: 130% -130%;
+    }
+}
+
+// Card: a bordered block whose children lay themselves out, dark while
+// pressed. The label box steps aside so the children are the card's items.
+.card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: rem(4);
+    padding: rem(12) rem(14);
+    color: var(--color-charcoal);
+    text-align: left;
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(6);
+
+    .label {
+        display: contents;
+        font: inherit;
+        letter-spacing: inherit;
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            border-color: var(--color-charcoal);
+        }
+    }
+
+    &[aria-pressed="true"] {
+        color: var(--color-bg);
+        background-color: var(--color-charcoal);
+        border-color: var(--color-charcoal);
     }
 }
 
@@ -239,6 +280,23 @@
 // Chevron flips when the toggled panel is open.
 .plain[data-open="true"] .icon svg {
     rotate: 180deg;
+}
+
+// Inline: words set in running text, such as a join's phrase in the Graph
+// Explorer or a seed column heading that opens its value list. The label
+// wraps, takes the button's type, colour and decoration, and leaves the look
+// to the caller's class.
+.inline .label {
+    display: block;
+    height: auto;
+    padding-inline: 0;
+    overflow: visible;
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    text-decoration: inherit;
+    background-color: transparent;
+    border-radius: 0;
 }
 
 // Compact size: same type, rem(20) tall segments.

@@ -59,14 +59,18 @@ const structuredUnitText = (unit: StructuredUnit): string => {
         unit.currency,
         unit.magnitude && unit.magnitude !== 'units' ? unit.magnitude : null,
     ].filter(Boolean);
-    const basis = [unit.prices, unit.base_year].filter((part) => part != null).join(' ');
+    const prices = [unit.prices, unit.base_year].filter((part) => part != null).join(' ');
+    const basis = [prices, unit.deflation_basis && `${unit.deflation_basis} prices`]
+        .filter(Boolean)
+        .join(', ');
 
     return [amount.join(' '), basis && `(${basis})`].filter(Boolean).join(' ');
 };
 
 // A payload unit as text: a plain label as it stands, a currency amount as
-// "USD millions (constant 2023)", a composed unit as the info panel words it
-// ("US Dollar per Total population").
+// "USD millions (constant 2023)" or "NGN (constant 2024, donor prices)", a
+// composed unit as the info panel words it ("US Dollar per Total
+// population").
 const payloadUnitText = (unit: PayloadUnit | undefined): string | undefined => {
     if (unit === undefined || typeof unit === 'string') {
         return unit;
@@ -586,6 +590,7 @@ export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
         ...widget,
         frame: payloadFrameRef(frame.payload) ?? frame.provenance.inputs[0],
         info: infoOf(frame.fact_summary, provenanceOf(frame), description),
+        ...(frame.unit_change && { unitChange: frame.unit_change }),
     };
 };
 
@@ -672,6 +677,14 @@ export const reviseWidget = (
     }
 
     const provenance = payloadProvenance(payload);
+    const drawnFrom = payloadFrameRef(payload) ?? redrawn.frame;
+
+    // `component.revised` carries no unit offer. The created card's offer
+    // holds while the redrawn frame reads the spec the offer describes and
+    // goes when it reads another, whose units the offer does not describe.
+    if (redrawn.unitChange && drawnFrom?.spec_id !== redrawn.unitChange.spec_id) {
+        delete redrawn.unitChange;
+    }
 
     return {
         ...redrawn,
@@ -679,7 +692,7 @@ export const reviseWidget = (
             ? { unit: payloadUnitText(asUnit(frame.fact_summary.unit)) }
             : {}),
         ref: refOf(frame),
-        frame: payloadFrameRef(payload) ?? redrawn.frame,
+        frame: drawnFrom,
         source: frame.fact_summary.attribution.label,
         ...(provenance || read
             ? {

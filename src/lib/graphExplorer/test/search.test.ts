@@ -1,0 +1,256 @@
+/**
+ * `search.ts` over the test documents: fields, ranking, datasets, the cap,
+ * and base and UN System terms outside the model when their lists are given.
+ */
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { buildModel } from '../model.ts';
+import { enterChoice, escapeAction, search, searchPlaceholder, stepActive } from '../search.ts';
+import { outsideTermList, readSchema, readUsage, readTerms, readUnTerms } from '../wire.ts';
+import { schemaBody, usageBody, termsBody } from './fixtures.ts';
+
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
+const baseTerms = readTerms(termsBody());
+
+const ids = (query: string, limit = 50) =>
+    search(model, query, { limit }).hits.map((hit) => hit.id);
+
+test('a classification code or alternate name matches exactly, ignoring case', () => {
+    assert.deepEqual(
+        search(model, '1015').hits.map((hit) => [hit.id, hit.match]),
+        [['DAC1AidType1015', 'exact']],
+    );
+    const oda = search(model, 'oda').hits[0];
+    assert.equal(oda?.id, 'DAC1AidType1010');
+    assert.equal(oda?.match, 'exact');
+});
+
+test('an open property value or name finds the nodes that carry it', () => {
+    assert.deepEqual(
+        search(model, 'DOD').hits.map((hit) => [hit.id, hit.match]),
+        [['AmountOutstanding', 'exact']],
+    );
+    assert.equal(search(model, 'chf').hits[0]?.id, 'CurrencyCHF');
+    assert.ok(ids('country/LIE').includes('CurrencyCHF'));
+    assert.ok(ids('wbCode').includes('AmountOutstanding'));
+    assert.ok(ids('wbCode').includes('wbCode'));
+});
+
+test('exact beats whole words beats prefix beats substring', () => {
+    const hits = search(model, 'Source', { limit: 50 }).hits;
+    assert.deepEqual(
+        hits.map((hit) => [hit.id, hit.match]),
+        [
+            ['Source', 'exact'],
+            ['sourceIndicatorCode', 'word'],
+            ['FinancingResourceEnum', 'substring'],
+            ['financingResource', 'substring'],
+        ],
+    );
+
+    // An acronym in brackets is a whole word, so it outranks a longer word that starts with it.
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const buyback = body.nodes.find((node) => node.ref === 'Buyback');
+    assert.ok(buyback);
+    body.nodes.push(
+        { ...buyback, ref: 'Wholesale', label: 'Wholesale store' },
+        { ...buyback, ref: 'WorldHealthOrganization', label: 'World Health Organization (WHO)' },
+        { ...buyback, ref: 'GDPPerCapita', label: 'Output per head' },
+    );
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
+    assert.deepEqual(
+        search(edited, 'who').hits.map((hit) => [hit.id, hit.match]),
+        [
+            ['WorldHealthOrganization', 'word'],
+            ['Wholesale', 'prefix'],
+        ],
+    );
+    // A run of capitals ends a word before the capital that starts the next.
+    assert.deepEqual(
+        search(edited, 'gdp').hits.map((hit) => [hit.id, hit.match]),
+        [['GDPPerCapita', 'word']],
+    );
+});
+
+test('within a rank, DFO terms and datasets come before base terms', () => {
+    // DataType is a base class with a shorter label than either DFO property.
+    assert.deepEqual(ids('data').slice(0, 4), [
+        'provenance/ONEClimateFinance',
+        'dataTransformationChangelog',
+        'dataTransformationDescription',
+        'DataType',
+    ]);
+    assert.deepEqual(ids('measure').slice(0, 4), [
+        'UnitOfMeasure',
+        'MeasurementEnum',
+        'measuredValue',
+        'measurementQualifier',
+    ]);
+});
+
+test('a model node declared by base or the UN System ranks after a DFO node, and an undeclared one with it', () => {
+    // measuredValue is the shortest label, so label length alone would rank it first.
+    const leadsFor = (declaredBy: string | null) => {
+        const schema = readSchema(schemaBody());
+        for (const [ref, by] of [
+            ['measuredValue', declaredBy],
+            ['measurementQualifier', 'dfo'],
+        ] as const) {
+            const node = schema.nodes.find((entry) => entry.ref === ref);
+            assert.ok(node);
+            node.declared_by = by;
+        }
+        const ids = search(buildModel(schema, readUsage(usageBody())), 'measure').hits.map(
+            (hit) => hit.id,
+        );
+        return ids.indexOf('measuredValue') < ids.indexOf('measurementQualifier');
+    };
+    assert.deepEqual(
+        [leadsFor('un_system'), leadsFor('base'), leadsFor(null), leadsFor('dfo')],
+        [false, false, true, true],
+    );
+});
+
+test('datasets are found by label and dcid', () => {
+    const hits = search(model, 'oecd dac2', { limit: 50 }).hits;
+    assert.deepEqual(
+        hits.map((hit) => [hit.id, hit.kind, hit.match]),
+        [
+            ['provenance/OECDDAC2A', 'dataset', 'prefix'],
+            ['provenance/OECDDAC2B', 'dataset', 'prefix'],
+        ],
+    );
+});
+
+test('hits are capped with the total kept', () => {
+    const result = search(model, 'oda', { limit: 3 });
+    assert.equal(result.hits.length, 3);
+    assert.equal(result.total, 21);
+    assert.deepEqual(search(model, '   '), { hits: [], total: 0 });
+});
+
+test('with the terms list, base terms outside the model follow those inside', () => {
+    assert.deepEqual(
+        search(model, 'amount').hits.filter((hit) => hit.match === 'exact'),
+        [
+            {
+                id: 'amount',
+                kind: 'property',
+                label: 'amount',
+                match: 'exact',
+                declaredBy: 'base',
+                inModel: true,
+            },
+        ],
+    );
+    const hits = search(model, 'amount', {
+        outside: baseTerms.terms,
+    }).hits.filter((hit) => hit.match === 'exact');
+    assert.deepEqual(
+        hits.map((hit) => [hit.id, hit.kind, hit.inModel]),
+        [
+            ['amount', 'property', true],
+            ['Amount', 'class', false],
+        ],
+    );
+});
+
+test('a term with no declaring provenance outside the model is found', () => {
+    const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
+    const term = body.terms.find((entry) => entry.ref === 'AdministrativeArea1');
+    assert.ok(term);
+    term.declared_by = null;
+    const hits = search(model, 'AdministrativeArea1', {
+        outside: readTerms(body).terms,
+    }).hits;
+    assert.deepEqual(
+        hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
+        [['AdministrativeArea1', false]],
+    );
+});
+
+test('a term outside the model carries the origin declaring it, and a DFO row is skipped', () => {
+    const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
+    const term = body.terms.find((entry) => entry.ref === 'AdministrativeArea1');
+    assert.ok(term);
+    const exact = () =>
+        search(model, 'AdministrativeArea1', {
+            outside: readTerms(body).terms,
+        })
+            .hits.filter((hit) => hit.match === 'exact')
+            .map((hit) => [hit.id, hit.inModel, hit.declaredBy]);
+    assert.deepEqual(exact(), [['AdministrativeArea1', false, 'base']]);
+    term.declared_by = 'un_system';
+    assert.deepEqual(exact(), [['AdministrativeArea1', false, 'un_system']]);
+    term.declared_by = 'dfo';
+    assert.deepEqual(exact(), []);
+});
+
+test('a base term the model holds is found once, as part of the model', () => {
+    const hits = search(model, 'AdministrativeArea', {
+        outside: baseTerms.terms,
+    }).hits;
+    assert.deepEqual(
+        hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
+        [['AdministrativeArea', true]],
+    );
+    // Its narrower levels are base classes outside the model.
+    assert.deepEqual(
+        hits.slice(1, 3).map((hit) => [hit.id, hit.match, hit.inModel]),
+        [
+            ['AdministrativeArea1', 'prefix', false],
+            ['AdministrativeArea2', 'prefix', false],
+        ],
+    );
+});
+
+test('UN System terms are found beside base terms, tagged with their origin', () => {
+    const un = readUnTerms({
+        generation: null,
+        terms: [
+            {
+                ref: 'undata/AGE',
+                label: 'Age',
+                types: ['Class'],
+                provenances: ['undata/p/UNData'],
+                declared_by: 'un_system',
+            },
+        ],
+    });
+    const hits = search(model, 'undata/', {
+        outside: outsideTermList({ base: baseTerms, un, baseLoading: false }),
+        limit: 50,
+    }).hits.filter((hit) => !hit.inModel);
+    assert.deepEqual(
+        hits.map((hit) => [hit.id, hit.declaredBy]),
+        [['undata/AGE', 'un_system']],
+    );
+});
+
+test('the arrow keys wrap over the hits; with none active, up lands on the last', () => {
+    assert.equal(stepActive(-1, -1, 5), 4);
+    assert.equal(stepActive(-1, 1, 5), 0);
+    assert.equal(stepActive(0, -1, 5), 4);
+    assert.equal(stepActive(4, 1, 5), 0);
+    assert.equal(stepActive(2, 1, 5), 3);
+    assert.equal(stepActive(-1, -1, 0), -1);
+});
+
+test('Enter opens the active hit, else the first, and does nothing while the list is hidden or empty', () => {
+    assert.equal(enterChoice(2, 5, true), 2);
+    assert.equal(enterChoice(-1, 5, true), 0);
+    assert.equal(enterChoice(7, 5, true), 0);
+    assert.equal(enterChoice(2, 5, false), null);
+    assert.equal(enterChoice(-1, 0, true), null);
+});
+
+test('Escape closes a shown list and clears the query once it is closed', () => {
+    assert.equal(escapeAction(true), 'close');
+    assert.equal(escapeAction(false), 'clear');
+});
+
+test('the placeholder says search is off after the model failed, apart from while it loads', () => {
+    assert.notEqual(searchPlaceholder('failed'), searchPlaceholder('loading'));
+    assert.notEqual(searchPlaceholder('failed'), searchPlaceholder('ready'));
+});

@@ -3,11 +3,16 @@ import test from 'node:test';
 
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 import type { ShareMark } from '../../chat/history.ts';
+import { mergeClosedTurns } from '../conversationState.ts';
 import {
     isPrompt,
     isRefundedPrompt,
     shareMarkAfter,
+    NEW_QUESTION_NOTE,
+    UNSENT_NOTE,
     withAnswer,
+    withNewQuestion,
+    withReadPrompts,
     withRefundedPrompt,
 } from '../transcript.ts';
 
@@ -108,8 +113,122 @@ test('a share of a finished turn sits after its reply, before the next prompt', 
     assert.equal(shareMarkAfter([...finished, { role: 'user', text: 'And Ghana?' }], mark), 1);
 });
 
+test('a turn a read inserts above a share mark leaves the mark after the reply it followed', () => {
+    // Shared after page turn 2, harness turn 3.
+    const shared: ChatMessage[] = [
+        { role: 'user', text: 'Show me aid to Kenya', harnessTurn: 1, turn: 1 },
+        { role: 'bot', text: 'USD 1.2bn' },
+        { role: 'user', text: 'By donor', harnessTurn: 3, turn: 2 },
+        { role: 'bot', text: 'The United States leads.' },
+    ];
+    const mark = { ...markFor(shared), turnCount: 2 };
+    // A state read then inserted another tab's turn 2, stamped page turn 3,
+    // and the user asked again as page turn 4.
+    const later: ChatMessage[] = [
+        ...shared.slice(0, 2),
+        { role: 'user', text: 'And Ghana?', harnessTurn: 2, turn: 3 },
+        { role: 'bot', text: 'USD 0.9bn' },
+        ...shared.slice(2),
+        { role: 'user', text: 'By sector', harnessTurn: 4, turn: 4 },
+        { role: 'bot', text: '' },
+    ];
+
+    assert.equal(later[shareMarkAfter(later, mark)]?.text, 'The United States leads.');
+});
+
 test('a mark saved before userMessages keeps its message count', () => {
     const mark: ShareMark = { messageIndex: 2, shareId: 'share', at: 0 };
 
     assert.equal(shareMarkAfter(withAnswer(paused, 'Since 2018.'), mark), 1);
+});
+
+test('a change taken as a new question leaves the turn, whose empty reply says so', () => {
+    const amended = withAnswer(paused, 'What about Uganda?');
+
+    assert.deepEqual(withNewQuestion(amended, 'What about Uganda?'), [
+        { role: 'user', text: 'Show me aid to Kenya' },
+        { role: 'bot', text: NEW_QUESTION_NOTE },
+    ]);
+
+    const said: ChatMessage[] = [...amended.slice(0, -1), { role: 'bot', text: 'Set aside.' }];
+
+    assert.deepEqual(withNewQuestion(said, 'What about Uganda?'), [
+        { role: 'user', text: 'Show me aid to Kenya' },
+        { role: 'bot', text: 'Set aside.' },
+    ]);
+});
+
+test("a read keys each of the page's unconfirmed prompts, in order, to the turn that recorded it", async (t) => {
+    // Turn 1 is held; the page saved its later prompts before their streams
+    // named their turns.
+    const page = (...texts: string[]): ChatMessage[] => [
+        { role: 'user', text: 'Show me aid to Kenya', turn: 1, harnessTurn: 1 },
+        { role: 'bot', text: 'USD 1.2bn' },
+        ...texts.flatMap((text, k): ChatMessage[] => [
+            { role: 'user', text, turn: k + 2 },
+            { role: 'bot', text: '' },
+        ]),
+    ];
+    const turnsOf = (...texts: string[]) =>
+        texts.map((text, k) => ({
+            turn_index: k + 2,
+            user_message: text,
+            reply: `reply ${k + 2}`,
+            component_ids: [],
+        }));
+
+    for (const [name, texts, recorded, keyed, inserted] of [
+        [
+            'two prompts the harness ran',
+            ['By donor', 'By sector'],
+            ['By donor', 'By sector'],
+            [2, 3],
+            [],
+        ],
+        [
+            'a prompt the harness lacks between two it ran',
+            ['By donor', 'lost', 'By sector'],
+            ['By donor', 'By sector'],
+            [2, undefined, 3],
+            [],
+        ],
+        [
+            "another tab's turn between them",
+            ['By donor', 'By sector'],
+            ['By donor', 'theirs', 'By sector'],
+            [2, 4],
+            [3],
+        ],
+        [
+            'prompts out of the order the harness ran them',
+            ['By sector', 'By donor'],
+            ['By donor', 'By sector'],
+            [3, undefined],
+            [2],
+        ],
+    ] as const) {
+        await t.test(name, () => {
+            const turns = turnsOf(...recorded);
+            const read = withReadPrompts(page(...texts), turns);
+            const prompts = read.slice(2).filter((message) => message.role === 'user');
+
+            assert.deepEqual(
+                prompts.map((message) => message.harnessTurn),
+                keyed,
+            );
+            assert.deepEqual(
+                prompts.map((message) => message.unkeyed ?? false),
+                keyed.map((turn) => turn === undefined),
+            );
+            assert.equal(
+                read.filter((message) => message.text === UNSENT_NOTE).length,
+                keyed.filter((turn) => turn === undefined).length,
+            );
+            // Only the turns no prompt took join the transcript.
+            assert.deepEqual(
+                mergeClosedTurns(read, turns, 10).appended.map((turn) => turn.turn_index),
+                inserted,
+            );
+        });
+    }
 });

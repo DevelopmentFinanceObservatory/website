@@ -3,7 +3,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
 import styles from './Header.module.scss';
@@ -12,8 +12,10 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import AccountMenu from '@/components/molecules/AccountMenu/AccountMenu';
 import { useScrollFrame } from '@/hooks/useScrollFrame';
+import { useSiteNavigate } from '@/hooks/useSiteNavigate';
 import { DOCS_MENU } from '@/lib/docs/nav';
 import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
+import { IS_SITE, siteHref } from '@/lib/site';
 import Logo from '@/assets/svg/logo.svg';
 
 // "Data" in the nav is the Sources page (the search lives behind Get Data /
@@ -100,13 +102,16 @@ const Header = ({
 }: HeaderProps) => {
     const studio = variant === 'studio';
     const pathname = usePathname();
+    // The site page shown, for marking the current entry. Null in the
+    // prototypes app, whose pages are none of the menu's.
+    const sitePath = IS_SITE ? pathname : null;
     // A nav item is current on its page and its sub-pages (/data/sources → Data).
     const isCurrent = (href: string) => {
         const section = navItems.find((item) => item.href === href)?.section ?? href;
 
-        return pathname === section || pathname.startsWith(`${section}/`);
+        return sitePath === section || (sitePath?.startsWith(`${section}/`) ?? false);
     };
-    const router = useRouter();
+    const navigate = useSiteNavigate();
 
     const headerRef = useRef<HTMLElement>(null);
     const navRef = useRef<HTMLElement>(null);
@@ -367,11 +372,15 @@ const Header = ({
                                 <Icon name="arrow" className={styles.backIcon} />
                             </button>
                         ) : (
-                            <Link href="/" className={styles.back} aria-label="Back to DFO">
+                            <Link
+                                href={siteHref('/')}
+                                className={styles.back}
+                                aria-label="Back to DFO"
+                            >
                                 <Icon name="arrow" className={styles.backIcon} />
                             </Link>
                         ))}
-                    <Link href="/" className={styles.logo} aria-label="DFO — home">
+                    <Link href={siteHref('/')} className={styles.logo} aria-label="DFO — home">
                         <Logo />
                     </Link>
                     <span className={styles.studioDivider} aria-hidden="true" />
@@ -442,7 +451,7 @@ const Header = ({
                         { label: 'Open Studio', href: '/studio' },
                     ].map(({ label, href }) => (
                         <DropdownMenu.Item key={href} asChild onSelect={() => setMenuInstant(true)}>
-                            <Link href={href} className={styles.menuItem}>
+                            <Link href={siteHref(href)} className={styles.menuItem}>
                                 {label}
                             </Link>
                         </DropdownMenu.Item>
@@ -485,13 +494,13 @@ const Header = ({
                                             onSelect={() => setMenuInstant(true)}
                                         >
                                             <Link
-                                                href={entry.href}
+                                                href={siteHref(entry.href)}
                                                 className={classNames(
                                                     styles.menuItem,
                                                     styles.menuItemSub,
                                                 )}
                                                 aria-current={
-                                                    pathname === entry.href ? 'page' : undefined
+                                                    sitePath === entry.href ? 'page' : undefined
                                                 }
                                             >
                                                 {entry.label}
@@ -532,10 +541,10 @@ const Header = ({
                             {[...menu, ...(action ? [action] : [])].map((entry, index) => (
                                 <Link
                                     key={entry.href}
-                                    href={entry.href}
+                                    href={siteHref(entry.href)}
                                     className={styles.navMenuItem}
                                     style={{ '--i': index } as React.CSSProperties}
-                                    data-current={pathname === entry.href || undefined}
+                                    data-current={sitePath === entry.href || undefined}
                                     onClick={() => setOpenNav(null)}
                                 >
                                     <span className={styles.navMenuLabel}>{entry.label}</span>
@@ -557,12 +566,12 @@ const Header = ({
                     aria-hidden="true"
                 />
             </nav>
-            <Link href="/" className={styles.logo} aria-label="DFO — home">
+            <Link href={siteHref('/')} className={styles.logo} aria-label="DFO — home">
                 <Logo />
             </Link>
             <div className={styles.actions}>
-                <Button onClick={() => router.push('/data')}>Get Data</Button>
-                <Button variant="dark" icon="arrow" wide onClick={() => router.push('/studio')}>
+                <Button onClick={() => navigate('/data')}>Get Data</Button>
+                <Button variant="dark" icon="arrow" wide onClick={() => navigate('/studio')}>
                     Open Studio
                 </Button>
                 <span className={styles.divider} aria-hidden="true" />

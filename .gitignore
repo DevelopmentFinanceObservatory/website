@@ -20,14 +20,19 @@ dist/
 .env*
 !.env.example
 
-# agent guidance files that `next dev` (re)generates locally
-AGENTS.md
-CLAUDE.md
-
 # misc
 .DS_Store
 *.pem
 npm-debug.log*
 
-/.claude
+/.claude/*
+!/.claude/CLAUDE.md
+/CLAUDE.local.md
 /.idea
+
+# wrangler dev state (prototypes/)
+.wrangler/
+
+# python
+__pycache__/
+.pytest_cache/

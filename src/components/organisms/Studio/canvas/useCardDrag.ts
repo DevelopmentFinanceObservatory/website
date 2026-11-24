@@ -120,7 +120,7 @@ export const useCardDrag = ({
 
     useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
-    // The grabbed card vanished (replaced by a newer turn) → let go.
+    // The grabbed card vanished (taken off the canvas) → let go.
     useEffect(() => {
         if (startRef.current && !widgetIds.has(startRef.current.id)) {
             cancel();

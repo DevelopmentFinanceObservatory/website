@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { hasServiceConsent, onServiceConsent, USAGE_STATS_SERVICE } from '../consent.ts';
+import {
+    hasServiceConsent,
+    onServiceConsent,
+    showPrivacySettings,
+    USAGE_STATS_SERVICE,
+} from '../consent.ts';
 
 const details = (given: boolean) => ({
     services: { [USAGE_STATS_SERVICE]: { consent: { given } } },
@@ -65,4 +70,26 @@ test('UC_CONSENT events report the service consent until unsubscribed', () => {
     fire(details(true));
 
     assert.deepEqual(heard, [true, false, false]);
+});
+
+test('privacy settings open the loaded CMP', () => {
+    let opened = 0;
+
+    stubWindow({ showSecondLayer: async () => void (opened += 1) });
+    showPrivacySettings();
+    assert.equal(opened, 1);
+});
+
+test('privacy settings clicked before the CMP loads open it once its interface is up', async () => {
+    let opened = 0;
+
+    stubWindow();
+    Object.assign(window, { setTimeout, clearTimeout });
+    showPrivacySettings();
+    assert.equal(opened, 0);
+
+    Object.assign(window, { __ucCmp: { showSecondLayer: async () => void (opened += 1) } });
+    window.dispatchEvent(new Event('UC_UI_INITIALIZED'));
+    window.dispatchEvent(new Event('UC_UI_INITIALIZED'));
+    assert.equal(opened, 1);
 });

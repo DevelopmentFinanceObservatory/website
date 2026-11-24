@@ -1,8 +1,8 @@
 'use client';
 
+import BuiltWithMark from './BuiltWithMark';
 import styles from './CardChrome.module.scss';
 
-import Logo from '@/assets/svg/logo.svg';
 import Icon from '@/components/atoms/Icon/Icon';
 import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import { type CardInfo, sourceLine } from '@/lib/chat/widgets';
@@ -117,10 +117,7 @@ const ChromeBar = ({ source, info, onInfo }: CardChromeProps) => (
                 <InfoTag label="Source Name" content={source} />
             )}
         </span>
-        <span className={styles.builtWith}>
-            Built with
-            <Logo />
-        </span>
+        <BuiltWithMark />
     </div>
 );
 

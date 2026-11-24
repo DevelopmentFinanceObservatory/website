@@ -389,12 +389,15 @@ test("a table names each row's unit when units mix, and charts with it when the 
     });
     const tableOf = (rows: unknown[]) => envelope({ type: 'table', title, columns, rows });
     const dollars = { currency: 'USD', magnitude: 'millions', prices: 'constant', base_year: 2023 };
+    const naira = { currency: 'NGN', prices: 'constant', base_year: 2024 };
     const mixed = asTable(
         widgetFromComponent(
             frame(
                 'table',
                 tableOf([
                     row('ODA', dollars),
+                    row('Aid to Nigeria', { ...naira, deflation_basis: 'donor' }),
+                    row('Debt service', { ...naira, deflation_basis: 'recipient' }),
                     row('Share of GNI', 'percent'),
                     row('ODA per person', composedUnit),
                     row('ODA per person, euros', eurosPerPerson),
@@ -405,6 +408,8 @@ test("a table names each row's unit when units mix, and charts with it when the 
     );
     const unitTexts = [
         'USD millions (constant 2023)',
+        'NGN (constant 2024, donor prices)',
+        'NGN (constant 2024, recipient prices)',
         'percent',
         'US Dollar per Total population',
         'Euro (constant 2020 prices) per Total population',
@@ -418,6 +423,8 @@ test("a table names each row's unit when units mix, and charts with it when the 
     assert.equal(mixed.namesColumn, 0);
     assert.deepEqual(mixed.rows, [
         ['ODA', '2023', 'USD millions (constant 2023)', '5'],
+        ['Aid to Nigeria', '2023', 'NGN (constant 2024, donor prices)', '5'],
+        ['Debt service', '2023', 'NGN (constant 2024, recipient prices)', '5'],
         ['Share of GNI', '2023', 'percent', '5'],
         ['ODA per person', '2023', 'US Dollar per Total population', '5'],
         ['ODA per person, euros', '2023', 'Euro (constant 2020 prices) per Total population', '5'],
@@ -1027,5 +1034,71 @@ test('More Info: a revised payload brings its own citation and sources', () => {
     assert.deepEqual(
         revised.info?.sources?.map((source) => [source.id, source.licence, source.url]),
         [['src_dc_base_worlddevelopmentindicators_9957fdf7', null, null]],
+    );
+});
+
+test('unit change: the offer goes when the redrawn frame reads another spec than the offer', () => {
+    const offer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current' as const] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' as const },
+    };
+    const table = (spec_id: string) => ({
+        ...envelope({
+            type: 'table',
+            title,
+            columns: [{ key: 'period', label: 'Period' }],
+            rows: [{ series_id: 's_x', period: '2020', source_ref: SOURCE, value: 1 }],
+        }),
+        provenance: { inputs: [{ spec_id, content_version: 'cv_1' }] },
+    });
+    const drawn = asTable(
+        widgetFromComponent({
+            ...frame('table', table('spec_a')),
+            unit_change: { spec_id: 'spec_b', offer },
+        }),
+    );
+
+    assert.equal(
+        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_a')))).unitChange,
+        undefined,
+    );
+    assert.ok(asTable(reviseWidget(drawn, revisedFrame(2, table('spec_b')))).unitChange);
+});
+
+test('unit change: a created card keeps its offer while revisions read its frame', () => {
+    const offer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current' as const] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' as const },
+    };
+    const table = (spec_id: string) => ({
+        ...envelope({
+            type: 'table',
+            title,
+            columns: [{ key: 'period', label: 'Period' }],
+            rows: [{ series_id: 's_x', period: '2020', source_ref: SOURCE, value: 1 }],
+        }),
+        provenance: { inputs: [{ spec_id, content_version: 'cv_1' }] },
+    });
+    const drawn = asTable(
+        widgetFromComponent({
+            ...frame('table', table('spec_a')),
+            unit_change: { spec_id: 'spec_a', offer },
+        }),
+    );
+
+    assert.deepEqual(drawn.unitChange, { spec_id: 'spec_a', offer });
+    assert.equal(
+        asTable(widgetFromComponent(frame('table', table('spec_a')))).unitChange,
+        undefined,
+    );
+    assert.deepEqual(
+        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_a')))).unitChange,
+        drawn.unitChange,
+    );
+    assert.equal(
+        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_b')))).unitChange,
+        undefined,
     );
 });

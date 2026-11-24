@@ -2,9 +2,9 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { effectiveKind, LEAVE_MS, widgetTitle } from './canvas/layout';
+import { effectiveKind, widgetTitle } from './canvas/layout';
 import LiveNote from './canvas/LiveNote';
 import Whiteboard from './canvas/Whiteboard';
 import { useCanvasDocument } from './hooks/useCanvasDocument';
@@ -33,11 +33,14 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
-import { latestTurnOf } from '@/lib/chat/canvas';
+import { isHarnessCard, withUnheldShownCards } from '@/lib/chat/canvas';
+import { forkOf, openedSave } from '@/lib/chat/fork';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
+import { cardUnitChange } from '@/lib/studio/cardUnit';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -50,7 +53,7 @@ import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/prom
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
-import type { Seed } from '@/lib/studio/wire';
+import type { Seed, UnitChoice } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
 
@@ -128,7 +131,12 @@ const Studio = ({
     continuable = false,
     examples = [],
 }: StudioProps) => {
-    const sharedSaved = shared?.saved;
+    // A share keeps the cards its page showed that its harness never held,
+    // as the owner's reopened copy does (openedSave).
+    const sharedSaved = useMemo(
+        () => (shared ? withUnheldShownCards(shared.saved) : undefined),
+        [shared],
+    );
 
     const readOnly = !!shared;
     // What a signed-in user has and a guest lacks: history and saving.
@@ -153,6 +161,9 @@ const Studio = ({
     // The landing's opener is a growing textarea; the type covers both.
     const inputRef = useRef<PromptField>(null);
     const [query, setQuery] = useState(sharedSaved?.title ?? '');
+    // The chat's follow-up field, kept here so text typed into the landing's
+    // field while it leaves carries into it (see `leaving` below).
+    const [followDraft, setFollowDraft] = useState('');
     const [chatTab, setChatTab] = useState<ChatTab>('chat');
     const [cardsTab, setCardsTab] = useState('all');
     // A canvas/card share has no chat to show — it opens collapsed.
@@ -176,17 +187,34 @@ const Studio = ({
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const leaveTimer = useRef(0);
 
-    const conversation = useChat(sharedSaved);
+    const doc = useCanvasDocument(sharedSaved);
+    // The guest canvas restored after sign-in whose first save has not landed.
+    // The harness state read answers 404 until it does, so the page reads no
+    // state meanwhile.
+    const [unsavedGuestId, setUnsavedGuestId] = useState<string | null>(null);
+    // The ids of the cards the canvas shows, as last painted, for a chat
+    // that leaves its session before any manifest arrived.
+    const shownIdsRef = useRef<string[]>([]);
+    // A card the harness redrew under a new id keeps the old card's settings.
+    const conversation = useChat(sharedSaved, {
+        onCardReplaced: doc.renameWidget,
+        shownCards: () => shownIdsRef.current,
+        readsState: account && unsavedGuestId === null,
+        // A new question a turn handed back joins the queue past the gate
+        // below, so the queue sends it through the gate.
+        admitHandedBack: (text, queued, run) => prompt(undefined, text.trim().length, run, queued),
+    });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
     // A prompt counts once it is actually sent (a queued one can still be
     // removed): the count follows the user turns in the transcript, so the
     // queue's own drain is covered too. A prompt the harness refused before
-    // its turn started comes back, as the server's meter gives it back. Only
-    // growth counts, of either: New Chat empties the transcript without
-    // giving prompts back.
+    // its turn started comes back, as the server's meter gives it back, also
+    // when it then left the transcript (droppedRefunds). Only growth counts,
+    // of either: New Chat empties the transcript without giving prompts back.
     const sentCount = conversation.messages.filter(isPrompt).length;
-    const refundedCount = conversation.messages.filter(isRefundedPrompt).length;
+    const refundedCount =
+        conversation.messages.filter(isRefundedPrompt).length + conversation.droppedRefunds;
     const sentRef = useRef(sentCount);
     const refundedRef = useRef(refundedCount);
 
@@ -208,35 +236,42 @@ const Studio = ({
     // through here: past the limit a guest's is dropped, the rest are counted
     // as usage (turn, intent and a typed prompt's length, never the text). A
     // prompt the chat queues is counted here once; the queue's drain sends it
-    // inside the chat, past this gate.
+    // inside the chat, past this gate, except a new question a turn handed
+    // back, which the drain sends through here with the count of prompts
+    // still queued behind it (`queued`). Returns whether the prompt went.
     const prompt = (
         intent: PromptIntent | undefined,
         length: number | undefined,
         run: () => void,
-    ) => {
+        queued = conversation.queued.length,
+    ): boolean => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
         const event = promptEvent({
             guest,
             used: readGuestUsed(),
-            queued: conversation.queued.length,
+            queued,
             sent: sentCount,
             intent,
             length,
         });
 
         if (!event) {
-            return;
+            return false;
         }
 
         track('studio.prompt', event);
         run();
+
+        return true;
     };
     const send: typeof conversation.send = (text, options, seeds) =>
         prompt(options?.intent, text.trim().length, () => conversation.send(text, options, seeds));
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
-    const chat = { ...conversation, send, applyChoice };
+    const applyUnit: typeof conversation.applyUnit = (change) =>
+        prompt('apply_unit', undefined, () => conversation.applyUnit(change));
+    const chat = { ...conversation, send, applyChoice, applyUnit };
 
     // Usage: each card the harness puts on the canvas, once (a reopened or
     // shared conversation's cards were counted when they were made).
@@ -293,18 +328,10 @@ const Studio = ({
         }
     }, [walled, guestUsed]);
 
-    const doc = useCanvasDocument(sharedSaved);
-
     useEffect(() => {
         logRefusedDescriptions(sharedSaved?.widgets ?? []);
     }, [sharedSaved]);
 
-    // Cards the agent took off the canvas leave it as a card-menu Remove does.
-    const { agentRemovals, takeAgentRemoved } = conversation;
-
-    useEffect(() => {
-        takeAgentRemoved().forEach(doc.removeWidget);
-    }, [agentRemovals, takeAgentRemoved, doc.removeWidget]);
     const pinCount = doc.pinnedIds.length;
     const cardCount = conversation.widgets.length;
 
@@ -391,7 +418,13 @@ const Studio = ({
 
     // Reopen a saved conversation exactly as it was left — same transcript,
     // widgets, pins and card layout; follow-ups keep saving under its id.
-    const openSaved = (saved: SavedConversation) => {
+    // A guest canvas restored after sign-in (`fromGuest`) has no owner until
+    // its first save claims it, and before then the harness state read
+    // answers 404, so the restore reads the harness once that save lands.
+    const openSaved = (stored: SavedConversation, fromGuest = false) => {
+        // A fork's inherited turns and cards are marked as such (openedSave).
+        const saved = openedSave(stored);
+
         window.history.replaceState(null, '', `/studio/${saved.id}`);
         saved.widgets.forEach((widget) => trackedCards.current.add(widget.id));
         logRefusedDescriptions(saved.widgets);
@@ -399,6 +432,38 @@ const Studio = ({
         doc.load(saved);
         setQuery(saved.title);
         chat.hydrate(saved);
+
+        // The harness's copy of the conversation fills in what the snapshot
+        // missed: a pending card, a turn that ended or paused after the page
+        // left, a turn left running.
+        if (account && fromGuest) {
+            const { reattach } = chat;
+
+            // A failed save leaves the wait open for the next save of this
+            // conversation; the page leaving it ends the wait.
+            const awaitLanding = () => {
+                void save.whenSaved(saved.id).then((landed) => {
+                    if (landed) {
+                        setUnsavedGuestId((id) => (id === saved.id ? null : id));
+                        reattach();
+                    } else if (save.conversationId() === saved.id) {
+                        console.warn(
+                            'studio: the restored guest conversation did not save; the harness state is not read yet',
+                            saved.id,
+                        );
+                        awaitLanding();
+                    } else {
+                        setUnsavedGuestId((id) => (id === saved.id ? null : id));
+                    }
+                });
+            };
+
+            setUnsavedGuestId(saved.id);
+            awaitLanding();
+        } else if (account) {
+            chat.reattach();
+        }
+
         enterWorkspace();
     };
 
@@ -427,7 +492,7 @@ const Studio = ({
             const saved = takeGuestSession(() => window.sessionStorage);
 
             if (saved) {
-                openSaved(saved);
+                openSaved(saved, true);
             }
         }, 0);
 
@@ -453,6 +518,7 @@ const Studio = ({
         window.history.replaceState(null, '', '/studio');
         window.clearTimeout(leaveTimer.current);
         setQuery('');
+        setFollowDraft('');
         setChatCollapsed(false);
         setChatTab('chat');
         doc.reset();
@@ -474,8 +540,11 @@ const Studio = ({
 
         setForking(true);
 
+        // The copy's harness session holds none of the turns or cards, so
+        // every message and card it inherits is marked so (forkOf).
         const copy: SavedConversation = {
             ...sharedSaved,
+            ...forkOf(sharedSaved),
             id: uuid(),
             sessionId: null,
             updatedAt: Date.now(),
@@ -492,37 +561,20 @@ const Studio = ({
         router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
     };
 
-    const latestTurn = latestTurnOf(chat.widgets);
-
     // A live share's canvas: its data cards drawn on current data as each
     // refresh answers, and their states. A snapshot's cards its page could
     // not draw are filled the same way. The owner's own widgets pass
     // through untouched.
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
-        doc.visibleWidgets(chat.widgets),
+        editedCanvasCards(chat.canvas, chat.pendingCards, (canvas) =>
+            doc.visibleWidgets(chat.widgets, canvas, chat.owedRemovals),
+        ),
     );
-    // The harness cards off screen that the user did not remove: a new turn
-    // hid them. Reported once their fade-out has finished.
-    const hiddenKey = chat.widgets
-        .filter(
-            (widget) =>
-                !visibleWidgets.some((other) => other.id === widget.id) &&
-                !doc.removedIds.includes(widget.id),
-        )
-        .map((widget) => widget.id)
-        .join(' ');
-    const { reportHidden, canvasVersion } = conversation;
 
-    useEffect(() => {
-        if (!hiddenKey) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => reportHidden(hiddenKey.split(' ')), LEAVE_MS);
-
-        return () => window.clearTimeout(timer);
-    }, [hiddenKey, canvasVersion, reportHidden]);
+    useLayoutEffect(() => {
+        shownIdsRef.current = visibleWidgets.map((widget) => widget.id);
+    }, [visibleWidgets]);
 
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
     const cardTitleOf = (id: string): string => {
@@ -531,35 +583,77 @@ const Studio = ({
         return doc.titles[id] ?? (widget ? widgetTitle(widget) : 'Card');
     };
     const flyToCard = (id: string) => flyToCardRef.current?.(id);
-
-    // Chat chip → Add: back on the canvas (on grace if from an older turn).
-    const addWidget = (id: string) => {
+    // Card menu → Change unit → Send: a turn that moves the card to `unit`.
+    const changeUnit = (id: string, unit: UnitChoice) => {
         const widget = chat.widgets.find((other) => other.id === id);
+        const change = widget && cardUnitChange(widget, cardTitleOf(id), unit);
 
-        doc.addWidget(id, !!widget && widget.turn !== latestTurn, latestTurn);
-
-        if (widget) {
-            chat.syncCanvas([{ op: 'add', component_id: id }]);
+        if (change) {
+            chat.applyUnit(change);
         }
     };
 
-    // The card menu's Remove and Pin. A harness card's edit goes to the
-    // harness too; a text card lives only here.
-    const removeCard = (id: string) => {
-        doc.removeWidget(id);
+    // A card the harness holds goes on and off the canvas by the harness's
+    // manifest, so Add and Remove are edits sent to the harness. A text card
+    // and a fork's inherited card live only here (isHarnessCard).
+    const harnessCard = (id: string) =>
+        isHarnessCard({ widgets: chat.widgets, localIds: doc.localIds }, id);
 
-        if (chat.widgets.some((widget) => widget.id === id)) {
+    // Chat chip → Add: back on the canvas.
+    const addWidget = (id: string) => {
+        if (harnessCard(id)) {
+            chat.syncCanvas([{ op: 'add', component_id: id }]);
+        } else {
+            doc.addWidget(id);
+        }
+    };
+
+    // The cards a legacy canvas's save held that its harness session never
+    // held become local cards, before the frame that takes the manifest is
+    // painted: the ones it showed stay on the canvas, and the ones it hid
+    // stay off it, so Add brings one back on the page alone.
+    const { localCards } = conversation;
+    const { addLocalIds } = doc;
+
+    useLayoutEffect(() => {
+        addLocalIds(localCards.shown, localCards.hidden);
+    }, [localCards, addLocalIds]);
+
+    // A harness card's pin is the harness manifest's (chat.pins): the
+    // document takes it, keeping the pins of the cards only the page holds,
+    // the ones the effect above made local included.
+    // A legacy canvas, whose manifest has not been taken, keeps the save's.
+    const { pins, widgets: chatWidgets } = chat;
+    const { takeHarnessPins } = doc;
+
+    useLayoutEffect(() => {
+        if (pins) {
+            takeHarnessPins(pins, chatWidgets);
+        }
+    }, [pins, chatWidgets, takeHarnessPins]);
+
+    // The card menu's Remove and Pin. A harness card's edit goes to the
+    // harness, whose answer settles it; a legacy canvas shows its pin here
+    // at once.
+    const removeCard = (id: string) => {
+        if (harnessCard(id)) {
             chat.syncCanvas([{ op: 'remove', component_id: id }]);
+        } else {
+            doc.removeWidget(id);
         }
     };
     const togglePin = (id: string) => {
-        const pinning = !doc.pinnedIds.includes(id);
+        if (!harnessCard(id)) {
+            doc.togglePin(id);
 
-        doc.togglePin(id, latestTurn);
-
-        if (chat.widgets.some((widget) => widget.id === id)) {
-            chat.syncCanvas([{ op: pinning ? 'pin' : 'unpin', component_id: id }]);
+            return;
         }
+
+        if (!pins) {
+            doc.togglePin(id);
+        }
+
+        chat.syncCanvas([pinEdit(pins ?? doc.pinnedIds, id)]);
     };
 
     // Studio opens on the handed-over question instead of a blank canvas.
@@ -632,6 +726,18 @@ const Studio = ({
     const showFilters =
         visibleWidgets.length > 0 && (!shared || Object.keys(kindCounts).length >= 2);
 
+    // From the first send until the workspace mounts, the landing's field is
+    // on screen and keeps focus, so a quick follow-up is typed into it.
+    // It then holds the follow-up draft, so that text carries into the chat's
+    // follow-up field, and Enter sends it as a follow-up.
+    const leaving = mode === 'leaving';
+    const sendDraft = (text: string) => {
+        if (text.trim()) {
+            send(text);
+            setFollowDraft('');
+        }
+    };
+
     const title = doc.conversationTitle ?? query;
     const firstPrompt = chat.messages.find((message) => message.role === 'user')?.text ?? query;
     const inWorkspace = mode === 'workspace';
@@ -701,6 +807,7 @@ const Studio = ({
                         onTogglePin={togglePin}
                         onRemove={removeCard}
                         onAskFollowUp={askFollowUp}
+                        onChangeUnit={readOnly ? undefined : changeUnit}
                         onCardInfo={setInfoCardId}
                         focusedId={infoCardId}
                         onEditText={modals.textCard.show}
@@ -711,6 +818,7 @@ const Studio = ({
                         onRemoveNote={doc.removeNote}
                         initialLayout={save.openedLayout}
                         onLayoutChange={save.handleLayoutChange}
+                        replacedIds={doc.replacedIds}
                         flyToCardRef={flyToCardRef}
                         theme={derivedTheme}
                         views={doc.views}
@@ -858,15 +966,15 @@ const Studio = ({
 
             {!inWorkspace && (
                 <StudioLanding
-                    query={query}
-                    onQueryChange={setQuery}
-                    onBegin={begin}
+                    query={leaving ? followDraft : query}
+                    onQueryChange={leaving ? setFollowDraft : setQuery}
+                    onBegin={leaving ? sendDraft : begin}
                     examples={examples}
                     inputRef={inputRef}
                     history={account ? landingHistory.history : null}
                     openingId={landingHistory.openingId}
                     onOpenHistory={landingHistory.openHistory}
-                    leaving={mode === 'leaving'}
+                    leaving={leaving}
                     wall={walled ? <GuestWall /> : null}
                 />
             )}
@@ -902,6 +1010,8 @@ const Studio = ({
                         note={liveCanvas ? <LiveNote live={liveCanvas} /> : undefined}
                     />
                     <ChatPanel
+                        draft={followDraft}
+                        onDraftChange={setFollowDraft}
                         editTarget={editTarget}
                         onClearEditTarget={() => setEditTarget(null)}
                         chat={chat}
