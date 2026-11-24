@@ -31,6 +31,7 @@ export type ProblemStatus = keyof typeof TITLES;
  * code the site refuses with is its own, and its `type` is `about:blank`.
  */
 export const REGISTRY_CODES = [
+    'allowance_exhausted',
     'invalid_api_key',
     'request_invalid',
     'not_found',
@@ -165,10 +166,12 @@ export const rateLimitedProblem = (
     });
 
 /**
- * A 429 `rate_limited` problem document: a daily count of `limit` API calls
- * is used up, the account's quota, which all its keys share, or the key's
- * own cap (`scope`). `reset` is the seconds to 00:00 UTC, when the count
- * starts over.
+ * A 429 `allowance_exhausted` problem document: a daily count of `limit` API
+ * calls is used up, the account's quota, which all its keys share, or the
+ * key's own cap (`scope`). `reset` is the seconds to 00:00 UTC, when the
+ * count starts over. It is not retryable: a client raises it at once
+ * (QuotaExceededError in the SDKs) instead of waiting up to a day, and
+ * Retry-After says when the count starts over.
  */
 export const dailyQuotaProblem = (
     { limit, reset }: { limit: number; reset: number },
@@ -177,12 +180,12 @@ export const dailyQuotaProblem = (
 ): Response =>
     problem({
         status: 429,
-        code: 'rate_limited',
+        code: 'allowance_exhausted',
         detail:
             scope === 'account'
                 ? `This account's daily quota of ${limit} API calls, shared by all its keys, is used up. It resets at 00:00 UTC, in ${reset}s.`
                 : `This API key's daily cap of ${limit} calls is used up. It resets at 00:00 UTC, in ${reset}s.`,
-        retryable: true,
+        retryable: false,
         headers: { ...headers, 'Retry-After': String(reset) },
     });
 

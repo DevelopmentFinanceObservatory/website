@@ -246,7 +246,7 @@ test('an account past its daily quota is a 429 that reports the quota', async ()
 
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.outcome, 'limited');
-    assert.equal((await access.refusal!.json()).code, 'rate_limited');
+    assert.equal((await access.refusal!.json()).code, 'allowance_exhausted');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '1000');
     assert.equal(access.refusal?.headers.get('x-ratelimit-remaining'), '0');
     assert.equal(access.refusal?.headers.get('retry-after'), '30');

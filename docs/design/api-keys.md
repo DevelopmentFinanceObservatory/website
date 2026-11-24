@@ -149,7 +149,7 @@ An account at the keyed default of 600 calls a minute could make 864,000 calls a
 - The quota is the nullable `user.api_daily_limit` column. Empty means the deployment default, `API_KEY_DAILY_LIMIT` (1,000 by default). An admin sets it per account on the admin page.
 - A key may carry a lower cap of its own, the nullable `apikey.daily_limit` column, counted under `apiday:key:<keyId>` only when it is set. An admin sets it per key on the admin page, to hold back one key without touching the account's others.
 - Every limit applies to each keyed API call: the per-minute limit first, then the account's daily quota, then the key's cap.
-- Over a daily limit, a call is refused with a 429 problem document. The outcome is `limited`, and the detail says the count resets at 00:00 UTC.
+- Over a daily limit, a call is refused with a 429 problem document whose code is `allowance_exhausted`, not retryable, with `Retry-After` to 00:00 UTC, so a client stops for the day instead of waiting in a retry. The outcome is `limited`, and the detail says the count resets at 00:00 UTC.
 - Refused calls count toward the day's total, because the limiter counts every attempt. The usage bar on the self-service panel and the admin page shows the account's count, for example "500 of 1,000", and a capped key shows its own count beside its cap.
 
 Since both limits belong to the account, creating more keys multiplies neither, and deleting a key and creating another does not start the day again. Key creation needs no throttle of its own.

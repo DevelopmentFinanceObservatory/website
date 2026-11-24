@@ -587,7 +587,7 @@ test('forward on a real key store and counter', async (t) => {
             assert.equal(answers[0]!.headers.get('x-ratelimit-limit'), '10');
             assert.equal(answers[2]!.headers.get('x-ratelimit-limit'), '2');
             assert.equal(answers[2]!.headers.get('x-ratelimit-remaining'), '0');
-            assert.equal((await answers[2]!.json()).code, 'rate_limited');
+            assert.equal((await answers[2]!.json()).code, 'allowance_exhausted');
             assert.ok(Number(answers[2]!.headers.get('retry-after')) <= 86_400);
 
             // Deleting the key and making another leaves the count where it is.

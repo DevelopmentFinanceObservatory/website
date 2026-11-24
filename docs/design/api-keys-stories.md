@@ -103,7 +103,7 @@ Keyed limits apply to API calls, which arrive from scripts, pipelines and SDKs, 
 _As a DFO user calling the API with a key, I want a refusal that tells me what happened and what to do next, so I'm not left guessing._
 
 - [ ] A call over the account's per-minute limit gets 429 with `Retry-After`, the `X-RateLimit-*` headers and a problem document ([design: example][design-testing]).
-- [ ] A call over the account's daily quota, or a key's daily cap, is refused the same way, with outcome `limited`, and its problem document's `detail` says the count resets at 00:00 UTC.
+- [ ] A call over the account's daily quota, or a key's daily cap, gets 429 with code `allowance_exhausted`, `retryable` false and `Retry-After` to 00:00 UTC, with outcome `limited`, and its problem document's `detail` says the count resets at 00:00 UTC. The SDKs raise it as `QuotaExceededError` and do not retry it.
 - [ ] The problem document's `detail` says which limit was reached, the account's or the key's, when to retry, and names the API keys panel in the account menu.
 - [ ] The problem document's `type` (`/codes/rate_limited`) resolves to a page that explains limits and how to ask for a higher one (support flow TBD, see [Open Questions][]).
 - [ ] The problem document's `detail` is plain sentences that a script can log as is.

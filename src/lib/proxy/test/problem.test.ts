@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    dailyQuotaProblem,
     missingProblem,
     notFoundProblem,
     problem,
@@ -46,6 +47,24 @@ test('rateLimitedProblem: a retryable 429 problem that keeps the rate headers an
     assert.equal(body.status, 429);
     assert.equal(body.retryable, true);
     assert.equal(res.headers.get('x-dfo-trace-id'), body.trace_id);
+});
+
+test('dailyQuotaProblem: a 429 allowance_exhausted that is not retried, with Retry-After to the reset', async () => {
+    for (const scope of ['account', 'key'] as const) {
+        const res = dailyQuotaProblem(
+            { limit: 1000, reset: 3600 },
+            { 'X-RateLimit-Limit': '1000' },
+            scope,
+        );
+        const body = await res.json();
+
+        assert.equal(res.status, 429);
+        assert.equal(res.headers.get('retry-after'), '3600');
+        assert.equal(res.headers.get('x-ratelimit-limit'), '1000');
+        assert.equal(body.code, 'allowance_exhausted');
+        assert.equal(body.type, '/codes/allowance_exhausted');
+        assert.equal(body.retryable, false);
+    }
 });
 
 test('unreachableProblem: a retryable 502 transient_unavailable problem with the detail given', async () => {
@@ -98,6 +117,7 @@ test('problem: titles the statuses the site refuses with and spreads the extra m
 
 test('problem: type links the registry codes and is about:blank for any other code', async () => {
     for (const [code, type] of [
+        ['allowance_exhausted', '/codes/allowance_exhausted'],
         ['invalid_api_key', '/codes/invalid_api_key'],
         ['request_invalid', '/codes/request_invalid'],
         ['not_found', '/codes/not_found'],
