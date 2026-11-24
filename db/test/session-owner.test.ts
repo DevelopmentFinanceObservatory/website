@@ -290,25 +290,44 @@ const migratedTo = async (
 
 const through26 = (entry: { idx: number }) => entry.idx <= 26;
 
-/** Resolves once some transaction waits for a lock on `table`. */
-const untilBlocked = async (pool: Pool, table: string) => {
+/**
+ * Resolves once a transaction in this database waits for a lock of
+ * `locktype`: `relation` for a table, `transactionid` for a row another
+ * transaction holds. If `migration` settles first, rethrows its error or
+ * fails.
+ */
+const untilWaiting = async (
+    pool: Pool,
+    migration: Promise<unknown>,
+    locktype: 'relation' | 'transactionid',
+) => {
+    let settled = false;
+    migration.then(
+        () => (settled = true),
+        () => (settled = true),
+    );
     const deadline = Date.now() + 10_000;
 
     for (;;) {
         const { rowCount } = await pool.query(
-            `select 1 from pg_locks join pg_class on pg_class.oid = pg_locks.relation
-             where pg_class.relname = $1 and not pg_locks.granted`,
-            [table],
+            `select 1 from pg_locks join pg_stat_activity using (pid)
+             where pg_stat_activity.datname = current_database()
+               and not pg_locks.granted and pg_locks.locktype = $1`,
+            [locktype],
         );
 
         if (rowCount !== 0) return;
-        assert.ok(Date.now() < deadline, `nothing waited on ${table}`);
+        if (settled) {
+            await migration;
+            assert.fail(`the migration finished before anything waited on a ${locktype} lock`);
+        }
+        assert.ok(Date.now() < deadline, `nothing waited on a ${locktype} lock`);
         await new Promise((resolve) => setTimeout(resolve, 20));
     }
 };
 
 // 100 SHA-256 digests in base64, 4,400 characters. A repeated character
-// compresses under the 2,704-byte btree limit; these bytes barely compress.
+// compresses under the 2,704-byte btree limit. These bytes barely compress.
 const incompressible = Array.from({ length: 100 }, (_, index) =>
     createHash('sha256').update(String(index)).digest('base64'),
 ).join('');
@@ -377,67 +396,115 @@ test('migration 0027 clears every harness id the Studio refuses', async (t) => {
     );
 });
 
+const insertConversation = (
+    client: Pick<Pool, 'query'>,
+    id: string,
+    userId: string,
+    agentSessionId: string,
+) =>
+    client.query(
+        `insert into conversation (id, user_id, title, agent_session_id, data)
+            values ($1, $2, 'Chat', $3, '{}')`,
+        [id, userId, agentSessionId],
+    );
+
 /**
  * The old service keeps saving while the migration runs. A save that commits
  * after the clear and before the index build would put a refused id under the
- * index, so the clear first locks `conversation` against writes until the
- * migrations commit. Here a save holding a 4,400-character id is open when
- * the migration starts; the migration waits for it, then clears it.
+ * index, so the clear locks `conversation` against writes until both
+ * migrations commit in one transaction. Here a save of a 4,400-character id
+ * is open when the migration starts, and the migration waits for it, then
+ * clears it. A row lock then holds the migration inside the clear while a
+ * second such save queues. That save runs only after the index exists, and
+ * fails on it.
  */
-test('migration 0027 clears a refused id saved while it waits', async (t) => {
+test('migration 0027 holds its lock from the clear until the index is built', async (t) => {
     const { database, migrateRest } = await migratedTo(t, through26);
-    const writer = await database.adminPool().connect();
     const pool = database.adminPool();
+    const [writer, holder, saver] = await Promise.all([
+        database.adminPool().connect(),
+        database.adminPool().connect(),
+        database.adminPool().connect(),
+    ]);
+
+    await insertConversation(pool, 'conv-held', 'user-ana', '');
 
     try {
+        await holder.query('begin');
+        await holder.query(`select 1 from conversation where id = 'conv-held' for update`);
         await writer.query('begin');
-        await writer.query(
-            `insert into conversation (id, user_id, title, agent_session_id, data)
-                values ('conv-late', 'user-ana', 'Chat', $1, '{}')`,
-            [incompressible],
-        );
+        await insertConversation(writer, 'conv-late', 'user-ana', incompressible);
 
         const migrated = migrateRest();
 
-        await untilBlocked(pool, 'conversation');
+        await untilWaiting(pool, migrated, 'relation');
         await writer.query('commit');
+        await untilWaiting(pool, migrated, 'transactionid');
+
+        const saved = insertConversation(saver, 'conv-later', 'user-ana', incompressible).then(
+            () => 'stored',
+            (error: { code?: string }) => error.code,
+        );
+
+        await untilWaiting(pool, migrated, 'relation');
+        await holder.query('commit');
         await migrated;
+        assert.equal(await saved, '54000');
     } finally {
-        writer.release(true);
+        for (const client of [writer, holder, saver]) client.release(true);
     }
 
-    const { rows } = await pool.query<{ agent_session_id: string | null }>(
-        `select agent_session_id from conversation where id = 'conv-late'`,
+    const { rows } = await pool.query<{ id: string; agent_session_id: string | null }>(
+        'select id, agent_session_id from conversation order by id',
     );
 
-    assert.deepEqual(rows, [{ agent_session_id: null }]);
+    assert.deepEqual(rows, [
+        { id: 'conv-held', agent_session_id: null },
+        { id: 'conv-late', agent_session_id: null },
+    ]);
 });
 
 /**
  * Account deletion locks `user`, then `conversation` through its cascade.
  * Migration 0027_studio_session_owner adds a foreign key to `user`, so a clear
  * that locked `conversation` alone would hold it while waiting on `user`, and
- * a deletion in between would deadlock with it. Here a deletion has locked
- * `user` when the migration starts, then deletes the account's conversations.
+ * a deletion in between would deadlock with it. Here a row lock holds the
+ * migration inside the clear while an account deletion starts.
  */
-test('migration 0027 waits behind an account deletion without deadlock', async (t) => {
+test('migration 0027 and an account deletion lock their tables in one order', async (t) => {
     const { database, migrateRest } = await migratedTo(t, through26);
-    const deleter = await database.adminPool().connect();
     const pool = database.adminPool();
+    const [holder, deleter] = await Promise.all([
+        database.adminPool().connect(),
+        database.adminPool().connect(),
+    ]);
+
+    await pool.query(
+        `insert into "user" (id, name, email) values ('user-ben', 'Ben', 'ben@example.org')`,
+    );
+    await insertConversation(pool, 'conv-held', 'user-ana', '');
+    await insertConversation(pool, 'conv-ben', 'user-ben', 'harness-ben');
 
     try {
-        await deleter.query('begin');
-        await deleter.query(`update "user" set name = name where id = 'user-ana'`);
+        await holder.query('begin');
+        await holder.query(`select 1 from conversation where id = 'conv-held' for update`);
 
         const migrated = migrateRest();
 
-        await untilBlocked(pool, 'user');
-        await deleter.query(`delete from conversation where user_id = 'user-ana'`);
-        await deleter.query('commit');
-        await migrated;
+        await untilWaiting(pool, migrated, 'transactionid');
+
+        const deleted = deleter.query(`delete from "user" where id = 'user-ben'`);
+
+        await untilWaiting(pool, migrated, 'relation');
+        await holder.query('commit');
+        await Promise.all([migrated, deleted]);
     } finally {
-        deleter.release(true);
+        for (const client of [holder, deleter]) client.release(true);
     }
+
+    const { rows } = await pool.query<{ id: string }>('select id from conversation');
+
+    assert.deepEqual(rows, [{ id: 'conv-held' }]);
 });
 
 /**
