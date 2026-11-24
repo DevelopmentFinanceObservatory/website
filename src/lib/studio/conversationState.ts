@@ -39,6 +39,7 @@ import type {
     ConversationRead,
     PlanApproved,
     Provenance,
+    StoredCard,
     StudioFrame,
 } from './wire.ts';
 
@@ -533,6 +534,16 @@ export const cardTurns = (
     return filed;
 };
 
+/** The stored cards of a read's closed turns (`cards`), by component id,
+ *  the latest turn's where two turns changed one card. */
+export const storedCards = (closed: readonly ClosedTurn[]): Map<string, StoredCard> =>
+    new Map(
+        [...closed]
+            .sort((a, b) => a.turn_index - b.turn_index)
+            .flatMap((turn) => turn.cards ?? [])
+            .map((card) => [card.component_id, card] as const),
+    );
+
 /**
  * Draw the cards a state read's manifest names that the page lacks
  * (cardsToRead): each is read (`read`), dropped when a newer revision
@@ -639,7 +650,8 @@ const provenanceOfRead = (read: ComponentRead): Provenance => {
 
 /**
  * A manifest card drawn from its component read: a card the page never saw
- * as the widget its `component.created` frame would have drawn, and a card
+ * as the widget its `component.created` frame would have drawn, with the
+ * unit offer its stored card (`stored`, a state read's) keeps, and a card
  * the page holds (`held`) redrawn at the read's revision as a
  * `component.revised` frame with its payload would. dfo-apis' fact summary
  * becomes the stream's (factsOf). Null for a card of a type the canvas does
@@ -649,6 +661,7 @@ export const widgetFromRead = (
     block: CompositionBlock,
     read: ComponentRead,
     held?: Widget,
+    stored?: StoredCard,
 ): Widget | null => {
     try {
         const description = payloadDescription(read.payload);
@@ -679,6 +692,7 @@ export const widgetFromRead = (
                   payload: read.payload,
                   fact_summary: facts,
                   provenance: provenanceOfRead(read),
+                  unit_change: stored?.unit_change ?? null,
               });
     } catch {
         return null;
@@ -733,8 +747,9 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * `handlers`: resume a running turn nobody holds (`resume`), wait while
  * another stream holds it, show a pause by its frames, and end with a `done`
  * once the harness has closed it. `onCarry` hears whether this page carries
- * the turn itself, true before each resume and false before each wait while
- * another stream holds it. A resume refused 409
+ * the turn itself: true once the harness grants a resume (its turn index or
+ * first frame), and false when it refuses one and before each wait while
+ * another stream holds the turn. A resume refused 409
  * (the turn was taken or paused meanwhile) or 503 `transient_unavailable`
  * reads the state again, after the wait the refusal names and at least
  * DEFAULT_WAIT_SECONDS. Each read is asked with `since()`. A read whose open
@@ -744,8 +759,9 @@ const CLOSED_FRAME: StudioFrame = { event: 'done', seq: -1, trace_id: '', compos
  * under handlers of its own. A read that finds this turn closed and no later
  * turn open yet ends the stream with a `done`. A read whose latest turn is
  * earlier than this one, or that holds no turn, comes from a session the
- * harness began afresh under the same id: it is not merged, and the stream
- * rejects. Any other refused resume, and a read refused as a StateRefusal
+ * harness began afresh under the same id: it is not merged, and goes to
+ * `handlers.onSessionGone`, which ends the turn (the stream rejects without
+ * one). Any other refused resume, and a read refused as a StateRefusal
  * (the session is gone, or a guest must sign in), goes to
  * `handlers.onRefusal` and ends the turn when it deals with it. Rejects when
  * that refusal is not dealt with, a resume is refused RESUME_ATTEMPTS times,
@@ -798,13 +814,28 @@ export const carryOnTurn = async ({
         if (step.kind === 'resume') {
             // Set by the refusal handler during the request.
             let refused: StreamRefusal | null = null;
+            // Set once the harness grants the resume.
+            let granted = false;
+            const grant = () => {
+                if (!granted) {
+                    granted = true;
+                    onCarry?.(true);
+                }
+            };
 
-            onCarry?.(true);
             await resume(
                 conversationId,
                 step.turnIndex,
                 {
                     ...handlers,
+                    onTurnIndex: (index) => {
+                        grant();
+                        handlers.onTurnIndex?.(index);
+                    },
+                    onFrame: (frame) => {
+                        grant();
+                        handlers.onFrame(frame);
+                    },
                     onRefusal: (refusal) => {
                         refused = refusal;
 
@@ -817,6 +848,8 @@ export const carryOnTurn = async ({
             if (refused === null) {
                 return;
             }
+
+            onCarry?.(false);
 
             const final: StreamRefusal = refused;
             const wait = resumeRetryAfter(final);
@@ -848,6 +881,12 @@ export const carryOnTurn = async ({
         }
 
         if ((answer.turn?.index ?? 0) < step.turnIndex) {
+            if (handlers.onSessionGone) {
+                handlers.onSessionGone();
+
+                return;
+            }
+
             throw new Error('the harness began the conversation afresh');
         }
 

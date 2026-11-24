@@ -11,7 +11,6 @@ import {
     CompositionRefusal,
     fetchComponentRevision,
     isNoBlock,
-    leaveCancels,
     mutateComposition,
     readState,
     runApplyChoice,
@@ -21,7 +20,7 @@ import {
     STATE_READ_ATTEMPTS,
     stopAction,
     watchAdmission,
-    type RequestPhase,
+    type CancelAnswer,
     type StopAction,
     whileBusy,
     type StreamRefusal,
@@ -94,11 +93,50 @@ test('cancelTurn: a cancel request that never answers settles once the bound pas
     );
 
     const outcome = await Promise.race([
-        cancelTurn('conv', 20).then(() => 'settled'),
+        cancelTurn('conv', null, 20).then(() => 'settled'),
         new Promise((resolve) => setTimeout(resolve, 2_000, 'hung')),
     ]);
 
     assert.equal(outcome, 'settled');
+});
+
+test('cancelTurn names its turn, and a turn the conversation moved past stopped nothing', async (t) => {
+    const cases: [string, number | null, Response[], CancelAnswer, (number | undefined)[]][] = [
+        ['the turn named', 4, [new Response(null, { status: 204 })], 'stopped', [4]],
+        [
+            'a later turn began',
+            4,
+            [Response.json({ code: 'turn_moved', turn_index: 5 })],
+            'moved',
+            [4],
+        ],
+        ['no turn known', null, [new Response(null, { status: 204 })], 'stopped', [undefined]],
+        // A harness from before `turn_index` refuses the member.
+        [
+            'an older harness',
+            4,
+            [
+                Response.json({ detail: 'extra' }, { status: 422 }),
+                new Response(null, { status: 204 }),
+            ],
+            'stopped',
+            [4, undefined],
+        ],
+    ];
+
+    for (const [label, turnIndex, answers, expected, sent] of cases) {
+        const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+
+        assert.equal(await cancelTurn('conv', turnIndex), expected, label);
+        assert.deepEqual(
+            fetch.mock.calls.map(
+                (call) => JSON.parse((call.arguments[1] as RequestInit).body as string).turn_index,
+            ),
+            sent,
+            label,
+        );
+        fetch.mock.restore();
+    }
 });
 
 const switchReply = {
@@ -561,15 +599,16 @@ test('whileBusy: Stop cancels a turn the harness admitted at once, one on its wa
     assert.equal(stopAction({ phase: 'unsent', metered: false }).refunded, false);
 });
 
-test("watchAdmission: a carried-on turn's Stop cancels at once, and a later frame changes nothing", () => {
+test("watchAdmission: a carried-on turn's Stop cancels that turn at once, and a later frame changes nothing", () => {
     const changes: StopAction[] = [];
     const admission = watchAdmission(
         { onFrame: () => {} },
-        { onStopChange: (action) => changes.push(action), admitted: true },
+        { onStopChange: (action) => changes.push(action), admittedTurn: 4 },
     );
 
     admission.start();
     assert.equal(admission.phase(), 'admitted');
+    assert.equal(admission.turnIndex(), 4);
     assert.deepEqual(admission.stop(false), {
         cancel: 'now',
         abort: 'after-grace',
@@ -581,28 +620,19 @@ test("watchAdmission: a carried-on turn's Stop cancels at once, and a later fram
     assert.deepEqual(changes, []);
 });
 
-test('leaving a conversation cancels only a turn this page carries that the harness named', () => {
-    const cases: [{ own: boolean; phase: RequestPhase } | null, boolean][] = [
-        // No stream runs: a state read, or nothing at all.
-        [null, false],
-        [{ own: true, phase: 'admitted' }, true],
-        // A send on its way, which the harness may yet answer busy while
-        // another tab's turn runs.
-        [{ own: true, phase: 'sent' }, false],
-        // A send waiting on another stream's turn.
-        [{ own: true, phase: 'unsent' }, false],
-        // A reopened page carrying on or watching another tab's turn.
-        [{ own: false, phase: 'admitted' }, false],
-        [{ own: false, phase: 'sent' }, false],
-    ];
+test("watchAdmission: a Stop's deferred cancel names the turn the harness admitted", () => {
+    // The turn index each deferred action came with.
+    const changes: [StopAction['cancel'], number | null][] = [];
+    const admission = watchAdmission(
+        { onFrame: () => {} },
+        { onStopChange: (action) => changes.push([action.cancel, admission.turnIndex()]) },
+    );
 
-    for (const [running, cancels] of cases) {
-        assert.equal(
-            leaveCancels(running && { own: running.own, phase: () => running.phase }),
-            cancels,
-            JSON.stringify(running),
-        );
-    }
+    admission.start();
+    assert.equal(admission.turnIndex(), null);
+    assert.equal(admission.stop(true).cancel, 'on-admit');
+    admission.handlers.onTurnIndex?.(7);
+    assert.deepEqual(changes, [['now', 7]]);
 });
 
 // A Stop after the turn's POST left and before its response headers: the

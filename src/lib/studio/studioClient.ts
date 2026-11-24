@@ -104,6 +104,9 @@ export type StreamHandlers = {
     onBusyWait?: (seconds: number | null) => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
     onUnreachable?: () => boolean;
+    // A state read found the conversation begun afresh under its id, so the
+    // stream's turn belongs to a session the harness dropped (carryOnTurn).
+    onSessionGone?: () => void;
 };
 
 const asToolError = (body: unknown): PlanRevisionStaleError | null =>
@@ -401,7 +404,9 @@ export type StopAction = {
  * after the client has gone holds the turn open with no stream, so the
  * cancel goes out once the response names the turn, and a refusal gives the
  * prompt back then. An unsent request ends at once with no cancel, since the
- * turn running may be another stream's.
+ * turn running may be another stream's. Stop is for the turn the page shows,
+ * so on a page that watches another tab's turn it cancels that turn. The
+ * cancel names the turn where the harness named it (cancelTurn).
  */
 export const stopAction = ({
     phase,
@@ -421,43 +426,34 @@ export const stopAction = ({
 };
 
 /**
- * Whether leaving the conversation (New Chat, opening another) asks the
- * harness to cancel the turn of the stream that runs (`running`, null when
- * none does): only a turn this page started or resumed (`own`) that the
- * harness has named (`phase`, watchAdmission's, is `admitted`). A stream
- * observing a turn another tab runs, a request on its way, and one waiting
- * on another stream's turn end on this page alone: the cancel names only
- * the conversation, so it would end whatever turn runs there.
- */
-export const leaveCancels = (
-    running: { own: boolean; phase: () => RequestPhase } | null,
-): boolean => running !== null && running.own && running.phase() === 'admitted';
-
-/**
- * `handlers` with a record of where the request stands (`phase`) and what
- * a Stop does to it. The caller calls `start` as the request starts,
- * and `stop` on Stop, which returns the StopAction to carry out. A Stop
- * while the request was `sent` is decided again when the harness answers:
- * `onStopChange` hears the action for `admitted` once the response names
- * the turn, and the one for `unsent` when the answer is to wait while
- * another stream holds the conversation (whileBusy). A stream that carries
- * on a turn the harness admitted already (`admitted`, a reopened page's)
- * is `admitted` from its start, so its Stop cancels at once and never
- * waits for a later frame, which may come after another turn has begun.
+ * `handlers` with a record of where the request stands (`phase`), the turn
+ * the harness named for it (`turnIndex`, null until named), and what a Stop
+ * does to it. The caller calls `start` as the request starts, and `stop` on
+ * Stop, which returns the StopAction to carry out. A Stop while the request
+ * was `sent` is decided again when the harness answers: `onStopChange`
+ * hears the action for `admitted` once the response names the turn, by
+ * which time `turnIndex` names it, and the one for `unsent` when the answer
+ * is to wait while another stream holds the conversation (whileBusy). A
+ * stream that carries on turn `admittedTurn`, which the harness admitted
+ * already (a reopened page's), starts `admitted` with that turn. Its Stop
+ * then cancels at once. A later frame may come after another turn has
+ * begun, so a cancel deferred to it could name the wrong turn.
  */
 export const watchAdmission = (
     handlers: StreamHandlers,
     {
         onStopChange,
-        admitted = false,
-    }: { onStopChange?: (action: StopAction) => void; admitted?: boolean } = {},
+        admittedTurn = null,
+    }: { onStopChange?: (action: StopAction) => void; admittedTurn?: number | null } = {},
 ): {
     handlers: StreamHandlers;
     phase: () => RequestPhase;
+    turnIndex: () => number | null;
     start: () => void;
     stop: (metered: boolean) => StopAction;
 } => {
     let phase: RequestPhase = 'unsent';
+    let turnIndex = admittedTurn;
     // Set by a Stop that waits on the harness's answer to decide again.
     let waiting: { metered: boolean } | null = null;
 
@@ -480,6 +476,7 @@ export const watchAdmission = (
         handlers: {
             ...handlers,
             onTurnIndex: (index) => {
+                turnIndex = index;
                 enter('admitted');
                 handlers.onTurnIndex?.(index);
             },
@@ -493,7 +490,8 @@ export const watchAdmission = (
             },
         },
         phase: () => phase,
-        start: () => enter(admitted ? 'admitted' : 'sent'),
+        turnIndex: () => turnIndex,
+        start: () => enter(admittedTurn === null ? 'sent' : 'admitted'),
         stop: (metered) => {
             const action = stopAction({ phase, metered });
 
@@ -706,6 +704,15 @@ export const isNoBlock = (refusal: CompositionRefusal): boolean =>
     refusal.error?.error === 'not_found' &&
     refusal.error.pointer === '/operations/component_id';
 
+/** Whether a refused canvas edit named a revision the composition has moved
+ *  past (409 `edit_conflict`, retry `refresh_then_retry`, no constraint):
+ *  read the manifest again and send the edit against its revision. */
+export const isStaleRevision = (refusal: CompositionRefusal): boolean =>
+    refusal.status === 409 &&
+    refusal.error?.error === 'edit_conflict' &&
+    refusal.error.retry === 'refresh_then_retry' &&
+    !refusal.error.constraint_id;
+
 /** Mutate the canvas; resolves with the new (or unchanged) manifest, and
  *  rejects with a CompositionRefusal when the request is refused. */
 export const mutateComposition = async (
@@ -736,30 +743,63 @@ export const mutateComposition = async (
     return (await res.json()) as CompositionManifest;
 };
 
+/** How a cancel went: the harness `stopped` the turn named, or the
+ *  conversation's turn when none was named; the turn named was not the
+ *  conversation's latest (`moved`), so nothing of this page's was running and
+ *  nothing stopped; or no answer came (`unanswered`). */
+export type CancelAnswer = 'stopped' | 'moved' | 'unanswered';
+
 /**
- * Stop the conversation's in-flight stream (the Stop button). Best-effort and
- * bounded: it always settles, within `timeoutMs`, because queued turns wait
- * on it.
+ * Stop the conversation's in-flight stream (the Stop button, or leaving the
+ * conversation). `turnIndex` names the turn to stop, as the harness named it
+ * (the stream's `x-dfo-turn-index` header, or the state read a carried-on
+ * turn came from), so a cancel that reaches the harness after another turn
+ * began stops nothing (`moved`). Null stops whatever turn the conversation
+ * runs. A harness that predates `turn_index` refuses the request 422, and
+ * the cancel goes again without it. Best-effort and bounded: it always
+ * settles, within `timeoutMs` in all, because queued turns wait on it.
  */
 export const cancelTurn = async (
     conversationId: string,
+    turnIndex: number | null = null,
     timeoutMs: number = STOP_GRACE_MS,
-): Promise<void> => {
-    const body: CancelRequest = {
-        kind: 'turn.cancel',
-        schema_version: 1,
-        conversation_id: conversationId,
+): Promise<CancelAnswer> => {
+    const signal = AbortSignal.timeout(timeoutMs);
+    const send = (index: number | null) => {
+        const body: CancelRequest = {
+            kind: 'turn.cancel',
+            schema_version: 1,
+            conversation_id: conversationId,
+            ...(index !== null && { turn_index: index }),
+        };
+
+        return fetch('/api/studio/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal,
+        });
     };
 
-    await fetch('/api/studio/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-    }).catch(() => {
+    try {
+        let res = await send(turnIndex);
+
+        if (res.status === 422 && turnIndex !== null) {
+            res = await send(null);
+        }
+
+        if (!res.ok) {
+            return 'unanswered';
+        }
+
+        const answer = res.status === 200 ? asRecord(await res.json().catch(() => null)) : null;
+
+        return answer?.['code'] === 'turn_moved' ? 'moved' : 'stopped';
+    } catch {
         // Cancel is best-effort (a timeout lands here too); closing the
         // stream also stops the turn.
-    });
+        return 'unanswered';
+    }
 };
 
 /** One component revision as the Presentation API's read route answers it:

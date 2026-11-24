@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
+import type { Widget } from '@/lib/chat/widgets';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { createLegacyCanvas, takeManifest } from '../composition.ts';
@@ -23,6 +24,7 @@ import {
     readConversation,
     RESUME_ATTEMPTS,
     sendNewQuestion,
+    storedCards,
     takeApproval,
     widgetFromRead,
     withMovedQuestion,
@@ -31,6 +33,7 @@ import {
     withTurnApprovals,
     type AttachStep,
 } from '../conversationState.ts';
+import { placeCard, takenOver } from '../cardReplace.ts';
 import { approvedFromFrame, planFromFrame, withApprovedPlan } from '../plan.ts';
 import {
     ensureTurn,
@@ -73,6 +76,7 @@ import type {
     PlanProposed,
     StudioFrame,
     TurnState,
+    UnitOffer,
 } from '../wire.ts';
 import { bodyOf } from './fixtures/recorded-wire.ts';
 
@@ -413,11 +417,13 @@ const run = async (
         resumes = [],
         reads = [],
         onRefusal,
+        onSessionGone,
         merged = [],
     }: {
         resumes?: (StudioFrame[] | StreamRefusal)[];
         reads?: (ConversationRead | StateRefusal | null)[];
         onRefusal?: StreamHandlers['onRefusal'];
+        onSessionGone?: StreamHandlers['onSessionGone'];
         merged?: ConversationRead[];
     } = {},
 ) => {
@@ -430,7 +436,7 @@ const run = async (
     await carryOnTurn({
         conversationId: 'conv',
         first,
-        handlers: { onFrame: (frame) => frames.push(frame), onRefusal },
+        handlers: { onFrame: (frame) => frames.push(frame), onRefusal, onSessionGone },
         signal: new AbortController().signal,
         since: () => 1,
         onRead: (read) => merged.push(read),
@@ -502,7 +508,7 @@ test('carryOnTurn waits out a held turn, then shows the pause it reached', async
         turn: turnState({ status: 'paused' }),
         pause: { interrupt_id: 'int-7', kind: 'plan', frames: [PLAN] },
     });
-    const { frames, calls, merged } = await run(
+    const { frames, calls, merged, claimed } = await run(
         { kind: 'resume', turnIndex: 2 },
         { resumes: [busy], reads: [paused] },
     );
@@ -510,6 +516,8 @@ test('carryOnTurn waits out a held turn, then shows the pause it reached', async
     assert.deepEqual(calls, ['resume conv 2', 'sleep 7000', 'read conv 1']);
     assert.deepEqual(merged, [paused]);
     assert.deepEqual(frames, [PLAN]);
+    // The refused resume left the turn another stream's.
+    assert.deepEqual(claimed, [false]);
 });
 
 test('carryOnTurn ends its turn once the harness closed it, and hands on a later turn another tab began', async () => {
@@ -555,7 +563,7 @@ test('carryOnTurn ends its turn once the harness closed it, and hands on a later
     }
 });
 
-test('carryOnTurn rejects a read of a session the harness began afresh, and merges nothing from it', async () => {
+test('carryOnTurn hands a read of a session the harness began afresh to the stream, and merges nothing from it', async () => {
     const cases: [string, ConversationRead][] = [
         ['a lower turn', readOf({ turn: turnState({ index: 1 }) })],
         ['no turn', readOf({})],
@@ -563,12 +571,21 @@ test('carryOnTurn rejects a read of a session the harness began afresh, and merg
 
     for (const [label, restarted] of cases) {
         const merged: ConversationRead[] = [];
+        let gone = 0;
+        const { frames } = await run(
+            { kind: 'wait', turnIndex: 2, seconds: 3 },
+            { reads: [restarted], merged, onSessionGone: () => (gone += 1) },
+        );
 
+        assert.equal(gone, 1, label);
+        assert.deepEqual(frames, [], label);
+        assert.deepEqual(merged, [], label);
+
+        // A stream with no handler for it rejects.
         await assert.rejects(
-            run({ kind: 'wait', turnIndex: 2, seconds: 3 }, { reads: [restarted], merged }),
+            run({ kind: 'wait', turnIndex: 2, seconds: 3 }, { reads: [restarted] }),
             label,
         );
-        assert.deepEqual(merged, [], label);
     }
 });
 
@@ -1466,6 +1483,55 @@ test("a state read draws the card another tab made, and a held card's newer revi
     assert.deepEqual(
         cardsToRead(manifestOf([[CARD, 2]]), new Map([[CARD, 2]]), new Set([CARD])),
         [],
+    );
+});
+
+test('a card a missed unit change drew takes the slot of the card it replaced, with its unit offer', async (t) => {
+    t.mock.method(globalThis, 'fetch', async (url: string) => {
+        const revision = Number(new URL(url, 'https://site.example').searchParams.get('revision'));
+
+        return Response.json({ ...bodyOf('component_read.at_revision'), revision });
+    });
+
+    const offer: UnitOffer = {
+        currencies: [{ code: 'USD', name: 'US dollars', prices: ['current'] }],
+        presets: ['USD'],
+        start: { currency: 'USD', prices: 'current' },
+    };
+    const turn: ClosedTurn = {
+        ...closed(3),
+        component_ids: [CARD],
+        cards: [
+            {
+                component_id: CARD,
+                type: 'line_chart',
+                title: 'ODA',
+                revision: 1,
+                unit_change: { spec_id: 'spec_1', offer },
+                replaces: 'cmp_old',
+            },
+        ],
+    };
+    const stored = storedCards([closed(2), turn]).get(CARD);
+    const read = await readComponent(CARD, 1);
+    const drawn = widgetFromRead(manifestOf([[CARD, 1]]).blocks[0]!, read!, undefined, stored);
+
+    assert.deepEqual(drawn?.kind !== 'text' && drawn?.unitChange, { spec_id: 'spec_1', offer });
+
+    // The page holds the old card between two others.
+    const page: (Widget & { turn: number })[] = ['cmp_a', 'cmp_old', 'cmp_b'].map((id) => ({
+        kind: 'text',
+        id,
+        title: id,
+        body: '',
+        turn: 1,
+    }));
+    const from = takenOver(CARD, { replaces: stored?.replaces ?? null });
+
+    assert.equal(from, 'cmp_old');
+    assert.deepEqual(
+        placeCard(page, { ...drawn!, turn: 3 }, { replaces: from }).map((card) => card.id),
+        ['cmp_a', CARD, 'cmp_b'],
     );
 });
 
