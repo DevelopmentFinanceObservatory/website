@@ -4,6 +4,7 @@ import Publications, {
     type PublicationCard,
 } from '@/components/organisms/Publications/Publications';
 import { sanityClient } from '@/sanity/client';
+import { toPublicationCards } from '@/sanity/publications';
 import { PUBLICATIONS_QUERY } from '@/sanity/queries';
 
 export const metadata: Metadata = {
@@ -15,32 +16,22 @@ export const metadata: Metadata = {
 // Edits published in cms-dfo reach the page within five minutes.
 export const revalidate = 300;
 
-const PublicationsPage = async () => {
-    const results = await sanityClient.fetch(PUBLICATIONS_QUERY);
-    // The schema requires these fields, but TypeGen types every field as
-    // nullable, so a document that lacks one is left out.
-    const publications = results.flatMap(
-        ({ id, title, byline, publishedAt, abstract, reportUrl, coverSrc }): PublicationCard[] =>
-            title && byline && publishedAt && coverSrc
-                ? [
-                      {
-                          id,
-                          title,
-                          byline,
-                          publishedAt,
-                          abstract: abstract ?? '',
-                          reportUrl,
-                          coverSrc,
-                      },
-                  ]
-                : [],
-    );
+// A failed read renders the empty list, so a Sanity outage during `next build`
+// leaves the build running and the next revalidation fills the page in.
+const loadPublications = async (): Promise<PublicationCard[]> => {
+    try {
+        return toPublicationCards(await sanityClient.fetch(PUBLICATIONS_QUERY));
+    } catch (error) {
+        console.warn('publications: the Sanity read failed', error);
 
-    return (
-        <main>
-            <Publications publications={publications} />
-        </main>
-    );
+        return [];
+    }
 };
+
+const PublicationsPage = async () => (
+    <main>
+        <Publications publications={await loadPublications()} />
+    </main>
+);
 
 export default PublicationsPage;

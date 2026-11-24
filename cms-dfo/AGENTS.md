@@ -1,14 +1,10 @@
-# AGENTS.md
+# cms-dfo
 
-Guidance for AI coding agents working in this repository.
+The Sanity Studio for the website in the repository root: project `te5hxtq5`, dataset `production`. The root `AGENTS.md` covers branches, commits, pull requests and writing. This file covers the Studio.
 
-## Sanity: connect MCP, then what to build next
-
-Check whether Sanity MCP tools are available before Sanity work. If they aren't, offer the user `npx sanity@latest mcp configure`. It detects their editor and adds the Sanity MCP server; they sign in from the editor the first time it connects. Ask before running it.
-
-Once the project is set up, show the user this map and offer the next step:
-
-1. **Schema**: model content in `schemaTypes/`, then offer to run `npx sanity schemas deploy` so MCP tools can see it.
-2. **Queries and types**: put queries under `src/` or set `typegen.path` in the CLI config to their location. Add `groq` if importing `defineQuery` from it. From the Studio root, run `npx sanity schema extract && npx sanity typegen generate`.
-3. **Functions**: run code when content changes or on a schedule, for example fill in a slug when a post is published ([Functions guide](https://github.com/sanity-io/agent-toolkit/blob/main/skills/sanity-best-practices/references/functions.md)).
-4. **Deploy**: when the user is ready to publish, offer `npx sanity deploy`.
+- Install and run commands from `cms-dfo/`, which has its own `package.json` and pnpm lockfile. `README.md` lists the commands.
+- Content types live in `schemaTypes/documents/` and take effect only once listed in `schemaTypes/index.ts`.
+- After changing a schema type or a GROQ query under `../src`, run `pnpm typegen` and commit the regenerated `../src/sanity/sanity.types.ts`. The script passes `--force` to the schema extract, which refuses to overwrite `schema.json` without it.
+- Run `npx sanity schemas deploy` after a schema change so the Sanity MCP server sees the new types and fields.
+- The website reads published documents from the public dataset without a token. Studio validation runs only in Studio, so `src/sanity/publications.ts` checks each document before the page renders it.
+- `pnpm build` and `pnpm run deploy` resolve the Studio's packages on Sanity's module CDN for auto-updates. When that lookup fails, `npx sanity build --no-auto-updates` builds from the local install.
