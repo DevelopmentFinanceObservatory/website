@@ -374,10 +374,14 @@ export type CompositionMutation = {
     expected_revision?: number | null;
 };
 
+/** POST /api/studio/cancel. `turn_index` names the turn to stop; the
+ *  harness answers 200 `turn_moved` (CancelSkipped) and stops nothing when
+ *  the conversation's latest turn is another. */
 export type CancelRequest = {
     kind: 'turn.cancel';
     schema_version: 1;
     conversation_id: string;
+    turn_index?: number;
 };
 
 /** POST /api/studio/resume: carry on the conversation's open turn
@@ -723,6 +727,20 @@ export type TurnState = {
     retry_after_seconds?: number | null;
 };
 
+/** A card a closed turn made or changed, as the conversation stores it.
+ *  `unit_change` and `replaces` are its `component.created` frame's: the
+ *  offer its Change unit opens on, and the card whose canvas slot it took.
+ *  A card an older harness stored carries neither. */
+export type StoredCard = {
+    component_id: string;
+    type: string;
+    title: string;
+    revision: number;
+    fact_summary?: FactSummary | null;
+    unit_change?: UnitChange | null;
+    replaces?: string | null;
+};
+
 /** One closed turn: the user's message as the turn recorded it, the reply it
  *  closed on (empty when none), the cards it made or changed, the code a
  *  turn that did not end cleanly closed on, and the question a turn ended by
@@ -732,6 +750,9 @@ export type ClosedTurn = {
     user_message: string;
     reply: string;
     component_ids: string[];
+    // The stored card of each id in `component_ids` the conversation holds a
+    // card for, in the same order. Absent from an older harness.
+    cards?: StoredCard[];
     // The `plan.approved` frame of each plan the turn approved, one per
     // `revision`.
     approved?: PlanApproved[] | null;
