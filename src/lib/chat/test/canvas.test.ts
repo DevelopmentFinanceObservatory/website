@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { takeManifest, type CanvasBaseline } from '../../studio/composition.ts';
-import { owedRemovalsOf, removalsToSend, settle } from '../../studio/owedRemovals.ts';
+import { owedRemovalsOf, resendsOf, settle } from '../../studio/owedRemovals.ts';
 import type { CompositionManifest } from '../../studio/wire.ts';
 import {
     canvasWidgetsOf,
@@ -136,7 +136,16 @@ test('an owed removal survives a failed request, a reload and a save, and keeps 
     const kept = settle(owed, taken, new Map());
 
     assert.equal(kept, owed);
-    assert.deepEqual(removalsToSend(kept, taken, new Set()), ['cmp_x']);
+    assert.deepEqual(
+        resendsOf({
+            owed: kept,
+            baseline: taken,
+            inFlight: new Set(),
+            sent: new Map(),
+            held: false,
+        })?.ids,
+        ['cmp_x'],
+    );
 
     // The page saves the pinned baseline with the owed set, and a reload
     // reads the set back: the canvas, its shares and its slots leave cmp_x
@@ -155,6 +164,17 @@ test('an owed removal survives a failed request, a reload and a save, and keeps 
 
     assert.deepEqual(settle(kept, confirmed, new Map()), []);
     assert.deepEqual(ids({ ...saved, canvas: confirmed, owedRemovals: [] }), ['cmp_a']);
+
+    // Before the first manifest, the owed set keeps the card off as well.
+    assert.deepEqual(
+        ids({
+            ...saved,
+            canvas: null,
+            localIds: undefined,
+            removedIds: ['cmp_fork', 'text_local'],
+        }),
+        ['cmp_a'],
+    );
 });
 
 test("a fork's inherited cards show beside the manifest of its own session", () => {
@@ -190,6 +210,17 @@ test("Add on a fork's removed inherited card shows it with no harness edit", () 
 
     // The fork shows what the share showed.
     assert.deepEqual(ids(fork), ids(shared));
+
+    // So does a fork of a save whose removals list a harness card the user
+    // added back, which the save owes no removal.
+    const addedBack = state({
+        widgets: [card('cmp_first', 1), card('cmp_second', 2)],
+        canvas: { compositionId: 'cps_1', revision: 2, ids: ['cmp_first', 'cmp_second'] },
+        removedIds: ['cmp_first'],
+        owedRemovals: [],
+    });
+
+    assert.deepEqual(ids({ ...addedBack, ...forkedCanvas(addedBack) }), ids(addedBack));
     // Its session never held the hidden card, so Add stays on the page.
     assert.equal(isHarnessCard(fork, 'cmp_first'), false);
 

@@ -67,7 +67,9 @@ export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
                       ? shown(widget)
                       : held.has(widget.id) && !owed.has(widget.id),
               )
-            : legacyCanvasWidgetsOf(state).filter(shown);
+            : legacyCanvasWidgetsOf(state).filter(
+                  (widget) => shown(widget) && !owed.has(widget.id),
+              );
 
     return [...cards, ...textCards.filter(shown)];
 };
@@ -135,10 +137,11 @@ export const forkedCanvas = (
         .filter((widget) => !shown.has(widget.id))
         .map((widget) => widget.id);
 
+    // A card the source shows stays shown, whatever its `removedIds` lists.
     return {
         canvas: null,
         localIds: saved.widgets.map((widget) => widget.id),
-        removedIds: [...new Set([...saved.removedIds, ...hidden])],
+        removedIds: [...new Set([...saved.removedIds.filter((id) => !shown.has(id)), ...hidden])],
         owedRemovals: [],
     };
 };

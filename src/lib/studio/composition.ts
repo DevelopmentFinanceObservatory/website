@@ -6,9 +6,10 @@ import type { CompositionManifest, MutationOperation } from './wire';
 import { isHarnessCard, legacyCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
 
 /** The harness canvas this page last saw: which composition, at which
- *  revision, holding which cards, and which of them the manifest pins
+ *  revision, holding which cards, which of them the manifest pins
  *  (`pinned`, absent on a legacy canvas and on a baseline saved before the
- *  page kept it). A null `compositionId` marks a legacy canvas, the cards a
+ *  page kept it), and the revision of each card's block (`revisions`, absent
+ *  on a baseline saved before the page kept them). A null `compositionId` marks a legacy canvas, the cards a
  *  save from before the page kept the manifest showed, which createLegacyCanvas
  *  brings to the harness's manifest. */
 export type CanvasBaseline = {
@@ -16,6 +17,7 @@ export type CanvasBaseline = {
     revision: number;
     ids: string[];
     pinned?: string[];
+    revisions?: Record<string, number>;
 };
 
 /** The canvas a save reopens with: its saved baseline, else, for a save
@@ -108,6 +110,9 @@ export const takeManifest = (
             pinned: manifest.blocks
                 .filter((block) => block.pinned)
                 .map((block) => block.component_id),
+            revisions: Object.fromEntries(
+                manifest.blocks.map((block) => [block.component_id, block.revision]),
+            ),
         },
         local: replaced ? previous.ids.filter((id) => !held.has(id)) : [],
     };

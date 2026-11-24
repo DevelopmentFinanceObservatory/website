@@ -7,8 +7,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
-import type { CanvasBaseline } from '../composition.ts';
-import { forgive, owe, owedRemovalsOf, removalsToSend, settle } from '../owedRemovals.ts';
+import { createCanvasEdits } from '../canvasEdits.ts';
+import { takeManifest, type CanvasBaseline } from '../composition.ts';
+import {
+    confirm,
+    forgive,
+    owe,
+    OWED_RESENDS,
+    owedRemovalsOf,
+    resendsOf,
+    settle,
+    type OwedRemoval,
+} from '../owedRemovals.ts';
+import { mutateComposition } from '../studioClient.ts';
+import type { CompositionManifest } from '../wire.ts';
 
 const card = (id: string) => ({ kind: 'text' as const, id, title: id, body: '', turn: 1 });
 
@@ -18,6 +30,29 @@ const baseline = (ids: string[]): CanvasBaseline => ({
     ids,
     pinned: [],
 });
+
+const manifest = (revision: number, blocks: [string, number][]): CompositionManifest => ({
+    composition_id: 'cps_1',
+    revision,
+    actor: 'model',
+    blocks: blocks.map(([id, cardRevision]) => ({
+        component_id: id,
+        revision: cardRevision,
+        type: 'line_chart',
+        title: id,
+    })),
+    counts: { all: blocks.length, stats: 0, charts: blocks.length, tables: 0, notes: 0 },
+});
+
+// The cards a page with `owed` sends a `remove` for against `canvas`.
+const resent = (
+    owed: OwedRemoval[],
+    canvas: CanvasBaseline | null,
+    inFlight: string[] = [],
+    sent = new Map<string, number>(),
+) =>
+    resendsOf({ owed, baseline: canvas, inFlight: new Set(inFlight), sent, held: false })?.ids ??
+    [];
 
 test('Add takes a card out of the owed set, so it shows and no remove goes for it', () => {
     const canvas = baseline(['cmp_a', 'cmp_x']);
@@ -32,14 +67,16 @@ test('Add takes a card out of the owed set, so it shows and no remove goes for i
         }).map((widget) => widget.id);
 
     assert.deepEqual(shown(owed), ['cmp_a']);
-    assert.deepEqual(removalsToSend(owed, canvas, new Set()), ['cmp_x']);
+    assert.deepEqual(resent(owed, canvas), ['cmp_x']);
 
     const added = forgive(owed, 'cmp_x');
 
     assert.deepEqual(shown(added), ['cmp_a', 'cmp_x']);
-    assert.deepEqual(removalsToSend(added, canvas, new Set()), []);
-    // A removal owed already keeps the revision it was owed at.
-    assert.deepEqual(owe(owed, 'cmp_x', 4), owed);
+    assert.deepEqual(resent(added, canvas), []);
+    // A removal owed already keeps the revision it was owed at, and the set
+    // keeps its identity when nothing changes, so no save is scheduled.
+    assert.equal(owe(owed, 'cmp_x', 4), owed);
+    assert.equal(forgive(added, 'cmp_x'), added);
 });
 
 test('a canvas settles the removals it confirms, and a card drawn again since', () => {
@@ -65,12 +102,104 @@ test('a canvas settles the removals it confirms, and a card drawn again since', 
 
     assert.equal(settle(owed, legacy, revisions), owed);
     assert.equal(settle(owed, null, revisions), owed);
-    assert.deepEqual(removalsToSend(owed, legacy, new Set()), []);
-    // A remove in flight is not sent twice.
-    assert.deepEqual(removalsToSend(owed, canvas, new Set(['cmp_held'])), [
-        'cmp_redrawn',
+    assert.deepEqual(resent(owed, legacy), []);
+    // A remove in flight is not sent twice, and one sent OWED_RESENDS times
+    // this page load waits for the next.
+    assert.deepEqual(resent(owed, canvas, ['cmp_held'], new Map([['cmp_redrawn', OWED_RESENDS]])), [
         'cmp_unknown',
     ]);
+});
+
+test('a manifest that holds an owed card at a newer revision settles it before the page draws it', () => {
+    // The user removed cmp_x at revision 2, and the remove failed. Another
+    // tab's turn had the model revise cmp_x to revision 3.
+    const owed = owe([], 'cmp_x', 2);
+    const taken = takeManifest(
+        baseline(['cmp_a', 'cmp_x']),
+        manifest(5, [
+            ['cmp_a', 1],
+            ['cmp_x', 3],
+        ]),
+    )!.baseline;
+
+    // The page has not read cmp_x's revision 3 yet (no drawn revisions).
+    assert.deepEqual(settle(owed, taken, new Map()), []);
+    assert.deepEqual(resent(settle(owed, taken, new Map()), taken), []);
+    // At the revision removed, the card is still owed.
+    const same = takeManifest(
+        taken,
+        manifest(6, [
+            ['cmp_a', 1],
+            ['cmp_x', 2],
+        ]),
+    )!.baseline;
+
+    assert.deepEqual(settle(owed, same, new Map()), owed);
+});
+
+test("a reopened page holds its resends until it has read the harness's state, then sends each against that canvas", () => {
+    const owed = owe([], 'cmp_x', 2);
+    const saved = baseline(['cmp_a', 'cmp_x']);
+    const resend = (held: boolean) =>
+        resendsOf({ owed, baseline: saved, inFlight: new Set(), sent: new Map(), held });
+
+    assert.equal(resend(true), null);
+    assert.deepEqual(resend(false), {
+        ids: ['cmp_x'],
+        against: { compositionId: 'cps_1', revision: 3 },
+    });
+});
+
+test('a resend goes with the composition and revision it is against, so a canvas changed since refuses it', async (t) => {
+    const bodies: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+
+        return Response.json(manifest(4, [['cmp_a', 1]]));
+    });
+
+    const edits = createCanvasEdits({
+        mutate: (session, operations, against) =>
+            mutateComposition(session, operations, against?.revision, against?.compositionId),
+        onManifest: () => {},
+        onFailure: () => assert.fail('the harness answered'),
+    });
+    const resend = resendsOf({
+        owed: owe([], 'cmp_x', 2),
+        baseline: baseline(['cmp_a', 'cmp_x']),
+        inFlight: new Set(),
+        sent: new Map(),
+        held: false,
+    })!;
+
+    assert.equal(
+        await edits.enqueue('conv', [{ op: 'remove', component_id: 'cmp_x' }], resend.against),
+        true,
+    );
+    assert.deepEqual(bodies, [
+        {
+            kind: 'composition.mutate',
+            schema_version: 1,
+            conversation_id: 'conv',
+            composition_id: 'cps_1',
+            operations: [{ op: 'remove', component_id: 'cmp_x' }],
+            expected_revision: 3,
+        },
+    ]);
+});
+
+test('a remove the harness answered clears its own entry, and a later Remove of the card keeps its own', () => {
+    const owed = owe([], 'cmp_x', 2);
+    const entry = owed[0]!;
+
+    assert.deepEqual(confirm(owed, entry), []);
+
+    // The answer lands after the card was removed again at a newer revision.
+    const again = owe(confirm(owed, entry), 'cmp_x', 9);
+
+    assert.equal(confirm(again, entry), again);
+    assert.deepEqual(again, [{ id: 'cmp_x', revision: 9 }]);
 });
 
 test("a save's own owed set wins over its removals, whatever its baseline", () => {

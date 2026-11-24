@@ -704,17 +704,29 @@ export const isNoBlock = (refusal: CompositionRefusal): boolean =>
     refusal.error?.error === 'not_found' &&
     refusal.error.pointer === '/operations/component_id';
 
+/** Whether a refused canvas edit named a revision the composition has moved
+ *  past (409 `edit_conflict`, retry `refresh_then_retry`, no constraint):
+ *  read the canvas again before sending it again. */
+export const isStaleRevision = (refusal: CompositionRefusal): boolean =>
+    refusal.status === 409 &&
+    refusal.error?.error === 'edit_conflict' &&
+    refusal.error.retry === 'refresh_then_retry' &&
+    !refusal.error.constraint_id;
+
 /** Mutate the canvas; resolves with the new (or unchanged) manifest, and
- *  rejects with a CompositionRefusal when the request is refused. */
+ *  rejects with a CompositionRefusal when the request is refused. Sent
+ *  against `expectedRevision` of composition `compositionId` when given. */
 export const mutateComposition = async (
     conversationId: string,
     operations: MutationOperation[],
     expectedRevision?: number,
+    compositionId?: string,
 ): Promise<CompositionManifest> => {
     const body: CompositionMutation = {
         kind: 'composition.mutate',
         schema_version: 1,
         conversation_id: conversationId,
+        ...(compositionId !== undefined ? { composition_id: compositionId } : {}),
         operations,
         ...(expectedRevision !== undefined ? { expected_revision: expectedRevision } : {}),
     };

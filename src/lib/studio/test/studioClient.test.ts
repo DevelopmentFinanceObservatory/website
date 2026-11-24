@@ -11,6 +11,7 @@ import {
     CompositionRefusal,
     fetchComponentRevision,
     isNoBlock,
+    isStaleRevision,
     mutateComposition,
     readState,
     runApplyChoice,
@@ -868,20 +869,26 @@ test('readState: a 503 transient_unavailable is asked again after its wait, a bo
     });
 });
 
-test('mutateComposition: a refusal rejects with a CompositionRefusal, and a no-block one says so', async (t) => {
+test('mutateComposition: a refusal rejects with a CompositionRefusal, and says whether no block or a moved canvas refused it', async (t) => {
     const noBlock = {
         error: 'not_found',
         retry: 'refresh_then_retry',
         detail: "no block 'cmp_1' in the composition",
         pointer: '/operations/component_id',
     };
-    const cases: [string, Response, boolean][] = [
-        ['no block', Response.json(noBlock, { status: 404 }), true],
-        ['no conversation', Response.json(unknownConversation, { status: 404 }), false],
-        ["the proxy's 404", proxyProblem(404, 'not_found'), false],
+    const moved = {
+        error: 'edit_conflict',
+        retry: 'refresh_then_retry',
+        detail: 'expected revision 3, the composition is at 4',
+    };
+    const cases: [string, Response, boolean, boolean][] = [
+        ['no block', Response.json(noBlock, { status: 404 }), true, false],
+        ['no conversation', Response.json(unknownConversation, { status: 404 }), false, false],
+        ["the proxy's 404", proxyProblem(404, 'not_found'), false, false],
+        ['a moved canvas', Response.json(moved, { status: 409 }), false, true],
     ];
 
-    for (const [name, response, refusedBlock] of cases) {
+    for (const [name, response, refusedBlock, stale] of cases) {
         await t.test(name, async (t) => {
             t.mock.method(globalThis, 'fetch', async () => response);
 
@@ -893,8 +900,9 @@ test('mutateComposition: a refusal rejects with a CompositionRefusal, and a no-b
             );
 
             assert.ok(refusal instanceof CompositionRefusal);
-            assert.equal(refusal.status, 404);
+            assert.equal(refusal.status, response.status);
             assert.equal(isNoBlock(refusal), refusedBlock);
+            assert.equal(isStaleRevision(refusal), stale);
         });
     }
 });

@@ -62,6 +62,11 @@ export const refusedRemoves = (
           )
         : [];
 
+/** The composition and revision an edit is sent against (`composition_id`,
+ *  `expected_revision`), which the harness refuses once the canvas has
+ *  moved on. */
+export type EditAgainst = { compositionId: string; revision: number };
+
 /** Serialise each session's canvas edits, so a Remove then an Add land in
  *  order. An edit refused as busy or briefly unavailable
  *  (canvasEditRetryAfter) is sent again after the wait the refusal names,
@@ -73,7 +78,8 @@ export const refusedRemoves = (
  *  ends. `reset`
  *  drops the answers of edits sent before it, and ends the wait of an edit
  *  waiting to be sent again, which then stops. `enqueue` resolves true when
- *  the harness answered the edit with a manifest. */
+ *  the harness answered the edit with a manifest, and sends it `against`
+ *  a composition and revision when given. */
 export const createCanvasEdits = ({
     mutate,
     onManifest,
@@ -85,6 +91,7 @@ export const createCanvasEdits = ({
     mutate: (
         session: string,
         operations: MutationOperation[],
+        against?: EditAgainst,
     ) => Promise<CompositionManifest | null>;
     onManifest: (manifest: CompositionManifest) => void;
     onFailure: (operations: MutationOperation[], error: unknown) => void;
@@ -103,7 +110,11 @@ export const createCanvasEdits = ({
             leaving.abort();
             leaving = new AbortController();
         },
-        enqueue: (session: string, operations: MutationOperation[]): Promise<boolean> => {
+        enqueue: (
+            session: string,
+            operations: MutationOperation[],
+            against?: EditAgainst,
+        ): Promise<boolean> => {
             const queuedGeneration = generation;
             const { signal } = leaving;
             const chain = (chains.get(session) ?? Promise.resolve()).then(async () => {
@@ -115,7 +126,7 @@ export const createCanvasEdits = ({
                     let failure: unknown;
 
                     try {
-                        const manifest = await mutate(session, operations);
+                        const manifest = await mutate(session, operations, against);
 
                         if (manifest) {
                             if (queuedGeneration === generation) {

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
-import type { Widget } from '@/lib/chat/widgets';
+import type { ChartWidget, Widget } from '@/lib/chat/widgets';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { createLegacyCanvas, takeManifest } from '../composition.ts';
@@ -1542,17 +1542,22 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
         presets: ['USD'],
         start: { currency: 'USD', prices: 'current' },
     };
-    const chart = (id: string): Widget & { turn: number } =>
-        ({
-            kind: 'chart',
-            id,
-            title: id,
-            series: [],
-            turn: 1,
-        }) as unknown as Widget & { turn: number };
+    const chart = (id: string): ChartWidget & { turn: number } => ({
+        kind: 'chart',
+        id,
+        chartType: 'line',
+        title: id,
+        categories: [],
+        series: [],
+        turn: 1,
+    });
     // The page holds cmp_a (its slot), and drew cmp_c from a poll while
     // another tab's turn ran: two Change unit swaps, cmp_a to cmp_b to cmp_c.
-    const page = [chart('cmp_a'), chart('cmp_other'), { ...chart('cmp_c'), turn: 3 }];
+    const page: (Widget & { turn: number })[] = [
+        chart('cmp_a'),
+        chart('cmp_other'),
+        { ...chart('cmp_c'), turn: 3 },
+    ];
     const stored = storedCards([
         {
             ...closed(2),

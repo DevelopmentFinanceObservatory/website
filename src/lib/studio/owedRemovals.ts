@@ -4,12 +4,14 @@
  * set is saved with the conversation (`owedRemovals`), and every path that
  * draws or saves a canvas leaves its cards off (canvasWidgetsOf), so a card
  * owed removal stays off the canvas, its shares and its embeds whatever
- * happened to the request. An entry leaves the set when a manifest of the
- * conversation's composition lacks the card (the harness took it off), when
- * the page has since seen the card at a newer revision than the one removed
- * (the model drew it again), and when the user adds the card back. The page
- * sends a `remove` for each entry the harness still holds whenever its
- * canvas changes, so an owed removal goes again once the harness answers.
+ * happened to the request. An entry leaves the set when the harness answers
+ * its `remove` with a manifest (confirm), when a manifest of the
+ * conversation's composition lacks the card, when the harness holds the
+ * card at a newer revision than the one removed (the model drew it again),
+ * and when the user adds the card back. Whenever its canvas changes, the
+ * page sends a `remove` again for each entry the harness still holds,
+ * against that canvas's revision (resendsOf). Each tab keeps its own set,
+ * and the last tab to save decides the saved one.
  */
 
 import type { CardRef } from '../chat/widgets.ts';
@@ -65,30 +67,55 @@ export const owedRemovalsOf = ({
 export const owedIds = (owed: readonly OwedRemoval[]): Set<string> =>
     new Set(owed.map((entry) => entry.id));
 
-/** `owed` with card `id`, held at `revision`, taken off (Remove). A card
- *  owed already keeps its entry. */
-export const owe = (
-    owed: readonly OwedRemoval[],
+/**
+ * The revision of card `id` the page knows the harness holds: the newer of
+ * the one `baseline`'s manifest names (`revisions`, kept from each block)
+ * and the one the page drew (`drawn`), which can lag the manifest until the
+ * card's read lands. Null when neither knows it.
+ */
+export const knownRevision = (
+    baseline: CanvasBaseline | null,
+    drawn: ReadonlyMap<string, number>,
     id: string,
-    revision: number | null,
-): OwedRemoval[] =>
-    owed.some((entry) => entry.id === id) ? [...owed] : [...owed, { id, revision }];
+): number | null => {
+    const known = [baseline?.revisions?.[id], drawn.get(id)].filter(
+        (revision): revision is number => revision !== undefined,
+    );
 
-/** `owed` without card `id`, which the user put back (Add). */
-export const forgive = (owed: readonly OwedRemoval[], id: string): OwedRemoval[] =>
-    owed.filter((entry) => entry.id !== id);
+    return known.length === 0 ? null : Math.max(...known);
+};
+
+/** `owed` with card `id`, held at `revision` (knownRevision), taken off
+ *  (Remove). A card owed already keeps its entry, and `owed` itself comes
+ *  back. */
+export const owe = (owed: OwedRemoval[], id: string, revision: number | null): OwedRemoval[] =>
+    owed.some((entry) => entry.id === id) ? owed : [...owed, { id, revision }];
+
+/** `owed` without card `id`, which the user put back (Add); `owed` itself
+ *  when it does not owe the card. */
+export const forgive = (owed: OwedRemoval[], id: string): OwedRemoval[] =>
+    owed.some((entry) => entry.id === id) ? owed.filter((entry) => entry.id !== id) : owed;
+
+/** `owed` without `entry`, whose `remove` the harness answered with a
+ *  manifest, so the harness took the card off. A later Remove of the same
+ *  card owes an entry of its own, which stays; `owed` itself comes back
+ *  when it lacks `entry`. */
+export const confirm = (owed: OwedRemoval[], entry: OwedRemoval): OwedRemoval[] =>
+    owed.includes(entry) ? owed.filter((other) => other !== entry) : owed;
 
 /**
  * `owed` less the removals that are settled against `baseline`, a manifest
  * of the conversation's composition: the cards it lacks, which the harness
- * took off, and the cards the page holds at a newer revision than the one
- * removed (`revisions`), which the model drew again. The same array when
- * nothing settled. A legacy baseline, and none, settle nothing.
+ * took off, and the cards the harness holds at a newer revision than the
+ * one removed (knownRevision, from the manifest's blocks and the page's
+ * draws), which the model drew again. An entry whose removed revision is
+ * unknown settles only when the card is gone. The same array when nothing
+ * settled. A legacy baseline, and none, settle nothing.
  */
 export const settle = (
     owed: OwedRemoval[],
     baseline: CanvasBaseline | null,
-    revisions: ReadonlyMap<string, number>,
+    drawn: ReadonlyMap<string, number>,
 ): OwedRemoval[] => {
     if (baseline?.compositionId == null) {
         return owed;
@@ -96,29 +123,62 @@ export const settle = (
 
     const held = new Set(baseline.ids);
     const kept = owed.filter((entry) => {
-        const seen = revisions.get(entry.id);
+        const seen = knownRevision(baseline, drawn, entry.id);
 
         return (
             held.has(entry.id) &&
-            !(entry.revision !== null && seen !== undefined && seen > entry.revision)
+            !(entry.revision !== null && seen !== null && seen > entry.revision)
         );
     });
 
     return kept.length === owed.length ? owed : kept;
 };
 
-/** The owed cards to send a `remove` for: the ones `baseline` holds, less
- *  the ones with a `remove` in flight. None for a legacy baseline. */
-export const removalsToSend = (
-    owed: readonly OwedRemoval[],
-    baseline: CanvasBaseline | null,
-    inFlight: ReadonlySet<string>,
-): string[] => {
-    if (baseline?.compositionId == null) {
-        return [];
+/** How many times one page load sends one owed removal again before it
+ *  leaves it for the next load. */
+export const OWED_RESENDS = 5;
+
+/** A resend of owed removals: the cards, each its own `remove`, and the
+ *  composition and revision each is sent against (`expected_revision`), so
+ *  a canvas changed since is refused and read again. */
+export type OwedResend = {
+    ids: string[];
+    against: { compositionId: string; revision: number };
+};
+
+/**
+ * The owed removals to send again against `baseline`, a manifest of the
+ * conversation's composition: the cards it holds, less the ones with a
+ * `remove` in flight (`inFlight`) and the ones sent OWED_RESENDS times this
+ * page load (`sent`). Null while `held` (a reopened page that has not taken
+ * the harness's state yet, whose saved baseline can be older than the
+ * harness's canvas), for a legacy baseline, and when nothing is left.
+ */
+export const resendsOf = ({
+    owed,
+    baseline,
+    inFlight,
+    sent,
+    held,
+}: {
+    owed: readonly OwedRemoval[];
+    baseline: CanvasBaseline | null;
+    inFlight: ReadonlySet<string>;
+    sent: ReadonlyMap<string, number>;
+    held: boolean;
+}): OwedResend | null => {
+    if (held || baseline?.compositionId == null) {
+        return null;
     }
 
-    const held = new Set(baseline.ids);
+    const onCanvas = new Set(baseline.ids);
+    const ids = owed
+        .map((entry) => entry.id)
+        .filter(
+            (id) => onCanvas.has(id) && !inFlight.has(id) && (sent.get(id) ?? 0) < OWED_RESENDS,
+        );
 
-    return owed.map((entry) => entry.id).filter((id) => held.has(id) && !inFlight.has(id));
+    return ids.length === 0
+        ? null
+        : { ids, against: { compositionId: baseline.compositionId, revision: baseline.revision } };
 };

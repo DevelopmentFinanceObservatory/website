@@ -41,8 +41,14 @@ const NONE_DRAWN = Promise.resolve(new Set<string>());
 const base: CanvasBaseline = { compositionId: 'cps_1', revision: 3, ids: ['cmp_1', 'cmp_2'] };
 
 test('a newer manifest of the same composition becomes the baseline', () => {
-    assert.deepEqual(takeManifest(base, manifest(4, [])), {
-        baseline: { compositionId: 'cps_1', revision: 4, ids: [], pinned: [] },
+    assert.deepEqual(takeManifest(base, manifest(4, ['cmp_1'], 'cps_1', { cmp_1: 3 })), {
+        baseline: {
+            compositionId: 'cps_1',
+            revision: 4,
+            ids: ['cmp_1'],
+            pinned: [],
+            revisions: { cmp_1: 3 },
+        },
         local: [],
     });
 });
@@ -57,13 +63,16 @@ test('another composition, a legacy canvas or no baseline starts afresh', () => 
         'cmp_9',
     ]);
     assert.deepEqual(takeManifest(null, manifest(1, [])), {
-        baseline: { compositionId: 'cps_1', revision: 1, ids: [], pinned: [] },
+        baseline: { compositionId: 'cps_1', revision: 1, ids: [], pinned: [], revisions: {} },
         local: [],
     });
     // createLegacyCanvas decides which of a legacy canvas's cards stay local.
     assert.deepEqual(
         takeManifest({ compositionId: null, revision: -1, ids: ['cmp_1'] }, manifest(0, [])),
-        { baseline: { compositionId: 'cps_1', revision: 0, ids: [], pinned: [] }, local: [] },
+        {
+            baseline: { compositionId: 'cps_1', revision: 0, ids: [], pinned: [], revisions: {} },
+            local: [],
+        },
     );
 });
 
