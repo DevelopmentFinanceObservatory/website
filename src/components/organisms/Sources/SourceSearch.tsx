@@ -187,7 +187,7 @@ const SourceSearch = ({ value, onChange, options }: SourceSearchProps) => {
                     >
                         {options.map((option, index) => (
                             <li
-                                key={option.id}
+                                key={option.label}
                                 id={`${id}-${index}`}
                                 role="option"
                                 aria-selected={index === active}

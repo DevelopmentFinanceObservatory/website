@@ -152,13 +152,14 @@ export const summaryLine = (visible: readonly Filterable[]): string => {
 
 /** One publisher the search box offers: its name and how many sources
  *  it has. */
-export type PublisherOption = { id: string; label: string; count: number };
+export type PublisherOption = { label: string; count: number };
 
 /**
  * The publishers whose name holds the query, each with its source count,
  * most sources first and then by name. An empty query offers every
- * publisher. Picking one puts its name in the field, so the list shows the
- * publisher's sources whichever way they come.
+ * publisher. Picking one puts its name in the field, so a row stands for
+ * a name, and the graph's two nodes for one publisher (WHO has one on
+ * each Data Commons) make one row whose count is what the pick shows.
  */
 export const publisherOptions = (cards: readonly Filterable[], q: string): PublisherOption[] => {
     const needle = fold(q);
@@ -171,10 +172,10 @@ export const publisherOptions = (cards: readonly Filterable[], q: string): Publi
             continue;
         }
 
-        const option = options.get(card.family) ?? { id: card.family, label, count: 0 };
+        const option = options.get(label) ?? { label, count: 0 };
 
         option.count += 1;
-        options.set(card.family, option);
+        options.set(label, option);
     }
 
     return [...options.values()].sort((a, b) => b.count - a.count || collate(a.label, b.label));

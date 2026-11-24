@@ -115,12 +115,12 @@ test('the summary line reports the split, a single share without it, and no matc
 
 test('the search box offers the publishers whose name holds the query, most sources first', () => {
     assert.deepEqual(publisherOptions(cards, ''), [
-        { id: 'dc/s/WorldBank', label: 'World Bank', count: 3 },
-        { id: 'dc/s/Alpha', label: 'Alpha', count: 2 },
-        { id: 'dc/s/OECD', label: 'OECD', count: 2 },
-        { id: 'un/fao', label: 'FAO', count: 1 },
-        { id: 'un/wfp', label: 'WFP', count: 1 },
-        { id: 'dc/s/Zeta', label: 'Zeta', count: 1 },
+        { label: 'World Bank', count: 3 },
+        { label: 'Alpha', count: 2 },
+        { label: 'OECD', count: 2 },
+        { label: 'FAO', count: 1 },
+        { label: 'WFP', count: 1 },
+        { label: 'Zeta', count: 1 },
     ]);
     assert.deepEqual(
         publisherOptions(cards, 'f').map((o) => o.label),
@@ -128,8 +128,18 @@ test('the search box offers the publishers whose name holds the query, most sour
     );
     assert.deepEqual(publisherOptions(cards, 'development'), []);
     assert.deepEqual(publisherOptions([card('X', 'dc/s/None', null, BASE)], 'none'), [
-        { id: 'dc/s/None', label: 'dc/s/None', count: 1 },
+        { label: 'dc/s/None', count: 1 },
     ]);
+});
+
+test('two graph nodes with one publisher name make one row, counting both', () => {
+    assert.deepEqual(
+        publisherOptions(
+            [card('GHO', 'dc/s/WHO', 'WHO', BASE), card('WHO', 'undata/p/WHO', 'WHO', UN)],
+            'who',
+        ),
+        [{ label: 'WHO', count: 2 }],
+    );
 });
 
 test('the URL values parse to a known provenance and the query as typed', () => {
