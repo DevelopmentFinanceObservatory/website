@@ -65,12 +65,16 @@ export const isSaveableConversation = (
 
 /**
  * A saved conversation as the Studio reopens it. Saves from older releases
- * stored a `sessionId` of `''`, which isSaveableConversation and the Studio
- * proxy refuse, so it reads as null, a conversation with no harness
+ * stored any `sessionId`, including `''`. One that isConversationId refuses
+ * would make isSaveableConversation and the Studio proxy refuse the
+ * conversation, so it reads as null, a conversation with no harness
  * conversation yet.
  */
 export const readSavedConversation = (data: SavedConversation): SavedConversation =>
-    data.sessionId === '' ? { ...data, sessionId: null } : data;
+    data.sessionId == null ||
+    (typeof data.sessionId === 'string' && isConversationId(data.sessionId))
+        ? data
+        : { ...data, sessionId: null };
 
 /**
  * Give an unowned harness conversation to the account behind the oldest
