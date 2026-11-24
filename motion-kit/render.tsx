@@ -281,6 +281,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         syncCanvas: noop,
         canvas: null,
         pendingCards: new Map(),
+        owedRemovals: [],
         send: noop,
         unqueue: noop,
         answerClarify: noop,
@@ -298,6 +299,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
             componentRefs: [],
             turnCount: turn,
             canvas: null,
+            owedRemovals: [],
         }),
     };
 };
