@@ -38,9 +38,11 @@ export const requireUser = async (next: string) => {
  * The admin gate, checked on every admin page and every admin action, since
  * an action is a POST anyone can send. The admins are the signed-in users
  * whose verified email is in `ADMIN_EMAILS` (settings.isAdmin). Everyone
- * else, signed out included, gets the 404 page, not a 403, so a visitor
- * cannot tell the page exists. The list is read per call, so a change to it
- * needs only a new revision.
+ * else, signed out included, gets a 404 and none of the page. `notFound()`
+ * thrown here answers with Next's error shell, whose server HTML differs from
+ * the 404 of a URL that matches no route (it lacks the root layout's consent
+ * scripts), so a visitor who compares the two can tell the route exists. The
+ * list is read per call, so a change to it needs only a new revision.
  */
 export const requireAdmin = async () => {
     const admin = adminFrom(await getUser(), process.env.ADMIN_EMAILS);
