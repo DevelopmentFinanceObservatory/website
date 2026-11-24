@@ -4,10 +4,11 @@ import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { Writable } from 'node:stream';
+import { syncBuiltinESMExports } from 'node:module';
+import { type Readable, Writable } from 'node:stream';
 import { setTimeout as sleep } from 'node:timers/promises';
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { BigQuery, type Table } from '@google-cloud/bigquery';
 import {
     type ExportBigQuery,
@@ -61,13 +62,20 @@ type Fake = {
     states?: (JobState | typeof NOT_FOUND | 'hang')[];
     /** The job's state once BigQuery accepted a cancel, when the cancel stops it. */
     afterCancel?: JobState;
+    /**
+     * The wall clock stands still while timers run, as on a loaded runner
+     * whose timers fire before Date.now() reaches their due time.
+     */
+    frozenWallClock?: boolean;
 };
 
 /**
  * A table and an upload (`send`) whose load runs as `fake` says, the calls
  * they get (`load`, `abort` of its upload, `cancel`, `state`), and the job
  * ids the upload was given and the table looked up. Its upload stream emits
- * `job` and `complete` as loadUpload's does.
+ * `job` and `complete` as loadUpload's does. `read` resolves once the file
+ * piped into the upload has ended, failed, or paused on a full upload, when
+ * no more of it is read before the upload moves.
  */
 const fakeTable = ({
     auth = async () => new Headers({ authorization: 'Bearer token' }),
@@ -83,6 +91,7 @@ const fakeTable = ({
     const calls: string[] = [];
     const jobIds: { created?: string; looked?: string; location?: string } = {};
     let cancelled = false;
+    const { promise: read, resolve: readDone } = Promise.withResolvers<void>();
     const table = {
         id: 't',
         location: 'EU',
@@ -103,7 +112,10 @@ const fakeTable = ({
                     },
                     getMetadata: async () => {
                         calls.push('state');
-                        await sleep(readMs);
+                        if (readMs > 0) {
+                            await sleep(readMs);
+                        }
+
                         const state =
                             afterCancel !== undefined && cancelled
                                 ? afterCancel
@@ -158,16 +170,81 @@ const fakeTable = ({
             },
         });
 
+        stream.on('pipe', (source: Readable) => {
+            for (const event of ['end', 'error', 'pause']) {
+                source.once(event, () => readDone());
+            }
+        });
+
         return stream;
     };
 
-    return { table, send, calls, jobIds };
+    return { table, send, calls, jobIds, read };
 };
 
 const BOUNDS = { timeoutMs: 40, cancelTimeoutMs: 20, confirmTimeoutMs: 60, pollMs: 5 };
 
-// Each step has its own bound, so one call never outlasts their sum, with slack for the timers.
-const SLOT_MS = BOUNDS.timeoutMs + BOUNDS.cancelTimeoutMs + BOUNDS.confirmTimeoutMs + 200;
+// Each step has its own bound, so one call never outlasts their sum.
+const SLOT_MS = BOUNDS.timeoutMs + BOUNDS.cancelTimeoutMs + BOUNDS.confirmTimeoutMs;
+
+const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/**
+ * loadWithin over `fake`'s table and upload, on mocked timers and wall
+ * clock that stand still until the upload's file read is done (fakeTable),
+ * so no bound passes while a real read of the file is pending however slow
+ * the machine. They then move 1 ms per turn of the event loop until the
+ * load settles, which must be within SLOT_MS. Returns the load, the calls
+ * and job ids, and the mocked ms it took.
+ */
+const loadOnMockedClock = async (
+    t: TestContext,
+    fake: Fake,
+    options: Partial<typeof BOUNDS> = {},
+) => {
+    const faked = fakeTable(fake);
+    const start = Date.now();
+
+    t.mock.timers.enable({
+        apis: fake.frozenWallClock ? ['setTimeout'] : ['setTimeout', 'Date'],
+        ...(fake.frozenWallClock ? {} : { now: start }),
+    });
+    // loadWithin and the fake hold node:timers/promises' setTimeout as an
+    // ES module binding, which follows the mock only once synced.
+    syncBuiltinESMExports();
+
+    const wallClock = fake.frozenWallClock ? t.mock.method(Date, 'now', () => start) : undefined;
+
+    try {
+        let settled = false;
+        const load = loadWithin({
+            table: faked.table,
+            send: faked.send,
+            file: fake.file ?? FILE,
+            metadata: {},
+            ...BOUNDS,
+            ...options,
+        }).finally(() => {
+            settled = true;
+        });
+
+        await Promise.race([load, faked.read]);
+
+        let ms = 0;
+
+        for (await nextTurn(); !settled; await nextTurn()) {
+            assert.ok(ms < SLOT_MS, `load unsettled after ${ms} mocked ms`);
+            t.mock.timers.tick(1);
+            ms += 1;
+        }
+
+        return { ...faked, load: await load, ms };
+    } finally {
+        wallClock?.mock.restore();
+        t.mock.timers.reset();
+        syncBuiltinESMExports();
+    }
+};
 
 const count = (calls: string[], call: string) => calls.filter((made) => made === call).length;
 
@@ -220,18 +297,10 @@ test(
         ];
 
         for (const [label, fake, late, calls] of cases) {
-            await t.test(label, async () => {
-                const { table, send, calls: made } = fakeTable(fake);
-                const started = performance.now();
+            await t.test(label, async (t) => {
+                const { load, calls: made } = await loadOnMockedClock(t, fake);
 
-                assert.deepEqual(
-                    await loadWithin({ table, send, file: FILE, metadata: {}, ...BOUNDS }),
-                    {
-                        outcome: 'replaced',
-                        late,
-                    },
-                );
-                assert.ok(performance.now() - started < SLOT_MS);
+                assert.deepEqual(load, { outcome: 'replaced', late });
                 assert.deepEqual(made, calls);
             });
         }
@@ -345,6 +414,12 @@ test(
                 (calls) => assert.deepEqual(calls, ['load', 'state', 'cancel', 'state']),
             ],
             [
+                'an upload that fails with its job state unreadable, its reads timed out before the wall clock reaches their bound',
+                { upload: reject, states: ['hang'], frozenWallClock: true },
+                'unknown',
+                (calls) => assert.deepEqual(calls, ['load', 'state', 'cancel', 'state']),
+            ],
+            [
                 'a load past its timeout that its cancel stops',
                 { states: [RUNNING, FAILED] },
                 'kept',
@@ -431,21 +506,11 @@ test(
         ];
 
         for (const [label, fake, outcome, checkCalls] of cases) {
-            await t.test(label, async () => {
-                const { table, send, calls, jobIds } = fakeTable(fake);
-                const started = performance.now();
-                const load = await loadWithin({
-                    table,
-                    send,
-                    file: fake.file ?? FILE,
-                    metadata: {},
-                    ...BOUNDS,
-                });
-                const ms = performance.now() - started;
+            await t.test(label, async (t) => {
+                const { load, calls, jobIds, ms } = await loadOnMockedClock(t, fake);
 
                 assert.equal(load.outcome, outcome);
                 assert.ok('error' in load && load.error instanceof Error);
-                assert.ok(ms < SLOT_MS);
 
                 // An unknown outcome names the job it leaves to reconcile.
                 if (outcome === 'unknown') {
@@ -460,35 +525,31 @@ test(
 test(
     'a job BigQuery creates after refusing its cancel, then stops at a re-sent cancel left unanswered, is read once more and replaced',
     { timeout: 5_000 },
-    async () => {
+    async (t) => {
         const states: Fake['states'] = [RUNNING];
         let sent = 0;
-        const { table, send, calls } = fakeTable({
-            stall: true,
-            states,
-            readMs: 5,
-            cancel: async () => {
-                sent += 1;
-
-                if (sent === 1) {
-                    return refuse(404)();
-                }
-
-                // BigQuery stops the job but never answers the cancel.
-                states.splice(0, states.length, DONE);
-                return never();
-            },
-        });
         // Polls slower than the window, so only the read straight after the
         // re-sent cancel can see the job DONE.
-        const load = await loadWithin({
-            table,
-            send,
-            file: FILE,
-            metadata: {},
-            ...BOUNDS,
-            pollMs: 1_000,
-        });
+        const { load, calls } = await loadOnMockedClock(
+            t,
+            {
+                stall: true,
+                states,
+                readMs: 5,
+                cancel: async () => {
+                    sent += 1;
+
+                    if (sent === 1) {
+                        return refuse(404)();
+                    }
+
+                    // BigQuery stops the job but never answers the cancel.
+                    states.splice(0, states.length, DONE);
+                    return never();
+                },
+            },
+            { pollMs: 1_000 },
+        );
 
         assert.deepEqual(load, { outcome: 'replaced', late: 'timeout' });
         assert.deepEqual(calls, ['load', 'abort', 'cancel', 'state', 'cancel', 'state']);
