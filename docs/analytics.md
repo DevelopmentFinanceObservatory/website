@@ -138,13 +138,13 @@ The line reads the request's raw headers, which keep the `RSC` and `Next-Router-
 
 ### API key usage line
 
-A call to the platform proxy (`/api/v1/*`, `/openapi.json`, `/codes`, `/mcp`) that carries an API key also writes one line from `forward()` (`src/lib/proxy/forward.ts`), when the call is decided and before it goes upstream:
+A call to the platform proxy on a surface that honours API keys (`/api/v1/*`, the Datasets API's routes below `/api/v1/datasets/` included, `/openapi.json` and `/codes`) that carries an API key also writes one line from `forward()` (`src/lib/proxy/forward.ts`), when the call is decided and before it goes upstream:
 
 ```json
 {"severity":"INFO","message":"api key call","surface":"api","outcome":"allowed","keyId":"…","accountId":"…"}
 ```
 
-`keyId` is the key's public id (the plugin's `apikey.id`) and `accountId` its owner. Neither is the key or its hash, which are never logged. `surface` is `api` or `mcp`. `outcome` is `allowed` (counted against the account), `limited` (the account's allowance, or the address's when the key was not yet looked up, was spent: a 429), `invalid` (unknown, disabled, expired or over-long: a 401, with null ids) or `unavailable` (the key store could not be read, so the call went on as anonymous, with null ids). The `request` line above still names a keyed call by its address: it is written from the raw headers when the response closes and does not see the key. Count keyed use from this line.
+`keyId` is the key's public id (the plugin's `apikey.id`) and `accountId` its owner. Neither is the key or its hash, which are never logged. `surface` is `api` or `datasets`. A key on `/mcp` or the Studio is stripped unread and writes no line. `outcome` is `allowed` (counted against the account), `limited` (a 429: the account's per-minute limit, its daily quota or the key's daily cap was spent, or the address's limit when the key was not yet looked up), `invalid` (unknown, disabled, expired or over-long: a 401, with null ids), `forged` (a key whose signed tag no server secret made: a 401 before any lookup or count, with null ids) or `unavailable` (the key store could not be read, so the call went on as anonymous, with null ids). The `request` line above still names a keyed call by its address: it is written from the raw headers when the response closes and does not see the key. Count keyed use from this line.
 
 ## Studio prompt allowance
 
