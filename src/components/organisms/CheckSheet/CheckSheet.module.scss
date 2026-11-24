@@ -29,7 +29,7 @@
     resize: vertical;
 
     // Lines do not wrap, so the box scrolls both ways and shows its scrollbars.
-    @include scrollbar-visible(var(--color-stone), both);
+    @include scrollbar-visible($axis: both);
 }
 
 .actions {
@@ -123,7 +123,7 @@
 // The table scrolls inside its own box so the page does not scroll sideways,
 // with its scrollbar in view as the cue that more lies past the edge.
 .scroll {
-    @include scrollbar-visible(var(--color-stone), both);
+    @include scrollbar-visible($axis: both);
 
     max-width: 100%;
     max-height: rem(560);
