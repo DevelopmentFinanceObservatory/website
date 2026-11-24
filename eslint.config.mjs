@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Sanity Studio lints with its own config from cms-dfo/.
+    "cms-dfo/**",
+    // Written by `pnpm typegen` in cms-dfo/.
+    "src/sanity/sanity.types.ts",
     // Not a default of eslint-config-next: pnpm run build:migrate bundles the
     // migrate entrypoint here, and linting a 10mb generated bundle reports
     // thousands of problems in vendored code.

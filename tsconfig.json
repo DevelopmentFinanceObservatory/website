@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "motion-kit", "prototypes"]
+  "exclude": ["node_modules", "motion-kit", "prototypes", "cms-dfo"]
 }
