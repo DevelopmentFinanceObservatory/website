@@ -63,6 +63,8 @@
 }
 
 .input {
+    --data-prompt-pad-end: max(0.1em, #{outfit-overhang()});
+
     @include font-size(56px, 0.95);
 
     display: block;
@@ -79,8 +81,19 @@
 
     // Breathing room inside the scroll container so cap-height glyphs aren't
     // clipped by the tight 0.95 line-height; margins cancel it out visually.
-    padding-block: 0.1em;
+    // The end padding grows to hold the font's overhang (outfit-overhang)
+    // where that is more than 0.1em, or a one-line field would draw a
+    // scrollbar.
+    padding-block: 0.1em var(--data-prompt-pad-end);
     margin-block: -0.1em;
+
+    // One line at rest. field-sizing sizes the box to its text in CSS, so the
+    // height follows late web fonts and width changes. The cap is two lines
+    // (the design's limit) plus the padding, since the box is border-box. A
+    // browser without field-sizing (Safari before 26.2, Firefox before 152)
+    // keeps one row and scrolls.
+    field-sizing: content;
+    max-height: calc(2lh + 0.1em + var(--data-prompt-pad-end));
 
     &::placeholder {
         color: var(--prompt-placeholder, var(--color-beige));

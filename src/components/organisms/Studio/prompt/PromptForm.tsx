@@ -1,17 +1,13 @@
 'use client';
 
 import classNames from 'classnames';
-import { type FormHTMLAttributes, type RefObject, useEffect, useRef } from 'react';
+import { type FormHTMLAttributes, type RefObject, useRef } from 'react';
 
 import styles from './PromptForm.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
 
 export type PromptField = HTMLInputElement | HTMLTextAreaElement;
-
-// How far a growing field may run before it scrolls instead. Long questions
-// are the point (QA-31); a field that grows without end is not.
-const MAX_LINES = 5;
 
 type PromptFormProps = {
     value: string;
@@ -51,23 +47,6 @@ const PromptForm = ({
 }: PromptFormProps) => {
     const ownRef = useRef<PromptField>(null);
     const field = inputRef ?? ownRef;
-
-    // Measured rather than counted in rows: the bar's padding and the field's
-    // line height both ride the fluid root font, so the cap has to be read
-    // off the element every time the text changes.
-    useEffect(() => {
-        const el = field.current;
-
-        if (!grow || !el) {
-            return;
-        }
-
-        el.style.height = 'auto';
-
-        const line = parseFloat(getComputedStyle(el).lineHeight) || el.scrollHeight;
-
-        el.style.height = `${Math.min(el.scrollHeight, line * MAX_LINES)}px`;
-    }, [grow, value, field]);
 
     const shared = {
         className: styles.promptInput,

@@ -40,23 +40,6 @@ const DataPrompt = ({
     const [value, setValue] = useState(() => (initial ?? '').replace(/\s+/g, ' '));
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
-    // One line at rest; grows only once the first line actually wraps,
-    // capped at two lines (per design).
-    useEffect(() => {
-        const el = inputRef.current;
-
-        if (!el) {
-            return;
-        }
-
-        el.style.height = 'auto';
-        const cs = getComputedStyle(el);
-        const line = parseFloat(cs.lineHeight) || el.scrollHeight;
-        const padding = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-
-        el.style.height = `${Math.min(el.scrollHeight, line * 2 + padding)}px`;
-    }, [value]);
-
     useEffect(() => {
         const input = inputRef.current;
 

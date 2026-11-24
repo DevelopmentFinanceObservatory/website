@@ -26,7 +26,20 @@
     height: auto;
     min-height: rem(48);
 
+    // field-sizing sizes the box to its text in CSS, so the height follows
+    // late web fonts and width changes as well as typing. Long questions are
+    // expected, so the field grows to five lines and scrolls past that. The
+    // padding holds the font's overhang (outfit-overhang), or every one-line
+    // field would draw a scrollbar, and sits at both ends so the text stays
+    // centred in the bar.
+    // A browser without field-sizing (Safari before 26.2, Firefox before 152)
+    // keeps one row and scrolls.
     .promptInput {
+        --prompt-input-pad: #{outfit-overhang()};
+
+        field-sizing: content;
+        max-height: calc(5lh + 2 * var(--prompt-input-pad));
+        padding-block: var(--prompt-input-pad);
         resize: none;
         overflow-y: auto;
     }
