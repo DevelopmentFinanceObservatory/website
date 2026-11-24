@@ -203,7 +203,7 @@ export const createKeyService = ({
         const [row] = await db
             .select({ id: user.id })
             .from(user)
-            .where(sql`lower(${user.email}) = ${email.trim().toLowerCase()}`)
+            .where(sql`lower(${user.email}) = lower(${email.trim()})`)
             .limit(1);
 
         return row?.id ?? null;
@@ -216,10 +216,7 @@ export const createKeyService = ({
             .select({ id: apikey.id })
             .from(apikey)
             .where(
-                and(
-                    eq(apikey.referenceId, accountId),
-                    sql`lower(${apikey.name}) = ${name.toLowerCase()}`,
-                ),
+                and(eq(apikey.referenceId, accountId), sql`lower(${apikey.name}) = lower(${name})`),
             )
             .limit(1);
 
@@ -238,10 +235,7 @@ export const createKeyService = ({
             .select({ id: apikey.id })
             .from(apikey)
             .where(
-                and(
-                    eq(apikey.referenceId, accountId),
-                    sql`lower(${apikey.name}) = ${name.toLowerCase()}`,
-                ),
+                and(eq(apikey.referenceId, accountId), sql`lower(${apikey.name}) = lower(${name})`),
             )
             .orderBy(asc(apikey.createdAt), asc(apikey.id))
             .limit(1);
