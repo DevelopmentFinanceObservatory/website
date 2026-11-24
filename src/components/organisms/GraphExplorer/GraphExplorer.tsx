@@ -82,7 +82,7 @@ const Missing = ({
     textRef?: React.Ref<HTMLParagraphElement>;
 }) => (
     <div className={styles.missing} role="status">
-        <p ref={textRef} tabIndex={-1}>
+        <p ref={textRef} tabIndex={-1} data-view-heading>
             The model has no kind of thing{' '}
             <code>
                 <BreakableId text={id} />
@@ -167,7 +167,9 @@ const ListScreen = ({
             return line === null ? (
                 <Missing id={centre.id} onStart={() => go(START_VIEW)} textRef={text} />
             ) : (
-                notice
+                <div tabIndex={-1} data-view-heading>
+                    {notice}
+                </div>
             );
         }
     }
@@ -194,8 +196,34 @@ const GraphExplorer = () => {
     const { show } = navigation.state;
     const mainRef = useRef<HTMLElement>(null);
     const [focusAfterMove] = useState(navigationFocus);
+    const fromHistory = useRef(false);
     const viewKey = exploreQuery({ view, ...NO_CARRIED });
-    useEffect(() => focusAfterMove.settle(viewKey, mainRef.current));
+
+    // The back and forward buttons move the view without `go`, which scrolls to the top.
+    useEffect(() => {
+        const onPopState = () => {
+            fromHistory.current = true;
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, []);
+
+    // A view that is still loading draws its heading later, so the debt is watched in the DOM.
+    useEffect(() => {
+        const main = mainRef.current;
+        if (main === null) return;
+        focusAfterMove.arrive(viewKey);
+        if (fromHistory.current) {
+            fromHistory.current = false;
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+        if (!focusAfterMove.pay(main, document)) return;
+        const observer = new MutationObserver(() => {
+            if (!focusAfterMove.pay(main, document)) observer.disconnect();
+        });
+        observer.observe(main, { childList: true, subtree: true });
+        return () => observer.disconnect();
+    }, [focusAfterMove, viewKey]);
     const awaitedOf = (id: string | null) =>
         data.full === null ? null : awaitedDataset(data.full, [id], data.usage);
     const awaited = awaitedOf(view.kind === 'dataset' ? view.id : null);

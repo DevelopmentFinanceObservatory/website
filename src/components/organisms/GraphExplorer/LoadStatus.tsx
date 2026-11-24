@@ -36,7 +36,7 @@ const LoadStatus = ({ state, onRetry, subject = 'model' }: LoadStatusProps) => {
         const building = state.reason === 'build_timeout';
         return (
             <div className={styles.status} role="alert">
-                <h1 className={styles.title}>
+                <h1 className={styles.title} tabIndex={-1}>
                     {building ? `The Graph API is still ${BUILDING}` : WORDS[subject].failed}
                 </h1>
                 <p className={styles.message}>{building ? state.message : state.explanation}</p>

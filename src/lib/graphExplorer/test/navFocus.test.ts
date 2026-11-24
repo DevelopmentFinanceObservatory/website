@@ -1,51 +1,152 @@
 /**
- * `navFocus.ts`: focus follows each move to a new view, waits for a view that
- * is still loading, and stays put on the first view of a page load.
+ * `navFocus.ts` over a stand-in DOM whose elements are attribute maps and
+ * whose selector lookup evaluates the real `VIEW_HEADING` selector: focus
+ * follows each move to a new view, waits for a view that is still loading,
+ * leaves focus the reader moved elsewhere, and stays put on the first view of
+ * a page load.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { navigationFocus, type HeadingScope } from '../navFocus.ts';
+import { navigationFocus, VIEW_HEADING } from '../navFocus.ts';
 
-/** A view's DOM as the heading lookup sees it: which selectors match, and what has focus. */
-const view = (matches: Partial<Record<'h1' | '[tabindex="-1"]', string>>, focused: string[]) =>
-    ({
+type Attributes = Readonly<Record<string, string>>;
+
+type Element = { readonly tag: string; readonly attributes: Attributes };
+
+/** One compound selector such as `h1[tabindex="-1"]` or `[data-view-heading]`, against an element. */
+const matches = (element: Element, compound: string): boolean => {
+    const [, tag = '', rest = ''] = /^([a-z0-9]*)(.*)$/.exec(compound) ?? [];
+    if (tag !== '' && tag !== element.tag) return false;
+    return [...rest.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)].every(([, name = '', value]) =>
+        value === undefined ? name in element.attributes : element.attributes[name] === value,
+    );
+};
+
+/** The page: the view's elements in document order, the focused one, and what `focus()` does. */
+const page = (views: readonly Element[]) => {
+    const state = { active: null as Element | null };
+    const body = { tag: 'body', attributes: {} };
+    // The DOM hands out one object per element, so focus compares by identity.
+    const handles = new Map(
+        views.map((element) => [
+            element,
+            {
+                element,
+                focus: () => {
+                    if ('tabindex' in element.attributes) state.active = element;
+                },
+            },
+        ]),
+    );
+    const root = {
         querySelector: (selector: string) => {
-            const name = matches[selector as 'h1' | '[tabindex="-1"]'];
-            return name === undefined ? null : { focus: () => void focused.push(name) };
+            const found = views.find((element) =>
+                selector.split(',').some((part) => matches(element, part.trim())),
+            );
+            return found === undefined ? null : (handles.get(found) ?? null);
         },
-    }) satisfies HeadingScope;
+        contains: (other: unknown) => [...handles.values()].some((handle) => handle === other),
+    };
+    return {
+        root,
+        document: {
+            get activeElement() {
+                const active = state.active;
+                return active === null ? body : (handles.get(active) ?? active);
+            },
+            body,
+        },
+        focused: () => state.active,
+        // The reader focuses a control inside the view, such as a Try Again button.
+        focusInside: (element: Element) => {
+            state.active = element;
+        },
+        // The reader moves focus to something outside the view, such as the search box.
+        focusOutside: (element: Element) => {
+            state.active = element;
+        },
+    };
+};
+
+const h1 = (text: string): Element => ({ tag: 'h1', attributes: { tabindex: '-1', text } });
+const refusal: Element = { tag: 'p', attributes: { tabindex: '-1', 'data-view-heading': '' } };
+const input: Element = { tag: 'input', attributes: {} };
+
+test('the selector pins both kinds of target', () => {
+    assert.equal(VIEW_HEADING, 'h1[tabindex="-1"], [data-view-heading]');
+});
 
 test('the first view of a page load takes no focus', () => {
-    const focused: string[] = [];
-    navigationFocus().settle('start', view({ h1: 'start' }, focused));
-    assert.deepEqual(focused, []);
+    const nav = navigationFocus();
+    const start = page([h1('start')]);
+    nav.arrive('start');
+    assert.equal(nav.pay(start.root, start.document), false);
+    assert.equal(start.focused(), null);
 });
 
-test('each move focuses the new view heading once, after term links, results and history alike', () => {
-    const focused: string[] = [];
+test('a move focuses the new view heading once', () => {
     const nav = navigationFocus();
-    nav.settle('start', view({ h1: 'start' }, focused));
-    nav.settle('node:A', view({ h1: 'A' }, focused));
-    nav.settle('node:A', view({ h1: 'A' }, focused));
-    nav.settle('start', view({ h1: 'start' }, focused));
-    assert.deepEqual(focused, ['A', 'start']);
+    nav.arrive('start');
+    const next = page([h1('A')]);
+    nav.arrive('node:A');
+    assert.equal(nav.pay(next.root, next.document), false);
+    assert.equal(next.focused()?.attributes.text, 'A');
+    next.focusOutside(input);
+    assert.equal(nav.pay(next.root, next.document), false);
+    assert.equal(next.focused(), input);
 });
 
-test('a view that draws no heading yet is focused when its heading lands', () => {
-    const focused: string[] = [];
+test('a loading view is focused when its heading lands', () => {
     const nav = navigationFocus();
-    nav.settle('start', view({ h1: 'start' }, focused));
-    nav.settle('node:B', view({}, focused));
-    assert.deepEqual(focused, []);
-    nav.settle('node:B', view({ h1: 'B' }, focused));
-    assert.deepEqual(focused, ['B']);
+    nav.arrive('start');
+    nav.arrive('node:B');
+    const loading = page([{ tag: 'div', attributes: {} }]);
+    assert.equal(nav.pay(loading.root, loading.document), true);
+    const landed = page([h1('B')]);
+    assert.equal(nav.pay(landed.root, landed.document), false);
+    assert.equal(landed.focused()?.attributes.text, 'B');
 });
 
-test('a refusal with no title takes focus on its text', () => {
-    const focused: string[] = [];
+test('a loading view leaves focus where the reader moved it meanwhile', () => {
     const nav = navigationFocus();
-    nav.settle('start', view({ h1: 'start' }, focused));
-    nav.settle('node:C', view({ '[tabindex="-1"]': 'refusal' }, focused));
-    assert.deepEqual(focused, ['refusal']);
+    nav.arrive('start');
+    nav.arrive('node:B');
+    const loading = page([{ tag: 'div', attributes: {} }]);
+    assert.equal(nav.pay(loading.root, loading.document), true);
+    loading.focusOutside(input);
+    assert.equal(nav.pay(loading.root, loading.document), false);
+    const landed = page([h1('B')]);
+    landed.focusOutside(input);
+    assert.equal(nav.pay(landed.root, landed.document), false);
+    assert.equal(landed.focused(), input);
+});
+
+test('an element that cannot take focus does not count as the heading', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:C');
+    const failed = page([{ tag: 'h1', attributes: {} }]);
+    assert.equal(nav.pay(failed.root, failed.document), true);
+    assert.equal(failed.focused(), null);
+});
+
+test('a refusal with no title takes focus on its marked text', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:D');
+    const refused = page([refusal]);
+    assert.equal(nav.pay(refused.root, refused.document), false);
+    assert.equal(refused.focused(), refusal);
+});
+
+test('focus on a control inside the view still takes the heading', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:E');
+    const button: Element = { tag: 'button', attributes: { tabindex: '0' } };
+    const loading = page([button, h1('E')]);
+    loading.focusInside(button);
+    assert.equal(nav.pay(loading.root, loading.document), false);
+    assert.equal(loading.focused()?.attributes.text, 'E');
 });
