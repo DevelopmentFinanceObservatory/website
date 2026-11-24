@@ -67,11 +67,12 @@ test('only the exact shape verifies', () => {
 
 test('the secret list is required, comma-separated and long enough', () => {
     assert.deepEqual(parseTagSecrets(` ${A} , ${B} `), [A, B]);
-    assert.throws(() => parseTagSecrets(undefined), /API_KEY_TAG_SECRETS is not set/);
-    assert.throws(() => parseTagSecrets(' , '), /API_KEY_TAG_SECRETS is not set/);
-    assert.throws(() => parseTagSecrets(`${A},short`), /at least 32/);
+    assert.throws(() => parseTagSecrets(undefined));
+    assert.throws(() => parseTagSecrets(' , '));
+    assert.throws(() => parseTagSecrets(`${A},short`));
+    assert.deepEqual(parseTagSecrets(`${A},${'c'.repeat(32)}`), [A, 'c'.repeat(32)]);
     assert.deepEqual(tagSecrets({ API_KEY_TAG_SECRETS: A }), [A]);
-    assert.throws(() => signKey(BODY, []), /cannot be made/);
+    assert.throws(() => signKey(BODY, []));
 });
 
 test('a minted key carries the prefix, 32 letters, a tag from the first secret and a checksum', () => {

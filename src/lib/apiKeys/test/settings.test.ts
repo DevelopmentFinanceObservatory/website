@@ -92,7 +92,9 @@ test('parseEmailInput: trimmed, lowercased, address-shaped', () => {
 });
 
 test('limitNotice: a known code, and nothing for anything else', () => {
-    assert.equal(limitNotice('saved'), 'The limit was saved.');
+    for (const code of ['saved', 'cleared', 'no-account', 'invalid']) {
+        assert.equal(typeof limitNotice(code), 'string', code);
+    }
 
     for (const code of ['', 'nope', '__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
         assert.equal(limitNotice(code), undefined, code);

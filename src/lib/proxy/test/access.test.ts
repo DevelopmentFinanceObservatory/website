@@ -285,7 +285,8 @@ test('an account past its limit is a 429 that names the account', async () => {
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.outcome, 'limited');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '600');
-    assert.match((await access.refusal!.json()).detail, /per account/);
+    assert.equal((await access.refusal!.json()).code, 'rate_limited');
+    assert.equal(access.refusal?.headers.get('retry-after'), '30');
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
 });
 
@@ -331,7 +332,8 @@ test('a key with a good tag that the store lacks, from an address past its limit
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.outcome, 'limited');
     assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
-    assert.match((await access.refusal!.json()).detail, /per address/);
+    assert.equal((await access.refusal!.json()).code, 'rate_limited');
+    assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '120');
 });
 
 test('an invalid key is a 401 problem document and does not fall back to anonymous', async () => {

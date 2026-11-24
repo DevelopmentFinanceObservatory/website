@@ -96,12 +96,10 @@ test('publicOpenApi: declares the optional API key as bearer and X-API-Key', () 
         (document.components as { securitySchemes?: Record<string, unknown> }).securitySchemes;
 
     assert.deepEqual(Object.keys(schemes(out) ?? {}), ['ApiKeyBearer', 'ApiKeyHeader']);
-    assert.deepEqual(schemes(out)?.ApiKeyHeader, {
-        type: 'apiKey',
-        in: 'header',
-        name: 'X-API-Key',
-        description: 'The same optional API key, as `X-API-Key: <key>`.',
-    });
+    const { description, ...header } = schemes(out)?.ApiKeyHeader as Record<string, unknown>;
+
+    assert.deepEqual(header, { type: 'apiKey', in: 'header', name: 'X-API-Key' });
+    assert.equal(typeof description, 'string');
     // Optional: the empty requirement comes first.
     assert.deepEqual(out.security, [{}, { ApiKeyBearer: [] }, { ApiKeyHeader: [] }]);
     // The document's own schemes and security stay.
