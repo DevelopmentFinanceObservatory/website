@@ -10,13 +10,10 @@
 export type Focusable = { focus(options?: FocusOptions): void };
 
 /** The part of the view's element this module reads, so a test can stand in for the DOM. */
-export type ViewRoot = {
-    querySelector(selector: string): Focusable | null;
-    contains(other: unknown): boolean;
-};
+export type ViewRoot = { querySelector(selector: string): Focusable | null };
 
 /** The part of `document` this module reads. */
-export type FocusPage = { readonly activeElement: unknown; readonly body: unknown };
+export type FocusPage = { readonly activeElement: unknown };
 
 /**
  * What a view offers for focus: its title, or the marked text of a screen with
@@ -25,31 +22,25 @@ export type FocusPage = { readonly activeElement: unknown; readonly body: unknow
 export const VIEW_HEADING = 'h1[tabindex="-1"], [data-view-heading]';
 
 /**
- * Focuses the view's heading inside `root`. False while the view draws none,
- * as when it loads, or when focus did not move.
+ * Focuses the view's heading inside `root`, scrolling it into view if it sits
+ * off screen, as it can where the picture stacks. False while the view draws
+ * none, as when it loads, or when focus did not move.
  */
 export const focusViewHeading = (root: ViewRoot, page: FocusPage): boolean => {
     const target = root.querySelector(VIEW_HEADING);
     if (target === null) return false;
-    target.focus({ preventScroll: true });
+    target.focus();
     return page.activeElement === target;
 };
-
-/**
- * Whether the reader has left focus alone since the move: on the page itself
- * (the body, which is where focus falls when its element unmounts) or inside
- * the view. Focus anywhere else belongs to what the reader chose.
- */
-const focusIsLoose = (root: ViewRoot, page: FocusPage) =>
-    page.activeElement === null ||
-    page.activeElement === page.body ||
-    root.contains(page.activeElement);
 
 /**
  * Tracks the view on show. `arrive` records its key and owes the view a focus
  * after a move; the first key of a page load owes none. `pay` takes the focus
  * the first time the view draws a heading and returns whether the debt is
- * still open. A debt the reader's own focus has outrun is dropped.
+ * still open. The move itself is the reader's input, so a view that draws at
+ * once is focused wherever focus sat, in the search box included. A view that
+ * loads first is focused only if the reader does nothing meanwhile: `cancel`,
+ * called on the reader's next key or pointer press, drops the debt.
  */
 export const navigationFocus = () => {
     let shown: string | null = null;
@@ -60,13 +51,11 @@ export const navigationFocus = () => {
             shown = key;
         },
         pay(root: ViewRoot, page: FocusPage): boolean {
-            if (!owed) return false;
-            if (!focusIsLoose(root, page)) {
-                owed = false;
-                return false;
-            }
-            if (focusViewHeading(root, page)) owed = false;
+            if (owed && focusViewHeading(root, page)) owed = false;
             return owed;
+        },
+        cancel() {
+            owed = false;
         },
     };
 };

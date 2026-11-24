@@ -37,7 +37,7 @@ const StartScreen = () => {
     return (
         <div className={styles.start}>
             <h1 className={styles.title} tabIndex={-1}>
-                Graph Explorer
+                Start
             </h1>
             <div className={styles.columns}>
                 <section className={styles.section} aria-labelledby="start-datasets">

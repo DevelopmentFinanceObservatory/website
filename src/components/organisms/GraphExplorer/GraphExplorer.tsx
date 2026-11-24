@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import {
@@ -208,21 +208,36 @@ const GraphExplorer = () => {
         return () => window.removeEventListener('popstate', onPopState);
     }, []);
 
+    // Before paint, so no frame shows the offset the browser restored for the old view.
+    useLayoutEffect(() => {
+        if (!fromHistory.current) return;
+        fromHistory.current = false;
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    }, [viewKey]);
+
     // A view that is still loading draws its heading later, so the debt is watched in the DOM.
     useEffect(() => {
         const main = mainRef.current;
         if (main === null) return;
         focusAfterMove.arrive(viewKey);
-        if (fromHistory.current) {
-            fromHistory.current = false;
-            window.scrollTo({ top: 0, behavior: 'instant' });
-        }
         if (!focusAfterMove.pay(main, document)) return;
         const observer = new MutationObserver(() => {
-            if (!focusAfterMove.pay(main, document)) observer.disconnect();
+            if (!focusAfterMove.pay(main, document)) stop();
         });
+        // The reader's next key or press ends the wait, so the heading never takes focus from them.
+        const cancel = () => {
+            focusAfterMove.cancel();
+            stop();
+        };
+        const stop = () => {
+            observer.disconnect();
+            document.removeEventListener('keydown', cancel, true);
+            document.removeEventListener('pointerdown', cancel, true);
+        };
         observer.observe(main, { childList: true, subtree: true });
-        return () => observer.disconnect();
+        document.addEventListener('keydown', cancel, true);
+        document.addEventListener('pointerdown', cancel, true);
+        return stop;
     }, [focusAfterMove, viewKey]);
     const awaitedOf = (id: string | null) =>
         data.full === null ? null : awaitedDataset(data.full, [id], data.usage);

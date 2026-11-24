@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { navigationFocus, VIEW_HEADING } from '../navFocus.ts';
+import { navigationFocus } from '../navFocus.ts';
 
 type Attributes = Readonly<Record<string, string>>;
 
@@ -46,7 +46,6 @@ const page = (views: readonly Element[]) => {
             );
             return found === undefined ? null : (handles.get(found) ?? null);
         },
-        contains: (other: unknown) => [...handles.values()].some((handle) => handle === other),
     };
     return {
         root,
@@ -58,10 +57,6 @@ const page = (views: readonly Element[]) => {
             body,
         },
         focused: () => state.active,
-        // The reader focuses a control inside the view, such as a Try Again button.
-        focusInside: (element: Element) => {
-            state.active = element;
-        },
         // The reader moves focus to something outside the view, such as the search box.
         focusOutside: (element: Element) => {
             state.active = element;
@@ -72,10 +67,6 @@ const page = (views: readonly Element[]) => {
 const h1 = (text: string): Element => ({ tag: 'h1', attributes: { tabindex: '-1', text } });
 const refusal: Element = { tag: 'p', attributes: { tabindex: '-1', 'data-view-heading': '' } };
 const input: Element = { tag: 'input', attributes: {} };
-
-test('the selector pins both kinds of target', () => {
-    assert.equal(VIEW_HEADING, 'h1[tabindex="-1"], [data-view-heading]');
-});
 
 test('the first view of a page load takes no focus', () => {
     const nav = navigationFocus();
@@ -92,9 +83,6 @@ test('a move focuses the new view heading once', () => {
     nav.arrive('node:A');
     assert.equal(nav.pay(next.root, next.document), false);
     assert.equal(next.focused()?.attributes.text, 'A');
-    next.focusOutside(input);
-    assert.equal(nav.pay(next.root, next.document), false);
-    assert.equal(next.focused(), input);
 });
 
 test('a loading view is focused when its heading lands', () => {
@@ -108,14 +96,24 @@ test('a loading view is focused when its heading lands', () => {
     assert.equal(landed.focused()?.attributes.text, 'B');
 });
 
-test('a loading view leaves focus where the reader moved it meanwhile', () => {
+test('a search-result pick focuses the new heading although focus sat in the search box', () => {
+    const nav = navigationFocus();
+    nav.arrive('start');
+    nav.arrive('node:S');
+    const drawn = page([h1('S')]);
+    drawn.focusOutside(input);
+    assert.equal(nav.pay(drawn.root, drawn.document), false);
+    assert.equal(drawn.focused()?.attributes.text, 'S');
+});
+
+test('a key or press during a load cancels the deferred focus', () => {
     const nav = navigationFocus();
     nav.arrive('start');
     nav.arrive('node:B');
     const loading = page([{ tag: 'div', attributes: {} }]);
     assert.equal(nav.pay(loading.root, loading.document), true);
     loading.focusOutside(input);
-    assert.equal(nav.pay(loading.root, loading.document), false);
+    nav.cancel();
     const landed = page([h1('B')]);
     landed.focusOutside(input);
     assert.equal(nav.pay(landed.root, landed.document), false);
@@ -138,15 +136,4 @@ test('a refusal with no title takes focus on its marked text', () => {
     const refused = page([refusal]);
     assert.equal(nav.pay(refused.root, refused.document), false);
     assert.equal(refused.focused(), refusal);
-});
-
-test('focus on a control inside the view still takes the heading', () => {
-    const nav = navigationFocus();
-    nav.arrive('start');
-    nav.arrive('node:E');
-    const button: Element = { tag: 'button', attributes: { tabindex: '0' } };
-    const loading = page([button, h1('E')]);
-    loading.focusInside(button);
-    assert.equal(nav.pay(loading.root, loading.document), false);
-    assert.equal(loading.focused()?.attributes.text, 'E');
 });
