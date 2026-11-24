@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -12,7 +13,8 @@ import {
 } from '../../src/lib/chat/conversationSave.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { conversation, user } from '../schema.ts';
-import { createTestDatabase } from './harness.ts';
+import { isConversationId } from '../../src/lib/studio/studioAccess.ts';
+import { createTestDatabase, migrationsThrough } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 
@@ -254,6 +256,84 @@ test('migration 0027 and every claim give a session to its oldest saver', async 
     await pool.query('delete from studio_session_owner');
     await saveConversation(db, 'user-ben', saved('conv-ben', 'harness-shared'));
     assert.deepEqual(await sessionOwners(db, 'harness-shared'), ['user-ana']);
+});
+
+/**
+ * Saves before migration 0027 stored any harness id. Migration 0027 clears
+ * each one isConversationId refuses before it indexes the column, so an id
+ * too long for a btree key cannot fail the migration, and gives an owner
+ * only to the ids it keeps. The ids cover each side of the length bound in
+ * UTF-16 code units, which count a character above U+FFFF twice, and of the
+ * Cc control range, which runs from U+0000 to U+001F and U+007F to U+009F.
+ * The 4,400-character id barely compresses, so its index key stays over the
+ * btree limit, where a repeated character would compress under it.
+ */
+test('migration 0027 clears every harness id the Studio refuses', async (t) => {
+    const database = await createTestDatabase();
+    const start = migrationsThrough(26);
+    t.after(() => database.teardown());
+    t.after(() => fs.rmSync(start, { recursive: true, force: true }));
+
+    const migrate = (migrationsFolder: string) =>
+        applyMigrations(database.migratorPool(), {
+            migrationsFolder,
+            runtimeDbUser: database.runtimeUser,
+            migratorDbUser: database.migratorUser,
+        });
+
+    await migrate(start);
+
+    const incompressible = Array.from({ length: 100 }, (_, index) =>
+        createHash('sha256').update(String(index)).digest('base64'),
+    ).join('');
+    const ids = [
+        'harness-ok',
+        '',
+        'a'.repeat(256),
+        'a'.repeat(257),
+        incompressible,
+        '\u{1F600}'.repeat(128),
+        '\u{1F600}'.repeat(129),
+        'tab\tid',
+        'del\u007fid',
+        'nel\u0085id',
+        'apc\u009fid',
+        'nbsp\u00a0id',
+        'zero\u200bwidth',
+    ];
+    const pool = database.adminPool();
+
+    await pool.query(
+        `insert into "user" (id, name, email) values ('user-ana', 'Ana', 'ana@example.org')`,
+    );
+    for (const [index, id] of ids.entries()) {
+        await pool.query(
+            `insert into conversation (id, user_id, title, agent_session_id, data)
+                values ($1, 'user-ana', 'Chat', $2, '{}')`,
+            [`conv-${index}`, id],
+        );
+    }
+
+    await migrate(MIGRATIONS_FOLDER);
+
+    const stored = await pool.query<{ id: string; agent_session_id: string | null }>(
+        'select id, agent_session_id from conversation',
+    );
+    const kept = new Map(stored.rows.map((row) => [row.id, row.agent_session_id]));
+
+    assert.deepEqual(
+        ids.map((_, index) => kept.get(`conv-${index}`)),
+        ids.map((id) => (isConversationId(id) ? id : null)),
+    );
+
+    const owners = await pool.query<{ agent_session_id: string }>(
+        'select agent_session_id from studio_session_owner',
+    );
+
+    assert.deepEqual(
+        owners.rows.map((row) => row.agent_session_id).sort(),
+        ids.filter(isConversationId).sort(),
+    );
 });
 
 /**
