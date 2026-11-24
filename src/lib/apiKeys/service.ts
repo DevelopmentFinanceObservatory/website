@@ -408,17 +408,6 @@ export const createKeyService = ({
         /** The account's daily API quota and today's count of it. */
         accountQuota: quotaOf,
 
-        /** The account's own limit, or null for the default. */
-        async accountLimit(userId: string): Promise<number | null> {
-            const [row] = await db
-                .select({ limit: user.apiRateLimit })
-                .from(user)
-                .where(eq(user.id, userId))
-                .limit(1);
-
-            return row?.limit ?? null;
-        },
-
         // Operator functions. The caller has passed the admin gate.
 
         /** Every key with its owner, newest first, optionally of the accounts whose email contains `email`. */

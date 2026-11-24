@@ -338,9 +338,14 @@ test('API key service', async (t) => {
         const made = await service.createOwn(frank, 'limited');
 
         assert.ok(made.ok);
-        assert.equal(await service.accountLimit(frank), null);
+
+        // As the admin page's user table reads it.
+        const accountLimit = async () =>
+            (await service.adminListUsers({ query: 'frank@f.example' })).users[0]!.accountLimit;
+
+        assert.equal(await accountLimit(), null);
         assert.equal(await service.adminSetLimit('ops@example.org', 'Frank@F.example', 250), true);
-        assert.equal(await service.accountLimit(frank), 250);
+        assert.equal(await accountLimit(), 250);
 
         const verdict = await createKeyVerifier(db).verify(made.key);
 
@@ -349,7 +354,7 @@ test('API key service', async (t) => {
 
         // Clearing returns the account to the default.
         assert.equal(await service.adminSetLimit('ops@example.org', 'frank@f.example', null), true);
-        assert.equal(await service.accountLimit(frank), null);
+        assert.equal(await accountLimit(), null);
 
         const after = await createKeyVerifier(db).verify(made.key);
 
