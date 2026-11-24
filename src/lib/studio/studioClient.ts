@@ -28,6 +28,7 @@ import type {
 
 import { asRecord } from '../asRecord.ts';
 import { SIGN_IN_REQUIRED } from './studioAccess.ts';
+import { isTextTooLong, TEXT_TOO_LONG_MESSAGE } from './interruptText.ts';
 import type { LiveCard } from './liveBackend.ts';
 
 /**
@@ -166,9 +167,12 @@ const streamStudio = async (
         let detail: string | null = null;
         let error: PlanRevisionStaleError | null = null;
         let proxy: ProxyProblem | null = null;
+        let tooLong = false;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };
+
+            tooLong = endpoint === 'interrupt' && isTextTooLong(res.status, parsed);
 
             error = asToolError(parsed);
             proxy = asProxyProblem(parsed, res.headers);
@@ -187,7 +191,7 @@ const streamStudio = async (
             return;
         }
 
-        onFrame(transportError(detail ?? `HTTP ${res.status}`));
+        onFrame(transportError(tooLong ? TEXT_TOO_LONG_MESSAGE : (detail ?? `HTTP ${res.status}`)));
 
         return;
     }

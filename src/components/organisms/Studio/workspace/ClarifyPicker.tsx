@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import styles from './ChatPanel.module.scss';
 import UnitChoice from './UnitChoice';
 import type { ChatState } from '../hooks/useChat';
+import CharCount from '../prompt/CharCount';
 
 import {
     multiAnswer,
@@ -25,6 +26,7 @@ import {
     tabStopId,
     type Stepper,
 } from '@/lib/studio/clarifyStepper';
+import { interruptTextCount } from '@/lib/studio/interruptText';
 import { unitAnswer } from '@/lib/studio/unitChoice';
 import type { ElicitationAnswer, UnitOffer } from '@/lib/studio/wire';
 
@@ -69,41 +71,48 @@ const TextAnswer = ({
     onSubmit: (text: string) => void;
 }) => {
     const [text, setText] = useState(initial);
+    const count = interruptTextCount(text.trim());
+    const countId = useId();
 
     return (
-        <form
-            className={styles.pickerText}
-            onSubmit={(event) => {
-                event.preventDefault();
+        <div className={styles.pickerTextWrap}>
+            <form
+                className={styles.pickerText}
+                onSubmit={(event) => {
+                    event.preventDefault();
 
-                const trimmed = text.trim();
+                    const trimmed = text.trim();
 
-                if (trimmed || ticked) {
-                    onSubmit(trimmed);
-                    setText('');
-                }
-            }}
-        >
-            <input
-                className={styles.pickerTextInput}
-                value={text}
-                onChange={(event) => {
-                    setText(event.target.value);
-                    onDraft?.(event.target.value);
+                    if ((trimmed || ticked) && !count.over) {
+                        onSubmit(trimmed);
+                        setText('');
+                    }
                 }}
-                placeholder="Type your answer..."
-                aria-labelledby={labelledBy}
-            />
-            <Button
-                type="submit"
-                variant="dark"
-                small
-                className={styles.pickerTextSubmit}
-                disabled={!text.trim() && !ticked}
             >
-                Send
-            </Button>
-        </form>
+                <input
+                    className={styles.pickerTextInput}
+                    value={text}
+                    onChange={(event) => {
+                        setText(event.target.value);
+                        onDraft?.(event.target.value);
+                    }}
+                    placeholder="Type your answer..."
+                    aria-labelledby={labelledBy}
+                    aria-invalid={count.over || undefined}
+                    aria-describedby={countId}
+                />
+                <Button
+                    type="submit"
+                    variant="dark"
+                    small
+                    className={styles.pickerTextSubmit}
+                    disabled={(!text.trim() && !ticked) || count.over}
+                >
+                    Send
+                </Button>
+            </form>
+            <CharCount id={countId} text={count} />
+        </div>
     );
 };
 
