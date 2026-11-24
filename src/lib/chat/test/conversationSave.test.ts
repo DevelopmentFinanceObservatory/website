@@ -87,10 +87,18 @@ for (const [name, order, expected] of [
     });
 }
 
-test('a stored empty harness id reopens as none, and a saveable one as it was', () => {
-    const stored = readSavedConversation(saved('conv-1', ''));
+for (const [name, sessionId, expected] of [
+    ['a saveable harness id', 'harness-1', 'harness-1'],
+    ['no harness id', null, null],
+    ['an empty harness id', '', null],
+    ['a harness id over the limit', tooLong, null],
+    ['a harness id with a control character', 'harness\u0001id', null],
+    ['a harness id that is not a string', 42, null],
+] as const) {
+    test(`a stored conversation with ${name} reopens saveable`, () => {
+        const stored = readSavedConversation(saved('conv-1', sessionId as never));
 
-    assert.equal(stored.sessionId, null);
-    assert.equal(isSaveableConversation('conv-1', stored), true);
-    assert.equal(readSavedConversation(saved('conv-1', 'harness-1')).sessionId, 'harness-1');
-});
+        assert.equal(stored.sessionId, expected);
+        assert.equal(isSaveableConversation('conv-1', stored), true);
+    });
+}
