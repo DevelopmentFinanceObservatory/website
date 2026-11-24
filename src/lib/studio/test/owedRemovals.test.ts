@@ -339,31 +339,39 @@ test('a resend goes against the revision the canvas holds when the edit queue re
         onManifest: () => {},
         onFailure: () => assert.fail('the harness answered'),
     });
+    const owed = owe([], 'cmp_x', 1);
     const resend = nextResend({
-        owed: owe([], 'cmp_x', 1),
+        owed,
         baseline: canvas,
         inFlight: new Set(),
         sent: new Map(),
         held: false,
     })!;
+    const when = (over: Partial<Parameters<typeof againstWhenSent>[0]> = {}) =>
+        againstWhenSent({
+            id: 'cmp_x',
+            against: resend.against,
+            owed,
+            baseline: canvas,
+            drawn: new Map(),
+            ...over,
+        });
 
     // The user's pin is queued ahead of the resend and moves the canvas to 4.
     const pinned = edits.enqueue('conv', [{ op: 'pin', component_id: 'cmp_a' }]);
-    const removed = edits.enqueue('conv', [{ op: 'remove', component_id: 'cmp_x' }], () =>
-        againstWhenSent(resend.against, canvas),
-    );
+    const removed = edits.enqueue('conv', [{ op: 'remove', component_id: 'cmp_x' }], () => when());
 
     assert.deepEqual(await Promise.all([pinned, removed]), [true, true]);
     assert.deepEqual(seen, [
         ['pin', undefined],
         ['remove', 4],
     ]);
-    // A page that holds another composition by then sends the one picked,
-    // which the harness refuses.
-    assert.deepEqual(
-        againstWhenSent(resend.against, { ...canvas, compositionId: 'cps_2' }),
-        resend.against,
-    );
+    // The revision picked goes, which the harness refuses as stale, once
+    // the entry has settled, once the model drew the card again, and once
+    // the page holds another composition.
+    assert.deepEqual(when({ owed: [] }), resend.against);
+    assert.deepEqual(when({ drawn: new Map([['cmp_x', 2]]) }), resend.against);
+    assert.deepEqual(when({ baseline: { ...canvas, compositionId: 'cps_2' } }), resend.against);
 });
 
 test('a run that leaves cards behind runs again after a wait that doubles', () => {

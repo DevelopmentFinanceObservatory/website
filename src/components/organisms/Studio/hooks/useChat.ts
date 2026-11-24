@@ -512,6 +512,13 @@ export const useChat = (
     // state before it sends any (set by hydrate, cleared by reattach's read
     // and by any manifest the page takes).
     const resentRef = useRef(new Map<string, number>());
+    // How many drain runs in a row left owed cards behind, and the timer
+    // that runs the drain again (owedRetryAfter). Whether the page has
+    // unmounted, which stops a drain in flight and arms no timer.
+    const owedRetryRef = useRef<{ runs: number; timer?: ReturnType<typeof setTimeout> }>({
+        runs: 0,
+    });
+    const unmountedRef = useRef(false);
     const [owedHeld, setOwedHeldState] = useState(false);
     const owedHeldRef = useRef(false);
     const setOwedHeld = useCallback((held: boolean) => {
@@ -803,6 +810,8 @@ export const useChat = (
             setOwed(() => []);
             removingRef.current.clear();
             awaitingStoredRef.current.clear();
+            clearTimeout(owedRetryRef.current.timer);
+            owedRetryRef.current.runs = 0;
 
             if (cards.shown.length > 0 || cards.hidden.length > 0) {
                 setLocalCards(cards);
@@ -2848,12 +2857,16 @@ export const useChat = (
     // doubles with each such run in a row (owedRetryAfter). A reopened page
     // holds them until it has taken the harness's state (`owedHeld`).
     const drainingRef = useRef<number | null>(null);
-    const owedRetryRef = useRef<{ runs: number; timer?: ReturnType<typeof setTimeout> }>({
-        runs: 0,
-    });
     const [owedRetryTick, setOwedRetryTick] = useState(0);
 
-    useEffect(() => () => clearTimeout(owedRetryRef.current.timer), []);
+    useEffect(() => {
+        unmountedRef.current = false;
+
+        return () => {
+            unmountedRef.current = true;
+            clearTimeout(owedRetryRef.current.timer);
+        };
+    }, []);
 
     useEffect(() => {
         const settled = settle(owedRef.current, canvas, revisionsRef.current);
@@ -2873,7 +2886,11 @@ export const useChat = (
         clearTimeout(owedRetryRef.current.timer);
         void drainOwedRemovals({
             next: (skip) => {
-                if (generationRef.current !== generation || sessionRef.current !== session) {
+                if (
+                    unmountedRef.current ||
+                    generationRef.current !== generation ||
+                    sessionRef.current !== session
+                ) {
                     return null;
                 }
 
@@ -2894,7 +2911,13 @@ export const useChat = (
             },
             send: ({ id, against }) =>
                 syncCanvas([{ op: 'remove', component_id: id }], () =>
-                    againstWhenSent(against, canvasRef.current),
+                    againstWhenSent({
+                        id,
+                        against,
+                        owed: owedRef.current,
+                        baseline: canvasRef.current,
+                        drawn: revisionsRef.current,
+                    }),
                 ),
             reread: () => rereadCanvas(session),
             sent: resentRef.current,
@@ -2907,7 +2930,7 @@ export const useChat = (
             },
         })
             .then((left) => {
-                if (generationRef.current !== generation) {
+                if (unmountedRef.current || generationRef.current !== generation) {
                     return;
                 }
 

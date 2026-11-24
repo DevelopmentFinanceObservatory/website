@@ -63,18 +63,22 @@ type Block = { id: string; revision: number };
  * edit sent against another revision (409 `edit_conflict`) and a remove of
  * a card it lacks (404 no block). `beforeEdit` runs before each edit
  * lands, as another writer would. `stateFails` answers the state route 500,
- * and the route starts failing after `failStateAfter` reads.
+ * and the route starts failing after `failStateAfter` reads. The first
+ * `busyEdits` edits are answered busy (409 `transient_unavailable`), as
+ * while a turn runs.
  */
 const fakeHarness = ({
     revision,
     blocks,
     beforeEdit,
     failStateAfter,
+    busyEdits = 0,
 }: {
     revision: number;
     blocks: Block[];
     beforeEdit?: (harness: { revision: number; blocks: Block[] }, edit: number) => void;
     failStateAfter?: number;
+    busyEdits?: number;
 }) => {
     const edits: { remove: string; expected?: number; composition?: string }[] = [];
     const harness = {
@@ -137,6 +141,18 @@ const fakeHarness = ({
                 composition: body.composition_id,
             });
 
+            if (harness.edits.length <= busyEdits) {
+                return Response.json(
+                    {
+                        error: 'transient_unavailable',
+                        retry: 'retry_after',
+                        retry_after_seconds: 1,
+                        detail: 'a turn is running',
+                    },
+                    { status: 409 },
+                );
+            }
+
             if (
                 body.expected_revision !== undefined &&
                 body.expected_revision !== harness.revision
@@ -176,11 +192,20 @@ const fakeHarness = ({
 };
 
 // A save from before manifest pins that hid `removed` among `ids`, all
-// harness cards of composition cps_1 at `revision`.
+// harness cards of composition cps_1 at `revision`, each at card revision 1.
 const pinlessSave = (revision: number, ids: string[], removed: string[]): ChatSnapshot => ({
     sessionId: 'conv_1',
     messages: [],
-    widgets: ids.map((id) => ({ kind: 'text', id, title: id, body: '', turn: 1 })),
+    widgets: ids.map((id) => ({
+        kind: 'chart',
+        id,
+        chartType: 'line',
+        title: id,
+        categories: [],
+        series: [],
+        turn: 1,
+        ref: { component_id: id, revision: 1 },
+    })),
     turnCount: 1,
     canvas: { compositionId: 'cps_1', revision, ids },
     removedIds: removed,
@@ -225,28 +250,45 @@ test('a reopened page sends its owed removals one at a time, each against the re
     page.unmount();
 });
 
-test('a resend met by a moved canvas reads it again, and settles once the harness lacks the card', async (t) => {
-    // Another writer takes cmp_x off just before the resend lands, as when
-    // this page's own earlier remove landed and its answer was lost.
+test('a resend held busy while the model draws the card again goes against the revision it was picked for', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+
     const { harness, fetch } = fakeHarness({
         revision: 5,
         blocks: [
             { id: 'cmp_a', revision: 1 },
             { id: 'cmp_x', revision: 1 },
         ],
-        beforeEdit: (moved, edit) => {
-            if (edit === 0) {
-                moved.blocks = moved.blocks.filter((block) => block.id !== 'cmp_x');
-                moved.revision += 1;
-            }
-        },
+        busyEdits: 1,
     });
     const page = await reopen(t, pinlessSave(5, ['cmp_a', 'cmp_x'], ['cmp_x']), fetch);
 
-    assert.deepEqual(harness.edits, [{ remove: 'cmp_x', expected: 5, composition: 'cps_1' }]);
-    assert.equal(harness.reads, 2);
+    // The resend went once and waits out the busy answer.
+    assert.equal(harness.edits.length, 1);
+
+    // Meanwhile the model draws cmp_x again, and a read brings it, which
+    // settles the entry.
+    harness.blocks = harness.blocks.map((block) =>
+        block.id === 'cmp_x' ? { ...block, revision: 2 } : block,
+    );
+    harness.revision += 1;
+    page.result().reattach();
+    await page.settle(60);
+
     assert.deepEqual(page.result().owedRemovals, []);
-    assert.equal(page.result().canvas?.revision, 6);
+
+    // The resend goes again against revision 5, and the harness refuses it.
+    t.mock.timers.tick(1_000);
+    await page.settle(60);
+
+    assert.deepEqual(
+        harness.edits.map((edit) => edit.expected),
+        [5, 5],
+    );
+    assert.deepEqual(
+        harness.blocks.map((block) => block.id),
+        ['cmp_a', 'cmp_x'],
+    );
     page.unmount();
 });
 

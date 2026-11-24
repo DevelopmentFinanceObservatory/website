@@ -203,19 +203,37 @@ export const nextResend = ({
 export type ResendOutcome = 'answered' | 'gone' | 'stale' | 'failed';
 
 /**
- * The composition and revision a resend goes against when the edit queue
- * reaches it: `against`'s composition at the revision `baseline` holds by
- * then, so the edits queued ahead of it do not make it stale. `against`
- * itself once the page holds another composition or none, which the
- * harness then refuses.
+ * The composition and revision a resend of card `id` goes against when the
+ * edit queue reaches it, each time it goes. While `owed` still holds the
+ * card's entry and the harness holds the card at no newer revision than the
+ * one removed (knownRevision over `baseline` and `drawn`), it goes against
+ * the revision `baseline` holds by then, so the edits queued ahead of it do
+ * not make it stale. Otherwise it goes against the revision it was picked
+ * for (`against`), which the harness refuses as stale: a card the model drew
+ * again while the resend waited stays on the canvas. `against` also goes
+ * once the page holds another composition or none.
  */
-export const againstWhenSent = (
-    against: OwedResend['against'],
-    baseline: CanvasBaseline | null,
-): OwedResend['against'] =>
-    baseline?.compositionId === against.compositionId
+export const againstWhenSent = ({
+    id,
+    against,
+    owed,
+    baseline,
+    drawn,
+}: {
+    id: string;
+    against: OwedResend['against'];
+    owed: readonly OwedRemoval[];
+    baseline: CanvasBaseline | null;
+    drawn: ReadonlyMap<string, number>;
+}): OwedResend['against'] => {
+    const entry = owed.find((other) => other.id === id);
+    const known = knownRevision(baseline, drawn, id);
+    const redrawn = entry?.revision != null && known !== null && known > entry.revision;
+
+    return entry && !redrawn && baseline?.compositionId === against.compositionId
         ? { compositionId: against.compositionId, revision: baseline.revision }
         : against;
+};
 
 /** The first wait before a drain run that left cards behind runs again,
  *  in milliseconds. Each such run in a row doubles it, up to
