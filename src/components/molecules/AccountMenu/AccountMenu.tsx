@@ -9,6 +9,7 @@ import styles from './AccountMenu.module.scss';
 import DeleteAccountModal from './DeleteAccountModal';
 
 import Button from '@/components/atoms/Button/Button';
+import ApiKeysPanel from '@/components/organisms/ApiKeys/ApiKeysPanel';
 import { useSiteNavigate } from '@/hooks/useSiteNavigate';
 import { signOut, useSession } from '@/lib/auth/client';
 import { IS_SITE } from '@/lib/site';
@@ -16,7 +17,14 @@ import { IS_SITE } from '@/lib/site';
 /**
  * The header's account button. Signed out it leads to /login (and back
  * here afterwards); signed in it opens the account menu — who you are, My
- * History, delete account (confirmed in the house panel), sign out.
+ * History, API keys (a side panel that calls the JSON routes under
+ * /api/account/api-keys), Admin (admins only), delete account (confirmed in the
+ * house panel), sign out.
+ *
+ * Whether the viewer is an admin is a server setting (ADMIN_EMAILS), so the
+ * menu asks GET /api/account/admin once, the first time it opens for a given
+ * user, and shows the Admin item when the answer comes back. The prototypes app has no admin
+ * page, so it never asks.
  */
 type AccountMenuProps = {
     className?: string;
@@ -31,6 +39,11 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
     // Keys the modal per opening so its fields start clean; it stays
     // mounted through the close animation.
     const [deleteSeq, setDeleteSeq] = useState(0);
+    // The API keys panel, keyed per opening like the modal above.
+    const [keysOpen, setKeysOpen] = useState(false);
+    const [keysSeq, setKeysSeq] = useState(0);
+    // The user id the admin answer belongs to, so another sign-in asks again.
+    const [admin, setAdmin] = useState<{ userId: string; admin: boolean } | null>(null);
 
     if (!session) {
         return (
@@ -50,6 +63,21 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
     }
 
     const { user } = session;
+    const isAdmin = admin?.userId === user.id && admin.admin;
+
+    const askAdmin = (open: boolean) => {
+        if (!open || !IS_SITE || admin?.userId === user.id) {
+            return;
+        }
+        const userId = user.id;
+
+        fetch('/api/account/admin', { cache: 'no-store' })
+            .then((response) => (response.ok ? response.json() : { admin: false }))
+            .then(
+                (body: { admin?: unknown }) => setAdmin({ userId, admin: body.admin === true }),
+                () => setAdmin({ userId, admin: false }),
+            );
+    };
 
     const leave = async () => {
         await signOut();
@@ -66,7 +94,7 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
         // Non-modal, like every other menu in the app: the modal variant locks
         // the page (body pointer-events off + scroll lock) and on touch the
         // menu never showed, leaving the lock behind.
-        <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Root modal={false} onOpenChange={askAdmin}>
             <DropdownMenu.Trigger asChild>
                 <Button className={className} icon="user" aria-label="Account" />
             </DropdownMenu.Trigger>
@@ -104,6 +132,26 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
                             My History
                         </button>
                     </DropdownMenu.Item>
+                    {IS_SITE && (
+                        <DropdownMenu.Item
+                            asChild
+                            onSelect={() => {
+                                setKeysSeq((n) => n + 1);
+                                setKeysOpen(true);
+                            }}
+                        >
+                            <button type="button" className={styles.item}>
+                                API keys
+                            </button>
+                        </DropdownMenu.Item>
+                    )}
+                    {isAdmin && (
+                        <DropdownMenu.Item asChild onSelect={() => navigate('/admin/api-keys')}>
+                            <button type="button" className={styles.item}>
+                                User management
+                            </button>
+                        </DropdownMenu.Item>
+                    )}
                     <DropdownMenu.Item asChild onSelect={leave}>
                         <button type="button" className={styles.item}>
                             Sign out
@@ -126,6 +174,9 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
                     </DropdownMenu.Item>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
+            {IS_SITE && (
+                <ApiKeysPanel key={`keys-${keysSeq}`} open={keysOpen} onOpenChange={setKeysOpen} />
+            )}
             <DeleteAccountModal
                 key={`delete-${deleteSeq}`}
                 open={deleteOpen}

@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { limitCounter } from '../../../db/schema.ts';
@@ -30,6 +30,15 @@ export type Reservation = {
 export type ReservationVerdict =
     | { admitted: true; receipt: Reservation; limit: number; remaining: number; reset: number }
     | { admitted: false; limit: number; remaining: 0; reset: number };
+
+/** The window of a daily API quota in seconds: a UTC day, epoch-aligned. */
+export const DAY_S = 86_400;
+
+/** The counter key of an account's daily API quota, which every key of the account spends. */
+export const accountDailyCounterKey = (accountId: string): string => `apiday:user:${accountId}`;
+
+/** The counter key of one API key's own daily cap. */
+export const keyDailyCounterKey = (keyId: string): string => `apiday:key:${keyId}`;
 
 // Rows whose window started this long ago are dead for any window of a day
 // or less, the longest the site uses.
@@ -164,4 +173,34 @@ export const pruneCounters = async (db: CounterDb): Promise<void> => {
         delete from ${limitCounter}
         where ${limitCounter.windowStart} < now() - make_interval(secs => ${PRUNE_AFTER_S})
     `);
+};
+
+/**
+ * The current UTC day's count of each daily counter in `counterKeys`
+ * (accountDailyCounterKey, keyDailyCounterKey), refused calls included, by
+ * counter key. A counter that does not exist, or is from an earlier day, is 0.
+ */
+export const dailyUsage = async (
+    db: Pick<NodePgDatabase, 'select'>,
+    counterKeys: string[],
+): Promise<Map<string, number>> => {
+    const used = new Map(counterKeys.map((key) => [key, 0]));
+
+    if (counterKeys.length === 0) {
+        return used;
+    }
+
+    const rows = await db
+        .select({ key: limitCounter.key, count: limitCounter.count })
+        .from(limitCounter)
+        .where(
+            sql`${inArray(limitCounter.key, counterKeys)}
+                and ${limitCounter.windowStart} >= date_bin(make_interval(secs => ${DAY_S}), now(), timestamptz 'epoch')`,
+        );
+
+    for (const { key, count } of rows) {
+        used.set(key, count);
+    }
+
+    return used;
 };
