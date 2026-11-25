@@ -36,7 +36,7 @@ import type { RateVerdict } from './rateHeaders';
  * against its address at a cookieless allowance. Either way it is then
  * counted on its address's backstop (src/lib/proxy/access):
  *   RATE_LIMIT_API_ANON   calls per window per IP on 'api' with no valid
- *                         visitor token (default 60). 'datasets' stays at
+ *                         visitor token (default 20). 'datasets' stays at
  *                         RATE_LIMIT_DATASETS, since prototype pages and
  *                         embeds never carry the token.
  *   RATE_LIMIT_API_BACKSTOP, RATE_LIMIT_DATASETS_BACKSTOP
@@ -44,12 +44,21 @@ import type { RateVerdict } from './rateHeaders';
  *                         token or without, whichever visitors they name
  *                         (defaults 240, 600): the most an address gets
  *
+ * Every anonymous call forward() counts on 'api' and 'datasets', with a
+ * visitor token or without and whether visitor limits are on or off, is
+ * also counted against its address in a one-day window (hitDaily), once the
+ * per-minute counts admit it. Studio calls and stored-file downloads are
+ * not (countAnonymous's `daily` option):
+ *   RATE_LIMIT_ANON_DAILY_API, RATE_LIMIT_ANON_DAILY_DATASETS
+ *                         anonymous calls per UTC day per IP on each surface
+ *                         (defaults 1000, 1000; 0 turns the cap off)
+ *
  *   RATE_LIMIT_KEYED      calls per window per account on each of the 'api'
  *                         and 'datasets' surfaces, for an account with no
  *                         limit of its own (default 600)
  *   API_KEY_DAILY_LIMIT   API calls per UTC day per account, every key's
  *                         calls together, for an account with no quota of
- *                         its own (`user.api_daily_limit`; default 75000).
+ *                         its own (`user.api_daily_limit`; default 10000).
  *                         Counted apart from the window above, in a one-day
  *                         window (hitDaily). A key may also carry a lower
  *                         cap of its own (`apikey.daily_limit`).
@@ -86,7 +95,7 @@ export const LIMITS = {
 
 /** An address's calls per window with no valid visitor token, while visitor limits are on. */
 export const COOKIELESS_LIMITS = {
-    api: Number(process.env.RATE_LIMIT_API_ANON) || 60,
+    api: Number(process.env.RATE_LIMIT_API_ANON) || 20,
     datasets: LIMITS.datasets,
 } as const;
 
@@ -101,6 +110,26 @@ export const BACKSTOP_LIMITS = {
 } as const;
 
 /**
+ * A daily allowance read from the env value `raw`: a whole number of 0 or
+ * more, where 0 turns the cap off, else `fallback` when unset or not such a
+ * number.
+ */
+export const dailyAllowance = (raw: string | undefined, fallback: number): number => {
+    const value = raw?.trim() ? Number(raw) : Number.NaN;
+
+    return Number.isInteger(value) && value >= 0 ? value : fallback;
+};
+
+/**
+ * An address's anonymous calls per UTC day on each surface, every visitor's
+ * and the cookieless ones together; 0 is no cap.
+ */
+export const ANONYMOUS_DAILY_LIMITS = {
+    api: dailyAllowance(process.env.RATE_LIMIT_ANON_DAILY_API, 1_000),
+    datasets: dailyAllowance(process.env.RATE_LIMIT_ANON_DAILY_DATASETS, 1_000),
+} as const;
+
+/**
  * An account's calls per window when it sets none of its own
  * (`user.api_rate_limit`). An account is one caller, not a vendor's address
  * with many users behind it.
@@ -108,7 +137,7 @@ export const BACKSTOP_LIMITS = {
 export const KEYED_LIMIT = Number(process.env.RATE_LIMIT_KEYED) || 600;
 
 /** An account's API calls per UTC day when it sets none of its own (`user.api_daily_limit`). */
-export const ACCOUNT_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 75_000;
+export const ACCOUNT_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 10_000;
 
 export type Surface = keyof typeof LIMITS;
 
@@ -122,8 +151,8 @@ export type Limiter = {
     hitKey(surface: Surface, callerKey: string, limit: number): Promise<RateVerdict>;
     /**
      * Count one API call on the daily counter `counterKey`
-     * (accountDailyCounterKey or keyDailyCounterKey) against `limit` calls in
-     * the current UTC day.
+     * (accountDailyCounterKey, keyDailyCounterKey or anonymousDailyCounterKey)
+     * against `limit` calls in the current UTC day.
      */
     hitDaily(counterKey: string, limit: number): Promise<RateVerdict>;
     /**

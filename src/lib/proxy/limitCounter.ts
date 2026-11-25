@@ -3,6 +3,8 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { limitCounter } from '../../../db/schema.ts';
 
+import { limiterBucket } from './caller.ts';
+
 /**
  * Fixed-window counters in Postgres (table `limit_counter`), shared by every
  * server instance: the per-address limits on /api and /mcp
@@ -39,6 +41,13 @@ export const accountDailyCounterKey = (accountId: string): string => `apiday:use
 
 /** The counter key of one API key's own daily cap. */
 export const keyDailyCounterKey = (keyId: string): string => `apiday:key:${keyId}`;
+
+/**
+ * The counter key of the address `ip`'s anonymous calls on `surface` in a
+ * UTC day, with a visitor token or without (limiterBucket names the address).
+ */
+export const anonymousDailyCounterKey = (surface: string, ip: string): string =>
+    `anonday:${surface}:${limiterBucket(ip)}`;
 
 // Rows whose window started this long ago are dead for any window of a day
 // or less, the longest the site uses.

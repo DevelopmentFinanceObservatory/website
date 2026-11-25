@@ -2,7 +2,7 @@
  * `rateLimit.ts`'s limiter on a migrated database: an address and an account
  * count apart, each against its own limit, on each surface; and a count that
  * fails or is slow does not let a burst through, since the instance counts it
- * in memory.
+ * in memory. With no env set, the allowances are the documented defaults.
  */
 import '../../test/serverModules.ts';
 
@@ -17,7 +17,13 @@ import { buildCounterPool } from '../../../../db/connection.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
 import { createFallbackCounter } from '../limitFallback.ts';
 
-const { createLimiter } = await import('../rateLimit.ts');
+const {
+    ACCOUNT_DAILY_LIMIT,
+    ANONYMOUS_DAILY_LIMITS,
+    COOKIELESS_LIMITS,
+    createLimiter,
+    dailyAllowance,
+} = await import('../rateLimit.ts');
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../../../../db/migrations');
 
@@ -202,4 +208,34 @@ test('limiter: a count that times out falls back too', async () => {
     // The daily count falls back on its own one-day window.
     assert.equal((await limiter.hitDaily('x', 1)).allowed, true);
     assert.equal((await limiter.hitDaily('x', 1)).allowed, false);
+});
+
+test('defaults: 20 cookieless API calls a minute, 1,000 anonymous calls a day, 10,000 per account', () => {
+    for (const name of [
+        'RATE_LIMIT_API_ANON',
+        'RATE_LIMIT_ANON_DAILY_API',
+        'RATE_LIMIT_ANON_DAILY_DATASETS',
+        'API_KEY_DAILY_LIMIT',
+    ]) {
+        assert.equal(process.env[name], undefined, `${name} is set, so the defaults are not seen`);
+    }
+
+    assert.equal(COOKIELESS_LIMITS.api, 20);
+    assert.deepEqual(ANONYMOUS_DAILY_LIMITS, { api: 1000, datasets: 1000 });
+    assert.equal(ACCOUNT_DAILY_LIMIT, 10_000);
+});
+
+test('dailyAllowance: 0 turns the cap off, and an unset or malformed value keeps the default', () => {
+    for (const [raw, expected] of [
+        [undefined, 1000],
+        ['', 1000],
+        ['0', 0],
+        ['250', 250],
+        [' 250 ', 250],
+        ['-1', 1000],
+        ['1.5', 1000],
+        ['lots', 1000],
+    ] as const) {
+        assert.equal(dailyAllowance(raw, 1000), expected, String(raw));
+    }
 });

@@ -54,7 +54,7 @@ The proxy check, an admin page for operators and a self-service panel in the acc
 
 Every public API and MCP call passes through one function in the website, `forward()` in `src/lib/proxy/forward.ts`. That is the single place a key needs to be checked.
 
-- **Rate limit.** `forward()` counts each call in a fixed window. An anonymous call on the site's own pages counts against the reader's visitor token, 120 calls a minute on `/api/*`; one without a token counts against the address, 60 a minute on `/api/*`. Both count on a per-address backstop of 240 a minute. `/mcp` counts against the address, 300 a minute. See [The visitor tier][]. The counters live in the website's Postgres (`limit_counter` table) and are shared by all instances. If the shared count is slow or fails, each instance falls back to a small in-memory count per caller (`src/lib/proxy/limitFallback.ts`), so a burst is limited on that instance.
+- **Rate limit.** `forward()` counts each call in a fixed window. An anonymous call on the site's own pages counts against the reader's visitor token, 120 calls a minute on `/api/*`; one without a token counts against the address, 20 a minute on `/api/*`. Both count on a per-address backstop of 240 a minute. `/mcp` counts against the address, 300 a minute. See [The visitor tier][]. The counters live in the website's Postgres (`limit_counter` table) and are shared by all instances. If the shared count is slow or fails, each instance falls back to a small in-memory count per caller (`src/lib/proxy/limitFallback.ts`), so a burst is limited on that instance.
 - **No Redis.** The website has no Redis code, so per-key limits need no Memorystore instance.
 - **Edge limits.** Cloudflare (Pro plan) also rate-limits by address, in front of the site: 600 calls a minute on the data API and 60 on the Studio, each blocking the address for 10 minutes. `/mcp` has no edge limit.
 - **dfo-ai's own limit.** All outside MCP calls share one bucket in dfo-ai of about 2,400 calls a minute. Every MCP call is anonymous and counted by address, so the 300 calls a minute per address holds a caller to it.
@@ -117,11 +117,11 @@ Keyed use is limited twice, and both limits count API calls only.
 
 The visitor tier below sets the anonymous numbers on the API and the Datasets API. The MCP surface has no keyed limit, because a key is ignored there. Every MCP call counts against its address at the anonymous limit, so heavy MCP use leaves an account's API allowance untouched.
 
-| Surface      | Covers                                 | Anonymous limit                                                          | Keyed limit                                                                     |
-| ------------ | -------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| API          | `/api/v1/*`, `/openapi.json`, `/codes` | 60 calls a minute per address, or 120 per visitor with the site's cookie | The account's per-minute limit and daily quota, and the key's cap if it has one |
-| Datasets API | `/api/v1/datasets/*` document routes   | 300 calls a minute per address, or per visitor with the site's cookie    | The account's per-minute limit and daily quota, and the key's cap if it has one |
-| MCP          | `/mcp`                                 | 300 calls a minute per address                                           | None. A key is ignored, so the call is anonymous                                |
+| Surface      | Covers                                 | Anonymous limit                                                                                                                                                    | Keyed limit                                                                     |
+| ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| API          | `/api/v1/*`, `/openapi.json`, `/codes` | 20 calls a minute per address, or 120 per visitor with the site's cookie; 1,000 calls a day per visitor, or per address without it; 5,000 a day per address in all | The account's per-minute limit and daily quota, and the key's cap if it has one |
+| Datasets API | `/api/v1/datasets/*` document routes   | 300 calls a minute per address, or per visitor with the site's cookie; 1,000 calls a day per visitor, or per address without it; 5,000 a day per address in all    | The account's per-minute limit and daily quota, and the key's cap if it has one |
+| MCP          | `/mcp`                                 | 300 calls a minute per address                                                                                                                                     | None. A key is ignored, so the call is anonymous                                |
 
 - The per-minute limit is an optional integer on the account (`user.api_rate_limit`).
 - Empty means the default for keyed callers, set per deployment in env (`RATE_LIMIT_KEYED`, 600 by default). Most accounts store nothing, and raising the default moves them all at once.
@@ -136,11 +136,11 @@ One per-minute number is simpler to explain to a key holder and simpler to admin
 An account at the keyed default of 600 calls a minute could make 864,000 calls a day, and an email address is cheaper to get than an IP address. The per-minute limit is burst protection. The daily quota caps total use.
 
 - Each account has a quota of API calls a day, counted across all its keys in `limit_counter` under `apiday:user:<accountId>`, in a one-day window aligned to 00:00 UTC.
-- The quota is the nullable `user.api_daily_limit` column. Empty means the deployment default, `API_KEY_DAILY_LIMIT` (75,000 by default). An admin sets it per account on the admin page.
+- The quota is the nullable `user.api_daily_limit` column. Empty means the deployment default, `API_KEY_DAILY_LIMIT` (10,000 by default). An admin sets it per account on the admin page.
 - A key may carry a lower cap of its own, the nullable `apikey.daily_limit` column, counted under `apiday:key:<keyId>` only when it is set. An admin sets it per key on the admin page, to hold back one key without touching the account's others.
 - Every limit applies to each keyed API call: the account's per-minute window first, then the key's own daily cap, then the account's daily quota. A call the key's cap refuses leaves the account's daily quota untouched, so one capped key cannot lock out the account's other keys, but it still counts against the per-minute window. A call the account quota refuses leaves the key's cap untouched.
 - Over a daily limit, a call is refused with a 429 problem document whose code is `allowance_exhausted`, not retryable, with `Retry-After` to 00:00 UTC, so a client stops for the day instead of waiting in a retry. The outcome is `limited`, and the detail says the count resets at 00:00 UTC.
-- A call the account quota refuses counts toward the day's total, and a call a key's cap refuses leaves the account's total alone. The usage bar on the self-service panel and the admin page shows the account's count, for example "40,000 of 75,000", and a capped key shows its own count beside its cap.
+- A call the account quota refuses counts toward the day's total, and a call a key's cap refuses leaves the account's total alone. The usage bar on the self-service panel and the admin page shows the account's count, for example "4,000 of 10,000", and a capped key shows its own count beside its cap.
 
 Since both limits belong to the account, creating more keys multiplies neither, and deleting a key and creating another does not start the day again. Key creation needs no throttle of its own.
 
@@ -259,13 +259,15 @@ An anonymous call on the API or the Datasets API is counted by the reader's `dfo
 | The call carries                  | Counted against                | Limit a minute                               |
 | --------------------------------- | ------------------------------ | -------------------------------------------- |
 | A valid, unexpired `dfo_v` token  | The visitor                    | 120 API, 300 datasets                        |
-| No token, a forged or expired one | The address's cookieless count | 60 API (`RATE_LIMIT_API_ANON`), 300 datasets |
+| No token, a forged or expired one | The address's cookieless count | 20 API (`RATE_LIMIT_API_ANON`), 300 datasets |
+
+Anonymous calls also have daily caps, from 00:00 to 00:00 UTC on each of the API and the Datasets API. A call with a valid token counts 1,000 a day against the visitor, under `anonday:<surface>:visitor:<id>`; one without counts 1,000 a day against the address's cookieless count, under `anonday:<surface>:cookieless:<bucket>` (`RATE_LIMIT_ANON_DAILY_API`, `RATE_LIMIT_ANON_DAILY_DATASETS`). Every anonymous call from one address, with a token or without, also counts against the address at 5,000 a day per surface, under `anonday:<surface>:addr:<bucket>` (`RATE_LIMIT_ANON_DAILY_ADDRESS_API`, `RATE_LIMIT_ANON_DAILY_ADDRESS_DATASETS`). Setting any of the four to 0 turns that cap off. The check runs after the per-minute and backstop counts admit the call. A spent cap answers 429 `allowance_exhausted`, not retryable, with `Retry-After` to 00:00 UTC. Studio calls and stored-file downloads do not count. `VISITOR_LIMITS_ENABLED=false` leaves the cap on.
 
 A call goes to the backstop only once its own row admits it, so a refused call spends nothing there. A call with a valid token never touches the cookieless count, so readers with tokens do not spend a cookieless caller's allowance. The site's download links (`/api/version-download/<spec>/<cv>`, `/s/<id>/download`) count on the API row the same way.
 
 The token is `<id>.<expiry>.<tag>`, signed with a key derived from `CALLER_HMAC_KEY` under the label `visitor-token` (`src/lib/proxy/visitor.ts`). `src/proxy.ts` sets the cookie on any `GET` its matcher runs on, a page load or the RSC request of an in-app navigation or prefetch, when none is valid or less than half its 24 hours is left, so a reader who keeps using the site keeps a cookie. Next strips the headers that mark a prefetch before the proxy sees the request, so prefetches renew it too. It is HttpOnly, `SameSite=Lax` and lasts 24 hours. Rotating `CALLER_HMAC_KEY` voids every token, and the next page request issues a new one.
 
-Any client can load a page and get a token, so a token proves nothing about the caller. The backstop counts every anonymous call at the address, with a token or without, so it is the most one address gets however many tokens it mints. The Datasets API keeps 300 without a token because prototype pages and third-party embeds never carry the cookie. While keys are on, a cookieless 429 on the API or the Datasets API says keys come from the account menu, gives an account's default limits (600 a minute and 75,000 calls a day) and links `/docs/build/api-keys`.
+Any client can load a page and get a token, so a token proves nothing about the caller. The backstop counts every anonymous call at the address, with a token or without, so it is the most one address gets however many tokens it mints. The Datasets API keeps 300 without a token because prototype pages and third-party embeds never carry the cookie. While keys are on, a cookieless 429 on the API or the Datasets API says keys come from the account menu, gives an account's default limits (600 a minute and 10,000 calls a day) and links `/docs/build/api-keys`.
 
 With visitor limits off (`VISITOR_LIMITS_ENABLED=false`) or `CALLER_HMAC_KEY` unset, every anonymous call counts against its address at the limits of the first table: 120 API, 300 datasets. A production server with visitor limits on and no `CALLER_HMAC_KEY` refuses to start (`checkVisitorKey` in `src/instrumentation.ts`); elsewhere it starts and warns once. `/mcp` and `/api/download-pin` never use the visitor tier.
 
@@ -350,7 +352,7 @@ gcloud run services update <service> --region <region> --update-env-vars API_KEY
 
 **Before keys are first switched on in an environment,** run a week with `API_KEYS_ENABLED=false` and count the `api key header while keys are off` lines with `ours: false`: those callers send another service's key in `X-API-Key` and would get a 401 on the API.
 
-**Turn visitor limits off.** Set `VISITOR_LIMITS_ENABLED=false`. No cookie is issued, and every anonymous call counts against its address at 120 API and 300 datasets calls a minute.
+**Turn visitor limits off.** Set `VISITOR_LIMITS_ENABLED=false`. No cookie is issued, and every anonymous call counts against its address at 120 API and 300 datasets calls a minute, and the daily cap still applies.
 
 ```
 gcloud run services update <service> --region <region> --update-env-vars VISITOR_LIMITS_ENABLED=false

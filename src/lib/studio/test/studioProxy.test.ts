@@ -109,6 +109,12 @@ test('studioProxy: counts per visitor with a valid visitor token, else on the co
 
         return verdict(limit);
     };
+    // Logged so the assertions below show the daily allowance is never spent.
+    accessDeps.hitDaily = async (counterKey, limit) => {
+        log.push(`daily:${counterKey}:${limit}`);
+
+        return verdict(limit);
+    };
 
     const options = (headers: Record<string, string> = {}) =>
         handler(

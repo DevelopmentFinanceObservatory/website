@@ -222,6 +222,31 @@ export const dailyQuotaProblem = (
     });
 
 /**
+ * The 429 `allowance_exhausted` problem document of an anonymous call over
+ * its address's daily allowance of `limit` calls (src/lib/proxy/access),
+ * not retryable, as dailyQuotaProblem's. With `keyed`, while keys are on,
+ * the detail goes on to say where to get a free API key and the daily quota
+ * one gives (`keyed.dailyLimit`, the account's default), and links
+ * API_KEYS_DOCS_PATH.
+ */
+export const anonymousDailyProblem = (
+    { limit, reset }: { limit: number; reset: number },
+    headers: Record<string, string>,
+    keyed?: { dailyLimit: number },
+): Response =>
+    problem({
+        status: 429,
+        code: 'allowance_exhausted',
+        detail: `This address's daily allowance of ${count.format(limit)} calls without an API key is used up. It resets at 00:00 UTC, in ${reset}s.${
+            keyed
+                ? ` A free API key, made from the account menu once signed in, gives ${count.format(keyed.dailyLimit)} calls a day: see ${API_KEYS_DOCS_PATH}.`
+                : ''
+        }`,
+        retryable: false,
+        headers: { ...headers, 'Retry-After': String(reset) },
+    });
+
+/**
  * A 502 `transient_unavailable` problem document: the upstream did not
  * answer. `upstreamStatus` is the status of an upstream that did answer and
  * whose body then failed before the first byte was relayed; the document

@@ -43,6 +43,7 @@ const {
     cookielessCallerKey,
     createLimiter,
     visitorCallerKey,
+    ANONYMOUS_DAILY_LIMITS,
     BACKSTOP_LIMITS,
     COOKIELESS_LIMITS,
     LIMITS,
@@ -61,6 +62,8 @@ const accountCaller = `user:${createHmac('sha256', 'test-hmac-key')
     .update(`user:${ACCOUNT}`)
     .digest('hex')
     .slice(0, 32)}`;
+// The daily counter an anonymous API call from the test address spends.
+const ANON_DAY = 'daily:anonday:api:203.0.113.7';
 const addressCaller = `ip:${createHmac('sha256', 'test-hmac-key')
     .update('203.0.113.7')
     .digest('hex')
@@ -194,6 +197,11 @@ const tierFakes = () => {
 
         return verdictOf(limit);
     };
+    accessDeps.hitDaily = async (counterKey, limit) => {
+        log.push(`daily:${counterKey}:${limit}`);
+
+        return verdictOf(limit);
+    };
 
     return log;
 };
@@ -284,7 +292,7 @@ test('forward: an unavailable key store goes on as anonymous with the key still 
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': KEY });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cache', 'lookup', 'cookieless:api', 'backstop:api']);
+    assert.deepEqual(log, ['cache', 'lookup', 'cookieless:api', 'backstop:api', ANON_DAY]);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
@@ -320,7 +328,7 @@ test('forward: another bearer is no key, and dfo-apis gets no caller Authorizati
     const res = await call({ authorization: 'Bearer some-other-token' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
@@ -332,7 +340,7 @@ test('forward: a key in another scheme, or bare, is anonymous and never reaches 
         const res = await call({ authorization });
 
         assert.equal(res.status, 200);
-        assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
+        assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
         assert.equal(seen[0]!.authorization, undefined);
     }
 });
@@ -343,7 +351,7 @@ test('forward: a call with no key is anonymous, and a client-sent caller is drop
 
     await call({ 'x-dfo-caller': accountCaller });
 
-    assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
@@ -448,7 +456,7 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': 'junk' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
@@ -473,13 +481,19 @@ test('forward: a valid visitor token is counted per visitor, a forged or expired
         assert.equal(res.headers.get('x-dfo-limit-tier'), 'address');
     }
 
+    // Visitor and cookieless calls spend one daily allowance for the address.
+    const day = `${ANON_DAY}:${ANONYMOUS_DAILY_LIMITS.api}`;
+
     assert.deepEqual(log, [
         `visitor:api:${LIMITS.api}`,
         `backstop:api:${BACKSTOP_LIMITS.api}`,
+        day,
         `cookieless:api:${COOKIELESS_LIMITS.api}`,
         `backstop:api:${BACKSTOP_LIMITS.api}`,
+        day,
         `cookieless:api:${COOKIELESS_LIMITS.api}`,
         `backstop:api:${BACKSTOP_LIMITS.api}`,
+        day,
     ]);
 });
 
@@ -501,11 +515,19 @@ for (const [name, visitorLimitsOff] of [
             await call({}, { surface });
         }
 
+        // The daily allowance is counted whatever the visitor limits.
+        const apiDay = `${ANON_DAY}:${ANONYMOUS_DAILY_LIMITS.api}`;
+        const datasetsDay = `daily:anonday:datasets:203.0.113.7:${ANONYMOUS_DAILY_LIMITS.datasets}`;
+
         assert.deepEqual(log, [
             `address:api:${LIMITS.api}`,
+            apiDay,
             `address:api:${LIMITS.api}`,
+            apiDay,
             `address:datasets:${LIMITS.datasets}`,
+            datasetsDay,
             `address:datasets:${LIMITS.datasets}`,
+            datasetsDay,
         ]);
         fresh();
     });
@@ -829,6 +851,7 @@ test('forward on a real key store and counter', async (t) => {
                     address: { api: 3, datasets: 3, mcp: 3, pin: 3 },
                     cookieless: { api: 2, datasets: 2 },
                     backstop: { api: 4, datasets: 4 },
+                    daily: ANONYMOUS_DAILY_LIMITS,
                 },
             });
 

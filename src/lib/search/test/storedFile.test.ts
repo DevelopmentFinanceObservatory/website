@@ -54,6 +54,12 @@ test('downloadAllowance: counts per visitor with a valid visitor token, else on 
 
         return verdict(limit);
     };
+    // Logged so the assertions below show the daily allowance is never spent.
+    accessDeps.hitDaily = async (counterKey, limit) => {
+        log.push(`daily:${counterKey}:${limit}`);
+
+        return verdict(limit);
+    };
 
     const click = (headers: Record<string, string> = {}) =>
         downloadAllowance(

@@ -36,6 +36,7 @@ import {
     hitVisitor,
     refundDaily,
     ACCOUNT_DAILY_LIMIT,
+    ANONYMOUS_DAILY_LIMITS,
     BACKSTOP_LIMITS,
     COOKIELESS_LIMITS,
     KEYED_LIMIT,
@@ -54,7 +55,9 @@ import { readVisitor, visitorLimitsOn } from './visitor';
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
  * headers and x-dfo-limit-tier go out only on a counted call). While visitor
  * limits are on, an anonymous 'api' or 'datasets' call with the site's
- * visitor token is counted per visitor instead (src/lib/proxy/access). A call on the 'api' or 'datasets'
+ * visitor token is counted per visitor instead (src/lib/proxy/access). Each
+ * anonymous 'api' or 'datasets' call is also counted on its address's daily
+ * allowance (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS). A call on the 'api' or 'datasets'
  * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
  * the account's limit on that surface and against the account's daily quota,
@@ -138,7 +141,12 @@ export const accessDeps: AccessDeps = {
     hitVisitor,
     hitCookieless,
     hitBackstop,
-    anonymousLimits: { address: LIMITS, cookieless: COOKIELESS_LIMITS, backstop: BACKSTOP_LIMITS },
+    anonymousLimits: {
+        address: LIMITS,
+        cookieless: COOKIELESS_LIMITS,
+        backstop: BACKSTOP_LIMITS,
+        daily: ANONYMOUS_DAILY_LIMITS,
+    },
     visitorLimits: visitorLimitsOn,
     visitor: readVisitor,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
@@ -192,10 +200,21 @@ const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
  * Count an anonymous call on `surface` from `req` as forward() does, by
  * visitor or by address (src/lib/proxy/access), any key ignored. For a
  * caller that counts before forward() runs and passes the result as
- * `counted`.
+ * `counted`. `daily` says whether the call spends its address's daily
+ * allowance.
  */
-export const countAnonymous = (req: NextRequest, surface: Surface): Promise<Access> =>
-    decideAccess(accessDeps, { surface, keys: false, headers: req.headers, ip: clientIp(req) });
+export const countAnonymous = (
+    req: NextRequest,
+    surface: Surface,
+    { daily }: { daily: boolean },
+): Promise<Access> =>
+    decideAccess(accessDeps, {
+        surface,
+        keys: false,
+        headers: req.headers,
+        ip: clientIp(req),
+        daily,
+    });
 
 export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
@@ -286,6 +305,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             keys: honorsKeys && keysOn,
             headers: req.headers,
             ip: clientIp(req),
+            daily: true,
         }));
 
     if (honorsKeys && !keysOn) {

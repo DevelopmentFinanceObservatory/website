@@ -22,14 +22,14 @@ const VERSION_READ_TIMEOUT_MS = 20_000;
 /**
  * Counts the call on the proxy's `api` surface as any anonymous site call
  * is counted, per visitor or per address (countAnonymous in
- * src/lib/proxy/forward). `refusal` is the 429 problem document when the
+ * src/lib/proxy/forward), off the address's daily allowance. `refusal` is the 429 problem document when the
  * call is over its allowance. `headers` are the X-RateLimit-* set and the
  * limit tier, with `Retry-After` added on a refusal.
  */
 export const downloadAllowance = async (
     req: NextRequest,
 ): Promise<{ refusal?: Response; headers: Record<string, string> }> => {
-    const access = await countAnonymous(req, 'api');
+    const access = await countAnonymous(req, 'api', { daily: false });
     const headers = limitHeaders(access);
 
     return access.refusal

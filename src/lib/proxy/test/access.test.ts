@@ -8,7 +8,9 @@
  * any other surface, /mcp included, is ignored. While visitor limits are on,
  * an anonymous API or Datasets API call is counted per visitor when it
  * carries a valid visitor token, and on its address's cookieless count when
- * it does not, then on its address's backstop either way.
+ * it does not, then on its address's backstop either way. Every anonymous
+ * API or Datasets API call the per-minute counts admit is then counted on its
+ * address's daily allowance, unless the caller or a 0 allowance turns it off.
  */
 import '../../test/serverModules.ts';
 
@@ -48,7 +50,11 @@ const LIMITS: AnonymousLimits = {
     address: { api: 120, datasets: 300, pin: 10, mcp: 300 },
     cookieless: { api: 60, datasets: 300 },
     backstop: { api: 240, datasets: 600 },
+    // Off here, so the per-minute tests see only the per-minute counts; the
+    // daily allowance tests turn it on.
+    daily: { api: 0, datasets: 0 },
 };
+const DAILY_ON: AnonymousLimits = { ...LIMITS, daily: { api: 1000, datasets: 1000 } };
 
 // A world of fakes: `answer` is what the key store says, `cached` whether the
 // cache already holds it, `used` how many calls each counter already has.
@@ -66,6 +72,8 @@ const world = ({
     visitorUsed = 0,
     cookielessUsed = 0,
     backstopUsed = 0,
+    anonymousDailyUsed = 0,
+    anonymousLimits = LIMITS,
 }: {
     answer?: KeyVerdict;
     cached?: boolean;
@@ -80,6 +88,8 @@ const world = ({
     visitorUsed?: number;
     cookielessUsed?: number;
     backstopUsed?: number;
+    anonymousDailyUsed?: number;
+    anonymousLimits?: AnonymousLimits;
 } = {}) => {
     const calls: string[] = [];
     const verifier: KeyVerifier = {
@@ -120,7 +130,7 @@ const world = ({
 
             return verdict(limit, backstopUsed + 1);
         },
-        anonymousLimits: LIMITS,
+        anonymousLimits,
         visitorLimits: () => visitorLimits,
         visitor: () => visitorId,
         hitAccount: async (surface, accountId, limit) => {
@@ -131,10 +141,13 @@ const world = ({
         hitDaily: async (counterKey, limit) => {
             calls.push(`daily:${counterKey}:${limit}`);
 
-            return verdict(
-                limit,
-                (counterKey.startsWith('apiday:user:') ? dailyUsed : capUsed) + 1,
-            );
+            const used = counterKey.startsWith('anonday:')
+                ? anonymousDailyUsed
+                : counterKey.startsWith('apiday:user:')
+                  ? dailyUsed
+                  : capUsed;
+
+            return verdict(limit, used + 1);
         },
         refundDaily: async (counterKey) => {
             calls.push(`refund:${counterKey}`);
@@ -147,13 +160,14 @@ const world = ({
 const decide = (
     deps: AccessDeps,
     headers: Record<string, string> = {},
-    options: { surface?: Surface; keys?: boolean } = {},
+    options: { surface?: Surface; keys?: boolean; daily?: boolean } = {},
 ) =>
     decideAccess(deps, {
         surface: 'surface' in options ? options.surface : 'api',
         keys: options.keys ?? true,
         headers: new Headers(headers),
         ip: '203.0.113.7',
+        daily: options.daily ?? true,
     });
 
 test('a call with no key is counted against its address, as before', async () => {
@@ -666,4 +680,113 @@ test('a keyed call is counted as tier key, whatever visitor token it carries', a
 
     assert.equal(access.tier, 'key');
     assert.ok(calls.every((entry) => !entry.startsWith('visitor:')));
+});
+
+test("an anonymous call past its address's daily allowance is a 429 allowance_exhausted until 00:00 UTC", async () => {
+    for (const [name, setting, headers, surface, tier] of [
+        ['visitor', { visitorLimits: true, visitorId: 'v-1' }, {}, 'api', 'visitor'],
+        ['cookieless', { visitorLimits: true }, {}, 'datasets', 'address'],
+        ['visitor limits off', { visitorId: 'v-1' }, {}, 'api', 'address'],
+        [
+            'key the store lacks',
+            { answer: { kind: 'invalid' } },
+            { 'x-api-key': KEY },
+            'api',
+            'address',
+        ],
+    ] as const) {
+        const admitted = world({ ...setting, anonymousLimits: DAILY_ON, anonymousDailyUsed: 999 });
+        const last = await decide(admitted.deps, headers, { surface });
+
+        // The 1,000th call of the day is within the allowance.
+        assert.equal(admitted.calls.at(-1), `daily:anonday:${surface}:203.0.113.7:1000`, name);
+        assert.notEqual(last.refusal?.status, 429, name);
+
+        const spent = world({ ...setting, anonymousLimits: DAILY_ON, anonymousDailyUsed: 1000 });
+        const access = await decide(spent.deps, headers, { surface });
+        const document = await access.refusal!.json();
+
+        assert.equal(access.refusal?.status, 429, name);
+        assert.equal(document.code, 'allowance_exhausted', name);
+        assert.equal(document.retryable, false, name);
+        assert.equal(access.refusal?.headers.get('retry-after'), '30', name);
+        assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '1000', name);
+        assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), tier, name);
+        assert.ok(document.detail.includes('/docs/build/api-keys'), name);
+    }
+
+    const { deps } = world({ anonymousLimits: DAILY_ON, anonymousDailyUsed: 1000 });
+    const keysOff = await decide(deps, {}, { keys: false });
+
+    assert.equal((await keysOff.refusal!.json()).detail.includes('/docs/build/api-keys'), false);
+});
+
+test('visitors and cookieless calls at one address share its daily allowance', async () => {
+    const counts = new Map<string, number>();
+    const { deps } = world({
+        visitorLimits: true,
+        anonymousLimits: { ...LIMITS, daily: { api: 3, datasets: 3 } },
+    });
+    let visitorId: string | null = 'v-1';
+
+    deps.visitor = () => visitorId;
+    deps.hitDaily = async (counter, limit) => {
+        const used = (counts.get(counter) ?? 0) + 1;
+
+        counts.set(counter, used);
+
+        return verdict(limit, used);
+    };
+
+    const status = async (id: string | null) => {
+        visitorId = id;
+
+        return (await decide(deps)).refusal?.status ?? 200;
+    };
+
+    assert.deepEqual(
+        [await status('v-1'), await status(null), await status('v-2'), await status(null)],
+        [200, 200, 200, 429],
+    );
+    assert.equal(await status('v-3'), 429);
+});
+
+test('a call refused per minute spends nothing on the daily allowance', async () => {
+    for (const setting of [
+        { visitorLimits: true, cookielessUsed: 60 },
+        { visitorLimits: true, visitorId: 'v-1', visitorUsed: 120 },
+        { visitorLimits: true, visitorId: 'v-1', backstopUsed: 240 },
+        { addressUsed: 120 },
+    ]) {
+        const { calls, deps } = world({ ...setting, anonymousLimits: DAILY_ON });
+        const access = await decide(deps);
+
+        assert.equal((await access.refusal!.json()).code, 'rate_limited');
+        assert.ok(
+            calls.every((entry) => !entry.startsWith('daily:')),
+            JSON.stringify(calls),
+        );
+    }
+});
+
+test('no daily allowance is counted for a caller that opts out, a 0 allowance, mcp or pin', async () => {
+    for (const [name, anonymousLimits, options] of [
+        ['daily false', DAILY_ON, { daily: false }],
+        ['0 allowance', { ...DAILY_ON, daily: { api: 0, datasets: 1000 } }, {}],
+        ['mcp', DAILY_ON, { surface: 'mcp' }],
+        ['pin', DAILY_ON, { surface: 'pin' }],
+    ] as const) {
+        const { calls, deps } = world({
+            visitorLimits: true,
+            anonymousLimits,
+            anonymousDailyUsed: 5000,
+        });
+        const access = await decide(deps, {}, options);
+
+        assert.equal(access.refusal, undefined, name);
+        assert.ok(
+            calls.every((entry) => !entry.startsWith('daily:')),
+            name,
+        );
+    }
 });
