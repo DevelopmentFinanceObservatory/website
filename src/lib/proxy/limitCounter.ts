@@ -432,13 +432,16 @@ export const refundReservation = async (db: CounterDb, receipt: Reservation): Pr
  * `window_start`, on a row it rolls into a new window. Neither row's
  * `expires_at` says when its window ends, so the prune deletes it only once
  * its window started two days ago, a test the window_start index serves.
+ * A row with a later `expires_at` keeps its window open whatever its age.
  */
 export const pruneCounters = async (db: CounterDb): Promise<void> => {
     await db.execute(
         sql`delete from ${limitCounter}
             where (${limitCounter.expiresAt} < now()
                     and ${limitCounter.expiresAt} > ${limitCounter.windowStart})
-                or ${limitCounter.windowStart} < now() - make_interval(secs => ${PRUNE_AFTER_S})`,
+                or (${limitCounter.windowStart} < now() - make_interval(secs => ${PRUNE_AFTER_S})
+                    and (${limitCounter.expiresAt} = 'infinity'
+                        or ${limitCounter.expiresAt} <= ${limitCounter.windowStart}))`,
     );
 };
 

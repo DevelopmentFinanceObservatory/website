@@ -273,46 +273,43 @@ test('limit counters and Studio prompt allowances', async (t) => {
     );
 
     await t.test(
-        'pruning keeps a row an older revision inserted and rolled into today, and deletes it once its window is two days old',
+        'pruning deletes a row without a trusted expiry only once its window is two days old, and keeps an open window',
         async () => {
-            // An older revision inserts without expires_at, so the row takes the
-            // column default, and rolls the row into a new window without
-            // touching it. Moving expires_at back dates the insert to then.
+            // An older revision inserts without expires_at, so the row takes
+            // the column default, infinity.
             const day = `date_bin(interval '1 day', now(), timestamptz 'epoch')`;
-            const legacy = async (key: string, windowStart: string, insertedAgo: string) => {
+            const row = async (key: string, windowStart: string, expiresAt?: string) => {
                 await admin.query(
                     'insert into limit_counter (key, window_start, count) values ($1, now(), 1)',
                     [key],
                 );
                 await admin.query(
                     `update limit_counter
-                     set expires_at = expires_at - (${insertedAgo}), window_start = ${windowStart}
+                     set window_start = ${windowStart}${expiresAt ? `, expires_at = ${expiresAt}` : ''}
                      where key = $1`,
                     [key],
                 );
             };
 
-            // Inserted two days before a moment earlier today: the old two-day
-            // expiry would fall inside today's window, which has not ended.
-            await legacy(
-                'anonday:api:visitor:legacy-today',
-                day,
-                `interval '2 days' + (now() - ${day}) / 2`,
-            );
-            await legacy(
-                'anonday:api:visitor:legacy-old',
+            await row('anonday:api:visitor:legacy-today', day);
+            await row('anonday:api:visitor:legacy-old', `${day} - interval '3 days'`);
+            // A window longer than two days that has not ended.
+            await row(
+                'anonday:api:visitor:long-open',
                 `${day} - interval '3 days'`,
-                `interval '3 days'`,
+                `now() + interval '1 day'`,
             );
 
             await pruneCounters(db);
 
             const { rows } = await admin.query<{ key: string }>(
-                `select key from limit_counter where key like 'anonday:api:visitor:legacy-%'`,
+                `select key from limit_counter
+                 where key like 'anonday:api:visitor:legacy-%' or key = 'anonday:api:visitor:long-open'
+                 order by key`,
             );
             assert.deepEqual(
                 rows.map(({ key }) => key),
-                ['anonday:api:visitor:legacy-today'],
+                ['anonday:api:visitor:legacy-today', 'anonday:api:visitor:long-open'],
             );
         },
     );
