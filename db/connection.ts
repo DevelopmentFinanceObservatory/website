@@ -266,3 +266,19 @@ export function buildCounterPool(env: EnvLike = process.env): Pool {
         statement_timeout: 400,
     });
 }
+
+/**
+ * A small, bounded pool for the proxy's API key lookups (src/lib/proxy/
+ * keyVerifier), apart from the counters' so a slow key store does not slow
+ * the counts, and the other way round. A lookup gives up in 400 ms in
+ * Postgres, 500 ms in the client, or 1 s waiting for a connection, and the
+ * proxy then treats the key store as unavailable.
+ */
+export function buildKeyPool(env: EnvLike = process.env): Pool {
+    return buildRuntimePool(env, {
+        max: 2,
+        connectionTimeoutMillis: 1_000,
+        query_timeout: 500,
+        statement_timeout: 400,
+    });
+}
