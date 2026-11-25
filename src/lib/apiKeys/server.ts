@@ -7,7 +7,6 @@ import { getUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 
 import { tagSecrets } from '@/lib/auth/keyTag';
-import { keysEnabled } from '@/lib/proxy/keysSwitch';
 import { ACCOUNT_DAILY_LIMIT, KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
 import { createKeyService } from './service';
@@ -33,7 +32,7 @@ export const keyService = createKeyService({
     maxPerAccount: () => maxKeysPerAccount(process.env.API_KEYS_MAX_PER_ACCOUNT),
     defaultDailyLimit: () => ACCOUNT_DAILY_LIMIT,
     defaultRateLimit: () => KEYED_LIMIT,
-    canMint: () => keysEnabled() && tagSecretsSet(),
+    canMint: tagSecretsSet,
 });
 
 /**

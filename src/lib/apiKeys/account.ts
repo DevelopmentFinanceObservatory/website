@@ -60,7 +60,7 @@ const REFUSALS = {
         problem({
             status: 503,
             code: 'keys_unavailable',
-            detail: 'API keys cannot be made at the moment. Try again later.',
+            detail: 'API keys cannot be made at the moment.',
             retryable: false,
             headers: NO_STORE,
         }),
