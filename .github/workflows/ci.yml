@@ -87,7 +87,14 @@ jobs:
                   PGPASSWORD: postgres
               run: pnpm test
 
+            # Prerendering loads src/lib/auth/auth.ts, which logs an error and
+            # a warning per page when BETTER_AUTH_SECRET and BETTER_AUTH_URL
+            # are unset. The build signs and redirects nothing, so
+            # placeholders stand in.
             - name: Build
+              env:
+                  BETTER_AUTH_SECRET: build-only-placeholder-signs-nothing
+                  BETTER_AUTH_URL: http://localhost:3000
               run: pnpm build
 
             # dist/** is eslint-ignored (eslint.config.mjs), so this runs after

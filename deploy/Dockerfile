@@ -26,7 +26,13 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build
+# Prerendering loads src/lib/auth/auth.ts, which logs an error and a warning
+# per page when BETTER_AUTH_SECRET and BETTER_AUTH_URL are unset. The
+# placeholders live only in this command's environment, and the service reads
+# the real values at run time.
+RUN BETTER_AUTH_SECRET=build-only-placeholder-signs-nothing \
+    BETTER_AUTH_URL=http://localhost:3000 \
+    pnpm build
 
 # Bundled separately from the Next.js build. Standalone output only traces
 # and copies files reachable from a route handler, and the migrate
