@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import styles from './SourceDetail.module.scss';
 import { refreshedByLabel, sourceOriginLine } from '@/lib/dataCommons';
 import type { ChangeKind, SourceDoc, SourceRelease } from '@/lib/sources/graph';
-import { nextReleaseText, sourceDateText } from '@/lib/sources/updateDates';
+import { nextRefreshText, sourceDateText } from '@/lib/sources/updateDates';
 import { httpOnly } from '@/lib/sources/url';
 
 import Button from '@/components/atoms/Button/Button';
@@ -120,7 +120,7 @@ const Rows = ({ rows }: { rows: Row[] }) => (
  * Version History = a dated timeline. Placeholder copy (see sourcesData).
  * The tab lives in the URL (?tab=log) — shareable, survives a reload.
  * `now` is the request time as an ISO string, read on the server, so the
- * overdue mark on the next release hydrates as it rendered.
+ * overdue mark on the next refresh hydrates as it rendered.
  */
 const SourceDetail = ({ dcid, doc, now }: { dcid: string; doc: SourceDoc; now: string }) => {
     const sectionRef = useReveal<HTMLElement>();
@@ -165,10 +165,17 @@ const SourceDetail = ({ dcid, doc, now }: { dcid: string; doc: SourceDoc; now: s
             value: license.last_update && sourceDateText(license.last_update),
         },
         {
-            label: 'Next release expected',
+            label: 'Next refresh due',
+            // Only DFO runs its own imports, so only their late refreshes
+            // are DFO's to fix. A federated source's date is its Data
+            // Commons' schedule.
             value:
                 license.next_expected_update &&
-                nextReleaseText(license.next_expected_update, new Date(now)),
+                nextRefreshText(
+                    license.next_expected_update,
+                    new Date(now),
+                    details.data_commons?.id === 'dfo',
+                ),
         },
     ].filter((row): row is Row => !!row.value);
     const scopeRows = [
