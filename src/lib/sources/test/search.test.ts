@@ -177,19 +177,24 @@ test('the search box offers the publishers whose name holds the query, most sour
     ]);
 });
 
-test('picked publishers lead the list whatever the query, counting 0 where the cards hold none', () => {
+test('picked publishers the query or the chip would hide lead the list, counting 0 where the cards hold none', () => {
     const google = cards.filter((c) => c.dataCommons.id === 'base');
 
-    // FAO picked, then the Google chip: FAO stays offered so it can be unticked.
+    // With FAO picked and then the Google chip, FAO stays offered to be unticked.
     assert.deepEqual(publisherOptions(google, 'f', ['FAO']), [{ label: 'FAO', count: 0 }]);
     assert.deepEqual(publisherOptions(cards, 'alpha', ['Zeta', 'World Bank']), [
         { label: 'Zeta', count: 1 },
         { label: 'World Bank', count: 3 },
         { label: 'Alpha', count: 2 },
     ]);
+    // A pick the list holds anyway keeps its place.
     assert.deepEqual(
         publisherOptions(cards, '', ['OECD']).map((o) => o.label),
-        ['OECD', 'World Bank', 'Alpha', 'FAO', 'WFP', 'Zeta'],
+        ['World Bank', 'Alpha', 'OECD', 'FAO', 'WFP', 'Zeta'],
+    );
+    assert.deepEqual(
+        publisherOptions(cards, 'o', ['OECD', 'Alpha']).map((o) => o.label),
+        ['Alpha', 'World Bank', 'OECD', 'FAO'],
     );
 });
 
@@ -252,7 +257,9 @@ test('a publisher name holding a bar or a percent sign survives the URL', () => 
         assert.deepEqual(parsePublishers(value, named), picked);
     }
 
-    // A link written before names were escaped reads as it did.
+    // Escapes read in either case.
+    assert.deepEqual(parsePublishers('A %7c B|100%25 C', named), ['A | B', '100% C']);
+    // A value with unescaped names reads as written.
     assert.deepEqual(parsePublishers('World Bank|OECD', cards), ['World Bank', 'OECD']);
 });
 

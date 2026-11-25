@@ -75,7 +75,7 @@
         --plain-color: var(--color-bg);
     }
 
-    // The cross brightens on hover in place of the plain variant's dim.
+    // The cross brightens on hover, at full opacity.
 
     @media (hover: hover) {
         &:hover {

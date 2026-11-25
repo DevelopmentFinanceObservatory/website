@@ -36,7 +36,8 @@ type SourceSearchProps = {
  *
  * The list renders into the document body, placed under the field, because
  * the hero clips its overflow to keep the map inside and would cut the list
- * at its bottom edge.
+ * at its bottom edge. A page scroll closes the list, since a fixed list over
+ * a moving page would slide across the header.
  */
 const SourceSearch = ({
     value,
@@ -55,10 +56,11 @@ const SourceSearch = ({
     const shown = open && options.length > 0;
     const fieldRef = useRef<HTMLLabelElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const listRef = useRef<HTMLUListElement>(null);
     // Where the list sits, under the field and as wide as it.
     const [place, setPlace] = useState<{ top: number; left: number; width: number } | null>(null);
 
-    // Keeps the current place when the field has not moved, so a frame
+    // Keeps the current place when the field has not moved, so a measure
     // without movement does not re-render.
     const measure = useCallback(() => {
         const rect = fieldRef.current?.getBoundingClientRect();
@@ -86,19 +88,41 @@ const SourceSearch = ({
             return;
         }
 
-        // The list follows the field each frame while it shows. Scrolls,
-        // resizes and the controls' reveal entrance all move the field, and
-        // the entrance fires no event a listener could catch.
-        let frame = 0;
+        const field = fieldRef.current;
 
-        const follow = () => {
-            measure();
-            frame = requestAnimationFrame(follow);
+        // A scroll anywhere but in the list itself moves the field, so it
+        // closes the list.
+        const onScroll = (event: Event) => {
+            if (!(event.target instanceof Node && listRef.current?.contains(event.target))) {
+                setOpen(false);
+                setActive(-1);
+            }
         };
 
-        frame = requestAnimationFrame(follow);
+        // The controls rise into place with a CSS reveal animation (data-reveal),
+        // and a field focused during it moves until the animation ends.
+        const onAnimationEnd = (event: AnimationEvent) => {
+            if (event.target instanceof Node && field && event.target.contains(field)) {
+                measure();
+            }
+        };
 
-        return () => cancelAnimationFrame(frame);
+        const resizes = new ResizeObserver(measure);
+
+        if (field) {
+            resizes.observe(field);
+        }
+
+        window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+        window.addEventListener('resize', measure);
+        document.addEventListener('animationend', onAnimationEnd);
+
+        return () => {
+            window.removeEventListener('scroll', onScroll, { capture: true });
+            window.removeEventListener('resize', measure);
+            document.removeEventListener('animationend', onAnimationEnd);
+            resizes.disconnect();
+        };
     }, [shown, measure]);
 
     const pick = (option: PublisherOption) => {
@@ -228,6 +252,7 @@ const SourceSearch = ({
                 place &&
                 createPortal(
                     <ul
+                        ref={listRef}
                         id={listId}
                         role="listbox"
                         aria-label="Publishers"

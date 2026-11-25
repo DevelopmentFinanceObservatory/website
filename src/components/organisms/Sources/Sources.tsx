@@ -67,9 +67,9 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
         color: SOURCE_SWATCHES[index % SOURCE_SWATCHES.length]!,
     }));
 
-    // A `?filter=` link from the old source chips fills the filters it
-    // names, unless the URL carries that filter itself. Read through Next's
-    // params so the server render and the hydration agree.
+    // A `?filter=` link, a list of Data Commons ids and publisher dcids, fills
+    // the filters it names, unless the URL carries that filter itself. Read
+    // through Next's params so the server render and the hydration agree.
     const params = useSearchParams();
     const legacy = useMemo(() => legacyFilter(params.get('filter'), sources), [params, sources]);
 
@@ -138,8 +138,8 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
     );
     const colorOf = (id: Provenance) => groups.find((group) => group.id === id)?.color;
     // The publisher list offers what the chosen provenance holds, so a row's
-    // count is what picking it shows. The picks lead the list whatever the
-    // text and the chip, so each can be unticked.
+    // count is what picking it shows. A pick the text or the chip would hide
+    // leads the list, so each can be unticked.
     const offered = publisherOptions(
         via ? sources.filter((source) => source.dataCommons.id === via) : sources,
         q,

@@ -30,10 +30,9 @@ const isPending = (half: Half<unknown>): boolean =>
  * catalogue's counts it shows the scope line, the aid line, and the
  * indicator and dataset tiles. Below them comes the Sources page's publisher
  * list, each publisher with its dataset count and a link to that page with
- * the publisher picked. Each half
- * shows its own placeholder until it arrives, and a failed half shows as
- * empty. The footer links to the Sources page and offers a canvas where the
- * agent answers questions about the data.
+ * the publisher picked. Each half shows its own placeholder until it
+ * arrives, and a failed half shows as empty. The footer links to the Sources
+ * page and offers a canvas where the agent answers questions about the data.
  *
  * Every link here sets `prefetch={false}` because /data/sources is
  * force-dynamic, and a viewport prefetch renders it in full, one graph read

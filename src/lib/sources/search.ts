@@ -11,8 +11,8 @@
  * from how many publishers, and the chosen provenance.
  *
  * The Studio landing's data drawer links here with `?publisher=`. The page
- * also reads `?filter=`, the value the filter chips that came before the
- * search box wrote, as a provenance or picked publishers.
+ * also reads `?filter=`, a comma-separated list of Data Commons ids and
+ * publisher dcids, as a provenance or picked publishers.
  */
 
 import type { DataCommonsRef } from '../search/types.ts';
@@ -40,7 +40,7 @@ const escapeName = (name: string): string =>
     name.replace(/[%|]/g, (char) => (char === '%' ? '%25' : '%7C'));
 
 const unescapeName = (part: string): string =>
-    part.replace(/%(25|7C)/g, (_, code: string) => (code === '25' ? '%' : '|'));
+    part.replace(/%(25|7C)/gi, (_, code: string) => (code === '25' ? '%' : '|'));
 
 // Provenances in display order: the Observatory's own imports, then the
 // Data Commons.
@@ -174,8 +174,9 @@ export type PublisherOption = { label: string; count: number };
  * publisher. A row stands for a name, so the graph's two nodes for one
  * publisher make one row whose count is what picking it shows.
  *
- * The `picked` names come first, in their given order, whatever the query,
- * so a reader can untick each one. A picked name with no cards here counts 0.
+ * A picked name the query or the cards would leave out comes first, in the
+ * given order, so a reader can untick it. A picked name in the list anyway
+ * keeps its place there. A picked name with no cards here counts 0.
  */
 export const publisherOptions = (
     cards: readonly Filterable[],
@@ -187,23 +188,21 @@ export const publisherOptions = (
 
     for (const card of cards) {
         const label = publisherName(card);
-
-        if (needle !== '' && !fold(label).includes(needle) && !picked.includes(label)) {
-            continue;
-        }
-
         const option = options.get(label) ?? { label, count: 0 };
 
         option.count += 1;
         options.set(label, option);
     }
 
-    const pickedRows = picked.map((label) => options.get(label) ?? { label, count: 0 });
-    const rest = [...options.values()]
-        .filter((option) => !picked.includes(option.label))
+    const matches = (label: string) => needle === '' || fold(label).includes(needle);
+    const hiddenPicks = picked
+        .filter((label) => !options.has(label) || !matches(label))
+        .map((label) => options.get(label) ?? { label, count: 0 });
+    const listed = [...options.values()]
+        .filter((option) => matches(option.label))
         .sort((a, b) => b.count - a.count || collate(a.label, b.label));
 
-    return [...pickedRows, ...rest];
+    return [...hiddenPicks, ...listed];
 };
 
 /** The picked publishers with `name` added, or removed when it is among
@@ -235,13 +234,12 @@ export const serializePublishers = (publishers: readonly string[]): string | nul
     publishers.length > 0 ? publishers.map(escapeName).join(PUBLISHER_SEPARATOR) : null;
 
 /**
- * A `?filter=` link, written by the filter chips that came before the search
- * box, as the page's own filters. The chips joined their picks with commas.
- * A lone Data Commons id is a provenance. Otherwise each id that is a
- * publisher's dcid picks that publisher by name, with all its sources from
- * every provenance, and a Data Commons id in the list is dropped, since the
- * chips' union of picks has no equal among filters that intersect. A list
- * with no known publisher is no filter.
+ * A `?filter=` value, a comma-separated list of Data Commons ids and
+ * publisher dcids, as the page's own filters. A lone Data Commons id is a
+ * provenance. Otherwise each publisher dcid picks that publisher by name,
+ * with all its sources from every provenance. A Data Commons id in a list is
+ * dropped, because a provenance narrows the picks while a list unions them.
+ * A list with no known publisher is no filter.
  */
 export const legacyFilter = (
     raw: string | null,
