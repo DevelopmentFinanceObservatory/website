@@ -29,8 +29,9 @@ import { requestCaller } from './caller.ts';
  * the page, since the server cannot see activation. `tier` is whose count a
  * rate-limited call spent, `key`, `visitor` or `address`, read from the
  * response's x-dfo-limit-tier header (src/lib/proxy/access), and null for a
- * call nothing counted. The line holds no raw address, query string, cookie,
- * visitor id, auth header or user agent. A signed-in
+ * call nothing counted. The header is removed as the response head is
+ * written, so it reaches no client or cache. The line holds no raw address,
+ * query string, cookie, visitor id, auth header or user agent. A signed-in
  * user's request names no account here; see AccountLogEntry.
  */
 export type RequestKind = 'page' | 'api' | 'rsc' | 'prefetch';
@@ -140,15 +141,99 @@ const LIMIT_TIERS: ReadonlySet<string> = new Set<LimitTier>(['key', 'visitor', '
 const isLimitTier = (value: unknown): value is LimitTier =>
     typeof value === 'string' && LIMIT_TIERS.has(value);
 
-/**
- * The LimitTier a response's x-dfo-limit-tier header names, or null. Next
- * copies a route handler's headers with NodeNextResponse.appendHeader, which
- * stores each as an array, so a header holding exactly one tier counts.
- */
-const tierOf = (response: ServerResponse): LimitTier | null => {
-    const values = [response.getHeader(LIMIT_TIER_HEADER)].flat();
+// The single LimitTier among a header's values, or null.
+const singleTier = (value: unknown): LimitTier | null => {
+    const values = [value].flat();
 
     return values.length === 1 && isLimitTier(values[0]) ? values[0] : null;
+};
+
+// The tier each wrapped response's x-dfo-limit-tier header named when its
+// head was written, after the header was removed.
+const writtenTiers = new WeakMap<ServerResponse, LimitTier | null>();
+
+/**
+ * The LimitTier a response's x-dfo-limit-tier header named, or null. Next
+ * copies a route handler's headers with NodeNextResponse.appendHeader, which
+ * stores each as an array, so a header holding exactly one tier counts. Once
+ * `stripTierHeader`'s wrap has written the head, the tier comes from
+ * writtenTiers.
+ */
+const tierOf = (response: ServerResponse): LimitTier | null =>
+    writtenTiers.has(response)
+        ? (writtenTiers.get(response) ?? null)
+        : singleTier(response.getHeader(LIMIT_TIER_HEADER));
+
+const isTierHeader = (name: unknown): boolean =>
+    typeof name === 'string' && name.toLowerCase() === LIMIT_TIER_HEADER;
+
+/**
+ * `headers` as passed to `writeHead`, without x-dfo-limit-tier, and the value
+ * it held there: an object, or a flat array of names and values.
+ */
+const withoutTier = (headers: unknown): { headers: unknown; value: unknown } => {
+    if (Array.isArray(headers)) {
+        const kept: unknown[] = [];
+        let value: unknown;
+
+        for (let index = 0; index < headers.length; index += 2) {
+            if (isTierHeader(headers[index])) {
+                value = headers[index + 1];
+            } else {
+                kept.push(headers[index], headers[index + 1]);
+            }
+        }
+
+        return { headers: kept, value };
+    }
+
+    if (typeof headers === 'object' && headers !== null) {
+        const entries = Object.entries(headers);
+        const tier = entries.find(([name]) => isTierHeader(name));
+
+        return tier
+            ? {
+                  headers: Object.fromEntries(entries.filter(([name]) => !isTierHeader(name))),
+                  value: tier[1],
+              }
+            : { headers, value: undefined };
+    }
+
+    return { headers, value: undefined };
+};
+
+/**
+ * Keep x-dfo-limit-tier off the wire. Route handlers set it so this log can
+ * read the tier, and a client or shared cache must not see it. Node's
+ * implicit-header path (`write`, `end`) calls `writeHead` as well, so the
+ * wrap covers every response. The header can be set before `writeHead`, as
+ * Next's sendResponse does, or passed in its headers argument, which wins
+ * over a header already set.
+ */
+const stripTierHeader = (response: ServerResponse): void => {
+    const writeHead = response.writeHead;
+
+    // writeHead's overloads take (status, headers) or (status, message,
+    // headers); a typed wrapper cannot name both, so it passes args through.
+    response.writeHead = ((...args: unknown[]) => {
+        let tier = singleTier(response.getHeader(LIMIT_TIER_HEADER));
+
+        response.removeHeader(LIMIT_TIER_HEADER);
+        const last = args.length - 1;
+
+        if (last >= 1 && typeof args[last] !== 'string') {
+            const stripped = withoutTier(args[last]);
+
+            if (stripped.value !== undefined) {
+                tier = singleTier(stripped.value);
+                args[last] = stripped.headers;
+            }
+        }
+
+        writtenTiers.set(response, tier);
+
+        return Reflect.apply(writeHead, response, args) as ServerResponse;
+    }) as ServerResponse['writeHead'];
 };
 
 // The path of each logged request's target as it arrived, kept because
@@ -353,6 +438,7 @@ const onRequestStart = (message: unknown): void => {
     }
 
     arrivedPaths.set(request, path);
+    stripTierHeader(response);
     response.once('close', () => {
         logRequest(request, {
             status: response.headersSent ? response.statusCode : CLIENT_CLOSED_REQUEST,

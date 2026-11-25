@@ -602,21 +602,27 @@ test('server logging writes one line with finished true for a response that fini
 });
 
 test(
-    'server logging records the limit tier a response names, and null for any other value',
+    'server logging records the limit tier a response names, and null for any other value, and sends no tier header',
     { timeout: 5000 },
     async (t) => {
         const lines: unknown[] = [];
         t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
         t.after(registerRequestLogging());
         const port = await listen(t, (request, response) => {
-            const tiers = new URL(request.url ?? '/', 'http://localhost').searchParams.getAll(
-                'tier',
-            );
+            const query = new URL(request.url ?? '/', 'http://localhost').searchParams;
+            const tiers = query.getAll('tier');
 
-            // Next's sendResponse copies a route handler's Response headers
-            // through NodeNextResponse.appendHeader, which stores each one as
-            // an array of values.
-            if (tiers.length > 0) {
+            if (query.has('object')) {
+                // A tier passed in writeHead's headers object wins over one
+                // already set.
+                response.setHeader('x-dfo-limit-tier', 'key');
+                response.writeHead(200, { 'X-Dfo-Limit-Tier': tiers, 'x-kept': '1' });
+            } else if (query.has('array')) {
+                response.writeHead(200, 'OK', ['x-kept', '1', 'x-dfo-limit-tier', tiers[0]!]);
+            } else if (tiers.length > 0) {
+                // Next's sendResponse copies a route handler's Response
+                // headers through NodeNextResponse.appendHeader, which stores
+                // each one as an array of values.
                 response.setHeader('x-dfo-limit-tier', tiers);
             }
 
@@ -630,10 +636,17 @@ test(
             'tier=v-1234',
             'tier=key&tier=visitor',
             '',
+            'object&tier=visitor',
+            'array&tier=address',
         ];
+        const sent: (string | null)[] = [];
+        const kept: (string | null)[] = [];
 
         for (const query of queries) {
-            await (await fetch(`http://127.0.0.1:${port}/api/v1/search?${query}`)).text();
+            const res = await fetch(`http://127.0.0.1:${port}/api/v1/search?${query}`);
+            await res.text();
+            sent.push(res.headers.get('x-dfo-limit-tier'));
+            kept.push(res.headers.get('x-kept'));
         }
 
         // The close listener writes each line after the response ends.
@@ -643,8 +656,10 @@ test(
 
         assert.deepEqual(
             lines.map((line) => (line as { tier: unknown }).tier),
-            ['key', 'visitor', 'address', null, null, null],
+            ['key', 'visitor', 'address', null, null, null, 'visitor', 'address'],
         );
+        assert.deepEqual(sent, Array(queries.length).fill(null));
+        assert.deepEqual(kept.slice(-2), ['1', '1']);
     },
 );
 
