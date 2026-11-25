@@ -213,22 +213,30 @@ test("the daily quota is the account's: its own, else the default, whichever key
     assert.equal(another.calls.at(-1), 'daily:apiday:user:acct-1:1000');
 });
 
-test("a key with a cap of its own is counted against it after the account's quota", async () => {
+test("a key's own cap is counted before the account's quota, which a refused call leaves alone", async () => {
     const capped = world({ cached: true, answer: { ...VALID, dailyLimit: 50 }, capUsed: 50 });
     const access = await decide(capped.deps, { 'x-api-key': KEY });
 
-    assert.deepEqual(capped.calls.slice(-2), [
-        'daily:apiday:user:acct-1:1000',
+    assert.deepEqual(capped.calls, [
+        'cache',
+        'account:api:acct-1:600',
         'daily:apiday:key:key-1:50',
     ]);
     assert.equal(access.refusal?.status, 429);
+    assert.equal((await access.refusal!.json()).code, 'allowance_exhausted');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '50');
 
-    // A spent account quota refuses before the cap is counted.
+    // A call the cap admits goes on to the account's quota, which can still refuse it.
     const spent = world({ cached: true, answer: { ...VALID, dailyLimit: 50 }, dailyUsed: 1000 });
+    const refused = await decide(spent.deps, { 'x-api-key': KEY });
 
-    await decide(spent.deps, { 'x-api-key': KEY });
-    assert.equal(spent.calls.at(-1), 'daily:apiday:user:acct-1:1000');
+    assert.deepEqual(spent.calls, [
+        'cache',
+        'account:api:acct-1:600',
+        'daily:apiday:key:key-1:50',
+        'daily:apiday:user:acct-1:1000',
+    ]);
+    assert.equal(refused.refusal?.headers.get('x-ratelimit-limit'), '1000');
 });
 
 test('an allowed keyed call reports the per-minute verdict, not the daily one', async () => {

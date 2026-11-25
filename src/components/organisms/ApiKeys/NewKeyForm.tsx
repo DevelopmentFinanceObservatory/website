@@ -44,7 +44,7 @@ const NewKeyForm = ({ onCancel, onCreate }: NewKeyFormProps) => {
                     autoFocus
                     required
                     value={label}
-                    placeholder="For example, Claude Desktop"
+                    placeholder="For example, Data pipeline"
                     onChange={(event) => setLabel(event.target.value)}
                 />
             </label>

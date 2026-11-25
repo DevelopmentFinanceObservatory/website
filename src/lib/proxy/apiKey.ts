@@ -4,8 +4,8 @@
  *
  * A key is `Authorization: Bearer dfo_…` or `X-API-Key: …`. A bearer that
  * does not start with `dfo_` is not a key, whatever else it is (the harness
- * token on /mcp, say), so it is left alone and the call is handled as it was
- * before keys. `X-API-Key` always names a key. A call that sends both with
+ * token on /mcp, say), so it is left alone and the call is handled as an anonymous
+ * call. `X-API-Key` always names a key. A call that sends both with
  * different values is refused, and a value over MAX_KEY_LENGTH is refused
  * unread. The key is never put in a query string.
  */

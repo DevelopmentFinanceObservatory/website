@@ -105,18 +105,26 @@ export const adminSetKeyLimit = async (
         return { ok: false, error: LIMIT_INVALID };
     }
 
-    return (await keyService.adminSetKeyDailyLimit(admin.email, keyId, parsed.limit))
-        ? { ok: true }
-        : { ok: false, error: REFUSALS.not_found };
+    if (!(await keyService.adminSetKeyDailyLimit(admin.email, keyId, parsed.limit))) {
+        return { ok: false, error: REFUSALS.not_found };
+    }
+
+    revalidatePath(PATH);
+
+    return { ok: true };
 };
 
 /** Sets an account's API call count for today back to 0, its keys' caps included. */
 export const adminResetUsage = async (userId: unknown): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();
 
-    return typeof userId === 'string' && (await keyService.adminResetUsage(admin.email, userId))
-        ? { ok: true }
-        : { ok: false, error: REFUSALS.no_such_account };
+    if (typeof userId !== 'string' || !(await keyService.adminResetUsage(admin.email, userId))) {
+        return { ok: false, error: REFUSALS.no_such_account };
+    }
+
+    revalidatePath(PATH);
+
+    return { ok: true };
 };
 
 /** Sets or clears an account's per-minute limit (empty text clears it). */

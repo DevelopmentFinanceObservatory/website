@@ -178,8 +178,10 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
 
                     {data.keys.length === 0 ? (
                         <p className={styles.muted}>
-                            An API key raises your API limits for scripts and pipelines that use the
-                            DFO API or the Python and TypeScript SDK. See{' '}
+                            An API key gives scripts and pipelines that use the DFO API or the
+                            Python and TypeScript SDK 600 calls a minute on each of the API and the
+                            Datasets API, and {data.quota.dailyLimit.toLocaleString('en-GB')} calls
+                            a day shared by all your keys. See{' '}
                             <Link className={styles.link} href={docsHref('build/api-keys')}>
                                 how to use an API key
                             </Link>

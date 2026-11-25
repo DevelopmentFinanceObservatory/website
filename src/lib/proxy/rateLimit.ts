@@ -34,7 +34,7 @@ import type { RateVerdict } from './rateHeaders';
  *                         limit of its own (default 600)
  *   API_KEY_DAILY_LIMIT   API calls per UTC day per account, every key's
  *                         calls together, for an account with no quota of
- *                         its own (`user.api_daily_limit`; default 1000).
+ *                         its own (`user.api_daily_limit`; default 75000).
  *                         Counted apart from the window above, in a one-day
  *                         window (hitDaily). A key may also carry a lower
  *                         cap of its own (`apikey.daily_limit`).
@@ -77,7 +77,7 @@ export const LIMITS = {
 export const KEYED_LIMIT = Number(process.env.RATE_LIMIT_KEYED) || 600;
 
 /** An account's API calls per UTC day when it sets none of its own (`user.api_daily_limit`). */
-export const ACCOUNT_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 1000;
+export const ACCOUNT_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 75_000;
 
 export type Surface = keyof typeof LIMITS;
 

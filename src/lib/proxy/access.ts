@@ -4,21 +4,25 @@
  * call goes upstream. Kept apart from `forward` so `node --test` can drive it
  * with a fake limiter and key verifier.
  *
- * A call is anonymous, counted against its address as before, or keyed,
- * counted against the account that owns the key at the account's limit,
- * against the account's daily quota, which every key of the account spends,
- * and against the key's own daily cap when it has one
- * (docs/design/api-keys.md, "The proxy check"). Keys are honoured on the
- * 'api' and 'datasets' surfaces (`honorsKeys`). Every key carries a tag signed by a server secret
- * (src/lib/auth/keyTag), checked first, so a made-up key costs no read and no
- * count:
+ * A call is anonymous, counted against its address, or keyed, counted
+ * against the account that owns the key: first the account's per-minute
+ * limit, then the key's own daily cap when it has one, then the account's
+ * daily quota, which every key of the account spends (docs/design/api-keys.md,
+ * "The proxy check"). Each count is taken only once the one before admits the
+ * call, so a call the key's cap refuses leaves the account's daily quota
+ * untouched, and the account's other keys keep it. That call has still spent
+ * one on the account's per-minute window. Keys are honoured on the 'api' and
+ * 'datasets' surfaces (`honorsKeys`). Every key carries a tag signed by a
+ * server secret (src/lib/auth/keyTag), checked first, so a made-up key costs
+ * no read and no count:
  *
  *   no key                       anonymous
  *   bad tag                      401, no lookup, no count (outcome `forged`)
- *   good tag, valid in the cache counted against the account, then its
- *                                daily quota, then the key's cap if any; the
- *                                headers report the account's per-minute
- *                                count, or the daily count that refuses
+ *   good tag, valid in the cache counted against the account per minute,
+ *                                then the key's cap if any, then the
+ *                                account's daily quota; the headers report
+ *                                the account's per-minute count, or the
+ *                                daily count that refuses
  *   good tag, otherwise looked up:
  *     valid                      counted against the account, never the
  *                                address, so keyed callers behind a shared
@@ -93,10 +97,10 @@ export const honorsKeys = (surface: Surface | undefined): boolean =>
 const accountLimit = (key: ValidKey, defaultLimit: number): number => key.rateLimit ?? defaultLimit;
 
 /**
- * Decide the call. `keys` is whether the route and the deployment accept a
- * key at all (the route's `keys` option, and API_KEYS_ENABLED); the surface
- * must honour keys as well (`honorsKeys`). `surface` unset means the call has
- * no limit and no key check.
+ * Decide the call. `keys` is false when keys are switched off
+ * (API_KEYS_ENABLED, read by `forward`), and the surface must honour keys as
+ * well (`honorsKeys`). `surface` unset means the call has no limit and no key
+ * check.
  */
 export const decideAccess = async (
     deps: AccessDeps,
@@ -161,14 +165,6 @@ export const decideAccess = async (
             verdict: daily,
             outcome: 'limited',
         });
-        const daily = await deps.hitDaily(
-            accountDailyCounterKey(key.accountId),
-            key.accountDailyLimit ?? deps.defaultDailyLimit,
-        );
-
-        if (!daily.allowed) {
-            return spent(daily, 'account');
-        }
 
         if (key.dailyLimit !== null) {
             const capped = await deps.hitDaily(keyDailyCounterKey(key.keyId), key.dailyLimit);
@@ -176,6 +172,15 @@ export const decideAccess = async (
             if (!capped.allowed) {
                 return spent(capped, 'key');
             }
+        }
+
+        const daily = await deps.hitDaily(
+            accountDailyCounterKey(key.accountId),
+            key.accountDailyLimit ?? deps.defaultDailyLimit,
+        );
+
+        if (!daily.allowed) {
+            return spent(daily, 'account');
         }
 
         return { identity, verdict, outcome: 'allowed' };

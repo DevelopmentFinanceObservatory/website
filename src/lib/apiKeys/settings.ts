@@ -1,7 +1,7 @@
 /**
  * The settings and input rules of the API key pages (account and admin),
  * apart from the code that stores keys so `node --test` loads them with no
- * database. docs/design/api-keys.md, "Phases", is the background.
+ * database. docs/design/api-keys.md is the background.
  */
 
 const DEFAULT_MAX_PER_ACCOUNT = 5;

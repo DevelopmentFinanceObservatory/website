@@ -24,9 +24,13 @@ import {
     type HeaderPass,
 } from './headers';
 import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
+import { keysEnabled } from './keysSwitch';
 import { rateLimitedProblem, unreachableProblem } from './problem';
 import { rateHeaders, type RateVerdict } from './rateHeaders';
 import { hit, hitDaily, hitKey, ACCOUNT_DAILY_LIMIT, KEYED_LIMIT, type Surface } from './rateLimit';
+
+// Re-exported for the panel and admin pages, which read the switch here.
+export { keysEnabled };
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -98,7 +102,7 @@ export const clientIp = (req: NextRequest): string =>
 
 // The tag secrets, read per call so a test can set them. Unset, no key is
 // accepted: src/instrumentation.ts refuses to start in production without
-// them, and in dev every key is a 401.
+// them while keys are on, and otherwise every key is a 401.
 const keyTagValid = (key: string): boolean => {
     let secrets: string[];
 
@@ -122,12 +126,6 @@ export const accessDeps: AccessDeps = {
     defaultLimit: KEYED_LIMIT,
     defaultDailyLimit: ACCOUNT_DAILY_LIMIT,
 };
-
-// API_KEYS_ENABLED is the emergency switch: set to `false` (or `0`, `off`,
-// `no`), keys are stripped and every call is treated as anonymous. Read per
-// call, so a test can flip it.
-export const keysEnabled = (): boolean =>
-    !['false', '0', 'off', 'no'].includes(process.env.API_KEYS_ENABLED?.trim().toLowerCase() ?? '');
 
 // One structured line per call that carried a key. The key's public id and
 // the account are named; the key and its hash never are.
@@ -293,10 +291,10 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     if (options.bearer) {
         headers.set('authorization', `Bearer ${options.bearer}`);
     } else if (callerAuth && !apisTarget && !carriesKey(callerAuth)) {
-        // Any other credential passes through as it always did, to the MCP
-        // harness say. dfo-apis reads no caller's Authorization on a route
-        // the proxy serves, so it gets none. A value holding one of our keys,
-        // in any scheme, goes no further, verified or not.
+        // Any other credential passes through, to the MCP harness say.
+        // dfo-apis reads no caller's Authorization on a route the proxy
+        // serves, so it gets none. A value holding one of our keys, in any
+        // scheme, goes no further, verified or not.
         headers.set('authorization', callerAuth);
     }
 
