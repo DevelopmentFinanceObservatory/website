@@ -80,8 +80,9 @@ export type SourceCard = {
     /** the publisher's dcid */
     family: string;
     publisher: string | null;
-    /** where the data comes from; the card's filter is its publisher when this
-     *  is `dfo`, and this origin otherwise (see filters.ts) */
+    /** where the data comes from: the Observatory's own import (`dfo`) or
+     *  the Data Commons that delivered it, the Sources page's provenance
+     *  (see search.ts) */
     dataCommons: DataCommonsRef;
     /** the org line: "World Bank via Data Commons by Google", the publisher
      *  alone for DFO's own data, "via UN System Data Commons" alone when the

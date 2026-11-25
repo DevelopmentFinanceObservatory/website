@@ -49,8 +49,9 @@
     letter-spacing: -0.01em;
 }
 
-// The Sources page's rows, one per line. The name links to the page
-// filtered to it, and the dataset count sits at the end of the line.
+// The Sources page's publishers, one per line. The name links to the page
+// with that publisher picked, and the dataset count sits at the end of the
+// line.
 .sources {
     @include flex(column, flex-start, stretch);
 
