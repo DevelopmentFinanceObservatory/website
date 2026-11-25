@@ -609,27 +609,41 @@ test(
         t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
         t.after(registerRequestLogging());
         const port = await listen(t, (request, response) => {
-            const tier = new URL(request.url ?? '/', 'http://localhost').searchParams.get('tier');
+            const tiers = new URL(request.url ?? '/', 'http://localhost').searchParams.getAll(
+                'tier',
+            );
 
-            if (tier) {
-                response.setHeader('x-dfo-limit-tier', tier);
+            // Next's sendResponse copies a route handler's Response headers
+            // through NodeNextResponse.appendHeader, which stores each one as
+            // an array of values.
+            if (tiers.length > 0) {
+                response.setHeader('x-dfo-limit-tier', tiers);
             }
 
             response.end('ok');
         });
 
-        for (const tier of ['key', 'visitor', 'address', 'v-1234', '']) {
-            await (await fetch(`http://127.0.0.1:${port}/api/v1/search?tier=${tier}`)).text();
+        const queries = [
+            'tier=key',
+            'tier=visitor',
+            'tier=address',
+            'tier=v-1234',
+            'tier=key&tier=visitor',
+            '',
+        ];
+
+        for (const query of queries) {
+            await (await fetch(`http://127.0.0.1:${port}/api/v1/search?${query}`)).text();
         }
 
         // The close listener writes each line after the response ends.
-        while (lines.length < 5) {
+        while (lines.length < queries.length) {
             await new Promise((resolve) => setTimeout(resolve, 5));
         }
 
         assert.deepEqual(
             lines.map((line) => (line as { tier: unknown }).tier),
-            ['key', 'visitor', 'address', null, null],
+            ['key', 'visitor', 'address', null, null, null],
         );
     },
 );

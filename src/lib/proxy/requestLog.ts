@@ -140,11 +140,15 @@ const LIMIT_TIERS: ReadonlySet<string> = new Set<LimitTier>(['key', 'visitor', '
 const isLimitTier = (value: unknown): value is LimitTier =>
     typeof value === 'string' && LIMIT_TIERS.has(value);
 
-/** The LimitTier a response's x-dfo-limit-tier header names, or null. */
+/**
+ * The LimitTier a response's x-dfo-limit-tier header names, or null. Next
+ * copies a route handler's headers with NodeNextResponse.appendHeader, which
+ * stores each as an array, so a header holding exactly one tier counts.
+ */
 const tierOf = (response: ServerResponse): LimitTier | null => {
-    const value = response.getHeader(LIMIT_TIER_HEADER);
+    const values = [response.getHeader(LIMIT_TIER_HEADER)].flat();
 
-    return isLimitTier(value) ? value : null;
+    return values.length === 1 && isLimitTier(values[0]) ? values[0] : null;
 };
 
 // The path of each logged request's target as it arrived, kept because
