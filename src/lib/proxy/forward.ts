@@ -11,6 +11,8 @@ import { setAccount } from './account';
 import {
     decideAccess,
     honorsKeys as surfaceHonorsKeys,
+    limitHeaders as limitHeadersOf,
+    LIMIT_TIER_HEADER,
     type Access,
     type AccessDeps,
 } from './access';
@@ -25,17 +27,23 @@ import {
 } from './headers';
 import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
 import { keysEnabled } from './keysSwitch';
-import { rateLimitedProblem, unreachableProblem } from './problem';
-import { rateHeaders, type RateVerdict } from './rateHeaders';
+import { unreachableProblem } from './problem';
 import {
+    admit,
     hit,
     hitDaily,
     hitKey,
     refundDaily,
     ACCOUNT_DAILY_LIMIT,
+    ADDRESS_DAILY_LIMITS,
+    ANONYMOUS_DAILY_LIMITS,
+    BACKSTOP_LIMITS,
+    COOKIELESS_LIMITS,
     KEYED_LIMIT,
+    LIMITS,
     type Surface,
 } from './rateLimit';
+import { readVisitor, visitorLimitsOn } from './visitor';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -45,7 +53,13 @@ import {
  * /codes call the route forwards, is rate-limited per IP: /mcp and the
  * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
- * headers go out only on a counted call). A call on the 'api' or 'datasets'
+ * headers and x-dfo-limit-tier go out only on a counted call). While visitor
+ * limits are on, an anonymous 'api' or 'datasets' call with the site's
+ * visitor token is counted per visitor instead (src/lib/proxy/access). Each
+ * anonymous 'api' or 'datasets' call is also counted on a daily allowance,
+ * the visitor's or the address's cookieless one, and on its address's daily
+ * ceiling (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS and
+ * ADDRESS_DAILY_LIMITS). A call on the 'api' or 'datasets'
  * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
  * the account's limit on that surface and against the account's daily quota,
@@ -126,6 +140,16 @@ export const accessDeps: AccessDeps = {
     verifier: createKeyVerifier(keyDb, cacheLifetimes(process.env.API_KEY_CACHE_S)),
     tagValid: keyTagValid,
     hitAddress: hit,
+    admit,
+    anonymousLimits: {
+        address: LIMITS,
+        cookieless: COOKIELESS_LIMITS,
+        backstop: BACKSTOP_LIMITS,
+        daily: ANONYMOUS_DAILY_LIMITS,
+        dailyAddress: ADDRESS_DAILY_LIMITS,
+    },
+    visitorLimits: visitorLimitsOn,
+    visitor: readVisitor,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
     hitDaily,
     refundDaily,
@@ -173,14 +197,32 @@ const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
     );
 };
 
+/**
+ * Count an anonymous call on `surface` from `req` as forward() does, by
+ * visitor or by address (src/lib/proxy/access), any key ignored. For a
+ * caller that counts before forward() runs and passes the result as
+ * `counted`. `daily` says whether the call spends the daily allowances.
+ */
+export const countAnonymous = (
+    req: NextRequest,
+    surface: Surface,
+    { daily }: { daily: boolean },
+): Promise<Access> =>
+    decideAccess(accessDeps, {
+        surface,
+        keys: false,
+        headers: req.headers,
+        ip: clientIp(req),
+        daily,
+    });
+
 export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
-    // The verdict of a call the caller has already counted against its
-    // address (the Studio proxy counts before it reads a body), so forward()
-    // counts nothing more and the call is anonymous: a key on it is stripped
-    // and ignored.
-    counted?: RateVerdict;
+    // The decision on a call the caller has already counted as anonymous
+    // (the Studio proxy counts before it reads a body, with countAnonymous),
+    // so forward() counts nothing more: a key on it is stripped and ignored.
+    counted?: Access;
     // The upstream URL to hit (path + query already resolved).
     target: string;
     // A bearer the proxy attaches on the caller's behalf; when unset, the
@@ -252,24 +294,41 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
     });
 };
 
+/**
+ * `refusal` with the call's x-dfo-limit-tier, which `admit` answers after the
+ * call spent its count: the Studio's prompt allowance, for one, answers a 429
+ * of its own. The rate headers stay off, since they describe a count other
+ * than the one that refused. A refusal that names a tier keeps its own.
+ */
+const withTier = (refusal: Response, { tier }: Access): Response => {
+    if (!tier || refusal.headers.has(LIMIT_TIER_HEADER)) {
+        return refusal;
+    }
+
+    const headers = new Headers(refusal.headers);
+
+    headers.set(LIMIT_TIER_HEADER, tier);
+
+    return new Response(refusal.body, {
+        status: refusal.status,
+        statusText: refusal.statusText,
+        headers,
+    });
+};
+
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     // Who the caller is and whether it is within its allowance, decided once.
     const honorsKeys = options.counted === undefined && surfaceHonorsKeys(options.surface);
     const keysOn = keysEnabled();
-    const access: Access = options.counted
-        ? {
-              identity: { kind: 'anonymous' },
-              verdict: options.counted,
-              refusal: options.counted.allowed
-                  ? undefined
-                  : rateLimitedProblem(options.counted, rateHeaders(options.counted)),
-          }
-        : await decideAccess(accessDeps, {
-              surface: options.surface,
-              keys: honorsKeys && keysOn,
-              headers: req.headers,
-              ip: clientIp(req),
-          });
+    const access: Access =
+        options.counted ??
+        (await decideAccess(accessDeps, {
+            surface: options.surface,
+            keys: honorsKeys && keysOn,
+            headers: req.headers,
+            ip: clientIp(req),
+            daily: true,
+        }));
 
     if (honorsKeys && !keysOn) {
         logKeyHeaderWhileOff(options.surface!, req.headers);
@@ -281,12 +340,12 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         return access.refusal;
     }
 
-    const limitHeaders = access.verdict ? rateHeaders(access.verdict) : {};
+    const limitHeaders = limitHeadersOf(access);
 
     const refusal = await options.admit?.();
 
     if (refusal) {
-        return refusal;
+        return withTier(refusal, access);
     }
 
     const headers = upstreamRequestHeaders(req.headers, new Headers(), options.pass?.request);

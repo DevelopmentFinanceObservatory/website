@@ -2,6 +2,7 @@ import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { IncomingMessage, ServerResponse } from 'node:http';
 
 import { isBotAgent, requestAgent, type Agent } from '../bot.ts';
+import { LIMIT_TIER_HEADER, type LimitTier } from './access.ts';
 import { accountFor } from './account.ts';
 import { requestCaller } from './caller.ts';
 
@@ -25,8 +26,12 @@ import { requestCaller } from './caller.ts';
  * flags. `agent` and `agent_name` say what sent the request (requestAgent in
  * src/lib/bot.ts). `prerender` is true for a document request with `Sec-Purpose:
  * prefetch;prerender`, so its kind is `page` whether or not the visitor opens
- * the page, since the server cannot see activation. The line holds no raw
- * address, query string, cookie, auth header or user agent. A signed-in
+ * the page, since the server cannot see activation. `tier` is whose count a
+ * rate-limited call spent, `key`, `visitor` or `address`, read from the
+ * response's x-dfo-limit-tier header (src/lib/proxy/access), and null for a
+ * call nothing counted. The header is removed as the response head is
+ * written, so it reaches no client or cache. The line holds no raw address,
+ * query string, cookie, visitor id, auth header or user agent. A signed-in
  * user's request names no account here; see AccountLogEntry.
  */
 export type RequestKind = 'page' | 'api' | 'rsc' | 'prefetch';
@@ -45,11 +50,14 @@ export type RequestLogEntry = {
     agent: Agent;
     agent_name: string | null;
     prerender: boolean;
+    tier: LimitTier | null;
 };
+
+type ResponseMetadata = { status: number; finished: boolean; tier?: LimitTier | null };
 
 type RequestMetadata = { path: string; method: string; headers: Headers };
 
-// Framework files and images and fonts by extension.
+// Framework files and images and fonts by extension, outside API_PATHS.
 const STATIC_ASSET = /^\/_next\/|\.(?:png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$/i;
 
 // The machine-facing paths: the site's own /api endpoints and the platform
@@ -62,8 +70,12 @@ const isApiPath = (path: string): boolean =>
 
 const isMcpPath = (path: string): boolean => path === '/mcp' || path.startsWith('/mcp/');
 
-/** True for a static asset, which is not logged. */
-export const isStaticAsset = (path: string): boolean => STATIC_ASSET.test(path);
+/**
+ * True for a static asset, which is not logged: a framework file, image or
+ * font a page loads. A path under API_PATHS is a machine call that a limit
+ * can count, so it is logged whatever its ending.
+ */
+export const isStaticAsset = (path: string): boolean => !isApiPath(path) && STATIC_ASSET.test(path);
 
 /** The tokens of a `Sec-Purpose` or `Purpose` header, such as `prefetch;prerender`. */
 const purposeOf = (headers: Headers): string[] =>
@@ -105,7 +117,7 @@ const classifyRequest = (
 export const requestLogEntry = (
     { path, method, headers }: RequestMetadata,
     caller: string | undefined,
-    { status, finished }: { status: number; finished: boolean },
+    { status, finished, tier = null }: ResponseMetadata,
 ): RequestLogEntry => {
     const { kind, prerender } = classifyRequest(path, headers);
     const { agent, agentName } = requestAgent(headers, { mcp: isMcpPath(path) });
@@ -124,7 +136,108 @@ export const requestLogEntry = (
         agent,
         agent_name: agentName,
         prerender,
+        tier,
     };
+};
+
+const LIMIT_TIERS: ReadonlySet<string> = new Set<LimitTier>(['key', 'visitor', 'address']);
+
+const isLimitTier = (value: unknown): value is LimitTier =>
+    typeof value === 'string' && LIMIT_TIERS.has(value);
+
+// The single LimitTier among a header's values, or null.
+const singleTier = (value: unknown): LimitTier | null => {
+    const values = [value].flat();
+
+    return values.length === 1 && isLimitTier(values[0]) ? values[0] : null;
+};
+
+// The tier each wrapped response's x-dfo-limit-tier header named when its
+// head was written, after the header was removed.
+const writtenTiers = new WeakMap<ServerResponse, LimitTier | null>();
+
+/**
+ * The LimitTier a response's x-dfo-limit-tier header named, or null. Next
+ * copies a route handler's headers with NodeNextResponse.appendHeader, which
+ * stores each as an array, so a header holding exactly one tier counts. Once
+ * `stripTierHeader`'s wrap has written the head, the tier comes from
+ * writtenTiers.
+ */
+const tierOf = (response: ServerResponse): LimitTier | null =>
+    writtenTiers.has(response)
+        ? (writtenTiers.get(response) ?? null)
+        : singleTier(response.getHeader(LIMIT_TIER_HEADER));
+
+const isTierHeader = (name: unknown): boolean =>
+    typeof name === 'string' && name.toLowerCase() === LIMIT_TIER_HEADER;
+
+/**
+ * `headers` as passed to `writeHead`, without x-dfo-limit-tier, and the value
+ * it held there: an object, or a flat array of names and values.
+ */
+const withoutTier = (headers: unknown): { headers: unknown; value: unknown } => {
+    if (Array.isArray(headers)) {
+        const kept: unknown[] = [];
+        let value: unknown;
+
+        for (let index = 0; index < headers.length; index += 2) {
+            if (isTierHeader(headers[index])) {
+                value = headers[index + 1];
+            } else {
+                kept.push(headers[index], headers[index + 1]);
+            }
+        }
+
+        return { headers: kept, value };
+    }
+
+    if (typeof headers === 'object' && headers !== null) {
+        const entries = Object.entries(headers);
+        const tier = entries.find(([name]) => isTierHeader(name));
+
+        return tier
+            ? {
+                  headers: Object.fromEntries(entries.filter(([name]) => !isTierHeader(name))),
+                  value: tier[1],
+              }
+            : { headers, value: undefined };
+    }
+
+    return { headers, value: undefined };
+};
+
+/**
+ * Keep x-dfo-limit-tier off the wire. Route handlers set it so this log can
+ * read the tier, and a client or shared cache must not see it. Node's
+ * implicit-header path (`write`, `end`) calls `writeHead` as well, so the
+ * wrap covers every response. The header can be set before `writeHead`, as
+ * Next's sendResponse does, or passed in its headers argument, which wins
+ * over a header already set.
+ */
+const stripTierHeader = (response: ServerResponse): void => {
+    const writeHead = response.writeHead;
+
+    // writeHead's overloads take (status, headers) or (status, message,
+    // headers); a typed wrapper cannot name both, so it passes args through.
+    response.writeHead = ((...args: unknown[]) => {
+        let tier = singleTier(response.getHeader(LIMIT_TIER_HEADER));
+
+        response.removeHeader(LIMIT_TIER_HEADER);
+        const last = args.length - 1;
+
+        if (last >= 1 && typeof args[last] !== 'string') {
+            const stripped = withoutTier(args[last]);
+
+            if (stripped.value !== undefined) {
+                tier = singleTier(stripped.value);
+                args[last] = stripped.headers;
+            }
+        }
+
+        writtenTiers.set(response, tier);
+
+        return Reflect.apply(writeHead, response, args) as ServerResponse;
+    }) as ServerResponse['writeHead'];
 };
 
 // The path of each logged request's target as it arrived, kept because
@@ -202,10 +315,7 @@ const requestHeaders = (request: IncomingMessage): Headers => {
  * are read or its caller digest computed. Never throws: a logging fault must
  * not fail the request.
  */
-export const logRequest = (
-    request: IncomingMessage,
-    response: { status: number; finished: boolean },
-): void => {
+export const logRequest = (request: IncomingMessage, response: ResponseMetadata): void => {
     try {
         const path = arrivedPaths.get(request) ?? targetPath(request.url ?? '/');
 
@@ -314,7 +424,8 @@ const httpPair = (
         : undefined;
 
 // The close listener logs every request that arrived after registration,
-// apart from a static asset, which gets no listener and no entry.
+// apart from a static asset, which gets no listener and no entry. Every
+// response has x-dfo-limit-tier stripped, a static asset's included.
 // ServerResponse emits `close` after `finish`, so one listener covers a
 // response that ends and one that does not.
 const onRequestStart = (message: unknown): void => {
@@ -327,6 +438,8 @@ const onRequestStart = (message: unknown): void => {
     const { request, response } = pair;
     const path = targetPath(request.url ?? '/');
 
+    stripTierHeader(response);
+
     if (isStaticAsset(path)) {
         return;
     }
@@ -336,6 +449,7 @@ const onRequestStart = (message: unknown): void => {
         logRequest(request, {
             status: response.headersSent ? response.statusCode : CLIENT_CLOSED_REQUEST,
             finished: response.writableFinished,
+            tier: tierOf(response),
         });
     });
 };
@@ -349,7 +463,11 @@ const onResponseFinish = (message: unknown): void => {
     const pair = httpPair(message);
 
     if (pair && !arrivedPaths.has(pair.request)) {
-        logRequest(pair.request, { status: pair.response.statusCode, finished: true });
+        logRequest(pair.request, {
+            status: pair.response.statusCode,
+            finished: true,
+            tier: tierOf(pair.response),
+        });
     }
 };
 

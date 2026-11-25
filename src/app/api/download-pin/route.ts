@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 
+import { LIMIT_TIER_HEADER } from '@/lib/proxy/access';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp } from '@/lib/proxy/forward';
 import { problem, rateLimitedProblem, requestInvalidProblem } from '@/lib/proxy/problem';
@@ -25,15 +26,23 @@ const CAPTURE_POLL_DEADLINE_MS = 50_000;
 // 413 as soon as the count passes it, chunked or not, and a malformed one
 // fails parseDownloadPin. A pin the door refuses, or cannot take right now, is
 // logged with the door's detail and left unpinned for a later download to
-// retry. Every refusal is a problem document (src/lib/proxy/problem).
+// retry. Every refusal is a problem document (src/lib/proxy/problem). Every
+// answer names the address's count in x-dfo-limit-tier, which the request log
+// (src/lib/proxy/requestLog) reads and removes.
 export const POST = async (req: NextRequest) => {
     // A pin can mint, so it has its own small allowance.
     const verdict = await hit('pin', clientIp(req));
+    const response = verdict.allowed
+        ? await pin(req)
+        : rateLimitedProblem(verdict, rateHeaders(verdict));
 
-    if (!verdict.allowed) {
-        return rateLimitedProblem(verdict, rateHeaders(verdict));
-    }
+    response.headers.set(LIMIT_TIER_HEADER, 'address');
 
+    return response;
+};
+
+// The pin of a call the allowance admitted.
+const pin = async (req: NextRequest): Promise<Response> => {
     const text = await readBoundedText(req.body, MAX_DOWNLOAD_PIN_BODY).catch((error: unknown) => {
         // A client that hangs up mid-body, for one.
         console.error('download-pin: the body could not be read', {

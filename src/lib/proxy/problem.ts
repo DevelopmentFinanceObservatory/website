@@ -132,13 +132,16 @@ export const unauthorizedProblem = (): Response =>
  * A 401 `invalid_api_key` problem document: the call's API key is unknown,
  * disabled, expired or malformed. The call is not treated as anonymous.
  * No `WWW-Authenticate`, which would send a client looking for OAuth.
+ * `headers` are the rate headers and limit tier of a call that was counted
+ * before its key was found invalid.
  */
-export const invalidKeyProblem = (): Response =>
+export const invalidKeyProblem = (headers?: Record<string, string>): Response =>
     problem({
         status: 401,
         code: 'invalid_api_key',
         detail: 'The API key is not valid. Check the key, or leave it off to call without one.',
         retryable: false,
+        headers,
     });
 
 /** A 400 `request_invalid` problem document: two different keys on one call. */
@@ -147,23 +150,58 @@ export const conflictingKeysProblem = (): Response =>
         'The Authorization bearer and X-API-Key carry different API keys. Send one key.',
     );
 
-/**
- * A 429 `rate_limited` problem document; `headers` carry the rate headers.
- * `scope` says whose allowance is spent: the caller's address or, for a
- * call with an API key, its account.
- */
-export const rateLimitedProblem = (
+// A 429 `rate_limited` problem document whose detail ends with `more`.
+const limitedProblem = (
     { limit, reset }: { limit: number; reset: number },
     headers: Record<string, string>,
-    scope: 'address' | 'account' = 'address',
+    scope: RateScope,
+    more = '',
 ): Response =>
     problem({
         status: 429,
         code: 'rate_limited',
-        detail: `Too many requests: ${limit} per window per ${scope}. Try again in ${reset}s.`,
+        detail: `Too many requests: ${limit} per window per ${scope}. Try again in ${reset}s.${more}`,
         retryable: true,
         headers: { ...headers, 'Retry-After': String(reset) },
     });
+
+/** Whose per-window allowance a 429 `rate_limited` says is spent. */
+export type RateScope = 'visitor' | 'address' | 'account';
+
+/**
+ * A 429 `rate_limited` problem document; `headers` carry the rate headers.
+ * `scope` says whose allowance is spent: the visitor's (the site's visitor
+ * token), the caller's address or, for a call with an API key, its account.
+ */
+export const rateLimitedProblem = (
+    verdict: { limit: number; reset: number },
+    headers: Record<string, string>,
+    scope: RateScope = 'address',
+): Response => limitedProblem(verdict, headers, scope);
+
+/** The docs page on API keys, which a cookieless refusal links. */
+export const API_KEYS_DOCS_PATH = '/docs/build/api-keys';
+
+const count = new Intl.NumberFormat('en-GB');
+
+/**
+ * The 429 `rate_limited` problem document of an anonymous call with no
+ * visitor token (src/lib/proxy/access): rateLimitedProblem's document, whose
+ * detail goes on to say where to get a free API key, what one gives
+ * (`keyed.limit` calls per window and `keyed.dailyLimit` a day, the
+ * account's defaults), and links API_KEYS_DOCS_PATH.
+ */
+export const cookielessLimitedProblem = (
+    verdict: { limit: number; reset: number },
+    headers: Record<string, string>,
+    keyed: { limit: number; dailyLimit: number },
+): Response =>
+    limitedProblem(
+        verdict,
+        headers,
+        'address',
+        ` A free API key, made from the account menu once signed in, raises the limit to ${count.format(keyed.limit)} per window and ${count.format(keyed.dailyLimit)} calls a day: see ${API_KEYS_DOCS_PATH}.`,
+    );
 
 /**
  * A 429 `allowance_exhausted` problem document: a daily count of `limit` API
@@ -185,6 +223,40 @@ export const dailyQuotaProblem = (
             scope === 'account'
                 ? `This account's daily quota of ${limit} API calls, shared by all its keys, is used up. It resets at 00:00 UTC, in ${reset}s.`
                 : `This API key's daily cap of ${limit} calls is used up. It resets at 00:00 UTC, in ${reset}s.`,
+        retryable: false,
+        headers: { ...headers, 'Retry-After': String(reset) },
+    });
+
+// Whose daily allowance an anonymous call spent, as anonymousDailyProblem says it.
+const ANONYMOUS_DAILY_SCOPES = {
+    visitor: "This visitor's daily allowance of",
+    cookieless: "This address's daily allowance, for calls without the site's visitor cookie, of",
+    address: "This address's daily allowance, shared by everyone calling from it, of",
+} as const;
+
+/**
+ * The 429 `allowance_exhausted` problem document of an anonymous call over
+ * a daily allowance of `limit` calls (src/lib/proxy/access): the visitor's,
+ * the address's cookieless one, or the address's ceiling (`scope`). Not
+ * retryable, as dailyQuotaProblem's. With `keyed`, while keys are on, the
+ * detail goes on to say where to get a free API key and the daily quota one
+ * gives (`keyed.dailyLimit`, the account's default), and links
+ * API_KEYS_DOCS_PATH.
+ */
+export const anonymousDailyProblem = (
+    { limit, reset }: { limit: number; reset: number },
+    headers: Record<string, string>,
+    scope: keyof typeof ANONYMOUS_DAILY_SCOPES,
+    keyed?: { dailyLimit: number },
+): Response =>
+    problem({
+        status: 429,
+        code: 'allowance_exhausted',
+        detail: `${ANONYMOUS_DAILY_SCOPES[scope]} ${count.format(limit)} calls without an API key is used up. It resets at 00:00 UTC, in ${reset}s.${
+            keyed
+                ? ` A free API key, made from the account menu once signed in, gives ${count.format(keyed.dailyLimit)} calls a day: see ${API_KEYS_DOCS_PATH}.`
+                : ''
+        }`,
         retryable: false,
         headers: { ...headers, 'Retry-After': String(reset) },
     });

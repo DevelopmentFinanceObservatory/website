@@ -2,9 +2,8 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 
-import { clientIp } from '@/lib/proxy/forward';
-import { rateHeaders, type RateVerdict } from '@/lib/proxy/rateHeaders';
-import { hit } from '@/lib/proxy/rateLimit';
+import { limitHeaders, type LimitScope } from '@/lib/proxy/access';
+import { countAnonymous } from '@/lib/proxy/forward';
 import { datasetsFetch } from '@/lib/search/datasetsFetch';
 import { artifactHref } from '@/lib/search/searchClient';
 import { storedDownload, type VersionLinkDocument } from '@/lib/search/versionLink';
@@ -21,24 +20,27 @@ import { searchApiBase } from '@/lib/searchApi';
 const VERSION_READ_TIMEOUT_MS = 20_000;
 
 /**
- * Counts the call against the proxy's `api` allowance, which the site's
- * /api routes share outside the Datasets API's routes below
- * /api/v1/datasets/. The X-RateLimit-* headers go
- * on the response whenever the call was counted, with `Retry-After` added
- * when the call is over it.
+ * Counts the call on the proxy's `api` surface as any anonymous site call
+ * is counted, per visitor or per address (countAnonymous in
+ * src/lib/proxy/forward), off the daily allowances. `refusal` is the 429
+ * problem document when the call is over its allowance, and `scope` whose
+ * count refused it, the visitor's or the address's. `headers` are the
+ * X-RateLimit-* set and the limit tier, with `Retry-After` added on a
+ * refusal.
  */
 export const downloadAllowance = async (
     req: NextRequest,
-): Promise<{ allowed: boolean; verdict: RateVerdict; headers: Record<string, string> }> => {
-    const verdict = await hit('api', clientIp(req));
+): Promise<{ refusal?: Response; scope?: LimitScope; headers: Record<string, string> }> => {
+    const access = await countAnonymous(req, 'api', { daily: false });
+    const headers = limitHeaders(access);
 
-    return {
-        allowed: verdict.allowed,
-        verdict,
-        headers: verdict.allowed
-            ? rateHeaders(verdict)
-            : { ...rateHeaders(verdict), 'Retry-After': String(verdict.reset) },
-    };
+    return access.refusal
+        ? {
+              refusal: access.refusal,
+              scope: access.scope,
+              headers: { ...headers, 'Retry-After': String(access.verdict?.reset ?? 0) },
+          }
+        : { headers };
 };
 
 /**
