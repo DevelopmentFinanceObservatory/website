@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 
 import styles from './SourceSearch.module.scss';
 
+import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import { escapeAction, stepActive } from '@/lib/graphExplorer/search';
 import type { PublisherOption } from '@/lib/sources/search';
@@ -27,7 +28,7 @@ type SourceSearchProps = {
  * The Sources page's search box: a field on the dark ground with a list of
  * publishers under it while the field has focus. Typing narrows the list to
  * the publishers whose name holds the text. Picking a row ticks the
- * publisher, and picking it again unticks it; the list stays open for the
+ * publisher, and picking it again unticks it. The list stays open for the
  * next pick, and the field's placeholder counts the picks. A cross at the
  * field's right clears the text and the picks. Every row is reachable by
  * keyboard (arrows move, Enter picks, Escape closes the list, then clears
@@ -54,16 +55,25 @@ const SourceSearch = ({
     const shown = open && options.length > 0;
     const fieldRef = useRef<HTMLLabelElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    // Where the list sits: under the field, as wide as it. Measured as the
-    // list opens and again as the page scrolls or resizes while it is open.
+    // Where the list sits, under the field and as wide as it.
     const [place, setPlace] = useState<{ top: number; left: number; width: number } | null>(null);
 
+    // Keeps the current place when the field has not moved, so a frame
+    // without movement does not re-render.
     const measure = useCallback(() => {
         const rect = fieldRef.current?.getBoundingClientRect();
 
-        if (rect) {
-            setPlace({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+        if (!rect) {
+            return;
         }
+
+        const next = { top: rect.bottom + 2, left: rect.left, width: rect.width };
+
+        setPlace((current) =>
+            current?.top === next.top && current.left === next.left && current.width === next.width
+                ? current
+                : next,
+        );
     }, []);
 
     const openList = () => {
@@ -76,21 +86,19 @@ const SourceSearch = ({
             return;
         }
 
-        // The field's size moves the list, as the viewport narrows.
-        const resized = new ResizeObserver(measure);
+        // The list follows the field each frame while it shows. Scrolls,
+        // resizes and the controls' reveal entrance all move the field, and
+        // the entrance fires no event a listener could catch.
+        let frame = 0;
 
-        if (fieldRef.current) {
-            resized.observe(fieldRef.current);
-        }
-
-        window.addEventListener('scroll', measure, true);
-        window.addEventListener('resize', measure);
-
-        return () => {
-            resized.disconnect();
-            window.removeEventListener('scroll', measure, true);
-            window.removeEventListener('resize', measure);
+        const follow = () => {
+            measure();
+            frame = requestAnimationFrame(follow);
         };
+
+        frame = requestAnimationFrame(follow);
+
+        return () => cancelAnimationFrame(frame);
     }, [shown, measure]);
 
     const pick = (option: PublisherOption) => {
@@ -123,8 +131,8 @@ const SourceSearch = ({
             return;
         }
 
-        // Enter picks only a highlighted row: a pick toggles a filter, so it
-        // is never a guess at the first row.
+        // Enter picks only a highlighted row. A pick toggles a filter, so
+        // Enter leaves the first row alone when no row is highlighted.
         if (event.key === 'Enter') {
             const option = shown && active >= 0 ? options[active] : undefined;
 
@@ -197,21 +205,23 @@ const SourceSearch = ({
                     onKeyDown={onKeyDown}
                 />
                 {(value !== '' || selected.length > 0) && (
-                    <button
-                        type="button"
+                    <Button
+                        variant="plain"
+                        icon="closer"
                         className={styles.clear}
                         aria-label="Clear the search"
                         // Keeps focus in the field, so the list stays open after.
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => {
-                            onChange('');
+                            // The picks clear first. Their write pushes a history
+                            // entry, and the text's write then replaces it, so Back
+                            // restores the text together with the picks.
                             onClearSelected();
+                            onChange('');
                             setActive(-1);
                             inputRef.current?.focus();
                         }}
-                    >
-                        <Icon name="closer" className={styles.clearIcon} />
-                    </button>
+                    />
                 )}
             </label>
             {shown &&
@@ -224,9 +234,9 @@ const SourceSearch = ({
                         aria-multiselectable="true"
                         className={styles.list}
                         style={place}
-                        // Keeps focus in the field, so the blur does not close
-                        // the list first: a press on a row or on the list's own
-                        // scrollbar, which some browsers would focus.
+                        // Keeps focus in the field when a row or the list's own
+                        // scrollbar is pressed, which some browsers would focus,
+                        // so the blur does not close the list first.
                         onMouseDown={(event) => event.preventDefault()}
                     >
                         {options.map((option, index) => {

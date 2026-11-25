@@ -10,10 +10,9 @@
  * holds the text. The summary line reports how many sources are showing,
  * from how many publishers, and the chosen provenance.
  *
- * The Studio landing's data drawer links here with the filter chips' old
- * `?filter=` value (lib/sources/filters.ts): a Data Commons id, or the
- * dcid of a publisher the Observatory imports itself. The page reads that
- * as a provenance or a picked publisher, so those links keep working.
+ * The Studio landing's data drawer links here with `?publisher=`. The page
+ * also reads `?filter=`, the value the filter chips that came before the
+ * search box wrote, as a provenance or picked publishers.
  */
 
 import type { DataCommonsRef } from '../search/types.ts';
@@ -32,8 +31,16 @@ export type ProvenanceGroup = { id: Provenance; label: string; count: number };
 export type SourceFilters = { q: string; via: Provenance | null; publishers: readonly string[] };
 
 // Publisher names hold commas ("Central Statistics Office (CSO), Ireland"),
-// so the URL joins them with a bar.
+// so the URL joins them with a bar. Each name escapes `%` and `|` first, so a
+// name holding a bar survives, and a name with neither character serialises
+// as itself.
 const PUBLISHER_SEPARATOR = '|';
+
+const escapeName = (name: string): string =>
+    name.replace(/[%|]/g, (char) => (char === '%' ? '%25' : '%7C'));
+
+const unescapeName = (part: string): string =>
+    part.replace(/%(25|7C)/g, (_, code: string) => (code === '25' ? '%' : '|'));
 
 // Provenances in display order: the Observatory's own imports, then the
 // Data Commons.
@@ -48,8 +55,8 @@ const rank = (id: Provenance): number => {
 const collate = (a: string, b: string) => a.localeCompare(b, 'en');
 
 /** The card's publisher as the page names it: the publisher's label, or
- *  its dcid for a card without one. */
-export const publisherName = (card: Filterable): string => card.publisher ?? card.family;
+ *  its dcid for a card whose label is missing or empty. */
+export const publisherName = (card: Filterable): string => card.publisher || card.family;
 
 /** The chip's name for a provenance: "DFO" for the Observatory's own
  *  imports, else the Data Commons' own label. */
@@ -166,15 +173,22 @@ export type PublisherOption = { label: string; count: number };
  * most sources first and then by name. An empty query offers every
  * publisher. A row stands for a name, so the graph's two nodes for one
  * publisher make one row whose count is what picking it shows.
+ *
+ * The `picked` names come first, in their given order, whatever the query,
+ * so a reader can untick each one. A picked name with no cards here counts 0.
  */
-export const publisherOptions = (cards: readonly Filterable[], q: string): PublisherOption[] => {
+export const publisherOptions = (
+    cards: readonly Filterable[],
+    q: string,
+    picked: readonly string[] = [],
+): PublisherOption[] => {
     const needle = fold(q);
     const options = new Map<string, PublisherOption>();
 
     for (const card of cards) {
         const label = publisherName(card);
 
-        if (needle !== '' && !fold(label).includes(needle)) {
+        if (needle !== '' && !fold(label).includes(needle) && !picked.includes(label)) {
             continue;
         }
 
@@ -184,7 +198,12 @@ export const publisherOptions = (cards: readonly Filterable[], q: string): Publi
         options.set(label, option);
     }
 
-    return [...options.values()].sort((a, b) => b.count - a.count || collate(a.label, b.label));
+    const pickedRows = picked.map((label) => options.get(label) ?? { label, count: 0 });
+    const rest = [...options.values()]
+        .filter((option) => !picked.includes(option.label))
+        .sort((a, b) => b.count - a.count || collate(a.label, b.label));
+
+    return [...pickedRows, ...rest];
 };
 
 /** The picked publishers with `name` added, or removed when it is among
@@ -202,38 +221,47 @@ export const parseVia = (raw: string | null, cards: readonly Filterable[]): Prov
 export const parseQuery = (raw: string | null): string => raw ?? '';
 
 /** The `?publisher=` value as the publisher names the cards hold, each
- *  once, in the URL's order. */
+ *  once, in the URL's order. An empty name picks nothing. */
 export const parsePublishers = (raw: string | null, cards: readonly Filterable[]): string[] => {
     const known = new Set(cards.map(publisherName));
+    const names = (raw ?? '').split(PUBLISHER_SEPARATOR).map(unescapeName);
 
-    return [...new Set((raw ?? '').split(PUBLISHER_SEPARATOR))].filter((name) => known.has(name));
+    return [...new Set(names)].filter((name) => name !== '' && known.has(name));
 };
 
-/** The picked publishers as the `?publisher=` value, or null with none. */
+/** The picked publishers as the `?publisher=` value, or null with none.
+ *  The Studio landing's data drawer builds its links with it too. */
 export const serializePublishers = (publishers: readonly string[]): string | null =>
-    publishers.length > 0 ? publishers.join(PUBLISHER_SEPARATOR) : null;
+    publishers.length > 0 ? publishers.map(escapeName).join(PUBLISHER_SEPARATOR) : null;
 
-/** The drawer's `?filter=` link as the page's own filters: a Data Commons id
- *  is a provenance, and the dcid of a publisher the Observatory imports picks
- *  that publisher's own imports, the cards the drawer's row counts. Any other
- *  value is no filter. */
+/**
+ * A `?filter=` link, written by the filter chips that came before the search
+ * box, as the page's own filters. The chips joined their picks with commas.
+ * A lone Data Commons id is a provenance. Otherwise each id that is a
+ * publisher's dcid picks that publisher by name, with all its sources from
+ * every provenance, and a Data Commons id in the list is dropped, since the
+ * chips' union of picks has no equal among filters that intersect. A list
+ * with no known publisher is no filter.
+ */
 export const legacyFilter = (
     raw: string | null,
     cards: readonly Filterable[],
 ): Partial<SourceFilters> => {
-    if (!raw) {
-        return {};
-    }
-
-    const via = parseVia(raw, cards);
+    const ids = (raw ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+    const via = ids.length === 1 ? parseVia(ids[0]!, cards) : null;
 
     if (via) {
         return { via };
     }
 
-    const card = cards.find(
-        (candidate) => candidate.family === raw && candidate.dataCommons.id === 'dfo',
-    );
+    const publishers = [
+        ...new Set(
+            ids.flatMap((id) => cards.filter((card) => card.family === id).map(publisherName)),
+        ),
+    ];
 
-    return card ? { publishers: [publisherName(card)], via: 'dfo' } : {};
+    return publishers.length > 0 ? { publishers } : {};
 };

@@ -3,7 +3,6 @@
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 
-import SourceSearch from './SourceSearch';
 import styles from './Sources.module.scss';
 import { SOURCE_SWATCHES } from './sourcesData';
 
@@ -11,6 +10,7 @@ import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import FilterChips from '@/components/molecules/FilterChips/FilterChips';
 import PageFade from '@/components/molecules/PageFade/PageFade';
 import PageHero from '@/components/molecules/PageHero/PageHero';
+import SourceSearch from '@/components/organisms/SourceSearch/SourceSearch';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { useUrlParam } from '@/hooks/useUrlParam';
 import type { SourceCard } from '@/lib/sources/graph';
@@ -50,12 +50,12 @@ const serializeVia = (via: Provenance | null) => via;
  * offers the matching publishers to pick (`?publisher=`), any number of
  * them, so "World Bank" lists every World Bank source, the one the
  * Observatory imports itself alongside the ones that arrive via Google. The
- * chips (`?via=`) narrow by
- * provenance: the Observatory's own imports, or the Data Commons that
- * delivered the data. Each federated card's org line says which; a card
- * the Observatory imports itself carries no "via". With a filter on, the
- * summary line reports how many sources are showing and their split by
- * provenance.
+ * chips (`?via=`) narrow by provenance, meaning the Observatory's own
+ * imports or the Data Commons that delivered the data. Each federated
+ * card's org line names that Data Commons, and a card the Observatory
+ * imports itself carries no "via". With a filter on, the summary line
+ * reports how many sources are showing, from how many publishers when any
+ * are picked, and the chosen provenance.
  */
 const Sources = ({ sources }: { sources: SourceCard[] }) => {
     const sectionRef = useReveal<HTMLElement>();
@@ -67,9 +67,9 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
         color: SOURCE_SWATCHES[index % SOURCE_SWATCHES.length]!,
     }));
 
-    // The data drawer's `?filter=` link fills whichever filter it names,
-    // unless the URL carries that filter itself. Read through Next's params
-    // so the server render and the hydration agree.
+    // A `?filter=` link from the old source chips fills the filters it
+    // names, unless the URL carries that filter itself. Read through Next's
+    // params so the server render and the hydration agree.
     const params = useSearchParams();
     const legacy = useMemo(() => legacyFilter(params.get('filter'), sources), [params, sources]);
 
@@ -138,10 +138,12 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
     );
     const colorOf = (id: Provenance) => groups.find((group) => group.id === id)?.color;
     // The publisher list offers what the chosen provenance holds, so a row's
-    // count is what picking it shows.
+    // count is what picking it shows. The picks lead the list whatever the
+    // text and the chip, so each can be unticked.
     const offered = publisherOptions(
         via ? sources.filter((source) => source.dataCommons.id === via) : sources,
         q,
+        publishers,
     );
 
     return (

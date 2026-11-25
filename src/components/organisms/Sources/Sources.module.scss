@@ -107,7 +107,9 @@
     padding: rem(40) rem(20) rem(60);
     background-color: var(--color-white);
     animation: card-in 0.5s $ease-out both;
-    animation-delay: calc(var(--i, 0) * 0.06s);
+
+    // Capped, so a card far down a long grid waits at most 0.72 s.
+    animation-delay: calc(min(var(--i, 0), 12) * 0.06s);
     transition: background-color 0.25s ease;
 
     &:hover {

@@ -171,6 +171,26 @@ test('the search box offers the publishers whose name holds the query, most sour
     assert.deepEqual(publisherOptions([card('X', 'dc/s/None', null, BASE)], 'none'), [
         { label: 'dc/s/None', count: 1 },
     ]);
+    // An empty label names the publisher by its dcid, as a missing one does.
+    assert.deepEqual(publisherOptions([card('X', 'dc/s/Blank', '', BASE)], ''), [
+        { label: 'dc/s/Blank', count: 1 },
+    ]);
+});
+
+test('picked publishers lead the list whatever the query, counting 0 where the cards hold none', () => {
+    const google = cards.filter((c) => c.dataCommons.id === 'base');
+
+    // FAO picked, then the Google chip: FAO stays offered so it can be unticked.
+    assert.deepEqual(publisherOptions(google, 'f', ['FAO']), [{ label: 'FAO', count: 0 }]);
+    assert.deepEqual(publisherOptions(cards, 'alpha', ['Zeta', 'World Bank']), [
+        { label: 'Zeta', count: 1 },
+        { label: 'World Bank', count: 3 },
+        { label: 'Alpha', count: 2 },
+    ]);
+    assert.deepEqual(
+        publisherOptions(cards, '', ['OECD']).map((o) => o.label),
+        ['OECD', 'World Bank', 'Alpha', 'FAO', 'WFP', 'Zeta'],
+    );
 });
 
 test('two graph nodes with one publisher name make one row, counting both', () => {
@@ -203,6 +223,10 @@ test('the URL values parse to a known provenance, the query as typed, and known 
     ]);
     assert.deepEqual(parsePublishers(null, cards), []);
     assert.deepEqual(parsePublishers('', cards), []);
+    // A card with an empty label names its publisher by dcid, so no URL picks ''.
+    const blank = [...cards, card('Blank', 'dc/s/Blank', '', BASE)];
+    assert.deepEqual(parsePublishers(null, blank), []);
+    assert.deepEqual(parsePublishers('|OECD|', blank), ['OECD']);
 });
 
 test('picked publishers serialize bar-separated, since their names hold commas, and none as null', () => {
@@ -214,13 +238,39 @@ test('picked publishers serialize bar-separated, since their names hold commas, 
     assert.equal(serializePublishers([]), null);
 });
 
-test("the drawer's ?filter= link reads as a provenance or a picked publisher", () => {
-    assert.deepEqual(legacyFilter('un_system', cards), { via: 'un_system' });
-    // The drawer's row counts a publisher's own imports, and so does its link.
-    assert.deepEqual(legacyFilter('dc/s/WorldBank', cards), {
-        publishers: ['World Bank'],
-        via: 'dfo',
-    });
-    assert.deepEqual(legacyFilter('dc/s/Nobody', cards), {});
-    assert.deepEqual(legacyFilter(null, cards), {});
+test('a publisher name holding a bar or a percent sign survives the URL', () => {
+    const named = ['A | B', '100% C', 'D %7C E', 'World Bank'].map((name) =>
+        card(name, `dc/s/${name}`, name, BASE),
+    );
+
+    for (const [picked, value] of [
+        [['A | B'], 'A %7C B'],
+        [['100% C', 'World Bank'], '100%25 C|World Bank'],
+        [['D %7C E'], 'D %257C E'],
+    ] as const) {
+        assert.equal(serializePublishers(picked), value);
+        assert.deepEqual(parsePublishers(value, named), picked);
+    }
+
+    // A link written before names were escaped reads as it did.
+    assert.deepEqual(parsePublishers('World Bank|OECD', cards), ['World Bank', 'OECD']);
+});
+
+test('an old ?filter= link reads as a provenance or picked publishers', () => {
+    for (const [raw, expected] of [
+        ['un_system', { via: 'un_system' }],
+        // A publisher's dcid picks the publisher, with its sources from every
+        // provenance.
+        ['dc/s/WorldBank', { publishers: ['World Bank'] }],
+        ['dc/s/WorldBank,dc/s/OECD', { publishers: ['World Bank', 'OECD'] }],
+        // A Data Commons id beside a publisher is dropped.
+        ['dc/s/WorldBank,base', { publishers: ['World Bank'] }],
+        ['base,dc/s/Alpha', { publishers: ['Alpha'] }],
+        ['base,un_system', {}],
+        ['dc/s/Nobody', {}],
+        ['', {}],
+        [null, {}],
+    ] as const) {
+        assert.deepEqual(legacyFilter(raw, cards), expected, String(raw));
+    }
 });

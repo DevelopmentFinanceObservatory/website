@@ -3,10 +3,12 @@
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { urlAfterWrite } from './urlAfterWrite';
+
 type UrlParamOptions = {
-    // How a write enters the history: 'replace' (the default) rewrites the
-    // current entry, as suits text typed into a field; 'push' adds one, so
-    // a chip picked by hand can be undone with Back.
+    // How a write enters the history. 'replace' (the default) rewrites the
+    // current entry, which suits text typed into a field. 'push' adds an
+    // entry, so a chip picked by hand can be undone with Back.
     history?: 'replace' | 'push';
 };
 
@@ -59,20 +61,15 @@ export const useUrlParam = <T>(
         (next: T) => {
             setValue(next);
 
-            const url = new URL(window.location.href);
             const serialized = serialize(next);
-
-            if (serialized) {
-                url.searchParams.set(key, serialized);
-            } else {
-                url.searchParams.delete(key);
-            }
 
             written.current = { raw: serialized || null };
 
-            // An unchanged URL takes no entry, so Back never lands where it
-            // already is.
-            if (url.href === window.location.href) {
+            // An unchanged param takes no entry, so Back never lands where
+            // it already is.
+            const url = urlAfterWrite(window.location.href, key, serialized);
+
+            if (!url) {
                 return;
             }
 

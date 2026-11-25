@@ -6,7 +6,7 @@
     width: 100%;
 }
 
-// The field on the dark ground: a shade darker than the hero, with a thin
+// The field on the dark ground is a shade darker than the hero, with a thin
 // lighter edge that turns light while the list is open.
 .field {
     @include flex(row, flex-start, center);
@@ -23,10 +23,12 @@
     &:focus-within {
         border-color: var(--color-stone-light);
     }
-}
 
-.fieldOpen {
-    border-color: var(--color-bg);
+    // The list is open only while the field has focus, so this rule comes
+    // after :focus-within, at the same specificity, to win over it.
+    &.fieldOpen {
+        border-color: var(--color-bg);
+    }
 }
 
 .icon {
@@ -56,38 +58,39 @@
     }
 }
 
-// The cross that clears the field, at its right while it holds text.
-.clear {
-    @include flex(row, center, center);
+// The cross that clears the field, at its right while it holds text or
+// picks. Its selector outranks the Button atom's layout and hover rules.
+.search .field .clear {
+    --plain-color: var(--color-stone-light);
 
     flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
     width: rem(24);
     height: rem(24);
-    padding: 0;
     margin-right: rem(-4);
-    color: var(--color-stone-light);
-    cursor: pointer;
-    background: none;
-    border: 0;
     border-radius: rem(4);
-    transition: color 0.2s ease;
 
-    &:hover,
     &:focus-visible {
-        color: var(--color-bg);
+        --plain-color: var(--color-bg);
     }
-}
 
-.clearIcon {
-    width: rem(12);
-    height: rem(12);
+    // The cross brightens on hover in place of the plain variant's dim.
+
+    @media (hover: hover) {
+        &:hover {
+            --plain-color: var(--color-bg);
+
+            opacity: 1;
+        }
+    }
 }
 
 // The publishers under the field, over whatever follows the hero. The
 // component sets top, left and width from the field's place on screen.
 .list {
     position: fixed;
-    z-index: 20;
+    z-index: $z-header + 2; // over the feedback widget ($z-header + 1) and the footer
     max-height: rem(300);
     padding: 0;
     margin: 0;
