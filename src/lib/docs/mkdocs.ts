@@ -185,12 +185,7 @@ export const normaliseMkdocs = (source: string): string => {
 
                 const [body, after] = bodyAfter(lines, cursor + 1, pad.length);
 
-                run.push(
-                    `${pad}::tab{label="${next[2]}"}`,
-                    '',
-                    ...body.map((entry) => pad + entry),
-                    '',
-                );
+                run.push(`${pad}::tab{label="${next[2]}"}`, '', ...body.map((entry) => pad + entry), '');
                 cursor = after;
 
                 while (cursor < lines.length && lines[cursor]!.trim() === '') {

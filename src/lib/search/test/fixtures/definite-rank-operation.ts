@@ -16,29 +16,29 @@ const [sourcePart] = source.parts;
 const query = 'Top 5 donors of ODA for malaria control to Kenya since 2015';
 
 export const definiteRankOperation: unknown = {
-    schema_version: source.schema_version,
-    kind: 'resolution',
-    query_echo: {
-        ...source.query_echo,
-        raw_query: query,
-        normalized_query: query,
-    },
-    diagnostics: source.diagnostics,
-    parts: [
+  "schema_version": source.schema_version,
+  "kind": "resolution",
+  "query_echo": {
+    ...source.query_echo,
+    "raw_query": query,
+    "normalized_query": query
+  },
+  "diagnostics": source.diagnostics,
+  "parts": [
+    {
+      "variable_text": sourcePart.variable_text,
+      "warnings": [],
+      "restatement": sourcePart.restatement,
+      "operations": [
         {
-            variable_text: sourcePart.variable_text,
-            warnings: [],
-            restatement: sourcePart.restatement,
-            operations: [
-                {
-                    verb: 'rank',
-                    phrase: 'top 5 donors',
-                    over: 'origin',
-                },
-            ],
-            status: 'definite',
-            spec: sourcePart.spec,
-        },
-    ],
-    status: 'definite',
+          "verb": "rank",
+          "phrase": "top 5 donors",
+          "over": "origin"
+        }
+      ],
+      "status": "definite",
+      "spec": sourcePart.spec
+    }
+  ],
+  "status": "definite"
 };

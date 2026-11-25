@@ -8,29 +8,29 @@
  */
 
 export const catalogueKenya: unknown = {
-    schema_version: 1,
-    kind: 'catalogue',
-    scope: {
-        place: {
-            ref: 'country/KEN',
-            label: 'Kenya',
-        },
-    },
-    query_echo: {
-        entry_path: 'raw_text',
-        raw_query: 'What data do you have on Kenya?',
-        normalized_query: 'What data do you have on Kenya?',
-        extract_skipped: false,
-    },
-    diagnostics: {
-        engine_build: '0000000000000000000000000000000000000000',
-        trace_id: '00000000000000000000000000000000',
-        warnings: [],
-        timing_ms: {
-            total: 903,
-            by_step: {
-                extract: 760,
-            },
-        },
-    },
+  "schema_version": 1,
+  "kind": "catalogue",
+  "scope": {
+    "place": {
+      "ref": "country/KEN",
+      "label": "Kenya"
+    }
+  },
+  "query_echo": {
+    "entry_path": "raw_text",
+    "raw_query": "What data do you have on Kenya?",
+    "normalized_query": "What data do you have on Kenya?",
+    "extract_skipped": false
+  },
+  "diagnostics": {
+    "engine_build": "0000000000000000000000000000000000000000",
+    "trace_id": "00000000000000000000000000000000",
+    "warnings": [],
+    "timing_ms": {
+      "total": 903,
+      "by_step": {
+        "extract": 760
+      }
+    }
+  }
 };

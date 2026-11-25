@@ -12,147 +12,151 @@
  */
 
 export const worldBankAmbiguous: unknown = {
-    schema_version: 1,
-    query_echo: {
-        entry_path: 'raw_text',
-        raw_query: 'ODA from the World Bank',
-        normalized_query: 'ODA from the World Bank',
-        extract_skipped: false,
-    },
-    diagnostics: {
-        engine_build: '0000000000000000000000000000000000000000',
-        trace_id: '00000000000000000000000000000000',
-        warnings: [],
-        timing_ms: {
-            total: 2140,
-        },
-    },
-    kind: 'resolution',
-    parts: [
+  "schema_version": 1,
+  "query_echo": {
+    "entry_path": "raw_text",
+    "raw_query": "ODA from the World Bank",
+    "normalized_query": "ODA from the World Bank",
+    "extract_skipped": false
+  },
+  "diagnostics": {
+    "engine_build": "0000000000000000000000000000000000000000",
+    "trace_id": "00000000000000000000000000000000",
+    "warnings": [],
+    "timing_ms": {
+      "total": 2140
+    }
+  },
+  "kind": "resolution",
+  "parts": [
+    {
+      "variable_text": "ODA",
+      "warnings": [],
+      "rendered_sentence": "\"World Bank\" matches more than one entity: \"International Bank for Reconstruction and Development\" and \"International Development Association\". Be more specific.",
+      "sentence_plan": [
         {
-            variable_text: 'ODA',
-            warnings: [],
-            rendered_sentence:
-                '"World Bank" matches more than one entity: "International Bank for Reconstruction and Development" and "International Development Association". Be more specific.',
-            sentence_plan: [
-                {
-                    kind: 'text',
-                    text: '"',
-                    entity_refs: [],
-                },
-                {
-                    kind: 'slot',
-                    text: 'World Bank',
-                    role: 'origin',
-                    entity_refs: [],
-                },
-                {
-                    kind: 'text',
-                    text: '" matches more than one entity: "International Bank for Reconstruction and Development" and "International Development Association". Be more specific.',
-                    entity_refs: [],
-                },
+          "kind": "text",
+          "text": "\"",
+          "entity_refs": []
+        },
+        {
+          "kind": "slot",
+          "text": "World Bank",
+          "role": "origin",
+          "entity_refs": []
+        },
+        {
+          "kind": "text",
+          "text": "\" matches more than one entity: \"International Bank for Reconstruction and Development\" and \"International Development Association\". Be more specific.",
+          "entity_refs": []
+        }
+      ],
+      "restatement": {
+        "variable_text": "ODA",
+        "entities": [
+          {
+            "text": "World Bank",
+            "role_text": "from"
+          }
+        ],
+        "operations": []
+      },
+      "operations": [],
+      "status": "no_data",
+      "no_data": {
+        "reason": "entity_ambiguous",
+        "category": "unresolved",
+        "entity_terms": [
+          "World Bank"
+        ],
+        "ambiguous_entities": [
+          {
+            "text": "World Bank",
+            "candidates": [
+              {
+                "ref": "InternationalBankForReconstructionAndDevelopment",
+                "label": "International Bank for Reconstruction and Development",
+                "kind": "organisation"
+              },
+              {
+                "ref": "InternationalDevelopmentAssociation",
+                "label": "International Development Association",
+                "kind": "organisation"
+              }
+            ]
+          }
+        ],
+        "unbound_qualifiers": [],
+        "options": [
+          {
+            "mentions": [
+              "World Bank"
             ],
-            restatement: {
-                variable_text: 'ODA',
-                entities: [
+            "label": "International Bank for Reconstruction and Development",
+            "data_query": {
+              "kind": "parsed",
+              "parts": [
+                {
+                  "variable_text": "ODA",
+                  "entities": [
                     {
-                        text: 'World Bank',
-                        role_text: 'from',
-                    },
-                ],
-                operations: [],
-            },
-            operations: [],
-            status: 'no_data',
-            no_data: {
-                reason: 'entity_ambiguous',
-                category: 'unresolved',
-                entity_terms: ['World Bank'],
-                ambiguous_entities: [
+                      "text": "World Bank",
+                      "role_text": "from",
+                      "dcid": "InternationalBankForReconstructionAndDevelopment"
+                    }
+                  ],
+                  "operations": []
+                }
+              ]
+            }
+          },
+          {
+            "mentions": [
+              "World Bank"
+            ],
+            "label": "International Development Association",
+            "data_query": {
+              "kind": "parsed",
+              "parts": [
+                {
+                  "variable_text": "ODA",
+                  "entities": [
                     {
-                        text: 'World Bank',
-                        candidates: [
-                            {
-                                ref: 'InternationalBankForReconstructionAndDevelopment',
-                                label: 'International Bank for Reconstruction and Development',
-                                kind: 'organisation',
-                            },
-                            {
-                                ref: 'InternationalDevelopmentAssociation',
-                                label: 'International Development Association',
-                                kind: 'organisation',
-                            },
-                        ],
-                    },
-                ],
-                unbound_qualifiers: [],
-                options: [
-                    {
-                        mentions: ['World Bank'],
-                        label: 'International Bank for Reconstruction and Development',
-                        data_query: {
-                            kind: 'parsed',
-                            parts: [
-                                {
-                                    variable_text: 'ODA',
-                                    entities: [
-                                        {
-                                            text: 'World Bank',
-                                            role_text: 'from',
-                                            dcid: 'InternationalBankForReconstructionAndDevelopment',
-                                        },
-                                    ],
-                                    operations: [],
-                                },
-                            ],
-                        },
-                    },
-                    {
-                        mentions: ['World Bank'],
-                        label: 'International Development Association',
-                        data_query: {
-                            kind: 'parsed',
-                            parts: [
-                                {
-                                    variable_text: 'ODA',
-                                    entities: [
-                                        {
-                                            text: 'World Bank',
-                                            role_text: 'from',
-                                            dcid: 'InternationalDevelopmentAssociation',
-                                        },
-                                    ],
-                                    operations: [],
-                                },
-                            ],
-                        },
-                    },
-                ],
-            },
-        },
-    ],
-    rendered_sentence:
-        '"World Bank" matches more than one entity: "International Bank for Reconstruction and Development" and "International Development Association". Be more specific.',
-    sentence_plan: [
-        {
-            kind: 'text',
-            text: '"',
-            entity_refs: [],
-            part_index: 0,
-        },
-        {
-            kind: 'slot',
-            text: 'World Bank',
-            role: 'origin',
-            entity_refs: [],
-            part_index: 0,
-        },
-        {
-            kind: 'text',
-            text: '" matches more than one entity: "International Bank for Reconstruction and Development" and "International Development Association". Be more specific.',
-            entity_refs: [],
-            part_index: 0,
-        },
-    ],
-    status: 'no_data',
+                      "text": "World Bank",
+                      "role_text": "from",
+                      "dcid": "InternationalDevelopmentAssociation"
+                    }
+                  ],
+                  "operations": []
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "rendered_sentence": "\"World Bank\" matches more than one entity: \"International Bank for Reconstruction and Development\" and \"International Development Association\". Be more specific.",
+  "sentence_plan": [
+    {
+      "kind": "text",
+      "text": "\"",
+      "entity_refs": [],
+      "part_index": 0
+    },
+    {
+      "kind": "slot",
+      "text": "World Bank",
+      "role": "origin",
+      "entity_refs": [],
+      "part_index": 0
+    },
+    {
+      "kind": "text",
+      "text": "\" matches more than one entity: \"International Bank for Reconstruction and Development\" and \"International Development Association\". Be more specific.",
+      "entity_refs": [],
+      "part_index": 0
+    }
+  ],
+  "status": "no_data"
 };

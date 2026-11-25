@@ -23,9 +23,6 @@ dist/
 # misc
 .DS_Store
 *.pem
-
-# the local mail catcher's certificate and key (just mail-cert)
-/.mailpit/
 npm-debug.log*
 
 /.claude/*
