@@ -10,8 +10,10 @@
  * daily quota, which every key of the account spends (docs/design/api-keys.md,
  * "The proxy check"). Each count is taken only once the one before admits the
  * call, so a call the key's cap refuses leaves the account's daily quota
- * untouched, and the account's other keys keep it. That call has still spent
- * one on the account's per-minute window. Keys are honoured on the 'api' and
+ * untouched, and the account's other keys keep it. A call the account's quota
+ * refuses gives its hit on the key's cap back, so the key is not spent by
+ * calls that never ran. Either call has still spent one on the account's
+ * per-minute window. Keys are honoured on the 'api' and
  * 'datasets' surfaces (`honorsKeys`). Every key carries a tag signed by a
  * server secret (src/lib/auth/keyTag), checked first, so a made-up key costs
  * no read and no count:
@@ -79,6 +81,8 @@ export type AccessDeps = {
     // Count a call on a daily counter (accountDailyCounterKey,
     // keyDailyCounterKey) against `limit`.
     hitDaily: (counterKey: string, limit: number) => Promise<RateVerdict>;
+    // Give back one hit on a daily counter, for a call a later count refused.
+    refundDaily: (counterKey: string) => Promise<void>;
     // The account's limit when it has none of its own.
     defaultLimit: number;
     // An account's daily quota when it has none of its own.
@@ -166,8 +170,10 @@ export const decideAccess = async (
             outcome: 'limited',
         });
 
+        const capKey = keyDailyCounterKey(key.keyId);
+
         if (key.dailyLimit !== null) {
-            const capped = await deps.hitDaily(keyDailyCounterKey(key.keyId), key.dailyLimit);
+            const capped = await deps.hitDaily(capKey, key.dailyLimit);
 
             if (!capped.allowed) {
                 return spent(capped, 'key');
@@ -180,6 +186,10 @@ export const decideAccess = async (
         );
 
         if (!daily.allowed) {
+            if (key.dailyLimit !== null) {
+                await deps.refundDaily(capKey);
+            }
+
             return spent(daily, 'account');
         }
 

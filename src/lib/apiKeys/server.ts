@@ -6,10 +6,25 @@ import { auth } from '@/lib/auth/auth';
 import { getUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 
-import { ACCOUNT_DAILY_LIMIT } from '@/lib/proxy/rateLimit';
+import { tagSecrets } from '@/lib/auth/keyTag';
+import { keysEnabled } from '@/lib/proxy/keysSwitch';
+import { ACCOUNT_DAILY_LIMIT, KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
 import { createKeyService } from './service';
 import { adminFrom, maxKeysPerAccount } from './settings';
+
+// Whether API_KEY_TAG_SECRETS holds a usable list. Without one, a key cannot
+// be signed, and src/instrumentation.ts lets production start so while keys
+// are switched off.
+const tagSecretsSet = (): boolean => {
+    try {
+        tagSecrets();
+
+        return true;
+    } catch {
+        return false;
+    }
+};
 
 /** The API key service on the site's own auth instance and database. */
 export const keyService = createKeyService({
@@ -17,6 +32,8 @@ export const keyService = createKeyService({
     db,
     maxPerAccount: () => maxKeysPerAccount(process.env.API_KEYS_MAX_PER_ACCOUNT),
     defaultDailyLimit: () => ACCOUNT_DAILY_LIMIT,
+    defaultRateLimit: () => KEYED_LIMIT,
+    canMint: () => keysEnabled() && tagSecretsSet(),
 });
 
 /**

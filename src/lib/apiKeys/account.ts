@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { getUser } from '@/lib/auth/session';
-import { keysEnabled } from '@/lib/proxy/forward';
+import { keysEnabled } from '@/lib/proxy/keysSwitch';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 
 import type { ApiKeysData, KeyView } from '@/components/organisms/ApiKeys/state';
@@ -56,11 +56,19 @@ const REFUSALS = {
             'You have as many keys as you may hold. Delete one to make another.',
         ),
     no_such_account: () => refuse(404, 'not_found', 'That account was not found.'),
+    keys_unavailable: () =>
+        problem({
+            status: 503,
+            code: 'keys_unavailable',
+            detail: 'API keys cannot be made at the moment. Try again later.',
+            retryable: false,
+            headers: NO_STORE,
+        }),
 } as const;
 
 const issued = (key: string) => Response.json({ key }, { headers: NO_STORE });
 
-/** The signed-in user's name, email, daily quota, keys and key cap. */
+/** The signed-in user's name, email, limits, keys and key cap. */
 export const listKeys = async (request: Request): Promise<Response> => {
     const user = await getUser();
 
@@ -74,7 +82,11 @@ export const listKeys = async (request: Request): Promise<Response> => {
     ]);
     const data: ApiKeysData = {
         user: { name: user.name, email: user.email },
-        quota: { dailyLimit: quota.dailyLimit, usedToday: quota.usedToday },
+        quota: {
+            rateLimit: quota.rateLimit,
+            dailyLimit: quota.dailyLimit,
+            usedToday: quota.usedToday,
+        },
         keys: keys.map((key): KeyView => ({
             id: key.id,
             name: key.name,

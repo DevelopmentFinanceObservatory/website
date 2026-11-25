@@ -19,12 +19,13 @@ export type KeyView = {
 };
 
 /**
- * What the account panel loads: who is signed in, the account's daily API
- * quota, which every key spends, their keys and the key cap.
+ * What the account panel loads: who is signed in, the account's limits (its
+ * calls per minute on each keyed surface, and its daily API quota, which
+ * every key spends), their keys and the key cap.
  */
 export type ApiKeysData = {
     user: { name: string; email: string };
-    quota: { dailyLimit: number; usedToday: number };
+    quota: { rateLimit: number; dailyLimit: number; usedToday: number };
     keys: KeyView[];
     maxKeys: number;
     // False while the emergency switch (API_KEYS_ENABLED) is off.

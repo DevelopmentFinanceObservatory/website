@@ -84,6 +84,13 @@ export type KeyServiceOptions = {
     maxPerAccount: () => number;
     /** An account's daily API calls when it sets none of its own; read per call. */
     defaultDailyLimit: () => number;
+    /** An account's calls per rate-limit window when it sets none of its own; read per call. */
+    defaultRateLimit: () => number;
+    /**
+     * Whether a key can be made: keys switched on and the tag secrets set.
+     * Read per call, so an operator's change needs no restart.
+     */
+    canMint: () => boolean;
     /** One structured line per mutation. Never receives a key or a hash. */
     log?: (line: Record<string, unknown>) => void;
 };
@@ -111,6 +118,9 @@ export type OwnKey = {
 
 /** An account's daily API quota, which every one of its keys spends. */
 export type AccountQuota = {
+    // The account's calls per rate-limit window on each of the API and the
+    // Datasets API: its own, else the deployment default.
+    rateLimit: number;
     // The account's API calls per UTC day: its own, else the deployment default.
     dailyLimit: number;
     // The account's own daily quota, null when it has none.
@@ -130,7 +140,15 @@ export type AdminKey = OwnKey & {
 
 export type CreateResult =
     | { ok: true; id: string; key: string }
-    | { ok: false; reason: 'label_invalid' | 'name_taken' | 'cap_reached' | 'no_such_account' };
+    | {
+          ok: false;
+          reason:
+              | 'label_invalid'
+              | 'name_taken'
+              | 'cap_reached'
+              | 'no_such_account'
+              | 'keys_unavailable';
+      };
 
 /** An account as an operator sees it in the user list. */
 export type AdminUser = {
@@ -165,8 +183,8 @@ const ADMIN_LIST_LIMIT = 500;
 const ADMIN_USERS_DEFAULT_LIMIT = 50;
 const ADMIN_USERS_MAX_LIMIT = 500;
 
-/** A positive whole number is a daily limit of its own; anything else is none. */
-const ownDaily = (value: number | null): number | null =>
+/** A positive whole number is a limit of its own; anything else is none. */
+const ownLimit = (value: number | null): number | null =>
     typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 ? value : null;
 
 /** The HTTP status of a Better Auth APIError, or undefined for any other throw. */
@@ -181,6 +199,8 @@ export const createKeyService = ({
     db,
     maxPerAccount,
     defaultDailyLimit,
+    defaultRateLimit,
+    canMint,
     log = defaultLog,
 }: KeyServiceOptions) => {
     const mint = async (userId: string, label: string | null) => {
@@ -268,7 +288,7 @@ export const createKeyService = ({
                 .where(inArray(apikey.id, ids)),
             dailyUsage(db, ids.map(keyDailyCounterKey)),
         ]);
-        const caps = new Map(limits.map(({ id, custom }) => [id, ownDaily(custom)]));
+        const caps = new Map(limits.map(({ id, custom }) => [id, ownLimit(custom)]));
         const tails = new Map(limits.map(({ id, tail }) => [id, tail]));
 
         return keys.map((key) => {
@@ -288,15 +308,16 @@ export const createKeyService = ({
         const counter = accountDailyCounterKey(userId);
         const [[row], used] = await Promise.all([
             db
-                .select({ custom: user.apiDailyLimit })
+                .select({ custom: user.apiDailyLimit, rate: user.apiRateLimit })
                 .from(user)
                 .where(eq(user.id, userId))
                 .limit(1),
             dailyUsage(db, [counter]),
         ]);
-        const own = ownDaily(row?.custom ?? null);
+        const own = ownLimit(row?.custom ?? null);
 
         return {
+            rateLimit: ownLimit(row?.rate ?? null) ?? defaultRateLimit(),
             dailyLimit: own ?? defaultDailyLimit(),
             customDailyLimit: own,
             usedToday: used.get(counter) ?? 0,
@@ -323,12 +344,16 @@ export const createKeyService = ({
         },
 
         /**
-         * A new key for the user, unless the label is not usable, another of
-         * the account's keys has that name (without regard to case), or the
-         * account holds its cap. The full key is in this result and nowhere
+         * A new key for the user, unless keys cannot be made (`canMint`), the
+         * label is not usable, another of the account's keys has that name
+         * (without regard to case), or the account holds its cap. The full key is in this result and nowhere
          * after it.
          */
         async createOwn(userId: string, label: unknown): Promise<CreateResult> {
+            if (!canMint()) {
+                return { ok: false, reason: 'keys_unavailable' };
+            }
+
             const name = parseLabel(label);
 
             if (!name) {
@@ -509,10 +534,15 @@ export const createKeyService = ({
         },
 
         /**
-         * A key for the account with this email, unless another of its keys
-         * has that name. Not held to the account cap.
+         * A key for the account with this email, unless keys cannot be made
+         * (`canMint`) or another of its keys has that name. Not held to the
+         * account cap.
          */
         async adminCreate(actor: string, email: string, label: unknown): Promise<CreateResult> {
+            if (!canMint()) {
+                return { ok: false, reason: 'keys_unavailable' };
+            }
+
             const name = parseLabel(label);
 
             if (!name) {

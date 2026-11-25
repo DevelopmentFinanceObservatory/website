@@ -27,10 +27,15 @@ import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
 import { keysEnabled } from './keysSwitch';
 import { rateLimitedProblem, unreachableProblem } from './problem';
 import { rateHeaders, type RateVerdict } from './rateHeaders';
-import { hit, hitDaily, hitKey, ACCOUNT_DAILY_LIMIT, KEYED_LIMIT, type Surface } from './rateLimit';
-
-// Re-exported for the panel and admin pages, which read the switch here.
-export { keysEnabled };
+import {
+    hit,
+    hitDaily,
+    hitKey,
+    refundDaily,
+    ACCOUNT_DAILY_LIMIT,
+    KEYED_LIMIT,
+    type Surface,
+} from './rateLimit';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -123,6 +128,7 @@ export const accessDeps: AccessDeps = {
     hitAddress: hit,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
     hitDaily,
+    refundDaily,
     defaultLimit: KEYED_LIMIT,
     defaultDailyLimit: ACCOUNT_DAILY_LIMIT,
 };

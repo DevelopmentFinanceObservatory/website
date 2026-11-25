@@ -14,7 +14,7 @@ import AdminApiKeys from '@/components/organisms/ApiKeys/AdminApiKeys';
 import { ADMIN_PAGE_SIZE } from '@/components/organisms/ApiKeys/AdminState';
 import { keyService, requireAdmin } from '@/lib/apiKeys/server';
 import { isAdmin, parseAdminEmails } from '@/lib/apiKeys/settings';
-import { keysEnabled } from '@/lib/proxy/forward';
+import { keysEnabled } from '@/lib/proxy/keysSwitch';
 import { ACCOUNT_DAILY_LIMIT, KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
 export const metadata: Metadata = {

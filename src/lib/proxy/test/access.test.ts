@@ -101,6 +101,9 @@ const world = ({
                 (counterKey.startsWith('apiday:user:') ? dailyUsed : capUsed) + 1,
             );
         },
+        refundDaily: async (counterKey) => {
+            calls.push(`refund:${counterKey}`);
+        },
     };
 
     return { calls, deps };
@@ -226,7 +229,8 @@ test("a key's own cap is counted before the account's quota, which a refused cal
     assert.equal((await access.refusal!.json()).code, 'allowance_exhausted');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '50');
 
-    // A call the cap admits goes on to the account's quota, which can still refuse it.
+    // A call the cap admits goes on to the account's quota, which can still
+    // refuse it, and then gives its hit on the cap back.
     const spent = world({ cached: true, answer: { ...VALID, dailyLimit: 50 }, dailyUsed: 1000 });
     const refused = await decide(spent.deps, { 'x-api-key': KEY });
 
@@ -235,6 +239,7 @@ test("a key's own cap is counted before the account's quota, which a refused cal
         'account:api:acct-1:600',
         'daily:apiday:key:key-1:50',
         'daily:apiday:user:acct-1:1000',
+        'refund:apiday:key:key-1',
     ]);
     assert.equal(refused.refusal?.headers.get('x-ratelimit-limit'), '1000');
 });

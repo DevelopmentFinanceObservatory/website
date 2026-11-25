@@ -61,11 +61,14 @@ test('API key service', async (t) => {
     const lines: Record<string, unknown>[] = [];
     let cap = 3;
     let defaultDaily = 1000;
+    let mintable = true;
     const service = createKeyService({
         auth,
         db,
         maxPerAccount: () => cap,
         defaultDailyLimit: () => defaultDaily,
+        defaultRateLimit: () => 600,
+        canMint: () => mintable,
         log: (line) => lines.push(line),
     });
 
@@ -235,6 +238,26 @@ test('API key service', async (t) => {
         }
     });
 
+    await t.test('with keys unavailable, neither a user nor an operator makes a key', async () => {
+        const hal = await account('hal@h.example');
+
+        mintable = false;
+
+        try {
+            assert.deepEqual(await service.createOwn(hal, 'notebook'), {
+                ok: false,
+                reason: 'keys_unavailable',
+            });
+            assert.deepEqual(await service.adminCreate('ops@example.org', 'hal@h.example', 'ops'), {
+                ok: false,
+                reason: 'keys_unavailable',
+            });
+            assert.deepEqual(await service.listOwn(await as(hal)), []);
+        } finally {
+            mintable = true;
+        }
+    });
+
     await t.test('a bad label is refused and makes no key', async () => {
         const before = (await service.listOwn(await as(alice))).length;
 
@@ -344,8 +367,11 @@ test('API key service', async (t) => {
             (await service.adminListUsers({ query: 'frank@f.example' })).users[0]!.accountLimit;
 
         assert.equal(await accountLimit(), null);
+        assert.equal((await service.accountQuota(frank)).rateLimit, 600);
         assert.equal(await service.adminSetLimit('ops@example.org', 'Frank@F.example', 250), true);
         assert.equal(await accountLimit(), 250);
+        // As the account panel reads it.
+        assert.equal((await service.accountQuota(frank)).rateLimit, 250);
 
         const verdict = await createKeyVerifier(db).verify(made.key);
 
@@ -429,6 +455,7 @@ test('API key service', async (t) => {
             const ida = await account('ida@i.example');
 
             assert.deepEqual(await service.accountQuota(ida), {
+                rateLimit: 600,
                 dailyLimit: 1000,
                 customDailyLimit: null,
                 usedToday: 0,

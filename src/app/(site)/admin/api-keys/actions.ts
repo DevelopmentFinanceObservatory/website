@@ -33,6 +33,8 @@ const REFUSALS = {
     name_taken: 'That account already has a key with that name.',
     cap_reached: 'That account holds as many keys as it may.',
     no_such_account: 'No account has that email.',
+    keys_unavailable:
+        'No key can be made while API keys are switched off (API_KEYS_ENABLED) or API_KEY_TAG_SECRETS is not set.',
     not_found: 'That key was not found.',
 } as const;
 

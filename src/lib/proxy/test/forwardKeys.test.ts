@@ -545,6 +545,7 @@ test('forward on a real key store and counter', async (t) => {
             hitAccount: (surface: 'api' | 'mcp' | 'pin', accountId: string, limit: number) =>
                 limiter.hitKey(surface, `acct:${accountId}`, limit),
             hitDaily: (counterKey: string, limit: number) => limiter.hitDaily(counterKey, limit),
+            refundDaily: (counterKey: string) => limiter.refundDaily(counterKey),
             defaultLimit: 5,
             defaultDailyLimit: 1000,
         });

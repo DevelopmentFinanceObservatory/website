@@ -28,11 +28,11 @@ These stories set the UX for API keys and quotas, and each acceptance criterion 
 ## Terms
 
 - **Per-minute limit.** The number of API calls an account may make per 60-second window, shared by all of the account's keys. Empty on the account means the keyed default (`RATE_LIMIT_KEYED`, 600). See [Limits][design-limits].
-- **Daily quota.** The number of API calls an account may make per day, counted from 00:00 UTC and shared by all of the account's keys. Empty on the account means the deployment default (`API_KEY_DAILY_LIMIT`, 1,000). See [Limits][design-limits].
+- **Daily quota.** The number of API calls an account may make per day, counted from 00:00 UTC and shared by all of the account's keys. Empty on the account means the deployment default (`API_KEY_DAILY_LIMIT`, 75,000). See [Limits][design-limits].
 - **Daily cap.** An optional lower number of API calls one key may make per day, set by an admin. Empty on the key means it has none, and spends only the account's quota.
 - **Surface.** API (`/api/v1/*`, `/openapi.json`, `/codes`) or MCP (`/mcp`). Keys apply to the API, the Datasets API included. A key sent to `/mcp` or the Studio is stripped and ignored, and the call is anonymous.
 - **Key.** A `dfo_k_…` secret in the client contract's key format, shown once at creation.
-- **Usage bar.** An account's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "500 of 1,000". Refused calls are included. A key with a daily cap shows a bar of its own against the cap.
+- **Usage bar.** An account's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "40,000 of 75,000". A call the quota refuses is included. A key with a daily cap shows a bar of its own against the cap.
 - **Panel.** The right-side drawer that the account menu's "API keys" item opens on whatever page the user is on. It is the same drawer as the Studio's Customize panel.
 - **Limit alert.** A minute in which at least one of an account's keyed calls was refused for being over a limit.
 
@@ -70,8 +70,8 @@ _As a DFO user, I want to see how much of my daily quota I have used today, so I
 
 A per-minute count would be empty or full by the time anyone looked, so the bar shows the daily quota, which changes slowly enough to read.
 
-- [ ] The panel shows one usage bar and a count such as "500 of 1,000": the API calls made with any of the account's keys since 00:00 UTC, against the account's daily quota (its own, or the default). A key with a daily cap shows its own bar against the cap on its card.
-- [ ] The count includes refused calls, and the bar reads full once the quota is reached.
+- [ ] The panel shows one usage bar and a count such as "40,000 of 75,000": the API calls made with any of the account's keys since 00:00 UTC, against the account's daily quota (its own, or the default). A key with a daily cap shows its own bar against the cap on its card.
+- [ ] The count includes calls the quota refuses, and the bar reads full once the quota is reached.
 - [ ] An account with no calls today shows "0 of N".
 - [ ] The panel says the count resets at 00:00 UTC.
 - [ ] Only this account's keys appear.
@@ -94,7 +94,7 @@ Keyed limits apply to API calls, which arrive from scripts, pipelines and SDKs, 
 
 _As a DFO user calling the API with a key, I want a refusal that tells me what happened and what to do next, so I'm not left guessing._
 
-- [ ] A call over the account's per-minute limit gets 429 with `Retry-After`, the `X-RateLimit-*` headers and a problem document ([design: example][design-testing]).
+- [ ] A call over the account's per-minute limit gets 429 with `Retry-After`, the `X-RateLimit-*` headers and a problem document.
 - [ ] A call over the account's daily quota, or a key's daily cap, gets 429 with code `allowance_exhausted`, `retryable` false and `Retry-After` to 00:00 UTC, with outcome `limited`, and its problem document's `detail` says the count resets at 00:00 UTC. The SDKs raise it as `QuotaExceededError` and do not retry it.
 - [ ] The problem document's `detail` says which limit was reached, the account's or the key's, when to retry, and names the API keys panel in the account menu.
 - [ ] The problem document's `type` (`/codes/rate_limited`) resolves to a page that explains limits and how to ask for a higher one (support flow TBD, see [Open questions][]).
@@ -200,7 +200,7 @@ _As a DFO admin responding to abuse, I want to kill one key from the admin page 
 
 _As a DFO admin, I want to raise, lower or reset an account's daily quota, or cap one key, so I can grant a partner more API calls a day or hold back a key that is being abused._
 
-- [ ] In a user's expanded row, the account's daily quota is editable. An admin can set a positive integer or clear it back to the deployment default (`API_KEY_DAILY_LIMIT`, 1,000).
+- [ ] In a user's expanded row, the account's daily quota is editable. An admin can set a positive integer or clear it back to the deployment default (`API_KEY_DAILY_LIMIT`, 75,000).
 - [ ] Each key's daily cap is editable, and empty means no cap of its own.
 - [ ] The account's usage bar shows the effective quota as its right-hand number, and the field shows whether it is the default or set for this account.
 - [ ] Invalid input (zero, negative, non-integer, absurdly large) is refused with a message.
@@ -268,7 +268,7 @@ Deliberately not part of this work. Some are listed in the design's [Future Feat
 
 ## Open questions
 
-- [ ] **Support flow for a higher limit.** A support email address, a page on the site, or a ticketing system? U3, U11 and the `/codes/rate_limited` page all link to it. (Also an open question in the [design][design-open].)
+- [ ] **Support flow for a higher limit.** A support email address, a page on the site, or a ticketing system? U3, U11 and the `/codes/rate_limited` page all link to it.
 - [ ] **MCP refusals in clients.** How does an over-limit MCP call reach the user? It concerns the anonymous MCP limit, since `/mcp` ignores keys, and is part of signed-in MCP access ([design: Future Features][design-future]).
 - [ ] **Studio limit messaging.** The Studio's daily prompt allowance is separate from key limits. Should its refusal get the same treatment as U3, as a separate story?
 
@@ -279,9 +279,7 @@ Deliberately not part of this work. Some are listed in the design's [Future Feat
 [design-identity]: api-keys.md#identity-failure-and-abuse
 [design-key-format]: api-keys.md#key-format-and-communication
 [design-logs]: api-keys.md#logs-and-docs
-[design-testing]: api-keys.md#local-test-results
 [design-future]: api-keys.md#future-features
-[design-open]: api-keys.md#open-questions
 [Personas]: #personas
 [Terms]: #terms
 [Stories: in scope]: #stories-in-scope

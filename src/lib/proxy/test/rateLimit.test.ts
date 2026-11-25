@@ -125,6 +125,33 @@ test('limiter: counts an address and an account apart, per surface, at the limit
             assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 1);
         },
     );
+
+    await t.test(
+        'a daily hit given back leaves the shared count and the in-memory count one lower',
+        async () => {
+            let down = false;
+            const real = drizzle(pool);
+            const flaky = {
+                execute: (...args: Parameters<typeof real.execute>) =>
+                    down ? Promise.reject(new Error('database is down')) : real.execute(...args),
+            };
+            const limiter = createLimiter(flaky as never, { warn: () => {}, prune: false });
+
+            assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, true);
+            await limiter.refundDaily('apiday:key:refund');
+
+            const { rows } = await pool.query(
+                "select count from limit_counter where key = 'apiday:key:refund'",
+            );
+
+            assert.equal(rows[0].count, 0);
+
+            // With the database down, the count goes on from the refunded one.
+            down = true;
+            assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, true);
+            assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, false);
+        },
+    );
 });
 
 test('limiter: a count that fails is counted in memory instead of passing, and warns', async () => {

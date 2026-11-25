@@ -3,7 +3,7 @@ import 'server-only';
 import { counterDb } from '@/lib/db';
 
 import { limiterBucket } from './caller';
-import { countHit, DAY_S, pruneCounters, type CounterDb } from './limitCounter';
+import { countHit, DAY_S, pruneCounters, refundHit, type CounterDb } from './limitCounter';
 import { createFallbackCounter, type FallbackCounter } from './limitFallback';
 import type { RateVerdict } from './rateHeaders';
 
@@ -94,6 +94,12 @@ export type Limiter = {
      * the current UTC day.
      */
     hitDaily(counterKey: string, limit: number): Promise<RateVerdict>;
+    /**
+     * Give back one hit on the daily counter `counterKey` in the current UTC
+     * day, for a call a later check refused. The in-memory count gives it back
+     * too, so a fallback goes on from the refunded count.
+     */
+    refundDaily(counterKey: string): Promise<void>;
 };
 
 export const createLimiter = (
@@ -150,6 +156,15 @@ export const createLimiter = (
         hitKey: (surface, callerKey, limit) =>
             count(fallback, `${surface}:${callerKey}`, limit, windowS),
         hitDaily: (counterKey, limit) => count(dailyFallback, counterKey, limit, DAY_S),
+        refundDaily: async (counterKey) => {
+            dailyFallback.refund(counterKey);
+
+            try {
+                await refundHit(db, counterKey, DAY_S);
+            } catch (error) {
+                warn('daily count not refunded', error);
+            }
+        },
     };
 };
 
@@ -166,3 +181,6 @@ export const hit = (surface: Surface, ip: string): Promise<RateVerdict> =>
 /** Count one API call on a daily counter (see Limiter). */
 export const hitDaily = (counterKey: string, limit: number): Promise<RateVerdict> =>
     limiter.hitDaily(counterKey, limit);
+
+/** Give back one hit on a daily counter (see Limiter). */
+export const refundDaily = (counterKey: string): Promise<void> => limiter.refundDaily(counterKey);

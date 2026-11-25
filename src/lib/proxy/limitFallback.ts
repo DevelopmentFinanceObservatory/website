@@ -35,6 +35,12 @@ export type FallbackCounter = {
      * sent earlier only raises it.
      */
     record(key: string, verdict: Verdict, sentAt: number): void;
+    /**
+     * Gives back one hit on `key` in the current window, whether it was
+     * counted here or recorded from the shared count. A key from an earlier
+     * window, or at 0, is left alone.
+     */
+    refund(key: string): void;
     size(): number;
 };
 
@@ -104,6 +110,13 @@ export const createFallbackCounter = (
                 store(key, window, Math.max(known.count, count), known.at);
             } else {
                 store(key, window, count, sentAt);
+            }
+        },
+        refund(key) {
+            const known = counts.get(key);
+
+            if (known && known.window === Math.floor(now() / windowMs) && known.count > 0) {
+                known.count -= 1;
             }
         },
         size: () => counts.size,
