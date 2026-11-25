@@ -499,8 +499,11 @@ const cleaned = (value: string | null): string | null =>
     [...(value ?? '').replace(NON_PRINTABLE, '').trim()].slice(0, MAX_FIELD_LENGTH).join('') ||
     null;
 
-// The caller forward() sends dfo-apis, from the same env and resolver
-// (apisCallerFor); forward()'s own resolver logs the missing-settings warning.
+// The address caller for the delivery log, from the env and resolver
+// forward() uses (apisCallerFor); forward()'s own resolver logs the
+// missing-settings warning. For a call with a valid key, forward() sends
+// dfo-apis the account's `user:` caller instead, so the two logs name a
+// keyed call differently.
 const apisCaller = apisCallerFor(process.env, () => {});
 
 const sentCaller = (

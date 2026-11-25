@@ -229,6 +229,16 @@ export const resolveCaller = (
     return `ip:${digest}`;
 };
 
+/**
+ * The caller for an account (the owner of an API key): `user:` and the first
+ * 32 hex characters of HMAC-SHA-256 over `"user:" + accountId`, keyed by
+ * CALLER_HMAC_KEY as the `ip:` digest is. The account id never leaves the
+ * site. The `user:` prefix in the digest's input keeps it apart from an
+ * address's.
+ */
+export const resolveAccountCaller = (accountId: string, { key }: CallerConfig): string =>
+    `user:${createHmac('sha256', key).update(`user:${accountId}`).digest('hex').slice(0, DIGEST_LENGTH)}`;
+
 /** Set the resolved caller on upstream headers, dropping any other value. */
 export const setCaller = (headers: Headers, caller: string | undefined): void => {
     headers.delete(CALLER_HEADER);
@@ -255,7 +265,7 @@ export type ApisCaller = { principal?: string; caller?: string };
 export const apisCallerFor = (
     env: Record<string, string | undefined>,
     log: (message: string) => void = console.warn,
-): ((forwardedFor: string | null) => ApisCaller) => {
+): ((forwardedFor: string | null, caller?: string) => ApisCaller) => {
     const principal = env.DFO_CALLER_PRINCIPAL?.trim();
     const config = callerConfig(env);
     let logged = false;
@@ -286,7 +296,12 @@ export const apisCallerFor = (
         };
     }
 
-    return (forwardedFor) => ({ principal, caller: resolveCaller(forwardedFor, config) });
+    // A call that has already named its caller (an account's, see
+    // resolveAccountCaller) sends that name in place of the address's.
+    return (forwardedFor, caller) => ({
+        principal,
+        caller: caller ?? resolveCaller(forwardedFor, config),
+    });
 };
 
 const apisCaller = apisCallerFor(process.env);
@@ -316,16 +331,23 @@ export const applyApisCaller = (
  * Name the caller of `incoming` on upstream headers bound for dfo-apis, from
  * this process's env (see apisCallerFor and applyApisCaller). `surface`
  * defaults to the one `incoming` shows (requestSurface); a call the site's
- * server makes for a page it renders passes `website`.
+ * server makes for a page it renders passes `website`. `named` is the caller
+ * the proxy already resolved for an API key's account (accountCaller), which
+ * goes in place of the address's.
  */
 export const setApisCaller = (
     headers: Headers,
     incoming: Headers,
     surface: ApisSurface = requestSurface(incoming),
-): void => applyApisCaller(headers, apisCaller(incoming.get('x-forwarded-for')), surface);
+    named?: string,
+): void => applyApisCaller(headers, apisCaller(incoming.get('x-forwarded-for'), named), surface);
 
 const config = callerConfig(process.env);
 let warned = false;
+
+/** The caller for an account, from this process's env, or undefined without CALLER_HMAC_KEY. */
+export const accountCaller = (accountId: string): string | undefined =>
+    'problem' in config ? undefined : resolveAccountCaller(accountId, config);
 
 /** The caller for an incoming request, from this process's env. */
 export const requestCaller = (incoming: Headers): string | undefined => {

@@ -110,7 +110,7 @@ test('forward: sends the body option in place of a client body already read', as
 test('forward: takes the verdict of a call already counted and counts nothing more', async () => {
     const res = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
         surface: 'api',
-        counted: { allowed: false, limit: 120, remaining: 0, reset: 30, counted: true },
+        counted: { allowed: false, limit: 120, remaining: 0, reset: 30 },
         target: `${base}/empty`,
         unreachable: 'The API is unreachable.',
     });

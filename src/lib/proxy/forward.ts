@@ -3,9 +3,19 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { apisFetch } from '@/lib/apisAuth';
+import { keyDb } from '@/lib/db';
+
+import { hasValidTag, tagSecrets } from '@/lib/auth/keyTag';
 
 import { setAccount } from './account';
-import { limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
+import {
+    decideAccess,
+    honorsKeys as surfaceHonorsKeys,
+    type Access,
+    type AccessDeps,
+} from './access';
+import { API_KEY_HEADER, carriesKey, hasKeyPrefix } from './apiKey';
+import { accountCaller, limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import {
     clientResponseHeaders,
     dropEncodedLength,
@@ -13,9 +23,19 @@ import {
     upstreamRequestHeaders,
     type HeaderPass,
 } from './headers';
+import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
+import { keysEnabled } from './keysSwitch';
 import { rateLimitedProblem, unreachableProblem } from './problem';
 import { rateHeaders, type RateVerdict } from './rateHeaders';
-import { hit, type Surface } from './rateLimit';
+import {
+    hit,
+    hitDaily,
+    hitKey,
+    refundDaily,
+    ACCOUNT_DAILY_LIMIT,
+    KEYED_LIMIT,
+    type Surface,
+} from './rateLimit';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -25,7 +45,16 @@ import { hit, type Surface } from './rateLimit';
  * /codes call the route forwards, is rate-limited per IP: /mcp and the
  * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
- * headers go out only on a counted call). A call is forwarded with its
+ * headers go out only on a counted call). A call on the 'api' or 'datasets'
+ * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
+ * (src/lib/proxy/apiKey), and is then counted against the key's account at
+ * the account's limit on that surface and against the account's daily quota,
+ * or refused with a 401 when the key is not valid (src/lib/proxy/access). A
+ * Datasets API read the edge cache answers never reaches the proxy, so it is
+ * neither counted nor checked. On /mcp and on the
+ * Studio route a key is ignored: the call is anonymous and counted by
+ * address. The key is never forwarded, on any route, in any header or scheme.
+ * dfo-apis gets no caller Authorization at all. A call is forwarded with its
  * method, query, body, content headers, user-agent, x-dfo-client and every
  * mcp-* header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
@@ -53,8 +82,10 @@ import { hit, type Surface } from './rateLimit';
  * (src/lib/apisAuth matches on the target's origin), and names the caller in
  * x-dfo-caller and its surface in x-dfo-surface beside the
  * x-dfo-caller-principal secret (setApisCaller in src/lib/proxy/caller),
- * matched on the same origin. The other upstreams get none of them. A route
- * names the caller to one in x-dfo-caller and x-dfo-account instead.
+ * matched on the same origin. The caller is `ip:` and a digest of the
+ * address, or `user:` and a digest of the account for a call with a valid
+ * key. The other upstreams get none of them. A route names the caller to one
+ * in x-dfo-caller and x-dfo-account instead.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -74,12 +105,81 @@ const limiterKey = limiterKeyFor(trustedHops(process.env));
 export const clientIp = (req: NextRequest): string =>
     limiterKey(req.headers.get('x-forwarded-for'));
 
+// The tag secrets, read per call so a test can set them. Unset, no key is
+// accepted: src/instrumentation.ts refuses to start in production without
+// them while keys are on, and otherwise every key is a 401.
+const keyTagValid = (key: string): boolean => {
+    let secrets: string[];
+
+    try {
+        secrets = tagSecrets();
+    } catch {
+        return false;
+    }
+
+    return hasValidTag(key, secrets);
+};
+
+// The accounts' counts and key lookups, as forward() reaches them. A test
+// swaps a field for a fake.
+export const accessDeps: AccessDeps = {
+    verifier: createKeyVerifier(keyDb, cacheLifetimes(process.env.API_KEY_CACHE_S)),
+    tagValid: keyTagValid,
+    hitAddress: hit,
+    hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
+    hitDaily,
+    refundDaily,
+    defaultLimit: KEYED_LIMIT,
+    defaultDailyLimit: ACCOUNT_DAILY_LIMIT,
+};
+
+// One structured line per call that carried a key. The key's public id and
+// the account are named; the key and its hash never are.
+const logKeyUse = (surface: Surface | undefined, { identity, outcome }: Access): void => {
+    if (!outcome) {
+        return;
+    }
+
+    console.log(
+        JSON.stringify({
+            severity: 'INFO',
+            message: 'api key call',
+            surface: surface ?? null,
+            outcome,
+            keyId: identity.kind === 'keyed' ? identity.keyId : null,
+            accountId: identity.kind === 'keyed' ? identity.accountId : null,
+        }),
+    );
+};
+
+// While keys are off, one line per call on a keyed surface that sends an
+// X-API-Key header, so the callers who would get a 401 once keys are on (any
+// X-API-Key value is read as a key) can be counted first. It says whether the
+// value has our prefix, and nothing else of it.
+const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
+    const value = headers.get(API_KEY_HEADER);
+
+    if (value === null) {
+        return;
+    }
+
+    console.log(
+        JSON.stringify({
+            severity: 'INFO',
+            message: 'api key header while keys are off',
+            surface,
+            ours: hasKeyPrefix(value.trim()),
+        }),
+    );
+};
+
 export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
-    // The verdict of a call the caller has already counted against `surface`
-    // (the Studio proxy counts before it reads a body), so forward() counts
-    // nothing more.
+    // The verdict of a call the caller has already counted against its
+    // address (the Studio proxy counts before it reads a body), so forward()
+    // counts nothing more and the call is anonymous: a key on it is stripped
+    // and ignored.
     counted?: RateVerdict;
     // The upstream URL to hit (path + query already resolved).
     target: string;
@@ -153,14 +253,35 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
 };
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
-    const verdict =
-        options.counted ??
-        (options.surface ? await hit(options.surface, clientIp(req)) : undefined);
-    const limitHeaders = verdict ? rateHeaders(verdict) : {};
+    // Who the caller is and whether it is within its allowance, decided once.
+    const honorsKeys = options.counted === undefined && surfaceHonorsKeys(options.surface);
+    const keysOn = keysEnabled();
+    const access: Access = options.counted
+        ? {
+              identity: { kind: 'anonymous' },
+              verdict: options.counted,
+              refusal: options.counted.allowed
+                  ? undefined
+                  : rateLimitedProblem(options.counted, rateHeaders(options.counted)),
+          }
+        : await decideAccess(accessDeps, {
+              surface: options.surface,
+              keys: honorsKeys && keysOn,
+              headers: req.headers,
+              ip: clientIp(req),
+          });
 
-    if (verdict && !verdict.allowed) {
-        return rateLimitedProblem(verdict, limitHeaders);
+    if (honorsKeys && !keysOn) {
+        logKeyHeaderWhileOff(options.surface!, req.headers);
     }
+
+    logKeyUse(options.surface, access);
+
+    if (access.refusal) {
+        return access.refusal;
+    }
+
+    const limitHeaders = access.verdict ? rateHeaders(access.verdict) : {};
 
     const refusal = await options.admit?.();
 
@@ -171,15 +292,25 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     const headers = upstreamRequestHeaders(req.headers, new Headers(), options.pass?.request);
 
     const callerAuth = req.headers.get('authorization');
+    const apisTarget = isApisTarget(options.target);
 
     if (options.bearer) {
         headers.set('authorization', `Bearer ${options.bearer}`);
-    } else if (callerAuth) {
+    } else if (callerAuth && !apisTarget && !carriesKey(callerAuth)) {
+        // Any other credential passes through, to the MCP harness say.
+        // dfo-apis reads no caller's Authorization on a route the proxy
+        // serves, so it gets none. A value holding one of our keys, in any
+        // scheme, goes no further, verified or not.
         headers.set('authorization', callerAuth);
     }
 
-    if (isApisTarget(options.target)) {
-        setApisCaller(headers, req.headers);
+    headers.delete(API_KEY_HEADER);
+
+    const accountName =
+        access.identity.kind === 'keyed' ? accountCaller(access.identity.accountId) : undefined;
+
+    if (apisTarget) {
+        setApisCaller(headers, req.headers, undefined, accountName);
     } else {
         setCaller(headers, options.caller);
         setAccount(headers, await options.account?.());

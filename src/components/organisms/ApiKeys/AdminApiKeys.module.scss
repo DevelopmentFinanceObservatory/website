@@ -1,0 +1,831 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The admin user table (/admin/api-keys): the dark hero, then the table on
+// the light ground with each user's keys opening in a tinted sub-table.
+.page {
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+.visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// --- Hero -------------------------------------------------------------------
+
+// A compact hero: PageHero's default is a screen-tall box on tablet and phone
+// with the map above it, which pushed the title and search below the fold.
+// Here the box sits just under the nav at every width.
+.page .hero {
+    min-height: 0;
+    padding-top: rem(100);
+}
+
+.title {
+    @include font-size(60px, 0.95);
+
+    display: flex;
+    gap: rem(12);
+    align-items: flex-start;
+    margin-bottom: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+// The user count: a mono chip a touch below the cap line.
+.count {
+    @include flex(row, center, center);
+    @include font-size(14px, 1);
+
+    flex-shrink: 0;
+    min-width: rem(37);
+    height: rem(22);
+    padding-inline: rem(6);
+    margin-top: rem(8);
+    font-family: var(--font-dm-mono);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-media-bg);
+    border-radius: rem(4);
+}
+
+.lead {
+    @include font-size(19px, 1.3);
+
+    margin-bottom: rem(30);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.search {
+    @include flex(row, flex-start, stretch);
+
+    flex-wrap: wrap;
+    gap: rem(4);
+    width: 100%;
+}
+
+.searchField {
+    position: relative;
+    flex: 1 1 rem(260);
+}
+
+// The magnifier sits inside the field, at its left.
+.searchIcon {
+    position: absolute;
+    top: 50%;
+    left: rem(10);
+    width: rem(16);
+    height: rem(16);
+    color: var(--color-media-bg);
+    pointer-events: none;
+    opacity: 0.7;
+    translate: 0 -50%;
+}
+
+.searchInput {
+    @include font-size(14px, 1.3);
+
+    width: 100%;
+    height: rem(36);
+    padding: 0 rem(10) 0 rem(34);
+    font-family: var(--font-dm-mono);
+    color: var(--color-bg);
+    background-color: color-mix(in sRGB, var(--color-charcoal) 60%, black);
+    border: 0;
+    border-radius: rem(4);
+
+    &::placeholder {
+        color: var(--color-media-bg);
+        opacity: 0.6;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-bg);
+        outline-offset: 1px;
+    }
+}
+
+// --- Body -------------------------------------------------------------------
+
+.body {
+    @include page-band(rem(30));
+
+    padding-top: rem(40);
+    padding-bottom: rem(40);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.notice {
+    @include font-size(14px, 1.4);
+
+    padding: rem(10) rem(14);
+    margin-bottom: rem(16);
+    background-color: var(--color-red-light);
+    border-radius: rem(6);
+}
+
+.summary {
+    @include font-size(13px, 1.3);
+
+    margin-bottom: rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.empty {
+    @include font-size(17px, 1.45);
+
+    padding: rem(24) 0;
+    color: var(--color-text-muted);
+}
+
+.scroll {
+    overflow-x: auto;
+}
+
+// Each account is a white card. The gap between cards is a band of the page
+// ground drawn as each card's top border, which a collapsed table allows
+// where margins do not.
+.table {
+    @include font-size(14px, 1.35);
+
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+        padding: rem(14) rem(16) rem(14) 0;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    th:first-child,
+    td:first-child {
+        padding-left: rem(14);
+    }
+
+    thead th {
+        @include font-size(12px, 1.3);
+
+        padding-bottom: rem(10);
+        font-family: var(--font-dm-mono);
+        font-weight: 400;
+        color: var(--color-text-muted);
+        white-space: nowrap;
+    }
+}
+
+.row > * {
+    background-color: var(--color-white);
+    border-top: rem(6) solid var(--color-bg);
+}
+
+.email {
+    width: rem(220);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+// The role, shown as the mockup's beige chip with a chevron. Disabled
+// selects fade by default; this one keeps full ink so it reads as a value.
+.roleCell {
+    width: rem(230);
+}
+
+.role {
+    @include font-size(13px, 1);
+
+    height: rem(26);
+    padding: 0 rem(28) 0 rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    appearance: none;
+    background-color: var(--color-media-bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23484842' stroke-width='1.2'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right rem(10) center;
+    background-size: rem(9) rem(6);
+    border: 0;
+    border-radius: rem(4);
+
+    &:disabled {
+        color: var(--color-charcoal);
+        cursor: default;
+        opacity: 1;
+    }
+}
+
+.mono {
+    @include font-size(13px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    white-space: nowrap;
+}
+
+// The created date and the key count, which share one muted line on phones.
+.created,
+.active {
+    white-space: nowrap;
+}
+
+.table .active {
+    @include font-size(12px, 1.3);
+
+    padding-right: rem(4);
+    font-family: var(--font-dm-mono);
+    text-align: right;
+}
+
+.table thead th:nth-last-child(2) {
+    text-align: right;
+}
+
+.table .toggleCell {
+    width: rem(44);
+    padding-right: rem(10);
+    text-align: right;
+}
+
+.toggle {
+    @include flex(row, center, center);
+
+    width: rem(32);
+    height: rem(32);
+    margin-left: auto;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    svg {
+        transition: rotate 0.3s $ease-out;
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-media-bg);
+        }
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+    }
+}
+
+.toggleOpen svg {
+    rotate: 180deg;
+}
+
+// --- Opened row -------------------------------------------------------------
+
+// The opened keys continue the account's white card, as tinted rows inset
+// from its edges.
+.table .detail > td {
+    padding: 0 rem(10) rem(10);
+    background-color: var(--color-white);
+}
+
+.keys {
+    display: flex;
+    flex-direction: column;
+}
+
+.hint {
+    @include font-size(14px, 1.4);
+
+    color: var(--color-text-muted);
+}
+
+.noteError,
+.noteOk {
+    @include font-size(13px, 1.3);
+}
+
+.noteError {
+    color: var(--color-red);
+}
+
+.noteOk {
+    color: var(--color-text-muted);
+}
+
+.keyTable {
+    @include font-size(13px, 1.35);
+
+    width: 100%;
+    border-collapse: collapse;
+
+    td {
+        padding: rem(10) rem(16) rem(10) 0;
+        text-align: left;
+        vertical-align: middle;
+        background-color: var(--color-media-bg);
+        border-top: 1px solid var(--color-white);
+    }
+
+    td:first-child {
+        padding-left: rem(14);
+    }
+
+    td:last-child {
+        padding-right: rem(10);
+    }
+}
+
+.keyName {
+    display: block;
+    font-weight: 400;
+    overflow-wrap: anywhere;
+}
+
+.keySnippet {
+    @include font-size(11px, 1.3);
+
+    margin-left: rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.keyCreated {
+    @include font-size(11px, 1.3);
+
+    display: block;
+    margin-top: rem(2);
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.usageCell {
+    width: 50%;
+}
+
+.usage {
+    @include flex(row, flex-end, center);
+
+    gap: rem(10);
+}
+
+.meter {
+    flex: 1 1 auto;
+    max-width: rem(300);
+}
+
+.of {
+    @include font-size(13px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.limit {
+    display: inline-flex;
+    flex-direction: column;
+    gap: rem(4);
+}
+
+.limitInput,
+.toolInput {
+    @include font-size(13px, 1.3);
+
+    height: rem(28);
+    padding: 0 rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-beige);
+    border-radius: rem(4);
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 0;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+    }
+}
+
+.limitInput {
+    width: rem(96);
+    appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+    }
+}
+
+.toolInput {
+    width: rem(220);
+}
+
+// The per-minute field's placeholder ("600 default") needs more than a
+// key's daily cap does.
+.toolField .limitInput {
+    width: rem(140);
+}
+
+.keyTable .keyActions {
+    white-space: nowrap;
+    text-align: right;
+
+    > * + * {
+        margin-left: rem(4);
+    }
+}
+
+.iconButton,
+.iconButtonDanger {
+    @include flex(row, center, center);
+
+    width: rem(28);
+    height: rem(28);
+    vertical-align: middle;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-media-bg);
+        }
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+    }
+}
+
+.iconButton {
+    display: inline-flex;
+    color: var(--color-charcoal);
+}
+
+.iconButtonDanger {
+    display: inline-flex;
+    color: var(--color-red);
+}
+
+.iconSvg {
+    width: rem(20);
+    height: rem(20);
+}
+
+// The delete question sits in its own row under the key, so
+// opening it moves none of the key row's columns.
+.keyTable .confirmRow td {
+    padding-block: 0 rem(10);
+    text-align: right;
+    border-top-color: var(--color-media-bg);
+}
+
+.confirm {
+    @include flex(row, flex-end, center);
+
+    flex-wrap: wrap;
+    gap: rem(6);
+}
+
+.confirmText {
+    @include font-size(13px, 1.3);
+
+    white-space: normal;
+}
+
+// A new key, shown once: loud enough that it is not missed.
+.once {
+    padding: rem(14);
+    margin-bottom: rem(16);
+    background-color: var(--color-white);
+    border: 2px solid var(--color-charcoal);
+    border-radius: rem(8);
+}
+
+.onceTitle {
+    @include font-size(15px, 1.3);
+
+    font-weight: 600;
+}
+
+.onceRow {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(8);
+    margin-top: rem(10);
+}
+
+.onceKey {
+    @include font-size(14px, 1.3);
+
+    padding: rem(6) rem(8);
+    font-family: var(--font-dm-mono);
+    word-break: break-all;
+    user-select: all;
+    background-color: var(--color-net-light);
+    border-radius: rem(4);
+}
+
+// Holds its width while empty, so Done stays put when the note appears.
+.copyNote {
+    @include font-size(13px, 1.3);
+
+    min-width: rem(100);
+    color: var(--color-charcoal);
+}
+
+.accountLimit {
+    display: flex;
+    flex-direction: column;
+    gap: rem(4);
+    margin-bottom: rem(20);
+}
+
+.accountLimitRow {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(8) rem(12);
+}
+
+.accountLimitUnit {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.accountLimit .limitInput {
+    width: rem(140);
+}
+
+.tools {
+    @include flex(row, space-between, flex-end);
+
+    flex-wrap: wrap;
+    gap: rem(16) rem(32);
+    padding: rem(14) rem(4) rem(4);
+}
+
+.tools .accountLimit {
+    margin-bottom: 0;
+}
+
+.keys > .hint,
+.keys > .noteError {
+    padding: rem(10) rem(4) 0;
+}
+
+.keys > .once {
+    margin: rem(4) 0 rem(10);
+}
+
+.create {
+    @include flex(row, flex-start, flex-end);
+
+    flex-wrap: wrap;
+    gap: rem(8);
+}
+
+.toolField {
+    display: flex;
+    flex-direction: column;
+    gap: rem(4);
+}
+
+.toolLabel {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+// --- Pager ------------------------------------------------------------------
+
+.pager {
+    @include flex(row, space-between, center);
+
+    gap: rem(12);
+    margin-top: rem(24);
+}
+
+.pageInfo {
+    @include font-size(13px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.pageLink {
+    @include flex(row, center, center);
+    @include font-size(12px, 1);
+
+    height: rem(28);
+    padding-inline: rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-decoration: none;
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-media-bg);
+        }
+    }
+}
+
+// Phones: the tables give way to stacked rows. A user is the email, then the
+// date and key count on one muted line, with the chevron at the top right. A
+// key is its name and date, then the meter and limit, then its actions.
+@include breakpoint(phone) {
+    .title {
+        @include font-size(40px, 1.1);
+    }
+
+    .count {
+        margin-top: rem(4);
+    }
+
+    .page .hero {
+        padding-top: rem(84);
+    }
+
+    .body {
+        @include page-band(rem(20));
+    }
+
+    .search {
+        flex-wrap: nowrap;
+    }
+
+    .searchField {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .table,
+    .table tbody,
+    .table tr,
+    .table th,
+    .table td,
+    .keyTable,
+    .keyTable tbody,
+    .keyTable tr,
+    .keyTable th,
+    .keyTable td {
+        display: block;
+    }
+
+    .table thead,
+    .keyTable thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+
+    .table .row {
+        position: relative;
+        padding: rem(14) rem(44) rem(12) rem(14);
+        background-color: var(--color-white);
+        border-top: rem(6) solid var(--color-bg);
+    }
+
+    .table .row > * {
+        padding: 0;
+        border-top: 0;
+    }
+
+    .table .row > :first-child {
+        padding-left: 0;
+    }
+
+    .table .email {
+        width: auto;
+        margin-bottom: rem(6);
+    }
+
+    .table .roleCell {
+        width: auto;
+        margin-bottom: rem(8);
+    }
+
+    .table .active {
+        padding: 0;
+        text-align: left;
+    }
+
+    .table .created,
+    .table .active {
+        @include font-size(13px, 1.3);
+
+        display: inline;
+        font-family: var(--font-dm-mono);
+        font-weight: 300;
+        color: var(--color-text-muted);
+    }
+
+    .table .active::before {
+        content: " · ";
+    }
+
+    .table .toggleCell {
+        position: absolute;
+        top: rem(10);
+        right: 0;
+        width: auto;
+    }
+
+    .table .detail > td {
+        padding: 0 rem(10) rem(10);
+    }
+
+    .keyTable .keyRow {
+        padding: rem(12);
+        background-color: var(--color-media-bg);
+        border-top: 1px solid var(--color-white);
+    }
+
+    .keyTable .keyRow td {
+        padding: 0;
+        border-top: 0;
+    }
+
+    .usageCell {
+        width: auto;
+    }
+
+    .keyCell {
+        margin-bottom: rem(10);
+    }
+
+    .keyTable .keyActions {
+        margin-top: rem(10);
+        text-align: left;
+    }
+
+    .keyTable .confirmRow {
+        padding: 0 rem(12) rem(12);
+        background-color: var(--color-media-bg);
+    }
+
+    .keyTable .confirmRow td {
+        padding: 0;
+        text-align: left;
+    }
+
+    .confirm {
+        justify-content: flex-start;
+    }
+
+    .usage {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+    }
+
+    .meter {
+        flex: 1 1 0;
+        width: auto;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .tools {
+        flex-direction: column;
+        align-items: stretch;
+        gap: rem(16);
+    }
+
+    .create {
+        flex-wrap: nowrap;
+        align-items: flex-end;
+    }
+
+    .create .toolField {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .create .toolInput {
+        width: 100%;
+    }
+}
