@@ -52,6 +52,16 @@ const nextConfig: NextConfig = {
                 destination: '/graph-explorer/seed',
                 permanent: false,
             },
+            // Publications sits under About, and the Insights section is gone.
+            // The rest of /insights goes to the home page, temporarily, so the
+            // Library can take those paths later.
+            {
+                source: '/insights/publications',
+                destination: '/about/publications',
+                permanent: true,
+            },
+            { source: '/insights', destination: '/', permanent: false },
+            { source: '/insights/:path*', destination: '/', permanent: false },
         ];
     },
     // A docs page's raw markdown sits beside it: /docs/<path>.md serves the

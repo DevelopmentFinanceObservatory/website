@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { effectiveKind, widgetTitle } from './canvas/layout';
@@ -34,7 +34,7 @@ import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
 import { isHarnessCard, withUnheldShownCards } from '@/lib/chat/canvas';
-import { forkOf, openedSave } from '@/lib/chat/fork';
+import { openedSave } from '@/lib/chat/fork';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
@@ -55,7 +55,6 @@ import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
 import type { PromptSource, Seed, UnitChoice } from '@/lib/studio/wire';
-import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
 
 // Light-canvas cell tints (hardcoded hex by the canvas-layer convention).
@@ -92,9 +91,6 @@ export type StudioProps = {
     // Signed out: GUEST_PROMPTS prompts, then the wall; nothing is saved
     // (that needs an account), and shares are unowned snapshots.
     guest?: boolean;
-    // A gallery item: the same read-only sheet, plus the one action a
-    // curated session exists for — carrying it on in your own Studio.
-    continuable?: boolean;
     // The landing's example prompts for this visit (pickExamples, drawn by
     // the page). A share has no landing and passes none.
     examples?: readonly string[];
@@ -125,13 +121,7 @@ const subscribeGuest = (listener: () => void) => {
  * saving and the modals; the pieces live in ./landing, ./workspace,
  * ./canvas, ./modals and ./hooks.
  */
-const Studio = ({
-    shared,
-    openId,
-    guest = false,
-    continuable = false,
-    examples = [],
-}: StudioProps) => {
+const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) => {
     // A share keeps the cards its page showed that its harness never held,
     // as the owner's reopened copy does (openedSave).
     const sharedSaved = useMemo(
@@ -540,40 +530,6 @@ const Studio = ({
         setMode('start');
     };
 
-    // Gallery → "Continue this session": the curated snapshot becomes a
-    // conversation of the viewer's own (a new id, no agent session behind
-    // it), and the Studio opens on that copy. Signed out, the login sends
-    // them back here.
-    const router = useRouter();
-    const [forking, setForking] = useState(false);
-    const continueSession = async () => {
-        if (!sharedSaved || forking) {
-            return;
-        }
-
-        setForking(true);
-
-        // The copy's harness session holds none of the turns or cards, so
-        // every message and card it inherits is marked so (forkOf).
-        const copy: SavedConversation = {
-            ...sharedSaved,
-            ...forkOf(sharedSaved),
-            id: uuid(),
-            sessionId: null,
-            updatedAt: Date.now(),
-            shareMarks: [],
-        };
-
-        if (await pushConversation(copy)) {
-            router.push(`/studio/${copy.id}`);
-
-            return;
-        }
-
-        setForking(false);
-        router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
-    };
-
     // A live share's canvas: its data cards drawn on current data as each
     // refresh answers, and their states. A snapshot's cards its page could
     // not draw are filled the same way. The owner's own widgets pass
@@ -869,7 +825,6 @@ const Studio = ({
                 onOpenChange={(next) => !next && setInfoCardId(null)}
                 shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
                 // A share row's `live` is set either way (sharedViewOfRecord).
-                // A gallery canvas leaves it unset and has no share link.
                 snapshot={
                     shared?.live === false
                         ? {
@@ -993,14 +948,6 @@ const Studio = ({
                 />
             )}
 
-            {continuable && solo && (
-                <div className={styles.continueBar}>
-                    <Button onClick={continueSession} disabled={forking}>
-                        {forking ? 'Opening…' : 'Continue this session'}
-                    </Button>
-                </div>
-            )}
-
             {!readOnly && <FeedbackWidget />}
 
             {inWorkspace && (
@@ -1040,8 +987,6 @@ const Studio = ({
                         // a share, which opens straight on the workspace.
                         autoFocus={!shared && !phone}
                         wall={walled ? <GuestWall /> : null}
-                        onContinue={continuable ? continueSession : null}
-                        continuing={forking}
                         shareMarks={doc.shareMarks}
                         titles={doc.titles}
                         views={doc.views}

@@ -541,7 +541,7 @@ const Whiteboard = ({
                         <div
                             className={styles.cardBox}
                             data-card-box=""
-                            // Read by cardPress.ts and the cursors: a gallery
+                            // Read by cardPress.ts and the cursors: a read-only
                             // card or a fading one is not draggable, so a press
                             // on it pans the board.
                             data-draggable={!isLeaving && !readOnly ? '' : undefined}

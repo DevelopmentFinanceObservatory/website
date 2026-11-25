@@ -159,7 +159,7 @@ const BuiltWith = () => {
                 <Button
                     variant="dark"
                     data-reveal
-                    onClick={() => router.push('/insights/publications')}
+                    onClick={() => router.push('/about/publications')}
                 >
                     View All
                 </Button>

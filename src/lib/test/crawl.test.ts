@@ -4,14 +4,10 @@
  * sitemap lists pages it may fetch and index.
  */
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
 import test from 'node:test';
 
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match.js';
-import metadataRoute from 'next/dist/lib/metadata/get-metadata-route.js';
 import { searchParamsToUrlQuery } from 'next/dist/shared/lib/router/utils/querystring.js';
-
-import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
 
 import robots from '../../app/robots.ts';
 import {
@@ -23,7 +19,7 @@ import {
     noindexHeaders,
 } from '../crawl.ts';
 import type { DocsPage } from '../docs/corpus.ts';
-import { galleryCard, pageOpenGraph, SITE_CARD, SITE_NAME } from '../site.ts';
+import { pageOpenGraph, SITE_CARD, SITE_NAME } from '../site.ts';
 import { sitemapPaths } from '../sitemap.ts';
 
 // robots.txt matching as Google does it: a rule matches from the start of
@@ -49,32 +45,12 @@ const robotsHeader = (path: string): string | undefined =>
         .flatMap((rule) => rule.headers)
         .find((header) => header.key === 'X-Robots-Tag')?.value;
 
-const base = {
-    title: 'Item',
-    description: '',
-    types: [],
-    regions: ['africa'],
-    sources: ['wb-ids'],
-} as const;
-
-const gallery: GalleryItem[] = [
-    { ...base, slug: 'a-card', kind: 'card', sharedFrom: 'aaaaaaaa', live: true },
-    {
-        ...base,
-        slug: 'a-search',
-        kind: 'dataset',
-        title: 'Aid to Ghana',
-        description: 'Aid to Ghana since 2000.',
-        sharedFrom: 'bbbbbbbb',
-    },
-];
-
 const docs: DocsPage[] = [
     { id: 'index', title: 'Docs', path: '', kind: 'page', corpus_path: 'index.md' },
     { id: 'pydeflate', title: 'pydeflate', path: 'tools/pydeflate', kind: 'external' },
 ];
 
-const paths = sitemapPaths({ docs, gallery, sourceIds: ['dc/d/WorldBank_IDS'] });
+const paths = sitemapPaths({ docs, sourceIds: ['dc/d/WorldBank_IDS'] });
 
 const NOINDEX_PATHS = [
     '/s/abc',
@@ -92,7 +68,7 @@ test('every noindex route answers noindex, redirects and errors included', () =>
         assert.equal(robotsHeader(path), 'noindex, nofollow', path);
     }
 
-    for (const path of ['/', '/data', '/docs', '/insights/gallery/a-card', '/sources']) {
+    for (const path of ['/', '/data', '/docs', '/about/publications', '/sources']) {
         assert.equal(robotsHeader(path), undefined, path);
     }
 });
@@ -116,15 +92,12 @@ test('/data says noindex in its headers exactly where its metadata does', () => 
         const query = searchParamsToUrlQuery(params);
 
         assert.deepEqual(dataPageQuery(params), query, search);
-        assert.equal(dataPageNoindex(params, gallery), !!dataPageRobots(query, gallery), search);
+        assert.equal(dataPageNoindex(params), !!dataPageRobots(query), search);
     }
 
-    assert.equal(dataPageNoindex(new URLSearchParams('share='), gallery), true);
-    assert.equal(
-        dataPageNoindex(new URLSearchParams('share=cccccccc&share=bbbbbbbb'), gallery),
-        true,
-    );
-    assert.equal(dataPageNoindex(new URLSearchParams('share=bbbbbbbb'), gallery), false);
+    assert.equal(dataPageNoindex(new URLSearchParams('share=')), true);
+    assert.equal(dataPageNoindex(new URLSearchParams('share=bbbbbbbb')), true);
+    assert.equal(dataPageNoindex(new URLSearchParams('q=aid+to+Ghana')), false);
 });
 
 test('a page that names itself keeps the site name and shows the site card', () => {
@@ -136,16 +109,6 @@ test('a page that names itself keeps the site name and shows the site card', () 
         images: SITE_CARD,
     });
     assert.equal('images' in pageOpenGraph({ title: 'A', description: 'B', image: null }), false);
-});
-
-test('a gallery item card sits where Next serves it', () => {
-    const segment = '/(studio)/insights/gallery/[slug]';
-
-    assert.ok(existsSync(new URL(`../../app${segment}/opengraph-image.tsx`, import.meta.url)));
-    assert.equal(
-        galleryCard('a-search').url,
-        metadataRoute.fillMetadataSegment(segment, { slug: 'a-search' }, 'opengraph-image', false),
-    );
 });
 
 test('crawlers may fetch the noindex routes and not the routes for programs', () => {
@@ -172,65 +135,34 @@ test('crawlers may fetch the noindex routes and not the routes for programs', ()
     assert.equal(robots().sitemap, 'https://developmentfinance.org/sitemap.xml');
 });
 
-test('a search share is indexed only when a gallery item opens it', () => {
-    assert.equal(dataPageRobots({}, gallery), undefined);
-    assert.equal(dataPageRobots({ share: 'bbbbbbbb' }, gallery), undefined);
-    assert.deepEqual(dataPageRobots({ share: 'cccccccc' }, gallery), {
-        index: false,
-        follow: false,
-    });
-    // A card's share opens on /s/, never on /data.
-    assert.deepEqual(dataPageRobots({ share: 'aaaaaaaa' }, gallery), {
-        index: false,
-        follow: false,
-    });
-    assert.deepEqual(dataPageRobots({ spec: 'x', share: 'bbbbbbbb' }, gallery), {
-        index: false,
-        follow: false,
-    });
+test('version links and search shares are unlisted, and every other render is listed', () => {
+    const unlisted = { index: false, follow: false };
+
+    assert.equal(dataPageRobots({}), undefined);
+    assert.equal(dataPageRobots({ q: 'aid to Ghana' }), undefined);
+    assert.deepEqual(dataPageRobots({ share: 'bbbbbbbb' }), unlisted);
+    assert.deepEqual(dataPageRobots({ spec: 'x' }), unlisted);
 });
 
-test('a gallery search carries its title and description, every other render is the Data page', () => {
-    assert.deepEqual(dataPageMetadata({ share: 'bbbbbbbb' }, gallery), {
-        title: 'Aid to Ghana — DFO Gallery',
-        description: 'Aid to Ghana since 2000.',
-        openGraph: {
-            type: 'article',
-            siteName: SITE_NAME,
-            title: 'Aid to Ghana',
-            description: 'Aid to Ghana since 2000.',
-            images: galleryCard('a-search'),
-        },
-    });
-    // Every other render is the Data page: titled, described, and robots-marked per URL.
+test('every render of /data is the Data page, robots-marked per URL', () => {
     const unlisted = { index: false, follow: false };
-    const data = dataPageMetadata({}, gallery);
+    const data = dataPageMetadata({});
 
     assert.equal(data.title, 'Data — DFO');
     assert.ok(data.description);
     assert.equal(data.openGraph?.title, 'Data');
     assert.equal(data.robots, undefined);
 
-    for (const query of [{ share: 'cccccccc' }, { spec: 'x', share: 'bbbbbbbb' }]) {
-        assert.deepEqual(dataPageMetadata(query, gallery), { ...data, robots: unlisted });
+    for (const query of [{ share: 'bbbbbbbb' }, { spec: 'x', share: 'bbbbbbbb' }]) {
+        assert.deepEqual(dataPageMetadata(query), { ...data, robots: unlisted });
     }
 });
 
-test('the sitemap lists docs, gallery and source pages, but no redirect', () => {
+test('the sitemap lists docs, About and source pages', () => {
     assert.ok(paths.includes('/docs'));
     assert.ok(paths.includes('/docs/tools/pydeflate'));
-    assert.ok(paths.includes('/insights/gallery/a-card'));
-    assert.ok(paths.includes('/data?share=bbbbbbbb'));
+    assert.ok(paths.includes('/about/publications'));
     assert.ok(paths.includes('/data/sources/dc/d/WorldBank_IDS'));
-    assert.equal(paths.includes('/insights/gallery/a-search'), false);
-    assert.ok(paths.includes('/insights/gallery'));
-
-    const empty = sitemapPaths({ docs, gallery: [], sourceIds: [] });
-
-    assert.deepEqual(
-        empty.filter((path) => path.startsWith('/insights/gallery')),
-        [],
-    );
 });
 
 test('every page the sitemap lists may be fetched and indexed', () => {
@@ -243,7 +175,7 @@ test('every page the sitemap lists may be fetched and indexed', () => {
         assert.equal(robotsHeader(url.pathname), undefined, path);
 
         if (url.pathname === '/data') {
-            assert.equal(dataPageNoindex(url.searchParams, gallery), false, path);
+            assert.equal(dataPageNoindex(url.searchParams), false, path);
         }
     }
 });

@@ -15,7 +15,6 @@ import type { useChat } from '../hooks/useChat';
 import CharCount from '../prompt/CharCount';
 import PromptForm, { type PromptField } from '../prompt/PromptForm';
 
-import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
 import { messageTurns, plansByTurn } from '@/lib/studio/activityView';
@@ -39,9 +38,6 @@ type ChatPanelProps = {
     autoFocus?: boolean;
     // A guest past the free prompts: shown in place of the follow-up input.
     wall?: React.ReactNode;
-    // A gallery session: the one thing a reader can do here.
-    onContinue?: (() => void) | null;
-    continuing?: boolean;
     shareMarks: ShareMark[];
     titles: Record<string, string>;
     views: Record<string, CardView>;
@@ -72,8 +68,6 @@ const ChatPanel = ({
     readOnly,
     autoFocus = false,
     wall,
-    onContinue,
-    continuing = false,
     shareMarks,
     titles,
     views,
@@ -239,17 +233,6 @@ const ChatPanel = ({
                             </div>
                         ))}
                     </div>
-                    {readOnly && onContinue && (
-                        <div className={styles.chatFoot}>
-                            <Button full onClick={onContinue} disabled={continuing}>
-                                {continuing ? 'Opening…' : 'Continue this session'}
-                            </Button>
-                            <p className={styles.chatNote}>
-                                Opens a copy in your own Studio — ask follow-ups, change the cards,
-                                keep the canvas.
-                            </p>
-                        </div>
-                    )}
                     {!readOnly && (
                         <div className={styles.chatFoot}>
                             {chat.plan && (
