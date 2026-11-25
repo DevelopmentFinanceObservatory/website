@@ -3,8 +3,8 @@ import test from 'node:test';
 
 import {
     localShortDateText,
-    nextReleaseText,
-    releaseOverdue,
+    nextRefreshText,
+    refreshOverdue,
     shortDateText,
     sourceDateText,
 } from '../updateDates.ts';
@@ -49,11 +49,12 @@ test('a release is overdue once its month precedes the current month', () => {
     ];
 
     for (const [value, overdue] of cases) {
-        assert.equal(releaseOverdue(value, NOW), overdue, value);
+        assert.equal(refreshOverdue(value, NOW), overdue, value);
     }
 });
 
-test('the next release reads in words and is marked once overdue', () => {
-    assert.equal(nextReleaseText('2026-09', NOW), 'September 2026 (overdue)');
-    assert.equal(nextReleaseText('2026-10', NOW), 'October 2026');
+test('the next refresh reads in words and is marked overdue only when asked', () => {
+    assert.equal(nextRefreshText('2026-09', NOW, true), 'September 2026 (overdue)');
+    assert.equal(nextRefreshText('2026-09', NOW, false), 'September 2026');
+    assert.equal(nextRefreshText('2026-10', NOW, true), 'October 2026');
 });
