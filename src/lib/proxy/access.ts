@@ -43,10 +43,10 @@
  * site's visitor token while visitor limits are on (src/lib/proxy/visitor):
  *
  *   valid visitor token          counted against the visitor at the address
- *                                allowance (LIMITS), then on the address's
+ *                                allowance (LIMITS), and on the address's
  *                                backstop
  *   no valid token               counted against the address's cookieless
- *                                count at the cookieless allowance, then on
+ *                                count at the cookieless allowance, and on
  *                                the address's backstop; a 429 names what an
  *                                API key gives while keys are on
  *
@@ -56,18 +56,33 @@
  * so readers with tokens do not spend a cookieless caller's allowance, and
  * a cookieless caller reaches its own limit before the backstop. A call
  * whose key the store does not hold, or cannot check, is counted as a
- * cookieless call. With visitor limits off, and on 'mcp' and 'pin' always,
- * an anonymous call is counted against its address at LIMITS.
+ * cookieless call. With visitor limits off, an anonymous call on 'api' or
+ * 'datasets' is counted against its address at LIMITS, with no backstop,
+ * and on 'mcp' and 'pin' always, with nothing more.
  *
- * An anonymous call on 'api' or 'datasets' that the per-minute counts admit
- * is then counted on its address's daily allowance for that surface
- * (anonymousDailyCounterKey), with a visitor token or without and whether
- * visitor limits are on or off. Past it the call is a 429
- * `allowance_exhausted` until 00:00 UTC, which names what an API key gives
- * while keys are on. A call refused per minute spends nothing on it. A caller
- * that counts with `daily` false (the Studio and stored-file downloads, through
- * countAnonymous in src/lib/proxy/forward) skips it, as does a surface whose
- * daily allowance is 0.
+ * Such a call is also counted in a UTC day: on its own daily count, the
+ * visitor's (visitorDailyCounterKey) or else the address's cookieless one
+ * (cookielessDailyCounterKey), and on the address's daily ceiling
+ * (addressDailyCounterKey), which every anonymous call there spends. Past a
+ * daily count the call is a 429 `allowance_exhausted` until 00:00 UTC,
+ * which names what an API key gives while keys are on. A caller that
+ * counts with `daily` false (the Studio and stored-file downloads, through
+ * countAnonymous in src/lib/proxy/forward) skips the daily counts, and a
+ * daily count whose allowance is 0 is skipped.
+ *
+ * All of a call's anonymous counts are taken at once (`admit`, admitHit in
+ * src/lib/proxy/limitCounter): the address's backstop and ceiling are read
+ * first, and an address over either refuses the call before any count of
+ * its own is written, so fresh visitor ids from such an address cost no
+ * rows. Then the call's own per-minute count, then its own daily count,
+ * then the backstop and ceiling are spent, each only once the one before
+ * admits the call.
+ *
+ * Every refusal of a counted call says whose count refused it (`scope`):
+ * the visitor's, the address's (its cookieless, backstop or ceiling count,
+ * or its count with visitor limits off), the account's or the key's. Its
+ * `tier` is the count the call was taken as, so a visitor refused by its
+ * address's backstop is tier `visitor`, scope `address`.
  */
 import {
     conflictingKeysProblem,
@@ -80,8 +95,17 @@ import {
 import { readApiKey } from './apiKey.ts';
 import {
     accountDailyCounterKey,
-    anonymousDailyCounterKey,
+    addressCounterKey,
+    addressDailyCounterKey,
+    backstopCounterKey,
+    cookielessCounterKey,
+    cookielessDailyCounterKey,
+    isDailyStage,
     keyDailyCounterKey,
+    visitorCounterKey,
+    visitorDailyCounterKey,
+    type Admission,
+    type AdmissionPlan,
 } from './limitCounter.ts';
 import type { KeyVerifier, ValidKey } from './keyVerifier.ts';
 import type { RateVerdict } from './rateHeaders.ts';
@@ -95,6 +119,12 @@ import { rateHeaders } from './rateHeaders.ts';
  */
 export type LimitTier = 'key' | 'visitor' | 'address';
 
+/**
+ * Whose count refused a call: a visitor's, an address's, an account's
+ * (its per-minute limit or daily quota) or one key's daily cap.
+ */
+export type LimitScope = 'visitor' | 'address' | 'account' | 'key';
+
 /** The response header that carries a counted call's LimitTier to the request log. */
 export const LIMIT_TIER_HEADER = 'x-dfo-limit-tier';
 
@@ -105,14 +135,16 @@ export type VisitorSurface = 'api' | 'datasets';
  * The anonymous allowances per window: `address` for an address with
  * visitor limits off (LIMITS, which a visitor also gets), `cookieless` for
  * an address's calls with no valid visitor token, and `backstop` for all of
- * an address's anonymous calls while visitor limits are on. `daily` is an
- * address's anonymous calls per UTC day, 0 for no cap.
+ * an address's anonymous calls while visitor limits are on. Per UTC day,
+ * `daily` is a visitor's anonymous calls or an address's cookieless ones, and
+ * `dailyAddress` all of an address's anonymous calls; 0 is no cap.
  */
 export type AnonymousLimits = {
     address: Record<Surface, number>;
     cookieless: Record<VisitorSurface, number>;
     backstop: Record<VisitorSurface, number>;
     daily: Record<VisitorSurface, number>;
+    dailyAddress: Record<VisitorSurface, number>;
 };
 
 export type Identity = { kind: 'anonymous' } | { kind: 'keyed'; keyId: string; accountId: string };
@@ -124,7 +156,8 @@ export type KeyOutcome = 'allowed' | 'limited' | 'invalid' | 'forged' | 'unavail
  * The decision. `refusal` is the answer when the call is not forwarded.
  * `verdict` is what the rate headers say, when a count ran. `outcome` is set
  * when the call carried a key that was looked at, and is what the usage line
- * (forward) reports.
+ * (forward) reports. `tier` is the count a counted call was taken as, and
+ * `scope` whose count refused it, on a 429.
  */
 export type Access = {
     refusal?: Response;
@@ -132,21 +165,18 @@ export type Access = {
     verdict?: RateVerdict;
     outcome?: KeyOutcome;
     tier?: LimitTier;
+    scope?: LimitScope;
 };
 
 export type AccessDeps = {
     verifier: KeyVerifier;
     // Whether the key's tag is one a server secret made (src/lib/auth/keyTag).
     tagValid: (key: string) => boolean;
-    // Count a call from an address against `limit`.
+    // Count a call from an address against `limit`: 'mcp' and 'pin'.
     hitAddress: (surface: Surface, ip: string, limit: number) => Promise<RateVerdict>;
-    // Count a call from a visitor (its visitor id) against `limit`.
-    hitVisitor: (surface: VisitorSurface, visitorId: string, limit: number) => Promise<RateVerdict>;
-    // Count a call with no valid visitor token from an address against `limit`,
-    // on a counter apart from hitAddress's.
-    hitCookieless: (surface: VisitorSurface, ip: string, limit: number) => Promise<RateVerdict>;
-    // Count an anonymous call on its address's backstop against `limit`.
-    hitBackstop: (surface: VisitorSurface, ip: string, limit: number) => Promise<RateVerdict>;
+    // Count an anonymous call on 'api' or 'datasets' on the counters of
+    // `plan` (admitHit in ./limitCounter).
+    admit: (plan: AdmissionPlan) => Promise<Admission>;
     anonymousLimits: AnonymousLimits;
     // Whether visitor limits are on (visitorLimitsOn in src/lib/proxy/visitor).
     visitorLimits: () => boolean;
@@ -155,7 +185,7 @@ export type AccessDeps = {
     // Count a call from an account against `limit`.
     hitAccount: (surface: Surface, accountId: string, limit: number) => Promise<RateVerdict>;
     // Count a call on a daily counter (accountDailyCounterKey,
-    // keyDailyCounterKey, anonymousDailyCounterKey) against `limit`.
+    // keyDailyCounterKey) against `limit`.
     hitDaily: (counterKey: string, limit: number) => Promise<RateVerdict>;
     // Give back one hit on a daily counter, for a call a later count refused.
     refundDaily: (counterKey: string) => Promise<void>;
@@ -189,8 +219,7 @@ const accountLimit = (key: ValidKey, defaultLimit: number): number => key.rateLi
  * Decide the call. `keys` is false when keys are switched off
  * (API_KEYS_ENABLED, read by `forward`), and the surface must honour keys as
  * well (`honorsKeys`). `surface` unset means the call has no limit and no key
- * check. `daily` false leaves an anonymous call off its address's daily
- * allowance.
+ * check. `daily` false leaves an anonymous call off the daily allowances.
  */
 export const decideAccess = async (
     deps: AccessDeps,
@@ -209,124 +238,112 @@ export const decideAccess = async (
     },
 ): Promise<Access> => {
     const anonymous: Identity = { kind: 'anonymous' };
-    const limited = (verdict: RateVerdict, tier: LimitTier, refusal?: Response): Access =>
+    // A count of the address alone, as 'mcp' and 'pin' are counted.
+    const limited = (verdict: RateVerdict, tier: LimitTier): Access =>
         verdict.allowed
             ? { identity: anonymous, verdict, tier }
             : {
-                  refusal:
-                      refusal ??
-                      rateLimitedProblem(
-                          verdict,
-                          limitHeaders({ identity: anonymous, verdict, tier }),
-                      ),
+                  refusal: rateLimitedProblem(
+                      verdict,
+                      limitHeaders({ identity: anonymous, verdict, tier }),
+                  ),
                   identity: anonymous,
                   verdict,
                   tier,
+                  scope: 'address',
               };
 
-    // The address at LIMITS: visitor limits off, and 'mcp' and 'pin'.
-    const countAddress = async (): Promise<Access> =>
-        surface
-            ? limited(
-                  await deps.hitAddress(surface, ip, deps.anonymousLimits.address[surface]),
-                  'address',
-              )
-            : { identity: anonymous };
-
-    // Count on `first`, then, once it admits the call, on the address's
-    // backstop. The headers report `first`, or the backstop when it refuses.
-    const thenBackstop = async (
-        visitorSurface: VisitorSurface,
-        first: RateVerdict,
-    ): Promise<RateVerdict> => {
-        if (!first.allowed) {
-            return first;
+    // An anonymous call, by visitor or by address. `cookieless` counts it
+    // as a call with no valid visitor token whatever it carries: a key the
+    // store does not hold or cannot check.
+    const countAnonymous = async (cookieless = false): Promise<Access> => {
+        if (!surface) {
+            return { identity: anonymous };
         }
 
-        const backstop = await deps.hitBackstop(
-            visitorSurface,
-            ip,
-            deps.anonymousLimits.backstop[visitorSurface],
-        );
-
-        return backstop.allowed ? first : backstop;
-    };
-
-    // A call with no valid visitor token, or a key the store does not hold
-    // or cannot check. A refusal names what an API key gives while keys are on.
-    const countCookieless = async (): Promise<Access> => {
-        if (!surface || !isVisitorSurface(surface) || !deps.visitorLimits()) {
-            return countAddress();
+        if (!isVisitorSurface(surface)) {
+            return limited(
+                await deps.hitAddress(surface, ip, deps.anonymousLimits.address[surface]),
+                'address',
+            );
         }
 
-        const verdict = await thenBackstop(
-            surface,
-            await deps.hitCookieless(surface, ip, deps.anonymousLimits.cookieless[surface]),
-        );
-        const hint =
-            !verdict.allowed && keys
-                ? cookielessLimitedProblem(
-                      verdict,
-                      limitHeaders({ identity: anonymous, verdict, tier: 'address' }),
-                      { limit: deps.defaultLimit, dailyLimit: deps.defaultDailyLimit },
-                  )
-                : undefined;
+        const limits = deps.anonymousLimits;
+        const visitorsOn = deps.visitorLimits();
+        const visitorId = visitorsOn && !cookieless ? deps.visitor(headers) : null;
+        const tier: LimitTier = visitorId === null ? 'address' : 'visitor';
+        const dayLimit = daily ? limits.daily[surface] : 0;
+        const ceilingLimit = daily ? limits.dailyAddress[surface] : 0;
+        const plan: AdmissionPlan = {
+            minute:
+                visitorId !== null
+                    ? { key: visitorCounterKey(surface, visitorId), limit: limits.address[surface] }
+                    : visitorsOn
+                      ? {
+                            key: cookielessCounterKey(surface, ip),
+                            limit: limits.cookieless[surface],
+                        }
+                      : { key: addressCounterKey(surface, ip), limit: limits.address[surface] },
+        };
 
-        return limited(verdict, 'address', hint);
-    };
-
-    // Once the per-minute counts admit `admitted`, count it on its address's
-    // daily allowance. The headers report the per-minute count, or the daily
-    // one when it refuses.
-    const thenDaily = async (admitted: Access): Promise<Access> => {
-        if (admitted.refusal || !daily || !surface || !isVisitorSurface(surface)) {
-            return admitted;
+        if (visitorsOn) {
+            plan.backstop = {
+                key: backstopCounterKey(surface, ip),
+                limit: limits.backstop[surface],
+            };
         }
 
-        const limit = deps.anonymousLimits.daily[surface];
-
-        if (limit <= 0) {
-            return admitted;
+        if (dayLimit > 0) {
+            plan.day = {
+                key:
+                    visitorId === null
+                        ? cookielessDailyCounterKey(surface, ip)
+                        : visitorDailyCounterKey(surface, visitorId),
+                limit: dayLimit,
+            };
         }
 
-        const verdict = await deps.hitDaily(anonymousDailyCounterKey(surface, ip), limit);
-
-        if (verdict.allowed) {
-            return admitted;
+        if (ceilingLimit > 0) {
+            plan.ceiling = { key: addressDailyCounterKey(surface, ip), limit: ceilingLimit };
         }
 
-        const spent = { identity: anonymous, verdict, tier: admitted.tier };
+        const { refusedBy, verdicts } = await deps.admit(plan);
+
+        if (refusedBy === null) {
+            return { identity: anonymous, verdict: verdicts.minute, tier };
+        }
+
+        const verdict = verdicts[refusedBy]!;
+        const own = refusedBy === 'minute' || refusedBy === 'day';
+        const scope = own && visitorId !== null ? 'visitor' : 'address';
+        const refused: Access = { identity: anonymous, verdict, tier, scope };
+        const rate = limitHeaders(refused);
+
+        if (isDailyStage(refusedBy)) {
+            const whose = !own ? 'address' : visitorId === null ? 'cookieless' : 'visitor';
+
+            return {
+                ...refused,
+                refusal: anonymousDailyProblem(
+                    verdict,
+                    rate,
+                    whose,
+                    keys ? { dailyLimit: deps.defaultDailyLimit } : undefined,
+                ),
+            };
+        }
 
         return {
-            ...spent,
-            refusal: anonymousDailyProblem(
-                verdict,
-                limitHeaders(spent),
-                keys ? { dailyLimit: deps.defaultDailyLimit } : undefined,
-            ),
+            ...refused,
+            refusal:
+                visitorsOn && visitorId === null && keys
+                    ? cookielessLimitedProblem(verdict, rate, {
+                          limit: deps.defaultLimit,
+                          dailyLimit: deps.defaultDailyLimit,
+                      })
+                    : rateLimitedProblem(verdict, rate, scope),
         };
     };
-
-    const countPerMinute = async (): Promise<Access> => {
-        if (!surface || !isVisitorSurface(surface) || !deps.visitorLimits()) {
-            return countAddress();
-        }
-
-        const visitorId = deps.visitor(headers);
-
-        if (visitorId === null) {
-            return countCookieless();
-        }
-
-        const verdict = await thenBackstop(
-            surface,
-            await deps.hitVisitor(surface, visitorId, deps.anonymousLimits.address[surface]),
-        );
-
-        return limited(verdict, 'visitor');
-    };
-
-    const countAnonymous = async (): Promise<Access> => thenDaily(await countPerMinute());
 
     if (!surface || !keys || !honorsKeys(surface)) {
         return countAnonymous();
@@ -365,6 +382,7 @@ export const decideAccess = async (
                 verdict,
                 outcome: 'limited',
                 tier: 'key',
+                scope: 'account',
             };
         }
 
@@ -378,6 +396,7 @@ export const decideAccess = async (
             verdict: daily,
             outcome: 'limited',
             tier: 'key',
+            scope,
         });
 
         const capKey = keyDailyCounterKey(key.keyId);
@@ -422,11 +441,16 @@ export const decideAccess = async (
         return countAccount(found);
     }
 
-    const address = await thenDaily(await countCookieless());
+    const address = await countAnonymous(true);
 
     if (found.kind === 'unavailable' || address.refusal) {
         return { ...address, outcome: address.refusal ? 'limited' : 'unavailable' };
     }
 
-    return { refusal: invalidKeyProblem(), identity: anonymous, outcome: 'invalid' };
+    // The call spent the address's counts, so the 401 carries them and the tier.
+    return {
+        ...address,
+        refusal: invalidKeyProblem(limitHeaders(address)),
+        outcome: 'invalid',
+    };
 };

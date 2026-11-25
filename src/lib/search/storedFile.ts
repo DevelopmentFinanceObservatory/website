@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 
-import { limitHeaders } from '@/lib/proxy/access';
+import { limitHeaders, type LimitScope } from '@/lib/proxy/access';
 import { countAnonymous } from '@/lib/proxy/forward';
 import { datasetsFetch } from '@/lib/search/datasetsFetch';
 import { artifactHref } from '@/lib/search/searchClient';
@@ -22,19 +22,22 @@ const VERSION_READ_TIMEOUT_MS = 20_000;
 /**
  * Counts the call on the proxy's `api` surface as any anonymous site call
  * is counted, per visitor or per address (countAnonymous in
- * src/lib/proxy/forward), off the address's daily allowance. `refusal` is the 429 problem document when the
- * call is over its allowance. `headers` are the X-RateLimit-* set and the
- * limit tier, with `Retry-After` added on a refusal.
+ * src/lib/proxy/forward), off the daily allowances. `refusal` is the 429
+ * problem document when the call is over its allowance, and `scope` whose
+ * count refused it, the visitor's or the address's. `headers` are the
+ * X-RateLimit-* set and the limit tier, with `Retry-After` added on a
+ * refusal.
  */
 export const downloadAllowance = async (
     req: NextRequest,
-): Promise<{ refusal?: Response; headers: Record<string, string> }> => {
+): Promise<{ refusal?: Response; scope?: LimitScope; headers: Record<string, string> }> => {
     const access = await countAnonymous(req, 'api', { daily: false });
     const headers = limitHeaders(access);
 
     return access.refusal
         ? {
               refusal: access.refusal,
+              scope: access.scope,
               headers: { ...headers, 'Retry-After': String(access.verdict?.reset ?? 0) },
           }
         : { headers };

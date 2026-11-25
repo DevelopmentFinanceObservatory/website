@@ -28,14 +28,13 @@ import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
 import { keysEnabled } from './keysSwitch';
 import { unreachableProblem } from './problem';
 import {
+    admit,
     hit,
-    hitBackstop,
-    hitCookieless,
     hitDaily,
     hitKey,
-    hitVisitor,
     refundDaily,
     ACCOUNT_DAILY_LIMIT,
+    ADDRESS_DAILY_LIMITS,
     ANONYMOUS_DAILY_LIMITS,
     BACKSTOP_LIMITS,
     COOKIELESS_LIMITS,
@@ -56,8 +55,10 @@ import { readVisitor, visitorLimitsOn } from './visitor';
  * headers and x-dfo-limit-tier go out only on a counted call). While visitor
  * limits are on, an anonymous 'api' or 'datasets' call with the site's
  * visitor token is counted per visitor instead (src/lib/proxy/access). Each
- * anonymous 'api' or 'datasets' call is also counted on its address's daily
- * allowance (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS). A call on the 'api' or 'datasets'
+ * anonymous 'api' or 'datasets' call is also counted on a daily allowance,
+ * the visitor's or the address's cookieless one, and on its address's daily
+ * ceiling (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS and
+ * ADDRESS_DAILY_LIMITS). A call on the 'api' or 'datasets'
  * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
  * the account's limit on that surface and against the account's daily quota,
@@ -138,14 +139,13 @@ export const accessDeps: AccessDeps = {
     verifier: createKeyVerifier(keyDb, cacheLifetimes(process.env.API_KEY_CACHE_S)),
     tagValid: keyTagValid,
     hitAddress: hit,
-    hitVisitor,
-    hitCookieless,
-    hitBackstop,
+    admit,
     anonymousLimits: {
         address: LIMITS,
         cookieless: COOKIELESS_LIMITS,
         backstop: BACKSTOP_LIMITS,
         daily: ANONYMOUS_DAILY_LIMITS,
+        dailyAddress: ADDRESS_DAILY_LIMITS,
     },
     visitorLimits: visitorLimitsOn,
     visitor: readVisitor,
@@ -200,8 +200,7 @@ const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
  * Count an anonymous call on `surface` from `req` as forward() does, by
  * visitor or by address (src/lib/proxy/access), any key ignored. For a
  * caller that counts before forward() runs and passes the result as
- * `counted`. `daily` says whether the call spends its address's daily
- * allowance.
+ * `counted`. `daily` says whether the call spends the daily allowances.
  */
 export const countAnonymous = (
     req: NextRequest,

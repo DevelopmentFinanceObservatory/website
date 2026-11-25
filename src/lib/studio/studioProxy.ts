@@ -158,8 +158,8 @@ export const studioProxy =
 
         // Counted before the body is read, so a call the proxy answers itself
         // counts too: per visitor with a valid visitor token, else per
-        // address, as an anonymous API call is, but off the address's daily
-        // allowance. forward() takes this decision and counts nothing more.
+        // address, as an anonymous API call is, but off the daily
+        // allowances. forward() takes this decision and counts nothing more.
         const counted = await countAnonymous(req, 'api', { daily: false });
         const limitHeaders = limitHeadersOf(counted);
 

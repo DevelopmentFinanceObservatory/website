@@ -22,11 +22,11 @@ test('version-download refusals after the count are logged with their tier, whic
 
     process.env.SEARCH_API_BASE = 'http://apis.test';
     accessDeps.visitorLimits = () => false;
-    accessDeps.hitAddress = async (_surface, _ip, limit) => ({
-        allowed: true,
-        limit,
-        remaining: 1,
-        reset: 30,
+    accessDeps.admit = async (plan) => ({
+        refusedBy: null,
+        verdicts: {
+            minute: { allowed: true, limit: plan.minute.limit, remaining: 1, reset: 30 },
+        },
     });
     t.after(() => {
         Object.assign(accessDeps, original);

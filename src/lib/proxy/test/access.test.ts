@@ -8,9 +8,12 @@
  * any other surface, /mcp included, is ignored. While visitor limits are on,
  * an anonymous API or Datasets API call is counted per visitor when it
  * carries a valid visitor token, and on its address's cookieless count when
- * it does not, then on its address's backstop either way. Every anonymous
- * API or Datasets API call the per-minute counts admit is then counted on its
- * address's daily allowance, unless the caller or a 0 allowance turns it off.
+ * it does not, and on its address's backstop either way. Every anonymous
+ * API or Datasets API call is also counted on its own daily count and its
+ * address's daily ceiling, unless the caller or a 0 allowance turns it off.
+ * The fake limiter is the in-memory one (admitInMemory), which takes a
+ * plan's counts in the order the shared statement does, so the log shows
+ * each read (`peek`) and count (`hit`) of a counter key.
  */
 import '../../test/serverModules.ts';
 
@@ -20,6 +23,8 @@ import test from 'node:test';
 import { hasValidTag, signKey } from '../../auth/keyTag.ts';
 import type { AccessDeps, AnonymousLimits } from '../access.ts';
 import type { KeyVerdict, KeyVerifier, ValidKey } from '../keyVerifier.ts';
+import { DAY_S } from '../limitCounter.ts';
+import { admitInMemory, createFallbackCounter, type FallbackCounter } from '../limitFallback.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
 import type { Surface } from '../rateLimit.ts';
 
@@ -39,6 +44,9 @@ const VALID: ValidKey = {
     expiresAt: null,
 };
 
+// 30 s before 00:00 UTC, so a minute's window and a day's both end in 30 s.
+const NOW = 20_000 * DAY_S * 1000 - 30_000;
+
 const verdict = (limit: number, used: number): RateVerdict => ({
     allowed: used <= limit,
     limit,
@@ -53,8 +61,13 @@ const LIMITS: AnonymousLimits = {
     // Off here, so the per-minute tests see only the per-minute counts; the
     // daily allowance tests turn it on.
     daily: { api: 0, datasets: 0 },
+    dailyAddress: { api: 0, datasets: 0 },
 };
-const DAILY_ON: AnonymousLimits = { ...LIMITS, daily: { api: 1000, datasets: 1000 } };
+const DAILY_ON: AnonymousLimits = {
+    ...LIMITS,
+    daily: { api: 1000, datasets: 1000 },
+    dailyAddress: { api: 5000, datasets: 5000 },
+};
 
 // A world of fakes: `answer` is what the key store says, `cached` whether the
 // cache already holds it, `used` how many calls each counter already has.
@@ -73,6 +86,7 @@ const world = ({
     cookielessUsed = 0,
     backstopUsed = 0,
     anonymousDailyUsed = 0,
+    addressDailyUsed = 0,
     anonymousLimits = LIMITS,
 }: {
     answer?: KeyVerdict;
@@ -89,9 +103,57 @@ const world = ({
     cookielessUsed?: number;
     backstopUsed?: number;
     anonymousDailyUsed?: number;
+    addressDailyUsed?: number;
     anonymousLimits?: AnonymousLimits;
 } = {}) => {
     const calls: string[] = [];
+    // How many calls a counter key holds before the test, by its kind.
+    const usedBefore = (key: string): number =>
+        /^anonday:\w+:addr:/.test(key)
+            ? addressDailyUsed
+            : key.startsWith('anonday:')
+              ? anonymousDailyUsed
+              : key.includes(':visitor:')
+                ? visitorUsed
+                : key.includes(':cookieless:')
+                  ? cookielessUsed
+                  : key.includes(':backstop:')
+                    ? backstopUsed
+                    : addressUsed;
+    const minuteCounter = createFallbackCounter(60, { now: () => NOW });
+    const dayCounter = createFallbackCounter(DAY_S, { now: () => NOW });
+    // `counter`, seeded with usedBefore on a key's first touch, logging
+    // each read and count.
+    const logged = (counter: FallbackCounter): FallbackCounter => {
+        const seeded = new Set<string>();
+        const seed = (key: string): void => {
+            const used = usedBefore(key);
+
+            if (!seeded.has(key) && used > 0) {
+                counter.record(key, { allowed: true, limit: used, remaining: 0, reset: 1 }, NOW);
+            }
+
+            seeded.add(key);
+        };
+
+        return {
+            ...counter,
+            hit(key, limit) {
+                seed(key);
+                calls.push(`hit:${key}:${limit}`);
+
+                return counter.hit(key, limit);
+            },
+            peek(key, limit) {
+                seed(key);
+                calls.push(`peek:${key}:${limit}`);
+
+                return counter.peek(key, limit);
+            },
+        };
+    };
+    const minute = logged(minuteCounter);
+    const day = logged(dayCounter);
     const verifier: KeyVerifier = {
         cacheSize: () => 0,
         cachedValid: async () => {
@@ -111,25 +173,11 @@ const world = ({
         defaultLimit,
         defaultDailyLimit,
         hitAddress: async (surface, ip, limit) => {
-            calls.push(`address:${surface}:${ip}`);
+            calls.push(`hit:${surface}:${ip}:${limit}`);
 
             return verdict(limit, addressUsed + 1);
         },
-        hitVisitor: async (surface, id, limit) => {
-            calls.push(`visitor:${surface}:${id}:${limit}`);
-
-            return verdict(limit, visitorUsed + 1);
-        },
-        hitCookieless: async (surface, ip, limit) => {
-            calls.push(`cookieless:${surface}:${ip}:${limit}`);
-
-            return verdict(limit, cookielessUsed + 1);
-        },
-        hitBackstop: async (surface, ip, limit) => {
-            calls.push(`backstop:${surface}:${ip}:${limit}`);
-
-            return verdict(limit, backstopUsed + 1);
-        },
+        admit: async (plan) => admitInMemory(plan, { minute, day }),
         anonymousLimits,
         visitorLimits: () => visitorLimits,
         visitor: () => visitorId,
@@ -141,11 +189,7 @@ const world = ({
         hitDaily: async (counterKey, limit) => {
             calls.push(`daily:${counterKey}:${limit}`);
 
-            const used = counterKey.startsWith('anonday:')
-                ? anonymousDailyUsed
-                : counterKey.startsWith('apiday:user:')
-                  ? dailyUsed
-                  : capUsed;
+            const used = counterKey.startsWith('apiday:user:') ? dailyUsed : capUsed;
 
             return verdict(limit, used + 1);
         },
@@ -154,7 +198,10 @@ const world = ({
         },
     };
 
-    return { calls, deps };
+    // The calls a daily counter key holds now.
+    const dailyCount = (key: string): number => 1e9 - dayCounter.peek(key, 1e9).remaining;
+
+    return { calls, deps, dailyCount };
 };
 
 const decide = (
@@ -174,7 +221,7 @@ test('a call with no key is counted against its address, as before', async () =>
     const { calls, deps } = world();
     const access = await decide(deps);
 
-    assert.deepEqual(calls, ['address:api:203.0.113.7']);
+    assert.deepEqual(calls, ['hit:api:203.0.113.7:120']);
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.refusal, undefined);
     assert.equal(access.outcome, undefined);
@@ -203,7 +250,7 @@ test('a key on a call that ignores keys is ignored: anonymous, counted by addres
     const { calls, deps } = world();
     const access = await decide(deps, { 'x-api-key': 'nonsense' }, { keys: false });
 
-    assert.deepEqual(calls, ['address:api:203.0.113.7']);
+    assert.deepEqual(calls, ['hit:api:203.0.113.7:120']);
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.refusal, undefined);
 });
@@ -240,11 +287,14 @@ test('a key on the datasets surface is counted against the account there', async
 });
 
 test('a key on mcp or pin is anonymous, counted by address, never looked up', async () => {
-    for (const surface of ['mcp', 'pin'] as const) {
+    for (const [surface, limit] of [
+        ['mcp', 300],
+        ['pin', 10],
+    ] as const) {
         const { calls, deps } = world({ cached: true });
         const access = await decide(deps, { 'x-api-key': KEY }, { surface });
 
-        assert.deepEqual(calls, [`address:${surface}:203.0.113.7`]);
+        assert.deepEqual(calls, [`hit:${surface}:203.0.113.7:${limit}`]);
         assert.deepEqual(access.identity, { kind: 'anonymous' });
         assert.equal(access.outcome, undefined);
         assert.equal(access.refusal, undefined);
@@ -277,6 +327,7 @@ test("a key's own cap is counted before the account's quota, which a refused cal
     assert.equal(access.refusal?.status, 429);
     assert.equal((await access.refusal!.json()).code, 'allowance_exhausted');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '50');
+    assert.equal(access.scope, 'key');
 
     // A call the cap admits goes on to the account's quota, which can still
     // refuse it, and then gives its hit on the cap back.
@@ -291,6 +342,7 @@ test("a key's own cap is counted before the account's quota, which a refused cal
         'refund:apiday:key:key-1',
     ]);
     assert.equal(refused.refusal?.headers.get('x-ratelimit-limit'), '1000');
+    assert.equal(refused.scope, 'account');
 });
 
 test('an allowed keyed call reports the per-minute verdict, not the daily one', async () => {
@@ -348,6 +400,7 @@ test('an account past its limit is a 429 that names the account', async () => {
     assert.equal(access.outcome, 'limited');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '600');
     assert.equal((await access.refusal!.json()).code, 'rate_limited');
+    assert.equal(access.scope, 'account');
     assert.equal(access.refusal?.headers.get('retry-after'), '30');
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
 });
@@ -393,7 +446,7 @@ test('a key with a good tag that the store lacks, from an address past its limit
 
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.outcome, 'limited');
-    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'hit:api:203.0.113.7:120']);
     assert.equal((await access.refusal!.json()).code, 'rate_limited');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '120');
 });
@@ -410,8 +463,9 @@ test('with visitor limits on, a key the store lacks or cannot check is counted a
         assert.deepEqual(calls, [
             'cache',
             'lookup',
-            'cookieless:api:203.0.113.7:60',
-            'backstop:api:203.0.113.7:240',
+            'peek:api:backstop:203.0.113.7:240',
+            'hit:api:cookieless:203.0.113.7:60',
+            'hit:api:backstop:203.0.113.7:240',
         ]);
     }
 });
@@ -427,10 +481,12 @@ test('an invalid key is a 401 problem document and does not fall back to anonymo
     assert.equal(body.type, '/codes/invalid_api_key');
     assert.equal(access.outcome, 'invalid');
     assert.deepEqual(access.identity, { kind: 'anonymous' });
-    // A deleted key keeps a good tag, so a miss costs its address a call;
-    // no account count, and the 401 carries no limit headers.
-    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
-    assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), null);
+    // A deleted key keeps a good tag, so a miss costs its address a call,
+    // and no account count. The 401 carries the address's count and tier.
+    assert.deepEqual(calls, ['cache', 'lookup', 'hit:api:203.0.113.7:120']);
+    assert.equal(access.tier, 'address');
+    assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '120');
+    assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), 'address');
 });
 
 test('an unavailable key store lets the call through as anonymous, counted by address', async () => {
@@ -441,7 +497,7 @@ test('an unavailable key store lets the call through as anonymous, counted by ad
     assert.equal(access.outcome, 'unavailable');
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.verdict?.limit, 120);
-    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'hit:api:203.0.113.7:120']);
 });
 
 test('two different keys are a 400 before anything is counted', async () => {
@@ -469,7 +525,7 @@ test('a bearer that is not one of our keys is no key: anonymous, no lookup', asy
     const { calls, deps } = world();
     const access = await decide(deps, { authorization: 'Bearer harness-token' });
 
-    assert.deepEqual(calls, ['address:api:203.0.113.7']);
+    assert.deepEqual(calls, ['hit:api:203.0.113.7:120']);
     assert.equal(access.outcome, undefined);
 });
 
@@ -481,7 +537,7 @@ test("with visitor limits off, an anonymous call is counted by address at today'
         const { calls, deps } = world({ visitorId: 'v-1' });
         const access = await decide(deps, {}, { surface });
 
-        assert.deepEqual(calls, [`address:${surface}:203.0.113.7`]);
+        assert.deepEqual(calls, [`hit:${surface}:203.0.113.7:${limit}`]);
         assert.equal(access.verdict?.limit, limit);
         assert.equal(access.tier, 'address');
     }
@@ -493,7 +549,7 @@ test("with visitor limits off, an anonymous call is counted by address at today'
     assert.ok(!(await refused.refusal!.json()).detail.includes('/docs/build/api-keys'));
 });
 
-test('a call with a valid visitor token is counted per visitor, then on the address backstop', async () => {
+test('a call with a valid visitor token reads the address backstop, then counts per visitor, then on the backstop', async () => {
     for (const [surface, own, backstop] of [
         ['api', 120, 240],
         ['datasets', 300, 600],
@@ -502,8 +558,9 @@ test('a call with a valid visitor token is counted per visitor, then on the addr
         const access = await decide(deps, {}, { surface });
 
         assert.deepEqual(calls, [
-            `visitor:${surface}:v-1:${own}`,
-            `backstop:${surface}:203.0.113.7:${backstop}`,
+            `peek:${surface}:backstop:203.0.113.7:${backstop}`,
+            `hit:${surface}:visitor:v-1:${own}`,
+            `hit:${surface}:backstop:203.0.113.7:${backstop}`,
         ]);
         assert.deepEqual(access.identity, { kind: 'anonymous' });
         assert.equal(access.refusal, undefined);
@@ -516,28 +573,19 @@ test('a visitor over its limit is a 429 that spends nothing on the backstop', as
     const { calls, deps } = world({ visitorLimits: true, visitorId: 'v-1', visitorUsed: 120 });
     const access = await decide(deps);
 
-    assert.deepEqual(calls, ['visitor:api:v-1:120']);
+    assert.deepEqual(calls, ['peek:api:backstop:203.0.113.7:240', 'hit:api:visitor:v-1:120']);
     assert.equal(access.refusal?.status, 429);
     assert.equal((await access.refusal!.json()).code, 'rate_limited');
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '120');
     assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), 'visitor');
+    assert.equal(access.scope, 'visitor');
 });
 
 test('ten visitors from one address meet the address backstop', async () => {
-    const counts = new Map<string, number>();
-    const count = async (counter: string, limit: number) => {
-        const used = (counts.get(counter) ?? 0) + 1;
-
-        counts.set(counter, used);
-
-        return verdict(limit, used);
-    };
     const { deps } = world({ visitorLimits: true });
     let visitorId = '';
 
     deps.visitor = () => visitorId;
-    deps.hitVisitor = (surface, id, limit) => count(`visitor:${id}`, limit);
-    deps.hitBackstop = (surface, ip, limit) => count(`backstop:${ip}`, limit);
 
     const statuses: number[] = [];
 
@@ -553,13 +601,15 @@ test('ten visitors from one address meet the address backstop', async () => {
     assert.deepEqual(statuses.slice(240), Array(60).fill(429));
 });
 
-test('a backstop refusal reports the backstop', async () => {
-    const { deps } = world({ visitorLimits: true, visitorId: 'v-1', backstopUsed: 240 });
+test('an address past its backstop refuses a visitor before counting it, and names the address', async () => {
+    const { calls, deps } = world({ visitorLimits: true, visitorId: 'v-1', backstopUsed: 240 });
     const access = await decide(deps);
 
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '240');
     assert.equal(access.tier, 'visitor');
+    assert.equal(access.scope, 'address');
+    assert.deepEqual(calls, ['peek:api:backstop:203.0.113.7:240']);
 });
 
 test('a call with no valid visitor token is counted on its own cookieless count, then the backstop', async () => {
@@ -571,8 +621,9 @@ test('a call with no valid visitor token is counted on its own cookieless count,
         const access = await decide(deps, {}, { surface });
 
         assert.deepEqual(calls, [
-            `cookieless:${surface}:203.0.113.7:${limit}`,
-            `backstop:${surface}:203.0.113.7:${backstop}`,
+            `peek:${surface}:backstop:203.0.113.7:${backstop}`,
+            `hit:${surface}:cookieless:203.0.113.7:${limit}`,
+            `hit:${surface}:backstop:203.0.113.7:${backstop}`,
         ]);
         assert.equal(access.verdict?.limit, limit);
         assert.equal(access.tier, 'address');
@@ -583,9 +634,13 @@ test('a cookieless call over its own count spends nothing on the backstop', asyn
     const { calls, deps } = world({ visitorLimits: true, cookielessUsed: 60 });
     const access = await decide(deps);
 
-    assert.deepEqual(calls, ['cookieless:api:203.0.113.7:60']);
+    assert.deepEqual(calls, [
+        'peek:api:backstop:203.0.113.7:240',
+        'hit:api:cookieless:203.0.113.7:60',
+    ]);
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '60');
+    assert.equal(access.scope, 'address');
 });
 
 test('a cookieless 429 links the API key docs while keys are on, on api and datasets', async () => {
@@ -617,25 +672,14 @@ test("a call with a valid visitor token never touches its address's cookieless c
     const access = await decide(deps);
 
     assert.equal(access.refusal, undefined);
-    assert.ok(calls.every((entry) => !entry.startsWith('cookieless:')));
+    assert.ok(calls.every((entry) => !entry.includes(':cookieless:')));
 });
 
 test('cookieless callers and visitors at one address share its backstop', async () => {
-    const counts = new Map<string, number>();
-    const count = async (counter: string, limit: number) => {
-        const used = (counts.get(counter) ?? 0) + 1;
-
-        counts.set(counter, used);
-
-        return verdict(limit, used);
-    };
     const { deps } = world({ visitorLimits: true });
     let visitorId: string | null = null;
 
     deps.visitor = () => visitorId;
-    deps.hitVisitor = (surface, id, limit) => count(`visitor:${id}`, limit);
-    deps.hitCookieless = (surface, ip, limit) => count(`cookieless:${ip}`, limit);
-    deps.hitBackstop = (surface, ip, limit) => count(`backstop:${ip}`, limit);
 
     const statuses = async (calls: number) => {
         const seen: number[] = [];
@@ -669,7 +713,7 @@ test("mcp and pin are counted by address at today's limits with visitor limits o
         const { calls, deps } = world({ visitorLimits: true, visitorId: 'v-1' });
         const access = await decide(deps, {}, { surface });
 
-        assert.deepEqual(calls, [`address:${surface}:203.0.113.7`]);
+        assert.deepEqual(calls, [`hit:${surface}:203.0.113.7:${limit}`]);
         assert.equal(access.verdict?.limit, limit);
     }
 });
@@ -679,40 +723,70 @@ test('a keyed call is counted as tier key, whatever visitor token it carries', a
     const access = await decide(deps, { 'x-api-key': KEY });
 
     assert.equal(access.tier, 'key');
-    assert.ok(calls.every((entry) => !entry.startsWith('visitor:')));
+    assert.ok(calls.every((entry) => !entry.includes(':visitor:')));
 });
 
-test("an anonymous call past its address's daily allowance is a 429 allowance_exhausted until 00:00 UTC", async () => {
-    for (const [name, setting, headers, surface, tier] of [
-        ['visitor', { visitorLimits: true, visitorId: 'v-1' }, {}, 'api', 'visitor'],
-        ['cookieless', { visitorLimits: true }, {}, 'datasets', 'address'],
-        ['visitor limits off', { visitorId: 'v-1' }, {}, 'api', 'address'],
+test('an anonymous call past its own daily count or its address ceiling is a 429 allowance_exhausted', async () => {
+    for (const [name, setting, headers, surface, own, tier] of [
+        ['visitor', { visitorLimits: true, visitorId: 'v-1' }, {}, 'api', 'visitor:v-1', 'visitor'],
+        [
+            'cookieless',
+            { visitorLimits: true },
+            {},
+            'datasets',
+            'cookieless:203.0.113.7',
+            'address',
+        ],
+        [
+            'visitor limits off',
+            { visitorId: 'v-1' },
+            {},
+            'api',
+            'cookieless:203.0.113.7',
+            'address',
+        ],
         [
             'key the store lacks',
             { answer: { kind: 'invalid' } },
             { 'x-api-key': KEY },
             'api',
+            'cookieless:203.0.113.7',
             'address',
         ],
     ] as const) {
-        const admitted = world({ ...setting, anonymousLimits: DAILY_ON, anonymousDailyUsed: 999 });
+        const ownKey = `hit:anonday:${surface}:${own}:1000`;
+        const ceilingKey = `hit:anonday:${surface}:addr:203.0.113.7:5000`;
+        const admitted = world({
+            ...setting,
+            anonymousLimits: DAILY_ON,
+            anonymousDailyUsed: 999,
+            addressDailyUsed: 4999,
+        });
         const last = await decide(admitted.deps, headers, { surface });
 
-        // The 1,000th call of the day is within the allowance.
-        assert.equal(admitted.calls.at(-1), `daily:anonday:${surface}:203.0.113.7:1000`, name);
+        // The 1,000th call on its own count, and the 5,000th at the address, are within both.
+        assert.ok(admitted.calls.includes(ownKey), name);
+        assert.ok(admitted.calls.includes(ceilingKey), name);
         assert.notEqual(last.refusal?.status, 429, name);
 
-        const spent = world({ ...setting, anonymousLimits: DAILY_ON, anonymousDailyUsed: 1000 });
-        const access = await decide(spent.deps, headers, { surface });
-        const document = await access.refusal!.json();
+        for (const [used, limit, scope] of [
+            [{ anonymousDailyUsed: 1000 }, '1000', tier],
+            [{ addressDailyUsed: 5000 }, '5000', 'address'],
+        ] as const) {
+            const spent = world({ ...setting, anonymousLimits: DAILY_ON, ...used });
+            const access = await decide(spent.deps, headers, { surface });
+            const document = await access.refusal!.json();
 
-        assert.equal(access.refusal?.status, 429, name);
-        assert.equal(document.code, 'allowance_exhausted', name);
-        assert.equal(document.retryable, false, name);
-        assert.equal(access.refusal?.headers.get('retry-after'), '30', name);
-        assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '1000', name);
-        assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), tier, name);
-        assert.ok(document.detail.includes('/docs/build/api-keys'), name);
+            assert.equal(access.refusal?.status, 429, name);
+            assert.equal(document.code, 'allowance_exhausted', name);
+            assert.equal(document.retryable, false, name);
+            assert.equal(access.refusal?.headers.get('retry-after'), '30', name);
+            assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), limit, name);
+            assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), tier, name);
+            assert.equal(access.tier, tier, name);
+            assert.equal(access.scope, scope, name);
+            assert.ok(document.detail.includes('/docs/build/api-keys'), name);
+        }
     }
 
     const { deps } = world({ anonymousLimits: DAILY_ON, anonymousDailyUsed: 1000 });
@@ -721,37 +795,64 @@ test("an anonymous call past its address's daily allowance is a 429 allowance_ex
     assert.equal((await keysOff.refusal!.json()).detail.includes('/docs/build/api-keys'), false);
 });
 
-test('visitors and cookieless calls at one address share its daily allowance', async () => {
-    const counts = new Map<string, number>();
-    const { deps } = world({
+// A world whose daily counters count for real, at `daily` per visitor or
+// cookieless count and `dailyAddress` per address, every per-minute count admitting.
+const countingDaily = (daily: number, dailyAddress: number) => {
+    const { calls, deps, dailyCount } = world({
         visitorLimits: true,
-        anonymousLimits: { ...LIMITS, daily: { api: 3, datasets: 3 } },
+        anonymousLimits: {
+            ...LIMITS,
+            daily: { api: daily, datasets: daily },
+            dailyAddress: { api: dailyAddress, datasets: dailyAddress },
+        },
     });
-    let visitorId: string | null = 'v-1';
+    let visitorId: string | null = null;
 
     deps.visitor = () => visitorId;
-    deps.hitDaily = async (counter, limit) => {
-        const used = (counts.get(counter) ?? 0) + 1;
 
-        counts.set(counter, used);
-
-        return verdict(limit, used);
-    };
-
-    const status = async (id: string | null) => {
+    const statuses = async (id: string | null, n: number) => {
         visitorId = id;
 
-        return (await decide(deps)).refusal?.status ?? 200;
+        const seen: number[] = [];
+
+        for (let call = 0; call < n; call++) {
+            seen.push((await decide(deps)).refusal?.status ?? 200);
+        }
+
+        return seen;
     };
 
-    assert.deepEqual(
-        [await status('v-1'), await status(null), await status('v-2'), await status(null)],
-        [200, 200, 200, 429],
-    );
-    assert.equal(await status('v-3'), 429);
+    return { calls, dailyCount, statuses };
+};
+
+test('two visitors at one address each get their own daily count', async () => {
+    const { statuses } = countingDaily(3, 100);
+
+    assert.deepEqual(await statuses('v-1', 4), [200, 200, 200, 429]);
+    assert.deepEqual(await statuses('v-2', 4), [200, 200, 200, 429]);
 });
 
-test('a call refused per minute spends nothing on the daily allowance', async () => {
+test('visitor and cookieless calls at one address stop at its daily ceiling', async () => {
+    const { dailyCount, statuses } = countingDaily(4, 10);
+
+    // Two visitors and the cookieless count fill the ceiling of 10 between them.
+    assert.deepEqual(await statuses('v-1', 4), [200, 200, 200, 200]);
+    assert.deepEqual(await statuses(null, 4), [200, 200, 200, 200]);
+    assert.deepEqual(await statuses('v-2', 4), [200, 200, 429, 429]);
+    assert.deepEqual(await statuses(null, 1), [429]);
+    // A call the ceiling refuses spends nothing on its own count.
+    assert.equal(dailyCount('anonday:api:visitor:v-2'), 2);
+});
+
+test('a refusal on a daily count spends nothing on the ceiling', async () => {
+    const { calls, dailyCount, statuses } = countingDaily(2, 100);
+
+    assert.deepEqual(await statuses(null, 3), [200, 200, 429]);
+    assert.equal(dailyCount('anonday:api:addr:203.0.113.7'), 2);
+    assert.equal(calls.at(-1), 'hit:anonday:api:cookieless:203.0.113.7:2');
+});
+
+test('a call refused per minute spends nothing on the daily counts', async () => {
     for (const setting of [
         { visitorLimits: true, cookielessUsed: 60 },
         { visitorLimits: true, visitorId: 'v-1', visitorUsed: 120 },
@@ -763,29 +864,37 @@ test('a call refused per minute spends nothing on the daily allowance', async ()
 
         assert.equal((await access.refusal!.json()).code, 'rate_limited');
         assert.ok(
-            calls.every((entry) => !entry.startsWith('daily:')),
+            calls.every((entry) => !entry.startsWith('hit:anonday:')),
             JSON.stringify(calls),
         );
     }
 });
 
-test('no daily allowance is counted for a caller that opts out, a 0 allowance, mcp or pin', async () => {
-    for (const [name, anonymousLimits, options] of [
-        ['daily false', DAILY_ON, { daily: false }],
-        ['0 allowance', { ...DAILY_ON, daily: { api: 0, datasets: 1000 } }, {}],
-        ['mcp', DAILY_ON, { surface: 'mcp' }],
-        ['pin', DAILY_ON, { surface: 'pin' }],
+test('no daily count runs for a caller that opts out, a 0 allowance, mcp or pin', async () => {
+    for (const [name, anonymousLimits, options, expected] of [
+        ['daily false', DAILY_ON, { daily: false }, []],
+        [
+            '0 own allowance',
+            { ...DAILY_ON, daily: { api: 0, datasets: 1000 } },
+            {},
+            ['hit:anonday:api:addr:203.0.113.7:5000'],
+        ],
+        [
+            '0 ceiling',
+            { ...DAILY_ON, dailyAddress: { api: 0, datasets: 5000 } },
+            {},
+            ['hit:anonday:api:cookieless:203.0.113.7:1000'],
+        ],
+        ['mcp', DAILY_ON, { surface: 'mcp' }, []],
+        ['pin', DAILY_ON, { surface: 'pin' }, []],
     ] as const) {
-        const { calls, deps } = world({
-            visitorLimits: true,
-            anonymousLimits,
-            anonymousDailyUsed: 5000,
-        });
+        const { calls, deps } = world({ visitorLimits: true, anonymousLimits });
         const access = await decide(deps, {}, options);
 
         assert.equal(access.refusal, undefined, name);
-        assert.ok(
-            calls.every((entry) => !entry.startsWith('daily:')),
+        assert.deepEqual(
+            calls.filter((entry) => entry.startsWith('hit:anonday:')),
+            expected,
             name,
         );
     }

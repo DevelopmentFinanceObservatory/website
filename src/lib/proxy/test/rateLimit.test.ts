@@ -19,6 +19,7 @@ import { createFallbackCounter } from '../limitFallback.ts';
 
 const {
     ACCOUNT_DAILY_LIMIT,
+    ADDRESS_DAILY_LIMITS,
     ANONYMOUS_DAILY_LIMITS,
     COOKIELESS_LIMITS,
     createLimiter,
@@ -133,6 +134,37 @@ test('limiter: counts an address and an account apart, per surface, at the limit
     );
 
     await t.test(
+        'an admission refused on the shared counts stays refused when the database then fails',
+        async () => {
+            let down = false;
+            const real = drizzle(pool);
+            const flaky = {
+                execute: (...args: Parameters<typeof real.execute>) =>
+                    down ? Promise.reject(new Error('database is down')) : real.execute(...args),
+            };
+            const limiter = createLimiter(flaky as never, {
+                windowS: 3600,
+                warn: () => {},
+                prune: false,
+            });
+            const plan = (visitor: string) => ({
+                minute: { key: `api:visitor:${visitor}`, limit: 1 },
+                backstop: { key: 'api:backstop:198.51.100.40', limit: 2 },
+            });
+
+            assert.equal((await limiter.admit(plan('a'))).refusedBy, null);
+            assert.equal((await limiter.admit(plan('a'))).refusedBy, 'minute');
+            assert.equal((await limiter.admit(plan('b'))).refusedBy, null);
+
+            // The in-memory count goes on from the shared counts it saw: the
+            // visitor's own, and the backstop its admitted calls spent.
+            down = true;
+            assert.equal((await limiter.admit(plan('a'))).refusedBy, 'backstop');
+            assert.equal((await limiter.admit(plan('c'))).refusedBy, 'backstop');
+        },
+    );
+
+    await t.test(
         'a daily hit given back leaves the shared count and the in-memory count one lower',
         async () => {
             let down = false;
@@ -196,6 +228,44 @@ test('limiter: a count that fails is counted in memory instead of passing, and w
     assert.equal((await limiter.hitKey('api', 'acct:b', 1)).allowed, true);
 });
 
+test('limiter: a failed count warns with the error code or class, never the query or its keys', async () => {
+    const warned: string[] = [];
+    const failing = (error: unknown) =>
+        createLimiter(
+            {
+                execute: async () => {
+                    throw error;
+                },
+            } as never,
+            { warn: (message, error) => warned.push(`${message}: ${error}`), prune: false },
+        );
+    // A failed query's message carries its parameters, the visitor id among them.
+    const timedOut = new Error(
+        'Failed query: insert into "limit_counter" ... params: api:visitor:v-secret,1',
+        { cause: Object.assign(new Error('canceling statement'), { code: '57014' }) },
+    );
+    const plan = { minute: { key: 'api:visitor:v-secret', limit: 5 } };
+
+    for (const [error, code] of [
+        [timedOut, '57014'],
+        [new TypeError('bad params: api:visitor:v-secret'), 'TypeError'],
+    ] as const) {
+        const limiter = failing(error);
+
+        warned.length = 0;
+        await limiter.admit(plan);
+        await limiter.hitKey('api', 'visitor:v-secret', 5);
+        await limiter.hitDaily('anonday:api:visitor:v-secret', 5);
+        await limiter.refundDaily('anonday:api:visitor:v-secret');
+
+        assert.equal(warned.length, 4);
+        assert.ok(
+            warned.every((line) => line.endsWith(`: ${code}`)),
+            warned.join('\n'),
+        );
+    }
+});
+
 test('limiter: a count that times out falls back too', async () => {
     const slow = {
         execute: () =>
@@ -208,13 +278,25 @@ test('limiter: a count that times out falls back too', async () => {
     // The daily count falls back on its own one-day window.
     assert.equal((await limiter.hitDaily('x', 1)).allowed, true);
     assert.equal((await limiter.hitDaily('x', 1)).allowed, false);
+
+    // An admission replays its whole order in memory: the daily stages on
+    // the one-day window, so the day the hitDaily calls spent refuses it.
+    const admission = await limiter.admit({
+        minute: { key: 'mcp:y', limit: 5 },
+        day: { key: 'x', limit: 1 },
+    });
+
+    assert.equal(admission.refusedBy, 'day');
+    assert.equal(admission.verdicts.minute?.remaining, 4);
 });
 
-test('defaults: 20 cookieless API calls a minute, 1,000 anonymous calls a day, 10,000 per account', () => {
+test('defaults: 20 cookieless API calls a minute, 1,000 anonymous calls a day, 5,000 per address, 10,000 per account', () => {
     for (const name of [
         'RATE_LIMIT_API_ANON',
         'RATE_LIMIT_ANON_DAILY_API',
         'RATE_LIMIT_ANON_DAILY_DATASETS',
+        'RATE_LIMIT_ANON_DAILY_ADDRESS_API',
+        'RATE_LIMIT_ANON_DAILY_ADDRESS_DATASETS',
         'API_KEY_DAILY_LIMIT',
     ]) {
         assert.equal(process.env[name], undefined, `${name} is set, so the defaults are not seen`);
@@ -222,6 +304,7 @@ test('defaults: 20 cookieless API calls a minute, 1,000 anonymous calls a day, 1
 
     assert.equal(COOKIELESS_LIMITS.api, 20);
     assert.deepEqual(ANONYMOUS_DAILY_LIMITS, { api: 1000, datasets: 1000 });
+    assert.deepEqual(ADDRESS_DAILY_LIMITS, { api: 5000, datasets: 5000 });
     assert.equal(ACCOUNT_DAILY_LIMIT, 10_000);
 });
 

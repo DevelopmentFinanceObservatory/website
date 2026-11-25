@@ -1,7 +1,8 @@
 /**
  * `downloadAllowance` counts a download click as the proxy counts any
  * anonymous site call: per visitor with a valid visitor token, else on the
- * address's cookieless count, and names the tier it spent.
+ * address's cookieless count, and names the tier it spent and, on a 429,
+ * whose count refused it.
  */
 import '../../test/serverModules.ts';
 
@@ -39,20 +40,29 @@ test('downloadAllowance: counts per visitor with a valid visitor token, else on 
 
         return verdict(limit);
     };
-    accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
-        log.push(`visitor:${surface}:${limit}`);
+    // Logs the counts of each plan, the call's own then the address's
+    // backstop, and refuses on the call's own count when `allowed` is false.
+    accessDeps.admit = async (plan) => {
+        const [surface, kind] = plan.minute.key.split(':');
 
-        return verdict(limit);
-    };
-    accessDeps.hitCookieless = async (surface, _ip, limit) => {
-        log.push(`cookieless:${surface}:${limit}`);
+        log.push(
+            `${kind === 'visitor' ? 'visitor' : 'cookieless'}:${surface}:${plan.minute.limit}`,
+        );
 
-        return verdict(limit);
-    };
-    accessDeps.hitBackstop = async (surface, _ip, limit) => {
-        log.push(`backstop:${surface}:${limit}`);
+        for (const counter of [plan.backstop, plan.day, plan.ceiling]) {
+            if (counter) {
+                log.push(
+                    counter === plan.backstop
+                        ? `backstop:${surface}:${counter.limit}`
+                        : `daily:${counter.key}:${counter.limit}`,
+                );
+            }
+        }
 
-        return verdict(limit);
+        return {
+            refusedBy: allowed ? null : 'minute',
+            verdicts: { minute: verdict(plan.minute.limit) },
+        };
     };
     // Logged so the assertions below show the daily allowance is never spent.
     accessDeps.hitDaily = async (counterKey, limit) => {
@@ -84,8 +94,12 @@ test('downloadAllowance: counts per visitor with a valid visitor token, else on 
     allowed = false;
 
     const refused = await click();
+    const refusedVisitor = await click({ cookie });
 
     assert.equal(refused.refusal?.status, 429);
     assert.equal((await refused.refusal!.json()).code, 'rate_limited');
     assert.equal(refused.headers['Retry-After'], '30');
+    // Whose count refused the click, which the share download's text names.
+    assert.equal(refused.scope, 'address');
+    assert.equal(refusedVisitor.scope, 'visitor');
 });

@@ -25,6 +25,7 @@ import { buildCounterPool, buildKeyPool } from '../../../../db/connection.ts';
 import * as schema from '../../../../db/schema.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
 import { signKey } from '../../auth/keyTag.ts';
+import type { AccessDeps } from '../access.ts';
 import type { KeyVerdict } from '../keyVerifier.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
 
@@ -39,10 +40,8 @@ process.env.API_KEY_TAG_SECRETS = SECRET;
 const { forward, accessDeps } = await import('../forward.ts');
 const { createKeyVerifier } = await import('../keyVerifier.ts');
 const {
-    backstopCallerKey,
-    cookielessCallerKey,
     createLimiter,
-    visitorCallerKey,
+    ADDRESS_DAILY_LIMITS,
     ANONYMOUS_DAILY_LIMITS,
     BACKSTOP_LIMITS,
     COOKIELESS_LIMITS,
@@ -62,8 +61,9 @@ const accountCaller = `user:${createHmac('sha256', 'test-hmac-key')
     .update(`user:${ACCOUNT}`)
     .digest('hex')
     .slice(0, 32)}`;
-// The daily counter an anonymous API call from the test address spends.
-const ANON_DAY = 'daily:anonday:api:203.0.113.7';
+// The daily counts a cookieless API call from the test address spends: its
+// own, then the address ceiling.
+const ANON_DAY = ['daily:anonday:api:cookieless:203.0.113.7', 'daily:anonday:api:addr:203.0.113.7'];
 const addressCaller = `ip:${createHmac('sha256', 'test-hmac-key')
     .update('203.0.113.7')
     .digest('hex')
@@ -120,16 +120,7 @@ const fakes = (answer: KeyVerdict, cached = false) => {
 
         return verdictOf(120);
     };
-    accessDeps.hitCookieless = async (surface) => {
-        log.push(`cookieless:${surface}`);
-
-        return verdictOf(60);
-    };
-    accessDeps.hitBackstop = async (surface) => {
-        log.push(`backstop:${surface}`);
-
-        return verdictOf(240);
-    };
+    accessDeps.admit = admitLogging(log, false);
     accessDeps.hitAccount = async (surface, accountId, limit) => {
         log.push(`account:${surface}:${accountId}`);
 
@@ -143,6 +134,30 @@ const fakes = (answer: KeyVerdict, cached = false) => {
 
     return log;
 };
+// An admit that lets every call through and logs the counts of its plan:
+// the call's own per-minute count, the address's backstop, its own daily
+// count and the address's daily ceiling, with each limit when `limits`.
+const admitLogging =
+    (log: string[], limits: boolean): AccessDeps['admit'] =>
+    async (plan) => {
+        const [surface, kind] = plan.minute.key.split(':');
+        const own = kind === 'visitor' || kind === 'cookieless' ? kind : 'address';
+        const at = (limit: number) => (limits ? `:${limit}` : '');
+
+        log.push(`${own}:${surface}${at(plan.minute.limit)}`);
+
+        if (plan.backstop) {
+            log.push(`backstop:${surface}${at(plan.backstop.limit)}`);
+        }
+
+        for (const counter of [plan.day, plan.ceiling]) {
+            if (counter) {
+                log.push(`daily:${counter.key}${at(counter.limit)}`);
+            }
+        }
+
+        return { refusedBy: null, verdicts: { minute: verdictOf(plan.minute.limit) } };
+    };
 const verdictOf = (limit: number): RateVerdict => ({
     allowed: true,
     limit,
@@ -182,21 +197,7 @@ const tierFakes = () => {
 
         return verdictOf(limit);
     };
-    accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
-        log.push(`visitor:${surface}:${limit}`);
-
-        return verdictOf(limit);
-    };
-    accessDeps.hitCookieless = async (surface, _ip, limit) => {
-        log.push(`cookieless:${surface}:${limit}`);
-
-        return verdictOf(limit);
-    };
-    accessDeps.hitBackstop = async (surface, _ip, limit) => {
-        log.push(`backstop:${surface}:${limit}`);
-
-        return verdictOf(limit);
-    };
+    accessDeps.admit = admitLogging(log, true);
     accessDeps.hitDaily = async (counterKey, limit) => {
         log.push(`daily:${counterKey}:${limit}`);
 
@@ -283,6 +284,8 @@ test('forward: a key on the Datasets API counts against the account and its dail
 
     assert.equal(revoked.status, 401);
     assert.equal((await revoked.json()).code, 'invalid_api_key');
+    // The call was counted on its address, so the 401 carries the tier.
+    assert.equal(revoked.headers.get('x-dfo-limit-tier'), 'address');
     assert.equal(seen.length, 0);
 });
 
@@ -292,7 +295,7 @@ test('forward: an unavailable key store goes on as anonymous with the key still 
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': KEY });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cache', 'lookup', 'cookieless:api', 'backstop:api', ANON_DAY]);
+    assert.deepEqual(log, ['cache', 'lookup', 'cookieless:api', 'backstop:api', ...ANON_DAY]);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
@@ -328,7 +331,7 @@ test('forward: another bearer is no key, and dfo-apis gets no caller Authorizati
     const res = await call({ authorization: 'Bearer some-other-token' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ...ANON_DAY]);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
@@ -340,7 +343,7 @@ test('forward: a key in another scheme, or bare, is anonymous and never reaches 
         const res = await call({ authorization });
 
         assert.equal(res.status, 200);
-        assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
+        assert.deepEqual(log, ['cookieless:api', 'backstop:api', ...ANON_DAY]);
         assert.equal(seen[0]!.authorization, undefined);
     }
 });
@@ -351,7 +354,7 @@ test('forward: a call with no key is anonymous, and a client-sent caller is drop
 
     await call({ 'x-dfo-caller': accountCaller });
 
-    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ...ANON_DAY]);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
@@ -456,7 +459,7 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': 'junk' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ANON_DAY]);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api', ...ANON_DAY]);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
@@ -481,20 +484,29 @@ test('forward: a valid visitor token is counted per visitor, a forged or expired
         assert.equal(res.headers.get('x-dfo-limit-tier'), 'address');
     }
 
-    // Visitor and cookieless calls spend one daily allowance for the address.
-    const day = `${ANON_DAY}:${ANONYMOUS_DAILY_LIMITS.api}`;
+    // A visitor spends its own daily count, a cookieless call the address's
+    // cookieless one, and both the address ceiling.
+    const visitorDay = `daily:anonday:api:visitor:<id>:${ANONYMOUS_DAILY_LIMITS.api}`;
+    const cookielessDay = `${ANON_DAY[0]}:${ANONYMOUS_DAILY_LIMITS.api}`;
+    const ceiling = `${ANON_DAY[1]}:${ADDRESS_DAILY_LIMITS.api}`;
 
-    assert.deepEqual(log, [
-        `visitor:api:${LIMITS.api}`,
-        `backstop:api:${BACKSTOP_LIMITS.api}`,
-        day,
-        `cookieless:api:${COOKIELESS_LIMITS.api}`,
-        `backstop:api:${BACKSTOP_LIMITS.api}`,
-        day,
-        `cookieless:api:${COOKIELESS_LIMITS.api}`,
-        `backstop:api:${BACKSTOP_LIMITS.api}`,
-        day,
-    ]);
+    assert.deepEqual(
+        log.map((entry) => entry.replace(/:visitor:[^:]+:/, ':visitor:<id>:')),
+        [
+            `visitor:api:${LIMITS.api}`,
+            `backstop:api:${BACKSTOP_LIMITS.api}`,
+            visitorDay,
+            ceiling,
+            `cookieless:api:${COOKIELESS_LIMITS.api}`,
+            `backstop:api:${BACKSTOP_LIMITS.api}`,
+            cookielessDay,
+            ceiling,
+            `cookieless:api:${COOKIELESS_LIMITS.api}`,
+            `backstop:api:${BACKSTOP_LIMITS.api}`,
+            cookielessDay,
+            ceiling,
+        ],
+    );
 });
 
 for (const [name, visitorLimitsOff] of [
@@ -515,19 +527,21 @@ for (const [name, visitorLimitsOff] of [
             await call({}, { surface });
         }
 
-        // The daily allowance is counted whatever the visitor limits.
-        const apiDay = `${ANON_DAY}:${ANONYMOUS_DAILY_LIMITS.api}`;
-        const datasetsDay = `daily:anonday:datasets:203.0.113.7:${ANONYMOUS_DAILY_LIMITS.datasets}`;
+        // The daily counts run whatever the visitor limits, every call as cookieless.
+        const day = (surface: 'api' | 'datasets') => [
+            `daily:anonday:${surface}:cookieless:203.0.113.7:${ANONYMOUS_DAILY_LIMITS[surface]}`,
+            `daily:anonday:${surface}:addr:203.0.113.7:${ADDRESS_DAILY_LIMITS[surface]}`,
+        ];
 
         assert.deepEqual(log, [
             `address:api:${LIMITS.api}`,
-            apiDay,
+            ...day('api'),
             `address:api:${LIMITS.api}`,
-            apiDay,
+            ...day('api'),
             `address:datasets:${LIMITS.datasets}`,
-            datasetsDay,
+            ...day('datasets'),
             `address:datasets:${LIMITS.datasets}`,
-            datasetsDay,
+            ...day('datasets'),
         ]);
         fresh();
     });
@@ -680,10 +694,14 @@ test('forward on a real key store and counter', async (t) => {
             verifier: createKeyVerifier(drizzle(verifierPool, { schema }), { log: () => {} }),
             hitAddress: (surface: 'api' | 'mcp' | 'pin', ip: string) =>
                 limiter.hitKey(surface, ip, { api: 3, mcp: 3, pin: 3 }[surface]),
-            hitCookieless: (surface: 'api', ip: string) =>
-                limiter.hitKey(surface, cookielessCallerKey(ip), 3),
-            hitBackstop: (surface: 'api', ip: string) =>
-                limiter.hitKey(surface, backstopCallerKey(ip), 100),
+            admit: limiter.admit,
+            anonymousLimits: {
+                address: { api: 3, datasets: 3, mcp: 3, pin: 3 },
+                cookieless: { api: 3, datasets: 3 },
+                backstop: { api: 100, datasets: 100 },
+                daily: ANONYMOUS_DAILY_LIMITS,
+                dailyAddress: ADDRESS_DAILY_LIMITS,
+            },
             hitAccount: (surface: 'api' | 'mcp' | 'pin', accountId: string, limit: number) =>
                 limiter.hitKey(surface, `acct:${accountId}`, limit),
             hitDaily: (counterKey: string, limit: number) => limiter.hitDaily(counterKey, limit),
@@ -841,17 +859,12 @@ test('forward on a real key store and counter', async (t) => {
         'cookieless calls and ten visitors from one address share its backstop',
         async () => {
             Object.assign(accessDeps, {
-                hitCookieless: (surface: 'api', ip: string, limit: number) =>
-                    limiter.hitKey(surface, cookielessCallerKey(ip), limit),
-                hitVisitor: (surface: 'api', visitorId: string, limit: number) =>
-                    limiter.hitKey(surface, visitorCallerKey(visitorId), limit),
-                hitBackstop: (surface: 'api', ip: string, limit: number) =>
-                    limiter.hitKey(surface, backstopCallerKey(ip), limit),
                 anonymousLimits: {
                     address: { api: 3, datasets: 3, mcp: 3, pin: 3 },
                     cookieless: { api: 2, datasets: 2 },
                     backstop: { api: 4, datasets: 4 },
                     daily: ANONYMOUS_DAILY_LIMITS,
+                    dailyAddress: ADDRESS_DAILY_LIMITS,
                 },
             });
 

@@ -94,20 +94,29 @@ test('studioProxy: counts per visitor with a valid visitor token, else on the co
 
         return verdict(limit);
     };
-    accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
-        log.push(`visitor:${surface}:${limit}`);
+    // Logs the counts of each plan, the call's own then the address's
+    // backstop, and refuses on the call's own count when `allowed` is false.
+    accessDeps.admit = async (plan) => {
+        const [surface, kind] = plan.minute.key.split(':');
 
-        return verdict(limit);
-    };
-    accessDeps.hitCookieless = async (surface, _ip, limit) => {
-        log.push(`cookieless:${surface}:${limit}`);
+        log.push(
+            `${kind === 'visitor' ? 'visitor' : 'cookieless'}:${surface}:${plan.minute.limit}`,
+        );
 
-        return verdict(limit);
-    };
-    accessDeps.hitBackstop = async (surface, _ip, limit) => {
-        log.push(`backstop:${surface}:${limit}`);
+        for (const counter of [plan.backstop, plan.day, plan.ceiling]) {
+            if (counter) {
+                log.push(
+                    counter === plan.backstop
+                        ? `backstop:${surface}:${counter.limit}`
+                        : `daily:${counter.key}:${counter.limit}`,
+                );
+            }
+        }
 
-        return verdict(limit);
+        return {
+            refusedBy: allowed ? null : 'minute',
+            verdicts: { minute: verdict(plan.minute.limit) },
+        };
     };
     // Logged so the assertions below show the daily allowance is never spent.
     accessDeps.hitDaily = async (counterKey, limit) => {
