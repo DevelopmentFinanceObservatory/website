@@ -39,8 +39,8 @@ const PUBLISHER_SEPARATOR = '|';
 // Data Commons.
 const PROVENANCE_ORDER: Provenance[] = ['dfo', 'base', 'un_system'];
 
-const rank = (id: string): number => {
-    const index = PROVENANCE_ORDER.indexOf(id as Provenance);
+const rank = (id: Provenance): number => {
+    const index = PROVENANCE_ORDER.indexOf(id);
 
     return index === -1 ? PROVENANCE_ORDER.length : index;
 };
@@ -82,15 +82,16 @@ export const provenanceGroups = (cards: readonly Filterable[]): ProvenanceGroup[
 // folded, so "world  bank" finds "World Bank".
 const fold = (text: string): string => text.trim().toLowerCase().replace(/\s+/g, ' ');
 
-/** Whether the card's title or publisher holds the query. An empty query
- *  matches every card. */
+/** Whether the card's title or publisher name (publisherName, as the
+ *  publisher list matches it) holds the query. An empty query matches every
+ *  card. */
 export const matchesQuery = (card: Filterable, q: string): boolean => {
     const needle = fold(q);
 
     return (
         needle === '' ||
         fold(card.title).includes(needle) ||
-        (!!card.publisher && fold(card.publisher).includes(needle))
+        fold(publisherName(card)).includes(needle)
     );
 };
 
@@ -132,20 +133,21 @@ export const filterCards = <Card extends Filterable>(
         .map(({ card }) => card);
 
 /**
- * The summary line: how many sources are showing, from how many picked
- * publishers when any are, and the chosen provenance's chip label when one
- * is: "15 sources from 2 publishers.", "5 sources via Data Commons by
- * Google.". No cards: "No sources match."
+ * The summary line: how many sources are showing, from how many of their
+ * publishers when publishers are picked, and the chosen provenance's chip
+ * label when one is: "15 sources from 2 publishers.", "5 sources via Data
+ * Commons by Google.". No cards: "No sources match."
  */
 export const summaryLine = (
     visible: readonly Filterable[],
-    publishers = 0,
+    picked = false,
     via: string | null = null,
 ): string => {
     if (visible.length === 0) {
         return 'No sources match.';
     }
 
+    const publishers = picked ? new Set(visible.map(publisherName)).size : 0;
     const from =
         publishers > 0
             ? ` from ${publishers} ${publishers === 1 ? 'publisher' : 'publishers'}`
@@ -212,7 +214,8 @@ export const serializePublishers = (publishers: readonly string[]): string | nul
     publishers.length > 0 ? publishers.join(PUBLISHER_SEPARATOR) : null;
 
 /** The drawer's `?filter=` link as the page's own filters: a Data Commons id
- *  is a provenance, and a publisher's dcid picks that publisher. Any other
+ *  is a provenance, and the dcid of a publisher the Observatory imports picks
+ *  that publisher's own imports, the cards the drawer's row counts. Any other
  *  value is no filter. */
 export const legacyFilter = (
     raw: string | null,
@@ -228,7 +231,9 @@ export const legacyFilter = (
         return { via };
     }
 
-    const card = cards.find((candidate) => candidate.family === raw);
+    const card = cards.find(
+        (candidate) => candidate.family === raw && candidate.dataCommons.id === 'dfo',
+    );
 
-    return card ? { publishers: [publisherName(card)] } : {};
+    return card ? { publishers: [publisherName(card)], via: 'dfo' } : {};
 };

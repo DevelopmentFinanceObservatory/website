@@ -70,7 +70,8 @@ test('a query matches part of the title or the publisher, ignoring case and spac
     assert.equal(matchesQuery(cards[3]!, ''), true);
     assert.equal(matchesQuery(cards[3]!, '   '), true);
     assert.equal(matchesQuery(card('Nameless', 'x', null, BASE), 'name'), true);
-    assert.equal(matchesQuery(card('Nameless', 'x', null, BASE), 'x'), false);
+    // A card with no publisher label matches on the dcid the publisher list names it by.
+    assert.equal(matchesQuery(card('Untitled', 'dc/s/None', null, BASE), 'none'), true);
 });
 
 test('"World Bank" lists every World Bank source: the DFO import, then the ones via Google', () => {
@@ -125,20 +126,29 @@ test('with no filter, cards sort by provenance, DFO imports in their order, the 
     ]);
 });
 
-test('the summary line counts the sources, the picked publishers, and names the chosen provenance', () => {
+test('the summary line counts the sources, the publishers showing, and names the chosen provenance', () => {
     assert.equal(summaryLine(cards), '10 sources.');
     assert.equal(summaryLine(filterCards(cards, filters({ q: 'World Bank' }))), '3 sources.');
     assert.equal(
-        summaryLine(filterCards(cards, filters({ publishers: ['OECD', 'Alpha'] })), 2),
+        summaryLine(filterCards(cards, filters({ publishers: ['OECD', 'Alpha'] })), true),
         '4 sources from 2 publishers.',
     );
-    assert.equal(summaryLine([cards[1]!], 1), '1 source from 1 publisher.');
+    assert.equal(summaryLine([cards[1]!], true), '1 source from 1 publisher.');
+    // Two picked, one showing under the chip: the line counts the one.
     assert.equal(
-        summaryLine(filterCards(cards, filters({ via: 'base' })), 0, 'Data Commons by Google'),
+        summaryLine(
+            filterCards(cards, filters({ publishers: ['World Bank', 'FAO'], via: 'base' })),
+            true,
+            'Data Commons by Google',
+        ),
+        '2 sources from 1 publisher via Data Commons by Google.',
+    );
+    assert.equal(
+        summaryLine(filterCards(cards, filters({ via: 'base' })), false, 'Data Commons by Google'),
         '5 sources via Data Commons by Google.',
     );
     assert.equal(
-        summaryLine(filterCards(cards, filters({ via: 'dfo', publishers: ['OECD'] })), 1, 'DFO'),
+        summaryLine(filterCards(cards, filters({ via: 'dfo', publishers: ['OECD'] })), true, 'DFO'),
         '2 sources from 1 publisher via DFO.',
     );
     assert.equal(summaryLine([]), 'No sources match.');
@@ -206,7 +216,11 @@ test('picked publishers serialize bar-separated, since their names hold commas, 
 
 test("the drawer's ?filter= link reads as a provenance or a picked publisher", () => {
     assert.deepEqual(legacyFilter('un_system', cards), { via: 'un_system' });
-    assert.deepEqual(legacyFilter('dc/s/WorldBank', cards), { publishers: ['World Bank'] });
+    // The drawer's row counts a publisher's own imports, and so does its link.
+    assert.deepEqual(legacyFilter('dc/s/WorldBank', cards), {
+        publishers: ['World Bank'],
+        via: 'dfo',
+    });
     assert.deepEqual(legacyFilter('dc/s/Nobody', cards), {});
     assert.deepEqual(legacyFilter(null, cards), {});
 });

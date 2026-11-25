@@ -18,9 +18,9 @@
 import { type CatalogueCounts, formatCount, parseCatalogue } from '../search/catalogue.ts';
 import type { FilterGroup } from '../sources/filters.ts';
 
-/** One row of the Sources page's filter chips: a publisher the Observatory
- *  imports itself, or a Data Commons that serves many publishers. `id` is
- *  what its chip filters by (lib/sources/filters.ts). */
+/** One row of the drawer's sources: a publisher the Observatory imports
+ *  itself, or a Data Commons that serves many publishers. `id` is the
+ *  `?filter=` value its link carries (lib/sources/filters.ts). */
 export type DataSource = FilterGroup;
 
 /** One half of the drawer: not read yet, on its way, read, or failed. A
@@ -43,8 +43,9 @@ export const settledHalf = <T>(value: T | null): Half<T> =>
 export const sourceDatasetCount = (count: number): string =>
     `${formatCount(count)} ${count === 1 ? 'dataset' : 'datasets'}`;
 
-/** The Sources page filtered to one row, the way its chips filter it
- *  (`?filter=<id>`). */
+/** The Sources page filtered to one row (`?filter=<id>`), which the page
+ *  reads as a provenance or a publisher (lib/sources/search.ts,
+ *  legacyFilter). */
 export const sourceHref = (source: DataSource): string =>
     `/data/sources?filter=${encodeURIComponent(source.id)}`;
 

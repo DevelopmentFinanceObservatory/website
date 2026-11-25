@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import styles from './SourceSearch.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
-import { enterChoice, escapeAction, stepActive } from '@/lib/graphExplorer/search';
+import { escapeAction, stepActive } from '@/lib/graphExplorer/search';
 import type { PublisherOption } from '@/lib/sources/search';
 
 type SourceSearchProps = {
@@ -101,6 +101,12 @@ const SourceSearch = ({
     };
 
     const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        // Keys pressed while an input method composes text (Enter commits
+        // it, arrows pick a candidate) are the composition's own.
+        if (event.nativeEvent.isComposing) {
+            return;
+        }
+
         const count = options.length;
 
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -117,9 +123,10 @@ const SourceSearch = ({
             return;
         }
 
+        // Enter picks only a highlighted row: a pick toggles a filter, so it
+        // is never a guess at the first row.
         if (event.key === 'Enter') {
-            const chosen = enterChoice(active, count, shown);
-            const option = chosen === null ? undefined : options[chosen];
+            const option = shown && active >= 0 ? options[active] : undefined;
 
             if (option) {
                 event.preventDefault();
@@ -183,7 +190,10 @@ const SourceSearch = ({
                         setActive(-1);
                     }}
                     onFocus={openList}
-                    onBlur={() => setOpen(false)}
+                    onBlur={() => {
+                        setOpen(false);
+                        setActive(-1);
+                    }}
                     onKeyDown={onKeyDown}
                 />
                 {(value !== '' || selected.length > 0) && (
@@ -214,6 +224,10 @@ const SourceSearch = ({
                         aria-multiselectable="true"
                         className={styles.list}
                         style={place}
+                        // Keeps focus in the field, so the blur does not close
+                        // the list first: a press on a row or on the list's own
+                        // scrollbar, which some browsers would focus.
+                        onMouseDown={(event) => event.preventDefault()}
                     >
                         {options.map((option, index) => {
                             const picked = selected.includes(option.label);
@@ -229,8 +243,6 @@ const SourceSearch = ({
                                         picked && styles.optionPicked,
                                         index === active && styles.optionActive,
                                     )}
-                                    // Keeps focus in the field so the blur does not close the list first.
-                                    onMouseDown={(event) => event.preventDefault()}
                                     onClick={() => pick(option)}
                                     onMouseMove={() => setActive(index)}
                                 >

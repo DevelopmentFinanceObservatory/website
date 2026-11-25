@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import SourceSearch from './SourceSearch';
 import styles from './Sources.module.scss';
@@ -73,6 +73,32 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
     const params = useSearchParams();
     const legacy = useMemo(() => legacyFilter(params.get('filter'), sources), [params, sources]);
 
+    // On arrival the link's filter becomes the page's own params and
+    // `?filter=` leaves the URL, so a choice the reader clears later stays
+    // cleared instead of falling back to the link's.
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const filter = legacyFilter(url.searchParams.get('filter'), sources);
+
+        if (!url.searchParams.has('filter')) {
+            return;
+        }
+
+        url.searchParams.delete('filter');
+
+        if (filter.via && !url.searchParams.has('via')) {
+            url.searchParams.set('via', filter.via);
+        }
+
+        const publisher = filter.publishers && serializePublishers(filter.publishers);
+
+        if (publisher && !url.searchParams.has('publisher')) {
+            url.searchParams.set('publisher', publisher);
+        }
+
+        window.history.replaceState(null, '', url);
+    }, [sources]);
+
     const [q, setQ] = useUrlParam(
         'q',
         useCallback((raw: string | null) => parseQuery(raw ?? legacy.q ?? null), [legacy]),
@@ -111,6 +137,12 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
         ]),
     );
     const colorOf = (id: Provenance) => groups.find((group) => group.id === id)?.color;
+    // The publisher list offers what the chosen provenance holds, so a row's
+    // count is what picking it shows.
+    const offered = publisherOptions(
+        via ? sources.filter((source) => source.dataCommons.id === via) : sources,
+        q,
+    );
 
     return (
         <section ref={sectionRef} className={styles.section}>
@@ -130,14 +162,14 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                     <SourceSearch
                         value={q}
                         onChange={setQ}
-                        options={publisherOptions(sources, q)}
+                        options={offered}
                         selected={publishers}
                         onToggle={(name) => setPublishers(togglePublisher(publishers, name))}
                         onClearSelected={() => setPublishers([])}
                     />
                     {/* One provenance at a time: a source has exactly one, so
                         stacking chips would widen the list where a filter is
-                        read as narrowing it (QA-15). */}
+                        read as narrowing it. */}
                     <FilterChips
                         groups={groups}
                         counts={counts}
@@ -152,14 +184,16 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                     {q.trim() !== '' || via || publishers.length > 0
                         ? summaryLine(
                               visible,
-                              publishers.length,
+                              publishers.length > 0,
                               groups.find((group) => group.id === via)?.label ?? null,
                           )
                         : null}
                 </p>
             </PageHero>
 
-            <ul className={styles.grid} key={`${via ?? 'all'}:${publishers.join('|')}:${q}`}>
+            {/* Keyed on the picks, so a new pick replays the cards' entrance
+                and typing in the field does not. */}
+            <ul className={styles.grid} key={`${via ?? 'all'}:${publishers.join('|')}`}>
                 {visible.map((source, index) => (
                     <li key={source.id} className={styles.card} style={revealIndex(index)}>
                         {/* The whole card opens the source's page. */}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { filterGroups, filterId, orderCards, type Filterable } from '../filters.ts';
+import { filterGroups, filterId, type Filterable } from '../filters.ts';
 
 const DFO = { id: 'dfo', label: 'Development Finance Observatory' } as const;
 const BASE = { id: 'base', label: 'Data Commons by Google' } as const;
@@ -46,11 +46,4 @@ test('an origin with no cards has no chip', () => {
         ['dc/s/OECD', 'base'],
     );
     assert.deepEqual(filterGroups([]), []);
-});
-
-test('cards: Observatory order kept, origins sorted by publisher then title', () => {
-    assert.deepEqual(
-        orderCards(cards).map((c) => c.title),
-        ['CRS', 'DAC', 'WDI', 'Base A1', 'Base A2', 'Base Z', 'UN A', 'UN B'],
-    );
 });

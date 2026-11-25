@@ -36,11 +36,22 @@ export const useUrlParam = <T>(
         parseRef.current = parse;
     }, [parse]);
 
+    // The param as this hook last wrote it. The sync below skips it, so a
+    // value whose round trip differs (text the serializer trims away) stays
+    // as the reader typed it, and a late router commit of the hook's own
+    // write does not flicker the value.
+    const written = useRef<{ raw: string | null } | null>(null);
+
     // Next patches pushState and replaceState and listens to popstate, so
     // `params` follows every change to the URL, this hook's own writes
     // included. Back and Forward land on an entry a write made (or the one
     // the page opened on), and the value follows.
     useEffect(() => {
+        if (written.current && written.current.raw === raw) {
+            return;
+        }
+
+        written.current = null;
         setValue(parseRef.current(raw));
     }, [key, raw]);
 
@@ -55,6 +66,14 @@ export const useUrlParam = <T>(
                 url.searchParams.set(key, serialized);
             } else {
                 url.searchParams.delete(key);
+            }
+
+            written.current = { raw: serialized || null };
+
+            // An unchanged URL takes no entry, so Back never lands where it
+            // already is.
+            if (url.href === window.location.href) {
+                return;
             }
 
             if (history === 'push') {
