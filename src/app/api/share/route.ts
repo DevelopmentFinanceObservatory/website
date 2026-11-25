@@ -9,7 +9,8 @@ import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
 import { getShare, makeShare, slotDepsFor } from '@/lib/chat/shareStore';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
-import { track } from '@/lib/events/track';
+import { logAccount } from '@/lib/proxy/requestLog';
+import { track, userWho } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
 import { liveCardsRefusal } from '@/lib/studio/slotCards';
@@ -67,12 +68,16 @@ const shareSearch = async (body: any, headers: Headers) => {
     }
 
     // Recorded after the response, so the link does not wait on analytics.
+    // A signed-in sharer's request also writes its account line (logAccount).
     after(() =>
-        track(
-            'share.create',
-            shareCreateProps({ id: created.id, kind: 'search', mode: request.mode }),
-            { userId: user?.id ?? null, headers },
-        ),
+        Promise.all([
+            track(
+                'share.create',
+                shareCreateProps({ id: created.id, kind: 'search', mode: request.mode }),
+                { ...userWho(user), headers },
+            ),
+            logAccount(headers, '/api/share', async () => user?.id ?? null),
+        ]),
     );
 
     return NextResponse.json(created);
@@ -181,12 +186,16 @@ export const POST = async (request: NextRequest) => {
     }
 
     // Recorded after the response, so the link does not wait on analytics.
+    // A signed-in sharer's request also writes its account line (logAccount).
     after(() =>
-        track(
-            'share.create',
-            shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
-            { userId: user?.id ?? null, headers: request.headers },
-        ),
+        Promise.all([
+            track(
+                'share.create',
+                shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
+                { ...userWho(user), headers: request.headers },
+            ),
+            logAccount(request.headers, '/api/share', async () => user?.id ?? null),
+        ]),
     );
 
     const servedAt = share.latest ? null : await snapshotServedAt(created.id);

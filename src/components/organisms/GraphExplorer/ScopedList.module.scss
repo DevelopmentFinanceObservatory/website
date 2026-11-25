@@ -30,6 +30,12 @@
     color: var(--color-stone);
 }
 
+.note {
+    @include font-size(13px, 1.4);
+
+    color: var(--color-stone);
+}
+
 .controls {
     display: flex;
     flex-wrap: wrap;
@@ -66,7 +72,7 @@
 // The table scrolls inside its own box so the page does not scroll sideways,
 // with its scrollbar in view as the cue that more lies past the edge.
 .scroll {
-    @include scrollbar-visible(var(--color-stone), x);
+    @include scrollbar-visible($axis: x);
 
     max-width: 100%;
 }

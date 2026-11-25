@@ -1,0 +1,60 @@
+name: Prototypes daily build
+
+# Rebuilds the prototypes once a day, so each page reads DFO's newest stored
+# data at least daily. It dispatches deploy-prototypes.yml on the `prototypes`
+# branch, because GitHub runs a schedule only from a workflow file on the
+# default branch (dev), and dev does not hold prototypes/. A dispatch made with
+# GITHUB_TOKEN starts the workflow; a push made with it would not.
+#
+# The daily build waits up to 600 seconds for DFO to settle a dataset whose
+# freshness is `pending` (BUILD_PENDING_BOUND_S, prototypes/lib/buildRead.ts),
+# then takes what it has. A failed read fails the build without deploying, so
+# the last deploy stays live. GitHub mails a failed scheduled run to the user
+# who last edited the schedule (the cron line below), so whoever edits the cron
+# line takes on those mails. The dispatched run is not the scheduled one, so
+# this job watches it and fails with it. A deploy that a newer push to
+# `prototypes` supersedes before it starts counts as a failure here too.
+
+on:
+    schedule:
+        # 05:17 UTC daily, off the top of the hour, when GitHub queues most
+        # scheduled runs.
+        - cron: '17 5 * * *'
+    workflow_dispatch: {}
+
+permissions:
+    contents: read
+
+jobs:
+    dispatch:
+        runs-on: ubuntu-latest
+        # The deploy's reads take minutes, and up to 10 more while DFO's
+        # freshness is pending.
+        timeout-minutes: 90
+        permissions:
+            actions: write
+        steps:
+            - env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              # The dispatch returns no run id, so the step tags it with an id of
+              # this run, which deploy-prototypes.yml puts in its run name in
+              # parentheses, and finds the run by that.
+              run: |
+                  id="daily-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+                  gh workflow run deploy-prototypes.yml --ref prototypes \
+                      -f pending_bound_s=600 -f dispatch_id="$id"
+                  run=''
+                  for _ in $(seq 1 30); do
+                      sleep 10
+                      run=$(gh run list --workflow deploy-prototypes.yml --branch prototypes \
+                          --event workflow_dispatch --limit 20 --json databaseId,displayTitle \
+                          --jq "[.[] | select(.displayTitle | contains(\"($id)\"))] | .[0].databaseId // empty")
+                      [ -n "$run" ] && break
+                  done
+                  if [ -z "$run" ]; then
+                      echo "::error::The dispatched deploy run did not appear within 5 minutes."
+                      exit 1
+                  fi
+                  echo "Watching deploy run $run." >> "$GITHUB_STEP_SUMMARY"
+                  gh run watch "$run" --exit-status --interval 30

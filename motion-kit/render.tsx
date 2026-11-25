@@ -275,11 +275,13 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         thinking: false,
         clarify: null,
         plan: spec.plan ?? null,
-        agentRemovals: 0,
-        takeAgentRemoved: () => [],
+        droppedRefunds: 0,
+        localCards: { shown: [], hidden: [] },
+        pins: null,
         syncCanvas: noop,
-        reportHidden: noop,
-        canvasVersion: 0,
+        canvas: null,
+        pendingCards: new Map(),
+        owedRemovals: [],
         send: noop,
         unqueue: noop,
         answerClarify: noop,
@@ -287,10 +289,18 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         respondPlan: noop,
         switchChoice: noop,
         applyChoice: noop,
+        applyUnit: noop,
         stop: noop,
         reset: noop,
         hydrate: noop,
-        snapshot: () => ({ sessionId: null, componentRefs: [], turnCount: turn, canvas: null }),
+        reattach: noop,
+        snapshot: () => ({
+            sessionId: null,
+            componentRefs: [],
+            turnCount: turn,
+            canvas: null,
+            owedRemovals: [],
+        }),
     };
 };
 
@@ -377,6 +387,8 @@ const Workspace = ({ spec, placed }: { spec: DemoSpec; placed: Placed[] }) => {
                     onShare={noop}
                 />
                 <ChatPanel
+                    draft=""
+                    onDraftChange={noop}
                     editTarget={null}
                     onClearEditTarget={noop}
                     chat={chatOf(spec)}
@@ -583,14 +595,6 @@ const chatHooks = (html: string, spec: DemoSpec): string => {
                 hook(line, `activity-${index}-${step}`),
             );
         });
-
-    // The app's entrance reveals start hidden until an observer marks them;
-    // the film shows them revealed.
-    for (const element of all) {
-        if ('data-reveal' in element.attrs || 'data-reveal-group' in element.attrs) {
-            additions.push({ element, name: 'data-revealed', value: '' });
-        }
-    }
 
     return addAttributes(html, additions);
 };

@@ -165,13 +165,19 @@
     z-index: 1;
 
     // Both axes: the sheet is a fixed logical area wider than the window —
-    // panning/edge-scroll move across it.
+    // panning/edge-scroll move across it. Panning replaces the scrollbars,
+    // and the bottom edge sits rem(10) outside the section's clip.
     overflow: auto;
+    scrollbar-width: none;
     background-color: var(--color-grid-bg-light);
     border: 1px solid var(--color-net-light);
     border-radius: rem(10);
     animation: board-in 0.35s ease 0.45s backwards;
     transition: inset var(--ws-dur) var(--ws-ease) var(--ws-delay);
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
 }
 
 @keyframes board-in {

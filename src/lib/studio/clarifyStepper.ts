@@ -1,4 +1,5 @@
 import type { Clarify, ClarifyAnswers, ClarifyQuestion } from './clarify';
+import { unitText } from './unitChoice.ts';
 import type { ElicitationAnswer } from './wire';
 
 /**
@@ -59,6 +60,10 @@ export const recordAnswer = (
         return stepper;
     }
 
+    if (answer.kind === 'options' && answer.option_ids.length === 0) {
+        return stepper;
+    }
+
     if (answer.kind === 'skipped' && !question.skippable) {
         return stepper;
     }
@@ -107,7 +112,8 @@ export const stepperRail = (clarify: Clarify, stepper: Stepper): StepperRail => 
 export const stepperAnswers = (clarify: Clarify, stepper: Stepper): ClarifyAnswers | null =>
     clarify.questions.every((question) => stepper.answers[question.id]) ? stepper.answers : null;
 
-/** An answer as the rail shows it: the option label, the typed text, or "Skipped". */
+/** An answer as the rail shows it: the option labels, the unit in words,
+ *  the typed text, or "Skipped". */
 export const answerText = (question: ClarifyQuestion, answer: ElicitationAnswer): string => {
     switch (answer.kind) {
         case 'option':
@@ -115,6 +121,12 @@ export const answerText = (question: ClarifyQuestion, answer: ElicitationAnswer)
                 question.options.find((option) => option.id === answer.option_id)?.label ??
                 answer.option_id
             );
+        case 'options':
+            return answer.option_ids
+                .map((id) => question.options.find((option) => option.id === id)?.label ?? id)
+                .join(', ');
+        case 'unit':
+            return question.unit ? unitText(question.unit, answer) : answer.currency;
         case 'text':
             return answer.text;
         case 'skipped':

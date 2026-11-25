@@ -28,3 +28,8 @@
     background-color: var(--color-net-mid);
     border-radius: rem(4);
 }
+
+// A tag and the punctuation after it, which must not wrap onto a line of its own.
+.trailed {
+    white-space: nowrap;
+}

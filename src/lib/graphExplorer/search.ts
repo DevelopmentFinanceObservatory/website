@@ -1,22 +1,29 @@
 /**
  * Search over the model: terms, values and datasets by label, dcid,
  * alternate name, classification code, and the names and values of each
- * node's open properties. With the terms list it also
+ * node's open properties. With the base or UN System terms lists it also
  * reaches classes and properties the model does not hold.
  */
 import { kindOfTerm, openNames, type Kind, type Model } from './model.ts';
-import type { SchemaTerms } from './wire.ts';
+import type { SchemaTerm } from './wire.ts';
 
-/** How a query matched a hit's best field. */
-export type MatchRank = 'exact' | 'prefix' | 'substring';
+/**
+ * How a query matched a hit's best field: the whole field, whole words in it,
+ * its start, or anywhere.
+ */
+export type MatchRank = 'exact' | 'word' | 'prefix' | 'substring';
 
 export type SearchHit = {
     readonly id: string;
     readonly kind: Kind | 'dataset';
     readonly label: string;
     readonly match: MatchRank;
-    /** Declared by base Data Commons. */
-    readonly base: boolean;
+    /**
+     * The origin declaring the hit, as a node's `declared_by`: `dfo`,
+     * `base`, `un_system`, another origin, or null when the graph names
+     * none. Null for a dataset.
+     */
+    readonly declaredBy: string | null;
     /** False for a term found only in the terms list. */
     readonly inModel: boolean;
 };
@@ -29,41 +36,96 @@ export type SearchResult = {
 };
 
 export type SearchOptions = {
-    /** The terms list. When given, terms outside the model are searched too. */
-    readonly baseTerms?: SchemaTerms;
+    /** The loaded terms lists merged by `outsideTermList`. Terms outside the model are searched in it. */
+    readonly outside?: readonly SchemaTerm[];
     readonly limit?: number;
 };
 
-const RANKS: readonly MatchRank[] = ['exact', 'prefix', 'substring'];
+const RANKS: readonly MatchRank[] = ['exact', 'word', 'prefix', 'substring'];
 
-/** The best rank any field reaches for a lower-cased query, or undefined. */
-const bestMatch = (query: string, fields: readonly (string | null)[]): MatchRank | undefined => {
+/**
+ * A text's words, lower-cased: split at every run of characters other than
+ * letters and digits, where a lower-case letter or digit meets an upper-case
+ * one, and before the last capital of a run of capitals that starts a word,
+ * so `undataHouseholdComposition` reads as undata, household, composition and
+ * `ONEClimateFinance` as one, climate, finance.
+ */
+const words = (text: string): string[] =>
+    text
+        .replace(/([\p{Ll}\p{Nd}])(\p{Lu})/gu, '$1 $2')
+        .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2')
+        .toLowerCase()
+        .split(/[^\p{L}\p{Nd}]+/u)
+        .filter((word) => word !== '');
+
+/** Whether `query`'s words run, in order and whole, somewhere in `field`'s words. */
+const holdsWords = (field: readonly string[], query: readonly string[]): boolean => {
+    if (query.length === 0 || query.length > field.length) return false;
+    for (let start = 0; start + query.length <= field.length; start++) {
+        if (query.every((word, offset) => field[start + offset] === word)) return true;
+    }
+    return false;
+};
+
+/**
+ * How one field matches a lower-cased query, as an index into RANKS. Whole
+ * words match across punctuation and case, so `household composition` finds
+ * `undataHouseholdComposition`.
+ */
+const rankOf = (
+    field: string,
+    query: string,
+    queryWords: readonly string[],
+): number | undefined => {
+    const text = field.toLowerCase();
+    if (text === query) return 0;
+    // Every word of a field is a run of its lower-cased text, so a field that
+    // lacks the query's first word cannot hold its words.
+    const first = queryWords[0];
+    if (first !== undefined && text.includes(first) && holdsWords(words(field), queryWords))
+        return 1;
+    if (text.startsWith(query)) return 2;
+    return text.includes(query) ? 3 : undefined;
+};
+
+/** The best rank any field reaches for a lower-cased query and its words, or undefined. */
+const bestMatch = (
+    query: string,
+    queryWords: readonly string[],
+    fields: readonly (string | null)[],
+): MatchRank | undefined => {
     let best: number | undefined;
     for (const field of fields) {
         if (field === null) continue;
-        const text = field.toLowerCase();
-        const rank =
-            text === query ? 0 : text.startsWith(query) ? 1 : text.includes(query) ? 2 : undefined;
+        const rank = rankOf(field, query, queryWords);
         if (rank !== undefined && (best === undefined || rank < best)) best = rank;
     }
     return best === undefined ? undefined : RANKS[best];
 };
 
-/** DFO terms and datasets, then base terms in the model, then terms outside it. */
-const tier = (hit: SearchHit): number => (!hit.inModel ? 2 : hit.base ? 1 : 0);
+/** A hit's place within its match rank, as `search` orders them. */
+const tier = (hit: SearchHit): number => {
+    if (!hit.inModel) return 2;
+    return hit.declaredBy === 'base' || hit.declaredBy === 'un_system' ? 1 : 0;
+};
 
 /**
- * Hits for `query`, case-insensitive, ranked exact, then prefix, then
- * substring. Within a rank, DFO terms come before base terms, then by label.
+ * Hits for `query`, case-insensitive, ranked by match first: exact, then
+ * whole words, then prefix, then substring. Within a match rank, DFO terms and datasets come
+ * first, with any model term base Data Commons or the UN System does not
+ * declare; then the model's base and UN System terms; then terms outside the
+ * model; then the shorter label. An exact base hit therefore lists above a
+ * DFO prefix hit.
  */
 export function search(model: Model, query: string, options: SearchOptions = {}): SearchResult {
-    const { baseTerms, limit = 12 } = options;
+    const { outside = [], limit = 12 } = options;
     const needle = query.trim().toLowerCase();
     if (needle === '') return { hits: [], total: 0 };
+    const needleWords = words(needle);
 
     const hits: SearchHit[] = [];
     for (const node of model.nodes) {
-        const match = bestMatch(needle, [
+        const match = bestMatch(needle, needleWords, [
             node.label,
             node.ref,
             ...node.alternate_name,
@@ -76,32 +138,32 @@ export function search(model: Model, query: string, options: SearchOptions = {})
             kind: model.kind(node.ref) ?? 'value',
             label: model.label(node.ref),
             match,
-            base: node.declared_by === 'base',
+            declaredBy: node.declared_by,
             inModel: true,
         });
     }
     for (const dataset of model.datasets) {
-        const match = bestMatch(needle, [dataset.label, dataset.ref]);
+        const match = bestMatch(needle, needleWords, [dataset.label, dataset.ref]);
         if (match === undefined) continue;
         hits.push({
             id: dataset.ref,
             kind: 'dataset',
             label: model.label(dataset.ref),
             match,
-            base: false,
+            declaredBy: null,
             inModel: true,
         });
     }
-    for (const term of baseTerms?.terms ?? []) {
+    for (const term of outside) {
         if (term.declared_by === 'dfo' || model.node(term.ref)) continue;
-        const match = bestMatch(needle, [term.label, term.ref]);
+        const match = bestMatch(needle, needleWords, [term.label, term.ref]);
         if (match === undefined) continue;
         hits.push({
             id: term.ref,
             kind: kindOfTerm(term),
             label: term.label ?? term.ref,
             match,
-            base: term.declared_by === 'base',
+            declaredBy: term.declared_by,
             inModel: false,
         });
     }

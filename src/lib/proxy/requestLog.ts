@@ -1,7 +1,8 @@
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { IncomingMessage, ServerResponse } from 'node:http';
 
-import { isBotAgent } from '../bot.ts';
+import { isBotAgent, requestAgent, type Agent } from '../bot.ts';
+import { accountFor } from './account.ts';
 import { requestCaller } from './caller.ts';
 
 /**
@@ -21,10 +22,12 @@ import { requestCaller } from './caller.ts';
  * parses. `caller` is the
  * same `ip:<digest>` the /mcp proxy sends as x-dfo-caller (see caller.ts).
  * `bot` is true when the User-Agent header is missing, empty or one isbot
- * flags. `prerender` is true for a document request with `Sec-Purpose:
+ * flags. `agent` and `agent_name` say what sent the request (requestAgent in
+ * src/lib/bot.ts). `prerender` is true for a document request with `Sec-Purpose:
  * prefetch;prerender`, so its kind is `page` whether or not the visitor opens
  * the page, since the server cannot see activation. The line holds no raw
- * address, query string, cookie, auth header or user agent.
+ * address, query string, cookie, auth header or user agent. A signed-in
+ * user's request names no account here; see AccountLogEntry.
  */
 export type RequestKind = 'page' | 'api' | 'rsc' | 'prefetch';
 
@@ -39,6 +42,8 @@ export type RequestLogEntry = {
     status: number;
     finished: boolean;
     bot: boolean;
+    agent: Agent;
+    agent_name: string | null;
     prerender: boolean;
 };
 
@@ -54,6 +59,8 @@ const API_PATHS = ['/api', '/mcp', '/openapi.json', '/codes'];
 
 const isApiPath = (path: string): boolean =>
     API_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+
+const isMcpPath = (path: string): boolean => path === '/mcp' || path.startsWith('/mcp/');
 
 /** True for a static asset, which is not logged. */
 export const isStaticAsset = (path: string): boolean => STATIC_ASSET.test(path);
@@ -101,6 +108,7 @@ export const requestLogEntry = (
     { status, finished }: { status: number; finished: boolean },
 ): RequestLogEntry => {
     const { kind, prerender } = classifyRequest(path, headers);
+    const { agent, agentName } = requestAgent(headers, { mcp: isMcpPath(path) });
 
     return {
         severity: 'INFO',
@@ -113,6 +121,8 @@ export const requestLogEntry = (
         status,
         finished,
         bot: isBotAgent(headers.get('user-agent')),
+        agent,
+        agent_name: agentName,
         prerender,
     };
 };
@@ -214,6 +224,69 @@ export const logRequest = (
     } catch {
         // Header errors can include raw request data.
         console.error('request log failed');
+    }
+};
+
+/**
+ * One JSON line on stdout for a search resolve (POST /api/v1/search/resolve,
+ * or its /api/search/resolve alias) or a chart share creation (POST
+ * /api/share) made by a signed-in user, written by the route handler after
+ * its response. It ties the request line's `caller` to an account, since the
+ * close hook that writes the request line cannot see the session.
+ *
+ * `caller` is the request line's `ip:<digest>` (requestCaller), null when it
+ * cannot be resolved. `user_hash` is exportDigest of the user id under
+ * EXPORT_ID_HMAC_KEY (accountFor in account.ts), the event and account
+ * exports' `user_hash`. `path` is the handler's path, `/api/v1/search/resolve`
+ * or `/api/share`, whichever alias the request arrived at. A guest, an unset
+ * key or a session read that fails writes no line. The line holds no raw
+ * user id, email, address, cookie or token.
+ */
+export type AccountLogEntry = {
+    severity: 'INFO';
+    message: 'account';
+    caller: string | null;
+    user_hash: string;
+    path: AccountPath;
+};
+
+export type AccountPath = '/api/v1/search/resolve' | '/api/share';
+
+// Built once, so an unset EXPORT_ID_HMAC_KEY logs its warning once per process.
+const defaultAccountOf = accountFor(process.env, () =>
+    console.warn('EXPORT_ID_HMAC_KEY is unset; request logs carry no account line'),
+);
+
+/**
+ * Write the account line for a request (see AccountLogEntry). `readUserId`
+ * reads the signed-in user's id, null for a guest. Never throws: a logging
+ * fault, or a session read that rejects, must not fail the request.
+ */
+export const logAccount = async (
+    incoming: Headers,
+    path: AccountPath,
+    readUserId: () => Promise<string | null>,
+    accountOf: (userId: string | null) => string | undefined = defaultAccountOf,
+): Promise<void> => {
+    try {
+        const userHash = accountOf(await readUserId());
+
+        if (!userHash) {
+            return;
+        }
+
+        const entry: AccountLogEntry = {
+            severity: 'INFO',
+            message: 'account',
+            caller: requestCaller(incoming) ?? null,
+            user_hash: userHash,
+            path,
+        };
+
+        console.log(JSON.stringify(entry));
+    } catch {
+        // A session read error can carry the cookie it read.
+        console.error('account log failed');
     }
 };
 

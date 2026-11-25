@@ -29,6 +29,15 @@ $browser-context: 16px;
     }
 }
 
+/// How far Outfit's glyph box hangs below the last line of a text box set
+/// at a line height under its 1.26em font box (ascent 1, descent 0.26).
+/// Scrollable overflow counts that overhang, so a text area that pads its
+/// end by this much draws no scrollbar while its text fits. The 0.5px covers
+/// Chrome rounding the ascent and descent to whole pixels.
+@function outfit-overhang() {
+    @return max(0px, (1.26em - 1lh) / 2 + 0.5px);
+}
+
 /// $max-at-ref = vh cap at $ref-height (Figma hero ref: 75vh at 524px).
 @function vh-max($size, $max-at-ref: 75, $ref-height: 524) {
     @return math.div(strip-units($max-at-ref) * strip-units($size), strip-units($ref-height)) * 1vh;
@@ -89,24 +98,24 @@ $browser-context: 16px;
 
 // Width of the WebKit scrollbar `scrollbar-visible` draws; a mask that must
 // keep the thumb solid reads the same value.
-$scrollbar-width: rem(6);
+$scrollbar-width: rem(8);
 
 // A scroll region's own scrollbar: `y` for a list or thread, `x` for a code
 // block or table that scrolls sideways, `both` for a box that scrolls either
-// way, such as a capped table or a text area. The site hides every
-// scrollbar (main.scss, on *), and a scroll region needs its cue back, so
-// this draws one that stays in view. A styled ::-webkit-scrollbar is a
-// classic bar, where an overlay one on a Mac would show only while
-// scrolling. That needs scrollbar-width back at auto and scrollbar-color
-// unset, since either set makes Chrome ignore the ::-webkit-scrollbar
-// rules. Firefox has no such pseudo-element and takes its own thin bar in
-// the same colours (about 2 px wider than $scrollbar-width on Windows and
-// Linux, an overlay on macOS). On `y` the bar takes layout width, so its
-// gutter is always reserved and content that takes the region in and out
-// of overflow keeps its width. The other axis is clipped, so children of a
-// `y` region must end at the padding edge, since a subpixel remainder
-// would otherwise draw a second bar.
-@mixin scrollbar-visible($thumb, $axis: y) {
+// way, such as a capped table or a text area. It draws a bar that stays in
+// view, where the default bar on a Mac is an overlay that shows only while
+// scrolling. A styled ::-webkit-scrollbar is a classic bar. It needs
+// scrollbar-width and scrollbar-color both at auto, since either one set
+// makes Chrome ignore the ::-webkit-scrollbar rules, and scrollbar-color
+// inherits from the root (main.scss). Firefox has no such pseudo-element
+// and takes its own thin bar in the same colours (about 2 px wider than
+// $scrollbar-width on Windows and Linux, an overlay on macOS). On `y` the
+// bar takes layout width, so its gutter is always reserved and content that
+// takes the region in and out of overflow keeps its width. The other axis
+// is clipped, so children of a `y` region must end at the padding edge,
+// since a subpixel remainder would otherwise draw a second bar. The thumb
+// defaults to --color-scrollbar, which the root gives every other bar.
+@mixin scrollbar-visible($thumb: var(--color-scrollbar), $axis: y) {
     @if $axis == y {
         overflow: hidden auto;
         scrollbar-gutter: stable;
@@ -118,6 +127,7 @@ $scrollbar-width: rem(6);
         @error "scrollbar-visible takes $axis x, y or both, not `#{$axis}`.";
     }
 
+    scrollbar-color: auto;
     scrollbar-width: auto;
 
     @supports not selector(::-webkit-scrollbar) {

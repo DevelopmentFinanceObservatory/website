@@ -62,6 +62,21 @@ test('a live canvas sends a slot per shown data card and holds every data card',
     assert.deepEqual(body.payload['componentRefs'], []);
 });
 
+test('a share of a save whose baseline predates manifest pins slots the pinned card it showed', () => {
+    // The manifest held only the latest turn's card; the page showed the
+    // pinned card of turn 1 beside it by the turn rule.
+    const old = {
+        ...saved([
+            chart('c1', { ref: { component_id: 'cmp_a', revision: 1 } }),
+            chart('c2', { turn: 2, ref: { component_id: 'cmp_b', revision: 1 } }),
+        ]),
+        pinnedIds: ['c1'],
+        canvas: { compositionId: 'cps_1', revision: 3, ids: ['c2'] },
+    };
+
+    assert.deepEqual(liveSlotsOf(old), { c1: 1, c2: 2 });
+});
+
 test('a live share is refused with the shown data cards that have no ref', () => {
     const canvas = saved([
         chart('c1', { ref: { component_id: 'cmp_a', revision: 2 } }),

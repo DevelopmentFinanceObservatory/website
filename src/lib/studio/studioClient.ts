@@ -11,16 +11,25 @@
 
 import type {
     ApplyChoice,
+    ApplyUnit,
     CancelRequest,
+    ClientFeature,
     CompositionManifest,
     CompositionMutation,
+    ConversationRead,
     InterruptResponse,
     MutationOperation,
     PlanRevisionStaleError,
+    ResumeRequest,
     StudioFrame,
     ToolError,
     TurnRequest,
 } from './wire';
+
+import { asRecord } from '../asRecord.ts';
+import { SIGN_IN_REQUIRED } from './studioAccess.ts';
+import { isTextTooLong, TEXT_TOO_LONG_MESSAGE } from './interruptText.ts';
+import type { LiveCard } from './liveBackend.ts';
 
 /**
  * How long the page waits on a stop: a cancelled stream may run on this long
@@ -68,15 +77,37 @@ export type StreamRefusal = {
     proxy?: ProxyProblem;
 };
 
-/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal,
- *  and `onUnreachable` a request that got no response at all (the fetch
- *  rejected), before the stream would report either as an `error` frame.
- *  Each returns true when it has dealt with it. */
+/** The response header every Studio stream names its turn's index in, from
+ *  1. A refused request carries none. */
+export const TURN_INDEX_HEADER = 'x-dfo-turn-index';
+
+/** The turn index a stream's response names in TURN_INDEX_HEADER, or null
+ *  when it names none or no positive integer. */
+export const turnIndexOf = (headers: Headers): number | null => {
+    const value = headers.get(TURN_INDEX_HEADER);
+    const index = value !== null && /^\d+$/.test(value) ? Number(value) : 0;
+
+    return index > 0 ? index : null;
+};
+
+/** What a stream reports to its caller. `onTurnIndex` hears the index of the
+ *  turn an accepted stream carries, before its first frame. `onRefusal` sees
+ *  an HTTP refusal, and `onUnreachable` a request that got no response at
+ *  all (the fetch rejected), before the stream would report either as an
+ *  `error` frame. Each returns true when it has dealt with it. `onBusyWait`
+ *  hears the seconds a request waits because another stream holds the
+ *  conversation (whileBusy), and null when the wait is over and the request
+ *  goes again. Between the two the page holds no stream. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
+    onTurnIndex?: (index: number) => void;
     onKeepAlive?: () => void;
+    onBusyWait?: (seconds: number | null) => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
     onUnreachable?: () => boolean;
+    // A state read found the conversation begun afresh under its id, so the
+    // stream's turn belongs to a session the harness dropped (carryOnTurn).
+    onSessionGone?: () => void;
 };
 
 const asToolError = (body: unknown): PlanRevisionStaleError | null =>
@@ -106,9 +137,9 @@ const asProxyProblem = (body: unknown, headers: Headers): ProxyProblem | null =>
 };
 
 const streamStudio = async (
-    endpoint: 'turn' | 'interrupt',
-    body: TurnRequest | InterruptResponse,
-    { onFrame, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
+    endpoint: 'turn' | 'interrupt' | 'resume',
+    body: TurnRequest | InterruptResponse | ResumeRequest,
+    { onFrame, onTurnIndex, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -136,9 +167,12 @@ const streamStudio = async (
         let detail: string | null = null;
         let error: PlanRevisionStaleError | null = null;
         let proxy: ProxyProblem | null = null;
+        let tooLong = false;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };
+
+            tooLong = endpoint === 'interrupt' && isTextTooLong(res.status, parsed);
 
             error = asToolError(parsed);
             proxy = asProxyProblem(parsed, res.headers);
@@ -157,9 +191,15 @@ const streamStudio = async (
             return;
         }
 
-        onFrame(transportError(detail ?? `HTTP ${res.status}`));
+        onFrame(transportError(tooLong ? TEXT_TOO_LONG_MESSAGE : (detail ?? `HTTP ${res.status}`)));
 
         return;
+    }
+
+    const turnIndex = turnIndexOf(res.headers);
+
+    if (turnIndex !== null) {
+        onTurnIndex?.(turnIndex);
     }
 
     const reader = res.body.getReader();
@@ -213,13 +253,18 @@ const streamStudio = async (
     }
 };
 
+/** The question forms the Studio renders, sent on every turn and answer. */
+export const CLIENT_FEATURES: ClientFeature[] = ['unit_question', 'multi_select'];
+
 /** Start (or continue) a turn. */
 export const runTurn = (
     conversationId: string,
     message: string,
     handlers: StreamHandlers,
     signal?: AbortSignal,
-    extras?: Partial<Pick<TurnRequest, 'component_ref' | 'auto_add' | 'surface' | 'seed_spec'>>,
+    extras?: Partial<
+        Pick<TurnRequest, 'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn'>
+    >,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -229,6 +274,7 @@ export const runTurn = (
             conversation_id: conversationId,
             message,
             ...extras,
+            client_features: CLIENT_FEATURES,
         },
         handlers,
         signal,
@@ -249,6 +295,28 @@ export const runApplyChoice = (
             schema_version: 1,
             conversation_id: conversationId,
             apply_choice: { choice_id, option_id, turn, spec_id },
+            client_features: CLIENT_FEATURES,
+        },
+        handlers,
+        signal,
+    );
+
+/** Run a turn that moves a card to another unit: the card, the reading it
+ *  shows, the turn that drew it and the unit, and no message. */
+export const runApplyUnit = (
+    conversationId: string,
+    { component_id, spec_id, turn, unit }: ApplyUnit,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_unit: { component_id, spec_id, turn, unit },
+            client_features: CLIENT_FEATURES,
         },
         handlers,
         signal,
@@ -260,7 +328,7 @@ export const runInterrupt = (
     interruptId: string,
     reply: Pick<
         InterruptResponse,
-        'decision' | 'payload' | 'answers' | 'choice_id' | 'option_id' | 'plan_revision'
+        'decision' | 'payload' | 'answers' | 'choice_id' | 'option_id' | 'plan_revision' | 'unit'
     >,
     handlers: StreamHandlers,
     signal?: AbortSignal,
@@ -273,21 +341,396 @@ export const runInterrupt = (
             conversation_id: conversationId,
             interrupt_id: interruptId,
             ...reply,
+            client_features: CLIENT_FEATURES,
         },
         handlers,
         signal,
     );
 
-/** Mutate the canvas; resolves with the new (or unchanged) manifest. */
+/** Carry on the conversation's open turn `turnIndex`, which is running with
+ *  no stream holding it; the response is a new stream continuing the turn. */
+export const runResume = (
+    conversationId: string,
+    turnIndex: number,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'resume',
+        {
+            kind: 'turn.resume',
+            schema_version: 1,
+            conversation_id: conversationId,
+            turn_index: turnIndex,
+        },
+        handlers,
+        signal,
+    );
+
+/**
+ * The seconds to wait before asking again when `refusal` says another stream
+ * holds the conversation (409 `transient_unavailable`), or null for any other
+ * refusal. The wait is at least a second, so a lease about to lapse is not
+ * asked about in a tight loop.
+ */
+export const busyRetryAfter = (refusal: StreamRefusal): number | null =>
+    refusal.status === 409 && refusal.error?.error === 'transient_unavailable'
+        ? Math.max(1, refusal.error.retry_after_seconds ?? 1)
+        : null;
+
+/**
+ * Where a stream's request stands, which decides what Stop does
+ * (stopAction). `unsent`: the request has not started, or it sleeps in
+ * whileBusy because another stream holds the conversation. `sent`: a send is
+ * on its way and the harness has not answered it. `admitted`: the harness
+ * named the stream's turn (`onTurnIndex`) or sent a frame.
+ */
+export type RequestPhase = 'unsent' | 'sent' | 'admitted';
+
+/**
+ * What Stop does to a stream. `cancel` says when the harness is asked to
+ * cancel the turn: `now`, `on-admit` (once the response names the turn), or
+ * `none`. `abort` says when the request is closed: `now`, or `after-grace`,
+ * reading the stream until the harness ends it (STOP_GRACE_MS). `refunded`
+ * marks the prompt of a `metered` request (a POST turn) the site's meter
+ * gives back, since a turn the harness never admitted was refused or never
+ * sent.
+ */
+export type StopAction = {
+    cancel: 'now' | 'on-admit' | 'none';
+    abort: 'now' | 'after-grace';
+    refunded: boolean;
+};
+
+/**
+ * What Stop does in `phase` (see RequestPhase). An admitted turn is
+ * cancelled at once. A sent request is left open: a harness that admits it
+ * after the client has gone holds the turn open with no stream, so the
+ * cancel goes out once the response names the turn, and a refusal gives the
+ * prompt back then. An unsent request ends at once with no cancel, since the
+ * turn running may be another stream's. Stop is for the turn the page shows,
+ * so on a page that watches another tab's turn it cancels that turn. The
+ * cancel names the turn where the harness named it (cancelTurn).
+ */
+export const stopAction = ({
+    phase,
+    metered,
+}: {
+    phase: RequestPhase;
+    metered: boolean;
+}): StopAction => {
+    switch (phase) {
+        case 'admitted':
+            return { cancel: 'now', abort: 'after-grace', refunded: false };
+        case 'sent':
+            return { cancel: 'on-admit', abort: 'after-grace', refunded: false };
+        case 'unsent':
+            return { cancel: 'none', abort: 'now', refunded: metered };
+    }
+};
+
+/**
+ * `handlers` with a record of where the request stands (`phase`), the turn
+ * the harness named for it (`turnIndex`, null until named), and what a Stop
+ * does to it. The caller calls `start` as the request starts, and `stop` on
+ * Stop, which returns the StopAction to carry out. A Stop while the request
+ * was `sent` is decided again when the harness answers: `onStopChange`
+ * hears the action for `admitted` once the response names the turn, by
+ * which time `turnIndex` names it, and the one for `unsent` when the answer
+ * is to wait while another stream holds the conversation (whileBusy). A
+ * stream that carries on turn `admittedTurn`, which the harness admitted
+ * already (a reopened page's), starts `admitted` with that turn. Its Stop
+ * then cancels at once. A later frame may come after another turn has
+ * begun, so a cancel deferred to it could name the wrong turn.
+ */
+export const watchAdmission = (
+    handlers: StreamHandlers,
+    {
+        onStopChange,
+        admittedTurn = null,
+    }: { onStopChange?: (action: StopAction) => void; admittedTurn?: number | null } = {},
+): {
+    handlers: StreamHandlers;
+    phase: () => RequestPhase;
+    turnIndex: () => number | null;
+    start: () => void;
+    stop: (metered: boolean) => StopAction;
+} => {
+    let phase: RequestPhase = 'unsent';
+    let turnIndex = admittedTurn;
+    // Set by a Stop that waits on the harness's answer to decide again.
+    let waiting: { metered: boolean } | null = null;
+
+    const enter = (next: RequestPhase) => {
+        if (phase === 'admitted') {
+            return;
+        }
+
+        phase = next;
+
+        if (waiting && next !== 'sent') {
+            const action = stopAction({ phase: next, metered: waiting.metered });
+
+            waiting = null;
+            onStopChange?.(action);
+        }
+    };
+
+    return {
+        handlers: {
+            ...handlers,
+            onTurnIndex: (index) => {
+                turnIndex = index;
+                enter('admitted');
+                handlers.onTurnIndex?.(index);
+            },
+            onFrame: (frame) => {
+                enter('admitted');
+                handlers.onFrame(frame);
+            },
+            onBusyWait: (seconds) => {
+                enter(seconds === null ? 'sent' : 'unsent');
+                handlers.onBusyWait?.(seconds);
+            },
+        },
+        phase: () => phase,
+        turnIndex: () => turnIndex,
+        start: () => enter(admittedTurn === null ? 'sent' : 'admitted'),
+        stop: (metered) => {
+            const action = stopAction({ phase, metered });
+
+            waiting = action.cancel === 'on-admit' ? { metered } : null;
+
+            return action;
+        },
+    };
+};
+
+/** Whether a turn request naming `after_turn` was refused because a later
+ *  turn began first (409 `edit_conflict`, `constraint_id: "turn_moved"`). */
+export const isTurnMoved = (refusal: StreamRefusal): boolean =>
+    refusal.status === 409 && refusal.error?.constraint_id === 'turn_moved';
+
+/** Resolves after `ms`, or rejects with an AbortError when `signal` aborts. */
+export const abortableSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+    new Promise((resolve, reject) => {
+        const aborted = () => {
+            clearTimeout(timer);
+            reject(new DOMException('The wait was aborted.', 'AbortError'));
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener('abort', aborted);
+            resolve();
+        }, ms);
+
+        if (signal?.aborted) {
+            aborted();
+        } else {
+            signal?.addEventListener('abort', aborted, { once: true });
+        }
+    });
+
+/**
+ * Run the stream request `run` and, while the harness answers that another
+ * stream holds the conversation (busyRetryAfter), wait the seconds it names
+ * and send it again. `handlers.onBusyWait` hears each wait start and end. A
+ * `signal` aborted during a wait rejects with an AbortError and sends
+ * nothing more. Any other refusal goes to `handlers.onRefusal` as usual,
+ * and the busy answer ends in the wait.
+ */
+export const whileBusy = async (
+    run: (handlers: StreamHandlers) => Promise<void>,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+    {
+        sleep = abortableSleep,
+    }: { sleep?: (ms: number, signal?: AbortSignal) => Promise<void> } = {},
+): Promise<void> => {
+    for (;;) {
+        // Set by the refusal handler during `run`.
+        let wait: number | null = null;
+
+        await run({
+            ...handlers,
+            onRefusal: (refusal) => {
+                wait = busyRetryAfter(refusal);
+
+                return wait !== null || (handlers.onRefusal?.(refusal) ?? false);
+            },
+        });
+
+        if (wait === null) {
+            return;
+        }
+
+        handlers.onBusyWait?.(wait);
+        await sleep(wait * 1000, signal);
+        handlers.onBusyWait?.(null);
+    }
+};
+
+/** A refusal's body: the harness's ToolError when it is one, and the proxy's
+ *  problem document when the site proxy refused the request itself. */
+const readRefusal = async (
+    res: Response,
+): Promise<{ error: PlanRevisionStaleError | null; proxy: ProxyProblem | null }> => {
+    try {
+        const parsed: unknown = await res.json();
+
+        return { error: asToolError(parsed), proxy: asProxyProblem(parsed, res.headers) };
+    } catch {
+        return { error: null, proxy: null };
+    }
+};
+
+/** Whether a refusal says the harness holds no conversation under the id it
+ *  names (404 `not_found` at `/conversation_id`): the harness session behind
+ *  the page is gone. The proxy's own 404 carries no pointer. */
+export const isSessionGone = ({
+    status,
+    error,
+}: {
+    status: number;
+    error: ToolError | null;
+}): boolean =>
+    status === 404 && error?.error === 'not_found' && error.pointer === '/conversation_id';
+
+/** Whether the proxy refused a guest's call about a conversation an account
+ *  owns (401 SIGN_IN_REQUIRED). */
+export const isSignInRequired = ({
+    status,
+    proxy,
+}: {
+    status: number;
+    proxy?: ProxyProblem | null;
+}): boolean => status === 401 && proxy?.code === SIGN_IN_REQUIRED;
+
+/** A state read the harness or the proxy refused for a reason the page acts
+ *  on: the harness holds no such conversation (`session_gone`), or the
+ *  conversation is an account's and the caller is a guest
+ *  (`sign_in_required`). `http` is the refusal as a stream request would
+ *  have heard it, for a stream that reads the state (carryOnTurn). */
+export type StateRefusal = {
+    refusal: 'session_gone' | 'sign_in_required';
+    http: StreamRefusal;
+};
+
+export const isStateRefusal = (answer: ConversationRead | StateRefusal): answer is StateRefusal =>
+    'refusal' in answer;
+
+/** How many times readState asks while the answer is 503
+ *  `transient_unavailable`. */
+export const STATE_READ_ATTEMPTS = 3;
+
+/**
+ * The conversation as the harness holds it, with the closed turns after
+ * `since`. A 503 `transient_unavailable`, from the harness or the proxy, is
+ * asked again after the seconds it names, up to STATE_READ_ATTEMPTS times in
+ * all. A refusal the page acts on is a StateRefusal. Null on any other
+ * failure, the proxy's 404 for a conversation another account owns included.
+ */
+export const readState = async (
+    conversationId: string,
+    since: number,
+    signal?: AbortSignal,
+    sleep: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
+): Promise<ConversationRead | StateRefusal | null> => {
+    const query = new URLSearchParams({ conversation_id: conversationId, since: String(since) });
+
+    for (let attempt = 1; ; attempt += 1) {
+        let res: Response;
+
+        try {
+            res = await fetch(`/api/studio/state?${query}`, { signal });
+
+            if (res.ok) {
+                return (await res.json()) as ConversationRead;
+            }
+        } catch (error) {
+            if ((error as Error).name === 'AbortError') {
+                throw error;
+            }
+
+            return null;
+        }
+
+        const { error, proxy } = await readRefusal(res);
+        const http: StreamRefusal = {
+            status: res.status,
+            detail: error?.detail ?? null,
+            error,
+            ...(proxy && { proxy }),
+        };
+
+        if (isSessionGone(http)) {
+            return { refusal: 'session_gone', http };
+        }
+
+        if (isSignInRequired(http)) {
+            return { refusal: 'sign_in_required', http };
+        }
+
+        const transient =
+            res.status === 503 &&
+            (error?.error === 'transient_unavailable' || proxy?.code === 'transient_unavailable');
+
+        if (!transient || attempt >= STATE_READ_ATTEMPTS) {
+            return null;
+        }
+
+        const seconds = error?.retry_after_seconds ?? proxy?.retryAfterSeconds ?? 1;
+
+        await sleep(Math.max(1, seconds) * 1000, signal);
+    }
+};
+
+/** A canvas edit the harness or the proxy refused: the response's status,
+ *  and its body as readRefusal reads it. */
+export class CompositionRefusal extends Error {
+    readonly status: number;
+    readonly error: ToolError | null;
+    readonly proxy: ProxyProblem | null;
+
+    constructor(status: number, error: ToolError | null, proxy: ProxyProblem | null) {
+        super(error?.detail ?? `the canvas edit was refused: HTTP ${status}`);
+        this.name = 'CompositionRefusal';
+        this.status = status;
+        this.error = error;
+        this.proxy = proxy;
+    }
+}
+
+/** Whether a refused canvas edit names a card the composition holds no block
+ *  for (404 `not_found` at `/operations/component_id`). For a `remove`, the
+ *  harness has taken the card off already, or never held it. */
+export const isNoBlock = (refusal: CompositionRefusal): boolean =>
+    refusal.status === 404 &&
+    refusal.error?.error === 'not_found' &&
+    refusal.error.pointer === '/operations/component_id';
+
+/** Whether a refused canvas edit named a revision the composition has moved
+ *  past (409 `edit_conflict`, retry `refresh_then_retry`, no constraint):
+ *  read the canvas again before sending it again. */
+export const isStaleRevision = (refusal: CompositionRefusal): boolean =>
+    refusal.status === 409 &&
+    refusal.error?.error === 'edit_conflict' &&
+    refusal.error.retry === 'refresh_then_retry' &&
+    !refusal.error.constraint_id;
+
+/** Mutate the canvas; resolves with the new (or unchanged) manifest, and
+ *  rejects with a CompositionRefusal when the request is refused. Sent
+ *  against `expectedRevision` of composition `compositionId` when given. */
 export const mutateComposition = async (
     conversationId: string,
     operations: MutationOperation[],
     expectedRevision?: number,
-): Promise<CompositionManifest | null> => {
+    compositionId?: string,
+): Promise<CompositionManifest> => {
     const body: CompositionMutation = {
         kind: 'composition.mutate',
         schema_version: 1,
         conversation_id: conversationId,
+        ...(compositionId !== undefined ? { composition_id: compositionId } : {}),
         operations,
         ...(expectedRevision !== undefined ? { expected_revision: expectedRevision } : {}),
     };
@@ -299,45 +742,119 @@ export const mutateComposition = async (
     });
 
     if (!res.ok) {
-        return null;
+        const { error, proxy } = await readRefusal(res);
+
+        throw new CompositionRefusal(res.status, error, proxy);
     }
 
     return (await res.json()) as CompositionManifest;
 };
 
-/**
- * Stop the conversation's in-flight stream (the Stop button). Best-effort and
- * bounded: it always settles, within `timeoutMs`, because queued turns wait
- * on it.
- */
-export const cancelTurn = async (
-    conversationId: string,
-    timeoutMs: number = STOP_GRACE_MS,
-): Promise<void> => {
-    const body: CancelRequest = {
-        kind: 'turn.cancel',
-        schema_version: 1,
-        conversation_id: conversationId,
-    };
+/** How a cancel went: the harness took it (`stopped`), it answered that the
+ *  conversation's latest turn is another than the one named (`moved`), or
+ *  no answer came (`unanswered`). */
+export type CancelAnswer = 'stopped' | 'moved' | 'unanswered';
 
-    await fetch('/api/studio/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-    }).catch(() => {
-        // Cancel is best-effort (a timeout lands here too); closing the
-        // stream also stops the turn.
-    });
+// Whether a 422 answer refuses `turn_index` as a member the request may not
+// carry: FastAPI's validation answer of a harness from before it, whose
+// `detail` entries name the member's location.
+const refusesTurnIndex = (body: unknown): boolean => {
+    const detail = asRecord(body)?.['detail'];
+
+    return (
+        Array.isArray(detail) &&
+        detail.some((entry) => {
+            const loc = asRecord(entry)?.['loc'];
+
+            return Array.isArray(loc) && loc.at(-1) === 'turn_index';
+        })
+    );
 };
 
 /**
- * The resolved payload of one component revision, read through the site's
- * proxy of the Presentation API's read route. A `component.revised` frame
- * may leave its payload out; the card then reads it by id. Null on any
- * failure, and the card keeps what it holds.
+ * Stop the conversation's in-flight stream (the Stop button, or leaving the
+ * conversation). `turnIndex` names the turn to stop, as the harness named it
+ * (the stream's `x-dfo-turn-index` header, or the state read a carried-on
+ * turn came from). The harness answers `turn_moved` and stops nothing when
+ * the conversation's latest turn is another. One that names the turn sent
+ * met the turn's claim mid-way, so the cancel goes once more. Null stops
+ * whatever turn the conversation runs. A harness from before `turn_index`
+ * refuses the member 422 (refusesTurnIndex), and the cancel goes again
+ * without it. Best-effort and bounded: it always settles, within
+ * `timeoutMs` in all, because queued turns wait on it.
  */
-export const fetchComponentRevision = async (
+export const cancelTurn = async (
+    conversationId: string,
+    turnIndex: number | null = null,
+    timeoutMs: number = STOP_GRACE_MS,
+): Promise<CancelAnswer> => {
+    const signal = AbortSignal.timeout(timeoutMs);
+    const send = (index: number | null) => {
+        const body: CancelRequest = {
+            kind: 'turn.cancel',
+            schema_version: 1,
+            conversation_id: conversationId,
+            ...(index !== null && { turn_index: index }),
+        };
+
+        return fetch('/api/studio/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal,
+        });
+    };
+
+    // The answer to one send: how it went, and for `moved` the latest turn
+    // the harness named.
+    const answerOf = async (res: Response): Promise<[CancelAnswer, unknown]> => {
+        if (!res.ok) {
+            return ['unanswered', null];
+        }
+
+        const body = res.status === 200 ? asRecord(await res.json().catch(() => null)) : null;
+
+        return body?.['code'] === 'turn_moved' ? ['moved', body['turn_index']] : ['stopped', null];
+    };
+
+    try {
+        let res = await send(turnIndex);
+
+        if (
+            res.status === 422 &&
+            turnIndex !== null &&
+            refusesTurnIndex(
+                await res
+                    .clone()
+                    .json()
+                    .catch(() => null),
+            )
+        ) {
+            res = await send(null);
+        }
+
+        const [answer, latest] = await answerOf(res);
+
+        if (answer === 'moved' && latest === turnIndex) {
+            return (await answerOf(await send(turnIndex)))[0];
+        }
+
+        return answer;
+    } catch {
+        // Cancel is best-effort (a timeout lands here too); closing the
+        // stream also stops the turn.
+        return 'unanswered';
+    }
+};
+
+/** One component revision as the Presentation API's read route answers it:
+ *  the resolved payload (`payload`), dfo-apis' fact summary, and the
+ *  catalogue it minted under. */
+export type ComponentRead = LiveCard & { catalog_version: string };
+
+// One component revision's read body, through the site's proxy of the
+// Presentation API's read route. Null on any failure, logged with the ids.
+const readComponentBody = async (
     componentId: string,
     revision: number,
 ): Promise<Record<string, unknown> | null> => {
@@ -356,15 +873,46 @@ export const fetchComponentRevision = async (
             return null;
         }
 
-        const body = (await res.json()) as { resolved_payload?: unknown };
-        const payload = body.resolved_payload;
-
-        return payload !== null && typeof payload === 'object'
-            ? (payload as Record<string, unknown>)
-            : null;
+        return asRecord(await res.json()) ?? null;
     } catch (error) {
         console.warn('component revision read failed', { componentId, revision, error });
 
         return null;
     }
+};
+
+/** One component revision as the Presentation API reads it, enough to draw
+ *  a card the page never saw. Null on any failure, or for an answer without
+ *  a payload and fact summary. */
+export const readComponent = async (
+    componentId: string,
+    revision: number,
+): Promise<ComponentRead | null> => {
+    const body = await readComponentBody(componentId, revision);
+
+    const payload = asRecord(body?.['resolved_payload']);
+    const facts = asRecord(body?.['fact_summary']);
+    const catalog = body?.['catalog_version'];
+
+    return payload && facts && Array.isArray(facts['series'])
+        ? {
+              component_id: componentId,
+              revision,
+              catalog_version: typeof catalog === 'string' ? catalog : '',
+              payload,
+              fact_summary: facts as ComponentRead['fact_summary'],
+          }
+        : null;
+};
+
+/**
+ * The resolved payload of one component revision. A `component.revised`
+ * frame may leave its payload out; the card then reads it by id. Null on any
+ * failure, and the card keeps what it holds.
+ */
+export const fetchComponentRevision = async (
+    componentId: string,
+    revision: number,
+): Promise<Record<string, unknown> | null> => {
+    return asRecord((await readComponentBody(componentId, revision))?.['resolved_payload']) ?? null;
 };

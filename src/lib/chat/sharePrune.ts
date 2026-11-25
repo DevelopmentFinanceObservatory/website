@@ -6,10 +6,12 @@ export type ShareKind = 'conversation' | 'canvas' | 'card' | 'search';
 const pick = <T>(record: Record<string, T> | undefined, id: string): Record<string, T> =>
     record && id in record ? { [id]: record[id]! } : {};
 
-// Every field of a saved conversation. A share stores these and no other, so
-// a request cannot carry extra fields into the table. Keyed by the type, so a
-// new field fails to compile until it is listed here.
-const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
+// Every field of a saved conversation, and whether a share stores it. A share
+// stores the fields marked true and no other, so a request cannot carry extra
+// fields into the table. Keyed by the type, so a new field fails to compile
+// until it is listed here. The owner page's save order (`saveWriter`,
+// `saveSeq`) stays out of a share.
+const SAVED_FIELDS: Record<keyof SavedConversation, boolean> = {
     id: true,
     sessionId: true,
     componentRefs: true,
@@ -20,6 +22,8 @@ const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
     activity: true,
     turnCount: true,
     canvas: true,
+    localIds: true,
+    owedRemovals: true,
     pinnedIds: true,
     removedIds: true,
     graceIds: true,
@@ -32,11 +36,15 @@ const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
     titles: true,
     notes: true,
     shareMarks: true,
+    saveWriter: false,
+    saveSeq: false,
 };
 
 const savedFields = (saved: SavedConversation): SavedConversation =>
     Object.fromEntries(
-        Object.entries(saved).filter(([key]) => Object.hasOwn(SAVED_FIELDS, key)),
+        Object.entries(saved).filter(
+            ([key]) => SAVED_FIELDS[key as keyof SavedConversation] === true,
+        ),
     ) as SavedConversation;
 
 /**
@@ -73,6 +81,11 @@ export const pruneForShare = (
         ...base,
         widgets: widget ? [{ ...widget, turn: 1 }] : [],
         textCards: textCard ? [textCard] : [],
+        // The one card shows by the legacy rule, as the pinned card of its
+        // only turn, since no manifest or inherited set names it.
+        canvas: null,
+        localIds: [],
+        owedRemovals: [],
         pinnedIds: widget ? [widget.id] : [],
         removedIds: [],
         graceIds: [],

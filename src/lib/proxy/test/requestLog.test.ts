@@ -1,7 +1,7 @@
 /**
  * `requestLog.ts`: which requests are logged and as what, and that the line
- * carries the caller digest, the response status and the bot verdict but no
- * raw address, query string or user agent.
+ * carries the caller digest, the response status, the agent and the bot
+ * verdict but no raw address, query string or user agent.
  */
 import assert from 'node:assert/strict';
 import crypto, { createHash, createHmac } from 'node:crypto';
@@ -15,8 +15,9 @@ import { syncBuiltinESMExports } from 'node:module';
 process.env.CALLER_HMAC_KEY = 'test-key';
 process.env.TRUSTED_PROXY_HOPS = '2';
 
-const { isStaticAsset, logRequest, registerRequestLogging, requestLogEntry } =
+const { isStaticAsset, logAccount, logRequest, registerRequestLogging, requestLogEntry } =
     await import('../requestLog.ts');
+const { accountFor, exportDigest } = await import('../account.ts');
 
 const VISITOR = '203.0.113.7';
 const CHROME =
@@ -177,6 +178,36 @@ test('requestLogEntry: bot is true for crawlers, tools and a missing user agent,
     }
 });
 
+test('requestLogEntry: agent and agent_name beside the isbot verdict, with the MCP route read from the path', () => {
+    const cases: [string, Record<string, string>, string, string | null, boolean][] = [
+        [
+            '/api/v1/datasets',
+            { 'user-agent': 'python-httpx/0.28.1', 'x-dfo-client': 'dfo-python/0.4.1' },
+            'sdk',
+            'dfo-python',
+            true,
+        ],
+        ['/mcp', { 'user-agent': 'Claude-User' }, 'mcp_client', 'Claude-User', true],
+        ['/mcp/', { 'user-agent': 'Claude-User' }, 'mcp_client', 'Claude-User', true],
+        ['/', { 'user-agent': 'Claude-User' }, 'user_fetcher', 'Claude-User', true],
+        ['/mcpx', { 'user-agent': 'Claude-User' }, 'user_fetcher', 'Claude-User', true],
+    ];
+
+    for (const [path, headers, agent, agentName, bot] of cases) {
+        const entry = requestLogEntry(
+            { path, method: 'GET', headers: new Headers(headers) },
+            undefined,
+            { status: 200, finished: true },
+        );
+
+        assert.deepEqual(
+            { agent: entry.agent, agent_name: entry.agent_name, bot: entry.bot },
+            { agent, agent_name: agentName, bot },
+            `${path} ${JSON.stringify(headers)}`,
+        );
+    }
+});
+
 // A server request as the HTTP parser hands it over: a raw target and raw headers.
 const serverRequest = (target: string, headers: Record<string, string> = {}): IncomingMessage => {
     const request = new IncomingMessage(new Socket());
@@ -228,6 +259,8 @@ test('logRequest: one line with the caller digest and no address or query', () =
             status: 404,
             finished: true,
             bot: false,
+            agent: 'browser',
+            agent_name: null,
             prerender: false,
         },
     ]);
@@ -243,6 +276,85 @@ test('logRequest: no client address logs a null caller', () => {
     const [line] = captureLog(serverRequest('/api/events'));
 
     assert.equal((line as { caller: unknown }).caller, null);
+});
+
+test('logAccount: a signed-in resolve or share names the caller and account digest; a guest, an unset key or a failed session read writes nothing', async (t) => {
+    const headers = new Headers({
+        'x-forwarded-for': `${VISITOR}, 198.51.100.1, 192.0.2.1`,
+        cookie: 'session=s3cret',
+    });
+    const caller = `ip:${createHmac('sha256', 'test-key').update(VISITOR).digest('hex').slice(0, 32)}`;
+    const keyed = accountFor({ EXPORT_ID_HMAC_KEY: 'export-key' });
+    const unkeyed = accountFor({}, () => {});
+    const userHash = exportDigest('user-1', 'export-key');
+    const signedIn = async () => 'user-1';
+    const cases: [
+        string,
+        '/api/v1/search/resolve' | '/api/share',
+        () => Promise<string | null>,
+        typeof keyed,
+        unknown[],
+    ][] = [
+        [
+            'signed-in resolve',
+            '/api/v1/search/resolve',
+            signedIn,
+            keyed,
+            [
+                {
+                    severity: 'INFO',
+                    message: 'account',
+                    caller,
+                    user_hash: userHash,
+                    path: '/api/v1/search/resolve',
+                },
+            ],
+        ],
+        [
+            'signed-in share',
+            '/api/share',
+            signedIn,
+            keyed,
+            [
+                {
+                    severity: 'INFO',
+                    message: 'account',
+                    caller,
+                    user_hash: userHash,
+                    path: '/api/share',
+                },
+            ],
+        ],
+        ['guest', '/api/v1/search/resolve', async () => null, keyed, []],
+        ['unset key', '/api/share', signedIn, unkeyed, []],
+        [
+            'session read rejects',
+            '/api/v1/search/resolve',
+            () => Promise.reject(new Error('session=s3cret')),
+            keyed,
+            [],
+        ],
+    ];
+    const errors: unknown[][] = [];
+    t.mock.method(console, 'error', (...args: unknown[]) => errors.push(args));
+
+    for (const [name, path, readUserId, accountOf, expected] of cases) {
+        const lines: unknown[] = [];
+        const log = t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+
+        await logAccount(headers, path, readUserId, accountOf);
+        log.mock.restore();
+
+        assert.deepEqual(lines, expected, name);
+
+        const text = JSON.stringify(lines);
+
+        for (const secret of [VISITOR, 'user-1', 's3cret']) {
+            assert.ok(!text.includes(secret), `${name}: ${secret}`);
+        }
+    }
+
+    assert.deepEqual(errors, [['account log failed']]);
 });
 
 test('logRequest: the path is the target without its query, resolved, with //mcp kept as a path, * as itself and any other target as a placeholder', () => {
@@ -442,6 +554,8 @@ test(
                 status: 200,
                 finished: true,
                 bot: true,
+                agent: 'other_bot',
+                agent_name: null,
                 prerender: false,
             },
         ]);

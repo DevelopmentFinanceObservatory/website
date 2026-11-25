@@ -12,6 +12,7 @@ import {
     percentNumber,
     type StatValue,
 } from '../studio/statFace.ts';
+import type { UnitChange } from '../studio/wire.ts';
 
 /** One source a card cites, as the platform names it. */
 export type CardSource = {
@@ -101,6 +102,9 @@ export type KeyNumberWidget = {
     data?: CardData;
     source?: string;
     info?: CardInfo;
+    // The units the card can move to, from its `component.created` frame;
+    // absent when its readings are not one convertible spec.
+    unitChange?: UnitChange;
 };
 
 export type ChartWidget = {
@@ -119,6 +123,9 @@ export type ChartWidget = {
     data?: CardData;
     source?: string;
     info?: CardInfo;
+    // The units the card can move to, from its `component.created` frame;
+    // absent when its readings are not one convertible spec.
+    unitChange?: UnitChange;
 };
 
 export type TableWidget = {
@@ -141,6 +148,9 @@ export type TableWidget = {
     data?: CardData;
     source?: string;
     info?: CardInfo;
+    // The units the card can move to, from its `component.created` frame;
+    // absent when its readings are not one convertible spec.
+    unitChange?: UnitChange;
 };
 
 // A user-authored note on the canvas (Add Text Card) — local only, never

@@ -3,7 +3,8 @@
 import { hasServiceConsent, onServiceConsent, USAGE_STATS_SERVICE } from '@/lib/consent';
 import { uuid } from '@/lib/uuid';
 
-import type { EventName, EventProps } from './track';
+import type { BrowserEventName } from './browserEvents';
+import type { EventProps } from './track';
 
 // A random id per browser so a visitor's events string together without an
 // account or a cookie. Not an identity: clearing site data makes a new one.
@@ -61,7 +62,7 @@ const visitorId = (): string | null => {
  * the page it describes.
  */
 export const track = (
-    name: EventName,
+    name: BrowserEventName,
     props: EventProps = {},
     page: string = location.pathname,
 ) => {

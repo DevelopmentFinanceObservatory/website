@@ -2,21 +2,28 @@ import { createHmac, randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { BigQuery } from '@google-cloud/bigquery';
 import { Pool } from 'pg';
+import { AccountExportError, runAccountExport } from '../account-export.ts';
 import { applyMigrations } from '../apply-migrations.ts';
+import { type ExportBigQuery, type ExportDb, exportDb, type Load } from '../bounded.ts';
 import {
     bigQueryWarehouse,
+    DAY_WORST_MS,
     EXPORT_SCHEMA,
     type EventSource,
     exportDays,
     type ExportField,
+    EventExportError,
+    ExportJobError,
     exportRow,
+    type JobProgress,
     type ExportRow,
     exportRules,
     pgEventSource,
+    PROP_RULES,
     runExport,
     ROW_SHAPE,
     ROW_SHAPE_VERSION,
@@ -26,6 +33,8 @@ import {
     type Warehouse,
 } from '../event-export.ts';
 import { EXPORT_READER_ROLE } from '../local-roles.ts';
+import { shareCopyProps } from '../../src/lib/events/shareCopy.ts';
+import type { StudioDownloadProps } from '../../src/lib/events/studioDownload.ts';
 import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
@@ -127,6 +136,10 @@ test('exportRow drops a value its rule refuses', async (t) => {
         ['a string boolean', { name: 'studio.prompt', props: { guest: 'true' } }],
         ['a key of another event', { name: 'studio.prompt', props: { query: 'aid' } }],
         ['a name the site no longer emits', { name: 'search.legacy', props: { kind: 'chat' } }],
+        // Only a `measures` entry admits `|`, so text v1 refused stays refused on reload.
+        ['a `|` in a token', { name: 'studio.card', props: { source: 'OECD|DAC' } }],
+        ['a `|` in a digest', { name: 'share.open', props: { shareId: 'OECD|DAC' } }],
+        ['a `|` in a specIds entry', { name: 'search.query', props: { specIds: ['OECD|DAC'] } }],
     ];
 
     for (const [label, overrides] of cases) {
@@ -134,6 +147,27 @@ test('exportRow drops a value its rule refuses', async (t) => {
             assert.deepEqual(exportRow(sourceEvent(overrides), KEY, RULES).props, {});
         });
     }
+});
+
+test('exportRow keeps the intent of every prompt Studio sends', async (t) => {
+    for (const intent of ['new', 'follow_up', 'edit', 'apply_choice', 'apply_unit']) {
+        await t.test(intent, () => {
+            const row = exportRow(
+                sourceEvent({ name: 'studio.prompt', props: { intent } }),
+                KEY,
+                RULES,
+            );
+
+            assert.deepEqual(row.props, { intent });
+        });
+    }
+});
+
+test('exportRow keeps a measures entry joined with `|`', () => {
+    const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
+    const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);
+
+    assert.deepEqual(row.props, { measures });
 });
 
 test('exportRow leaves the hashes null for a guest without consent', () => {
@@ -182,6 +216,7 @@ test('exportRow exports a share id as its digest, so share events still join', (
         ['share.open', { shareId, kind: 'card', mode: 'live' }],
         ['embed.view', { shareId, kind: 'card' }],
         ['search.action', { shareId, action: 'share' }],
+        ['share.copy', { shareId, kind: 'card', copied: 'link' }],
     ];
 
     for (const [name, props] of events) {
@@ -199,6 +234,54 @@ test('exportRow exports a share id as its digest, so share events still join', (
     );
 
     assert.deepEqual(refused.props, {});
+});
+
+test('exportRow keeps the props of a copied share and a share dialog download', async (t) => {
+    const hashed = createHmac('sha256', KEY).update('aB3dE5fG7h').digest('hex');
+    const cases: [string, string, Record<string, unknown>, Record<string, unknown>][] = [
+        [
+            'an embed code copied',
+            'share.copy',
+            shareCopyProps({
+                kind: 'canvas',
+                copied: 'embed_code',
+                share: { id: 'aB3dE5fG7h', mode: 'live' },
+            }),
+            { kind: 'canvas', copied: 'embed_code', shareId: hashed, mode: 'live' },
+        ],
+        [
+            'a search query link copied, with no share behind it',
+            'share.copy',
+            shareCopyProps({ kind: 'search', copied: 'query_link', share: null }),
+            { kind: 'search', copied: 'query_link' },
+        ],
+        [
+            'a file saved from the Share dialog',
+            'studio.download',
+            {
+                format: 'csv',
+                bundle: false,
+                kind: 'table',
+                cardId: 'c-1',
+                shared: false,
+                source: 'share_dialog',
+            } satisfies StudioDownloadProps,
+            {
+                format: 'csv',
+                bundle: false,
+                kind: 'table',
+                cardId: 'c-1',
+                shared: false,
+                source: 'share_dialog',
+            },
+        ],
+    ];
+
+    for (const [label, name, props, kept] of cases) {
+        await t.test(label, () => {
+            assert.deepEqual(exportRow(sourceEvent({ name, props }), KEY, RULES).props, kept);
+        });
+    }
 });
 
 // A fixed sample that reaches every rule and branch of exportRow.
@@ -232,68 +315,232 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
     }),
     sourceEvent({ id: 3, name: 'feedback.submit', page: '/a page', props: { kind: 'widget' } }),
     sourceEvent({ id: 4, name: 'retired.event', page: '/embed/x1', props: { kind: 'card' } }),
+    sourceEvent({
+        id: 5,
+        name: 'search.query',
+        props: {
+            specIds: ['spec_a1', 'spec_b2'],
+            measures: ['FinancialFlow/amount/Nominal', 'has space'],
+            internal_eng: true,
+        },
+    }),
+    sourceEvent({
+        id: 6,
+        name: 'embed.view',
+        props: { shareId: 'aB3dE5fG7h', kind: 'card', viewer: 'other', internal_eng: false },
+    }),
+    sourceEvent({
+        id: 7,
+        name: 'studio.download',
+        props: { format: 'xlsx', bundle: true, kind: 'chart', cardId: 'c-1', shared: false },
+    }),
+    sourceEvent({
+        id: 8,
+        name: 'search.query',
+        props: { measures: ['sv:Count_Person', '-'] },
+    }),
+    sourceEvent({
+        id: 9,
+        name: 'search.query',
+        props: { measures: Array.from({ length: 11 }, (_, at) => `sv:Ind_${at}`) },
+    }),
+    sourceEvent({
+        id: 10,
+        name: 'data.view',
+        page: '/embed/aB3dE5fG7h',
+        props: {
+            specIds: ['spec_a1', '-'],
+            contentVersions: ['cv_9f2e', '-'],
+            via: 'share',
+            host: 'blog.example',
+            caller: 'ip:0123456789abcdef0123456789abcdef',
+            internal_eng: false,
+        },
+    }),
+    sourceEvent({
+        id: 11,
+        name: 'data.view',
+        props: {
+            specIds: ['spec_a1'],
+            contentVersions: ['cv_9f2e'],
+            via: 'embedded',
+            shareId: 'aB3dE5fG7h',
+            caller: 'ip:ABC',
+            internal_eng: true,
+        },
+    }),
+];
+
+// Version 1 pinned the first four sample rows, which version 2 leaves as they were.
+const VERSION_1_ROWS: ExportRow[] = [
+    {
+        id: 1,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: '/data',
+        signed_in: true,
+        visitor_hash: '77a3c0b044582bfb514a3a3ad8521316635e2256261861c83b7498ee2e420f65',
+        user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
+        props: {
+            searchId: '0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
+            post: 0,
+            source: 'typed',
+            edited: false,
+            ms: 812,
+            outcome: 'definite',
+            kind: 'resolution',
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 2,
+        created_at: '2026-10-21T00:00:00.000001Z',
+        name: 'share.open',
+        page: '/s/:id/download/preparing',
+        signed_in: false,
+        visitor_hash: '656d62821b3df7e629e0d8af562ac6a21302f71aeed8fa018b46c7fa00d54f88',
+        user_hash: null,
+        props: {
+            shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+            kind: 'card',
+            mode: 'snapshot',
+            host: 'example.org',
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 3,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'feedback.submit',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { kind: 'widget' },
+        export_rules: 'r',
+    },
+    {
+        id: 4,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'retired.event',
+        page: '/embed/:id',
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: {},
+        export_rules: 'r',
+    },
+];
+
+// Rows 5 to 9 are the version 2 rows, and version 3 exports them unchanged.
+const VERSION_2_ROWS: ExportRow[] = [
+    ...VERSION_1_ROWS,
+    {
+        id: 5,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `measures` holds a token with a space, so the whole list is dropped.
+        props: { specIds: ['spec_a1', 'spec_b2'], internal_eng: true },
+        export_rules: 'r',
+    },
+    {
+        id: 6,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'embed.view',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: {
+            shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+            kind: 'card',
+            viewer: 'other',
+            internal_eng: false,
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 7,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'studio.download',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { format: 'xlsx', bundle: true, kind: 'chart', cardId: 'c-1', shared: false },
+        export_rules: 'r',
+    },
+    {
+        id: 8,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `-` stands for a part with no measure and passes.
+        props: { measures: ['sv:Count_Person', '-'] },
+        export_rules: 'r',
+    },
+    {
+        id: 9,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // Eleven measures is over the list cap, so the list is dropped.
+        props: {},
+        export_rules: 'r',
+    },
 ];
 
 // Each ROW_SHAPE_VERSION's rows for GOLDEN_SAMPLE under KEY, with rules
 // `r`. A change to the rows adds the next version with its rows, and an
 // entry never changes.
 const GOLDEN_ROWS: Record<number, ExportRow[]> = {
-    1: [
+    1: VERSION_1_ROWS,
+    2: VERSION_2_ROWS,
+    3: [
+        ...VERSION_2_ROWS,
         {
-            id: 1,
+            id: 10,
             created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'search.query',
-            page: '/data',
-            signed_in: true,
-            visitor_hash: '77a3c0b044582bfb514a3a3ad8521316635e2256261861c83b7498ee2e420f65',
-            user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
-            props: {
-                searchId: '0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
-                post: 0,
-                source: 'typed',
-                edited: false,
-                ms: 812,
-                outcome: 'definite',
-                kind: 'resolution',
-            },
-            export_rules: 'r',
-        },
-        {
-            id: 2,
-            created_at: '2026-10-21T00:00:00.000001Z',
-            name: 'share.open',
-            page: '/s/:id/download/preparing',
-            signed_in: false,
-            visitor_hash: '656d62821b3df7e629e0d8af562ac6a21302f71aeed8fa018b46c7fa00d54f88',
-            user_hash: null,
-            props: {
-                shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
-                kind: 'card',
-                mode: 'snapshot',
-                host: 'example.org',
-            },
-            export_rules: 'r',
-        },
-        {
-            id: 3,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'feedback.submit',
-            page: null,
-            signed_in: false,
-            visitor_hash: null,
-            user_hash: null,
-            props: { kind: 'widget' },
-            export_rules: 'r',
-        },
-        {
-            id: 4,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'retired.event',
+            name: 'data.view',
             page: '/embed/:id',
             signed_in: false,
             visitor_hash: null,
             user_hash: null,
-            props: {},
+            props: {
+                specIds: ['spec_a1', '-'],
+                contentVersions: ['cv_9f2e', '-'],
+                via: 'share',
+                host: 'blog.example',
+                caller: 'ip:0123456789abcdef0123456789abcdef',
+                internal_eng: false,
+            },
+            export_rules: 'r',
+        },
+        {
+            id: 11,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'data.view',
+            page: null,
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            // A `via` the site never sends, a share id the rule does not take
+            // and a malformed `caller` are dropped.
+            props: {
+                specIds: ['spec_a1'],
+                contentVersions: ['cv_9f2e'],
+                internal_eng: true,
+            },
             export_rules: 'r',
         },
     ],
@@ -304,6 +551,27 @@ test('exportRow writes the rows pinned to the current ROW_SHAPE_VERSION', () => 
         GOLDEN_SAMPLE.map((row) => exportRow(row, KEY, 'r')),
         GOLDEN_ROWS[ROW_SHAPE_VERSION],
     );
+});
+
+test('exportRow lets no email address out, whatever field the source holds it in', () => {
+    const email = 'ana@example.org';
+    const rows = Object.entries(PROP_RULES).flatMap(([name, rules]) => {
+        const props = Object.fromEntries(Object.keys(rules).map((key) => [key, email]));
+        const listProps = Object.fromEntries(Object.keys(rules).map((key) => [key, [email]]));
+
+        return [props, listProps].flatMap((eventProps) =>
+            [`/${email}`, `/data?email=${email}`, `/s/${email}`].map((page) =>
+                exportRow(
+                    sourceEvent({ name, userId: email, visitorId: email, page, props: eventProps }),
+                    KEY,
+                    RULES,
+                ),
+            ),
+        );
+    });
+
+    assert.ok(rows.length > 0);
+    assert.ok(rows.every((row) => !JSON.stringify(row).includes('@')));
 });
 
 const counts = (days: Record<string, number>) => new Map(Object.entries(days));
@@ -424,14 +692,17 @@ test('exportDays adds every earlier day whose counts differ', async (t) => {
     }
 });
 
+const REPLACED: Load = { outcome: 'replaced', late: null };
+
 /**
  * An in-memory warehouse. Each partition is the parsed lines of its last
  * load, and a day is stale while any of its rows carries an `export_rules`
- * other than the run's. A load of a day in `failLoad` throws.
+ * other than the run's. A load of a day in `failLoad` fails, its partition
+ * kept, and a load of a day in `throwLoad` rejects.
  */
 const fakeWarehouse = (
     partitions: Map<string, unknown[]>,
-    { failLoad = [] }: { failLoad?: string[] } = {},
+    { failLoad = [], throwLoad = [] }: { failLoad?: string[]; throwLoad?: string[] } = {},
 ) => {
     const calls: string[] = [];
     const warehouse: Warehouse = {
@@ -453,8 +724,12 @@ const fakeWarehouse = (
             };
         },
         async replaceDay(day, file) {
+            if (throwLoad.includes(day)) {
+                throw new Error('load client failed');
+            }
+
             if (failLoad.includes(day)) {
-                throw new Error('load job failed');
+                return { outcome: 'kept', error: new Error('load job failed') };
             }
 
             calls.push(`replace ${day}`);
@@ -466,6 +741,8 @@ const fakeWarehouse = (
                     .filter(Boolean)
                     .map((line) => JSON.parse(line)),
             );
+
+            return REPLACED;
         },
     };
 
@@ -499,6 +776,10 @@ const fakeSource = (
 
 const scratch = () => path.join(os.tmpdir(), `event-export-test-${randomBytes(4).toString('hex')}`);
 
+/** The day each of a run's day lines names, in order. */
+const dayLines = (logged: string[]) =>
+    logged.filter((line) => /^\d{4}-\d{2}-\d{2}:/.test(line)).map((line) => line.slice(0, 10));
+
 test('runExport backfills an empty table day by day and logs each day', async () => {
     const partitions = new Map<string, unknown[]>();
     const { warehouse, calls } = fakeWarehouse(partitions);
@@ -523,16 +804,104 @@ test('runExport backfills an empty table day by day and logs each day', async ()
         { day: '2026-10-22', rows: 1 },
     ]);
     assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-20', 'replace 2026-10-22']);
-    assert.deepEqual(
-        logged.map((line) => line.slice(0, 10)),
-        ['2026-10-20', '2026-10-21', '2026-10-22'],
-    );
+    assert.deepEqual(dayLines(logged), ['2026-10-20', '2026-10-21', '2026-10-22']);
     assert.deepEqual(partitions.get('2026-10-20'), [
         exportRow(first, KEY, RULES),
         exportRow(second, KEY, RULES),
     ]);
     assert.deepEqual(partitions.get('2026-10-22'), [exportRow(third, KEY, RULES)]);
     await assert.rejects(fs.access(scratchFile));
+});
+
+/**
+ * A run of `days` on a fake clock: the start takes `setupMs` and each day's
+ * read `perDayMs`, and the run stops at `stopAt`. Returns the days read and
+ * loaded, the clock at the end, and whether the run rejected.
+ */
+const timedRun = async ({
+    days,
+    partitions = new Map(),
+    today,
+    setupMs = 0,
+    perDayMs,
+    stopAt,
+}: {
+    days: Record<string, SourceEvent[][]>;
+    partitions?: Map<string, unknown[]>;
+    today: string;
+    setupMs?: number;
+    perDayMs: number;
+    stopAt: number;
+}) => {
+    let clock = 0;
+    const source = fakeSource(days);
+    const { warehouse, calls } = fakeWarehouse(partitions);
+    const read: string[] = [];
+    let rejected = false;
+
+    try {
+        await runExport({
+            source: {
+                ...source,
+                async *readDay(day) {
+                    read.push(day);
+                    clock += perDayMs;
+                    yield* source.readDay(day);
+                },
+            },
+            warehouse: {
+                ...warehouse,
+                async ensureTable() {
+                    clock += setupMs;
+                    await warehouse.ensureTable();
+                },
+            },
+            hmacKey: KEY,
+            today,
+            scratchFile: scratch(),
+            log: () => undefined,
+            stopAt,
+            now: () => clock,
+        });
+    } catch {
+        rejected = true;
+    }
+
+    return {
+        read,
+        loaded: calls.filter((call) => call.startsWith('replace')).map((call) => call.slice(8)),
+        clock,
+        rejected,
+    };
+};
+
+const dayOfEvents = (day: string, id: number) => [
+    [sourceEvent({ id, createdAt: `${day}T08:00:00.000000Z` })],
+];
+
+test('runExport starts a day only while its worst case fits before stopAt, and ends by then', async (t) => {
+    const days = {
+        '2026-10-20': dayOfEvents('2026-10-20', 1),
+        '2026-10-21': dayOfEvents('2026-10-21', 2),
+        '2026-10-22': dayOfEvents('2026-10-22', 3),
+    };
+    const all = Object.keys(days);
+    const cases: [string, number, number, string[]][] = [
+        ['every day fits', 1_000, 3 * DAY_WORST_MS, all],
+        ['the third day would not fit', DAY_WORST_MS, 3 * DAY_WORST_MS - 1, all.slice(0, 2)],
+        ['no day fits', 0, DAY_WORST_MS - 1, []],
+    ];
+
+    for (const [label, perDayMs, stopAt, started] of cases) {
+        await t.test(label, async () => {
+            const run = await timedRun({ days, today: '2026-10-22', perDayMs, stopAt });
+
+            assert.deepEqual(run.read, started);
+            assert.deepEqual(run.loaded, started);
+            assert.equal(run.rejected, started.length < all.length);
+            assert.ok(run.clock <= stopAt);
+        });
+    }
 });
 
 test('runExport rejects a source that reads empty and keeps every partition', async () => {
@@ -553,10 +922,12 @@ test('runExport rejects a source that reads empty and keeps every partition', as
             log: () => undefined,
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /2026-10-21\D+0\D+1\b/);
-            assert.match(error.message, /2026-10-22\D+0\D+1\b/);
-            assert.doesNotMatch(error.message, /2026-10-23/);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.shortDays, [
+                { day: '2026-10-21', read: 0, count: 1, countedIn: 'partition' },
+                { day: '2026-10-22', read: 0, count: 1, countedIn: 'partition' },
+            ]);
+            assert.deepEqual([error.failedDays, error.daysLeft], [[], []]);
             return true;
         },
     );
@@ -586,9 +957,11 @@ test('runExport keeps a partition that holds more rows than the day reads', asyn
             log: (line) => logged.push(line),
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /2026-10-22\D+1\D+2\b/);
-            assert.doesNotMatch(error.message, /2026-10-2[13]/);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.shortDays, [
+                { day: '2026-10-22', read: 1, count: 2, countedIn: 'partition' },
+            ]);
+            assert.deepEqual([error.failedDays, error.daysLeft], [[], []]);
             return true;
         },
     );
@@ -596,10 +969,7 @@ test('runExport keeps a partition that holds more rows than the day reads', asyn
     assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
     assert.equal(partitions.get('2026-10-22'), held);
     assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY, RULES)]);
-    assert.deepEqual(
-        logged.map((line) => line.slice(0, 10)),
-        ['2026-10-21', '2026-10-22', '2026-10-23'],
-    );
+    assert.deepEqual(dayLines(logged), ['2026-10-21', '2026-10-22', '2026-10-23']);
     await assert.rejects(fs.access(scratchFile));
 });
 
@@ -744,14 +1114,14 @@ test('runExport loads the days after a failed one, then names every failed day',
             log: (line) => logged.push(line),
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.equal(
-                error.message,
-                'event export 2026-10-21: connection lost; 2026-10-22: load job failed',
-            );
-            assert.ok(error.cause instanceof AggregateError);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [
+                { day: '2026-10-21', outcome: 'kept' },
+                { day: '2026-10-22', outcome: 'kept' },
+            ]);
+            // The fakes' own errors: the source's failed read and the load's.
             assert.deepEqual(
-                error.cause.errors.map((cause: Error) => cause.message),
+                error.errors.map((cause: Error) => cause.message),
                 ['connection lost', 'load job failed'],
             );
             return true;
@@ -759,14 +1129,36 @@ test('runExport loads the days after a failed one, then names every failed day',
     );
 
     assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
-    assert.deepEqual(
-        logged.map((line) => line.slice(0, 10)),
-        ['2026-10-21', '2026-10-22', '2026-10-23'],
-    );
+    assert.deepEqual(dayLines(logged), ['2026-10-21', '2026-10-22', '2026-10-23']);
     assert.deepEqual(partitions.get('2026-10-21'), before.get('2026-10-21'));
     assert.equal(partitions.get('2026-10-22'), kept);
     assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY, RULES)]);
     await assert.rejects(fs.access(scratchFile));
+});
+
+test('runExport fails a day whose load rejects as unknown and loads the next day', async () => {
+    const { warehouse, calls } = fakeWarehouse(new Map(), { throwLoad: ['2026-10-22'] });
+
+    await assert.rejects(
+        runExport({
+            source: fakeSource({
+                '2026-10-22': [[sourceEvent({ id: 1, createdAt: '2026-10-22T08:00:00.000000Z' })]],
+                '2026-10-23': [[sourceEvent({ id: 2, createdAt: '2026-10-23T08:00:00.000000Z' })]],
+            }),
+            warehouse,
+            hmacKey: KEY,
+            today: '2026-10-23',
+            scratchFile: scratch(),
+            log: () => undefined,
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [{ day: '2026-10-22', outcome: 'unknown' }]);
+            return true;
+        },
+    );
+
+    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
 });
 
 test('runExport reloads the days holding rows under other rules, and retries a failed one alone', async () => {
@@ -799,7 +1191,11 @@ test('runExport reloads the days holding rows under other rules, and retries a f
             scratchFile: scratch(),
             log: () => undefined,
         }),
-        /event export 2026-10-18: connection lost$/,
+        (error: unknown) => {
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [{ day: '2026-10-18', outcome: 'kept' }]);
+            return true;
+        },
     );
     assert.deepEqual(first.calls, [
         'ensureTable',
@@ -847,9 +1243,11 @@ test('runExport names the short days beside a failed day', async () => {
             log: () => undefined,
         }),
         (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /^event export 2026-10-22: /);
-            assert.match(error.message, /2026-10-21\D+1\D+2\b/);
+            assert.ok(error instanceof EventExportError);
+            assert.deepEqual(error.failedDays, [{ day: '2026-10-22', outcome: 'kept' }]);
+            assert.deepEqual(error.shortDays, [
+                { day: '2026-10-21', read: 1, count: 2, countedIn: 'partition' },
+            ]);
             return true;
         },
     );
@@ -859,127 +1257,77 @@ test('runExport names the short days beside a failed day', async () => {
 });
 
 test(
-    'a page query that hangs past the read deadline fails its day, destroys its client, and the next day loads',
+    'a day whose pages each answer in time but together run past the read deadline fails, and the next day loads',
     { timeout: 5_000 },
     async () => {
         const partitions = new Map<string, unknown[]>();
         const { warehouse, calls } = fakeWarehouse(partitions);
-        // Each client's queries by text, and what it was released with.
-        const clients: { queries: string[]; released?: Error | 'reused' }[] = [];
-        const pool = {
-            options: {},
-            connect: async () => {
-                const client: (typeof clients)[number] = { queries: [] };
-                clients.push(client);
+        // The day each page query reads.
+        const pages: string[] = [];
+        const db = {
+            query: async (sql: string, params: unknown[] = []) => {
+                if (sql !== ROW_SHAPE.READ_DAY_SQL) {
+                    return [
+                        { day: '2026-10-21', n: 1 },
+                        { day: '2026-10-22', n: 1 },
+                    ];
+                }
 
-                return {
-                    query: (text: string, values?: unknown[]) => {
-                        client.queries.push(text.split(/\s/, 1)[0]!);
+                const [after, , afterId] = params;
+                const day = String(after).slice(0, 10);
 
-                        if (text.includes('count(*)')) {
-                            return Promise.resolve({
-                                rows: [
-                                    { day: '2026-10-21', n: 1 },
-                                    { day: '2026-10-22', n: 1 },
-                                ],
-                            });
-                        }
+                pages.push(day);
 
-                        if (text !== ROW_SHAPE.READ_DAY_SQL) {
-                            return Promise.resolve({ rows: [] });
-                        }
+                // 21 October answers a full page every 20 ms without end, 22
+                // October one row.
+                if (day === '2026-10-21') {
+                    await sleep(20);
+                    return [
+                        sourceEvent({ id: pages.length, createdAt: `${day}T08:00:00.000000Z` }),
+                    ];
+                }
 
-                        // 21 October's page never answers, as over a stalled tunnel.
-                        return String(values?.[0]).startsWith('2026-10-21')
-                            ? new Promise(() => undefined)
-                            : Promise.resolve({
-                                  rows: [
-                                      sourceEvent({
-                                          id: 2,
-                                          createdAt: '2026-10-22T08:00:00.000000Z',
-                                      }),
-                                  ],
-                              });
-                    },
-                    release: (error?: Error) => {
-                        client.released = error ?? 'reused';
-                    },
-                };
+                return afterId === 0
+                    ? [sourceEvent({ id: 100, createdAt: `${day}T08:00:00.000000Z` })]
+                    : [];
             },
-        } as unknown as Pool;
-        const started = Date.now();
+        } as unknown as ExportDb;
+        const started = performance.now();
 
         await assert.rejects(
             runExport({
-                source: pgEventSource(pool, { readMs: 50, graceMs: 20 }),
+                source: pgEventSource(db, { pageSize: 1, readMs: 50 }),
                 warehouse,
                 hmacKey: KEY,
                 today: '2026-10-22',
                 scratchFile: scratch(),
                 log: () => undefined,
             }),
-            /event export 2026-10-21: read ran past its 0.05 s deadline$/,
         );
 
-        // The 50 ms deadline plus the 20 ms grace, with room for a slow machine.
-        assert.ok(Date.now() - started < 1_000);
-        // The day counts' client, then each day's.
-        assert.deepEqual(clients[0], { queries: ['SELECT'], released: 'reused' });
-        assert.deepEqual(clients[1]?.queries, ['SELECT']);
-        assert.ok(clients[1]?.released instanceof Error);
-        assert.deepEqual(clients[2], { queries: ['SELECT'], released: 'reused' });
+        assert.ok(performance.now() - started < 1_000);
+        // 50 ms of 20 ms pages: no page starts past the deadline.
+        assert.ok(pages.filter((day) => day === '2026-10-21').length <= 4);
         assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-22']);
     },
 );
 
-test(
-    'pgEventSource dayCounts fails a count that hangs past its bound and destroys its client',
-    { timeout: 5_000 },
-    async () => {
-        const released: unknown[] = [];
-        const pool = {
-            options: { statement_timeout: 20 },
-            connect: async () => ({
-                // The count never answers, as over a stalled tunnel.
-                query: () => new Promise(() => undefined),
-                release: (error?: unknown) => released.push(error),
-            }),
-        } as unknown as Pool;
-
-        await assert.rejects(
-            pgEventSource(pool, { graceMs: 20 }).dayCounts(),
-            /day counts ran past 0.04 s/,
-        );
-        assert.equal(released.length, 1);
-        assert.ok(released[0] instanceof Error);
-    },
-);
-
 test('bigQueryWarehouse loads a day into its partition and lets the schema gain columns', async () => {
-    const loads: { table: string; file: string; metadata: Record<string, unknown> }[] = [];
+    const loads: [string, string, Record<string, unknown>][] = [];
     const bigquery = {
-        dataset: () => ({
-            table: (table: string) => ({
-                createLoadJob: async (file: string, metadata: Record<string, unknown>) => {
-                    loads.push({ table, file, metadata });
-                    return [{ promise: async () => [{}] }];
-                },
-            }),
-        }),
-    };
-    const warehouse = bigQueryWarehouse({
-        projectId: 'p',
-        datasetId: 'd',
-        bigquery: bigquery as unknown as BigQuery,
-    });
+        load: async (table: string, file: string, metadata: Record<string, unknown>) => {
+            loads.push([table, file, metadata]);
+            return REPLACED;
+        },
+    } as unknown as ExportBigQuery;
+    const warehouse = bigQueryWarehouse({ bigquery });
 
-    await warehouse.replaceDay('2026-10-22', '/tmp/day.ndjson');
-
+    assert.deepEqual(await warehouse.replaceDay('2026-10-22', '/tmp/day.ndjson'), REPLACED);
     assert.equal(loads.length, 1);
-    assert.equal(loads[0]?.table, 'event$20261022');
-    assert.equal(loads[0]?.file, '/tmp/day.ndjson');
-    assert.equal(loads[0]?.metadata.writeDisposition, 'WRITE_TRUNCATE');
-    assert.deepEqual(loads[0]?.metadata.schemaUpdateOptions, ['ALLOW_FIELD_ADDITION']);
+    assert.equal(loads[0]?.[0], 'event$20261022');
+    assert.equal(loads[0]?.[1], '/tmp/day.ndjson');
+    assert.equal(loads[0]?.[2].writeDisposition, 'WRITE_TRUNCATE');
+    assert.deepEqual(loads[0]?.[2].schemaUpdateOptions, ['ALLOW_FIELD_ADDITION']);
 });
 
 test('EXPORT_SCHEMA admits a REQUIRED column only among those the table was created with', () => {
@@ -993,35 +1341,23 @@ test('EXPORT_SCHEMA admits a REQUIRED column only among those the table was crea
 test('bigQueryWarehouse creates the table, and counts rows and finds stale days per day', async (t) => {
     const fakeTable = ({ exists, fields = [] }: { exists: boolean; fields?: string[] }) => {
         const calls: unknown[] = [];
-        const table = {
-            exists: async () => [exists],
-            getMetadata: async () => [{ schema: { fields: fields.map((name) => ({ name })) } }],
-        };
         const bigquery = {
-            dataset: () => ({
-                table: () => table,
-                createTable: async (name: string, options: { schema: unknown }) => {
-                    calls.push(['createTable', name, options.schema]);
-                    return [table];
-                },
-            }),
-            query: async ({ query, params }: { query: string; params?: unknown }) => {
+            tableExists: async () => exists,
+            tableFields: async () => fields.map((name) => ({ name })),
+            createTable: async (name: string, options: { schema: unknown }) => {
+                calls.push(['createTable', name, options.schema]);
+            },
+            query: async (query: string, params?: unknown) => {
                 // The table itself, so each count is exact.
-                calls.push(['query', query.match(/FROM `([^`]+)`/)?.[1], params]);
+                calls.push(['query', query.match(/FROM (\w+)/)?.[1], params]);
                 const stale = fields.includes('export_rules') ? [true, false] : [true, true];
                 return [
-                    [
-                        { day: '2026-10-21', n: 3, stale: stale[0] },
-                        { day: '2026-10-22', n: 1434, stale: stale[1] },
-                    ],
+                    { day: '2026-10-21', n: 3, stale: stale[0] },
+                    { day: '2026-10-22', n: 1434, stale: stale[1] },
                 ];
             },
-        };
-        const warehouse = bigQueryWarehouse({
-            projectId: 'p',
-            datasetId: 'd',
-            bigquery: bigquery as unknown as BigQuery,
-        });
+        } as unknown as ExportBigQuery;
+        const warehouse = bigQueryWarehouse({ bigquery });
 
         return { warehouse, calls };
     };
@@ -1044,7 +1380,7 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
             counts,
             stale: new Set(['2026-10-21']),
         });
-        assert.deepEqual(calls, [['query', 'p.d.event', { rules: 'r1' }]]);
+        assert.deepEqual(calls, [['query', 'event', { rules: 'r1' }]]);
     });
 
     await t.test('a table without export_rules is stale on every day', async () => {
@@ -1054,51 +1390,43 @@ test('bigQueryWarehouse creates the table, and counts rows and finds stale days 
             counts,
             stale: new Set(['2026-10-21', '2026-10-22']),
         });
-        assert.deepEqual(calls, [['query', 'p.d.event', { rules: 'r1' }]]);
+        assert.deepEqual(calls, [['query', 'event', { rules: 'r1' }]]);
     });
 
     await t.test('a query over the bytes-billed cap fails naming the cap', async () => {
         const bigquery = {
-            dataset: () => ({
-                table: () => ({
-                    getMetadata: async () => [{ schema: { fields: [{ name: 'export_rules' }] } }],
-                }),
-            }),
+            tableFields: async () => [{ name: 'export_rules' }],
             query: async () => {
                 throw new Error('Query exceeded limit for bytes billed: 1000000000.');
             },
-        };
-        const warehouse = bigQueryWarehouse({
-            projectId: 'p',
-            datasetId: 'd',
-            bigquery: bigquery as unknown as BigQuery,
-        });
+        } as unknown as ExportBigQuery;
+        const warehouse = bigQueryWarehouse({ bigquery });
 
         await assert.rejects(warehouse.days('r1'), /maximumBytesBilled cap/);
     });
 });
 
-test('runExportJob runs the event export after a failed account export, then fails with every failure', async (t) => {
+test('runExportJob runs both exports, failed or not, then fails with every failure', async (t) => {
     const accountError = new Error('bigquery down');
-    const eventError = new Error('event export 2026-10-21: load job failed');
-    const cases: [string, () => Promise<void>, RegExp, number][] = [
-        [
-            'the account export alone',
-            async () => undefined,
-            /^account export failed: bigquery down$/,
-            1,
-        ],
+    const eventError = new Error('2026-10-21: load job failed');
+    // The errors the run rejects with, each read back to the phase's own error.
+    const cases: [string, () => Promise<void>, (error: unknown) => unknown[]][] = [
+        ['the account export alone', async () => undefined, (error) => [(error as Error).cause]],
         [
             'both',
             async () => {
                 throw eventError;
             },
-            /^account export failed: bigquery down; event export 2026-10-21: load job failed$/,
-            2,
+            (error) => {
+                assert.ok(error instanceof AggregateError);
+                const [account, event] = error.errors as Error[];
+
+                return [account?.cause, event];
+            },
         ],
     ];
 
-    for (const [label, exportEvents, message, causes] of cases) {
+    for (const [label, exportEvents, phaseErrors] of cases) {
         await t.test(label, async () => {
             const ran: string[] = [];
 
@@ -1114,28 +1442,270 @@ test('runExportJob runs the event export after a failed account export, then fai
                     },
                 }),
                 (error: unknown) => {
-                    assert.ok(error instanceof Error);
-                    assert.match(error.message, message);
-                    assert.equal(error instanceof AggregateError ? error.errors.length : 1, causes);
+                    assert.deepEqual(
+                        phaseErrors(error),
+                        label === 'both' ? [accountError, eventError] : [accountError],
+                    );
                     return true;
                 },
             );
-            assert.deepEqual(ran, ['accounts', 'events']);
+            assert.deepEqual(ran.toSorted(), ['accounts', 'events']);
         });
     }
 });
 
+const hang = () => new Promise<never>(() => undefined);
+
+/** What a run stopped by runAndExit's deadline reports, from its one logged error. */
+const stopReport = async (main: Parameters<typeof runAndExit>[0], deadlineMs = 20) => {
+    const exits: number[] = [];
+    const logged: unknown[] = [];
+
+    await runAndExit(main, {
+        deadlineMs,
+        exit: (code) => exits.push(code),
+        logError: (error) => logged.push(error),
+    });
+
+    assert.deepEqual(exits, [1]);
+    assert.equal(logged.length, 1);
+
+    const [error] = logged;
+
+    assert.ok(error instanceof ExportJobError);
+
+    const { events, accounts, unknown, unstarted, faults } = error;
+
+    return { events, accounts, unknown, unstarted, faults };
+};
+
+const NOTHING_LEFT = { unknown: [], unstarted: [], faults: [] };
+
 test(
-    'runAndExit stops a run hung past its deadline, names the phase and exits 1',
+    'runExportJob runs the account export to its end while the event export hangs',
+    { timeout: 2_000 },
+    async () => {
+        let accountsEnded = false;
+
+        assert.deepEqual(
+            await stopReport((progress) =>
+                runExportJob({
+                    exportEvents: hang,
+                    exportAccounts: async () => {
+                        await sleep(1);
+                        accountsEnded = true;
+                    },
+                    progress,
+                }),
+            ),
+            { events: 'the start', accounts: 'done', ...NOTHING_LEFT },
+        );
+        assert.ok(accountsEnded);
+    },
+);
+
+test(
+    'the account export loads all three tables while the event export waits on day counts that never answer',
+    { timeout: 2_000 },
+    async () => {
+        const unanswered = { query: hang, snapshot: hang } as unknown as ExportDb;
+        const loaded: string[] = [];
+
+        assert.deepEqual(
+            await stopReport(
+                (progress) =>
+                    runExportJob({
+                        exportEvents: () =>
+                            runExport({
+                                source: pgEventSource(unanswered),
+                                warehouse: fakeWarehouse(new Map()).warehouse,
+                                hmacKey: KEY,
+                                today: '2026-10-22',
+                                scratchFile: scratch(),
+                                log: () => undefined,
+                                progress,
+                            }),
+                        exportAccounts: () =>
+                            runAccountExport({
+                                readAccounts: async () => ({
+                                    rows: [
+                                        { day: '2026-10-21', organisation: 'one.org', accounts: 3 },
+                                    ],
+                                    organisations: [{ userId: 'user-1', organisation: 'one.org' }],
+                                    webmailDomains: true,
+                                }),
+                                readConversations: async () => [],
+                                replace: async (table) => {
+                                    loaded.push(table);
+                                    return REPLACED;
+                                },
+                                hmacKey: KEY,
+                                scratchFile: scratch(),
+                                log: () => undefined,
+                                progress,
+                            }),
+                        progress,
+                    }),
+                200,
+            ),
+            { events: 'the event table check and day counts', accounts: 'done', ...NOTHING_LEFT },
+        );
+        assert.deepEqual(loaded, ['account_daily', 'account_organisation', 'conversation']);
+    },
+);
+
+test(
+    'a phase that fails marks its step failed and gives its error to the deadline report',
+    { timeout: 2_000 },
+    async () => {
+        const failure = new Error('event table check failed');
+        const logged: unknown[] = [];
+
+        await runAndExit(
+            (progress) =>
+                runExportJob({
+                    exportEvents: async () => {
+                        throw failure;
+                    },
+                    exportAccounts: hang,
+                    progress,
+                }),
+            { deadlineMs: 20, exit: () => undefined, logError: (error) => logged.push(error) },
+        );
+
+        const [error] = logged;
+
+        assert.ok(error instanceof ExportJobError);
+        assert.equal(error.cause, failure);
+        assert.deepEqual(
+            [error.events, error.accounts],
+            [`failed: ${failure.message}`, 'the start'],
+        );
+    },
+);
+
+test(
+    "the deadline report leaves a failed phase's faults to its error",
+    { timeout: 2_000 },
+    async () => {
+        const logged: unknown[] = [];
+        let failures: JobProgress['failures'] = {};
+
+        await runAndExit(
+            (progress) => {
+                failures = progress.failures;
+
+                return runExportJob({
+                    exportEvents: () =>
+                        runExport({
+                            source: fakeSource({
+                                '2026-10-22': [
+                                    [
+                                        sourceEvent({
+                                            id: 1,
+                                            createdAt: '2026-10-22T08:00:00.000000Z',
+                                        }),
+                                    ],
+                                ],
+                            }),
+                            warehouse: fakeWarehouse(new Map(), { failLoad: ['2026-10-22'] })
+                                .warehouse,
+                            hmacKey: KEY,
+                            today: '2026-10-22',
+                            scratchFile: scratch(),
+                            log: () => undefined,
+                            progress,
+                        }),
+                    exportAccounts: hang,
+                    progress,
+                });
+            },
+            { deadlineMs: 200, exit: () => undefined, logError: (error) => logged.push(error) },
+        );
+
+        const [error] = logged;
+
+        assert.ok(error instanceof ExportJobError);
+        assert.ok(error.cause instanceof EventExportError);
+        assert.equal(error.cause, failures.events);
+        assert.deepEqual(error.cause.failedDays, [{ day: '2026-10-22', outcome: 'kept' }]);
+        assert.deepEqual(error.faults, []);
+    },
+);
+
+test('runAndExit names each failed phase once in its report', async () => {
+    const logged: unknown[] = [];
+
+    await runAndExit(
+        (progress) =>
+            runExportJob({
+                exportEvents: async () => {
+                    throw new EventExportError(
+                        '2026-10-22: load job failed',
+                        [new Error('load job failed')],
+                        {
+                            failedDays: [{ day: '2026-10-22', outcome: 'kept' }],
+                            shortDays: [],
+                            daysLeft: [],
+                        },
+                    );
+                },
+                exportAccounts: async () => {
+                    throw new AccountExportError(
+                        [new Error('load job failed')],
+                        [{ table: 'account_daily', outcome: 'kept' }],
+                    );
+                },
+                progress,
+            }),
+        { exit: () => undefined, logError: (error) => logged.push(error) },
+    );
+
+    const [error] = logged;
+
+    assert.ok(error instanceof ExportJobError);
+
+    for (const phase of ['event export', 'account export']) {
+        assert.equal(error.message.split(phase).length - 1, 1, phase);
+    }
+});
+
+test(
+    'runAndExit stops a run hung past its deadline, names each phase and exits 1',
     { timeout: 5_000 },
     async (t) => {
-        const hang = () => new Promise<never>(() => undefined);
         const source = fakeSource({
             '2026-10-21': [[sourceEvent({ id: 1, createdAt: '2026-10-21T08:00:00.000000Z' })]],
-            '2026-10-22': [[sourceEvent({ id: 2 })]],
-            '2026-10-23': [[sourceEvent({ id: 3 })]],
+            '2026-10-22': [[sourceEvent({ id: 2, createdAt: '2026-10-22T08:00:00.000000Z' })]],
+            '2026-10-23': [[sourceEvent({ id: 3, createdAt: '2026-10-23T08:00:00.000000Z' })]],
         });
-        const cases: [string, Parameters<typeof runAndExit>[0], RegExp][] = [
+        const run = (
+            progress: Parameters<Parameters<typeof runAndExit>[0]>[0],
+            warehouse: Warehouse,
+        ) =>
+            runExport({
+                source: {
+                    ...source,
+                    async *readDay(day) {
+                        if (day === '2026-10-22') {
+                            yield await hang();
+                        }
+
+                        yield* source.readDay(day);
+                    },
+                },
+                warehouse,
+                hmacKey: KEY,
+                today: '2026-10-23',
+                scratchFile: scratch(),
+                log: () => undefined,
+                progress,
+            });
+        const cases: [
+            string,
+            Parameters<typeof runAndExit>[0],
+            Awaited<ReturnType<typeof stopReport>>,
+        ][] = [
             [
                 'a hung account export',
                 (progress) =>
@@ -1144,86 +1714,115 @@ test(
                         exportEvents: async () => undefined,
                         progress,
                     }),
-                /deadline, 0.02 s from its start, during the account export$/,
+                { events: 'done', accounts: 'the start', ...NOTHING_LEFT },
             ],
             [
                 "a hung day's read after a failed day",
                 (progress) =>
-                    runExport({
-                        source: {
-                            ...source,
-                            async *readDay(day) {
-                                if (day === '2026-10-22') {
-                                    yield await hang();
-                                }
-
-                                yield* source.readDay(day);
-                            },
-                        },
-                        warehouse: fakeWarehouse(new Map(), { failLoad: ['2026-10-21'] }).warehouse,
-                        hmacKey: KEY,
-                        today: '2026-10-23',
-                        scratchFile: scratch(),
-                        log: () => undefined,
-                        progress,
-                    }),
-                /during the read of 2026-10-22; days not started: 2026-10-23; 2026-10-21: load job failed$/,
+                    run(progress, fakeWarehouse(new Map(), { failLoad: ['2026-10-21'] }).warehouse),
+                {
+                    events: 'the read of 2026-10-22',
+                    accounts: 'the start',
+                    unknown: [],
+                    unstarted: ['2026-10-23'],
+                    faults: ['2026-10-21: load job failed'],
+                },
+            ],
+            [
+                'a load in flight, whose outcome is unknown',
+                (progress) =>
+                    run(progress, { ...fakeWarehouse(new Map()).warehouse, replaceDay: hang }),
+                {
+                    events: 'the load of 2026-10-21',
+                    accounts: 'the start',
+                    unknown: ['2026-10-21'],
+                    unstarted: ['2026-10-22', '2026-10-23'],
+                    faults: [],
+                },
             ],
         ];
 
-        for (const [label, main, message] of cases) {
+        for (const [label, main, report] of cases) {
             // A run with no watchdog never ends, so each case is bounded.
             await t.test(label, { timeout: 2_000 }, async () => {
-                const exits: number[] = [];
-                const logged: unknown[] = [];
-
-                await runAndExit(main, {
-                    deadlineMs: 20,
-                    exit: (code) => exits.push(code),
-                    logError: (error) => logged.push(error),
-                });
-
-                assert.deepEqual(exits, [1]);
-                assert.equal(logged.length, 1);
-                assert.match(String((logged[0] as Error).message), message);
+                assert.deepEqual(await stopReport(main), report);
             });
         }
     },
 );
 
-test('runAndExit exits with 0 after main resolves, and with 1 after one line naming the phase when it rejects', async (t) => {
+test("runAndExit names a failed phase's error once, in that phase's line", async () => {
+    const failure = new Error('event table check failed');
+    const logged: unknown[] = [];
+
+    await runAndExit(
+        (progress) =>
+            runExportJob({
+                exportEvents: async () => {
+                    throw failure;
+                },
+                exportAccounts: async () => undefined,
+                progress,
+            }),
+        { exit: () => undefined, logError: (error) => logged.push(error) },
+    );
+
+    const [error] = logged;
+
+    assert.ok(error instanceof ExportJobError);
+    assert.equal(error.cause, failure);
+    assert.equal(error.events, `failed: ${failure.message}`);
+    assert.deepEqual(error.faults, []);
+});
+
+test('runAndExit exits with 0 after main resolves, and with 1 after one error naming each phase when it rejects', async (t) => {
     const failure = new Error('table check failed');
-    const cases: [string, Parameters<typeof runAndExit>[0], number, string[]][] = [
+    const cases: [string, Parameters<typeof runAndExit>[0], number, [string, string][]][] = [
         ['a run that succeeds', async () => undefined, 0, []],
         [
             'a run that fails',
             async (progress) => {
-                progress.phase = 'the event table check and day counts';
+                progress.events = 'the event table check and day counts';
                 throw failure;
             },
             1,
-            ['export Job failed during the event table check and day counts: table check failed'],
+            [['the event table check and day counts', 'the start']],
         ],
     ];
 
-    for (const [label, main, code, messages] of cases) {
+    for (const [label, main, code, phases] of cases) {
         await t.test(label, async () => {
             const exits: number[] = [];
-            const logged: Error[] = [];
+            const logged: unknown[] = [];
 
             await runAndExit(main, {
                 exit: (exitCode) => exits.push(exitCode),
-                logError: (error) => logged.push(error as Error),
+                logError: (error) => logged.push(error),
             });
 
             assert.deepEqual(exits, [code]);
+            assert.ok(logged.every((error) => error instanceof ExportJobError));
             assert.deepEqual(
-                logged.map(({ message }) => message),
-                messages,
+                (logged as ExportJobError[]).map(({ events, accounts }) => [events, accounts]),
+                phases,
             );
-            assert.ok(logged.every(({ cause }) => cause === failure));
+            assert.ok((logged as ExportJobError[]).every(({ cause }) => cause === failure));
         });
     }
+});
+
+test('runAndExit passes main the deadline it stops the run at', async () => {
+    let deadlineAt = 0;
+    const before = Date.now();
+
+    await runAndExit(
+        async (_progress, at) => {
+            deadlineAt = at;
+        },
+        { deadlineMs: 60_000, exit: () => undefined, logError: () => undefined },
+    );
+
+    assert.ok(deadlineAt >= before + 60_000 && deadlineAt <= Date.now() + 60_000);
 });
 
 /**
@@ -1284,24 +1883,17 @@ test('the export reader reads every row of each UTC day and no other table', asy
         max: 1,
     });
 
-    const pool = readerPool;
-    // The page queries readDay sends, by text.
+    const db = exportDb(readerPool);
+    // The statements readDay sends, by text.
     const pageQueries: string[] = [];
     const source = pgEventSource(
         {
-            options: pool.options,
-            connect: async () => {
-                const client = await pool.connect();
-
-                return {
-                    query: (text: string, values?: unknown[]) => {
-                        pageQueries.push(text);
-                        return client.query(text, values);
-                    },
-                    release: (error?: Error) => client.release(error),
-                };
+            ...db,
+            query: (text: string, values?: unknown[]) => {
+                pageQueries.push(text);
+                return db.query(text, values);
             },
-        } as unknown as Pool,
+        },
         { pageSize: 2 },
     );
     const { rows: expected } = await admin.query<{ day: string; count: number }>(
@@ -1328,8 +1920,11 @@ test('the export reader reads every row of each UTC day and no other table', asy
     assert.deepEqual(read, expected);
     // Days of 1, 3, 1 and 3 rows take 1, 2, 1 and 2 page queries, each the
     // SQL the export_rules digest covers.
-    assert.equal(pageQueries.length, 6);
-    assert.ok(pageQueries.every((text) => text === ROW_SHAPE.READ_DAY_SQL));
+    const pages = pageQueries.filter((text) => text === ROW_SHAPE.READ_DAY_SQL);
+
+    assert.equal(pages.length, 6);
+    // Each page is one statement of its own, with no transaction around them.
+    assert.equal(pages.length, pageQueries.length);
     // The three rows that share 05:00 on 22 October span two pages.
     assert.deepEqual(ids, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual(

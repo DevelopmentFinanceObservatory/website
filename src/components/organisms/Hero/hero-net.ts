@@ -1,10 +1,20 @@
 // Drifting squares pulled around by invisible virtual cursors.
 // Colors are hex on purpose — canvas can't read CSS vars per frame.
 
-import { NetNode, NodeBounds, rand, sizeCanvas } from '@/utils/net';
+import {
+    NetNode,
+    NodeBounds,
+    createLinkBatches,
+    rand,
+    runWhileSeen,
+    sizeCanvas,
+} from '@/utils/net';
 
 const HERO_COLORS = ['#CDCDB6', '#ECECDB', '#E0E0C7'];
 const NET_LINK_RGB = '216,216,202';
+const NET_LINK_ALPHA = 0.25;
+// Presence levels a link can take while the entrance fades it in.
+const LINK_LEVELS = 10;
 
 const NUM_CURSORS = 5;
 const CURSOR_PULL_RADIUS = 200;
@@ -58,9 +68,25 @@ interface Cursor {
     speed: number;
 }
 
+// When the document was first styled, on the document timeline: the first
+// paint follows the first style pass, so it is the closest recorded mark.
+// Without paint timing, the navigation start (0) dates the flights a little
+// early, which only lands them sooner.
+const firstStyledAt = (): number => {
+    const [paint] = performance.getEntriesByType('paint');
+
+    return paint?.startTime ?? 0;
+};
+
+/**
+ * Starts the mosaic in `canvasEl`, sized to `innerEl`. The loop runs only
+ * while `watchEl` is on screen and the tab is visible, and the entrance
+ * replays whenever `watchEl` comes back after fully leaving the viewport.
+ */
 export function startHeroNet(
     innerEl: HTMLElement,
     canvasEl: HTMLCanvasElement,
+    watchEl: Element,
     {
         nodeCount: N,
         nodeSize: NODE_SIZE,
@@ -73,11 +99,11 @@ export function startHeroNet(
         drift = DRIFT,
         returnStrength = RETURN_STRENGTH,
     }: NetConfig = HERO_NET,
-): { stop: () => void; replay: () => void } {
+): () => void {
     const maybeContext = canvasEl.getContext('2d');
 
     if (!maybeContext) {
-        return { stop: () => undefined, replay: () => undefined };
+        return () => undefined;
     }
 
     const context = maybeContext;
@@ -234,7 +260,7 @@ export function startHeroNet(
     let introStart: number | null = null;
     let introDone = reducedMotion;
 
-    // Re-arms the entrance (the section re-entered the viewport): the same
+    // Re-arms the entrance (the hero re-entered the viewport): the same
     // flights replay from the corner to the nodes' home spots, on the same
     // delays — so a scroll-back gets the exact load-time choreography.
     const replay = (): void => {
@@ -372,8 +398,11 @@ export function startHeroNet(
         });
     }
 
+    const linkBatches = createLinkBatches(NET_LINK_RGB, NET_LINK_ALPHA, LINK_LEVELS);
+
     function draw(): void {
         context.clearRect(0, 0, w, h);
+        context.lineWidth = 0.5;
 
         links.forEach(([a, b]) => {
             const n1 = nodes[a]!;
@@ -387,45 +416,72 @@ export function startHeroNet(
                 return;
             }
 
-            context.strokeStyle = `rgba(${NET_LINK_RGB},${0.25 * presence})`;
-            context.lineWidth = 0.5;
-
-            context.beginPath();
-            context.moveTo(n1.x, n1.y);
-            context.lineTo(n2.x, n2.y);
-            context.stroke();
+            linkBatches.add(presence, n1.x, n1.y, n2.x, n2.y);
         });
+        linkBatches.stroke(context);
+
+        // The squares overlap, so they keep their paint order; fillStyle
+        // is set only where the colour changes from the square before.
+        let fill = '';
 
         nodes.forEach((n, i) => {
             // In flight a square grows into its full size as it arrives.
             const size = introDone ? NODE_SIZE : NODE_SIZE * (0.5 + 0.5 * intro[i]!.p);
 
-            context.fillStyle = n.color;
+            if (n.color !== fill) {
+                fill = n.color;
+                context.fillStyle = fill;
+            }
+
             context.fillRect(n.x - size / 2, n.y - size / 2, size, size);
         });
-    }
-
-    let frame = 0;
-
-    function loop(now: number): void {
-        update(now);
-        draw();
-        frame = requestAnimationFrame(loop);
     }
 
     // Under reduced motion the field is one still frame: the squares sit at
     // their home spots and nothing drifts, swirls or pours in.
     if (reducedMotion) {
         draw();
-    } else {
-        frame = requestAnimationFrame(loop);
+
+        return () => resizeObserver.disconnect();
     }
 
-    return {
-        stop: () => {
-            cancelAnimationFrame(frame);
-            resizeObserver.disconnect();
+    // The first entrance keeps the clock of the hero's CSS telescope, which
+    // starts when the page is styled, before this runs after hydration: the
+    // flights are backdated to the earliest running CSS animation in the hero.
+    // A pending one (a client-side mount) starts the flights on the first
+    // frame. With none running, the hero's CSS entrance (done by about 2.3 s)
+    // has ended, but the last flights land near 2.6 s: the clock falls back to
+    // the first paint, when the page was first styled, so flights still due
+    // finish and the rest start landed. Both clocks share the document
+    // timeline's origin, as do the frame timestamps update() receives.
+    // Without the Web Animations API there is no CSS clock to read: introStart
+    // stays null and the flights start on the first frame.
+    if (typeof watchEl.getAnimations === 'function' && typeof CSSAnimation !== 'undefined') {
+        const cssEntrance = watchEl
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation instanceof CSSAnimation);
+        const cssStarts = cssEntrance
+            .map((animation) => animation.startTime)
+            .filter((time): time is number => typeof time === 'number');
+
+        if (cssEntrance.length === 0) {
+            introStart = firstStyledAt();
+        } else if (cssStarts.length === cssEntrance.length) {
+            introStart = Math.min(...cssStarts);
+        }
+    }
+
+    const stopLoop = runWhileSeen(
+        watchEl,
+        (now) => {
+            update(now);
+            draw();
         },
         replay,
+    );
+
+    return () => {
+        stopLoop();
+        resizeObserver.disconnect();
     };
 }

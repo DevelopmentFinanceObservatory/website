@@ -2,36 +2,6 @@
 @use "mixins" as *;
 @use "breakpoints" as *;
 
-.page {
-    @include flex(column, flex-start, stretch);
-
-    gap: rem(36);
-    max-width: rem(900);
-    min-width: 0;
-}
-
-.header {
-    @include flex(column, flex-start, stretch);
-
-    gap: rem(8);
-}
-
-.label {
-    @include font-size(11px, 1.3);
-
-    font-family: var(--font-dm-mono);
-    color: var(--color-stone);
-    letter-spacing: -0.02em;
-    text-transform: uppercase;
-}
-
-.title {
-    @include font-size(32px, 1.05);
-
-    font-weight: 700;
-    letter-spacing: -0.04em;
-}
-
 .lead {
     @include font-size(16px, 1.45);
 
@@ -59,7 +29,7 @@
     resize: vertical;
 
     // Lines do not wrap, so the box scrolls both ways and shows its scrollbars.
-    @include scrollbar-visible(var(--color-stone), both);
+    @include scrollbar-visible($axis: both);
 }
 
 .actions {
@@ -153,7 +123,7 @@
 // The table scrolls inside its own box so the page does not scroll sideways,
 // with its scrollbar in view as the cue that more lies past the edge.
 .scroll {
-    @include scrollbar-visible(var(--color-stone), both);
+    @include scrollbar-visible($axis: both);
 
     max-width: 100%;
     max-height: rem(560);
@@ -183,6 +153,12 @@
 }
 
 .quiet td {
+    color: var(--color-stone);
+}
+
+// The note on a row the check was not sent.
+.skipTag {
+    font-weight: 400;
     color: var(--color-stone);
 }
 
@@ -279,10 +255,6 @@
 }
 
 @include breakpoint(phone) {
-    .title {
-        @include font-size(26px, 1.05);
-    }
-
     // Every column row stacks alike: its name, its select, then its note.
     .column {
         display: grid;
@@ -300,4 +272,27 @@
     .value {
         @include font-size(12px, 1.3);
     }
+}
+
+// The line that says how the paste was read, set apart from the notes around it.
+.summary {
+    @include font-size(14px, 1.45);
+
+    padding: rem(10) rem(12);
+    background-color: var(--color-net-light);
+    border-radius: rem(4);
+
+    code {
+        font-family: var(--font-dm-mono);
+    }
+}
+
+.more > summary {
+    @include font-size(12px, 1.3);
+
+    padding-block: rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+    cursor: pointer;
 }

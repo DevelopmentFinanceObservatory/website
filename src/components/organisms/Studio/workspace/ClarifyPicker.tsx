@@ -2,9 +2,17 @@ import classNames from 'classnames';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
 import styles from './ChatPanel.module.scss';
+import UnitChoice from './UnitChoice';
 import type { ChatState } from '../hooks/useChat';
+import CharCount from '../prompt/CharCount';
 
-import type { Clarify, ClarifyAnswers, ClarifyOption, ClarifyQuestion } from '@/lib/studio/clarify';
+import {
+    multiAnswer,
+    type Clarify,
+    type ClarifyAnswers,
+    type ClarifyOption,
+    type ClarifyQuestion,
+} from '@/lib/studio/clarify';
 import {
     answerText,
     arrowTarget,
@@ -18,7 +26,9 @@ import {
     tabStopId,
     type Stepper,
 } from '@/lib/studio/clarifyStepper';
-import type { ElicitationAnswer } from '@/lib/studio/wire';
+import { interruptTextCount } from '@/lib/studio/interruptText';
+import { unitAnswer } from '@/lib/studio/unitChoice';
+import type { ElicitationAnswer, UnitOffer } from '@/lib/studio/wire';
 
 import Button from '@/components/atoms/Button/Button';
 
@@ -48,58 +58,114 @@ const OptionContent = ({ option }: { option: ClarifyOption }) => (
 const TextAnswer = ({
     labelledBy,
     initial,
+    ticked = false,
     onDraft,
     onSubmit,
 }: {
     labelledBy: string;
     initial: string;
+    // Ticked options let Send go with an empty box, and `onSubmit` then
+    // gets an empty string.
+    ticked?: boolean;
     onDraft?: (text: string) => void;
     onSubmit: (text: string) => void;
 }) => {
     const [text, setText] = useState(initial);
+    const count = interruptTextCount(text.trim());
+    const countId = useId();
 
     return (
-        <form
-            className={styles.pickerText}
-            onSubmit={(event) => {
-                event.preventDefault();
+        <div className={styles.pickerTextWrap}>
+            <form
+                className={styles.pickerText}
+                onSubmit={(event) => {
+                    event.preventDefault();
 
-                const trimmed = text.trim();
+                    const trimmed = text.trim();
 
-                if (trimmed) {
-                    onSubmit(trimmed);
-                    setText('');
-                }
-            }}
-        >
-            <input
-                className={styles.pickerTextInput}
-                value={text}
-                onChange={(event) => {
-                    setText(event.target.value);
-                    onDraft?.(event.target.value);
+                    if ((trimmed || ticked) && !count.over) {
+                        onSubmit(trimmed);
+                        setText('');
+                    }
                 }}
-                placeholder="Type your answer..."
-                aria-labelledby={labelledBy}
-            />
-            <Button
-                type="submit"
-                variant="dark"
-                small
-                className={styles.pickerTextSubmit}
-                disabled={!text.trim()}
             >
-                Send
-            </Button>
-        </form>
+                <input
+                    className={styles.pickerTextInput}
+                    value={text}
+                    onChange={(event) => {
+                        setText(event.target.value);
+                        onDraft?.(event.target.value);
+                    }}
+                    placeholder="Type your answer..."
+                    aria-labelledby={labelledBy}
+                    aria-invalid={count.over || undefined}
+                    aria-describedby={countId}
+                />
+                <Button
+                    type="submit"
+                    variant="dark"
+                    small
+                    className={styles.pickerTextSubmit}
+                    disabled={(!text.trim() && !ticked) || count.over}
+                >
+                    Send
+                </Button>
+            </form>
+            <CharCount id={countId} text={count} />
+        </div>
     );
 };
+
+// The rows of a multi-select question, each toggling its own tick box.
+const MultiOptions = ({
+    question,
+    ticked,
+    labelledBy,
+    onToggle,
+}: {
+    question: ClarifyQuestion;
+    ticked: string[];
+    labelledBy: string;
+    onToggle: (optionId: string) => void;
+}) => (
+    <div className={styles.pickerOptions} role="group" aria-labelledby={labelledBy}>
+        {question.options.map((option) => {
+            const on = ticked.includes(option.id);
+
+            return (
+                <button
+                    key={option.id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    className={classNames(styles.pickerOption, on && styles.pickerOptionChosen)}
+                    onClick={() => onToggle(option.id)}
+                >
+                    <span className={styles.pickerOptionRow}>
+                        <span className={styles.pickerCheck} aria-hidden="true" />
+                        <span className={styles.pickerOptionBody}>
+                            <OptionContent option={option} />
+                        </span>
+                    </span>
+                </button>
+            );
+        })}
+    </div>
+);
+
+// The ticked ids after toggling `id`, in the question's option order.
+const toggled = (question: ClarifyQuestion, ticked: string[], id: string): string[] =>
+    question.options
+        .map((option) => option.id)
+        .filter((optionId) => (optionId === id ? !ticked.includes(id) : ticked.includes(optionId)));
 
 // One question: a click answers the pause at once, and Skip dismisses the
 // whole pause when the frame permits it. It renders only the controls the
 // frame declares. `showText` is derived in clarify.ts, which guarantees at
 // least one control renders even when the frame offers no options and no
-// skip.
+// skip. A unit question shows the unit chips with Send. Its Skip skips the
+// question when the question is skippable, else the whole pause. Either way
+// the harness goes on with the chips' starting unit.
 const OneQuestion = ({
     pause,
     question,
@@ -112,7 +178,39 @@ const OneQuestion = ({
     onSkip: () => void;
 }) => {
     const questionId = useId();
+    const [ticked, setTicked] = useState<string[]>([]);
     const answer = (value: ElicitationAnswer) => onAnswer({ [question.id]: value });
+
+    if (question.unit) {
+        const skip = question.skippable
+            ? () => answer({ kind: 'skipped' })
+            : pause.skippable
+              ? onSkip
+              : undefined;
+
+        return (
+            <div className={styles.picker}>
+                <div className={styles.pickerHead}>
+                    <p id={questionId} className={styles.pickerQuestion}>
+                        {question.question}
+                    </p>
+                    {pause.progress && (
+                        <span className={styles.pickerCount}>
+                            {pause.progress.completed}/{pause.progress.total}
+                        </span>
+                    )}
+                </div>
+                {question.rationale && (
+                    <p className={styles.pickerRationale}>{question.rationale}</p>
+                )}
+                <UnitChoice
+                    offer={question.unit}
+                    onSend={(unit) => answer(unitAnswer(unit))}
+                    onSkip={skip}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className={styles.picker}>
@@ -126,7 +224,15 @@ const OneQuestion = ({
                     </span>
                 )}
             </div>
-            {question.options.length > 0 && (
+            {question.multi && (
+                <MultiOptions
+                    question={question}
+                    ticked={ticked}
+                    labelledBy={questionId}
+                    onToggle={(id) => setTicked((current) => toggled(question, current, id))}
+                />
+            )}
+            {!question.multi && question.options.length > 0 && (
                 <div className={styles.pickerOptions}>
                     {question.options.map((option) => (
                         <button
@@ -145,7 +251,14 @@ const OneQuestion = ({
                 <TextAnswer
                     labelledBy={questionId}
                     initial=""
-                    onSubmit={(text) => answer({ kind: 'text', text })}
+                    ticked={question.multi && ticked.length > 0}
+                    onSubmit={(text) =>
+                        answer(
+                            question.multi
+                                ? multiAnswer(question, text, ticked)
+                                : { kind: 'text', text },
+                        )
+                    }
                 />
             )}
             {pause.skippable && (
@@ -216,10 +329,23 @@ const Rail = ({
     );
 };
 
+// A reopened unit question's chips start on the unit already chosen.
+const reopenedOffer = (offer: UnitOffer, answer: ElicitationAnswer | undefined): UnitOffer =>
+    answer?.kind === 'unit'
+        ? {
+              ...offer,
+              start: {
+                  currency: answer.currency,
+                  prices: answer.prices,
+                  base_year: answer.base_year,
+              },
+          }
+        : offer;
+
 // The open question of a multi-question pause: its options as a radiogroup
 // labelled by the question and the counter, the free-text field and its own
-// Skip. The option already chosen (on a reopened question) or just clicked
-// is marked.
+// Skip, or for a unit question the unit chips with Send and Skip. The option
+// already chosen (on a reopened question) or just clicked is marked.
 const OpenQuestion = ({
     question,
     index,
@@ -249,6 +375,9 @@ const OpenQuestion = ({
     // chosen one, else the first. Arrow keys move focus (see SeveralQuestions)
     // and `onFocus` moves the stop with it.
     const [focusedId, setFocusedId] = useState<string | null>(null);
+    const [ticked, setTicked] = useState<string[]>(
+        answer?.kind === 'options' ? answer.option_ids : [],
+    );
     const checkedId = marked ?? (answer?.kind === 'option' ? answer.option_id : null);
     const tabStop = tabStopId(
         question.options.map((option) => option.id),
@@ -270,7 +399,15 @@ const OpenQuestion = ({
                     {index + 1}/{total}
                 </span>
             </div>
-            {question.options.length > 0 && (
+            {question.multi && (
+                <MultiOptions
+                    question={question}
+                    ticked={ticked}
+                    labelledBy={`${questionId} ${countId}`}
+                    onToggle={(id) => setTicked((current) => toggled(question, current, id))}
+                />
+            )}
+            {!question.multi && question.options.length > 0 && (
                 <div
                     className={styles.pickerOptions}
                     role="radiogroup"
@@ -300,15 +437,29 @@ const OpenQuestion = ({
                 </div>
             )}
             {question.rationale && <p className={styles.pickerRationale}>{question.rationale}</p>}
+            {question.unit && (
+                <UnitChoice
+                    offer={reopenedOffer(question.unit, answer)}
+                    onSend={(unit) => onAnswer(unitAnswer(unit))}
+                    onSkip={question.skippable ? () => onAnswer({ kind: 'skipped' }) : undefined}
+                />
+            )}
             {question.showText && (
                 <TextAnswer
                     labelledBy={questionId}
                     initial={draft ?? (answer?.kind === 'text' ? answer.text : '')}
+                    ticked={question.multi && ticked.length > 0}
                     onDraft={onDraft}
-                    onSubmit={(text) => onAnswer({ kind: 'text', text })}
+                    onSubmit={(text) =>
+                        onAnswer(
+                            question.multi
+                                ? multiAnswer(question, text, ticked)
+                                : { kind: 'text', text },
+                        )
+                    }
                 />
             )}
-            {question.skippable && (
+            {question.skippable && !question.unit && (
                 <Button
                     variant="bordered"
                     className={styles.pickerSkip}
@@ -350,7 +501,8 @@ const SeveralQuestions = ({
     useEffect(() => () => window.clearTimeout(markTimer.current), []);
 
     // After a move, focus lands on the open question's marked option (or its
-    // first), its text field when it offers no options, or Send.
+    // first), its first unit chip, its text field when it offers no options,
+    // or Send.
     useEffect(() => {
         if (moves === 0) {
             return;
@@ -359,7 +511,9 @@ const SeveralQuestions = ({
         const card = cardRef.current;
         const target =
             card?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]') ??
-            card?.querySelector<HTMLElement>('[role="radio"], input') ??
+            card?.querySelector<HTMLElement>(
+                '[role="radio"], [role="checkbox"], [data-unit-focus], input',
+            ) ??
             sendRef.current;
 
         target?.focus({ preventScroll: true });
@@ -437,8 +591,11 @@ const SeveralQuestions = ({
             return;
         }
 
-        const options = pause.questions[stepper.open]?.options ?? [];
-        const digit = digitPick(event.key, event.repeat, options.length);
+        const openQuestion = pause.questions[stepper.open];
+        const options = openQuestion?.options ?? [];
+        const digit = openQuestion?.multi
+            ? null
+            : digitPick(event.key, event.repeat, options.length);
 
         if (digit !== null) {
             event.preventDefault();
@@ -448,7 +605,9 @@ const SeveralQuestions = ({
         }
 
         const radios = [
-            ...(cardRef.current?.querySelectorAll<HTMLElement>('[role="radio"]') ?? []),
+            ...(cardRef.current?.querySelectorAll<HTMLElement>(
+                '[role="radio"], [role="checkbox"]',
+            ) ?? []),
         ];
         const at = radios.indexOf(document.activeElement as HTMLElement);
         const target = at >= 0 ? arrowTarget(event.key, at, radios.length) : null;

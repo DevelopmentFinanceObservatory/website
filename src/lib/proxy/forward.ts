@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 
 import { apisFetch } from '@/lib/apisAuth';
 
+import { setAccount } from './account';
 import { limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import {
     clientResponseHeaders,
@@ -13,7 +14,7 @@ import {
     type HeaderPass,
 } from './headers';
 import { rateLimitedProblem, unreachableProblem } from './problem';
-import { rateHeaders } from './rateHeaders';
+import { rateHeaders, type RateVerdict } from './rateHeaders';
 import { hit, type Surface } from './rateLimit';
 
 /**
@@ -21,7 +22,8 @@ import { hit, type Surface } from './rateLimit';
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
  * must not reach a client). An /api/*, /openapi.json or /mcp call, and a
- * /codes call the route forwards, is rate-limited per IP: /mcp on its own
+ * /codes call the route forwards, is rate-limited per IP: /mcp and the
+ * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
  * headers go out only on a counted call). A call is forwarded with its
  * method, query, body, content headers, user-agent, x-dfo-client and every
@@ -44,14 +46,15 @@ import { hit, type Surface } from './rateLimit';
  *   /openapi.json, /codes/{code}     → SEARCH_API_BASE, the same paths; the
  *                                    document is cut to this host's paths
  *                                    (src/lib/proxy/openapi)
- *   /api/v1/studio/turn|interrupt|cancel|composition
+ *   /api/v1/studio/turn|interrupt|cancel|composition|state|resume
  *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *
  * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
  * (src/lib/apisAuth matches on the target's origin), and names the caller in
- * x-dfo-caller beside the x-dfo-caller-principal secret (setApisCaller in
- * src/lib/proxy/caller), matched on the same origin. The other upstreams get
- * neither.
+ * x-dfo-caller and its surface in x-dfo-surface beside the
+ * x-dfo-caller-principal secret (setApisCaller in src/lib/proxy/caller),
+ * matched on the same origin. The other upstreams get none of them. A route
+ * names the caller to one in x-dfo-caller and x-dfo-account instead.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -71,9 +74,13 @@ const limiterKey = limiterKeyFor(trustedHops(process.env));
 export const clientIp = (req: NextRequest): string =>
     limiterKey(req.headers.get('x-forwarded-for'));
 
-type ForwardOptions = {
+export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
+    // The verdict of a call the caller has already counted against `surface`
+    // (the Studio proxy counts before it reads a body), so forward() counts
+    // nothing more.
+    counted?: RateVerdict;
     // The upstream URL to hit (path + query already resolved).
     target: string;
     // A bearer the proxy attaches on the caller's behalf; when unset, the
@@ -83,10 +90,18 @@ type ForwardOptions = {
     // which gets its own (src/lib/proxy/caller). Any value the client sent is
     // dropped either way.
     caller?: string;
+    // The x-dfo-account digest to send to an upstream other than dfo-apis
+    // (src/lib/proxy/account), resolved once after the rate limit and admit
+    // checks so a refused call costs no lookup. Any value the client sent is
+    // dropped either way.
+    account?: () => Promise<string | undefined>;
     // Headers carried beyond the defaults (src/lib/proxy/headers).
     pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
     unreachable: string;
+    // The request body to send in place of the client's, which the caller has
+    // already read (the Studio proxy's canonical call body).
+    body?: string;
     // Runs after the rate limit and before the upstream call; a Response it
     // returns is the answer instead (the Studio's prompt allowance).
     admit?: () => Promise<Response | null>;
@@ -98,7 +113,7 @@ type ForwardOptions = {
 
 // Whether `target` is on dfo-apis, read from SEARCH_API_BASE at call time as
 // src/lib/apisAuth reads it.
-const isApisTarget = (target: string): boolean => {
+export const isApisTarget = (target: string): boolean => {
     const base = process.env.SEARCH_API_BASE?.trim();
 
     return (
@@ -138,7 +153,9 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
 };
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
-    const verdict = options.surface ? await hit(options.surface, clientIp(req)) : undefined;
+    const verdict =
+        options.counted ??
+        (options.surface ? await hit(options.surface, clientIp(req)) : undefined);
     const limitHeaders = verdict ? rateHeaders(verdict) : {};
 
     if (verdict && !verdict.allowed) {
@@ -165,18 +182,20 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         setApisCaller(headers, req.headers);
     } else {
         setCaller(headers, options.caller);
+        setAccount(headers, await options.account?.());
     }
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+    const streamed = hasBody && options.body === undefined;
     let upstream: Response;
 
     try {
         upstream = await apisFetch(options.target, {
             method: req.method,
             headers,
-            body: hasBody ? req.body : undefined,
+            body: hasBody ? (options.body ?? req.body) : undefined,
             // A streamed request body needs this in Node's fetch.
-            ...(hasBody ? { duplex: 'half' } : {}),
+            ...(streamed ? { duplex: 'half' } : {}),
             cache: 'no-store',
             redirect: 'manual',
             // A client that leaves takes the upstream call with it, a body

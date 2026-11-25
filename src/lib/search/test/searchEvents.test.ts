@@ -72,9 +72,9 @@ test('a run over hundreds of StatVars and places fits the intake cap, as counts'
     });
 
     assert.ok(JSON.stringify(props).length <= MAX_PROPS_BYTES);
+    assert.deepEqual(props.specIds, ['spec_12b8fa627fefe6caea4a9140085c6d0f']);
     assert.deepEqual(props.resolved, [
         {
-            specId: 'spec_12b8fa627fefe6caea4a9140085c6d0f',
             measure: {
                 kind: 'statvar_schema',
                 population_type: 'FinancialFlow',
@@ -100,6 +100,78 @@ test('a run over hundreds of StatVars and places fits the intake cap, as counts'
             entityTerms: ['Kenya'],
         },
     ]);
+});
+
+test('flat specIds and measures name each resolved part, a pinned StatVar by its dcid', () => {
+    const spec = aidPart.hydratedSpec as any;
+    const pinned = {
+        ...aidPart,
+        index: 1,
+        hydratedSpec: {
+            ...spec,
+            spec_id: 'spec_pinned',
+            identity: { ...spec.identity, shape: { kind: 'stat_var', id: 'Count_Person' } },
+        },
+    } as HydratedPart;
+    const described = (specId: string, shape: object | undefined) =>
+        ({
+            ...aidPart,
+            index: 2,
+            hydratedSpec: { ...spec, spec_id: specId, identity: { ...spec.identity, shape } },
+        }) as HydratedPart;
+    const props = eventFor([
+        aidPart,
+        refusedPart,
+        pinned,
+        described('spec_full', {
+            kind: 'statvar_schema',
+            population_type: 'Person',
+            measured_property: 'count',
+            measurement_qualifier: 'Female',
+            stat_type: 'measuredValue',
+            measurement_denominator: { ref: 'Count_Person' },
+        }),
+        described('spec_none', undefined),
+        described('spec_slash', {
+            kind: 'statvar_schema',
+            population_type: 'Person',
+            measured_property: 'count',
+            measurement_qualifier: undefined,
+            stat_type: 'measuredValue',
+            measurement_denominator: { ref: 'dc/topic/Pop' },
+        }),
+        described('spec_odd', {
+            kind: 'statvar_schema',
+            population_type: 'Person+Odd',
+            measured_property: 'count',
+            measurement_qualifier: undefined,
+            stat_type: 'measuredValue',
+            measurement_denominator: undefined,
+        }),
+        described('spec_paren', { kind: 'stat_var', id: 'Count(Person)' }),
+    ]);
+
+    assert.deepEqual(props.specIds, [
+        'spec_12b8fa627fefe6caea4a9140085c6d0f',
+        'spec_pinned',
+        'spec_full',
+        'spec_none',
+        'spec_slash',
+        'spec_odd',
+        'spec_paren',
+    ]);
+    // One measure per spec id, in order, `-` for a part with no shape.
+    assert.deepEqual(props.measures, [
+        'schema:FinancialFlow|amount|Nominal|measuredValue|-',
+        'sv:Count_Person',
+        'schema:Person|count|Female|measuredValue|Count_Person',
+        '-',
+        // A member holding `/` stays whole. A token the export would reject reads `-`.
+        'schema:Person|count|-|measuredValue|dc/topic/Pop',
+        '-',
+        '-',
+    ]);
+    assert.deepEqual(eventFor([refusedPart]).specIds, []);
 });
 
 const withSources = (part: HydratedPart, count: number, length = 10): HydratedPart => {
@@ -212,6 +284,11 @@ test('an event too wide for sampled detail drops to the minimal form and fits th
     assert.equal(props.resolved[0].filters, undefined);
     assert.deepEqual(props.resolved[0].entities, { origin: { count: 1 } });
     assert.deepEqual(props.resolved[0].measure, (aidPart.hydratedSpec as any).identity.shape);
+    assert.equal(props.specIds.length, 6);
+    assert.deepEqual(
+        props.measures,
+        Array(6).fill('schema:FinancialFlow|amount|Nominal|measuredValue|-'),
+    );
 });
 
 test('a clip never ends on half of a surrogate pair', () => {
@@ -281,7 +358,7 @@ test('refused parts of control characters end on the floor: no free text, fixed 
     assert.deepEqual(props.refused, []);
 });
 
-test('the floor holds a clipped spec id and integer counts per part, whatever the identity weighs', () => {
+test('the floor holds the clipped spec ids and integer counts per part, whatever the identity weighs', () => {
     const spec = aidPart.hydratedSpec as any;
     const part = (index: number) =>
         ({
@@ -290,7 +367,10 @@ test('the floor holds a clipped spec id and integer counts per part, whatever th
             hydratedSpec: {
                 ...spec,
                 spec_id: 's'.repeat(1000),
-                identity: { ...spec.identity, shape: { kind: 'x'.repeat(3000) } },
+                identity: {
+                    ...spec.identity,
+                    shape: { kind: 'statvar_schema', population_type: 'x'.repeat(3000) },
+                },
             },
         }) as HydratedPart;
     const props = eventFor(Array.from({ length: 6 }, (_, index) => part(index)));
@@ -298,7 +378,15 @@ test('the floor holds a clipped spec id and integer counts per part, whatever th
     assert.ok(fitsProps(props));
     assert.equal(props.truncated, true);
     assert.equal(props.resolved[0].measure, undefined);
-    assert.equal(props.resolved[0].specId.length, 64);
+    assert.deepEqual(Object.keys(props.resolved[0]).toSorted(), [
+        'entityCount',
+        'sourceCount',
+        'statVarCount',
+    ]);
+    assert.equal(props.specIds.length, 6);
+    assert.equal(props.specIds[0].length, 64);
+    // A token over the cap is dropped, and the part keeps its place in the list.
+    assert.deepEqual(props.measures, Array(6).fill('-'));
     assert.ok(JSON.stringify(props).length < MAX_PROPS_BYTES / 4);
 });
 
@@ -324,7 +412,10 @@ test('the run fields ride every rung, the floor without its step timings', () =>
             hydratedSpec: {
                 ...spec,
                 spec_id: 's'.repeat(1000),
-                identity: { ...spec.identity, shape: { kind: 'x'.repeat(3000) } },
+                identity: {
+                    ...spec.identity,
+                    shape: { kind: 'statvar_schema', population_type: 'x'.repeat(3000) },
+                },
             },
         }) as HydratedPart;
     const { byStep, ...kept } = run;

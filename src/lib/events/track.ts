@@ -4,6 +4,7 @@ import { isBotRequest } from '@/lib/bot';
 import { db } from '@/lib/db';
 import { event } from '../../../db/schema';
 import { logEvent } from './eventLog';
+import { parseInternalEng, withInternalEng } from './internalEng';
 import { posthogConfigured, sendEventToPosthog } from './posthog';
 
 /**
@@ -33,8 +34,16 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - feedback.submit   a feedback sent (kind)
  * - embed.view        an embed loaded in an iframe (share id, kind, host site)
  * - share.create      a Studio or search share link made (share id, kind, mode)
+ * - share.copy        a share's link, embed code or download link copied (share id, kind,
+ *                     mode, what was copied)
  * - share.open        a share link opened at /s/<id> (share id, kind, mode, host site)
  * - gallery.open      a visitor opened a Gallery item (slug, kind)
+ * - studio.download   a Studio card's data saved to the device (format, card kind, card id, source)
+ * - data.view         an embed the site served that draws DFO data (spec ids, content
+ *                     versions, host site, the viewer's caller digest)
+ *
+ * Every event also carries `internal_eng`, true when the signed-in user's
+ * email is verified and on the INTERNAL_ENG_EMAILS list (see ./internalEng).
  */
 export const EVENT_NAMES = [
     'search.query',
@@ -53,8 +62,11 @@ export const EVENT_NAMES = [
     'feedback.submit',
     'embed.view',
     'share.create',
+    'share.copy',
     'share.open',
     'gallery.open',
+    'studio.download',
+    'data.view',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -69,10 +81,23 @@ export type EventProps = Record<string, unknown>;
  */
 export type Who = {
     userId?: string | null;
+    /** The signed-in user's email and whether it is verified, from the caller's session
+     *  (see `userWho`). INTERNAL_ENG_EMAILS matches a verified email only. */
+    email?: string | null;
+    emailVerified?: boolean | null;
     visitorId?: string | null;
     page?: string | null;
     headers: Headers | null;
 };
+
+/** The `Who` fields a session's user gives. */
+export const userWho = (
+    user: { id: string; email?: string | null; emailVerified?: boolean | null } | null | undefined,
+): Pick<Who, 'userId' | 'email' | 'emailVerified'> => ({
+    userId: user?.id ?? null,
+    email: user?.email ?? null,
+    emailVerified: user?.emailVerified ?? null,
+});
 
 /**
  * Record one event. Fire-and-forget: analytics never cost a request, so a
@@ -83,10 +108,14 @@ export type Who = {
  * (isBotRequest) is not recorded anywhere, since no stored row or log line
  * keeps the user agent to tell it from a person's afterwards.
  */
-export const track = async (name: EventName, props: EventProps, who: Who) => {
+export const track = async (name: EventName, incoming: EventProps, who: Who) => {
     if (isBotRequest(who.headers)) {
         return;
     }
+
+    // Set here, after the browser's own props, so a caller cannot claim it.
+    // Read from INTERNAL_ENG_EMAILS at write time, so a list change reaches new events only.
+    const props = withInternalEng(incoming, who, parseInternalEng(process.env.INTERNAL_ENG_EMAILS));
 
     logEvent(name, props, who);
 

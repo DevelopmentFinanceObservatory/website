@@ -1,12 +1,15 @@
 import { NextRequest } from 'next/server';
 
-import { forward } from '@/lib/proxy/forward';
+import { forwardDatasets } from '@/lib/proxy/datasetReads';
 import { dotSegmentProblem } from '@/lib/proxy/problem';
 import { forwardablePath } from '@/lib/proxy/surfaces';
 import { searchApiBase } from '@/lib/searchApi';
 
 // The Datasets API's document routes, mirrored 1:1 under the site's domain
-// (see src/lib/proxy/forward); the mint door itself is ../route.ts.
+// (see src/lib/proxy/forward), with the read routes cached, followed to
+// storage and open to DFO origins (src/lib/proxy/datasetReads), each counted
+// on the `datasets` allowance (src/lib/proxy/rateLimit); the mint door itself
+// is ../route.ts.
 const proxy = (req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) =>
     params.then(({ path }) => {
         const rest = forwardablePath(path);
@@ -15,8 +18,9 @@ const proxy = (req: NextRequest, { params }: { params: Promise<{ path: string[] 
             return dotSegmentProblem();
         }
 
-        return forward(req, {
-            surface: 'api',
+        return forwardDatasets(req, {
+            segments: path,
+            surface: 'datasets',
             target: `${searchApiBase()}/api/datasets${rest}${req.nextUrl.search}`,
             unreachable: 'The Datasets API is unreachable.',
         });

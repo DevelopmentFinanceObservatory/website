@@ -169,6 +169,34 @@
       "when": 1793871780545,
       "tag": "0024_drop_share_card_result",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795183972106,
+      "tag": "0025_account_organisation",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795270000000,
+      "tag": "0026_conversation_export",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795470778321,
+      "tag": "0027_clear_refused_harness_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795470778322,
+      "tag": "0027_studio_session_owner",
+      "breakpoints": true
     }
   ]
 }

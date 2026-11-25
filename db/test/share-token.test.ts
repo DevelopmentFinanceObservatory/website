@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import {
     deleteShareToken,
     fenceShareTokens,
+    ownsShare,
     putShareToken,
     readShareToken,
     refreshFence,
@@ -70,6 +71,10 @@ test('share write tokens', async (t) => {
     assert.equal(await readShareToken(db, other), null);
     assert.equal(await putShareToken(db, { ...other, writeToken: 'shw_theirs' }), false);
     assert.equal(await readShareToken(db, owner), 'shw_two');
+
+    assert.equal(await ownsShare(db, owner), true);
+    assert.equal(await ownsShare(db, other), false);
+    assert.equal(await ownsShare(db, { shareId: owner.shareId, userId: null }), false);
 
     await deleteShareToken(db, other);
     assert.equal(await readShareToken(db, owner), 'shw_two');

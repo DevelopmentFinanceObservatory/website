@@ -1,4 +1,5 @@
 import type { CardView } from '@/components/organisms/Studio/canvas/layout';
+import type { OwedRemoval } from '@/lib/studio/owedRemovals';
 import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
 import type { CardRef, TextWidget } from '@/lib/chat/widgets';
 import type { ActivityEntry } from '@/lib/studio/activity';
@@ -28,17 +29,27 @@ export type SavedConversation = {
     // The Activity trace (steps per turn).
     activity?: ActivityEntry[];
     turnCount: number;
-    // The harness canvas the conversation last saw (useChat's canvasRef).
+    // The harness canvas the conversation last saw (useChat's canvasRef):
+    // its ids are the harness cards the canvas shows (canvasWidgetsOf).
     // Optional: saves from before this didn't have it.
     canvas?: CanvasBaseline | null;
+    // A fork's inherited cards, which the harness session never held and no
+    // manifest of the fork names. Optional: only a fork has them.
+    localIds?: string[];
+    // The harness cards the user took off whose removal the harness has not
+    // confirmed (src/lib/studio/owedRemovals.ts). Each stays off the canvas.
+    // Optional: saves from before this didn't have it.
+    owedRemovals?: OwedRemoval[];
     pinnedIds: string[];
+    // The cards the harness never held (`localIds`, text cards) that the
+    // user took off the canvas. A save from before `canvas` also lists
+    // harness cards here, and so does one whose `canvas` names a composition
+    // and carries no `pinned`, which owes their removal (owedRemovalsOf).
     removedIds: string[];
-    // Unpinned cards from older turns that are still on the canvas (see
-    // useCanvasDocument's grace): without them a reopened conversation — and
-    // a share link, which is the same snapshot — drops cards the canvas was
-    // showing. Optional: saves from before this didn't have it.
+    // In a save from before `canvas`, the unpinned cards of older turns its
+    // canvas still showed, and the turn that set belongs to (a later turn
+    // made it stale). Only the legacy rule reads them (legacyCanvasWidgetsOf).
     graceIds?: string[];
-    // The turn that grace set belongs to — a later turn makes it stale.
     graceTurn?: number;
     layout: CardLayout;
     // Canvas theme (Customize).
@@ -59,6 +70,13 @@ export type SavedConversation = {
     // point" marker there (see shareMarkAfter). A share is a snapshot;
     // nothing after it ever reaches the link.
     shareMarks?: ShareMark[];
+    // The writer that built this snapshot (a random id minted once per
+    // useConversationSave mount) and the snapshot's sequence number from it.
+    // The server ignores a save whose stored row has the same writer and a
+    // higher number, and always writes a document without both fields. A
+    // copy into another conversation (forkOf, pruneForShare) drops both.
+    saveWriter?: string;
+    saveSeq?: number;
 };
 
 export type ShareMark = {
@@ -69,4 +87,8 @@ export type ShareMark = {
     // goes (see shareMarkAfter). Optional: marks from before this didn't
     // have it.
     userMessages?: number;
+    // The page's turn count when shared: a turn stamped later sits beyond
+    // the mark wherever a state read placed it (see shareMarkAfter).
+    // Optional: marks from before this didn't have it.
+    turnCount?: number;
 };
