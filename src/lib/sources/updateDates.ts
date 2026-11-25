@@ -1,10 +1,11 @@
 /**
  * The dates on a source page's License & Updates block. `last_update` is the
- * day DFO downloaded the data, a date ("2026-10-05") or a timestamp
- * ("2026-10-02T17:23:42Z"); `next_expected_update` is the publisher's next
- * release, usually a month ("2026-09"). Both read in UTC, so a timestamp
- * names the same day on every reader's clock. `shortDateText` also writes the
- * snapshot dates the citation and the /data banner share.
+ * day the data was last imported into its Data Commons (`lastDataRefreshDate`),
+ * a date ("2026-10-05") or a timestamp ("2026-10-02T17:23:42Z");
+ * `next_expected_update` is the importing pipeline's next scheduled refresh
+ * (`nextDataRefreshDate`), often a month ("2026-09"). Both read in UTC, so a
+ * timestamp names the same day on every reader's clock. `shortDateText` also
+ * writes the snapshot dates the citation and the /data banner share.
  */
 
 const MONTH = /^(\d{4})-(\d{2})$/;

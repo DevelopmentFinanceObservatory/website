@@ -94,7 +94,7 @@ test('toCard takes the facts from the Dataset row and the publisher and origin f
         family: 'dc/s/WorldBank',
         publisher: 'World Bank',
         dataCommons: { id: 'dfo', label: 'Development Finance Observatory' },
-        origin: 'World Bank',
+        origin: 'World Bank via DFO',
         description: 'External debt stocks and flows for low- and middle-income countries.',
         chips: [
             { kind: 'licence', label: 'CC BY 4.0' },
