@@ -298,8 +298,10 @@ const tipRow = (
         point.datasetIndex,
     ) ?? ['#484842', '#5e5e52'];
     const rowClass = near ? `${styles.chartTipRow} ${styles.chartTipNear}` : styles.chartTipRow;
+    const { number, words } = tooltipValue(chart, point.parsed);
+    const value = `<span class="${styles.chartTipNumber}">${escapeHtml(number)}</span>${words ? ` ${escapeHtml(words)}` : ''}`;
 
-    return `<span class="${rowClass}"><span class="${styles.chartTipDot}" style="--series-dark:${dark};--series-light:${light}"></span><span class="${styles.chartTipLabel}">${escapeHtml(name)}</span><span class="${styles.chartTipValue}">${escapeHtml(tooltipValue(chart, point.parsed))}</span></span>`;
+    return `<span class="${rowClass}"><span class="${styles.chartTipDot}" style="--series-dark:${dark};--series-light:${light}"></span><span class="${styles.chartTipLabel}">${escapeHtml(name)}</span><span class="${styles.chartTipValue}">${value}</span></span>`;
 };
 
 const htmlTooltip = ({ chart, tooltip }: { chart: ChartJS; tooltip: ChartTooltip }) => {
@@ -393,6 +395,7 @@ const htmlTooltip = ({ chart, tooltip }: { chart: ChartJS; tooltip: ChartTooltip
     }
 
     x = Math.max(edge, Math.min(window.innerWidth - tipW - edge, x));
+    y = Math.max(edge, Math.min(window.innerHeight - tipH - edge, y));
 
     tip.style.transform = `translate(${x}px, ${y}px)`;
 };

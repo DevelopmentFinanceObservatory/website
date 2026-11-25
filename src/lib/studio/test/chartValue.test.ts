@@ -69,19 +69,20 @@ const hovered = (unit: string | undefined, horizontal: boolean) => {
 };
 
 test('the tooltip and the value axis write the hovered value in the chart unit', () => {
-    const cases: [string | undefined, boolean, string, string | null][] = [
-        ['Percent', false, '5.33%', null],
-        ['Percent', true, '5.33%', null],
-        ['USDollar', false, '5.33 US Dollar', 'US Dollar'],
+    type Value = { number: string; words: string | null };
+    const cases: [string | undefined, boolean, Value, string | null][] = [
+        ['Percent', false, { number: '5.33%', words: null }, null],
+        ['Percent', true, { number: '5.33%', words: null }, null],
+        ['USDollar', false, { number: '5.33', words: 'US Dollar' }, 'US Dollar'],
         [
             'USD millions (constant 2023)',
             true,
-            '5.33 USD millions (constant 2023)',
+            { number: '5.33', words: 'USD millions (constant 2023)' },
             'USD millions (constant 2023)',
         ],
-        ['Person', false, '5.33 Person', 'Person'],
-        [undefined, false, '5.33', null],
-        [undefined, true, '5.33', null],
+        ['Person', false, { number: '5.33', words: 'Person' }, 'Person'],
+        [undefined, false, { number: '5.33', words: null }, null],
+        [undefined, true, { number: '5.33', words: null }, null],
     ];
 
     for (const [unit, horizontal, value, axisTitle] of cases) {

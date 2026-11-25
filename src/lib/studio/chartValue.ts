@@ -22,16 +22,18 @@ export const valueAxisTitle = (unit: string | undefined): { display: boolean; te
     return { display: words != null, text: words ?? '' };
 };
 
-/** A tooltip point's value as text in the chart's unit, read off the value
- *  axis: y, or x once the chart is transposed. A percentage carries its %
- *  sign ("5.33%"), any other unit its name ("37.0K US Dollar"). */
+/** A tooltip point's value in the chart's unit, read off the value axis: y,
+ *  or x once the chart is transposed. A percentage carries its % sign in the
+ *  number ("5.33%"), any other unit its name in `words` ("US Dollar"). The two
+ *  stay apart so the tooltip can keep the number on one line. */
 export const tooltipValue = (
     chart: { options: unknown },
     parsed: { x?: number | null; y?: number | null },
-): string => {
+): { number: string; words: string | null } => {
     const { indexAxis, valueUnit } = chart.options as { indexAxis?: string; valueUnit?: string };
-    const number = formatAxis(parsed[indexAxis === 'y' ? 'x' : 'y'] ?? 0, valueUnit);
-    const words = unitWords(valueUnit);
 
-    return words ? `${number} ${words}` : number;
+    return {
+        number: formatAxis(parsed[indexAxis === 'y' ? 'x' : 'y'] ?? 0, valueUnit),
+        words: unitWords(valueUnit),
+    };
 };
