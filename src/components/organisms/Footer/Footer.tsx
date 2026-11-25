@@ -22,6 +22,7 @@ import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 // The Data column mirrors the header's Data dropdown exactly — same
 // entries, same order (Coverage is left out of both until it's built).
 const columns = [
+    { title: 'Library', links: ['Browse Library', 'Chat'] },
     { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data'] },
     // Status is hidden for launch — see src/app/(site)/docs/status/page.tsx.
     { title: 'Docs', links: DOCS_MENU.map((entry) => entry.label) },
@@ -36,6 +37,8 @@ const CONTACT_MAILTO = 'mailto:data@one.org';
 const FOOTER_ROUTES: Record<string, string> = {
     'About DFO': '/about',
     'Contact us': CONTACT_MAILTO,
+    'Browse Library': '/library',
+    Chat: '/studio',
     Publications: '/about/publications',
     Sources: '/data/sources',
     Roadmap: '/data/roadmap',

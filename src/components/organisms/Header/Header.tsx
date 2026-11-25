@@ -31,6 +31,13 @@ const navItems: {
     action?: NavMenuEntry;
 }[] = [
     {
+        label: 'Library',
+        href: '/library',
+        section: '/library',
+        menu: [{ label: 'Browse Library', href: '/library' }],
+        action: { label: 'Open Studio', href: '/studio' },
+    },
+    {
         label: 'Data',
         href: '/data/sources',
         section: '/data',

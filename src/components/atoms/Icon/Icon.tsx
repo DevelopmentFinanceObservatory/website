@@ -8,6 +8,7 @@ import ArrowSmall from '@/assets/svg/arrow-small.svg';
 import ArrowUpRight from '@/assets/svg/arrow-up-right.svg';
 import Ask from '@/assets/svg/ask.svg';
 import Bulb from '@/assets/svg/bulb.svg';
+import Canvas from '@/assets/svg/canvas.svg';
 import ChartBar from '@/assets/svg/chart-bar.svg';
 import ChartLine from '@/assets/svg/chart-line.svg';
 import ChartTable from '@/assets/svg/chart-table.svg';
@@ -49,6 +50,7 @@ export const icons = {
     'arrow-up-right': ArrowUpRight,
     ask: Ask,
     bulb: Bulb,
+    canvas: Canvas,
     'chart-bar': ChartBar,
     'chart-line': ChartLine,
     'chart-table': ChartTable,

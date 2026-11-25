@@ -12,6 +12,7 @@ import {
     primaryKey,
     text,
     timestamp,
+    uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 import { user } from './auth-schema.ts';
@@ -310,3 +311,82 @@ export const daySalt = pgTable('day_salt', {
 export const webmailDomain = pgTable('webmail_domain', {
     domain: text('domain').primaryKey(),
 });
+
+/** A source a Library artifact credits, with its page when it has one. */
+export type LibrarySource = { name: string; url: string | null };
+
+/** One step of how a Library artifact was built: what was done, and the
+ *  detail of it when there is more to say. */
+export type LibraryStep = { title: string; detail: string | null };
+
+/**
+ * The Library: Studio and search outputs that DFO staff publish under a
+ * citable URL, `/library/<slug>`. `share_id` names the share in dfo-apis that
+ * draws the artifact, and `kind` (`chart`, `canvas` or `data`) and `mode`
+ * (`live` or `snapshot`) follow it. `content_title` and `content` are the
+ * optional text section the publisher writes. `sources` and `steps` are
+ * copied from the published card's description, so the Library's list,
+ * filters and pages read this table alone. `published_by` is null once the
+ * publisher's account is deleted, and the artifact stays.
+ */
+export const libraryArtifact = pgTable(
+    'library_artifact',
+    {
+        id: text('id').primaryKey(),
+        slug: text('slug').notNull(),
+        shareId: text('share_id').notNull(),
+        kind: text('kind').notNull(),
+        mode: text('mode').notNull(),
+        title: text('title').notNull(),
+        description: text('description').notNull(),
+        contentTitle: text('content_title'),
+        content: text('content'),
+        sources: jsonb('sources')
+            .$type<LibrarySource[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
+        steps: jsonb('steps')
+            .$type<LibraryStep[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
+        publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
+        publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex('library_artifact_slug_idx').on(table.slug),
+        check('library_artifact_kind', sql`${table.kind} IN ('chart', 'canvas', 'data')`),
+        check('library_artifact_mode', sql`${table.mode} IN ('live', 'snapshot')`),
+        index('library_artifact_published_at_idx').on(table.publishedAt.desc()),
+    ],
+);
+
+export type LibraryArtifactRow = typeof libraryArtifact.$inferSelect;
+
+/** A topic tag the Library's artifacts are filed under. Admins add topics,
+ *  and publishers pick from them. */
+export const libraryTopic = pgTable(
+    'library_topic',
+    {
+        id: text('id').primaryKey(),
+        label: text('label').notNull(),
+    },
+    (table) => [uniqueIndex('library_topic_label_idx').on(table.label)],
+);
+
+/** Which topics each artifact is filed under. */
+export const libraryArtifactTopic = pgTable(
+    'library_artifact_topic',
+    {
+        artifactId: text('artifact_id')
+            .notNull()
+            .references(() => libraryArtifact.id, { onDelete: 'cascade' }),
+        topicId: text('topic_id')
+            .notNull()
+            .references(() => libraryTopic.id, { onDelete: 'cascade' }),
+    },
+    (table) => [
+        primaryKey({ columns: [table.artifactId, table.topicId] }),
+        index('library_artifact_topic_topic_idx').on(table.topicId),
+    ],
+);

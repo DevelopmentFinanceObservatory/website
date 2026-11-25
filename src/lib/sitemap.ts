@@ -14,6 +14,7 @@ const STATIC_PATHS = [
     '/data',
     '/data/roadmap',
     '/data/sources',
+    '/library',
 ];
 
 export const sitemapPaths = ({
