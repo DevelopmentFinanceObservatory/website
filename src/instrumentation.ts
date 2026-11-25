@@ -76,6 +76,9 @@ export async function register(): Promise<void> {
         console.warn(error instanceof Error ? error.message : String(error));
     }
 
+    const { checkVisitorKey } = await import('./lib/proxy/visitor');
+    checkVisitorKey(process.env.NODE_ENV === 'production');
+
     const { resolveRuntimeConnection, connectCloudSqlRuntime, setCloudSqlRuntimeStream } =
         await import('../db/connection');
 

@@ -19,6 +19,11 @@ import { searchApiBase } from '@/lib/searchApi';
 
 const EVERY_RESPONSE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' };
 const NOT_PREPARED = 'The dataset could not be prepared. Open the share to download it.';
+// The 429 text, by whose count refused the click (downloadAllowance's scope).
+const TOO_MANY = {
+    visitor: 'Too many requests from this browser. Try again in a minute.',
+    address: 'Too many requests from this address. Try again in a minute.',
+} as const;
 
 // This instance's requests held open on the Datasets API.
 const upstreamWaits = createWaitGate(MAX_UPSTREAM_WAITS);
@@ -59,8 +64,8 @@ export const GET = async (req: NextRequest, { params }: { params: Promise<{ id: 
             headers: { ...allowance.headers, ...EVERY_RESPONSE, Location: location },
         });
 
-    if (!allowance.allowed) {
-        return reply(429, 'Too many requests from this address. Try again in a minute.');
+    if (allowance.refusal) {
+        return reply(429, TOO_MANY[allowance.scope === 'visitor' ? 'visitor' : 'address']);
     }
 
     try {
