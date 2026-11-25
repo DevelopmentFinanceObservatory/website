@@ -1,5 +1,5 @@
 /**
- * `visitor.ts`: which `dfo_v` tokens read as a visitor, when a page load gets
+ * `visitor.ts`: which `dfo_v` tokens read as a visitor, when a GET gets
  * a new cookie and with which attributes, and the start-up rule for a
  * missing CALLER_HMAC_KEY.
  */
@@ -21,7 +21,7 @@ import {
 const CALLER_KEY = 'test-caller-key';
 const KEY = visitorKey(CALLER_KEY);
 const NOW = 1_800_000_000_000;
-const HOUR = VISITOR_TOKEN_TTL * 1000;
+const TTL_MS = VISITOR_TOKEN_TTL * 1000;
 
 const saved = {
     key: process.env.CALLER_HMAC_KEY,
@@ -66,8 +66,8 @@ test('readVisitor: a token this key signed reads as its id until it expires', ()
     const token = mintVisitorToken(KEY, NOW);
 
     assert.equal(readVisitor(withCookie(`a=1; dfo_v=${token}; b=2`), NOW), idOf(token));
-    assert.equal(readVisitor(withCookie(`dfo_v=${token}`), NOW + HOUR - 1000), idOf(token));
-    assert.equal(readVisitor(withCookie(`dfo_v=${token}`), NOW + HOUR), null);
+    assert.equal(readVisitor(withCookie(`dfo_v=${token}`), NOW + TTL_MS - 1000), idOf(token));
+    assert.equal(readVisitor(withCookie(`dfo_v=${token}`), NOW + TTL_MS), null);
 });
 
 test('readVisitor: refuses a forged, altered, foreign-key or malformed token', () => {
@@ -134,7 +134,7 @@ test('issueVisitorCookie: a page load without a token gets one that reads back',
             secure: true,
             sameSite: 'lax',
             path: '/',
-            maxAge: 3600,
+            maxAge: 86_400,
         },
     );
     assert.equal(readVisitor(withCookie(`dfo_v=${cookie.value}`), NOW), idOf(cookie.value));
@@ -143,23 +143,21 @@ test('issueVisitorCookie: a page load without a token gets one that reads back',
 test('issueVisitorCookie: renews past half-life, keeps a fresher token', () => {
     const token = `dfo_v=${mintVisitorToken(KEY, NOW)}`;
 
-    assert.equal(issueVisitorCookie(pageLoad(token), NOW + HOUR / 2 - 1000), null);
-    assert.ok(issueVisitorCookie(pageLoad(token), NOW + HOUR / 2 + 1000));
+    assert.equal(issueVisitorCookie(pageLoad(token), NOW + TTL_MS / 2 - 1000), null);
+    assert.ok(issueVisitorCookie(pageLoad(token), NOW + TTL_MS / 2 + 1000));
     assert.ok(issueVisitorCookie(pageLoad('dfo_v=forged.1.x'), NOW));
 });
 
-test('issueVisitorCookie: only a GET page load gets one', () => {
-    for (const [name, overrides] of Object.entries({
-        post: { method: 'POST' },
-        fetch: { dest: 'empty' },
-        iframe: { dest: 'iframe' },
-    })) {
-        assert.equal(issueVisitorCookie(pageLoad(undefined, overrides), NOW), null, name);
+test('issueVisitorCookie: any GET gets one, an RSC navigation or prefetch included; a POST does not', () => {
+    for (const dest of ['empty', 'iframe']) {
+        assert.ok(issueVisitorCookie(pageLoad(undefined, { dest }), NOW), dest);
     }
 
     const noDest = pageLoad();
     noDest.headers.delete('sec-fetch-dest');
-    assert.equal(issueVisitorCookie(noDest, NOW), null);
+    assert.ok(issueVisitorCookie(noDest, NOW));
+
+    assert.equal(issueVisitorCookie(pageLoad(undefined, { method: 'POST' }), NOW), null);
 });
 
 test('issueVisitorCookie: none with the switch off or no key', () => {

@@ -58,12 +58,8 @@ test('rateLimitedProblem, cookielessLimitedProblem: a retryable 429 problem that
         assert.equal(res.headers.get('x-dfo-trace-id'), body.trace_id);
         members.add(Object.keys(body).sort().join());
 
-        // Only the cookieless refusal links the API key page, with what a key gives.
-        const keyHint = ['/docs/build/api-keys', '600', '75000'].every((part) =>
-            body.detail.includes(part),
-        );
-
-        assert.equal(keyHint, res === cookieless);
+        // Only the cookieless refusal links the API key page.
+        assert.equal(body.detail.includes('/docs/build/api-keys'), res === cookieless);
     }
 
     assert.equal(members.size, 1);

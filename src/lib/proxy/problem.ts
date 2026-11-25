@@ -173,11 +173,17 @@ export const rateLimitedProblem = (
     scope: 'address' | 'account' = 'address',
 ): Response => limitedProblem(verdict, headers, scope);
 
+/** The docs page on API keys, which a cookieless refusal links. */
+export const API_KEYS_DOCS_PATH = '/docs/build/api-keys';
+
+const count = new Intl.NumberFormat('en-GB');
+
 /**
- * The 429 `rate_limited` problem document of an anonymous API call with no
+ * The 429 `rate_limited` problem document of an anonymous call with no
  * visitor token (src/lib/proxy/access): rateLimitedProblem's document, whose
- * detail goes on to say what a free API key gives, `keyed.limit` calls per
- * window and `keyed.dailyLimit` a day, and where to get one.
+ * detail goes on to say where to get a free API key, what one gives
+ * (`keyed.limit` calls per window and `keyed.dailyLimit` a day, the
+ * account's defaults), and links API_KEYS_DOCS_PATH.
  */
 export const cookielessLimitedProblem = (
     verdict: { limit: number; reset: number },
@@ -188,7 +194,7 @@ export const cookielessLimitedProblem = (
         verdict,
         headers,
         'address',
-        ` A free API key raises the limit to ${keyed.limit} per window and ${keyed.dailyLimit} calls a day: see /docs/build/api-keys.`,
+        ` A free API key, made from the account menu once signed in, raises the limit to ${count.format(keyed.limit)} per window and ${count.format(keyed.dailyLimit)} calls a day: see ${API_KEYS_DOCS_PATH}.`,
     );
 
 /**

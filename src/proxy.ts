@@ -38,8 +38,9 @@ const pageResponse = (request: NextRequest) => {
 };
 
 /**
- * Every page gets its Graph Explorer or /data handling, then a `dfo_v`
- * visitor cookie when one is due (issueVisitorCookie).
+ * Every page request, document load or RSC fetch, gets its Graph Explorer
+ * or /data handling, then a `dfo_v` visitor cookie when one is due
+ * (issueVisitorCookie).
  */
 export const proxy = (request: NextRequest) => {
     const response = pageResponse(request);
@@ -53,14 +54,16 @@ export const proxy = (request: NextRequest) => {
 };
 
 /**
- * Pages only: the first entry skips the API, /mcp, /openapi.json, /codes,
- * embeds, /prototypes (served by the prototypes Worker), Next's own files and
- * any path ending in a file extension. /data and /graph-explorer are listed
- * on their own as well, so their handling never rests on the first entry.
+ * Pages only: the first entry skips /api, /mcp, /openapi.json, /codes,
+ * /embed and /prototypes (served by the prototypes Worker), each as a whole
+ * path segment, so /apiary or /codes-of-conduct would still match. It also
+ * skips Next's own files and any path ending in a file extension of either
+ * case. /data and /graph-explorer are listed on their own as well, so their
+ * handling never rests on the first entry.
  */
 export const config = {
     matcher: [
-        '/((?!api|mcp|openapi\\.json|codes|embed|prototypes|_next/|.*\\.[a-z0-9]+$).*)',
+        '/((?!(?:api|mcp|openapi\\.json|codes|embed|prototypes)(?:/|$)|_next/|.*\\.[a-zA-Z0-9]+$).*)',
         '/data',
         '/graph-explorer',
         '/graph-explorer/:path*',

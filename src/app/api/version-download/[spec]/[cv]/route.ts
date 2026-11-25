@@ -1,11 +1,6 @@
 import type { NextRequest } from 'next/server';
 
-import {
-    missingProblem,
-    rateLimitedProblem,
-    requestInvalidProblem,
-    unreachableProblem,
-} from '@/lib/proxy/problem';
+import { missingProblem, requestInvalidProblem, unreachableProblem } from '@/lib/proxy/problem';
 import { downloadAllowance, readVersionFile } from '@/lib/search/storedFile';
 import { SPEC_SHAPE, VERSION_SHAPE } from '@/lib/search/versionLink';
 
@@ -22,8 +17,8 @@ export const GET = async (
 ) => {
     const allowance = await downloadAllowance(req);
 
-    if (!allowance.allowed) {
-        return rateLimitedProblem(allowance.verdict, allowance.headers);
+    if (allowance.refusal) {
+        return allowance.refusal;
     }
 
     const { spec, cv } = await params;

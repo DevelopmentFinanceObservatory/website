@@ -10,9 +10,10 @@
  * Rotating CALLER_HMAC_KEY voids every token, and the next page load issues
  * a new one.
  *
- * src/proxy.ts issues the cookie on a page load (a GET with
- * `Sec-Fetch-Dest: document`) that carries no valid token, or one past half
- * its life. The token says only that this server issued it to someone who
+ * src/proxy.ts issues the cookie on any GET its matcher runs on (page loads,
+ * App Router navigations and prefetches) that carries no valid token, or one
+ * past half its life, so a reader who stays on the site keeps one. The token
+ * says only that this server issued it to someone who
  * loaded a page: any client can get one, so the per-address backstop is the
  * ceiling.
  *
@@ -21,8 +22,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const VISITOR_COOKIE = 'dfo_v';
-/** How long a token lasts, in seconds. */
-export const VISITOR_TOKEN_TTL = 60 * 60;
+/** How long a token lasts, in seconds: a day, so a tab left open overnight keeps it. */
+export const VISITOR_TOKEN_TTL = 24 * 60 * 60;
 
 const LABEL = 'visitor-token';
 const ID_BYTES = 16;
@@ -179,10 +180,12 @@ export type PageRequest = { method: string; headers: Headers; url: string };
 
 /**
  * The `dfo_v` cookie to set on the response to `request`, or null when none
- * is due. One is due on a page load, a GET with `Sec-Fetch-Dest: document`,
- * while visitorLimitsOn holds and the request carries no valid token or one
- * with less than half its life left. Fetches, prefetches and RSC requests
- * send another Sec-Fetch-Dest and get none.
+ * is due. One is due on a GET while visitorLimitsOn holds and the request
+ * carries no valid token or one with less than half its life left. The proxy
+ * sees the GETs its matcher runs on: document loads, and the RSC requests of
+ * App Router navigations and prefetches. Next strips the headers that would
+ * tell a prefetch apart (`next-router-prefetch` and the other Flight
+ * headers), so prefetches renew it too.
  *
  * The cookie is HttpOnly, SameSite=Lax and Path=/, and lasts as long as its
  * token. It is Secure except over plain http to localhost, so `next start`
@@ -192,7 +195,7 @@ export const issueVisitorCookie = (
     request: PageRequest,
     now: number = Date.now(),
 ): VisitorCookie | null => {
-    if (request.method !== 'GET' || request.headers.get('sec-fetch-dest') !== 'document') {
+    if (request.method !== 'GET') {
         return null;
     }
 

@@ -70,7 +70,7 @@ test('studioProxy: answers any other body read failure with a retryable 503', as
     assert.equal(document.retryable, true);
 });
 
-test('studioProxy: counts per visitor with a valid visitor token, else per address at the cookieless allowance', async (t) => {
+test('studioProxy: counts per visitor with a valid visitor token, else on the cookieless count', async (t) => {
     const callerKey = process.env.CALLER_HMAC_KEY;
     const original = { ...accessDeps };
 
@@ -96,6 +96,11 @@ test('studioProxy: counts per visitor with a valid visitor token, else per addre
     };
     accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
         log.push(`visitor:${surface}:${limit}`);
+
+        return verdict(limit);
+    };
+    accessDeps.hitCookieless = async (surface, _ip, limit) => {
+        log.push(`cookieless:${surface}:${limit}`);
 
         return verdict(limit);
     };
@@ -125,7 +130,8 @@ test('studioProxy: counts per visitor with a valid visitor token, else per addre
     assert.deepEqual(log, [
         `visitor:api:${LIMITS.api}`,
         `backstop:api:${BACKSTOP_LIMITS.api}`,
-        `address:api:${COOKIELESS_LIMITS.api}`,
+        `cookieless:api:${COOKIELESS_LIMITS.api}`,
+        `backstop:api:${BACKSTOP_LIMITS.api}`,
     ]);
 
     // A refusal is the rate_limited document, with no API key hint: the Studio ignores keys.

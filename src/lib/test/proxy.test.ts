@@ -1,6 +1,7 @@
 /**
- * `src/proxy.ts`: which paths its matcher runs on, and that a page load gets
- * a `dfo_v` cookie beside the /data and Graph Explorer handling.
+ * `src/proxy.ts`: which paths its matcher runs on, and that a page load or an
+ * RSC fetch gets a `dfo_v` cookie beside the /data and Graph Explorer
+ * handling.
  */
 import './serverModules.ts';
 
@@ -36,6 +37,11 @@ test('the matcher runs on pages', () => {
         '/docs/build/api-keys',
         '/studio/abc',
         '/s/abc',
+        '/apiary',
+        '/codes-of-conduct',
+        '/embedding-guide',
+        '/mcpherson',
+        '/prototypes-archive',
     ]) {
         assert.equal(matches(path), true, path);
     }
@@ -52,7 +58,10 @@ test('the matcher skips the API, embeds, prototypes, static files and Next files
         '/embed/abc',
         '/prototypes',
         '/prototypes/debt',
+        '/api',
+        '/codes',
         '/favicon.ico',
+        '/images/LOGO.SVG',
         '/images/logo.svg',
         '/docs/build.zip',
         '/_next/static/chunks/main.js',
@@ -76,12 +85,12 @@ test('a page load gets a dfo_v cookie that reads back as a visitor', () => {
     assert.match(cookie, /Secure/i);
     assert.match(cookie, /SameSite=lax/i);
     assert.match(cookie, /Path=\//);
-    assert.match(cookie, /Max-Age=3600/);
+    assert.match(cookie, /Max-Age=86400/);
     assert.notEqual(readVisitor(new Headers({ cookie: `dfo_v=${value}` })), null);
 });
 
-test('an RSC fetch gets no cookie', () => {
-    assert.equal(setCookie(proxy(request('/about', { 'sec-fetch-dest': 'empty' }))), '');
+test('an RSC navigation or prefetch gets the cookie too', () => {
+    assert.match(setCookie(proxy(request('/about', { 'sec-fetch-dest': 'empty' }))), /dfo_v=/);
 });
 
 test('/data and the Graph Explorer keep their handling and get the cookie', () => {

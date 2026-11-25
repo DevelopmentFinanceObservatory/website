@@ -33,14 +33,16 @@ import type { RateVerdict } from './rateHeaders';
  * While visitor limits are on (src/lib/proxy/visitor), an anonymous call on
  * the 'api' and 'datasets' surfaces is counted against the visitor at the
  * allowance above when it carries a valid visitor token, and otherwise
- * against its address at a cookieless allowance (src/lib/proxy/access):
+ * against its address at a cookieless allowance. Either way it is then
+ * counted on its address's backstop (src/lib/proxy/access):
  *   RATE_LIMIT_API_ANON   calls per window per IP on 'api' with no valid
  *                         visitor token (default 60). 'datasets' stays at
  *                         RATE_LIMIT_DATASETS, since prototype pages and
  *                         embeds never carry the token.
  *   RATE_LIMIT_API_BACKSTOP, RATE_LIMIT_DATASETS_BACKSTOP
- *                         calls per window per IP that carry visitor tokens,
- *                         whichever visitors they name (defaults 240, 600)
+ *                         anonymous calls per window per IP, with a visitor
+ *                         token or without, whichever visitors they name
+ *                         (defaults 240, 600): the most an address gets
  *
  *   RATE_LIMIT_KEYED      calls per window per account on each of the 'api'
  *                         and 'datasets' surfaces, for an account with no
@@ -88,10 +90,14 @@ export const COOKIELESS_LIMITS = {
     datasets: LIMITS.datasets,
 } as const;
 
-/** An address's calls per window that carry visitor tokens, every visitor's together. */
+/**
+ * An address's anonymous calls per window, every visitor's and the cookieless
+ * ones together. The datasets figure sits below Cloudflare's 600-a-minute
+ * per-address rule on the data API, so a reader meets this 429 first.
+ */
 export const BACKSTOP_LIMITS = {
     api: Number(process.env.RATE_LIMIT_API_BACKSTOP) || 240,
-    datasets: Number(process.env.RATE_LIMIT_DATASETS_BACKSTOP) || 600,
+    datasets: Number(process.env.RATE_LIMIT_DATASETS_BACKSTOP) || 500,
 } as const;
 
 /**
@@ -110,8 +116,8 @@ export type Limiter = {
     /**
      * Count one call by `callerKey` on `surface` against `limit` and say
      * whether it is within it. `callerKey` is the limiter bucket of an
-     * address (limiterBucket), `backstop:` and that bucket, `visitor:<id>`
-     * or `acct:<account id>`.
+     * address (limiterBucket), `cookieless:` or `backstop:` and that bucket,
+     * `visitor:<id>` or `acct:<account id>`.
      */
     hitKey(surface: Surface, callerKey: string, limit: number): Promise<RateVerdict>;
     /**
@@ -211,10 +217,16 @@ export const hit = (
 export const visitorCallerKey = (visitorId: string): string => `visitor:${visitorId}`;
 
 /**
- * The limiter key of the address `ip`'s backstop, the count of its calls
- * that carry visitor tokens, apart from the count of its calls with none.
+ * The limiter key of the address `ip`'s backstop, the count of all its
+ * anonymous calls, with visitor tokens or without.
  */
 export const backstopCallerKey = (ip: string): string => `backstop:${limiterBucket(ip)}`;
+
+/**
+ * The limiter key of the address `ip`'s calls with no valid visitor token,
+ * apart from the address count used while visitor limits are off.
+ */
+export const cookielessCallerKey = (ip: string): string => `cookieless:${limiterBucket(ip)}`;
 
 /** Count one call from the visitor `visitorId` against `limit`. */
 export const hitVisitor = (
@@ -223,9 +235,13 @@ export const hitVisitor = (
     limit: number,
 ): Promise<RateVerdict> => hitKey(surface, visitorCallerKey(visitorId), limit);
 
-/** Count one call with a visitor token from the address `ip` on its backstop against `limit`. */
+/** Count one anonymous call from the address `ip` on its backstop against `limit`. */
 export const hitBackstop = (surface: Surface, ip: string, limit: number): Promise<RateVerdict> =>
     hitKey(surface, backstopCallerKey(ip), limit);
+
+/** Count one call with no valid visitor token from the address `ip` against `limit`. */
+export const hitCookieless = (surface: Surface, ip: string, limit: number): Promise<RateVerdict> =>
+    hitKey(surface, cookielessCallerKey(ip), limit);
 
 /** Count one API call on a daily counter (see Limiter). */
 export const hitDaily = (counterKey: string, limit: number): Promise<RateVerdict> =>

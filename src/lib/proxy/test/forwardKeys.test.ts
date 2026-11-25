@@ -40,6 +40,7 @@ const { forward, accessDeps } = await import('../forward.ts');
 const { createKeyVerifier } = await import('../keyVerifier.ts');
 const {
     backstopCallerKey,
+    cookielessCallerKey,
     createLimiter,
     visitorCallerKey,
     BACKSTOP_LIMITS,
@@ -116,6 +117,16 @@ const fakes = (answer: KeyVerdict, cached = false) => {
 
         return verdictOf(120);
     };
+    accessDeps.hitCookieless = async (surface) => {
+        log.push(`cookieless:${surface}`);
+
+        return verdictOf(60);
+    };
+    accessDeps.hitBackstop = async (surface) => {
+        log.push(`backstop:${surface}`);
+
+        return verdictOf(240);
+    };
     accessDeps.hitAccount = async (surface, accountId, limit) => {
         log.push(`account:${surface}:${accountId}`);
 
@@ -156,6 +167,7 @@ const fresh = () => {
     Object.assign(accessDeps, original);
     delete process.env.API_KEYS_ENABLED;
     delete process.env.VISITOR_LIMITS_ENABLED;
+    process.env.CALLER_HMAC_KEY = 'test-hmac-key';
 };
 
 // Fakes that record whose count each anonymous call spent, and at what limit.
@@ -169,6 +181,11 @@ const tierFakes = () => {
     };
     accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
         log.push(`visitor:${surface}:${limit}`);
+
+        return verdictOf(limit);
+    };
+    accessDeps.hitCookieless = async (surface, _ip, limit) => {
+        log.push(`cookieless:${surface}:${limit}`);
 
         return verdictOf(limit);
     };
@@ -267,7 +284,7 @@ test('forward: an unavailable key store goes on as anonymous with the key still 
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': KEY });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cache', 'lookup', 'address:api']);
+    assert.deepEqual(log, ['cache', 'lookup', 'cookieless:api', 'backstop:api']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
@@ -303,7 +320,7 @@ test('forward: another bearer is no key, and dfo-apis gets no caller Authorizati
     const res = await call({ authorization: 'Bearer some-other-token' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['address:api']);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
@@ -315,7 +332,7 @@ test('forward: a key in another scheme, or bare, is anonymous and never reaches 
         const res = await call({ authorization });
 
         assert.equal(res.status, 200);
-        assert.deepEqual(log, ['address:api']);
+        assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
         assert.equal(seen[0]!.authorization, undefined);
     }
 });
@@ -326,7 +343,7 @@ test('forward: a call with no key is anonymous, and a client-sent caller is drop
 
     await call({ 'x-dfo-caller': accountCaller });
 
-    assert.deepEqual(log, ['address:api']);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
@@ -431,7 +448,7 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': 'junk' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['address:api']);
+    assert.deepEqual(log, ['cookieless:api', 'backstop:api']);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
@@ -459,29 +476,40 @@ test('forward: a valid visitor token is counted per visitor, a forged or expired
     assert.deepEqual(log, [
         `visitor:api:${LIMITS.api}`,
         `backstop:api:${BACKSTOP_LIMITS.api}`,
-        `address:api:${COOKIELESS_LIMITS.api}`,
-        `address:api:${COOKIELESS_LIMITS.api}`,
+        `cookieless:api:${COOKIELESS_LIMITS.api}`,
+        `backstop:api:${BACKSTOP_LIMITS.api}`,
+        `cookieless:api:${COOKIELESS_LIMITS.api}`,
+        `backstop:api:${BACKSTOP_LIMITS.api}`,
     ]);
 });
 
-test('forward: with visitor limits off, an anonymous call is counted by address at LIMITS, token or not', async () => {
-    fresh();
-    process.env.VISITOR_LIMITS_ENABLED = 'false';
+for (const [name, visitorLimitsOff] of [
+    ['VISITOR_LIMITS_ENABLED=false', () => (process.env.VISITOR_LIMITS_ENABLED = 'false')],
+    ['CALLER_HMAC_KEY unset', () => delete process.env.CALLER_HMAC_KEY],
+] as const) {
+    test(`forward: with ${name}, an anonymous call is counted by address at LIMITS, token or not`, async () => {
+        fresh();
 
-    const log = tierFakes();
+        const cookie = visitorCookie();
 
-    for (const surface of ['api', 'datasets'] as const) {
-        await call({ cookie: visitorCookie() }, { surface });
-        await call({}, { surface });
-    }
+        visitorLimitsOff();
 
-    assert.deepEqual(log, [
-        `address:api:${LIMITS.api}`,
-        `address:api:${LIMITS.api}`,
-        `address:datasets:${LIMITS.datasets}`,
-        `address:datasets:${LIMITS.datasets}`,
-    ]);
-});
+        const log = tierFakes();
+
+        for (const surface of ['api', 'datasets'] as const) {
+            await call({ cookie }, { surface });
+            await call({}, { surface });
+        }
+
+        assert.deepEqual(log, [
+            `address:api:${LIMITS.api}`,
+            `address:api:${LIMITS.api}`,
+            `address:datasets:${LIMITS.datasets}`,
+            `address:datasets:${LIMITS.datasets}`,
+        ]);
+        fresh();
+    });
+}
 
 test('forward: while keys are off, a call with X-API-Key is logged without its value', async () => {
     fresh();
@@ -630,6 +658,10 @@ test('forward on a real key store and counter', async (t) => {
             verifier: createKeyVerifier(drizzle(verifierPool, { schema }), { log: () => {} }),
             hitAddress: (surface: 'api' | 'mcp' | 'pin', ip: string) =>
                 limiter.hitKey(surface, ip, { api: 3, mcp: 3, pin: 3 }[surface]),
+            hitCookieless: (surface: 'api', ip: string) =>
+                limiter.hitKey(surface, cookielessCallerKey(ip), 3),
+            hitBackstop: (surface: 'api', ip: string) =>
+                limiter.hitKey(surface, backstopCallerKey(ip), 100),
             hitAccount: (surface: 'api' | 'mcp' | 'pin', accountId: string, limit: number) =>
                 limiter.hitKey(surface, `acct:${accountId}`, limit),
             hitDaily: (counterKey: string, limit: number) => limiter.hitDaily(counterKey, limit),
@@ -784,11 +816,11 @@ test('forward on a real key store and counter', async (t) => {
     });
 
     await t.test(
-        "ten visitors from one address meet its backstop, which leaves the address's cookieless count alone",
+        'cookieless calls and ten visitors from one address share its backstop',
         async () => {
             Object.assign(accessDeps, {
-                hitAddress: (surface: 'api', ip: string, limit: number) =>
-                    limiter.hitKey(surface, ip, limit),
+                hitCookieless: (surface: 'api', ip: string, limit: number) =>
+                    limiter.hitKey(surface, cookielessCallerKey(ip), limit),
                 hitVisitor: (surface: 'api', visitorId: string, limit: number) =>
                     limiter.hitKey(surface, visitorCallerKey(visitorId), limit),
                 hitBackstop: (surface: 'api', ip: string, limit: number) =>
@@ -801,21 +833,22 @@ test('forward on a real key store and counter', async (t) => {
             });
 
             const office = { 'x-forwarded-for': '198.51.100.20' };
-            const visitors = [];
-
-            for (let i = 0; i < 10; i++) {
-                visitors.push((await call({ ...office, cookie: visitorCookie() })).status);
-            }
-
-            assert.deepEqual(visitors, [200, 200, 200, 200, 429, 429, 429, 429, 429, 429]);
-
             const cookieless = [];
 
             for (let i = 0; i < 3; i++) {
                 cookieless.push((await call(office)).status);
             }
 
+            // Two within the cookieless count, which then spent two of the backstop's four.
             assert.deepEqual(cookieless, [200, 200, 429]);
+
+            const visitors = [];
+
+            for (let i = 0; i < 10; i++) {
+                visitors.push((await call({ ...office, cookie: visitorCookie() })).status);
+            }
+
+            assert.deepEqual(visitors, [200, 200, 429, 429, 429, 429, 429, 429, 429, 429]);
             wire(keyPool);
         },
     );

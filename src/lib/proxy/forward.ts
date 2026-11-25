@@ -30,6 +30,7 @@ import { unreachableProblem } from './problem';
 import {
     hit,
     hitBackstop,
+    hitCookieless,
     hitDaily,
     hitKey,
     hitVisitor,
@@ -135,6 +136,7 @@ export const accessDeps: AccessDeps = {
     tagValid: keyTagValid,
     hitAddress: hit,
     hitVisitor,
+    hitCookieless,
     hitBackstop,
     anonymousLimits: { address: LIMITS, cookieless: COOKIELESS_LIMITS, backstop: BACKSTOP_LIMITS },
     visitorLimits: visitorLimitsOn,

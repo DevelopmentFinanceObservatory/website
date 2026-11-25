@@ -29,10 +29,10 @@
  *     valid                      counted against the account, never the
  *                                address, so keyed callers behind a shared
  *                                address are not held to its limit
- *     invalid                    counted against the address, as a deleted
+ *     invalid                    counted as a cookieless call, as a deleted
  *                                key still has a good tag, then 401 (429 when
  *                                the address is over its limit)
- *     store unavailable          anonymous, counted against the address
+ *     store unavailable          anonymous, counted as a cookieless call
  *
  * A key sent on a surface that does not honour keys ('mcp' and 'pin'), or
  * with keys switched off (API_KEYS_ENABLED), is ignored: the call is
@@ -43,18 +43,21 @@
  * site's visitor token while visitor limits are on (src/lib/proxy/visitor):
  *
  *   valid visitor token          counted against the visitor at the address
- *                                allowance (LIMITS), then against the
- *                                address at the looser backstop
- *   no valid token               counted against the address at the
- *                                cookieless allowance; a 429 on the 'api'
- *                                surface names what an API key gives
+ *                                allowance (LIMITS), then on the address's
+ *                                backstop
+ *   no valid token               counted against the address's cookieless
+ *                                count at the cookieless allowance, then on
+ *                                the address's backstop; a 429 names what an
+ *                                API key gives while keys are on
  *
- * The backstop and the cookieless count are two counters, so readers with
- * tokens behind one address do not spend a cookieless caller's allowance
- * there. With visitor limits off, and on 'mcp' and 'pin' always, an
- * anonymous call is counted against its address at LIMITS. A call whose key
- * the store does not hold, or cannot check, is counted against its address
- * at LIMITS too.
+ * The backstop counts every anonymous call at the address, so it is the
+ * most an address gets however many tokens it mints. The cookieless count
+ * is a counter of its own, which a call with a valid token never touches,
+ * so readers with tokens do not spend a cookieless caller's allowance, and
+ * a cookieless caller reaches its own limit before the backstop. A call
+ * whose key the store does not hold, or cannot check, is counted as a
+ * cookieless call. With visitor limits off, and on 'mcp' and 'pin' always,
+ * an anonymous call is counted against its address at LIMITS.
  */
 import {
     conflictingKeysProblem,
@@ -86,8 +89,8 @@ export type VisitorSurface = 'api' | 'datasets';
 /**
  * The anonymous allowances per window: `address` for an address with
  * visitor limits off (LIMITS, which a visitor also gets), `cookieless` for
- * an address with no valid visitor token, and `backstop` for an address
- * whose calls carry visitor tokens.
+ * an address's calls with no valid visitor token, and `backstop` for all of
+ * an address's anonymous calls while visitor limits are on.
  */
 export type AnonymousLimits = {
     address: Record<Surface, number>;
@@ -122,7 +125,10 @@ export type AccessDeps = {
     hitAddress: (surface: Surface, ip: string, limit: number) => Promise<RateVerdict>;
     // Count a call from a visitor (its visitor id) against `limit`.
     hitVisitor: (surface: VisitorSurface, visitorId: string, limit: number) => Promise<RateVerdict>;
-    // Count a call with a visitor token on its address's backstop against `limit`.
+    // Count a call with no valid visitor token from an address against `limit`,
+    // on a counter apart from hitAddress's.
+    hitCookieless: (surface: VisitorSurface, ip: string, limit: number) => Promise<RateVerdict>;
+    // Count an anonymous call on its address's backstop against `limit`.
     hitBackstop: (surface: VisitorSurface, ip: string, limit: number) => Promise<RateVerdict>;
     anonymousLimits: AnonymousLimits;
     // Whether visitor limits are on (visitorLimitsOn in src/lib/proxy/visitor).
@@ -193,8 +199,7 @@ export const decideAccess = async (
                   tier,
               };
 
-    // The address at LIMITS: visitor limits off, 'mcp' and 'pin', and a key
-    // the store does not hold or cannot check.
+    // The address at LIMITS: visitor limits off, and 'mcp' and 'pin'.
     const countAddress = async (): Promise<Access> =>
         surface
             ? limited(
@@ -202,6 +207,48 @@ export const decideAccess = async (
                   'address',
               )
             : { identity: anonymous };
+
+    // Count on `first`, then, once it admits the call, on the address's
+    // backstop. The headers report `first`, or the backstop when it refuses.
+    const thenBackstop = async (
+        visitorSurface: VisitorSurface,
+        first: RateVerdict,
+    ): Promise<RateVerdict> => {
+        if (!first.allowed) {
+            return first;
+        }
+
+        const backstop = await deps.hitBackstop(
+            visitorSurface,
+            ip,
+            deps.anonymousLimits.backstop[visitorSurface],
+        );
+
+        return backstop.allowed ? first : backstop;
+    };
+
+    // A call with no valid visitor token, or a key the store does not hold
+    // or cannot check. A refusal names what an API key gives while keys are on.
+    const countCookieless = async (): Promise<Access> => {
+        if (!surface || !isVisitorSurface(surface) || !deps.visitorLimits()) {
+            return countAddress();
+        }
+
+        const verdict = await thenBackstop(
+            surface,
+            await deps.hitCookieless(surface, ip, deps.anonymousLimits.cookieless[surface]),
+        );
+        const hint =
+            !verdict.allowed && keys
+                ? cookielessLimitedProblem(
+                      verdict,
+                      limitHeaders({ identity: anonymous, verdict, tier: 'address' }),
+                      { limit: deps.defaultLimit, dailyLimit: deps.defaultDailyLimit },
+                  )
+                : undefined;
+
+        return limited(verdict, 'address', hint);
+    };
 
     const countAnonymous = async (): Promise<Access> => {
         if (!surface || !isVisitorSurface(surface) || !deps.visitorLimits()) {
@@ -211,40 +258,15 @@ export const decideAccess = async (
         const visitorId = deps.visitor(headers);
 
         if (visitorId === null) {
-            const verdict = await deps.hitAddress(
-                surface,
-                ip,
-                deps.anonymousLimits.cookieless[surface],
-            );
-            const hint =
-                !verdict.allowed && keys && surface === 'api'
-                    ? cookielessLimitedProblem(
-                          verdict,
-                          limitHeaders({ identity: anonymous, verdict, tier: 'address' }),
-                          { limit: deps.defaultLimit, dailyLimit: deps.defaultDailyLimit },
-                      )
-                    : undefined;
-
-            return limited(verdict, 'address', hint);
+            return countCookieless();
         }
 
-        const own = await deps.hitVisitor(
+        const verdict = await thenBackstop(
             surface,
-            visitorId,
-            deps.anonymousLimits.address[surface],
+            await deps.hitVisitor(surface, visitorId, deps.anonymousLimits.address[surface]),
         );
 
-        if (!own.allowed) {
-            return limited(own, 'visitor');
-        }
-
-        const backstop = await deps.hitBackstop(
-            surface,
-            ip,
-            deps.anonymousLimits.backstop[surface],
-        );
-
-        return backstop.allowed ? limited(own, 'visitor') : limited(backstop, 'visitor');
+        return limited(verdict, 'visitor');
     };
 
     if (!surface || !keys || !honorsKeys(surface)) {
@@ -341,7 +363,7 @@ export const decideAccess = async (
         return countAccount(found);
     }
 
-    const address = await countAddress();
+    const address = await countCookieless();
 
     if (found.kind === 'unavailable' || address.refusal) {
         return { ...address, outcome: address.refusal ? 'limited' : 'unavailable' };

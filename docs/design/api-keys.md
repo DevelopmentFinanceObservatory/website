@@ -54,7 +54,7 @@ The proxy check, an admin page for operators and a self-service panel in the acc
 
 Every public API and MCP call passes through one function in the website, `forward()` in `src/lib/proxy/forward.ts`. That is the single place a key needs to be checked.
 
-- **Rate limit.** `forward()` counts each call in a fixed window. An anonymous call on the site's own pages counts against the reader's visitor token, 120 calls a minute on `/api/*`; one without a token counts against the address, 60 a minute on `/api/*`. `/mcp` counts against the address, 300 a minute. See [The visitor tier][]. The counters live in the website's Postgres (`limit_counter` table) and are shared by all instances. If the shared count is slow or fails, each instance falls back to a small in-memory count per caller (`src/lib/proxy/limitFallback.ts`), so a burst is limited on that instance.
+- **Rate limit.** `forward()` counts each call in a fixed window. An anonymous call on the site's own pages counts against the reader's visitor token, 120 calls a minute on `/api/*`; one without a token counts against the address, 60 a minute on `/api/*`. Both count on a per-address backstop of 240 a minute. `/mcp` counts against the address, 300 a minute. See [The visitor tier][]. The counters live in the website's Postgres (`limit_counter` table) and are shared by all instances. If the shared count is slow or fails, each instance falls back to a small in-memory count per caller (`src/lib/proxy/limitFallback.ts`), so a burst is limited on that instance.
 - **No Redis.** The website has no Redis code, so per-key limits need no Memorystore instance.
 - **Edge limits.** Cloudflare (Pro plan) also rate-limits by address, in front of the site: 600 calls a minute on the data API and 60 on the Studio, each blocking the address for 10 minutes. `/mcp` has no edge limit.
 - **dfo-ai's own limit.** All outside MCP calls share one bucket in dfo-ai of about 2,400 calls a minute. Every MCP call is anonymous and counted by address, so the 300 calls a minute per address holds a caller to it.
@@ -241,12 +241,12 @@ Postgres holds the keys because the limiter already counts there, key volume is 
 
 ### The proxy check
 
-On `/mcp` and the Studio the proxy strips any `dfo_` value, reads nothing from it and counts the call against the address, so the steps below do not run. On the API (`/api/v1/*`, `/openapi.json`, `/codes`; see [Where keys apply][]), before the rate limit:
+On `/mcp` and the Studio the proxy strips any `dfo_` value and reads nothing from it, so the steps below do not run. `/mcp` counts the call against the address, and the Studio counts it as any anonymous site call ([The visitor tier][]). On the API (`/api/v1/*`, `/openapi.json`, `/codes`; see [Where keys apply][]), before the rate limit:
 
 1. Read the key header. With no header, carry on as an anonymous caller.
 2. Check the key's signed tag against each server secret. A bad tag gets 401, with no read and no count.
 3. Hash the key and look it up in a short in-process cache (about 60 seconds), so a keyed call adds no query in the common case. On a cache miss, look the key up in the store. Lookup is by the hash, so no secret is compared by hand.
-4. An unknown or revoked key is counted against the address's normal limit, then answered with 401 and a problem document (429 when the address is over its limit).
+4. An unknown or revoked key is counted as a cookieless call ([The visitor tier][]), or against the address's normal limit with visitor limits off, then answered with 401 and a problem document (429 when the address is over its limit). A call the store cannot check is counted the same way and goes on as anonymous.
 5. Valid key: count the call against the owning account at the account's per-minute limit, then, when the key has a cap of its own, against that cap (`apiday:key:<keyId>`), then against the account's daily quota (`apiday:user:<accountId>`), and never against the address, using the existing counter. A refusal stops the sequence, so a call the cap refuses leaves the quota untouched and a call the quota refuses leaves the cap untouched. A call over any limit gets 429 with a problem document. A daily refusal's detail says the quota resets at 00:00 UTC.
 6. Log the key's public id, its account, the surface and the outcome.
 
@@ -254,16 +254,18 @@ On `/mcp` and the Studio the proxy strips any `dfo_` value, reads nothing from i
 
 #### The visitor tier
 
-An anonymous call on the API or the Datasets API is counted by the reader's `dfo_v` cookie while visitor limits are on, so readers behind one office or campus address do not share an allowance. The check runs after the key steps above, which are unchanged, and the call goes to the first row that fits.
+An anonymous call on the API or the Datasets API is counted by the reader's `dfo_v` cookie while visitor limits are on, so readers behind one office or campus address do not share an allowance. The check runs after the key steps above, which are unchanged, and the call goes to the first row that fits. Every call in either row is then counted on the address's backstop, 240 API and 500 datasets calls a minute (`RATE_LIMIT_API_BACKSTOP`, `RATE_LIMIT_DATASETS_BACKSTOP`).
 
-| The call carries                  | Counted against                          | Limit a minute                                        |
-| --------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
-| A valid, unexpired `dfo_v` token  | The visitor, then the address's backstop | 120 API, 300 datasets; backstop 240 API, 600 datasets |
-| No token, a forged or expired one | The address                              | 60 API (`RATE_LIMIT_API_ANON`), 300 datasets          |
+| The call carries                  | Counted against                | Limit a minute                               |
+| --------------------------------- | ------------------------------ | -------------------------------------------- |
+| A valid, unexpired `dfo_v` token  | The visitor                    | 120 API, 300 datasets                        |
+| No token, a forged or expired one | The address's cookieless count | 60 API (`RATE_LIMIT_API_ANON`), 300 datasets |
 
-The token is `<id>.<expiry>.<tag>`, signed with a key derived from `CALLER_HMAC_KEY` under the label `visitor-token` (`src/lib/proxy/visitor.ts`). `src/proxy.ts` sets the cookie on a page load, a `GET` with `Sec-Fetch-Dest: document`, when none is valid or less than half its hour is left. It is HttpOnly, `SameSite=Lax` and lasts one hour. Rotating `CALLER_HMAC_KEY` voids every token, and the next page load issues a new one.
+A call goes to the backstop only once its own row admits it, so a refused call spends nothing there. A call with a valid token never touches the cookieless count, so readers with tokens do not spend a cookieless caller's allowance. The site's download links (`/api/version-download/<spec>/<cv>`, `/s/<id>/download`) count on the API row the same way.
 
-Any client can load a page and get a token, so a token proves nothing about the caller. The per-address backstop (`RATE_LIMIT_API_BACKSTOP`, `RATE_LIMIT_DATASETS_BACKSTOP`) bounds the readers one address can claim; it is counted apart from the cookieless count, so readers with tokens do not spend a cookieless caller's allowance. The Datasets API keeps 300 without a token because prototype pages and third-party embeds never carry the cookie. A cookieless 429 on the API names API keys, their limits and `/docs/build/api-keys`.
+The token is `<id>.<expiry>.<tag>`, signed with a key derived from `CALLER_HMAC_KEY` under the label `visitor-token` (`src/lib/proxy/visitor.ts`). `src/proxy.ts` sets the cookie on any `GET` its matcher runs on, a page load or the RSC request of an in-app navigation or prefetch, when none is valid or less than half its 24 hours is left, so a reader who keeps using the site keeps a cookie. Next strips the headers that mark a prefetch before the proxy sees the request, so prefetches renew it too. It is HttpOnly, `SameSite=Lax` and lasts 24 hours. Rotating `CALLER_HMAC_KEY` voids every token, and the next page request issues a new one.
+
+Any client can load a page and get a token, so a token proves nothing about the caller. The backstop counts every anonymous call at the address, with a token or without, so it is the most one address gets however many tokens it mints. The Datasets API keeps 300 without a token because prototype pages and third-party embeds never carry the cookie. While keys are on, a cookieless 429 on the API or the Datasets API says keys come from the account menu, gives an account's default limits (600 a minute and 75,000 calls a day) and links `/docs/build/api-keys`.
 
 With visitor limits off (`VISITOR_LIMITS_ENABLED=false`) or `CALLER_HMAC_KEY` unset, every anonymous call counts against its address at the limits of the first table: 120 API, 300 datasets. A production server with visitor limits on and no `CALLER_HMAC_KEY` refuses to start (`checkVisitorKey` in `src/instrumentation.ts`); elsewhere it starts and warns once. `/mcp` and `/api/download-pin` never use the visitor tier.
 

@@ -59,7 +59,7 @@ export const GET = async (req: NextRequest, { params }: { params: Promise<{ id: 
             headers: { ...allowance.headers, ...EVERY_RESPONSE, Location: location },
         });
 
-    if (!allowance.allowed) {
+    if (allowance.refusal) {
         return reply(429, 'Too many requests from this address. Try again in a minute.');
     }
 
