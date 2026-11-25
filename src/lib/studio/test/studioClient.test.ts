@@ -8,11 +8,22 @@ import test from 'node:test';
 
 import {
     cancelTurn,
+    CompositionRefusal,
     fetchComponentRevision,
+    isNoBlock,
+    isStaleRevision,
+    mutateComposition,
+    readState,
     runApplyChoice,
     runApplyUnit,
     runInterrupt,
     runTurn,
+    STATE_READ_ATTEMPTS,
+    stopAction,
+    watchAdmission,
+    type CancelAnswer,
+    type StopAction,
+    whileBusy,
     type StreamRefusal,
 } from '../studioClient.ts';
 import { cardUnitChange } from '../cardUnit.ts';
@@ -83,11 +94,73 @@ test('cancelTurn: a cancel request that never answers settles once the bound pas
     );
 
     const outcome = await Promise.race([
-        cancelTurn('conv', 20).then(() => 'settled'),
+        cancelTurn('conv', null, 20).then(() => 'settled'),
         new Promise((resolve) => setTimeout(resolve, 2_000, 'hung')),
     ]);
 
     assert.equal(outcome, 'settled');
+});
+
+test('cancelTurn names its turn, and a turn the conversation moved past stopped nothing', async (t) => {
+    const cases: [string, number | null, Response[], CancelAnswer, (number | undefined)[]][] = [
+        ['the turn named', 4, [new Response(null, { status: 204 })], 'stopped', [4]],
+        [
+            'a later turn began',
+            4,
+            [Response.json({ code: 'turn_moved', turn_index: 5 })],
+            'moved',
+            [4],
+        ],
+        ['no turn known', null, [new Response(null, { status: 204 })], 'stopped', [undefined]],
+        // A harness from before `turn_index` refuses the member.
+        [
+            'an older harness',
+            4,
+            [
+                Response.json(
+                    { detail: [{ type: 'extra_forbidden', loc: ['body', 'turn_index'] }] },
+                    { status: 422 },
+                ),
+                new Response(null, { status: 204 }),
+            ],
+            'stopped',
+            [4, undefined],
+        ],
+        // Any other refusal goes no further.
+        [
+            'another refusal',
+            4,
+            [Response.json({ detail: [{ loc: ['body', 'kind'] }] }, { status: 422 })],
+            'unanswered',
+            [4],
+        ],
+        // A cancel that met the turn's claim mid-way names the same turn,
+        // and goes once more.
+        [
+            'the same turn moved',
+            4,
+            [
+                Response.json({ code: 'turn_moved', turn_index: 4 }),
+                new Response(null, { status: 204 }),
+            ],
+            'stopped',
+            [4, 4],
+        ],
+    ];
+
+    for (const [label, turnIndex, answers, expected, sent] of cases) {
+        const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+
+        assert.equal(await cancelTurn('conv', turnIndex), expected, label);
+        assert.deepEqual(
+            fetch.mock.calls.map(
+                (call) => JSON.parse((call.arguments[1] as RequestInit).body as string).turn_index,
+            ),
+            sent,
+            label,
+        );
+        fetch.mock.restore();
+    }
 });
 
 const switchReply = {
@@ -307,13 +380,13 @@ test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', a
 test('runApplyChoice: a chip posts the harness fixture request, with no message', async (t) => {
     const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
     // The harness's wire fixtures (`services/harness/tests/wire_fixtures/studio`
-    // in dfo-ai), copied. The request names the conversation by the
-    // `session_id` alias the harness also accepts.
+    // in dfo-ai), copied.
     const read = (name: string): unknown =>
         JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
-    const { session_id: conversation, ...request } = read(
-        'request-13-turn-apply-choice.json',
-    ) as Record<string, unknown> & { session_id: string };
+    const request = read('request-13-turn-apply-choice.json') as Record<string, unknown> & {
+        conversation_id: string;
+    };
+    const conversation = request.conversation_id;
     const { items } = read('event-15-suggestions-apply-choice.json') as {
         items: ApplyChoiceSuggestion[];
     };
@@ -327,11 +400,7 @@ test('runApplyChoice: a chip posts the harness fixture request, with no message'
     assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
     const body = JSON.parse(init.body as string) as { apply_choice: Record<string, unknown> };
 
-    assert.deepEqual(body, {
-        ...request,
-        conversation_id: conversation,
-        client_features: ['unit_question', 'multi_select'],
-    });
+    assert.deepEqual(body, { ...request, client_features: ['unit_question', 'multi_select'] });
     assert.equal(body.apply_choice.turn, chip.turn);
     assert.equal(body.apply_choice.spec_id, chip.spec_id);
 });
@@ -409,4 +478,431 @@ test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame',
 
     assert.deepEqual(refusals, [{ status: 422, detail: body.detail, error: body }]);
     assert.deepEqual(frames, []);
+});
+
+test('whileBusy: a turn refused 409 while another stream holds the conversation is sent again after the wait', async (t) => {
+    const answers = [
+        Response.json(
+            {
+                error: 'transient_unavailable',
+                retry: 'retry_after_delay',
+                detail: 'another request is streaming on this conversation',
+                retry_after_seconds: 4,
+            },
+            { status: 409 },
+        ),
+        new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n'),
+    ];
+    const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+    const frames: StudioFrame[] = [];
+    const refusals: StreamRefusal[] = [];
+    const waits: number[] = [];
+    const busy: (number | null)[] = [];
+
+    await whileBusy(
+        (handlers) => runTurn('conv', 'and in 2021?', handlers),
+        {
+            onFrame: (frame) => frames.push(frame),
+            onRefusal: (refusal) => {
+                refusals.push(refusal);
+
+                return false;
+            },
+            onBusyWait: (seconds) => busy.push(seconds),
+        },
+        undefined,
+        { sleep: async (ms) => void waits.push(ms) },
+    );
+
+    assert.equal(fetch.mock.callCount(), 2);
+    assert.deepEqual(waits, [4000]);
+    // The page holds no stream from the busy answer until the second send.
+    assert.deepEqual(busy, [4, null]);
+    assert.deepEqual(refusals, []);
+    // The refusal's detail becomes no frame, so it cannot become the reply.
+    assert.deepEqual(frames, [{ event: 'message.complete', seq: 3, text: 'The answer.' }]);
+});
+
+// The harness's answer while another stream holds the conversation.
+const busyAnswer = (seconds: number) =>
+    Response.json(
+        {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'another request is streaming on this conversation',
+            retry_after_seconds: seconds,
+        },
+        { status: 409 },
+    );
+
+test('whileBusy: a Stop while a send waits on another stream ends the wait, sends nothing more and cancels nothing', async (t) => {
+    const answers = [
+        busyAnswer(30),
+        new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n'),
+    ];
+    const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+    const controller = new AbortController();
+    const waits: (number | null)[] = [];
+    let action: StopAction | null = null;
+    const admission = watchAdmission({
+        onFrame: () => {},
+        onBusyWait: (seconds) => {
+            waits.push(seconds);
+
+            // The user presses Stop as the wait begins.
+            if (seconds !== null) {
+                action = admission.stop(true);
+
+                if (action.abort === 'now') {
+                    controller.abort();
+                }
+            }
+        },
+    });
+
+    admission.start();
+    await assert.rejects(
+        whileBusy(
+            (handlers) => runTurn('conv', 'and in 2021?', handlers, controller.signal),
+            admission.handlers,
+            controller.signal,
+            {
+                // The wait as abortableSleep runs it, without the clock.
+                sleep: async (_ms, signal) => signal?.throwIfAborted(),
+            },
+        ),
+        { name: 'AbortError' },
+    );
+
+    assert.deepEqual(action, { cancel: 'none', abort: 'now', refunded: true });
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.deepEqual(waits, [30]);
+});
+
+test('whileBusy: Stop cancels a turn the harness admitted at once, one on its way once the harness names it, and refunds a metered prompt only while unsent', async (t) => {
+    const answers = [
+        busyAnswer(4),
+        new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n', {
+            headers: { 'x-dfo-turn-index': '3' },
+        }),
+    ];
+
+    t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+
+    // What Stop would do at each point the stream reports.
+    const stops: [string, StopAction][] = [];
+    const stop = (at: string) =>
+        stops.push([at, stopAction({ phase: admission.phase(), metered: true })]);
+    const admission = watchAdmission({
+        onFrame: () => stop('frame'),
+        onTurnIndex: () => stop('turn index'),
+        onBusyWait: (seconds) => stop(seconds === null ? 'sent again' : 'waiting'),
+    });
+
+    stop('queued');
+    admission.start();
+    await whileBusy(
+        (handlers) => runTurn('conv', 'and in 2021?', handlers),
+        admission.handlers,
+        undefined,
+        { sleep: async () => {} },
+    );
+
+    const ends = { cancel: 'none', abort: 'now', refunded: true };
+    const cancelsOnAdmit = { cancel: 'on-admit', abort: 'after-grace', refunded: false };
+    const cancels = { cancel: 'now', abort: 'after-grace', refunded: false };
+
+    assert.deepEqual(stops, [
+        ['queued', ends],
+        ['waiting', ends],
+        ['sent again', cancelsOnAdmit],
+        ['turn index', cancels],
+        ['frame', cancels],
+    ]);
+    // A free request ended before it left had no prompt to give back.
+    assert.equal(stopAction({ phase: 'unsent', metered: false }).refunded, false);
+});
+
+test("watchAdmission: a carried-on turn's Stop cancels that turn at once, and a later frame changes nothing", () => {
+    const changes: StopAction[] = [];
+    const admission = watchAdmission(
+        { onFrame: () => {} },
+        { onStopChange: (action) => changes.push(action), admittedTurn: 4 },
+    );
+
+    admission.start();
+    assert.equal(admission.phase(), 'admitted');
+    assert.equal(admission.turnIndex(), 4);
+    assert.deepEqual(admission.stop(false), {
+        cancel: 'now',
+        abort: 'after-grace',
+        refunded: false,
+    });
+
+    // The `done` that ends the stream after a hand-off to another turn.
+    admission.handlers.onFrame({ event: 'done', seq: -1, trace_id: '', composition: null });
+    assert.deepEqual(changes, []);
+});
+
+test("watchAdmission: a Stop's deferred cancel names the turn the harness admitted", () => {
+    // The turn index each deferred action came with.
+    const changes: [StopAction['cancel'], number | null][] = [];
+    const admission = watchAdmission(
+        { onFrame: () => {} },
+        { onStopChange: (action) => changes.push([action.cancel, admission.turnIndex()]) },
+    );
+
+    admission.start();
+    assert.equal(admission.turnIndex(), null);
+    assert.equal(admission.stop(true).cancel, 'on-admit');
+    admission.handlers.onTurnIndex?.(7);
+    assert.deepEqual(changes, [['now', 7]]);
+});
+
+// A Stop after the turn's POST left and before its response headers: the
+// harness may admit the turn after the client has gone and then hold it open
+// with no stream, which a later reopen would resume.
+for (const [name, answer, change] of [
+    [
+        'the harness names the turn',
+        () =>
+            new Response('data: {"event":"message.complete","seq":3,"text":"The answer."}\n\n', {
+                headers: { 'x-dfo-turn-index': '3' },
+            }),
+        { cancel: 'now', abort: 'after-grace', refunded: false },
+    ],
+    [
+        'the harness answers that another stream holds the conversation',
+        () => busyAnswer(4),
+        { cancel: 'none', abort: 'now', refunded: true },
+    ],
+] as const) {
+    test(`watchAdmission: a Stop while the request is on its way waits, and acts once ${name}`, async (t) => {
+        let release: () => void = () => {};
+        const answered = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+
+        t.mock.method(globalThis, 'fetch', async () => {
+            await answered;
+
+            return answer();
+        });
+
+        const changes: StopAction[] = [];
+        const controller = new AbortController();
+        const admission = watchAdmission(
+            { onFrame: () => {} },
+            {
+                onStopChange: (action) => {
+                    changes.push(action);
+
+                    if (action.abort === 'now') {
+                        controller.abort();
+                    }
+                },
+            },
+        );
+
+        admission.start();
+
+        const running = whileBusy(
+            (handlers) => runTurn('conv', 'and in 2021?', handlers, controller.signal),
+            admission.handlers,
+            controller.signal,
+            { sleep: async (_ms, signal) => signal?.throwIfAborted() },
+        ).catch((error: Error) => error.name);
+
+        // Stop before the response arrives: no cancel yet, no refund, and
+        // the request stays open.
+        assert.deepEqual(admission.stop(true), {
+            cancel: 'on-admit',
+            abort: 'after-grace',
+            refunded: false,
+        });
+        assert.deepEqual(changes, []);
+
+        release();
+        await running;
+
+        assert.deepEqual(changes, [change]);
+    });
+}
+
+test('whileBusy: any other refusal reaches onRefusal once and is not retried', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () =>
+        Response.json(
+            { error: 'edit_conflict', retry: 'refresh_then_retry', detail: 'stale' },
+            { status: 409 },
+        ),
+    );
+    const statuses: number[] = [];
+
+    await whileBusy(
+        (handlers) => runTurn('conv', 'hi', handlers),
+        {
+            onFrame: () => {},
+            onRefusal: (refusal) => {
+                statuses.push(refusal.status);
+
+                return true;
+            },
+        },
+        undefined,
+        { sleep: async () => assert.fail('no wait') },
+    );
+
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.deepEqual(statuses, [409]);
+});
+
+// The harness's answer for a conversation id its store does not hold
+// (`_unknown_conversation_response`), and the proxy's own problem documents.
+const unknownConversation = {
+    error: 'not_found',
+    retry: 'do_not_retry',
+    detail: "no conversation 'conv'",
+    pointer: '/conversation_id',
+};
+const proxyProblem = (status: number, code: string, headers: Record<string, string> = {}) =>
+    Response.json(
+        { status, code, detail: 'proxy text', retryable: false },
+        { status, headers: { 'Content-Type': 'application/problem+json', ...headers } },
+    );
+const harnessBusy = (seconds: number) =>
+    Response.json(
+        {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'busy',
+            retry_after_seconds: seconds,
+        },
+        { status: 503 },
+    );
+const stateRead = { conversation_id: 'conv', closed_since: [], closed_total: 0 };
+
+test('readState: a refusal the page acts on is named, any other is null', async (t) => {
+    const cases: [string, () => Response, unknown][] = [
+        [
+            'the harness holds no such conversation',
+            () => Response.json(unknownConversation, { status: 404 }),
+            {
+                refusal: 'session_gone',
+                http: {
+                    status: 404,
+                    detail: unknownConversation.detail,
+                    error: unknownConversation,
+                },
+            },
+        ],
+        [
+            'a guest on a conversation an account owns',
+            () => proxyProblem(401, 'sign_in_required'),
+            {
+                refusal: 'sign_in_required',
+                http: {
+                    status: 401,
+                    detail: null,
+                    error: null,
+                    proxy: {
+                        code: 'sign_in_required',
+                        upstreamStatus: null,
+                        retryAfterSeconds: null,
+                    },
+                },
+            },
+        ],
+        [
+            "the proxy's 404 for another account's conversation",
+            () => proxyProblem(404, 'not_found'),
+            null,
+        ],
+        [
+            'a card the harness holds no block for',
+            () =>
+                Response.json(
+                    { ...unknownConversation, pointer: '/operations/component_id' },
+                    { status: 404 },
+                ),
+            null,
+        ],
+        ['a read', () => Response.json(stateRead), stateRead],
+    ];
+
+    for (const [name, respond, expected] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', async () => respond());
+
+            assert.deepEqual(
+                await readState('conv', 0, undefined, async () => assert.fail('no wait')),
+                expected,
+            );
+        });
+    }
+});
+
+test('readState: a 503 transient_unavailable is asked again after its wait, a bounded number of times', async (t) => {
+    await t.test('the harness, then a read', async (t) => {
+        const answers = [
+            harnessBusy(2),
+            proxyProblem(503, 'transient_unavailable', { 'Retry-After': '5' }),
+            Response.json(stateRead),
+        ];
+        const fetch = t.mock.method(globalThis, 'fetch', async () => answers.shift()!);
+        const waits: number[] = [];
+
+        assert.deepEqual(
+            await readState('conv', 0, undefined, async (ms) => {
+                waits.push(ms);
+            }),
+            stateRead,
+        );
+        assert.equal(fetch.mock.callCount(), 3);
+        assert.deepEqual(waits, [2000, 5000]);
+    });
+
+    await t.test('busy on every attempt', async (t) => {
+        const fetch = t.mock.method(globalThis, 'fetch', async () => harnessBusy(1));
+
+        assert.equal(await readState('conv', 0, undefined, async () => {}), null);
+        assert.equal(fetch.mock.callCount(), STATE_READ_ATTEMPTS);
+    });
+});
+
+test('mutateComposition: a refusal rejects with a CompositionRefusal, and says whether no block or a moved canvas refused it', async (t) => {
+    const noBlock = {
+        error: 'not_found',
+        retry: 'refresh_then_retry',
+        detail: "no block 'cmp_1' in the composition",
+        pointer: '/operations/component_id',
+    };
+    const moved = {
+        error: 'edit_conflict',
+        retry: 'refresh_then_retry',
+        detail: 'expected revision 3, the composition is at 4',
+    };
+    const cases: [string, Response, boolean, boolean][] = [
+        ['no block', Response.json(noBlock, { status: 404 }), true, false],
+        ['no conversation', Response.json(unknownConversation, { status: 404 }), false, false],
+        ["the proxy's 404", proxyProblem(404, 'not_found'), false, false],
+        ['a moved canvas', Response.json(moved, { status: 409 }), false, true],
+    ];
+
+    for (const [name, response, refusedBlock, stale] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', async () => response);
+
+            const refusal = await mutateComposition('conv', [
+                { op: 'remove', component_id: 'cmp_1' },
+            ]).then(
+                () => assert.fail('the edit was refused'),
+                (error: unknown) => error,
+            );
+
+            assert.ok(refusal instanceof CompositionRefusal);
+            assert.equal(refusal.status, response.status);
+            assert.equal(isNoBlock(refusal), refusedBlock);
+            assert.equal(isStaleRevision(refusal), stale);
+        });
+    }
 });

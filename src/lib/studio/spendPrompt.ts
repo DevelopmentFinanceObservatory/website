@@ -14,7 +14,7 @@ import type { ToolError } from './wire.ts';
 
 /**
  * The Studio's prompt allowances, spent by the proxy
- * (src/app/api/v1/studio/[...path]/route.ts) before it forwards a turn. A
+ * (src/lib/studio/studioProxy.ts) before it forwards a turn. A
  * signed-in user is counted by the inbox their address reaches (inboxOf).
  * An email code makes a separate account for each spelling of an address
  * (`ana.silva@gmail.com`, `anasilva+1@gmail.com`), and those accounts share
@@ -35,7 +35,9 @@ const DAY_S = 86_400;
 const ADMIT_TIMEOUT_MS = 5_000;
 
 // The harness routes the browser calls (src/lib/studio/studioClient.ts).
-const STUDIO_ROUTES = new Set(['turn', 'interrupt', 'cancel', 'composition']);
+// Only `turn` spends a prompt. `state` reads a conversation and `resume`
+// continues a turn already paid for.
+const STUDIO_ROUTES = new Set(['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume']);
 
 /**
  * The harness route a proxied path names, or null for any other path. The

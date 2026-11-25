@@ -15,8 +15,9 @@ import { syncBuiltinESMExports } from 'node:module';
 process.env.CALLER_HMAC_KEY = 'test-key';
 process.env.TRUSTED_PROXY_HOPS = '2';
 
-const { isStaticAsset, logRequest, registerRequestLogging, requestLogEntry } =
+const { isStaticAsset, logAccount, logRequest, registerRequestLogging, requestLogEntry } =
     await import('../requestLog.ts');
+const { accountFor, exportDigest } = await import('../account.ts');
 
 const VISITOR = '203.0.113.7';
 const CHROME =
@@ -275,6 +276,85 @@ test('logRequest: no client address logs a null caller', () => {
     const [line] = captureLog(serverRequest('/api/events'));
 
     assert.equal((line as { caller: unknown }).caller, null);
+});
+
+test('logAccount: a signed-in resolve or share names the caller and account digest; a guest, an unset key or a failed session read writes nothing', async (t) => {
+    const headers = new Headers({
+        'x-forwarded-for': `${VISITOR}, 198.51.100.1, 192.0.2.1`,
+        cookie: 'session=s3cret',
+    });
+    const caller = `ip:${createHmac('sha256', 'test-key').update(VISITOR).digest('hex').slice(0, 32)}`;
+    const keyed = accountFor({ EXPORT_ID_HMAC_KEY: 'export-key' });
+    const unkeyed = accountFor({}, () => {});
+    const userHash = exportDigest('user-1', 'export-key');
+    const signedIn = async () => 'user-1';
+    const cases: [
+        string,
+        '/api/v1/search/resolve' | '/api/share',
+        () => Promise<string | null>,
+        typeof keyed,
+        unknown[],
+    ][] = [
+        [
+            'signed-in resolve',
+            '/api/v1/search/resolve',
+            signedIn,
+            keyed,
+            [
+                {
+                    severity: 'INFO',
+                    message: 'account',
+                    caller,
+                    user_hash: userHash,
+                    path: '/api/v1/search/resolve',
+                },
+            ],
+        ],
+        [
+            'signed-in share',
+            '/api/share',
+            signedIn,
+            keyed,
+            [
+                {
+                    severity: 'INFO',
+                    message: 'account',
+                    caller,
+                    user_hash: userHash,
+                    path: '/api/share',
+                },
+            ],
+        ],
+        ['guest', '/api/v1/search/resolve', async () => null, keyed, []],
+        ['unset key', '/api/share', signedIn, unkeyed, []],
+        [
+            'session read rejects',
+            '/api/v1/search/resolve',
+            () => Promise.reject(new Error('session=s3cret')),
+            keyed,
+            [],
+        ],
+    ];
+    const errors: unknown[][] = [];
+    t.mock.method(console, 'error', (...args: unknown[]) => errors.push(args));
+
+    for (const [name, path, readUserId, accountOf, expected] of cases) {
+        const lines: unknown[] = [];
+        const log = t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+
+        await logAccount(headers, path, readUserId, accountOf);
+        log.mock.restore();
+
+        assert.deepEqual(lines, expected, name);
+
+        const text = JSON.stringify(lines);
+
+        for (const secret of [VISITOR, 'user-1', 's3cret']) {
+            assert.ok(!text.includes(secret), `${name}: ${secret}`);
+        }
+    }
+
+    assert.deepEqual(errors, [['account log failed']]);
 });
 
 test('logRequest: the path is the target without its query, resolved, with //mcp kept as a path, * as itself and any other target as a placeholder', () => {

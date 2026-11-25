@@ -5,6 +5,7 @@ import { nextCookies } from 'better-auth/next-js';
 
 import { counterDb, db } from '@/lib/db';
 import * as schema from '../../../db/schema';
+import { API_KEY_PATHS, apiKeyPlugin } from '@/lib/auth/apiKeyOptions';
 import { CLIENT_IP_HEADER } from '@/lib/auth/clientIp';
 import { TOKEN_PATHS } from '@/lib/auth/closedPaths';
 import { takeCodeAllowance } from '@/lib/auth/codeLimit';
@@ -102,6 +103,12 @@ export const auth = betterAuth({
         // share token is stored for it meanwhile. Never sent or accepted.
         additionalFields: {
             deletingAt: { type: 'date', required: false, input: false, returned: false },
+            // The account's API-key limit, calls per window, set by an
+            // operator. Null is the default (RATE_LIMIT_KEYED).
+            apiRateLimit: { type: 'number', required: false, input: false, returned: false },
+            // The account's API calls per UTC day, set by an operator. Null
+            // is the default (API_KEY_DAILY_LIMIT).
+            apiDailyLimit: { type: 'number', required: false, input: false, returned: false },
         },
         // Delete account (account menu). With no password to confirm with,
         // Better Auth asks for a fresh session instead (session.freshAge).
@@ -142,8 +149,9 @@ export const auth = betterAuth({
     advanced: {
         ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
-    // The token endpoints answer 404 to the browser (closedPaths).
-    disabledPaths: [...TOKEN_PATHS, ...(emailOptions?.disabledPaths ?? [])],
+    // The token endpoints answer 404 to the browser (closedPaths), and so do
+    // the API key plugin's management endpoints (apiKeyOptions).
+    disabledPaths: [...TOKEN_PATHS, ...API_KEY_PATHS, ...(emailOptions?.disabledPaths ?? [])],
     hooks: {
         // A provider callback or an email code that ended in a session is a
         // sign-in. The usage event carries the provider only.
@@ -165,6 +173,8 @@ export const auth = betterAuth({
     },
     plugins: [
         ...(emailOptions?.plugins ?? []),
+        // API keys for the platform proxy. The proxy verifies them itself.
+        apiKeyPlugin(),
         // Lets server actions / route handlers set the session cookie. Last,
         // as Better Auth asks.
         nextCookies(),

@@ -172,16 +172,49 @@ const sameSide = (left: UnitSide, right: UnitSide): boolean => {
     }
 
     const identity = (unit: SimpleUnit): string =>
-        JSON.stringify([unit.ref, unit.currency, unit.prices, unit.base_year]);
+        JSON.stringify([
+            unit.ref,
+            unit.currency,
+            unit.prices,
+            unit.base_year,
+            unit.deflation_basis,
+        ]);
 
     return identity(left) === identity(right);
 };
 
-const sideWords = (side: UnitSide): string => ('stat_var' in side ? side.label : unitWords(side));
+// A unit's price basis and whose prices deflated it, where the unit says:
+// "constant 2024 prices, donor prices".
+const priceWords = (unit: SimpleUnit): string | null => {
+    if (!unit.prices) {
+        return null;
+    }
+
+    const prices =
+        unit.prices === 'constant' && unit.base_year !== undefined
+            ? `constant ${unit.base_year} prices`
+            : `${unit.prices} prices`;
+
+    return unit.deflation_basis ? `${prices}, ${unit.deflation_basis} prices` : prices;
+};
+
+// One side of a composed unit, its price basis in brackets so the words stay
+// with their side: "Nigerian naira (constant 2024 prices, donor prices)".
+const sideWords = (side: UnitSide): string => {
+    if ('stat_var' in side) {
+        return side.label;
+    }
+
+    const prices = priceWords(side);
+
+    return prices ? `${side.label} (${prices})` : side.label;
+};
 
 /** A unit in words: its label with its price basis ("US dollars, constant
- *  2021 prices"), a composed unit's sides ("US dollars per population"), or
- *  "Ratio" for a unit divided by itself. */
+ *  2021 prices") and whose prices deflated it where the unit says ("Nigerian
+ *  naira, constant 2024 prices, donor prices"), a composed unit's sides with
+ *  each price basis in brackets ("US dollars (constant 2021 prices) per
+ *  population"), or "Ratio" for a unit divided by itself. */
 export const unitWords = (unit: DescriptionUnit): string => {
     if ('numerator' in unit) {
         return sameSide(unit.numerator, unit.denominator)
@@ -189,11 +222,9 @@ export const unitWords = (unit: DescriptionUnit): string => {
             : `${sideWords(unit.numerator)} per ${sideWords(unit.denominator)}`;
     }
 
-    if (unit.prices === 'constant' && unit.base_year !== undefined) {
-        return `${unit.label}, constant ${unit.base_year} prices`;
-    }
+    const prices = priceWords(unit);
 
-    return unit.prices ? `${unit.label}, ${unit.prices} prices` : unit.label;
+    return prices ? `${unit.label}, ${prices}` : unit.label;
 };
 
 /** The licence of the description's source at `index` in words: as

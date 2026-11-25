@@ -17,6 +17,7 @@ import {
     limiterBucket,
     limiterKeyFor,
     requestSurface,
+    resolveAccountCaller,
     resolveCaller,
     setCaller,
     trustedHops,
@@ -223,6 +224,26 @@ test('apisCallerFor: a principal without a usable key or hops goes alone and log
     }
 });
 
+// The digest's input is the cross-service contract, as the address's is.
+test('resolveAccountCaller: user: and 32 hex of HMAC-SHA-256 over "user:" and the account id', () => {
+    const caller = resolveAccountCaller('acct-1', { key: KEY, hops: 0 });
+
+    assert.equal(
+        caller,
+        `user:${createHmac('sha256', KEY).update('user:acct-1').digest('hex').slice(0, 32)}`,
+    );
+    assert.match(caller, /^user:[0-9a-f]{32}$/);
+    assert.notEqual(caller, resolveAccountCaller('acct-2', { key: KEY, hops: 0 }));
+    assert.notEqual(caller, resolveAccountCaller('acct-1', { key: 'other', hops: 0 }));
+});
+
+test('apisCallerFor: an account named by the proxy goes in place of the address', () => {
+    const named = apisCallerFor({ DFO_CALLER_PRINCIPAL: 'p', CALLER_HMAC_KEY: KEY });
+
+    assert.deepEqual(named('2.2.2.2', 'user:abc'), { principal: 'p', caller: 'user:abc' });
+    assert.deepEqual(named('2.2.2.2'), { principal: 'p', caller: digest('2.2.2.2') });
+});
+
 test('requestSurface: website only for a same-origin fetch', () => {
     const surfaces = Object.fromEntries(
         [undefined, 'same-origin', 'same-site', 'cross-site', 'none', 'SAME-ORIGIN'].map((site) => [
@@ -239,6 +260,61 @@ test('requestSurface: website only for a same-origin fetch', () => {
         none: 'api',
         'SAME-ORIGIN': 'api',
     });
+});
+
+test('requestSurface: without Sec-Fetch-Site, the Referer host, then the Origin host, decides', () => {
+    const surface = (headers: Record<string, string>) =>
+        requestSurface(new Headers({ host: 'developmentfinance.org', ...headers }));
+
+    // Own host, with ports and case ignored.
+    assert.equal(surface({ referer: 'https://developmentfinance.org/data?q=x' }), 'website');
+    assert.equal(surface({ referer: 'https://DevelopmentFinance.org:443/data' }), 'website');
+    assert.equal(
+        requestSurface(
+            new Headers({ host: 'localhost:3000', referer: 'http://localhost:3000/data' }),
+        ),
+        'website',
+    );
+    // A foreign Referer is api, whatever the Origin says.
+    assert.equal(surface({ referer: 'https://blog.example.org/post' }), 'api');
+    assert.equal(
+        surface({
+            referer: 'https://blog.example.org/post',
+            origin: 'https://developmentfinance.org',
+        }),
+        'api',
+    );
+    assert.equal(surface({ referer: 'https://www.developmentfinance.org/' }), 'api');
+    // No usable Referer: the Origin decides.
+    assert.equal(surface({ origin: 'https://developmentfinance.org' }), 'website');
+    assert.equal(
+        surface({ referer: 'not a url', origin: 'https://developmentfinance.org' }),
+        'website',
+    );
+    assert.equal(surface({ origin: 'null' }), 'api');
+    assert.equal(surface({ origin: 'https://blog.example.org' }), 'api');
+    // Neither, or no Host to compare with.
+    assert.equal(surface({}), 'api');
+    assert.equal(
+        requestSurface(new Headers({ referer: 'https://developmentfinance.org/data' })),
+        'api',
+    );
+});
+
+test('requestSurface: a present Sec-Fetch-Site decides over an own-host Referer', () => {
+    for (const site of ['cross-site', 'same-site', 'none']) {
+        assert.equal(
+            requestSurface(
+                new Headers({
+                    host: 'developmentfinance.org',
+                    'sec-fetch-site': site,
+                    referer: 'https://developmentfinance.org/data',
+                    origin: 'https://developmentfinance.org',
+                }),
+            ),
+            'api',
+        );
+    }
 });
 
 test('applyApisCaller: the surface goes beside the principal and nowhere else', () => {

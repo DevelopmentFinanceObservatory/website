@@ -1,7 +1,7 @@
 /**
  * The problem documents the proxy answers with when it refuses a call
  * itself: a route it does not have (404), a spent allowance (429), an
- * upstream it cannot reach (502, 503). They are in the shape dfo-apis uses
+ * upstream it cannot reach (502, 503), a bad API key (401). They are in the shape dfo-apis uses
  * for its own refusals (the docs corpus's dfo-apis/conventions.md, "Problem
  * details"): `application/problem+json` with the registry `code`, a
  * `trace_id` repeated in the `x-dfo-trace-id` header, and `retryable`. A
@@ -15,6 +15,7 @@ export const TITLES = {
     401: 'Unauthorized',
     403: 'Forbidden',
     404: 'Not Found',
+    405: 'Method Not Allowed',
     413: 'Content Too Large',
     422: 'Unprocessable Content',
     429: 'Too Many Requests',
@@ -30,6 +31,8 @@ export type ProblemStatus = keyof typeof TITLES;
  * code the site refuses with is its own, and its `type` is `about:blank`.
  */
 export const REGISTRY_CODES = [
+    'allowance_exhausted',
+    'invalid_api_key',
     'request_invalid',
     'not_found',
     'rate_limited',
@@ -95,13 +98,19 @@ export const notFoundProblem = (path: string): Response =>
 /**
  * A 400 `request_invalid` problem document. `pointer` names the invalid
  * member of the request body, such as `/mode`, when one is at fault.
+ * `headers` go out with the document.
  */
-export const requestInvalidProblem = (detail: string, pointer?: string): Response =>
+export const requestInvalidProblem = (
+    detail: string,
+    pointer?: string,
+    headers?: Record<string, string>,
+): Response =>
     problem({
         status: 400,
         code: 'request_invalid',
         detail,
         retryable: false,
+        headers,
         extra: pointer ? { pointer } : undefined,
     });
 
@@ -119,16 +128,64 @@ export const unauthorizedProblem = (): Response =>
         retryable: false,
     });
 
-/** A 429 `rate_limited` problem document; `headers` carry the rate headers. */
+/**
+ * A 401 `invalid_api_key` problem document: the call's API key is unknown,
+ * disabled, expired or malformed. The call is not treated as anonymous.
+ * No `WWW-Authenticate`, which would send a client looking for OAuth.
+ */
+export const invalidKeyProblem = (): Response =>
+    problem({
+        status: 401,
+        code: 'invalid_api_key',
+        detail: 'The API key is not valid. Check the key, or leave it off to call without one.',
+        retryable: false,
+    });
+
+/** A 400 `request_invalid` problem document: two different keys on one call. */
+export const conflictingKeysProblem = (): Response =>
+    requestInvalidProblem(
+        'The Authorization bearer and X-API-Key carry different API keys. Send one key.',
+    );
+
+/**
+ * A 429 `rate_limited` problem document; `headers` carry the rate headers.
+ * `scope` says whose allowance is spent: the caller's address or, for a
+ * call with an API key, its account.
+ */
 export const rateLimitedProblem = (
     { limit, reset }: { limit: number; reset: number },
     headers: Record<string, string>,
+    scope: 'address' | 'account' = 'address',
 ): Response =>
     problem({
         status: 429,
         code: 'rate_limited',
-        detail: `Too many requests: ${limit} per window per address. Try again in ${reset}s.`,
+        detail: `Too many requests: ${limit} per window per ${scope}. Try again in ${reset}s.`,
         retryable: true,
+        headers: { ...headers, 'Retry-After': String(reset) },
+    });
+
+/**
+ * A 429 `allowance_exhausted` problem document: a daily count of `limit` API
+ * calls is used up, the account's quota, which all its keys share, or the
+ * key's own cap (`scope`). `reset` is the seconds to 00:00 UTC, when the
+ * count starts over. It is not retryable: a client raises it at once
+ * (QuotaExceededError in the SDKs) instead of waiting up to a day, and
+ * Retry-After says when the count starts over.
+ */
+export const dailyQuotaProblem = (
+    { limit, reset }: { limit: number; reset: number },
+    headers: Record<string, string>,
+    scope: 'account' | 'key' = 'account',
+): Response =>
+    problem({
+        status: 429,
+        code: 'allowance_exhausted',
+        detail:
+            scope === 'account'
+                ? `This account's daily quota of ${limit} API calls, shared by all its keys, is used up. It resets at 00:00 UTC, in ${reset}s.`
+                : `This API key's daily cap of ${limit} calls is used up. It resets at 00:00 UTC, in ${reset}s.`,
+        retryable: false,
         headers: { ...headers, 'Retry-After': String(reset) },
     });
 

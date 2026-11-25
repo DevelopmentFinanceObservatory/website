@@ -31,17 +31,45 @@ export const SURFACE_HEADER = 'x-dfo-surface';
 /** Where a call to dfo-apis comes from: the site's own pages, or an outside caller. */
 export type ApisSurface = 'website' | 'api';
 
+// The hostname of an http or https URL such as a Referer or an Origin, null
+// for anything else, `null` included.
+const urlHostname = (value: string | null): string | null => {
+    const url = URL.parse(value ?? '');
+
+    return url && /^https?:$/.test(url.protocol) ? url.hostname || null : null;
+};
+
+// The hostname a Host header names, without its port.
+const hostHostname = (host: string | null): string | null =>
+    host ? URL.parse(`http://${host}`)?.hostname || null : null;
+
 /**
- * The surface of a proxied request: `website` when the request says
- * `Sec-Fetch-Site: same-origin`, a fetch from one of the site's own pages,
- * and `api` for anything else, such as an SDK, a script or a page on another
- * site. The site's pages call the same /api/v1 routes outside callers do, so
- * the route cannot tell them apart. The header is a client claim, which any
- * non-browser client can forge, so the surface is for counting only. The
- * site's own share calls always send `website`.
+ * The surface of a proxied request: `website` for a fetch from one of the
+ * site's own pages, and `api` for anything else, such as an SDK, a script or
+ * a page on another site. The site's pages call the same /api/v1 routes
+ * outside callers do, so the route cannot tell them apart.
+ *
+ * A request that sends Sec-Fetch-Site is `website` only for `same-origin`.
+ * Safari before 16.4, in-app browsers and some bots send none, so a request
+ * without it is `website` when its Referer's hostname is the one its Host
+ * header names. A request with no http or https Referer uses its Origin's
+ * hostname the same way. Hostnames are compared with ports and case ignored.
+ * Every header here is a client claim, which any non-browser client can forge,
+ * so the surface is for counting only. The site's own share calls always send
+ * `website`.
  */
-export const requestSurface = (incoming: Headers): ApisSurface =>
-    incoming.get('sec-fetch-site') === 'same-origin' ? 'website' : 'api';
+export const requestSurface = (incoming: Headers): ApisSurface => {
+    const site = incoming.get('sec-fetch-site');
+
+    if (site !== null) {
+        return site === 'same-origin' ? 'website' : 'api';
+    }
+
+    const own = hostHostname(incoming.get('host'));
+    const from = urlHostname(incoming.get('referer')) ?? urlHostname(incoming.get('origin'));
+
+    return own !== null && from === own ? 'website' : 'api';
+};
 
 const DIGEST_LENGTH = 32;
 
@@ -201,6 +229,16 @@ export const resolveCaller = (
     return `ip:${digest}`;
 };
 
+/**
+ * The caller for an account (the owner of an API key): `user:` and the first
+ * 32 hex characters of HMAC-SHA-256 over `"user:" + accountId`, keyed by
+ * CALLER_HMAC_KEY as the `ip:` digest is. The account id never leaves the
+ * site. The `user:` prefix in the digest's input keeps it apart from an
+ * address's.
+ */
+export const resolveAccountCaller = (accountId: string, { key }: CallerConfig): string =>
+    `user:${createHmac('sha256', key).update(`user:${accountId}`).digest('hex').slice(0, DIGEST_LENGTH)}`;
+
 /** Set the resolved caller on upstream headers, dropping any other value. */
 export const setCaller = (headers: Headers, caller: string | undefined): void => {
     headers.delete(CALLER_HEADER);
@@ -227,7 +265,7 @@ export type ApisCaller = { principal?: string; caller?: string };
 export const apisCallerFor = (
     env: Record<string, string | undefined>,
     log: (message: string) => void = console.warn,
-): ((forwardedFor: string | null) => ApisCaller) => {
+): ((forwardedFor: string | null, caller?: string) => ApisCaller) => {
     const principal = env.DFO_CALLER_PRINCIPAL?.trim();
     const config = callerConfig(env);
     let logged = false;
@@ -258,7 +296,12 @@ export const apisCallerFor = (
         };
     }
 
-    return (forwardedFor) => ({ principal, caller: resolveCaller(forwardedFor, config) });
+    // A call that has already named its caller (an account's, see
+    // resolveAccountCaller) sends that name in place of the address's.
+    return (forwardedFor, caller) => ({
+        principal,
+        caller: caller ?? resolveCaller(forwardedFor, config),
+    });
 };
 
 const apisCaller = apisCallerFor(process.env);
@@ -288,16 +331,23 @@ export const applyApisCaller = (
  * Name the caller of `incoming` on upstream headers bound for dfo-apis, from
  * this process's env (see apisCallerFor and applyApisCaller). `surface`
  * defaults to the one `incoming` shows (requestSurface); a call the site's
- * server makes for a page it renders passes `website`.
+ * server makes for a page it renders passes `website`. `named` is the caller
+ * the proxy already resolved for an API key's account (accountCaller), which
+ * goes in place of the address's.
  */
 export const setApisCaller = (
     headers: Headers,
     incoming: Headers,
     surface: ApisSurface = requestSurface(incoming),
-): void => applyApisCaller(headers, apisCaller(incoming.get('x-forwarded-for')), surface);
+    named?: string,
+): void => applyApisCaller(headers, apisCaller(incoming.get('x-forwarded-for'), named), surface);
 
 const config = callerConfig(process.env);
 let warned = false;
+
+/** The caller for an account, from this process's env, or undefined without CALLER_HMAC_KEY. */
+export const accountCaller = (accountId: string): string | undefined =>
+    'problem' in config ? undefined : resolveAccountCaller(accountId, config);
 
 /** The caller for an incoming request, from this process's env. */
 export const requestCaller = (incoming: Headers): string | undefined => {

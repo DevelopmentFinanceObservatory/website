@@ -26,9 +26,29 @@
     height: auto;
     min-height: rem(48);
 
+    // field-sizing sizes the box to its text in CSS, so the height follows
+    // late web fonts and width changes as well as typing. Long questions are
+    // expected, so the field grows to five lines and scrolls past that. The
+    // padding holds the font's overhang (outfit-overhang), or every one-line
+    // field would draw a scrollbar, and sits at both ends so the text stays
+    // centred in the bar.
+    // A browser without field-sizing grows the field through
+    // useGrowFallback, under the same cap.
     .promptInput {
+        --prompt-input-pad: #{outfit-overhang()};
+
+        field-sizing: content;
+        max-height: calc(5lh + 2 * var(--prompt-input-pad));
+        padding-block: var(--prompt-input-pad);
         resize: none;
         overflow-y: auto;
+
+        // An empty field sizes to its placeholder, which wraps in the
+        // narrow chat panel. It rests at one line, the placeholder clipped.
+        &:placeholder-shown {
+            max-height: calc(1lh + 2 * var(--prompt-input-pad));
+            overflow-y: hidden;
+        }
     }
 }
 
@@ -89,4 +109,34 @@
         color: var(--color-gray-1400);
         opacity: 1;
     }
+}
+
+.charCount {
+    @include font-size(10px, 1.3);
+
+    margin-top: rem(6);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+
+    &:empty {
+        display: none;
+    }
+}
+
+.charCountOver {
+    color: var(--color-red);
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip-path: inset(50%);
 }

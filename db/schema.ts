@@ -23,7 +23,9 @@ export * from './auth-schema.ts';
  * with their CSV, activity, pins, layout, theme, notes…) as one JSON
  * document, plus the columns the history list needs without unpacking it.
  * `agentSessionId` is the agent's server-side conversation, so a reopened
- * conversation resumes with its context.
+ * conversation resumes with its context. It is part of the saved document,
+ * which the account rewrites on every save, so it grants nothing. The account
+ * a harness conversation belongs to is in `studioSessionOwner`.
  */
 export const conversation = pgTable(
     'conversation',
@@ -40,10 +42,39 @@ export const conversation = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
-    (table) => [index('conversation_user_updated_idx').on(table.userId, table.updatedAt)],
+    (table) => [
+        index('conversation_user_updated_idx').on(table.userId, table.updatedAt),
+        // Owner lookups in src/lib/chat/conversationSave find saves by harness conversation.
+        index('conversation_agent_session_idx').on(table.agentSessionId),
+    ],
 );
 
 export type ConversationRow = typeof conversation.$inferSelect;
+
+/**
+ * The account a harness conversation (`agentSessionId`) belongs to, which the
+ * Studio proxy (src/lib/studio/studioProxy) reads in its `admit` hook, after
+ * the rate limit, on each call that names a conversation
+ * (src/lib/studio/studioAccess). A signed-in turn naming it, a save naming
+ * it, or a read finding no row inserts the row when none exists
+ * (src/lib/chat/conversationSave). The owner is the account behind the
+ * oldest saved conversation naming the harness conversation, by
+ * `conversation.created_at`, then `id`, and with no such save, the account
+ * whose turn or save made the claim. A read with no save writes nothing.
+ * Once written, the owner stays, so a save by another account, or the owner's save
+ * naming a different harness conversation, leaves it as it was. Deleting the
+ * account sets `userId` to null and keeps the row, so the conversation
+ * belongs to nobody and the proxy refuses every call about it.
+ */
+export const studioSessionOwner = pgTable(
+    'studio_session_owner',
+    {
+        agentSessionId: text('agent_session_id').primaryKey(),
+        userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    },
+    (table) => [index('studio_session_owner_user_idx').on(table.userId)],
+);
 
 /**
  * A public share: a pruned copy of a conversation (or its canvas, or one
