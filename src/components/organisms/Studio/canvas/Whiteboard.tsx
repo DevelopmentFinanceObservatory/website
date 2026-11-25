@@ -1,13 +1,12 @@
 'use client';
 
 import classNames from 'classnames';
-import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { type MutableRefObject, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import BeaconLayer from './BeaconLayer';
 import { computeBeacons } from './beacons';
 import CardBody from './cards/CardBody';
-import CardNote from './cards/CardNote';
 import type { CardExtras } from './cards/types';
 import {
     type CardView,
@@ -41,15 +40,6 @@ import { cardUnitOffer } from '@/lib/studio/cardUnit';
 import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import type { UnitChoice } from '@/lib/studio/wire';
-
-// A card's note outlives the pointer leaving by enough to cross the few px
-// down to it, where its remove button is (CardNote).
-const NOTE_GRACE_MS = 150;
-// And it stays down this long after a card is dropped, then comes back by
-// itself. The drag ends under the pointer: nothing leaves, nothing
-// re-enters, and the pointer may not move again at all, so the note has to
-// be put back rather than wait to be asked for.
-const NOTE_DROP_MS = 400;
 
 export type WhiteboardProps = {
     widgets: Widget[];
@@ -180,50 +170,6 @@ const Whiteboard = ({
         replacedIds,
     });
     const widgetIds = useMemo(() => new Set(widgets.map((widget) => widget.id)), [widgets]);
-    // Which card the pointer is resting on — the whole card, not a tag in it,
-    // is what brings a user's note up (see CardNote), and it comes up at
-    // once. Leaving is what is held for a moment: the note hangs a few px
-    // below the card, and the pointer has to cross that gap to reach the
-    // remove button inside it.
-    const [hoveredId, setHoveredId] = useState<string | null>(null);
-    const hideNote = useRef(0);
-    const afterDrop = useRef(0);
-
-    const holdHover = (id: string) => {
-        window.clearTimeout(hideNote.current);
-        setHoveredId(id);
-    };
-    const releaseHover = (id: string) => {
-        // The pointer left: a note queued by a drop is no longer wanted.
-        window.clearTimeout(afterDrop.current);
-
-        // The pending hide belongs to whichever note is actually showing.
-        if (hoveredId !== id) {
-            return;
-        }
-
-        hideNote.current = window.setTimeout(
-            () => setHoveredId((current) => (current === id ? null : current)),
-            NOTE_GRACE_MS,
-        );
-    };
-    // Take the note down for the drop, then put it back where it was: the
-    // card is still under the pointer, and no event is coming to say so.
-    const settleHover = (id: string) => {
-        window.clearTimeout(hideNote.current);
-        window.clearTimeout(afterDrop.current);
-        setHoveredId(null);
-        afterDrop.current = window.setTimeout(() => setHoveredId(id), NOTE_DROP_MS);
-    };
-
-    useEffect(
-        () => () => {
-            window.clearTimeout(hideNote.current);
-            window.clearTimeout(afterDrop.current);
-        },
-        [],
-    );
-
     // Download Image. The card is found in the document rather than held in
     // a ref: the button that asks for it is rendered inside the very card
     // being photographed, and the sheet already labels each slot with its
@@ -545,45 +491,14 @@ const Whiteboard = ({
                             // card or a fading one is not draggable, so a press
                             // on it pans the board.
                             data-draggable={!isLeaving && !readOnly ? '' : undefined}
-                            // The whole card is the note's hover target —
-                            // and only a card that has one listens, so
-                            // crossing the rest costs no renders.
-                            {...(extras.note && {
-                                onMouseEnter: () => holdHover(widget.id),
-                                onMouseLeave: () => releaseHover(widget.id),
-                            })}
                             {...(!isLeaving &&
                                 !readOnly && {
                                     onPointerDown: dragging.startDrag(widget.id),
                                     onPointerMove: dragging.moveDrag,
-                                    onPointerUp: () => {
-                                        if (drag && extras.note) {
-                                            settleHover(widget.id);
-                                        }
-
-                                        dragging.endDrag(true)();
-                                    },
-                                    onPointerCancel: () => {
-                                        if (drag && extras.note) {
-                                            settleHover(widget.id);
-                                        }
-
-                                        dragging.endDrag(false)();
-                                    },
+                                    onPointerUp: dragging.endDrag(true),
+                                    onPointerCancel: dragging.endDrag(false),
                                 })}
                         >
-                            {/* A note shows while the pointer rests on the
-                                card, and never mid-drag — on any card, since
-                                a popup left standing while the sheet shifts
-                                under it points at nothing. */}
-                            {extras.note && !isLeaving && (
-                                <CardNote
-                                    note={extras.note}
-                                    open={hoveredId === widget.id && !drag}
-                                    width={slot.w * CELL}
-                                    onRemove={extras.onRemoveNote}
-                                />
-                            )}
                             {!isLeaving && (!readOnly || resizable) && !isText && (
                                 <span
                                     className={classNames(

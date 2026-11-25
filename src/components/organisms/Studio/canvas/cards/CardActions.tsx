@@ -22,15 +22,6 @@ import Icon, { type IconProps } from '@/components/atoms/Icon/Icon';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import type { UnitChoice as Unit, UnitOffer } from '@/lib/studio/wire';
 
-// A card carrying a user's note says so here, beside the pin. It is a mark,
-// not a control: the words come up on hovering the card (CardNote) and the
-// menu below edits them.
-const NoteMark = () => (
-    <span className={styles.noteMark} aria-hidden="true">
-        <Icon name="note" className={styles.noteMarkIcon} />
-    </span>
-);
-
 const PinButton = ({ pinned, onPin }: Pick<CardExtras, 'pinned' | 'onPin'>) => (
     <button
         type="button"
@@ -339,8 +330,8 @@ const UnitPanel = ({
 };
 
 // Download + pin + kebab, 1px apart, top-right of every card (none on a
-// read-only sheet), with the note mark ahead of them when there is a note to
-// mark. The card's unit panel opens from the menu and anchors here.
+// read-only sheet). The card's unit panel opens from the menu and anchors
+// here.
 const CardActions = (extras: CardExtras) => {
     const [unitOpen, setUnitOpen] = useState(false);
     const actionsRef = useRef<HTMLDivElement>(null);
@@ -358,7 +349,6 @@ const CardActions = (extras: CardExtras) => {
                 download button, the pin and the menu belong to the canvas,
                 not to the card's content. */}
             <div ref={actionsRef} className={styles.cardActions} data-no-export="">
-                {extras.note && <NoteMark />}
                 <DownloadMenu
                     onDownload={extras.onDownload}
                     onDownloadImage={extras.onDownloadImage}

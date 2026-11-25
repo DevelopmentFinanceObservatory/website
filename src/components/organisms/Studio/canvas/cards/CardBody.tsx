@@ -16,7 +16,8 @@ type CardBodyProps = {
     chartSource: ChartWidget | null;
     scale: number;
     theme: ThemeDerived;
-    // Text, chart and table cards report the rows their content needs.
+    // Text, chart and table cards report the rows their content needs, and a
+    // stat card the rows its note needs beyond its height.
     widthCells: number;
     // The card's current height in cells. A chart keeps it while it fits.
     heightCells?: number;
@@ -54,7 +55,15 @@ const CardBody = ({
     }
 
     if (widget.kind === 'key_number') {
-        return <KeyNumberCard widget={widget} {...extras} />;
+        return (
+            <KeyNumberCard
+                widget={widget}
+                widthCells={widthCells}
+                heightCells={heightCells}
+                onFit={onFit}
+                {...extras}
+            />
+        );
     }
 
     if (widget.kind === 'text') {

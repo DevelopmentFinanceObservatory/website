@@ -24,6 +24,7 @@ import Embed from '@/assets/svg/embed.svg';
 import Feedback from '@/assets/svg/feedback.svg';
 import Info from '@/assets/svg/info.svg';
 import Kebab from '@/assets/svg/kebab.svg';
+import LinkIcon from '@/assets/svg/link.svg';
 import Lock from '@/assets/svg/lock.svg';
 import Menu from '@/assets/svg/menu.svg';
 import Note from '@/assets/svg/note.svg';
@@ -65,6 +66,7 @@ export const icons = {
     feedback: Feedback,
     info: Info,
     kebab: Kebab,
+    link: LinkIcon,
     lock: Lock,
     menu: Menu,
     note: Note,

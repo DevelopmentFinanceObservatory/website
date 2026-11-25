@@ -2,14 +2,12 @@
 @use "mixins" as *;
 @use "shared" as *;
 
-// The card's bottom bar: the source line left, Built with right.
-// Pinned to the card's bottom and NEVER crushed or clipped — the content
-// above it is what gives way.
+// The card's bottom bar: the source line left, Built with right, level with
+// the source's first line. Pinned to the card's bottom and never crushed or
+// clipped: the content above it is what gives way.
 .chrome {
-    @include flex(row, space-between, flex-end);
+    @include flex(row, space-between, flex-start);
 
-    // Air between the source line and "Built with". The source may run to a
-    // second line (see .sourceLine); the mark stays on the last one.
     gap: rem(10);
     flex-shrink: 0;
     margin-top: auto;
@@ -97,21 +95,16 @@ button.leftOut {
     }
 }
 
-// The attribution line: "Source:", the first name dotted underlined as a
-// link, "+N more" and the info mark. The whole line opens More Info; the mark
-// is the quiet sign that it does. The name, count and mark wrap as one piece
-// under the lead when the line is too narrow for both, and the name clips
-// with an ellipsis, so the line takes two lines at most. Under a left-out
-// line it keeps to one, so the foot never takes more than two: there the name
-// gives way with an ellipsis, and the lead, count and mark keep their width.
-// A line with no name, a computed card crediting DFO's calculation alone,
-// lets its lead give way instead.
+// The attribution line: the info mark, then the first source's full name
+// dotted underlined as a link and "+N more", wrapping under itself clear of
+// the mark. Under a left-out line it keeps to one line, so the foot never
+// takes more than two before the note: there the name gives way with an
+// ellipsis.
 .sourceLine {
-    @include flex(row, flex-start, center);
-    @include font-size(12px, 1.3);
+    @include flex(row, flex-start, flex-start);
+    @include font-size(11px, 1.35);
 
-    flex-wrap: wrap;
-    column-gap: rem(4);
+    gap: rem(6);
     min-width: 0;
     padding: 0;
     font-family: var(--font-outfit);
@@ -127,38 +120,21 @@ button.leftOut {
     &:hover {
         color: var(--th-muted, var(--color-stone));
     }
+}
 
-    .foot & {
-        flex-wrap: nowrap;
+.creditText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+
+    .footLeftOut & {
         overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-}
-
-.creditLead {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    .sourceLine:has(.creditName) & {
-        flex-shrink: 0;
-    }
-}
-
-.creditTail {
-    @include flex(row, flex-start, center);
-
-    gap: rem(4);
-    min-width: 0;
-    max-width: 100%;
 }
 
 .creditName {
-    min-width: 0;
-    overflow: hidden;
     color: var(--th-muted, var(--color-stone));
-    text-overflow: ellipsis;
-    white-space: nowrap;
     text-decoration: underline dotted;
     text-decoration-color: var(--th-caption, var(--color-gray-1500));
     text-underline-offset: 0.22em;
@@ -170,15 +146,76 @@ button.leftOut {
 }
 
 .creditMore {
-    flex-shrink: 0;
     white-space: nowrap;
 }
 
+// Centred on the first line of the 11 px type beside it.
 .sourceIcon {
     display: block;
     flex-shrink: 0;
     width: rem(10);
     height: rem(10);
+    margin-top: rem(2.4);
+}
+
+.source .sourceIcon {
+    margin-top: 0;
+}
+
+// The user's note, set like the source line above it. It keeps the line
+// breaks it was typed with.
+.note {
+    @include flex(row, flex-start, flex-start);
+    @include font-size(11px, 1.35);
+
+    gap: rem(6);
+    min-width: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-muted, var(--color-stone));
+    letter-spacing: -0.01em;
+}
+
+// The note glyph sits inside a padded 20 px box, so the icon is drawn larger
+// to match the info mark, and pulled left by its padding so the note's text
+// starts where the source's does.
+.noteIcon {
+    display: block;
+    flex-shrink: 0;
+    width: rem(16);
+    height: rem(16);
+    margin: rem(-0.6) rem(-3) 0;
+    color: var(--th-caption, var(--color-gray-1500));
+}
+
+.noteText {
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.noteLink {
+    color: inherit;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--th-caption, var(--color-gray-1500));
+    text-underline-offset: 0.22em;
+
+    &:hover {
+        text-decoration-style: solid;
+        text-decoration-color: currentColor;
+    }
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip-path: inset(50%);
 }
 
 // The tag's content — the same shell as the kebab card menu (sage panel,

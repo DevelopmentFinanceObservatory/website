@@ -24,6 +24,7 @@ import {
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { renameKey } from '@/lib/studio/cardReplace';
+import { FITTED_ROWS_MAX } from '@/lib/studio/chartFit';
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -225,7 +226,8 @@ export const useSlots = ({
 
     // Sets the slot's rows for a derived height (every card but a stat card),
     // within the range of its current view, and lets the neighbours make
-    // room. Pinned ones move too, since the card cannot take less.
+    // room. Pinned ones move too, since the card cannot take less. A stat
+    // card fits only to hold its note, which may need more than its range.
     const fitRows = useCallback(
         (id: string, rows: number) => {
             setSlots((prev) => {
@@ -239,7 +241,11 @@ export const useSlots = ({
                     slot.widget,
                     resolveCardView(slot.widget, views[id]).view,
                 );
-                const h = clamp(rows, min, max);
+                const h = clamp(
+                    rows,
+                    min,
+                    slot.widget.kind === 'key_number' ? FITTED_ROWS_MAX : max,
+                );
 
                 if (h === slot.h) {
                     return prev;
