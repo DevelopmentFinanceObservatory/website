@@ -6,7 +6,7 @@ import { Fragment, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import styles from './SourceDetail.module.scss';
-import { downloadedByLabel, sourceOriginLine } from '@/lib/dataCommons';
+import { refreshedByLabel, sourceOriginLine } from '@/lib/dataCommons';
 import type { ChangeKind, SourceDoc, SourceRelease } from '@/lib/sources/graph';
 import { nextReleaseText, sourceDateText } from '@/lib/sources/updateDates';
 import { httpOnly } from '@/lib/sources/url';
@@ -161,7 +161,7 @@ const SourceDetail = ({ dcid, doc, now }: { dcid: string; doc: SourceDoc; now: s
         },
         { label: 'Update Cadence', value: license.update_cadence },
         {
-            label: downloadedByLabel(details.data_commons),
+            label: refreshedByLabel(details.data_commons),
             value: license.last_update && sourceDateText(license.last_update),
         },
         {

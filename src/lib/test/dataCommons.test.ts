@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { downloadedByLabel, originLine, sourceOriginLine } from '../dataCommons.ts';
+import { originLine, refreshedByLabel, sourceOriginLine } from '../dataCommons.ts';
 
 const DFO = { id: 'dfo', label: 'Development Finance Observatory' } as const;
 const BASE = { id: 'base', label: 'Data Commons by Google' } as const;
@@ -65,9 +65,9 @@ test('the Sources pages credit every provenance, DFO included', () => {
     }
 });
 
-test('the download date names who fetched the data', () => {
-    assert.equal(downloadedByLabel(DFO), 'Downloaded by DFO');
-    assert.equal(downloadedByLabel(BASE), 'Downloaded by Data Commons by Google');
-    assert.equal(downloadedByLabel(UN), 'Downloaded by UN System Data Commons');
-    assert.equal(downloadedByLabel(null), 'Last downloaded');
+test('the refresh date names the Data Commons that imported the data', () => {
+    assert.equal(refreshedByLabel(DFO), 'Last refreshed by DFO');
+    assert.equal(refreshedByLabel(BASE), 'Last refreshed by Data Commons by Google');
+    assert.equal(refreshedByLabel(UN), 'Last refreshed by UN System Data Commons');
+    assert.equal(refreshedByLabel(null), 'Last refreshed');
 });

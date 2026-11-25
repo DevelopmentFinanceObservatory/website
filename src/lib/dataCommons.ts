@@ -54,7 +54,8 @@ export const sourceOriginLine = (
     return dataCommons?.id === 'dfo' ? [line, 'via DFO'].filter(Boolean).join(' ') : line;
 };
 
-/** The label for the day a source's data was last fetched, naming who
- *  fetched it: "Downloaded by DFO" or "Downloaded by Data Commons by Google". */
-export const downloadedByLabel = (dataCommons: DataCommonsRef | null | undefined): string =>
-    dataCommons?.label ? `Downloaded by ${provenanceName(dataCommons)}` : 'Last downloaded';
+/** The label for a source's last import date (`lastDataRefreshDate`), naming
+ *  the Data Commons that imported it: "Last refreshed by DFO" or "Last
+ *  refreshed by Data Commons by Google". */
+export const refreshedByLabel = (dataCommons: DataCommonsRef | null | undefined): string =>
+    dataCommons?.label ? `Last refreshed by ${provenanceName(dataCommons)}` : 'Last refreshed';
