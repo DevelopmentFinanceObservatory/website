@@ -346,9 +346,11 @@ export const resolveCardView = (
 type ResolvedView = Pick<ReturnType<typeof resolveCardView>, 'view' | 'chartSource'>;
 
 // Whether the card's height follows its content: every card but a stat
-// card. `view` is the resolved view (resolveCardView). A table whose data
-// cannot chart has none and is derived all the same. Such a card reports its
-// rows through `onFit`; nothing else sets its height.
+// card, whose height is its kind's or the user's (it grows past that only to
+// hold what it shows, see KeyNumberCard). `view` is the resolved view
+// (resolveCardView). A table whose data cannot chart has none and is derived
+// all the same. Such a card reports its rows through `onFit`; nothing else
+// sets its height.
 export const heightIsDerived = (widget: Widget, view: CardView | null): boolean =>
     widget.kind === 'text' || widget.kind === 'table' || view !== null;
 
@@ -365,7 +367,8 @@ export const heightIsFree = (view: CardView | null, chartSource: ChartWidget | n
 
 // The heights in cells a card may take in its current view, by the kind it
 // reads as. A chart shown as a table takes a table's floor, and a table shown
-// as a chart a chart's.
+// as a chart a chart's. A stat card may reach FITTED_ROWS_MAX too, the room
+// a long note or source line can need.
 export const heightRange = (
     widget: Widget,
     view: CardView | null,
@@ -374,7 +377,10 @@ export const heightRange = (
 
     return {
         min: SPAN_MIN[kind].h,
-        max: heightIsDerived(widget, view) ? FITTED_ROWS_MAX : SPAN_MAX[kind].h,
+        max:
+            heightIsDerived(widget, view) || kind === 'key_number'
+                ? FITTED_ROWS_MAX
+                : SPAN_MAX[kind].h,
     };
 };
 

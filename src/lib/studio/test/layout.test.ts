@@ -76,7 +76,7 @@ test('the height range follows the kind the card reads as', () => {
     assert.deepEqual(heightRange(kenya, 'chart-bar'), chartRange);
     assert.deepEqual(heightRange(stat, null), {
         min: SPAN_MIN.key_number.h,
-        max: SPAN_MAX.key_number.h,
+        max: FITTED_ROWS_MAX,
     });
 });
 

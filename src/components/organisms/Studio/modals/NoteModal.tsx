@@ -9,10 +9,10 @@ import formStyles from './TextCardModal.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
-import { linkTarget, type NotePart, noteParts, noteText } from '@/lib/studio/noteLinks';
+import { linkable, linkTarget, type NotePart, noteParts, noteText } from '@/lib/studio/noteLinks';
 
-// The field's content built from a note: text nodes and links, never markup
-// parsed from the note itself.
+// The field's content built from a note's runs as text nodes and links. The
+// note's own text is set as text, so no markup in it is parsed.
 const fill = (field: HTMLElement, note: string) =>
     field.replaceChildren(
         ...noteParts(note).map((part) => {
@@ -29,9 +29,29 @@ const fill = (field: HTMLElement, note: string) =>
         }),
     );
 
-// The note read back from the field. A line break the browser writes as an
-// element (a <br>, or a <div> per line) is a newline, and a link keeps its
-// target only while that is an http(s) URL with words to it.
+// A line break the browser writes as an element (a <br>, or a <div> per line).
+const BREAKS = 'br, div';
+
+// The words selected in `field` as a range, or null when they cannot be one
+// link: no selection, one outside the field, or words across a line break or
+// holding a bracket.
+const pickOf = (field: HTMLElement | null): Range | null => {
+    const selection = document.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+
+    return range &&
+        field &&
+        !range.collapsed &&
+        field.contains(range.commonAncestorContainer) &&
+        linkable(range.toString()) &&
+        !range.cloneContents().querySelector(BREAKS)
+        ? range.cloneRange()
+        : null;
+};
+
+// The note read back from the field. A line break written as an element is a
+// newline, and a link keeps its target only while that is an http(s) URL and
+// its words can be one link (linkable).
 const read = (node: Node): NotePart[] =>
     [...node.childNodes].flatMap((child, index): NotePart[] => {
         if (child.nodeType === Node.TEXT_NODE) {
@@ -50,7 +70,9 @@ const read = (node: Node): NotePart[] =>
             const text = child.textContent ?? '';
             const href = linkTarget(child.getAttribute('href') ?? '');
 
-            return text && href && !/[\n\]]/.test(text) ? [{ text, href }] : [{ text }];
+            return href && linkable(text) && !child.querySelector(BREAKS)
+                ? [{ text, href }]
+                : [{ text }];
         }
 
         return [...(index > 0 ? [{ text: '\n' }] : []), ...read(child)];
@@ -58,9 +80,10 @@ const read = (node: Node): NotePart[] =>
 
 /**
  * A user's note on a data card (menu → Add Note / Edit Note). Selecting
- * words in the field offers a link on them: the Link control opens a URL
- * panel, and Apply makes the words a link. Remove deletes the note. Keyed by
- * the parent per opening so the field starts from the current note.
+ * words in the field offers a Link control over them, which opens a URL
+ * panel, and Apply makes the words a link. ⌘K or Ctrl+K opens the panel from
+ * the keyboard. Remove deletes the note. Keyed by the parent per opening so
+ * the field starts from the current note.
  */
 const NoteModal = ({
     open,
@@ -76,6 +99,9 @@ const NoteModal = ({
     onRemove: () => void;
 }) => {
     const [note, setNote] = useState(initial ?? '');
+    // The note as the dialog opened on it. The title and actions read it, so
+    // they hold still while the dialog closes after Remove.
+    const [opened] = useState(initial);
     // The words selected in the field, which the Link control and the URL
     // panel stand over.
     const [pick, setPick] = useState<Range | null>(null);
@@ -109,34 +135,13 @@ const NoteModal = ({
         [initial],
     );
 
-    // A selection of words inside the field offers the Link control. Words
-    // across a line break, or holding "]", cannot be one link.
+    // A selection of words inside the field offers the Link control.
     useEffect(() => {
         if (asking) {
             return;
         }
 
-        const onChange = () => {
-            const selection = document.getSelection();
-            const field = fieldRef.current;
-            const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
-            const text = range?.toString() ?? '';
-
-            if (
-                !range ||
-                !field ||
-                range.collapsed ||
-                !field.contains(range.commonAncestorContainer) ||
-                !text.trim() ||
-                /[\n\]]/.test(text)
-            ) {
-                setPick(null);
-
-                return;
-            }
-
-            setPick(range.cloneRange());
-        };
+        const onChange = () => setPick(pickOf(fieldRef.current));
 
         document.addEventListener('selectionchange', onChange);
 
@@ -166,14 +171,15 @@ const NoteModal = ({
         const range = pick;
         const start = range.commonAncestorContainer;
         const inside = (start instanceof Element ? start : start.parentElement)?.closest('a');
+        let link: HTMLAnchorElement;
 
         // Words inside a link change its target, and any other words
         // become a link of their own.
         if (inside && field.contains(inside)) {
-            inside.href = href;
+            link = inside;
+            link.href = href;
         } else {
-            const link = document.createElement('a');
-
+            link = document.createElement('a');
             link.href = href;
             link.textContent = range.toString();
             range.deleteContents();
@@ -184,8 +190,16 @@ const NoteModal = ({
         setNote(noteText(read(field)));
         setPick(null);
         closeAsk();
+
+        // The caret goes back to the field just after the link, where the
+        // reader left off.
+        const caret = document.createRange();
+
         field.focus();
-        document.getSelection()?.collapseToEnd();
+        caret.setStartAfter(link);
+        caret.collapse(true);
+        document.getSelection()?.removeAllRanges();
+        document.getSelection()?.addRange(caret);
     };
 
     const submit = (event: React.FormEvent) => {
@@ -203,10 +217,10 @@ const NoteModal = ({
         <Modal
             open={open}
             onOpenChange={onOpenChange}
-            title={initial ? 'Edit Note' : 'Add Note'}
+            title={opened ? 'Edit Note' : 'Add Note'}
             fit
             actions={
-                initial ? (
+                opened ? (
                     <Button
                         variant="paper"
                         onClick={() => {
@@ -235,6 +249,24 @@ const NoteModal = ({
                         aria-placeholder="Enter note…"
                         data-empty={note === '' ? '' : undefined}
                         onInput={(event) => setNote(noteText(read(event.currentTarget)))}
+                        onKeyDown={(event) => {
+                            if (
+                                event.key.toLowerCase() !== 'k' ||
+                                !(event.metaKey || event.ctrlKey)
+                            ) {
+                                return;
+                            }
+
+                            // Read here, since a selection made a moment ago
+                            // may not have reached `pick` yet.
+                            const words = pickOf(fieldRef.current);
+
+                            if (words) {
+                                event.preventDefault();
+                                setPick(words);
+                                setAsking(true);
+                            }
+                        }}
                     />
                     {/* Portalled over the dialog, which clips its own body. */}
                     <Popover.Root
@@ -262,9 +294,16 @@ const NoteModal = ({
                                 align="center"
                                 sideOffset={6}
                                 collisionPadding={16}
-                                // The control leaves the caret and the
-                                // selection in the field.
-                                onOpenAutoFocus={(event) => event.preventDefault()}
+                                // The Link control leaves the caret and the
+                                // selection in the field. The URL panel,
+                                // opened straight from the shortcut, takes
+                                // focus through Radix, which the dialog's
+                                // focus trap lets through.
+                                onOpenAutoFocus={(event) => {
+                                    if (!asking) {
+                                        event.preventDefault();
+                                    }
+                                }}
                                 onCloseAutoFocus={(event) => event.preventDefault()}
                             >
                                 {asking ? (
@@ -291,37 +330,33 @@ const NoteModal = ({
                                                 }}
                                             />
                                         </label>
-                                        <button
-                                            type="button"
-                                            className={styles.linkApply}
-                                            onClick={applyLink}
-                                        >
+                                        <Button variant="light" small onClick={applyLink}>
                                             Apply
-                                        </button>
+                                        </Button>
                                     </>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        className={styles.linkButton}
+                                    <Button
+                                        variant="dark"
+                                        small
+                                        icon="link"
                                         // Pressing it must not take the selection away.
                                         onMouseDown={(event) => event.preventDefault()}
                                         onClick={() => setAsking(true)}
                                     >
-                                        <Icon name="link" className={styles.linkIcon} />
                                         Link
-                                    </button>
+                                    </Button>
                                 )}
                             </Popover.Content>
                         </Popover.Portal>
                     </Popover.Root>
                     <p className={styles.hint}>
                         <Icon name="info" className={styles.hintIcon} />
-                        Select text to add a link
+                        Select text to add a link, or press ⌘K / Ctrl+K
                     </p>
                 </div>
                 <div className={formStyles.actions}>
                     <Button variant="dark" wide icon="arrow" type="submit" disabled={!canSave}>
-                        {initial ? 'Update Note' : 'Add Note'}
+                        {opened ? 'Update Note' : 'Add Note'}
                     </Button>
                 </div>
             </form>

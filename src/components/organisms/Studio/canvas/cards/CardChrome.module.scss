@@ -3,8 +3,8 @@
 @use "shared" as *;
 
 // The card's bottom bar: the source line left, Built with right, level with
-// the source's first line. Pinned to the card's bottom and never crushed or
-// clipped: the content above it is what gives way.
+// the source's first line. It is pinned to the card's bottom and never
+// crushed or clipped, and the content above it gives way.
 .chrome {
     @include flex(row, space-between, flex-start);
 
@@ -13,8 +13,9 @@
     margin-top: auto;
 }
 
-// A live card that leaves something out stacks that line over the bar and
-// pins both to the card's bottom, as the bar is pinned alone.
+// A card whose data leaves something out, or that carries a note, stacks the
+// left-out line over the bar and the note under it, and pins them to the
+// card's bottom as the bar is pinned alone.
 .foot {
     @include flex(column, flex-start, stretch);
 
@@ -97,9 +98,8 @@ button.leftOut {
 
 // The attribution line: the info mark, then the first source's full name
 // dotted underlined as a link and "+N more", wrapping under itself clear of
-// the mark. Under a left-out line it keeps to one line, so the foot never
-// takes more than two before the note: there the name gives way with an
-// ellipsis.
+// the mark. Under a left-out line it keeps to one line, with the name giving
+// way to an ellipsis, so the foot takes two lines at most before the note.
 .sourceLine {
     @include flex(row, flex-start, flex-start);
     @include font-size(11px, 1.35);
@@ -218,9 +218,8 @@ button.leftOut {
     clip-path: inset(50%);
 }
 
-// The tag's content — the same shell as the kebab card menu (sage panel,
-// mono type, pop-in/out on data-state, no shadow). The card's note wears a
-// different face on purpose: it belongs to the card, not to this bar.
+// The tag's content in the same shell as the kebab card menu (sage panel,
+// mono type, pop-in/out on data-state, no shadow).
 .sourceMenu {
     @include font-size(10px, 1.4);
     @include popup-motion;

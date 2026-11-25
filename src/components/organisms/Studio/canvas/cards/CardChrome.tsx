@@ -69,6 +69,9 @@ const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) =>
 const NoteLine = ({ note }: { note: string }) => (
     <p className={styles.note}>
         <Icon name="note" className={styles.noteIcon} />
+        {/* Read out, so a listener hears where the source ends and the
+            note begins. */}
+        <span className={styles.srOnly}>Note: </span>
         <span className={styles.noteText}>
             {noteParts(note).map((part, index) =>
                 part.href ? (

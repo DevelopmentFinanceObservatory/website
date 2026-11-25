@@ -16,8 +16,7 @@ type CardBodyProps = {
     chartSource: ChartWidget | null;
     scale: number;
     theme: ThemeDerived;
-    // Text, chart and table cards report the rows their content needs, and a
-    // stat card the rows its note needs beyond its height.
+    // Every card reports the rows its content needs; a stat card's grow only.
     widthCells: number;
     // The card's current height in cells. A chart keeps it while it fits.
     heightCells?: number;

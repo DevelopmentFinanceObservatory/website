@@ -24,7 +24,6 @@ import {
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { renameKey } from '@/lib/studio/cardReplace';
-import { FITTED_ROWS_MAX } from '@/lib/studio/chartFit';
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -50,7 +49,8 @@ type UseSlotsArgs = {
  * their slot is pruned. Newcomers get PRIORITY: they take the highest spot
  * honouring only pinned cards, and any unpinned veteran they crowd slides to
  * the nearest place that still fits. Also owns the content-fit of every card
- * but a stat card (rows follow the content) and the z-order counter.
+ * (rows follow the content; a stat card's only grow to hold it) and the
+ * z-order counter.
  */
 export const useSlots = ({
     widgets,
@@ -224,10 +224,9 @@ export const useSlots = ({
         onLayoutChange(layout);
     }, [slots, onLayoutChange]);
 
-    // Sets the slot's rows for a derived height (every card but a stat card),
+    // Sets the slot's rows a card's content needs (a stat card's grow only),
     // within the range of its current view, and lets the neighbours make
-    // room. Pinned ones move too, since the card cannot take less. A stat
-    // card fits only to hold its note, which may need more than its range.
+    // room. Pinned ones move too, since the card cannot take less.
     const fitRows = useCallback(
         (id: string, rows: number) => {
             setSlots((prev) => {
@@ -241,11 +240,7 @@ export const useSlots = ({
                     slot.widget,
                     resolveCardView(slot.widget, views[id]).view,
                 );
-                const h = clamp(
-                    rows,
-                    min,
-                    slot.widget.kind === 'key_number' ? FITTED_ROWS_MAX : max,
-                );
+                const h = clamp(rows, min, max);
 
                 if (h === slot.h) {
                     return prev;

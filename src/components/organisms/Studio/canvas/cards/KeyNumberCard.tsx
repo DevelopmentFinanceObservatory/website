@@ -7,7 +7,7 @@ import styles from './Card.module.scss';
 import CardChrome from './CardChrome';
 import CardHead from './CardHead';
 import type { CardExtras } from './types';
-import { cardEdges, type Fit, useFittedRows } from './useFittedRows';
+import { cardEdges, type Fit, useFittedRows, useFontsReady } from './useFittedRows';
 
 import type { KeyNumberWidget } from '@/lib/chat/widgets';
 import { keyNumberFace } from '@/lib/studio/statFace';
@@ -15,7 +15,7 @@ import { keyNumberFace } from '@/lib/studio/statFace';
 // The stat card: one big number (a per cent sign lighter after it), one
 // muted caption close under it (unit, price basis, period, change), then
 // the source and the user's note. Its height is its kind's or the user's,
-// and a note taller than that room grows the card to fit it.
+// and a source line or note taller than that room grows the card to fit it.
 const KeyNumberCard = ({
     widget,
     widthCells,
@@ -30,6 +30,7 @@ const KeyNumberCard = ({
 } & CardExtras) => {
     const { amount, suffix, caption } = keyNumberFace(widget);
     const cardRef = useRef<HTMLElement>(null);
+    const fontsReady = useFontsReady();
 
     const measure = useCallback(
         (card: HTMLElement, cell: number): Fit | null => {
@@ -45,25 +46,27 @@ const KeyNumberCard = ({
                 px += parseFloat(getComputedStyle(child).height) || 0;
             }
 
-            // A fifth of a cell of slack absorbs fluid rounding (see TextCard).
-            const need = Math.ceil(px / cell - 0.2);
+            // A hundredth of a cell of slack absorbs float noise. Any more would
+            // clip the note's last line, since the card only grows.
+            const need = Math.ceil(px / cell - 0.01);
 
             return { rows: Math.max(need, heightCells ?? need), settled: true };
         },
         [heightCells],
     );
     const token = useMemo(
-        () => ({ widget, widthCells, heightCells, title: extras.title, note: extras.note }),
-        [widget, widthCells, heightCells, extras.title, extras.note],
+        () => ({
+            widget,
+            widthCells,
+            heightCells,
+            title: extras.title,
+            note: extras.note,
+            fontsReady,
+        }),
+        [widget, widthCells, heightCells, extras.title, extras.note, fontsReady],
     );
 
-    useFittedRows({
-        cardRef,
-        widthCells,
-        token,
-        measure,
-        onFit: extras.note ? onFit : () => undefined,
-    });
+    useFittedRows({ cardRef, widthCells, token, measure, onFit });
 
     return (
         <article ref={cardRef} className={classNames(styles.card, styles.cardStat)}>
