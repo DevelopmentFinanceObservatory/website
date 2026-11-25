@@ -12,6 +12,7 @@ import {
     decideAccess,
     honorsKeys as surfaceHonorsKeys,
     limitHeaders as limitHeadersOf,
+    LIMIT_TIER_HEADER,
     type Access,
     type AccessDeps,
 } from './access';
@@ -293,6 +294,28 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
     });
 };
 
+/**
+ * `refusal` with the call's x-dfo-limit-tier, which `admit` answers after the
+ * call spent its count: the Studio's prompt allowance, for one, answers a 429
+ * of its own. The rate headers stay off, since they describe a count other
+ * than the one that refused. A refusal that names a tier keeps its own.
+ */
+const withTier = (refusal: Response, { tier }: Access): Response => {
+    if (!tier || refusal.headers.has(LIMIT_TIER_HEADER)) {
+        return refusal;
+    }
+
+    const headers = new Headers(refusal.headers);
+
+    headers.set(LIMIT_TIER_HEADER, tier);
+
+    return new Response(refusal.body, {
+        status: refusal.status,
+        statusText: refusal.statusText,
+        headers,
+    });
+};
+
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     // Who the caller is and whether it is within its allowance, decided once.
     const honorsKeys = options.counted === undefined && surfaceHonorsKeys(options.surface);
@@ -322,7 +345,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     const refusal = await options.admit?.();
 
     if (refusal) {
-        return refusal;
+        return withTier(refusal, access);
     }
 
     const headers = upstreamRequestHeaders(req.headers, new Headers(), options.pass?.request);

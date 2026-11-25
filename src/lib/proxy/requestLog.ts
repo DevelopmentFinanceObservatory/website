@@ -57,7 +57,7 @@ type ResponseMetadata = { status: number; finished: boolean; tier?: LimitTier | 
 
 type RequestMetadata = { path: string; method: string; headers: Headers };
 
-// Framework files and images and fonts by extension.
+// Framework files and images and fonts by extension, outside API_PATHS.
 const STATIC_ASSET = /^\/_next\/|\.(?:png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$/i;
 
 // The machine-facing paths: the site's own /api endpoints and the platform
@@ -70,8 +70,12 @@ const isApiPath = (path: string): boolean =>
 
 const isMcpPath = (path: string): boolean => path === '/mcp' || path.startsWith('/mcp/');
 
-/** True for a static asset, which is not logged. */
-export const isStaticAsset = (path: string): boolean => STATIC_ASSET.test(path);
+/**
+ * True for a static asset, which is not logged: a framework file, image or
+ * font a page loads. A path under API_PATHS is a machine call that a limit
+ * can count, so it is logged whatever its ending.
+ */
+export const isStaticAsset = (path: string): boolean => !isApiPath(path) && STATIC_ASSET.test(path);
 
 /** The tokens of a `Sec-Purpose` or `Purpose` header, such as `prefetch;prerender`. */
 const purposeOf = (headers: Headers): string[] =>
@@ -420,7 +424,8 @@ const httpPair = (
         : undefined;
 
 // The close listener logs every request that arrived after registration,
-// apart from a static asset, which gets no listener and no entry.
+// apart from a static asset, which gets no listener and no entry. Every
+// response has x-dfo-limit-tier stripped, a static asset's included.
 // ServerResponse emits `close` after `finish`, so one listener covers a
 // response that ends and one that does not.
 const onRequestStart = (message: unknown): void => {
@@ -433,12 +438,13 @@ const onRequestStart = (message: unknown): void => {
     const { request, response } = pair;
     const path = targetPath(request.url ?? '/');
 
+    stripTierHeader(response);
+
     if (isStaticAsset(path)) {
         return;
     }
 
     arrivedPaths.set(request, path);
-    stripTierHeader(response);
     response.once('close', () => {
         logRequest(request, {
             status: response.headersSent ? response.statusCode : CLIENT_CLOSED_REQUEST,

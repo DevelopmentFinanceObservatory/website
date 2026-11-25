@@ -273,6 +273,51 @@ test('limit counters and Studio prompt allowances', async (t) => {
     );
 
     await t.test(
+        'pruning keeps a row an older revision inserted and rolled into today, and deletes it once its window is two days old',
+        async () => {
+            // An older revision inserts without expires_at, so the row takes the
+            // column default, and rolls the row into a new window without
+            // touching it. Moving expires_at back dates the insert to then.
+            const day = `date_bin(interval '1 day', now(), timestamptz 'epoch')`;
+            const legacy = async (key: string, windowStart: string, insertedAgo: string) => {
+                await admin.query(
+                    'insert into limit_counter (key, window_start, count) values ($1, now(), 1)',
+                    [key],
+                );
+                await admin.query(
+                    `update limit_counter
+                     set expires_at = expires_at - (${insertedAgo}), window_start = ${windowStart}
+                     where key = $1`,
+                    [key],
+                );
+            };
+
+            // Inserted two days before a moment earlier today: the old two-day
+            // expiry would fall inside today's window, which has not ended.
+            await legacy(
+                'anonday:api:visitor:legacy-today',
+                day,
+                `interval '2 days' + (now() - ${day}) / 2`,
+            );
+            await legacy(
+                'anonday:api:visitor:legacy-old',
+                `${day} - interval '3 days'`,
+                `interval '3 days'`,
+            );
+
+            await pruneCounters(db);
+
+            const { rows } = await admin.query<{ key: string }>(
+                `select key from limit_counter where key like 'anonday:api:visitor:legacy-%'`,
+            );
+            assert.deepEqual(
+                rows.map(({ key }) => key),
+                ['anonday:api:visitor:legacy-today'],
+            );
+        },
+    );
+
+    await t.test(
         'fresh visitor ids at an address past its backstop or ceiling create no rows',
         async () => {
             const rowCount = async (pattern: string) =>

@@ -12,7 +12,8 @@
  *
  * src/proxy.ts issues the cookie on any GET its matcher runs on (page loads,
  * App Router navigations and prefetches) that carries no valid token, or one
- * past half its life, so a reader who stays on the site keeps one. The token
+ * past half its life, so a reader who stays on the site keeps one. A renewal
+ * keeps the id, so the visitor's counters carry over. The token
  * says only that this server issued it to someone who
  * loaded a page: any client can get one, so the per-address backstop is the
  * ceiling.
@@ -40,9 +41,15 @@ export const visitorKey = (callerKey: string): Buffer =>
 const tagFor = (key: Buffer, signed: string): Buffer =>
     createHmac('sha256', key).update(signed).digest();
 
-/** A new token for `key`, expiring VISITOR_TOKEN_TTL seconds after `now` (ms). */
-export const mintVisitorToken = (key: Buffer, now: number): string => {
-    const id = randomBytes(ID_BYTES).toString('base64url');
+/**
+ * A token for `key` expiring VISITOR_TOKEN_TTL seconds after `now` (ms),
+ * carrying `id`, or a new random id when none is given.
+ */
+export const mintVisitorToken = (
+    key: Buffer,
+    now: number,
+    id: string = randomBytes(ID_BYTES).toString('base64url'),
+): string => {
     const signed = `${id}.${Math.floor(now / 1000) + VISITOR_TOKEN_TTL}`;
 
     return `${signed}.${tagFor(key, signed).toString('base64url')}`;
@@ -181,7 +188,9 @@ export type PageRequest = { method: string; headers: Headers; url: string };
 /**
  * The `dfo_v` cookie to set on the response to `request`, or null when none
  * is due. One is due on a GET while visitorLimitsOn holds and the request
- * carries no valid token or one with less than half its life left. The proxy
+ * carries no valid token or one with less than half its life left. A held
+ * token is renewed with its own id, so the visitor's per-minute and daily
+ * counts carry over; a new id is minted only when none is held. The proxy
  * sees the GETs its matcher runs on: document loads, and the RSC requests of
  * App Router navigations and prefetches. Next strips the headers that would
  * tell a prefetch apart (`next-router-prefetch` and the other Flight
@@ -215,7 +224,7 @@ export const issueVisitorCookie = (
 
     return {
         name: VISITOR_COOKIE,
-        value: mintVisitorToken(key, now),
+        value: mintVisitorToken(key, now, held?.id),
         httpOnly: true,
         secure: url.protocol === 'https:' || !LOCAL_HOSTS.has(url.hostname),
         sameSite: 'lax',

@@ -129,6 +129,21 @@ test('forward: takes the decision on a call already counted and counts nothing m
     });
 
     assert.equal(refused, refusal);
+
+    // An admit refusal, such as the Studio's prompt allowance, comes after
+    // the count, so it carries the tier and none of the rate headers.
+    const admitted = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
+        surface: 'api',
+        counted: { identity: { kind: 'anonymous' }, verdict, tier: 'visitor' },
+        target: `${base}/empty`,
+        unreachable: 'The API is unreachable.',
+        admit: async () => new Response('{}', { status: 429, headers: { 'Retry-After': '60' } }),
+    });
+
+    assert.equal(admitted.status, 429);
+    assert.equal(admitted.headers.get('x-dfo-limit-tier'), 'visitor');
+    assert.equal(admitted.headers.get('retry-after'), '60');
+    assert.equal(admitted.headers.get('x-ratelimit-remaining'), null);
 });
 
 for (const acceptEncoding of ['gzip, deflate, br', null]) {

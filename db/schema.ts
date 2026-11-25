@@ -262,7 +262,8 @@ export type EventRow = typeof event.$inferSelect;
  * at `windowStart`, which ends at `expiresAt`. The next hit after the window
  * ends starts the row over, and a row whose window has ended is deleted
  * within minutes (pruneCounters). Every writer in limitCounter sets
- * `expiresAt`; the default dates a row written any other way two days out.
+ * `expiresAt`. The default `infinity` marks a row written by a revision that
+ * does not set it, and pruneCounters deletes such a row by `windowStart` age.
  */
 export const limitCounter = pgTable(
     'limit_counter',
@@ -272,9 +273,12 @@ export const limitCounter = pgTable(
         count: integer('count').notNull(),
         expiresAt: timestamp('expires_at', { withTimezone: true })
             .notNull()
-            .default(sql`now() + interval '2 days'`),
+            .default(sql`'infinity'`),
     },
-    (table) => [index('limit_counter_expires_at_idx').on(table.expiresAt)],
+    (table) => [
+        index('limit_counter_window_start_idx').on(table.windowStart),
+        index('limit_counter_expires_at_idx').on(table.expiresAt),
+    ],
 );
 
 /**

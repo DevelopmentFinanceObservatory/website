@@ -1,5 +1,5 @@
 {
-  "id": "6bbaaafc-2e28-4039-9254-22145f420d78",
+  "id": "e8242fd7-9831-4cdd-858b-e4880ffb2621",
   "prevId": "28cf98a2-5f41-4da6-b23f-a9d15075fa95",
   "version": "7",
   "dialect": "postgresql",
@@ -333,10 +333,25 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "default": "now() + interval '2 days'"
+          "default": "'infinity'"
         }
       },
       "indexes": {
+        "limit_counter_window_start_idx": {
+          "name": "limit_counter_window_start_idx",
+          "columns": [
+            {
+              "expression": "window_start",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "limit_counter_expires_at_idx": {
           "name": "limit_counter_expires_at_idx",
           "columns": [

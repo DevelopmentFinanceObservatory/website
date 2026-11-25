@@ -17,6 +17,7 @@ import {
     visitorLimitsOn,
     VISITOR_TOKEN_TTL,
 } from '../visitor.ts';
+import { visitorCounterKey, visitorDailyCounterKey } from '../limitCounter.ts';
 
 const CALLER_KEY = 'test-caller-key';
 const KEY = visitorKey(CALLER_KEY);
@@ -146,6 +147,22 @@ test('issueVisitorCookie: renews past half-life, keeps a fresher token', () => {
     assert.equal(issueVisitorCookie(pageLoad(token), NOW + TTL_MS / 2 - 1000), null);
     assert.ok(issueVisitorCookie(pageLoad(token), NOW + TTL_MS / 2 + 1000));
     assert.ok(issueVisitorCookie(pageLoad('dfo_v=forged.1.x'), NOW));
+});
+
+test('issueVisitorCookie: a renewal keeps the id, so the per-minute and daily counters carry over', () => {
+    const held = mintVisitorToken(KEY, NOW);
+    const at = NOW + TTL_MS / 2 + 1000;
+    const renewed = issueVisitorCookie(pageLoad(`dfo_v=${held}`), at);
+    const counters = (id: string | null) =>
+        id && [visitorCounterKey('api', id), visitorDailyCounterKey('api', id)];
+
+    assert.ok(renewed);
+    assert.notEqual(renewed.value, held);
+    assert.ok(verifyVisitorToken(renewed.value, KEY, at)!.expires * 1000 > NOW + TTL_MS);
+    assert.deepEqual(
+        counters(readVisitor(withCookie(`dfo_v=${renewed.value}`), at)),
+        counters(readVisitor(withCookie(`dfo_v=${held}`), at)),
+    );
 });
 
 test('issueVisitorCookie: any GET gets one, an RSC navigation or prefetch included; a POST does not', () => {

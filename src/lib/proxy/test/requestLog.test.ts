@@ -72,7 +72,7 @@ test('requestLogEntry: kind and prerender for pages, API calls, RSC, prefetch an
     }
 });
 
-test('isStaticAsset: framework files, images and fonts', () => {
+test('isStaticAsset: framework files, images and fonts, outside the API paths', () => {
     const cases: [string, boolean][] = [
         ['/_next/static/chunks/main.js', true],
         ['/_next/image', true],
@@ -82,6 +82,7 @@ test('isStaticAsset: framework files, images and fonts', () => {
         ['/', false],
         ['/docs/guide.md', false],
         ['/api/v1/search', false],
+        ['/api/v1/presentation/chart.png', false],
     ];
 
     for (const [path, expected] of cases) {
@@ -629,37 +630,51 @@ test(
             response.end('ok');
         });
 
-        const queries = [
-            'tier=key',
-            'tier=visitor',
-            'tier=address',
-            'tier=v-1234',
-            'tier=key&tier=visitor',
-            '',
-            'object&tier=visitor',
-            'array&tier=address',
+        const targets = [
+            '/api/v1/search?tier=key',
+            '/api/v1/search?tier=visitor',
+            '/api/v1/search?tier=address',
+            '/api/v1/search?tier=v-1234',
+            '/api/v1/search?tier=key&tier=visitor',
+            '/api/v1/search',
+            '/api/v1/search?object&tier=visitor',
+            '/api/v1/search?array&tier=address',
+            // An API path with an image ending is a counted call, and logged.
+            '/api/v1/presentation/chart.png?tier=visitor',
+            // A static asset writes no line, and its header is removed all the same.
+            '/images/logo.png?tier=key',
         ];
         const sent: (string | null)[] = [];
         const kept: (string | null)[] = [];
 
-        for (const query of queries) {
-            const res = await fetch(`http://127.0.0.1:${port}/api/v1/search?${query}`);
+        for (const target of targets) {
+            const res = await fetch(`http://127.0.0.1:${port}${target}`);
             await res.text();
             sent.push(res.headers.get('x-dfo-limit-tier'));
             kept.push(res.headers.get('x-kept'));
         }
 
-        // The close listener writes each line after the response ends.
-        while (lines.length < queries.length) {
+        // The close listener writes each line after the response ends. The
+        // wait is bounded, so a missing line fails the assertion below.
+        for (let waits = 0; lines.length < targets.length - 1 && waits < 200; waits += 1) {
             await new Promise((resolve) => setTimeout(resolve, 5));
         }
 
         assert.deepEqual(
-            lines.map((line) => (line as { tier: unknown }).tier),
-            ['key', 'visitor', 'address', null, null, null, 'visitor', 'address'],
+            lines.map((line) => {
+                const { path, tier } = line as { path: string; tier: unknown };
+
+                return `${path} ${tier}`;
+            }),
+            [
+                ...['key', 'visitor', 'address', null, null, null, 'visitor', 'address'].map(
+                    (tier) => `/api/v1/search ${tier}`,
+                ),
+                '/api/v1/presentation/chart.png visitor',
+            ],
         );
-        assert.deepEqual(sent, Array(queries.length).fill(null));
-        assert.deepEqual(kept.slice(-2), ['1', '1']);
+        assert.deepEqual(sent, Array(targets.length).fill(null));
+        assert.deepEqual(kept.slice(6, 8), ['1', '1']);
     },
 );
 
