@@ -4,16 +4,10 @@ import type { NextRequest } from 'next/server';
 
 import { counterDb } from '@/lib/db';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
-import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
+import { limitHeaders as limitHeadersOf } from '@/lib/proxy/access';
+import { clientIp, countAnonymous, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
 import { STUDIO_HEADERS } from '@/lib/proxy/headers';
-import {
-    notFoundProblem,
-    problem,
-    rateLimitedProblem,
-    requestInvalidProblem,
-} from '@/lib/proxy/problem';
-import { rateHeaders } from '@/lib/proxy/rateHeaders';
-import { hit } from '@/lib/proxy/rateLimit';
+import { notFoundProblem, problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
 import {
     checkStudioOwner,
@@ -134,8 +128,7 @@ type StudioUser = { id: string; email: string };
  * harness gets the query and body the check read its conversation id from,
  * so both name one conversation. The proxy answers an OPTIONS call and a
  * method the route does not serve itself, and forwards neither. The
- * ownership check runs in forward()'s `admit` hook, after the per-address
- * rate limit, and on a turn around the prompt spend (checkStudioOwner). A
+ * ownership check runs in forward()'s `admit` hook, after the rate limit, and on a turn around the prompt spend (checkStudioOwner). A
  * turn spends one prompt of the caller's daily allowance, and meterTurn
  * (src/lib/studio/spendPrompt) gives it back when the turn does not start.
  * Reading the state and resuming a turn spend none.
@@ -164,12 +157,14 @@ export const studioProxy =
         const readUserId = async () => (await session())?.id ?? null;
 
         // Counted before the body is read, so a call the proxy answers itself
-        // counts too. forward() takes this verdict and counts nothing more.
-        const counted = await hit('api', clientIp(req));
-        const limitHeaders = rateHeaders(counted);
+        // counts too: per visitor with a valid visitor token, else per
+        // address, as an anonymous API call is, but off the daily
+        // allowances. forward() takes this decision and counts nothing more.
+        const counted = await countAnonymous(req, 'api', { daily: false });
+        const limitHeaders = limitHeadersOf(counted);
 
-        if (!counted.allowed) {
-            return rateLimitedProblem(counted, limitHeaders);
+        if (counted.refusal) {
+            return counted.refusal;
         }
 
         let read: Awaited<ReturnType<typeof readStudioCall>>;

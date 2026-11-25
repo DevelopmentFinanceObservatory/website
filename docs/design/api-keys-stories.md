@@ -28,11 +28,11 @@ These stories set the UX for API keys and quotas, and each acceptance criterion 
 ## Terms
 
 - **Per-minute limit.** The number of API calls an account may make per 60-second window, shared by all of the account's keys. Empty on the account means the keyed default (`RATE_LIMIT_KEYED`, 600). See [Limits][design-limits].
-- **Daily quota.** The number of API calls an account may make per day, counted from 00:00 UTC and shared by all of the account's keys. Empty on the account means the deployment default (`API_KEY_DAILY_LIMIT`, 75,000). See [Limits][design-limits].
+- **Daily quota.** The number of API calls an account may make per day, counted from 00:00 UTC and shared by all of the account's keys. Empty on the account means the deployment default (`API_KEY_DAILY_LIMIT`, 10,000). See [Limits][design-limits].
 - **Daily cap.** An optional lower number of API calls one key may make per day, set by an admin. Empty on the key means it has none, and spends only the account's quota.
 - **Surface.** API (`/api/v1/*`, `/openapi.json`, `/codes`) or MCP (`/mcp`). Keys apply to the API, the Datasets API included. A key sent to `/mcp` or the Studio is stripped and ignored, and the call is anonymous.
 - **Key.** A `dfo_k_…` secret in the client contract's key format, shown once at creation.
-- **Usage bar.** An account's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "40,000 of 75,000". A call the quota refuses is included. A key with a daily cap shows a bar of its own against the cap.
+- **Usage bar.** An account's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "4,000 of 10,000". A call the quota refuses is included. A key with a daily cap shows a bar of its own against the cap.
 - **Panel.** The right-side drawer that the account menu's "API keys" item opens on whatever page the user is on. It is the same drawer as the Studio's Customize panel.
 - **Limit alert.** A minute in which at least one of an account's keyed calls was refused for being over a limit.
 
@@ -51,7 +51,7 @@ _As a DFO user running a pipeline, I want to give my script or the Python or Typ
 - [ ] A key from the panel works in the SDKs as given, through a client option (`api_key`, `apiKey`), the `DFO_API_KEY` environment variable, or `dfo auth login`, and passes the SDK's format check with no warning.
 - [ ] The SDK sends it as `Authorization: Bearer`, and a plain HTTP client can do the same, or send `X-API-Key`.
 - [ ] Keyed calls count against the account's per-minute limit and daily quota, and the account's usage bar and the key's last use on the panel move with them.
-- [ ] Without a key, the SDK and plain clients still work, counted per address at the anonymous limit (120 a minute).
+- [ ] Without a key, the SDK and plain clients still work, counted per address at the anonymous limit (20 a minute on the API without the site's cookie, and a daily cap).
 - [ ] Wherever the SDK prints the key, it is masked (`dfo_k_***Qjsd`), and its last four characters match the end of the key's snippet on the panel and the admin page.
 
 #### U13. Use MCP and the Studio without a key
@@ -70,7 +70,7 @@ _As a DFO user, I want to see how much of my daily quota I have used today, so I
 
 A per-minute count would be empty or full by the time anyone looked, so the bar shows the daily quota, which changes slowly enough to read.
 
-- [ ] The panel shows one usage bar and a count such as "40,000 of 75,000": the API calls made with any of the account's keys since 00:00 UTC, against the account's daily quota (its own, or the default). A key with a daily cap shows its own bar against the cap on its card.
+- [ ] The panel shows one usage bar and a count such as "4,000 of 10,000": the API calls made with any of the account's keys since 00:00 UTC, against the account's daily quota (its own, or the default). A key with a daily cap shows its own bar against the cap on its card.
 - [ ] The count includes calls the quota refuses, and the bar reads full once the quota is reached.
 - [ ] An account with no calls today shows "0 of N".
 - [ ] The panel says the count resets at 00:00 UTC.
@@ -200,7 +200,7 @@ _As a DFO admin responding to abuse, I want to kill one key from the admin page 
 
 _As a DFO admin, I want to raise, lower or reset an account's daily quota, or cap one key, so I can grant a partner more API calls a day or hold back a key that is being abused._
 
-- [ ] In a user's expanded row, the account's daily quota is editable. An admin can set a positive integer or clear it back to the deployment default (`API_KEY_DAILY_LIMIT`, 75,000).
+- [ ] In a user's expanded row, the account's daily quota is editable. An admin can set a positive integer or clear it back to the deployment default (`API_KEY_DAILY_LIMIT`, 10,000).
 - [ ] Each key's daily cap is editable, and empty means no cap of its own.
 - [ ] The account's usage bar shows the effective quota as its right-hand number, and the field shows whether it is the default or set for this account.
 - [ ] Invalid input (zero, negative, non-integer, absurdly large) is refused with a message.

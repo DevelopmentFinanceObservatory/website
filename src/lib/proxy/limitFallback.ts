@@ -18,12 +18,27 @@
  * then its oldest keys. An evicted key starts over, which is the same
  * leniency as a fresh instance.
  */
-import type { Verdict } from './limitCounter.ts';
+import {
+    countVerdict,
+    GATE_STAGES,
+    isDailyStage,
+    readVerdict,
+    TIER_STAGES,
+    type Admission,
+    type AdmissionPlan,
+    type AdmissionStage,
+    type Verdict,
+} from './limitCounter.ts';
 
 export const FALLBACK_MAX_KEYS = 10_000;
 
 export type FallbackCounter = {
     hit(key: string, limit: number): Verdict;
+    /**
+     * Whether one more hit on `key` fits within `limit` in the current
+     * window, counting nothing.
+     */
+    peek(key: string, limit: number): Verdict;
     /**
      * Takes the shared count's verdict for `key` as its count so far in the
      * window in effect at `sentAt`, when the count was sent. A count that
@@ -73,6 +88,9 @@ export const createFallbackCounter = (
         counts.set(key, { window, count, at });
     };
 
+    const reset = (at: number, window: number): number =>
+        Math.max(1, Math.ceil(((window + 1) * windowMs - at) / 1000));
+
     return {
         hit(key, limit) {
             const at = now();
@@ -82,12 +100,18 @@ export const createFallbackCounter = (
 
             store(key, window, count, at);
 
-            return {
-                allowed: count <= limit,
+            return countVerdict(count, limit, reset(at, window));
+        },
+        peek(key, limit) {
+            const at = now();
+            const window = Math.floor(at / windowMs);
+            const known = counts.get(key);
+
+            return readVerdict(
+                known?.window === window ? known.count : 0,
                 limit,
-                remaining: Math.max(0, limit - count),
-                reset: Math.max(1, Math.ceil(((window + 1) * windowMs - at) / 1000)),
-            };
+                reset(at, window),
+            );
         },
         record(key, { allowed, limit, remaining }, sentAt) {
             const window = Math.floor(sentAt / windowMs);
@@ -121,4 +145,43 @@ export const createFallbackCounter = (
         },
         size: () => counts.size,
     };
+};
+
+/**
+ * Count one anonymous call on `plan` in memory, in admitHit's order
+ * (./limitCounter): read the gates, count the call's own per-minute and
+ * daily counts, then debit the gates, each step only once the one before
+ * admits the call. `minute` and `day` are the counters of the per-minute
+ * and daily stages.
+ */
+export const admitInMemory = (
+    plan: AdmissionPlan,
+    { minute, day }: { minute: FallbackCounter; day: FallbackCounter },
+): Admission => {
+    const counterOf = (stage: AdmissionStage): FallbackCounter =>
+        isDailyStage(stage) ? day : minute;
+    const verdicts: Admission['verdicts'] = {};
+    const settle = (stage: AdmissionStage, verdict: Verdict): boolean => {
+        verdicts[stage] = verdict;
+
+        return verdict.allowed;
+    };
+
+    for (const stage of GATE_STAGES) {
+        const counter = plan[stage];
+
+        if (counter && !settle(stage, counterOf(stage).peek(counter.key, counter.limit))) {
+            return { refusedBy: stage, verdicts };
+        }
+    }
+
+    for (const stage of [...TIER_STAGES, ...GATE_STAGES]) {
+        const counter = plan[stage];
+
+        if (counter && !settle(stage, counterOf(stage).hit(counter.key, counter.limit))) {
+            return { refusedBy: stage, verdicts };
+        }
+    }
+
+    return { refusedBy: null, verdicts };
 };

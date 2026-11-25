@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
 import { isGraphExplorerPath, withRequestPath } from '@/lib/graphExplorer/signIn';
+import { issueVisitorCookie } from '@/lib/proxy/visitor';
 
 /** A Graph Explorer request carries its path and query (withRequestPath). */
 const graphExplorer = (request: NextRequest) =>
@@ -24,7 +25,47 @@ const dataPage = (request: NextRequest) => {
     return response;
 };
 
-export const proxy = (request: NextRequest) =>
-    isGraphExplorerPath(request.nextUrl.pathname) ? graphExplorer(request) : dataPage(request);
+const DATA_PATH = '/data';
 
-export const config = { matcher: ['/data', '/graph-explorer', '/graph-explorer/:path*'] };
+const pageResponse = (request: NextRequest) => {
+    const { pathname } = request.nextUrl;
+
+    if (isGraphExplorerPath(pathname)) {
+        return graphExplorer(request);
+    }
+
+    return pathname === DATA_PATH ? dataPage(request) : NextResponse.next();
+};
+
+/**
+ * Every page request, document load or RSC fetch, gets its Graph Explorer
+ * or /data handling, then a `dfo_v` visitor cookie when one is due
+ * (issueVisitorCookie).
+ */
+export const proxy = (request: NextRequest) => {
+    const response = pageResponse(request);
+    const cookie = issueVisitorCookie(request);
+
+    if (cookie) {
+        response.cookies.set(cookie);
+    }
+
+    return response;
+};
+
+/**
+ * Pages only: the first entry skips /api, /mcp, /openapi.json, /codes,
+ * /embed and /prototypes (served by the prototypes Worker), each as a whole
+ * path segment, so /apiary or /codes-of-conduct would still match. It also
+ * skips Next's own files and any path ending in a file extension of either
+ * case. /data and /graph-explorer are listed on their own as well, so their
+ * handling never rests on the first entry.
+ */
+export const config = {
+    matcher: [
+        '/((?!(?:api|mcp|openapi\\.json|codes|embed|prototypes)(?:/|$)|_next/|.*\\.[a-zA-Z0-9]+$).*)',
+        '/data',
+        '/graph-explorer',
+        '/graph-explorer/:path*',
+    ],
+};
