@@ -262,6 +262,7 @@ test('logRequest: one line with the caller digest and no address or query', () =
             agent: 'browser',
             agent_name: null,
             prerender: false,
+            tier: null,
         },
     ]);
 
@@ -557,6 +558,7 @@ test(
                 agent: 'other_bot',
                 agent_name: null,
                 prerender: false,
+                tier: null,
             },
         ]);
     },
@@ -598,6 +600,39 @@ test('server logging writes one line with finished true for a response that fini
         [true],
     );
 });
+
+test(
+    'server logging records the limit tier a response names, and null for any other value',
+    { timeout: 5000 },
+    async (t) => {
+        const lines: unknown[] = [];
+        t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+        t.after(registerRequestLogging());
+        const port = await listen(t, (request, response) => {
+            const tier = new URL(request.url ?? '/', 'http://localhost').searchParams.get('tier');
+
+            if (tier) {
+                response.setHeader('x-dfo-limit-tier', tier);
+            }
+
+            response.end('ok');
+        });
+
+        for (const tier of ['key', 'visitor', 'address', 'v-1234', '']) {
+            await (await fetch(`http://127.0.0.1:${port}/api/v1/search?tier=${tier}`)).text();
+        }
+
+        // The close listener writes each line after the response ends.
+        while (lines.length < 5) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+
+        assert.deepEqual(
+            lines.map((line) => (line as { tier: unknown }).tier),
+            ['key', 'visitor', 'address', null, null],
+        );
+    },
+);
 
 test(
     'server logging writes one line with finished false for a response closed early',

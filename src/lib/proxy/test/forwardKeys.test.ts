@@ -1,5 +1,5 @@
 /**
- * `forward()` with API keys, honoured on the API and the Datasets API: what reaches the upstream
+ * `forward()` with API keys and visitor tokens, honoured on the API and the Datasets API: what reaches the upstream
  * (never the key, the caller named as `user:` for an account), what a bad,
  * unavailable or ignored key does, a key on /mcp, the Studio and the kill
  * switch, the usage line, and the whole flow, the daily quota included, on a
@@ -38,7 +38,19 @@ process.env.API_KEY_TAG_SECRETS = SECRET;
 
 const { forward, accessDeps } = await import('../forward.ts');
 const { createKeyVerifier } = await import('../keyVerifier.ts');
-const { createLimiter } = await import('../rateLimit.ts');
+const {
+    backstopCallerKey,
+    createLimiter,
+    visitorCallerKey,
+    BACKSTOP_LIMITS,
+    COOKIELESS_LIMITS,
+    LIMITS,
+} = await import('../rateLimit.ts');
+const { mintVisitorToken, visitorKey, VISITOR_TOKEN_TTL } = await import('../visitor.ts');
+
+// A `dfo_v` cookie signed under `callerKey`, minted at `now`.
+const visitorCookie = (now = Date.now(), callerKey = 'test-hmac-key'): string =>
+    `dfo_v=${mintVisitorToken(visitorKey(callerKey), now)}`;
 
 const KEY = signKey(`dfo_k_${'k'.repeat(32)}`, [SECRET]);
 // The right shape and checksum, but a tag no secret of ours made.
@@ -143,6 +155,30 @@ const fresh = () => {
     seen.length = 0;
     Object.assign(accessDeps, original);
     delete process.env.API_KEYS_ENABLED;
+    delete process.env.VISITOR_LIMITS_ENABLED;
+};
+
+// Fakes that record whose count each anonymous call spent, and at what limit.
+const tierFakes = () => {
+    const log: string[] = [];
+
+    accessDeps.hitAddress = async (surface, _ip, limit) => {
+        log.push(`address:${surface}:${limit}`);
+
+        return verdictOf(limit);
+    };
+    accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
+        log.push(`visitor:${surface}:${limit}`);
+
+        return verdictOf(limit);
+    };
+    accessDeps.hitBackstop = async (surface, _ip, limit) => {
+        log.push(`backstop:${surface}:${limit}`);
+
+        return verdictOf(limit);
+    };
+
+    return log;
 };
 
 test.after(() => mock.restoreAll());
@@ -373,7 +409,7 @@ test('forward: the Studio strips a key and otherwise ignores it', async () => {
         seen.length = 0;
 
         const res = await call(headers, {
-            counted: verdictOf(120),
+            counted: { identity: { kind: 'anonymous' }, verdict: verdictOf(120) },
             surface: undefined,
             bearer: 'studio-token',
         });
@@ -401,6 +437,52 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
+test('forward: a valid visitor token is counted per visitor, a forged or expired one as cookieless', async () => {
+    fresh();
+
+    const log = tierFakes();
+    const valid = await call({ cookie: visitorCookie() });
+
+    assert.equal(valid.headers.get('x-dfo-limit-tier'), 'visitor');
+
+    for (const cookie of [
+        visitorCookie(Date.now(), 'another-hmac-key'),
+        visitorCookie(Date.now() - 2 * VISITOR_TOKEN_TTL * 1000),
+    ]) {
+        const res = await call({ cookie });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('x-ratelimit-limit'), String(COOKIELESS_LIMITS.api));
+        assert.equal(res.headers.get('x-dfo-limit-tier'), 'address');
+    }
+
+    assert.deepEqual(log, [
+        `visitor:api:${LIMITS.api}`,
+        `backstop:api:${BACKSTOP_LIMITS.api}`,
+        `address:api:${COOKIELESS_LIMITS.api}`,
+        `address:api:${COOKIELESS_LIMITS.api}`,
+    ]);
+});
+
+test('forward: with visitor limits off, an anonymous call is counted by address at LIMITS, token or not', async () => {
+    fresh();
+    process.env.VISITOR_LIMITS_ENABLED = 'false';
+
+    const log = tierFakes();
+
+    for (const surface of ['api', 'datasets'] as const) {
+        await call({ cookie: visitorCookie() }, { surface });
+        await call({}, { surface });
+    }
+
+    assert.deepEqual(log, [
+        `address:api:${LIMITS.api}`,
+        `address:api:${LIMITS.api}`,
+        `address:datasets:${LIMITS.datasets}`,
+        `address:datasets:${LIMITS.datasets}`,
+    ]);
+});
+
 test('forward: while keys are off, a call with X-API-Key is logged without its value', async () => {
     fresh();
     process.env.API_KEYS_ENABLED = 'false';
@@ -412,7 +494,13 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
     // /mcp ignores keys, so there is nothing to count.
     await call({ 'x-api-key': KEY }, { surface: 'mcp' });
     // The Studio ignores keys whatever the switch says.
-    await call({ 'x-api-key': KEY }, { counted: verdictOf(120), surface: undefined });
+    await call(
+        { 'x-api-key': KEY },
+        {
+            counted: { identity: { kind: 'anonymous' }, verdict: verdictOf(120) },
+            surface: undefined,
+        },
+    );
 
     assert.deepEqual(
         lines.map((line) => JSON.parse(line)),
@@ -694,6 +782,43 @@ test('forward on a real key store and counter', async (t) => {
 
         assert.deepEqual(statuses, [200, 200, 200, 429]);
     });
+
+    await t.test(
+        "ten visitors from one address meet its backstop, which leaves the address's cookieless count alone",
+        async () => {
+            Object.assign(accessDeps, {
+                hitAddress: (surface: 'api', ip: string, limit: number) =>
+                    limiter.hitKey(surface, ip, limit),
+                hitVisitor: (surface: 'api', visitorId: string, limit: number) =>
+                    limiter.hitKey(surface, visitorCallerKey(visitorId), limit),
+                hitBackstop: (surface: 'api', ip: string, limit: number) =>
+                    limiter.hitKey(surface, backstopCallerKey(ip), limit),
+                anonymousLimits: {
+                    address: { api: 3, datasets: 3, mcp: 3, pin: 3 },
+                    cookieless: { api: 2, datasets: 2 },
+                    backstop: { api: 4, datasets: 4 },
+                },
+            });
+
+            const office = { 'x-forwarded-for': '198.51.100.20' };
+            const visitors = [];
+
+            for (let i = 0; i < 10; i++) {
+                visitors.push((await call({ ...office, cookie: visitorCookie() })).status);
+            }
+
+            assert.deepEqual(visitors, [200, 200, 200, 200, 429, 429, 429, 429, 429, 429]);
+
+            const cookieless = [];
+
+            for (let i = 0; i < 3; i++) {
+                cookieless.push((await call(office)).status);
+            }
+
+            assert.deepEqual(cookieless, [200, 200, 429]);
+            wire(keyPool);
+        },
+    );
 
     await t.test(
         'an unreachable key store passes a keyed call as anonymous, at the address limit',

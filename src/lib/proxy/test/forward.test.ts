@@ -107,16 +107,28 @@ test('forward: sends the body option in place of a client body already read', as
     assert.equal(await res.text(), '{"conversation_id":"conv-b"}');
 });
 
-test('forward: takes the verdict of a call already counted and counts nothing more', async () => {
+test('forward: takes the decision on a call already counted and counts nothing more', async () => {
+    const verdict = { allowed: true, limit: 120, remaining: 119, reset: 30 };
     const res = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
         surface: 'api',
-        counted: { allowed: false, limit: 120, remaining: 0, reset: 30 },
+        counted: { identity: { kind: 'anonymous' }, verdict, tier: 'visitor' },
         target: `${base}/empty`,
         unreachable: 'The API is unreachable.',
     });
 
-    assert.equal(res.status, 429);
-    assert.equal((await res.json()).code, 'rate_limited');
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('x-ratelimit-remaining'), '119');
+    assert.equal(res.headers.get('x-dfo-limit-tier'), 'visitor');
+
+    const refusal = new Response(null, { status: 429 });
+    const refused = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
+        surface: 'api',
+        counted: { identity: { kind: 'anonymous' }, verdict, refusal },
+        target: `${base}/empty`,
+        unreachable: 'The API is unreachable.',
+    });
+
+    assert.equal(refused, refusal);
 });
 
 for (const acceptEncoding of ['gzip, deflate, br', null]) {

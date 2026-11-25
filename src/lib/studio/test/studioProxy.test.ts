@@ -1,7 +1,8 @@
 /**
  * The Studio proxy answers a request whose body fails to read with a problem
  * document, not a bare 500: 400 when the client dropped the connection, a
- * retryable 503 for any other failure.
+ * retryable 503 for any other failure. It counts a call per visitor when the
+ * call carries a valid visitor token, and per address otherwise.
  */
 import '../../test/serverModules.ts';
 
@@ -11,6 +12,15 @@ import test from 'node:test';
 import type { NextRequest } from 'next/server';
 
 const { studioProxy } = await import('../studioProxy.ts');
+const { accessDeps } = await import('../../proxy/forward.ts');
+const { BACKSTOP_LIMITS, COOKIELESS_LIMITS, LIMITS } = await import('../../proxy/rateLimit.ts');
+const { mintVisitorToken, visitorKey } = await import('../../proxy/visitor.ts');
+
+const handler = studioProxy({
+    getUser: async () => null,
+    ownersOf: async () => [],
+    claimOwner: async () => [],
+});
 
 const readFailure = async (signal: AbortSignal) => {
     const body = new ReadableStream<Uint8Array>({
@@ -28,11 +38,6 @@ const readFailure = async (signal: AbortSignal) => {
         { nextUrl: new URL('http://site.test/api/v1/studio/turn') },
     ) as unknown as NextRequest;
 
-    const handler = studioProxy({
-        getUser: async () => null,
-        ownersOf: async () => [],
-        claimOwner: async () => [],
-    });
     const res = await handler(req, { params: Promise.resolve({ path: ['turn'] }) });
 
     return { res, document: await res.json() };
@@ -63,4 +68,73 @@ test('studioProxy: answers any other body read failure with a retryable 503', as
     assert.equal(res.headers.get('content-type'), 'application/problem+json');
     assert.equal(document.code, 'transient_unavailable');
     assert.equal(document.retryable, true);
+});
+
+test('studioProxy: counts per visitor with a valid visitor token, else per address at the cookieless allowance', async (t) => {
+    const callerKey = process.env.CALLER_HMAC_KEY;
+    const original = { ...accessDeps };
+
+    process.env.CALLER_HMAC_KEY = 'studio-test-key';
+    t.after(() => {
+        Object.assign(accessDeps, original);
+
+        if (callerKey === undefined) {
+            delete process.env.CALLER_HMAC_KEY;
+        } else {
+            process.env.CALLER_HMAC_KEY = callerKey;
+        }
+    });
+
+    const log: string[] = [];
+    let allowed = true;
+    const verdict = (limit: number) => ({ allowed, limit, remaining: allowed ? 1 : 0, reset: 30 });
+
+    accessDeps.hitAddress = async (surface, _ip, limit) => {
+        log.push(`address:${surface}:${limit}`);
+
+        return verdict(limit);
+    };
+    accessDeps.hitVisitor = async (surface, _visitorId, limit) => {
+        log.push(`visitor:${surface}:${limit}`);
+
+        return verdict(limit);
+    };
+    accessDeps.hitBackstop = async (surface, _ip, limit) => {
+        log.push(`backstop:${surface}:${limit}`);
+
+        return verdict(limit);
+    };
+
+    const options = (headers: Record<string, string> = {}) =>
+        handler(
+            Object.assign(
+                new Request('http://site.test/api/v1/studio/turn', { method: 'OPTIONS', headers }),
+                { nextUrl: new URL('http://site.test/api/v1/studio/turn') },
+            ) as unknown as NextRequest,
+            { params: Promise.resolve({ path: ['turn'] }) },
+        );
+    const cookie = `dfo_v=${mintVisitorToken(visitorKey('studio-test-key'), Date.now())}`;
+
+    const visitor = await options({ cookie });
+    const cookieless = await options();
+
+    assert.equal(visitor.status, 204);
+    assert.equal(visitor.headers.get('x-dfo-limit-tier'), 'visitor');
+    assert.equal(cookieless.status, 204);
+    assert.equal(cookieless.headers.get('x-dfo-limit-tier'), 'address');
+    assert.deepEqual(log, [
+        `visitor:api:${LIMITS.api}`,
+        `backstop:api:${BACKSTOP_LIMITS.api}`,
+        `address:api:${COOKIELESS_LIMITS.api}`,
+    ]);
+
+    // A refusal is the rate_limited document, with no API key hint: the Studio ignores keys.
+    allowed = false;
+
+    const refused = await options();
+    const document = await refused.json();
+
+    assert.equal(refused.status, 429);
+    assert.equal(document.code, 'rate_limited');
+    assert.ok(!document.detail.includes('/docs/build/api-keys'));
 });

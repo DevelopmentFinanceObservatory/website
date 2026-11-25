@@ -2,6 +2,7 @@ import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { IncomingMessage, ServerResponse } from 'node:http';
 
 import { isBotAgent, requestAgent, type Agent } from '../bot.ts';
+import { LIMIT_TIER_HEADER, type LimitTier } from './access.ts';
 import { accountFor } from './account.ts';
 import { requestCaller } from './caller.ts';
 
@@ -25,8 +26,11 @@ import { requestCaller } from './caller.ts';
  * flags. `agent` and `agent_name` say what sent the request (requestAgent in
  * src/lib/bot.ts). `prerender` is true for a document request with `Sec-Purpose:
  * prefetch;prerender`, so its kind is `page` whether or not the visitor opens
- * the page, since the server cannot see activation. The line holds no raw
- * address, query string, cookie, auth header or user agent. A signed-in
+ * the page, since the server cannot see activation. `tier` is whose count a
+ * rate-limited call spent, `key`, `visitor` or `address`, read from the
+ * response's x-dfo-limit-tier header (src/lib/proxy/access), and null for a
+ * call nothing counted. The line holds no raw address, query string, cookie,
+ * visitor id, auth header or user agent. A signed-in
  * user's request names no account here; see AccountLogEntry.
  */
 export type RequestKind = 'page' | 'api' | 'rsc' | 'prefetch';
@@ -45,7 +49,10 @@ export type RequestLogEntry = {
     agent: Agent;
     agent_name: string | null;
     prerender: boolean;
+    tier: LimitTier | null;
 };
+
+type ResponseMetadata = { status: number; finished: boolean; tier?: LimitTier | null };
 
 type RequestMetadata = { path: string; method: string; headers: Headers };
 
@@ -105,7 +112,7 @@ const classifyRequest = (
 export const requestLogEntry = (
     { path, method, headers }: RequestMetadata,
     caller: string | undefined,
-    { status, finished }: { status: number; finished: boolean },
+    { status, finished, tier = null }: ResponseMetadata,
 ): RequestLogEntry => {
     const { kind, prerender } = classifyRequest(path, headers);
     const { agent, agentName } = requestAgent(headers, { mcp: isMcpPath(path) });
@@ -124,7 +131,20 @@ export const requestLogEntry = (
         agent,
         agent_name: agentName,
         prerender,
+        tier,
     };
+};
+
+const LIMIT_TIERS: ReadonlySet<string> = new Set<LimitTier>(['key', 'visitor', 'address']);
+
+const isLimitTier = (value: unknown): value is LimitTier =>
+    typeof value === 'string' && LIMIT_TIERS.has(value);
+
+/** The LimitTier a response's x-dfo-limit-tier header names, or null. */
+const tierOf = (response: ServerResponse): LimitTier | null => {
+    const value = response.getHeader(LIMIT_TIER_HEADER);
+
+    return isLimitTier(value) ? value : null;
 };
 
 // The path of each logged request's target as it arrived, kept because
@@ -202,10 +222,7 @@ const requestHeaders = (request: IncomingMessage): Headers => {
  * are read or its caller digest computed. Never throws: a logging fault must
  * not fail the request.
  */
-export const logRequest = (
-    request: IncomingMessage,
-    response: { status: number; finished: boolean },
-): void => {
+export const logRequest = (request: IncomingMessage, response: ResponseMetadata): void => {
     try {
         const path = arrivedPaths.get(request) ?? targetPath(request.url ?? '/');
 
@@ -336,6 +353,7 @@ const onRequestStart = (message: unknown): void => {
         logRequest(request, {
             status: response.headersSent ? response.statusCode : CLIENT_CLOSED_REQUEST,
             finished: response.writableFinished,
+            tier: tierOf(response),
         });
     });
 };
@@ -349,7 +367,11 @@ const onResponseFinish = (message: unknown): void => {
     const pair = httpPair(message);
 
     if (pair && !arrivedPaths.has(pair.request)) {
-        logRequest(pair.request, { status: pair.response.statusCode, finished: true });
+        logRequest(pair.request, {
+            status: pair.response.statusCode,
+            finished: true,
+            tier: tierOf(pair.response),
+        });
     }
 };
 

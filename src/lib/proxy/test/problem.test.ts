@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    cookielessLimitedProblem,
     dailyQuotaProblem,
     missingProblem,
     notFoundProblem,
@@ -35,18 +36,37 @@ test('notFoundProblem: each answer has its own trace id', () => {
     assert.notEqual(a.headers.get('x-dfo-trace-id'), b.headers.get('x-dfo-trace-id'));
 });
 
-test('rateLimitedProblem: a retryable 429 problem that keeps the rate headers and Retry-After', async () => {
-    const res = rateLimitedProblem({ limit: 60, reset: 7 }, { 'X-RateLimit-Limit': '60' });
-    const body = await res.json();
+test('rateLimitedProblem, cookielessLimitedProblem: a retryable 429 problem that keeps the rate headers and Retry-After', async () => {
+    const verdict = { limit: 60, reset: 7 };
+    const headers = { 'X-RateLimit-Limit': '60' };
+    const keyed = { limit: 600, dailyLimit: 75_000 };
+    const plain = rateLimitedProblem(verdict, headers);
+    const cookieless = cookielessLimitedProblem(verdict, headers, keyed);
+    const members = new Set<string>();
 
-    assert.equal(res.status, 429);
-    assert.equal(res.headers.get('content-type'), 'application/problem+json');
-    assert.equal(res.headers.get('retry-after'), '7');
-    assert.equal(res.headers.get('x-ratelimit-limit'), '60');
-    assert.equal(body.code, 'rate_limited');
-    assert.equal(body.status, 429);
-    assert.equal(body.retryable, true);
-    assert.equal(res.headers.get('x-dfo-trace-id'), body.trace_id);
+    for (const res of [plain, cookieless]) {
+        const body = await res.json();
+
+        assert.equal(res.status, 429);
+        assert.equal(res.headers.get('content-type'), 'application/problem+json');
+        assert.equal(res.headers.get('retry-after'), '7');
+        assert.equal(res.headers.get('x-ratelimit-limit'), '60');
+        assert.equal(body.code, 'rate_limited');
+        assert.equal(body.type, '/codes/rate_limited');
+        assert.equal(body.status, 429);
+        assert.equal(body.retryable, true);
+        assert.equal(res.headers.get('x-dfo-trace-id'), body.trace_id);
+        members.add(Object.keys(body).sort().join());
+
+        // Only the cookieless refusal links the API key page, with what a key gives.
+        const keyHint = ['/docs/build/api-keys', '600', '75000'].every((part) =>
+            body.detail.includes(part),
+        );
+
+        assert.equal(keyHint, res === cookieless);
+    }
+
+    assert.equal(members.size, 1);
 });
 
 test('dailyQuotaProblem: a 429 allowance_exhausted that is not retried, with Retry-After to the reset', async () => {

@@ -147,23 +147,49 @@ export const conflictingKeysProblem = (): Response =>
         'The Authorization bearer and X-API-Key carry different API keys. Send one key.',
     );
 
+// A 429 `rate_limited` problem document whose detail ends with `more`.
+const limitedProblem = (
+    { limit, reset }: { limit: number; reset: number },
+    headers: Record<string, string>,
+    scope: 'address' | 'account',
+    more = '',
+): Response =>
+    problem({
+        status: 429,
+        code: 'rate_limited',
+        detail: `Too many requests: ${limit} per window per ${scope}. Try again in ${reset}s.${more}`,
+        retryable: true,
+        headers: { ...headers, 'Retry-After': String(reset) },
+    });
+
 /**
  * A 429 `rate_limited` problem document; `headers` carry the rate headers.
  * `scope` says whose allowance is spent: the caller's address or, for a
  * call with an API key, its account.
  */
 export const rateLimitedProblem = (
-    { limit, reset }: { limit: number; reset: number },
+    verdict: { limit: number; reset: number },
     headers: Record<string, string>,
     scope: 'address' | 'account' = 'address',
+): Response => limitedProblem(verdict, headers, scope);
+
+/**
+ * The 429 `rate_limited` problem document of an anonymous API call with no
+ * visitor token (src/lib/proxy/access): rateLimitedProblem's document, whose
+ * detail goes on to say what a free API key gives, `keyed.limit` calls per
+ * window and `keyed.dailyLimit` a day, and where to get one.
+ */
+export const cookielessLimitedProblem = (
+    verdict: { limit: number; reset: number },
+    headers: Record<string, string>,
+    keyed: { limit: number; dailyLimit: number },
 ): Response =>
-    problem({
-        status: 429,
-        code: 'rate_limited',
-        detail: `Too many requests: ${limit} per window per ${scope}. Try again in ${reset}s.`,
-        retryable: true,
-        headers: { ...headers, 'Retry-After': String(reset) },
-    });
+    limitedProblem(
+        verdict,
+        headers,
+        'address',
+        ` A free API key raises the limit to ${keyed.limit} per window and ${keyed.dailyLimit} calls a day: see /docs/build/api-keys.`,
+    );
 
 /**
  * A 429 `allowance_exhausted` problem document: a daily count of `limit` API

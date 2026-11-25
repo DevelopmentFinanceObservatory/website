@@ -5,7 +5,10 @@
  * the API or the Datasets API is checked for its signed tag, then counted against its account and
  * against its own daily quota, and never its address. Only a key with a good
  * tag that the store does not hold is counted against the address. A key on
- * any other surface, /mcp included, is ignored.
+ * any other surface, /mcp included, is ignored. While visitor limits are on,
+ * an anonymous API or Datasets API call is counted per visitor and on its
+ * address's backstop when it carries a valid visitor token, and per address
+ * at the cookieless allowance when it does not.
  */
 import '../../test/serverModules.ts';
 
@@ -13,7 +16,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { hasValidTag, signKey } from '../../auth/keyTag.ts';
-import type { AccessDeps } from '../access.ts';
+import type { AccessDeps, AnonymousLimits } from '../access.ts';
 import type { KeyVerdict, KeyVerifier, ValidKey } from '../keyVerifier.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
 import type { Surface } from '../rateLimit.ts';
@@ -41,6 +44,12 @@ const verdict = (limit: number, used: number): RateVerdict => ({
     reset: 30,
 });
 
+const LIMITS: AnonymousLimits = {
+    address: { api: 120, datasets: 300, pin: 10, mcp: 300 },
+    cookieless: { api: 60, datasets: 300 },
+    backstop: { api: 240, datasets: 600 },
+};
+
 // A world of fakes: `answer` is what the key store says, `cached` whether the
 // cache already holds it, `used` how many calls each counter already has.
 const world = ({
@@ -52,7 +61,10 @@ const world = ({
     capUsed = 0,
     defaultLimit = 600,
     defaultDailyLimit = 1000,
-    addressLimit = 120,
+    visitorLimits = false,
+    visitorId = null,
+    visitorUsed = 0,
+    backstopUsed = 0,
 }: {
     answer?: KeyVerdict;
     cached?: boolean;
@@ -62,7 +74,10 @@ const world = ({
     capUsed?: number;
     defaultLimit?: number;
     defaultDailyLimit?: number;
-    addressLimit?: number;
+    visitorLimits?: boolean;
+    visitorId?: string | null;
+    visitorUsed?: number;
+    backstopUsed?: number;
 } = {}) => {
     const calls: string[] = [];
     const verifier: KeyVerifier = {
@@ -83,11 +98,24 @@ const world = ({
         tagValid: (key) => hasValidTag(key, [SECRET]),
         defaultLimit,
         defaultDailyLimit,
-        hitAddress: async (surface, ip) => {
+        hitAddress: async (surface, ip, limit) => {
             calls.push(`address:${surface}:${ip}`);
 
-            return verdict(addressLimit, addressUsed + 1);
+            return verdict(limit, addressUsed + 1);
         },
+        hitVisitor: async (surface, id, limit) => {
+            calls.push(`visitor:${surface}:${id}:${limit}`);
+
+            return verdict(limit, visitorUsed + 1);
+        },
+        hitBackstop: async (surface, ip, limit) => {
+            calls.push(`backstop:${surface}:${ip}:${limit}`);
+
+            return verdict(limit, backstopUsed + 1);
+        },
+        anonymousLimits: LIMITS,
+        visitorLimits: () => visitorLimits,
+        visitor: () => visitorId,
         hitAccount: async (surface, accountId, limit) => {
             calls.push(`account:${surface}:${accountId}:${limit}`);
 
@@ -404,4 +432,147 @@ test('a bearer that is not one of our keys is no key: anonymous, no lookup', asy
 
     assert.deepEqual(calls, ['address:api:203.0.113.7']);
     assert.equal(access.outcome, undefined);
+});
+
+test("with visitor limits off, an anonymous call is counted by address at today's limits, token or not", async () => {
+    for (const [surface, limit] of [
+        ['api', 120],
+        ['datasets', 300],
+    ] as const) {
+        const { calls, deps } = world({ visitorId: 'v-1' });
+        const access = await decide(deps, {}, { surface });
+
+        assert.deepEqual(calls, [`address:${surface}:203.0.113.7`]);
+        assert.equal(access.verdict?.limit, limit);
+        assert.equal(access.tier, 'address');
+    }
+
+    const { deps } = world({ addressUsed: 120 });
+    const refused = await decide(deps);
+
+    assert.equal(refused.refusal?.status, 429);
+    assert.ok(!(await refused.refusal!.json()).detail.includes('/docs/build/api-keys'));
+});
+
+test('a call with a valid visitor token is counted per visitor, then on the address backstop', async () => {
+    for (const [surface, own, backstop] of [
+        ['api', 120, 240],
+        ['datasets', 300, 600],
+    ] as const) {
+        const { calls, deps } = world({ visitorLimits: true, visitorId: 'v-1' });
+        const access = await decide(deps, {}, { surface });
+
+        assert.deepEqual(calls, [
+            `visitor:${surface}:v-1:${own}`,
+            `backstop:${surface}:203.0.113.7:${backstop}`,
+        ]);
+        assert.deepEqual(access.identity, { kind: 'anonymous' });
+        assert.equal(access.refusal, undefined);
+        assert.equal(access.verdict?.limit, own);
+        assert.equal(access.tier, 'visitor');
+    }
+});
+
+test('a visitor over its limit is a 429 that spends nothing on the backstop', async () => {
+    const { calls, deps } = world({ visitorLimits: true, visitorId: 'v-1', visitorUsed: 120 });
+    const access = await decide(deps);
+
+    assert.deepEqual(calls, ['visitor:api:v-1:120']);
+    assert.equal(access.refusal?.status, 429);
+    assert.equal((await access.refusal!.json()).code, 'rate_limited');
+    assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '120');
+    assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), 'visitor');
+});
+
+test('ten visitors from one address meet the address backstop', async () => {
+    const counts = new Map<string, number>();
+    const count = async (counter: string, limit: number) => {
+        const used = (counts.get(counter) ?? 0) + 1;
+
+        counts.set(counter, used);
+
+        return verdict(limit, used);
+    };
+    const { deps } = world({ visitorLimits: true });
+    let visitorId = '';
+
+    deps.visitor = () => visitorId;
+    deps.hitVisitor = (surface, id, limit) => count(`visitor:${id}`, limit);
+    deps.hitBackstop = (surface, ip, limit) => count(`backstop:${ip}`, limit);
+
+    const statuses: number[] = [];
+
+    // Thirty calls each, every one within its own allowance of 120.
+    for (let call = 0; call < 30; call++) {
+        for (let visitor = 0; visitor < 10; visitor++) {
+            visitorId = `v-${visitor}`;
+            statuses.push((await decide(deps)).refusal?.status ?? 200);
+        }
+    }
+
+    assert.equal(statuses.filter((status) => status === 200).length, 240);
+    assert.deepEqual(statuses.slice(240), Array(60).fill(429));
+});
+
+test('a backstop refusal reports the backstop', async () => {
+    const { deps } = world({ visitorLimits: true, visitorId: 'v-1', backstopUsed: 240 });
+    const access = await decide(deps);
+
+    assert.equal(access.refusal?.status, 429);
+    assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '240');
+    assert.equal(access.tier, 'visitor');
+});
+
+test('a call with no valid visitor token is counted by address at the cookieless allowance', async () => {
+    for (const [surface, limit] of [
+        ['api', 60],
+        ['datasets', 300],
+    ] as const) {
+        const { calls, deps } = world({ visitorLimits: true });
+        const access = await decide(deps, {}, { surface });
+
+        assert.deepEqual(calls, [`address:${surface}:203.0.113.7`]);
+        assert.equal(access.verdict?.limit, limit);
+        assert.equal(access.tier, 'address');
+    }
+});
+
+test('a cookieless API 429 names what a free API key gives; with keys off or on datasets it does not', async () => {
+    const hint = async (options: { surface?: Surface; keys?: boolean }) => {
+        const { deps } = world({ visitorLimits: true, addressUsed: 300, defaultLimit: 600 });
+        const access = await decide(deps, {}, options);
+        const document = await access.refusal!.json();
+
+        assert.equal(access.refusal?.status, 429);
+        assert.equal(document.code, 'rate_limited');
+        assert.equal(document.retryable, true);
+        assert.equal(access.refusal?.headers.get('x-dfo-limit-tier'), 'address');
+
+        return document.detail.includes('/docs/build/api-keys');
+    };
+
+    assert.equal(await hint({}), true);
+    assert.equal(await hint({ keys: false }), false);
+    assert.equal(await hint({ surface: 'datasets' }), false);
+});
+
+test("mcp and pin are counted by address at today's limits with visitor limits on", async () => {
+    for (const [surface, limit] of [
+        ['mcp', 300],
+        ['pin', 10],
+    ] as const) {
+        const { calls, deps } = world({ visitorLimits: true, visitorId: 'v-1' });
+        const access = await decide(deps, {}, { surface });
+
+        assert.deepEqual(calls, [`address:${surface}:203.0.113.7`]);
+        assert.equal(access.verdict?.limit, limit);
+    }
+});
+
+test('a keyed call is counted as tier key, whatever visitor token it carries', async () => {
+    const { calls, deps } = world({ cached: true, visitorLimits: true, visitorId: 'v-1' });
+    const access = await decide(deps, { 'x-api-key': KEY });
+
+    assert.equal(access.tier, 'key');
+    assert.ok(calls.every((entry) => !entry.startsWith('visitor:')));
 });
