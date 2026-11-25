@@ -320,7 +320,13 @@ export const decideAccess = async (
         const rate = limitHeaders(refused);
 
         if (isDailyStage(refusedBy)) {
-            const whose = !own ? 'address' : visitorId === null ? 'cookieless' : 'visitor';
+            const whose = !own
+                ? 'address'
+                : visitorId !== null
+                  ? 'visitor'
+                  : visitorsOn
+                    ? 'cookieless'
+                    : 'address';
 
             return {
                 ...refused,

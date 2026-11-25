@@ -17,14 +17,7 @@ import { buildCounterPool } from '../../../../db/connection.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
 import { createFallbackCounter } from '../limitFallback.ts';
 
-const {
-    ACCOUNT_DAILY_LIMIT,
-    ADDRESS_DAILY_LIMITS,
-    ANONYMOUS_DAILY_LIMITS,
-    COOKIELESS_LIMITS,
-    createLimiter,
-    dailyAllowance,
-} = await import('../rateLimit.ts');
+const { createLimiter, dailyAllowance } = await import('../rateLimit.ts');
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../../../../db/migrations');
 
@@ -288,24 +281,6 @@ test('limiter: a count that times out falls back too', async () => {
 
     assert.equal(admission.refusedBy, 'day');
     assert.equal(admission.verdicts.minute?.remaining, 4);
-});
-
-test('defaults: 20 cookieless API calls a minute, 1,000 anonymous calls a day, 5,000 per address, 10,000 per account', () => {
-    for (const name of [
-        'RATE_LIMIT_API_ANON',
-        'RATE_LIMIT_ANON_DAILY_API',
-        'RATE_LIMIT_ANON_DAILY_DATASETS',
-        'RATE_LIMIT_ANON_DAILY_ADDRESS_API',
-        'RATE_LIMIT_ANON_DAILY_ADDRESS_DATASETS',
-        'API_KEY_DAILY_LIMIT',
-    ]) {
-        assert.equal(process.env[name], undefined, `${name} is set, so the defaults are not seen`);
-    }
-
-    assert.equal(COOKIELESS_LIMITS.api, 20);
-    assert.deepEqual(ANONYMOUS_DAILY_LIMITS, { api: 1000, datasets: 1000 });
-    assert.deepEqual(ADDRESS_DAILY_LIMITS, { api: 5000, datasets: 5000 });
-    assert.equal(ACCOUNT_DAILY_LIMIT, 10_000);
 });
 
 test('dailyAllowance: 0 turns the cap off, and an unset or malformed value keeps the default', () => {

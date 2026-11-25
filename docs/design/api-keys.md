@@ -254,16 +254,22 @@ On `/mcp` and the Studio the proxy strips any `dfo_` value and reads nothing fro
 
 #### The visitor tier
 
-An anonymous call on the API or the Datasets API is counted by the reader's `dfo_v` cookie while visitor limits are on, so readers behind one office or campus address do not share an allowance. The check runs after the key steps above, which are unchanged, and the call goes to the first row that fits. Every call in either row is then counted on the address's backstop, 240 API and 500 datasets calls a minute (`RATE_LIMIT_API_BACKSTOP`, `RATE_LIMIT_DATASETS_BACKSTOP`).
+An anonymous call on the API or the Datasets API is counted by the reader's `dfo_v` cookie while visitor limits are on, so readers behind one office or campus address do not share an allowance. The tier follows whether the request carries a valid `dfo_v` cookie, whatever sends it: any HTTP client that loads a page gets one. The check runs after the key steps above, which are unchanged, and the call goes to the first row that fits. Every call in either row also counts on the address's backstop, 240 API and 500 datasets calls a minute (`RATE_LIMIT_API_BACKSTOP`, `RATE_LIMIT_DATASETS_BACKSTOP`).
 
 | The call carries                  | Counted against                | Limit a minute                               |
 | --------------------------------- | ------------------------------ | -------------------------------------------- |
 | A valid, unexpired `dfo_v` token  | The visitor                    | 120 API, 300 datasets                        |
 | No token, a forged or expired one | The address's cookieless count | 20 API (`RATE_LIMIT_API_ANON`), 300 datasets |
 
-Anonymous calls also have daily caps, from 00:00 to 00:00 UTC on each of the API and the Datasets API. A call with a valid token counts 1,000 a day against the visitor, under `anonday:<surface>:visitor:<id>`; one without counts 1,000 a day against the address's cookieless count, under `anonday:<surface>:cookieless:<bucket>` (`RATE_LIMIT_ANON_DAILY_API`, `RATE_LIMIT_ANON_DAILY_DATASETS`). Every anonymous call from one address, with a token or without, also counts against the address at 5,000 a day per surface, under `anonday:<surface>:addr:<bucket>` (`RATE_LIMIT_ANON_DAILY_ADDRESS_API`, `RATE_LIMIT_ANON_DAILY_ADDRESS_DATASETS`). Setting any of the four to 0 turns that cap off. The check runs after the per-minute and backstop counts admit the call. A spent cap answers 429 `allowance_exhausted`, not retryable, with `Retry-After` to 00:00 UTC. Studio calls and stored-file downloads do not count. `VISITOR_LIMITS_ENABLED=false` leaves the cap on.
+Anonymous calls also have daily caps, from 00:00 to 00:00 UTC on each of the API and the Datasets API. A call with a valid token counts 1,000 a day against the visitor, under `anonday:<surface>:visitor:<id>`; one without counts 1,000 a day against the address's cookieless count, under `anonday:<surface>:cookieless:<bucket>` (`RATE_LIMIT_ANON_DAILY_API`, `RATE_LIMIT_ANON_DAILY_DATASETS`). Every anonymous call from one address, with a token or without, also counts against the address at 5,000 a day per surface, under `anonday:<surface>:addr:<bucket>` (`RATE_LIMIT_ANON_DAILY_ADDRESS_API`, `RATE_LIMIT_ANON_DAILY_ADDRESS_DATASETS`). Setting any of the four to 0 turns that cap off. A spent cap answers 429 `allowance_exhausted`, not retryable, with `Retry-After` to 00:00 UTC. Studio calls and stored-file downloads do not count. `VISITOR_LIMITS_ENABLED=false` leaves the cap on.
 
-A call goes to the backstop only once its own row admits it, so a refused call spends nothing there. A call with a valid token never touches the cookieless count, so readers with tokens do not spend a cookieless caller's allowance. The site's download links (`/api/version-download/<spec>/<cv>`, `/s/<id>/download`) count on the API row the same way.
+`admitHit` in `src/lib/proxy/limitCounter.ts` runs the anonymous counts in one statement, in this order, each step only once the one before admits the call:
+
+1. Read the address's per-minute backstop and daily ceiling. A spent one refuses the call.
+2. Count the caller's own per-minute counter, then its own daily counter.
+3. Debit the backstop and the ceiling.
+
+A call refused at a step writes nothing after it, so fresh visitor ids at an address that has spent its backstop or ceiling create no rows, and a call its own counters refuse spends nothing on the address's. A call with a valid token never touches the cookieless count, so readers with tokens do not spend a cookieless caller's allowance. The site's download links (`/api/version-download/<spec>/<cv>`, `/s/<id>/download`) count on the API row the same way.
 
 The token is `<id>.<expiry>.<tag>`, signed with a key derived from `CALLER_HMAC_KEY` under the label `visitor-token` (`src/lib/proxy/visitor.ts`). `src/proxy.ts` sets the cookie on any `GET` its matcher runs on, a page load or the RSC request of an in-app navigation or prefetch, when none is valid or less than half its 24 hours is left, so a reader who keeps using the site keeps a cookie. Next strips the headers that mark a prefetch before the proxy sees the request, so prefetches renew it too. It is HttpOnly, `SameSite=Lax` and lasts 24 hours. Rotating `CALLER_HMAC_KEY` voids every token, and the next page request issues a new one.
 
@@ -271,7 +277,9 @@ Any client can load a page and get a token, so a token proves nothing about the 
 
 With visitor limits off (`VISITOR_LIMITS_ENABLED=false`) or `CALLER_HMAC_KEY` unset, every anonymous call counts against its address at the limits of the first table: 120 API, 300 datasets. A production server with visitor limits on and no `CALLER_HMAC_KEY` refuses to start (`checkVisitorKey` in `src/instrumentation.ts`); elsewhere it starts and warns once. `/mcp` and `/api/download-pin` never use the visitor tier.
 
-A counted call's response carries `x-dfo-limit-tier`, `key`, `visitor` or `address`, naming whose count it spent. The request log records it as `tier` and never the visitor id.
+A 429 names the counter that refused the call: the visitor, the address, the account or the key. The proxy sets `x-dfo-limit-tier` (`key`, `visitor` or `address`) on a counted call's response only for its own log. `requestLog.ts` removes the header from every response as the head is written and logs the value as `tier`, never the visitor id, so no client or shared cache sees it.
+
+Each counter's row has `expires_at`, the window start plus the window: a minute for a per-minute counter, a UTC day for a daily one. Every instance deletes the rows whose `expires_at` has passed every 5 minutes (`pruneCounters`), so a per-minute counter outlives its window by at most that long.
 
 A keyed API call is named to dfo-apis by its account instead of `ip:<digest>`, so dfo-apis's allowances are per account too. The form is `user:` and the first 32 hex digits of an HMAC-SHA-256 over the account id, keyed like the `ip:` digest, so no account id leaves the website. A `/mcp` call is always named `ip:<digest>`, so dfo-ai and its MCP servers never see a `user:` caller. dfo-apis accepts `user:`. A dfo-apis that predates it answers a `user:` caller with a 400, so dfo-apis deploys before the website. See [Work by repository][].
 

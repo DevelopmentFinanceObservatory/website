@@ -25,6 +25,7 @@ import type { AccessDeps, AnonymousLimits } from '../access.ts';
 import type { KeyVerdict, KeyVerifier, ValidKey } from '../keyVerifier.ts';
 import { DAY_S } from '../limitCounter.ts';
 import { admitInMemory, createFallbackCounter, type FallbackCounter } from '../limitFallback.ts';
+import { anonymousDailyProblem } from '../problem.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
 import type { Surface } from '../rateLimit.ts';
 
@@ -727,8 +728,16 @@ test('a keyed call is counted as tier key, whatever visitor token it carries', a
 });
 
 test('an anonymous call past its own daily count or its address ceiling is a 429 allowance_exhausted', async () => {
-    for (const [name, setting, headers, surface, own, tier] of [
-        ['visitor', { visitorLimits: true, visitorId: 'v-1' }, {}, 'api', 'visitor:v-1', 'visitor'],
+    for (const [name, setting, headers, surface, own, tier, wording] of [
+        [
+            'visitor',
+            { visitorLimits: true, visitorId: 'v-1' },
+            {},
+            'api',
+            'visitor:v-1',
+            'visitor',
+            'visitor',
+        ],
         [
             'cookieless',
             { visitorLimits: true },
@@ -736,6 +745,7 @@ test('an anonymous call past its own daily count or its address ceiling is a 429
             'datasets',
             'cookieless:203.0.113.7',
             'address',
+            'cookieless',
         ],
         [
             'visitor limits off',
@@ -744,6 +754,7 @@ test('an anonymous call past its own daily count or its address ceiling is a 429
             'api',
             'cookieless:203.0.113.7',
             'address',
+            'address',
         ],
         [
             'key the store lacks',
@@ -751,6 +762,7 @@ test('an anonymous call past its own daily count or its address ceiling is a 429
             { 'x-api-key': KEY },
             'api',
             'cookieless:203.0.113.7',
+            'address',
             'address',
         ],
     ] as const) {
@@ -786,6 +798,20 @@ test('an anonymous call past its own daily count or its address ceiling is a 429
             assert.equal(access.tier, tier, name);
             assert.equal(access.scope, scope, name);
             assert.ok(document.detail.includes('/docs/build/api-keys'), name);
+
+            // Only a call that meets the cookieless count with visitor limits on gets the cookieless wording.
+            const whose = 'anonymousDailyUsed' in used ? wording : 'address';
+            const expected = await anonymousDailyProblem(
+                { limit: Number(limit), reset: 30 },
+                {},
+                whose,
+            ).json();
+
+            assert.equal(
+                document.detail.slice(0, document.detail.indexOf(' calls')),
+                expected.detail.slice(0, expected.detail.indexOf(' calls')),
+                name,
+            );
         }
     }
 

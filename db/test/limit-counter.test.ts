@@ -245,6 +245,34 @@ test('limit counters and Studio prompt allowances', async (t) => {
     });
 
     await t.test(
+        'pruning keeps an ended row whose expires_at is not after its window_start until it is two days old',
+        async () => {
+            await countHit(db, 'api:192.0.2.52', 1, 60);
+            await countHit(db, 'api:192.0.2.53', 1, 60);
+            await admin.query(
+                `update limit_counter
+                 set window_start = now() - interval '30 seconds', expires_at = now() - interval '30 seconds'
+                 where key = 'api:192.0.2.52'`,
+            );
+            await admin.query(
+                `update limit_counter
+                 set window_start = now() - interval '3 days', expires_at = now() - interval '3 days'
+                 where key = 'api:192.0.2.53'`,
+            );
+
+            await pruneCounters(db);
+
+            const { rows } = await admin.query<{ key: string }>(
+                `select key from limit_counter where key in ('api:192.0.2.52', 'api:192.0.2.53')`,
+            );
+            assert.deepEqual(
+                rows.map(({ key }) => key),
+                ['api:192.0.2.52'],
+            );
+        },
+    );
+
+    await t.test(
         'fresh visitor ids at an address past its backstop or ceiling create no rows',
         async () => {
             const rowCount = async (pattern: string) =>

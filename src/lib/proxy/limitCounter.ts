@@ -36,6 +36,9 @@ export type ReservationVerdict =
 /** The window of a daily API quota in seconds: a UTC day, epoch-aligned. */
 export const DAY_S = 86_400;
 
+/** Age of `window_start` past which the prune deletes an ended row whatever its `expires_at`. */
+const PRUNE_AFTER_S = 2 * DAY_S;
+
 /** The counter key of an account's daily API quota, which every key of the account spends. */
 export const accountDailyCounterKey = (accountId: string): string => `apiday:user:${accountId}`;
 
@@ -425,7 +428,14 @@ export const refundReservation = async (db: CounterDb, receipt: Reservation): Pr
  * a count, a refund and dailyUsage each read the current one.
  */
 export const pruneCounters = async (db: CounterDb): Promise<void> => {
-    await db.execute(sql`delete from ${limitCounter} where ${limitCounter.expiresAt} < now()`);
+    // A revision that does not write expires_at leaves it at or before window_start
+    // when it rolls a row into a new window; such a row is kept until it is old.
+    await db.execute(
+        sql`delete from ${limitCounter}
+            where ${limitCounter.expiresAt} < now()
+                and (${limitCounter.expiresAt} > ${limitCounter.windowStart}
+                    or ${limitCounter.windowStart} < now() - make_interval(secs => ${PRUNE_AFTER_S}))`,
+    );
 };
 
 /**
