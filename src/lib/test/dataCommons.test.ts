@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { originLine } from '../dataCommons.ts';
+import { downloadedByLabel, originLine, sourceOriginLine } from '../dataCommons.ts';
 
 const DFO = { id: 'dfo', label: 'Development Finance Observatory' } as const;
 const BASE = { id: 'base', label: 'Data Commons by Google' } as const;
@@ -46,4 +46,28 @@ test('a publisher whose label equals the card title is dropped', () => {
         originLine('dc/d/Budget', budget, BASE, 'Other'),
         'South Africa Budget via Data Commons by Google',
     );
+});
+
+test('the Sources pages credit every provenance, DFO included', () => {
+    const rows: [Parameters<typeof sourceOriginLine>, string | null][] = [
+        [['provenance/OECDCreditorReportingSystem', oecd, DFO], 'OECD via DFO'],
+        [[unicef.ref, unicef, DFO], 'via DFO'],
+        [
+            ['dc/d/WorldBank_WorldDevelopmentIndicators', worldBank, BASE],
+            'World Bank via Data Commons by Google',
+        ],
+        [[unicef.ref, unicef, UN], 'via UN System Data Commons'],
+        [['dc/d/X', null, null], null],
+    ];
+
+    for (const [args, expected] of rows) {
+        assert.equal(sourceOriginLine(...args), expected);
+    }
+});
+
+test('the download date names who fetched the data', () => {
+    assert.equal(downloadedByLabel(DFO), 'Downloaded by DFO');
+    assert.equal(downloadedByLabel(BASE), 'Downloaded by Data Commons by Google');
+    assert.equal(downloadedByLabel(UN), 'Downloaded by UN System Data Commons');
+    assert.equal(downloadedByLabel(null), 'Last downloaded');
 });

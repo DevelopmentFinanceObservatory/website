@@ -15,6 +15,7 @@
  * publisher dcids, as a provenance or picked publishers.
  */
 
+import { provenanceName } from '../dataCommons.ts';
 import type { DataCommonsRef } from '../search/types.ts';
 
 import type { Filterable } from './filters.ts';
@@ -58,10 +59,8 @@ const collate = (a: string, b: string) => a.localeCompare(b, 'en');
  *  its dcid for a card whose label is missing or empty. */
 export const publisherName = (card: Filterable): string => card.publisher || card.family;
 
-/** The chip's name for a provenance: "DFO" for the Observatory's own
- *  imports, else the Data Commons' own label. */
-export const provenanceLabel = (commons: DataCommonsRef): string =>
-    commons.id === 'dfo' ? 'DFO' : commons.label;
+/** The chip's name for a provenance (provenanceName). */
+export const provenanceLabel = provenanceName;
 
 /** One chip per provenance with cards, in PROVENANCE_ORDER, each counting
  *  its cards. */
