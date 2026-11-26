@@ -53,6 +53,7 @@ import {
     type StatValue,
 } from './statFace.ts';
 import type { ComponentCreated, ComponentRevised, FactSummary } from './wire';
+import { readHeld } from './wire.ts';
 
 const structuredUnitText = (unit: StructuredUnit): string => {
     const amount = [
@@ -430,6 +431,7 @@ const provenanceOf = (frame: ComponentCreated): PayloadProvenance => {
         sources,
         dataThrough: freshness?.data_through ?? null,
         lastRefreshed: freshness?.last_refreshed ?? null,
+        held: readHeld(freshness?.held),
         // Only the resolved payload states its warnings by kind.
         leftOut: [],
     };
@@ -441,6 +443,7 @@ const provenanceOf = (frame: ComponentCreated): PayloadProvenance => {
         ...chosen,
         dataThrough: chosen.dataThrough ?? own.dataThrough,
         lastRefreshed: chosen.lastRefreshed ?? own.lastRefreshed,
+        held: platform ? platform.held : own.held,
         leftOut: platform?.leftOut ?? [],
     };
 };
@@ -452,6 +455,7 @@ const LINEAGE_ONLY: PayloadProvenance = {
     sources: [],
     dataThrough: null,
     lastRefreshed: null,
+    held: [],
     leftOut: [],
 };
 
@@ -544,6 +548,7 @@ const infoOf = (
         licence: first?.licence ?? null,
         dataThrough: provenance.dataThrough,
         lastRefreshed: provenance.lastRefreshed,
+        ...(provenance.held.length > 0 ? { held: provenance.held } : {}),
         citation: provenance.citation,
         sources,
         ...(provenance.leftOut.length > 0 ? { leftOut: provenance.leftOut } : {}),

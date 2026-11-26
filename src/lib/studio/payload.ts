@@ -9,7 +9,7 @@
 
 import { asRecord } from '../asRecord.ts';
 import { readDescription, type Description } from './description.ts';
-import type { Source, SpecRef } from './wire.ts';
+import { readHeld, type HeldPeriod, type Source, type SpecRef } from './wire.ts';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -348,6 +348,8 @@ export type PayloadProvenance = {
     sources: Source[];
     dataThrough: string | null;
     lastRefreshed: string | null;
+    // Periods the data holds that are partial or projected.
+    held: HeldPeriod[];
     leftOut: string[];
 };
 
@@ -389,6 +391,7 @@ export const payloadProvenance = (
         sources: sources.map(asSource).filter((source) => source !== undefined),
         dataThrough: nonBlank(freshness?.['data_through']) ?? null,
         lastRefreshed: nonBlank(freshness?.['last_refreshed']) ?? null,
+        held: readHeld(freshness?.['held']),
         leftOut: (Array.isArray(warnings) ? warnings : [])
             .map(asRecord)
             .filter((warning) => warning?.['kind'] === 'coverage_gap')
