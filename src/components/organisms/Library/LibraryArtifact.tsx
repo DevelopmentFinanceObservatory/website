@@ -2,6 +2,7 @@ import classNames from 'classnames';
 import Link from 'next/link';
 
 import ArtifactToc from './ArtifactToc';
+import EditArtifact from './EditArtifact';
 import styles from './LibraryArtifact.module.scss';
 import { KIND_ICONS, StatusBadge, TopicTags } from './parts';
 import ShareButton from './ShareButton';
@@ -56,16 +57,19 @@ const Prose = ({ text }: { text: string }) => (
  * sections. A phone stacks the artifact, the details, then the sections.
  *
  * `origin` is the site's own, for the citation. `accessed` is the day the
- * page was rendered, which the citation names.
+ * page was rendered, which the citation names. `canEdit` gives an admin the
+ * Edit button under the two actions.
  */
 const LibraryArtifact = ({
     artifact,
     origin,
     accessed,
+    canEdit = false,
 }: {
     artifact: Artifact;
     origin: string;
     accessed: Date;
+    canEdit?: boolean;
 }) => {
     const studioHref =
         artifact.kind === 'data' ? `/data?share=${artifact.shareId}` : `/s/${artifact.shareId}`;
@@ -124,6 +128,7 @@ const LibraryArtifact = ({
                         <Button href={studioHref} variant="light" full icon="arrow">
                             Open in Studio
                         </Button>
+                        {canEdit && <EditArtifact artifact={artifact} />}
                     </div>
                     <dl className={styles.facts}>
                         <div className={styles.fact}>

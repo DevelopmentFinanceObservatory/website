@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
+import { libraryAdmin } from '@/lib/library/admin';
 import { artifactBySlug } from '@/lib/library/store';
 import { pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
@@ -32,7 +33,12 @@ const LibraryArtifactPage = async ({ params }: LibraryArtifactPageProps) => {
 
     return (
         <main>
-            <LibraryArtifact artifact={artifact} origin={SITE_ORIGIN} accessed={new Date()} />
+            <LibraryArtifact
+                artifact={artifact}
+                origin={SITE_ORIGIN}
+                accessed={new Date()}
+                canEdit={(await libraryAdmin()) !== null}
+            />
         </main>
     );
 };

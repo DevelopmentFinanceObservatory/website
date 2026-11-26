@@ -880,6 +880,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                     title={title}
                     firstPrompt={firstPrompt}
                     shareData={shareData}
+                    cardTitleOf={cardTitleOf}
                     createShare={save.createShare}
                     guest={guest}
                 />

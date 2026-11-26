@@ -9,6 +9,7 @@ import type { StudioModalsState } from './useStudioModals';
 import { widgetTitle } from '../canvas/layout';
 import type { CanvasDocument } from '../hooks/useCanvasDocument';
 
+import { useAdmin } from '@/hooks/useAdmin';
 import type { Widget } from '@/lib/chat/widgets';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 import type { ShareLinkDeps } from '@/lib/studio/shareDialog';
@@ -25,6 +26,8 @@ type StudioModalsProps = {
     createShare: ShareLinkDeps['createShare'];
     // Signed out: the share dialog makes unowned snapshots only.
     guest?: boolean;
+    // A card's title as its face shows it (the Publish tab's list).
+    cardTitleOf: (id: string) => string;
 };
 
 /**
@@ -42,7 +45,9 @@ const StudioModals = ({
     shareData,
     createShare,
     guest = false,
+    cardTitleOf,
 }: StudioModalsProps) => {
+    const admin = useAdmin(!guest);
     const { seq } = modals;
     const editingText = modals.textCard.editingId
         ? doc.textCards.find((card) => card.id === modals.textCard.editingId)
@@ -137,6 +142,7 @@ const StudioModals = ({
                 offerLive={sharesData}
                 createShare={createShare}
                 guest={guest}
+                publish={admin ? { widgets: visibleWidgets, titleOf: cardTitleOf } : undefined}
             />
         </>
     );
