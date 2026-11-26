@@ -16,6 +16,7 @@ import {
     handoffFromExample,
     handoffQuestion,
     handoffSeeds,
+    searchFromExample,
     studioHref,
 } from '../studioHandoff.ts';
 import {
@@ -423,16 +424,23 @@ test('searchEventName counts a resolution with nothing resolved as search.empty'
     assert.equal(props.refused[0].reason, 'entity_ambiguous');
 });
 
-test('handoffFromExample: only an unedited search from an example hands over an example', () => {
-    const cases: [Parameters<typeof handoffFromExample>[0], boolean][] = [
-        [{ source: 'example', edited: false }, true],
-        [{ source: 'example', edited: true }, false],
-        [{ source: 'typed', edited: false }, false],
-        [{ source: 'permalink', edited: false }, false],
-        [{ source: null, edited: false }, false],
+test('a search asks an example when it was picked as one or retries one that was', () => {
+    const cases: [Parameters<typeof searchFromExample>, boolean][] = [
+        [['example', false], true],
+        [['retry', true], true],
+        [['retry', false], false],
+        [['typed', true], false],
+        [['permalink', true], false],
     ];
 
-    for (const [input, expected] of cases) {
-        assert.equal(handoffFromExample(input), expected, JSON.stringify(input));
+    for (const [args, expected] of cases) {
+        assert.equal(searchFromExample(...args), expected, JSON.stringify(args));
     }
+
+    // A retried example handed to Studio unedited is still the example.
+    assert.equal(
+        handoffFromExample({ fromExample: searchFromExample('retry', true), edited: false }),
+        true,
+    );
+    assert.equal(handoffFromExample({ fromExample: true, edited: true }), false);
 });

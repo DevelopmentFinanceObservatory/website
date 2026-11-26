@@ -214,13 +214,13 @@ its `website` stack outputs goes in this var verbatim.
 
 ### Studio examples
 
-Each run, as a phase of its own beside the event export, keeps the BigQuery table `studio_examples` (`db/example-export.ts`): one row per question the build offers as a pick, the Studio landing examples (`EXAMPLE_PROMPTS` in `src/lib/studio/examples.ts`) and the "What data is available?" question (`DATA_AVAILABILITY_PROMPT` in `src/lib/studio/examples.ts`). The run creates the table when it is missing, then sends one `MERGE` query, bounded as every BigQuery query is, that sets `last_seen_at` on each offered row and inserts a row for each new text. Rows for texts a later build drops stay as they were. The merge runs at the same time as the event days. A failed merge fails the Job under its own `example export` step, and the event phase reports only events.
+Each run, as a phase of its own beside the event export, keeps the BigQuery table `studio_examples` (`db/example-export.ts`): one row per question the build offers as a pick, the Studio landing examples (`EXAMPLE_PROMPTS` in `src/lib/studio/examples.ts`) and the "What data is available?" question (`DATA_AVAILABILITY_PROMPT` in `src/lib/studio/examples.ts`). The run creates the table when it is missing, then sends one `MERGE` query, bounded as every BigQuery query is, that sets `last_seen_at` on each offered row and inserts a row for each new text. A text production offered before the export first ran (`OFFERED_BEFORE_EXPORT`) is inserted with the times of the releases that shipped and dropped it. Rows for texts a later build drops stay as they were. The run holds a Postgres advisory lock from the table check to the end of the merge, so a second execution waits for the first, up to five minutes, and finds its rows. Two overlapping merges would otherwise each insert the same new text. The merge runs at the same time as the event days. A failed merge fails the Job under its own `example export` step, and the event phase reports only events.
 
 | Column          | Type      | Value                                                                     |
 | --------------- | --------- | ------------------------------------------------------------------------- |
 | `kind`          | STRING    | `example` for a landing example, `availability` for the drawer's question |
 | `text`          | STRING    | the question as the build offers it                                       |
-| `first_seen_at` | TIMESTAMP | the run that first found the text in a build                              |
+| `first_seen_at` | TIMESTAMP | the release that first shipped the text, or the run that first found it   |
 | `last_seen_at`  | TIMESTAMP | the latest run that found it                                              |
 
 ## GCP prerequisites (infra)

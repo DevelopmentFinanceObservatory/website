@@ -189,7 +189,7 @@ const DataSearch = ({
         editShared,
         editFacet,
         searchIds,
-        searchSource,
+        searchIsExample,
     } = useSearchRun();
     // A version link runs with no question of its own: the resolved sentence
     // stands in for it wherever the page needs text (the Studio handoff, a
@@ -380,7 +380,11 @@ const DataSearch = ({
             }),
         );
         router.push(
-            studioHref(question, token, handoffFromExample({ source: searchSource(), edited })),
+            studioHref(
+                question,
+                token,
+                handoffFromExample({ fromExample: searchIsExample(), edited }),
+            ),
         );
     }, [
         router,
@@ -392,7 +396,7 @@ const DataSearch = ({
         answerKind,
         answerReason,
         searchIds,
-        searchSource,
+        searchIsExample,
     ]);
 
     // A visitor's action on the answer on screen (docs/analytics.md): the

@@ -102,17 +102,24 @@ const isSeedOperation = (op: Operation): op is Operation & SeedOperation =>
 const operationKey = ({ verb, phrase, over, target_year }: Operation): string =>
     JSON.stringify([verb, phrase, over ?? null, target_year ?? null]);
 
+/** Whether a search asks a Data search example's text: it was picked as
+ *  an example, or it is a Retry of a search that was, which reruns the same
+ *  question. `previous` is the search it replaces. */
+export function searchFromExample(source: SearchSource, previous: boolean): boolean {
+    return source === 'example' || (source === 'retry' && previous);
+}
+
 /** Whether the question handed to Studio is a Data search example's text:
- *  the search on screen came from an example and no part was edited, so
- *  the question is the example as offered. */
+ *  the search on screen asks an example (searchFromExample) and no part was
+ *  edited, so the question is the example as offered. */
 export function handoffFromExample({
-    source,
+    fromExample,
     edited,
 }: {
-    source: SearchSource | null;
+    fromExample: boolean;
     edited: boolean;
 }): boolean {
-    return source === 'example' && !edited;
+    return fromExample && !edited;
 }
 
 /** Studio's URL for a handoff: the question, the token the seeds are
