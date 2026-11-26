@@ -20,12 +20,15 @@ const STATIC_PATHS = [
 export const sitemapPaths = ({
     docs,
     sourceIds,
+    librarySlugs = [],
 }: {
     docs: readonly DocsPage[];
     // Source dcids, slashes and all.
     sourceIds: readonly string[];
+    librarySlugs?: readonly string[];
 }): string[] => [
     ...STATIC_PATHS,
     ...docs.map((page) => docsHref(page.path)),
     ...sourceIds.map((dcid) => `/data/sources/${dcid}`),
+    ...librarySlugs.map((slug) => `/library/${slug}`),
 ];

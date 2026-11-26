@@ -17,9 +17,19 @@ export const metadata: Metadata = {
     openGraph: pageOpenGraph({ title: 'Library', description: DESCRIPTION }),
 };
 
+// The list reads no artifact's text section or build steps, so they stay on
+// the server.
+const listed = async () =>
+    (await listArtifacts()).map((artifact) => ({
+        ...artifact,
+        contentTitle: null,
+        content: null,
+        steps: [],
+    }));
+
 const LibraryPage = async () => (
     <main>
-        <Library artifacts={await listArtifacts()} />
+        <Library artifacts={await listed()} />
     </main>
 );
 

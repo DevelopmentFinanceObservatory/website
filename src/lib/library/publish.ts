@@ -46,6 +46,10 @@ export type Read<T> = { ok: true; value: T } | { ok: false; pointer: string; det
 // A share's id as dfo-apis issues it (src/lib/chat/apisShares.ts).
 const SHARE_ID = /^[A-Za-z0-9]{8}$/;
 
+// The bar the Library's list params join their values with (./artifact.ts),
+// which a topic's label and a source's name therefore leave out.
+const SEPARATOR = '|';
+
 const squeeze = (text: string): string => text.trim().replace(/[ \t]+/g, ' ');
 
 const refuse = (pointer: string, detail: string) => ({ ok: false as const, pointer, detail });
@@ -59,7 +63,9 @@ export const topicLabel = (raw: unknown): string | null => {
 
     const label = squeeze(raw.replace(/\s+/g, ' '));
 
-    return label.length > 0 && label.length <= LIMITS.topic ? label : null;
+    return label.length > 0 && label.length <= LIMITS.topic && !label.includes(SEPARATOR)
+        ? label
+        : null;
 };
 
 // A required line of text within `max`.
@@ -214,7 +220,7 @@ export const readPublish = (body: unknown): Read<PublishInput> => {
         const name = isRecord(raw) ? line(raw.name, LIMITS.line) : null;
         const url = isRecord(raw) ? sourceUrl(raw.url) : false;
 
-        if (!name || url === false) {
+        if (!name || name.includes(SEPARATOR) || url === false) {
             return refuse('/sources', 'A source has no name or a page that is not a link.');
         }
 
@@ -293,7 +299,7 @@ export const publishedFacts = (
 
     for (const view of views) {
         for (const source of view.sources) {
-            const name = clip(source.name, LIMITS.line);
+            const name = clip(source.name.replaceAll(SEPARATOR, '/'), LIMITS.line);
 
             if (name && !sources.has(name)) {
                 const url = sourceUrl(

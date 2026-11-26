@@ -50,7 +50,11 @@ const docs: DocsPage[] = [
     { id: 'pydeflate', title: 'pydeflate', path: 'tools/pydeflate', kind: 'external' },
 ];
 
-const paths = sitemapPaths({ docs, sourceIds: ['dc/d/WorldBank_IDS'] });
+const paths = sitemapPaths({
+    docs,
+    sourceIds: ['dc/d/WorldBank_IDS'],
+    librarySlugs: ['health-oda'],
+});
 
 const NOINDEX_PATHS = [
     '/s/abc',
@@ -163,6 +167,7 @@ test('the sitemap lists docs, About and source pages', () => {
     assert.ok(paths.includes('/docs/tools/pydeflate'));
     assert.ok(paths.includes('/about/publications'));
     assert.ok(paths.includes('/data/sources/dc/d/WorldBank_IDS'));
+    assert.ok(paths.includes('/library/health-oda'));
 });
 
 test('every page the sitemap lists may be fetched and indexed', () => {

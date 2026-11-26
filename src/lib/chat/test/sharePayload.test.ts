@@ -76,8 +76,14 @@ test('a share of a save whose baseline predates manifest pins slots the pinned c
 
     assert.ok('widgets' in slotted);
     assert.deepEqual(
-        slotted.widgets.map((widget) => (widget as { slot?: number }).slot),
-        [0, 1],
+        Object.fromEntries(
+            slotted.widgets.map((widget) => {
+                const { id, slot } = widget as { id: string; slot?: number };
+
+                return [id, slot];
+            }),
+        ),
+        { c1: 0, c2: 1 },
     );
 });
 

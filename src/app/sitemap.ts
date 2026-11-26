@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 import { DOCS_PAGES } from '@/lib/docs/corpus';
+import { listArtifacts } from '@/lib/library/store';
 import { SITE_ORIGIN } from '@/lib/site';
 import { sitemapPaths } from '@/lib/sitemap';
 import { loadSources } from '@/lib/sources/graph';
@@ -21,8 +22,23 @@ const sourceIds = async (): Promise<string[]> => {
     }
 };
 
+// A database failure drops the artifact pages for the same reason.
+const librarySlugs = async (): Promise<string[]> => {
+    try {
+        return (await listArtifacts()).map((artifact) => artifact.slug);
+    } catch (error) {
+        console.error('sitemap: the Library pages are left out', error);
+
+        return [];
+    }
+};
+
 const sitemap = async (): Promise<MetadataRoute.Sitemap> =>
-    sitemapPaths({ docs: DOCS_PAGES, sourceIds: await sourceIds() }).map((path) => ({
+    sitemapPaths({
+        docs: DOCS_PAGES,
+        sourceIds: await sourceIds(),
+        librarySlugs: await librarySlugs(),
+    }).map((path) => ({
         url: `${SITE_ORIGIN}${path}`,
     }));
 

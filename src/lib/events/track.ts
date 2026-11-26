@@ -42,7 +42,7 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  *                     mode, what was copied)
  * - share.open        a share link opened at /s/<id> (share id, kind, mode, host site)
  * - gallery.open      a visitor opened a Gallery item (slug, kind). Nothing
- *                     emits it; the export reads the rows already recorded.
+ *                     emits it, and the export reads the rows the table holds.
  * - studio.download   a Studio card's data saved to the device (format, card kind, card id, source)
  * - data.view         an embed the site served that draws DFO data (spec ids, content
  *                     versions, host site, the viewer's caller digest)

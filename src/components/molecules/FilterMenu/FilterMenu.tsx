@@ -36,11 +36,14 @@ const FilterMenu = ({ label, options, selected, onChange }: FilterMenuProps) => 
             <DropdownMenu.Trigger
                 className={classNames(styles.trigger, selected.length > 0 && styles.triggerOn)}
                 disabled={options.length === 0}
+                aria-label={
+                    selected.length > 0 ? `${label}, ${selected.length} selected` : undefined
+                }
             >
                 {label}
                 <Icon name="chevron-down" className={styles.chevron} />
                 {selected.length > 0 && (
-                    <span className={styles.count} aria-label={`${selected.length} selected`}>
+                    <span className={styles.count} aria-hidden="true">
                         {selected.length}
                     </span>
                 )}

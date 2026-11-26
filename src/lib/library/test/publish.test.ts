@@ -42,6 +42,8 @@ test('a publish body is refused at the first field at fault', () => {
         [{ content: 'x'.repeat(8001) }, '/content'],
         [{ topics: 'Health' }, '/topics'],
         [{ topics: [''] }, '/topics'],
+        [{ topics: ['Aid | Debt'] }, '/topics'],
+        [{ sources: [{ name: 'IMF | WEO', url: null }] }, '/sources'],
         [{ shareId: '../../etc' }, '/shareId'],
         [{ kind: 'data' }, '/kind'],
         [{ mode: 'frozen' }, '/mode'],
@@ -139,7 +141,7 @@ test('what a card gives is what a publish takes', () => {
     const facts = publishedFacts([
         view(
             [
-                { name: 'Plain', url: 'http://plain.example', page: null },
+                { name: 'Plain | bar', url: 'http://plain.example', page: null },
                 { name: 'n'.repeat(400), url: 'https://long.example', page: null },
             ],
             1,

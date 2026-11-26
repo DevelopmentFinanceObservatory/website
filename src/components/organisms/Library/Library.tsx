@@ -27,6 +27,10 @@ const serializeQuery = (q: string) => (q.trim() ? q : null);
 // Sources a row names before "+N more".
 const SOURCES_SHOWN = 2;
 
+// A filter picked by hand is a history entry, so Back undoes it. The search
+// text, written per keystroke, replaces the entry.
+const PICKED = { history: 'push' } as const;
+
 /**
  * The Library: the dark hero (title, count, lead, the search field and the
  * four filters), then the artifacts as rows on the light ground, each opening
@@ -36,10 +40,10 @@ const SOURCES_SHOWN = 2;
 const Library = ({ artifacts }: { artifacts: LibraryArtifact[] }) => {
     const sectionRef = useReveal<HTMLElement>();
     const [q, setQ] = useUrlParam('q', parseQuery, serializeQuery);
-    const [types, setTypes] = useUrlParam('type', parseList, serializeList);
-    const [topics, setTopics] = useUrlParam('topic', parseList, serializeList);
-    const [sources, setSources] = useUrlParam('source', parseList, serializeList);
-    const [statuses, setStatuses] = useUrlParam('status', parseList, serializeList);
+    const [types, setTypes] = useUrlParam('type', parseList, serializeList, PICKED);
+    const [topics, setTopics] = useUrlParam('topic', parseList, serializeList, PICKED);
+    const [sources, setSources] = useUrlParam('source', parseList, serializeList, PICKED);
+    const [statuses, setStatuses] = useUrlParam('status', parseList, serializeList, PICKED);
 
     const options = filterOptions(artifacts);
     const visible = filterArtifacts(artifacts, { q, types, topics, sources, statuses });
@@ -123,7 +127,7 @@ const Library = ({ artifacts }: { artifacts: LibraryArtifact[] }) => {
                                     href={artifactPath(artifact.slug)}
                                     prefetch={false}
                                     className={styles.rowLink}
-                                    aria-label={artifact.title}
+                                    aria-label={`${artifact.title}, ${KIND_LABELS[artifact.kind]}`}
                                 />
                                 <span className={styles.kind} title={KIND_LABELS[artifact.kind]}>
                                     <Icon name={KIND_ICONS[artifact.kind]} />
