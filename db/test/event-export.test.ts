@@ -22,6 +22,7 @@ import {
     type JobProgress,
     type ExportRow,
     exportRules,
+    jobProgress,
     pgEventSource,
     PROP_RULES,
     runExport,
@@ -161,6 +162,27 @@ test('exportRow keeps the intent of every prompt Studio sends', async (t) => {
             );
 
             assert.deepEqual(row.props, { intent });
+        });
+    }
+});
+
+test('exportRow keeps the source of every picked prompt and refuses another', async (t) => {
+    const cases: [unknown, Record<string, unknown>][] = [
+        ['example', { source: 'example' }],
+        ['availability', { source: 'availability' }],
+        ['search_example', { source: 'search_example' }],
+        ['typed', {}],
+    ];
+
+    for (const [source, props] of cases) {
+        await t.test(String(source), () => {
+            const row = exportRow(
+                sourceEvent({ name: 'studio.prompt', props: { source } }),
+                KEY,
+                RULES,
+            );
+
+            assert.deepEqual(row.props, props);
         });
     }
 });
@@ -1484,6 +1506,27 @@ test('runExportJob runs both exports, failed or not, then fails with every failu
             assert.deepEqual(ran.toSorted(), ['accounts', 'events']);
         });
     }
+});
+
+test('runExportJob reports a failed example export under its own phase, events done', async () => {
+    const examplesError = new Error('quota');
+    const progress = jobProgress();
+
+    await assert.rejects(
+        runExportJob({
+            exportAccounts: async () => undefined,
+            exportEvents: async () => undefined,
+            exportExamples: async () => {
+                throw examplesError;
+            },
+            progress,
+        }),
+        (error: unknown) => (error as Error).cause === examplesError,
+    );
+    assert.equal(progress.events, 'done');
+    assert.equal(progress.accounts, 'done');
+    assert.match(progress.examples, /^failed: /);
+    assert.deepEqual(Object.keys(progress.failures), ['examples']);
 });
 
 const hang = () => new Promise<never>(() => undefined);

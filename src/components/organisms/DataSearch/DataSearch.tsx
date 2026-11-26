@@ -71,6 +71,7 @@ import {
 import { earlySentenceTokens, tokenPart } from '@/lib/search/sentencePlan';
 import {
     handoffEdited,
+    handoffFromExample,
     handoffQuestion,
     handoffSeeds,
     studioHref,
@@ -188,6 +189,7 @@ const DataSearch = ({
         editShared,
         editFacet,
         searchIds,
+        searchIsExample,
     } = useSearchRun();
     // A version link runs with no question of its own: the resolved sentence
     // stands in for it wherever the page needs text (the Studio handoff, a
@@ -377,7 +379,13 @@ const DataSearch = ({
                 run: { ...(searchId && { searchId }), traceId },
             }),
         );
-        router.push(studioHref(question, token));
+        router.push(
+            studioHref(
+                question,
+                token,
+                handoffFromExample({ fromExample: searchIsExample(), edited }),
+            ),
+        );
     }, [
         router,
         query,
@@ -388,6 +396,7 @@ const DataSearch = ({
         answerKind,
         answerReason,
         searchIds,
+        searchIsExample,
     ]);
 
     // A visitor's action on the answer on screen (docs/analytics.md): the

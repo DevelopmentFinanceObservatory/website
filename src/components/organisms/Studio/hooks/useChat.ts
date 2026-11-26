@@ -183,6 +183,7 @@ import type {
     ConversationRead,
     InterruptResponse,
     MutationOperation,
+    PromptSource,
     Seed,
     StoredCard,
     StudioFrame,
@@ -264,12 +265,14 @@ export type CardTarget = {
 // card's unit change under its bubble's words. A new question a harness turn
 // handed back carries that turn's index (`fromNewQuestion`), which its
 // prompt keeps, and `handedBack`, since it joined the queue without passing
-// the page's prompt gate (admitHandedBack).
+// the page's prompt gate (admitHandedBack). A picked example keeps its
+// `source` for the request that sends it.
 export type QueuedMessage = {
     id: string;
     text: string;
     card?: CardTarget;
     seeds?: Seed[];
+    source?: PromptSource;
     chip?: ApplyChoiceSuggestion;
     unit?: CardUnitChange;
     fromNewQuestion?: number;
@@ -1954,13 +1957,19 @@ export const useChat = (
     // is offered on that turn's reply for the user to send, and not sent
     // again on its own (offerNewQuestion).
     const send = useCallback(
-        (message: string, card?: CardTarget, seeds?: Seed[], asked?: number) => {
+        (
+            message: string,
+            card?: CardTarget,
+            seeds?: Seed[],
+            asked?: number,
+            source?: PromptSource,
+        ) => {
             const text = message.trim();
             const fromNewQuestion =
                 asked ??
                 (card || seeds ? undefined : offeredQuestionTurn(messagesRef.current, text));
 
-            if (!text || holdTurn({ text, card, seeds, fromNewQuestion })) {
+            if (!text || holdTurn({ text, card, seeds, fromNewQuestion, source })) {
                 return;
             }
 
@@ -2001,6 +2010,7 @@ export const useChat = (
                     ...(componentRef && { component_ref: componentRef }),
                     ...(seeds && { seed_spec: seeds }),
                     ...(afterTurn !== undefined && { after_turn: afterTurn }),
+                    ...(source && { prompt_source: source }),
                 });
 
             const generation = generationRef.current;
@@ -2529,7 +2539,8 @@ export const useChat = (
                 applyUnit(next.unit);
             } else if (next.handedBack && next.fromNewQuestion !== undefined) {
                 const turnIndex = next.fromNewQuestion;
-                const sendNext = () => send(next.text, next.card, next.seeds, turnIndex);
+                const sendNext = () =>
+                    send(next.text, next.card, next.seeds, turnIndex, next.source);
                 const gate = admitHandedBackRef.current;
 
                 if (!gate) {
@@ -2539,7 +2550,7 @@ export const useChat = (
                     drainRef.current();
                 }
             } else {
-                send(next.text, next.card, next.seeds, next.fromNewQuestion);
+                send(next.text, next.card, next.seeds, next.fromNewQuestion, next.source);
             }
         };
     }, [applyChoice, applyUnit, offerNewQuestion, send]);
