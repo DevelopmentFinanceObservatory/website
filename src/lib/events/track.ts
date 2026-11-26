@@ -2,7 +2,10 @@ import 'server-only';
 
 import { isBotRequest } from '@/lib/bot';
 import { db } from '@/lib/db';
+import { trustedHops } from '@/lib/proxy/caller';
 import { event } from '../../../db/schema';
+import { isBrowserEventName } from './browserEvents';
+import { dayVisitorResolver } from './dayVisitor';
 import { logEvent } from './eventLog';
 import { parseInternalEng, withInternalEng } from './internalEng';
 import { posthogConfigured, sendEventToPosthog } from './posthog';
@@ -41,6 +44,14 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - studio.download   a Studio card's data saved to the device (format, card kind, card id, source)
  * - data.view         an embed the site served that draws DFO data (spec ids, content
  *                     versions, host site, the viewer's caller digest)
+ * - page.view         a page shown, on first load and on each in-app navigation, sent
+ *                     whatever the visitor's consent (the path, as `page`)
+ *
+ * Every event the site's pages send (BROWSER_EVENT_NAMES) is stored with its
+ * daily visitor key (`day_visitor`, see ./dayVisitor), which the log line and
+ * PostHog do not get. share.open, embed.view, data.view and feedback.submit
+ * carry none, since they are built to name no visitor or account and a key
+ * shared with a signed-in user's events would link them to that account.
  *
  * Every event also carries `internal_eng`, true when the signed-in user's
  * email is verified and on the INTERNAL_ENG_EMAILS list (see ./internalEng).
@@ -67,6 +78,7 @@ export const EVENT_NAMES = [
     'gallery.open',
     'studio.download',
     'data.view',
+    'page.view',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -75,7 +87,8 @@ export type EventProps = Record<string, unknown>;
 
 /**
  * Who an event is about. `headers` are the incoming browser request's, for
- * the user agent and client address forwarded to PostHog (see ./posthog),
+ * the user agent and client address forwarded to PostHog (see ./posthog)
+ * and keyed into a browser event's daily visitor key (see ./dayVisitor),
  * or null for an event with no browser request behind it. Required, so a
  * caller with a request cannot leave it out.
  */
@@ -99,6 +112,8 @@ export const userWho = (
     emailVerified: user?.emailVerified ?? null,
 });
 
+const dayVisitor = dayVisitorResolver(db, trustedHops(process.env));
+
 /**
  * Record one event. Fire-and-forget: analytics never cost a request, so a
  * failed insert or forward is logged and swallowed, and each sink fails
@@ -119,12 +134,18 @@ export const track = async (name: EventName, incoming: EventProps, who: Who) => 
 
     logEvent(name, props, who);
 
+    // One moment for the row's created_at and its visitor key, so a key always
+    // belongs to its row's UTC day.
+    const at = new Date();
+
     try {
         await db.insert(event).values({
+            createdAt: at,
             name,
             props,
             userId: who.userId ?? null,
             visitorId: who.visitorId ?? null,
+            dayVisitor: isBrowserEventName(name) ? await dayVisitor(who.headers, at) : null,
             page: who.page ?? null,
         });
     } catch (error) {
