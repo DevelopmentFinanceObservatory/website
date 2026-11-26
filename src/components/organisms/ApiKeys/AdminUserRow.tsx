@@ -34,21 +34,9 @@ const AdminUserRow = ({ user, defaultLimit, defaultDailyLimit, actions }: AdminU
                     {user.email}
                 </th>
                 <td className={styles.roleCell}>
-                    {/* Shows the role ADMIN_EMAILS gives the account. It is
-                        disabled because no stored role exists to change. */}
-                    <select
-                        className={styles.role}
-                        defaultValue={user.role}
-                        disabled
-                        aria-label={`Role of ${user.email}`}
-                        title="Admins are set by ADMIN_EMAILS"
-                    >
-                        {Object.entries(ROLE_LABELS).map(([role, label]) => (
-                            <option key={role} value={role}>
-                                {label}
-                            </option>
-                        ))}
-                    </select>
+                    {/* The role ADMIN_EMAILS gives the account, shown as a
+                        label because the site stores no role to change. */}
+                    <span className={styles.role}>{ROLE_LABELS[user.role]}</span>
                 </td>
                 <td className={classNames(styles.mono, styles.created)}>
                     <time dateTime={user.createdAt.toISOString()}>
