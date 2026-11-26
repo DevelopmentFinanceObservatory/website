@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
-import { placeCard, renameId, renameKey, takenOver } from '../cardReplace.ts';
+import { placeCard, renameId, renameKey, takenOver, withReplacedCard } from '../cardReplace.ts';
 import { widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated } from '../wire.ts';
 
@@ -157,4 +157,25 @@ test('renameId and renameKey: a card they do not hold leaves the same object', (
 
     assert.equal(renameId(ids, replaced, created.component_id), ids);
     assert.equal(renameKey(notes, replaced, created.component_id), notes);
+});
+
+test('withReplacedCard: before the next manifest, the canvas shows the replacement once and not the old card', () => {
+    const held = {
+        compositionId: 'cps_1',
+        revision: 3,
+        ids: [replaced, 'cmp_sibling'],
+        pinned: [replaced],
+        revisions: { [replaced]: 1, cmp_sibling: 1 },
+    };
+    const canvas = withReplacedCard(held, replaced, created.component_id);
+    const shown = canvasWidgetsOf({ widgets: after, pinnedIds: [], removedIds: [], canvas }).map(
+        ({ id }) => id,
+    );
+
+    assert.deepEqual(shown, [created.component_id, 'cmp_sibling']);
+    assert.deepEqual(canvas?.pinned, [created.component_id]);
+    assert.deepEqual(canvas?.revisions, { cmp_sibling: 1 });
+    // The next manifest is still taken: the revision is the held one.
+    assert.equal(canvas?.revision, 3);
+    assert.equal(withReplacedCard(held, 'cmp_elsewhere', 'cmp_new'), held);
 });

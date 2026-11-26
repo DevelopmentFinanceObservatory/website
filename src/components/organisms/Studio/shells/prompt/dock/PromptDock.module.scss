@@ -1,0 +1,926 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The dock fills its frame's width and grows upwards from the frame's foot:
+// pills, then the box, whose rows and sheets stack above the input row.
+.dock {
+    // The regions sit 70 under the page top and 10 above its foot, so the
+    // canvas region is the viewport less 80.
+
+    --dock-region: calc(100dvh - #{rem(80)});
+    --dock-cap-normal: min(calc(var(--dock-region) * 0.4), #{rem(280)});
+    --dock-cap-words: min(calc(var(--dock-region) * 0.6), #{rem(440)});
+    --dock-plan-cap: min(calc(var(--dock-region) * 0.5), #{rem(440)});
+    --dock-ease: var(--ws-ease, cubic-bezier(0.22, 1, 0.36, 1));
+    --dock-shadow-rest: 0 8px 28px rgb(47 47 43 / 16%), 0 1px 3px rgb(47 47 43 / 10%);
+    --dock-shadow-open: 0 -2px 12px rgb(72 72 66 / 10%), 0 1px 2px rgb(72 72 66 / 6%);
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    pointer-events: none;
+}
+
+// --- Pills -----------------------------------------------------------------
+
+.pills {
+    display: flex;
+    gap: rem(6);
+    max-width: 100%;
+
+    // The padding keeps the pills' shadow inside the scroller; the margins
+    // give the room back, so the row sits 8 above the box.
+    margin: rem(-4) rem(-2) rem(4);
+    padding: rem(4) rem(2);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.clippedStart {
+    mask-image: linear-gradient(to right, transparent, #000 #{rem(32)});
+}
+
+.clippedEnd {
+    mask-image: linear-gradient(to left, transparent, #000 #{rem(32)});
+}
+
+.clippedStart.clippedEnd {
+    mask-image: linear-gradient(
+        to right,
+        transparent,
+        #000 #{rem(32)},
+        #000 calc(100% - #{rem(32)}),
+        transparent
+    );
+}
+
+.pill {
+    @include font-size(13px, 1);
+
+    flex: 0 0 auto;
+    height: rem(26);
+    padding: 0 rem(12);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    white-space: nowrap;
+    cursor: pointer;
+    pointer-events: auto;
+    background-color: var(--color-net-mid);
+    border: 0;
+    border-radius: rem(28);
+    box-shadow: 0 2px 8px rgb(47 47 43 / 12%);
+    transition: background-color 0.2s ease;
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-sage);
+        }
+    }
+
+    &:focus-visible {
+        background-color: var(--color-sage);
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: -1px;
+    }
+}
+
+// --- Focus pill ------------------------------------------------------------
+
+// Out of the flow until focus mode, then the box leaves the flow and the
+// pill takes its place, the two cross-fading.
+.focusPill {
+    @include font-size(14px, 1);
+
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    gap: rem(8);
+    max-width: rem(320);
+    height: rem(40);
+    padding: 0 rem(16) 0 rem(12);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+    cursor: pointer;
+    opacity: 0;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+    box-shadow: var(--dock-shadow-rest);
+    transform: translateX(-50%);
+    transform-origin: 50% 100%;
+    scale: 1.6 1;
+    transition:
+        opacity 0.2s var(--dock-ease),
+        scale 0.2s var(--dock-ease),
+        border-color 0.2s ease;
+
+    @media (hover: hover) {
+        &:hover {
+            border-color: var(--color-sage-dark);
+        }
+    }
+
+    &:focus-visible {
+        border-color: var(--color-sage-dark);
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+
+    .dock[data-focus] & {
+        position: relative;
+        left: auto;
+        align-self: center;
+        pointer-events: auto;
+        opacity: 1;
+        transform: none;
+        scale: 1 1;
+    }
+}
+
+.focusGlyph {
+    flex: 0 0 auto;
+    width: rem(16);
+    height: rem(16);
+    color: var(--color-gray-2600);
+}
+
+.focusText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// --- Box ---------------------------------------------------------------------
+
+.box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    pointer-events: auto;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+    outline: none;
+    box-shadow: var(--dock-shadow-rest);
+    transform-origin: 50% 100%;
+    transition:
+        border-color 0.2s ease,
+        opacity 0.2s var(--dock-ease),
+        scale 0.2s var(--dock-ease);
+
+    &:has(.field:focus) {
+        border-color: var(--color-sage-dark);
+    }
+
+    .dock:not([data-sheet="none"]) & {
+        box-shadow: var(--dock-shadow-open);
+    }
+
+    .dock[data-focus] & {
+        position: absolute;
+        bottom: 0;
+        pointer-events: none;
+        opacity: 0;
+        scale: 0.5 1;
+    }
+}
+
+// Everything above the input row. Rows keep their height; a sheet gives way
+// and its body scrolls.
+.upper {
+    display: flex;
+    flex-direction: column;
+    max-height: var(--dock-cap);
+    overflow: hidden;
+    border-radius: rem(10) rem(10) 0 0;
+
+    > * {
+        flex: 0 0 auto;
+    }
+
+    > * + * {
+        border-top: 1px solid var(--color-net-light);
+    }
+
+    &:not(:empty) {
+        border-bottom: 1px solid var(--color-net-light);
+    }
+}
+
+.wall {
+    padding: rem(10);
+}
+
+.count {
+    padding: 0 rem(10) rem(8);
+
+    p {
+        margin: 0;
+    }
+}
+
+// --- Input row ---------------------------------------------------------------
+
+.input {
+    display: flex;
+    align-items: flex-end;
+    gap: rem(10);
+    min-height: rem(46);
+    padding: rem(9) rem(10);
+}
+
+.field {
+    --dock-field-pad: #{outfit-overhang()};
+    @include font-size(14px, 1.1);
+
+    flex-grow: 1;
+    min-width: 0;
+    max-height: calc(5lh + 2 * var(--dock-field-pad));
+    margin-block: auto;
+    padding-block: var(--dock-field-pad);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    resize: none;
+    field-sizing: content;
+    overflow-y: auto;
+    background: none;
+    border: 0;
+    outline: none;
+
+    &::placeholder {
+        color: var(--color-gray-1400);
+        opacity: 1;
+    }
+
+    &:placeholder-shown {
+        max-height: calc(1lh + 2 * var(--dock-field-pad));
+        overflow-y: hidden;
+    }
+}
+
+.send {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: rem(28);
+    height: rem(28);
+    color: var(--color-bg);
+    cursor: pointer;
+    background-color: var(--color-charcoal);
+    border: 1px solid var(--color-charcoal);
+    border-radius: rem(6);
+    transition: background-color 0.25s ease;
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-gray-2600);
+        }
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+// While a plan waits and the field is empty, Approve is the box's only dark
+// button.
+.sendQuiet {
+    color: var(--color-stone);
+    cursor: default;
+    background-color: var(--color-bg);
+    border-color: var(--color-sage-light);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-bg);
+        }
+    }
+}
+
+.sendIcon {
+    rotate: -90deg;
+}
+
+// --- Rows --------------------------------------------------------------------
+
+.row {
+    @include font-size(13px, 1.2);
+
+    display: flex;
+    align-items: center;
+    gap: rem(10);
+    min-height: rem(32);
+    padding: 0 rem(10);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+}
+
+.rowPress {
+    cursor: pointer;
+}
+
+.rowText {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rowMuted {
+    color: var(--color-stone);
+}
+
+.rowMeta {
+    @include font-size(11px, 1.45);
+
+    flex: 0 0 auto;
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+}
+
+.rowActions {
+    display: flex;
+    gap: rem(6);
+    margin-left: auto;
+}
+
+.btn {
+    @include font-size(12px, 1);
+
+    height: rem(24);
+    padding: 0 rem(9);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+    transition: background-color 0.2s ease;
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-net-light);
+        }
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+
+    &[aria-disabled="true"] {
+        cursor: default;
+        opacity: 0.5;
+    }
+}
+
+.btnDark {
+    color: var(--color-bg);
+    background-color: var(--color-charcoal);
+    border-color: var(--color-charcoal);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-stone);
+        }
+    }
+}
+
+.textBtn {
+    @include font-size(12px, 1);
+
+    flex: 0 0 auto;
+    min-height: rem(24);
+    margin-left: auto;
+    padding: 0 rem(4);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-net-light);
+        }
+    }
+
+    &:focus-visible {
+        background-color: var(--color-net-light);
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.iconBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: rem(24);
+    height: rem(24);
+    padding: 0;
+    color: var(--color-stone);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(6);
+    transition:
+        color 0.2s ease,
+        background-color 0.2s ease;
+
+    svg {
+        width: rem(16);
+        height: rem(16);
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            color: var(--color-charcoal);
+            background-color: var(--color-net-light);
+        }
+    }
+
+    &:focus-visible {
+        color: var(--color-charcoal);
+        background-color: var(--color-net-light);
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.chevronUp {
+    rotate: 180deg;
+}
+
+// The card chip of the `About` row.
+.chip {
+    display: flex;
+    align-items: center;
+    gap: rem(6);
+    min-width: 0;
+    height: rem(22);
+    padding: 0 rem(4) 0 rem(8);
+    background-color: var(--color-popup);
+    border-radius: rem(6);
+}
+
+.chipIcon {
+    flex: 0 0 auto;
+    width: rem(12);
+    height: rem(12);
+}
+
+.chipTitle {
+    @include font-size(11px, 2);
+
+    max-width: rem(420);
+    padding: 0;
+    overflow: hidden;
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+// The glyph is 16 px; the press area is 24 px, reaching past the chip.
+.chipClear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: rem(24);
+    height: rem(24);
+    margin: 0 rem(-4);
+    padding: 0;
+    color: var(--color-stone);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            color: var(--color-charcoal);
+            background-color: var(--color-net-mid);
+        }
+    }
+
+    &:focus-visible {
+        color: var(--color-charcoal);
+        outline: 1px solid var(--color-charcoal);
+    }
+}
+
+.spin {
+    flex: 0 0 auto;
+    width: rem(14);
+    height: rem(14);
+    border: 1.5px solid var(--color-sage-light);
+    border-top-color: var(--color-charcoal);
+    border-radius: 50%;
+    animation: dock-spin 0.9s linear infinite;
+}
+
+@keyframes dock-spin {
+    to {
+        rotate: 360deg;
+    }
+}
+
+// --- Heads -------------------------------------------------------------------
+
+.headPlain {
+    padding: 0 rem(10);
+
+    // One 32 px line each; a block box keeps the ellipsis.
+    .aboutLine,
+    .questionText {
+        line-height: rem(32);
+    }
+}
+
+.questionText,
+.headQuestion,
+.threadQuestion {
+    @include font-size(13px, 1.45);
+
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.aboutLine {
+    @include font-size(11px, 1.45);
+
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.aboutTitle {
+    color: var(--color-charcoal);
+}
+
+// --- Sheets ------------------------------------------------------------------
+
+.sheet {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    .upper > & {
+        flex: 1 1 auto;
+    }
+}
+
+.sheetHead {
+    flex: 0 0 auto;
+    padding: 0 rem(10) 0 rem(16);
+
+    .aboutLine {
+        padding-top: rem(8);
+    }
+}
+
+.headRow {
+    display: flex;
+    align-items: center;
+    gap: rem(4);
+    min-height: rem(36);
+}
+
+.headQuestion {
+    flex: 1 1 auto;
+}
+
+.headLabel {
+    @include font-size(11px, 1.45);
+
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.link {
+    @include font-size(11px, 1);
+
+    flex: 0 0 auto;
+    height: rem(24);
+    margin: 0 rem(4);
+    padding: 0 rem(6);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(6);
+
+    @media (hover: hover) {
+        &:hover {
+            color: var(--color-charcoal);
+            text-decoration: underline;
+        }
+    }
+
+    &:focus-visible {
+        color: var(--color-charcoal);
+        text-decoration: underline;
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: rem(4) rem(16) rem(12);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-sage-light) transparent;
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: -2px;
+    }
+}
+
+.replyText {
+    @include font-size(14px, 1.5);
+
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    overflow-wrap: anywhere;
+
+    // Zero specificity, so the block gap below wins.
+    :where(p, ul, ol, pre, table, h1, h2, h3, h4) {
+        margin-block: 0;
+    }
+
+    > * + *,
+    > * > * + * {
+        margin-top: rem(8);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @include font-size(14px, 1.5);
+
+        font-weight: 600;
+    }
+
+    ul,
+    ol {
+        padding-left: 1.2em;
+    }
+
+    li + li {
+        margin-top: rem(4);
+    }
+
+    strong {
+        font-weight: 600;
+    }
+
+    pre {
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-wrap: normal;
+    }
+
+    code {
+        @include font-size(12px, 1.5);
+
+        font-family: var(--font-dm-mono);
+    }
+
+    table {
+        @include font-size(12px, 1.4);
+
+        border-collapse: collapse;
+        overflow-wrap: normal;
+    }
+
+    th,
+    td {
+        padding: rem(4) rem(8);
+        text-align: left;
+        white-space: nowrap;
+        border-bottom: 1px solid var(--color-net-light);
+    }
+
+    + * {
+        margin-top: rem(10);
+    }
+}
+
+// A wide table scrolls sideways inside the reply.
+.wide {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.thread {
+    padding: rem(8) rem(16) rem(14);
+}
+
+.threadItem + .threadItem {
+    margin-top: rem(16);
+    padding-top: rem(16);
+    border-top: 1px solid var(--color-net-light);
+}
+
+.threadQuestion {
+    margin-bottom: rem(6);
+    line-height: 1.46;
+    white-space: normal;
+}
+
+// --- Clarifying question -----------------------------------------------------
+
+.clarifyHead {
+    flex: 0 0 auto;
+    padding: rem(10) rem(16);
+    border-bottom: 1px solid var(--color-net-light);
+}
+
+.clarifyQuestion {
+    @include font-size(11px, 1.45);
+
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.clarify {
+    padding: rem(16) rem(16) rem(14);
+}
+
+// --- Plan --------------------------------------------------------------------
+
+.planBody {
+    max-height: var(--dock-plan-cap);
+    padding: 0 rem(16) rem(12);
+
+    &[data-more-below] {
+        mask-image: linear-gradient(to bottom, #000 calc(100% - #{rem(24)}), transparent);
+    }
+}
+
+.planTitle {
+    @include font-size(15px, 1.33);
+
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+}
+
+.planSummary {
+    @include font-size(13px, 1.46);
+
+    margin: rem(4) 0 0;
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
+}
+
+.planLedger {
+    margin-top: rem(10);
+}
+
+.planCaveats {
+    margin-top: rem(12);
+}
+
+.planFull {
+    @include font-size(13px, 1.38);
+
+    margin-top: rem(12);
+    padding: 0;
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.planFolded {
+    display: flex;
+    align-items: center;
+    gap: rem(6);
+    width: 100%;
+    min-height: rem(32);
+    padding: 0 rem(10) 0 rem(16);
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: background-color 0.2s ease;
+
+    .headLabel {
+        flex: 0 1 auto;
+    }
+
+    svg {
+        flex: 0 0 auto;
+        width: rem(16);
+        height: rem(16);
+        margin-left: auto;
+        color: var(--color-stone);
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-grid-bg-light);
+        }
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: -2px;
+    }
+}
+
+.planFoldedTitle {
+    @include font-size(13px, 1.2);
+
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// --- Reduced motion ----------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) {
+    .box,
+    .focusPill,
+    .pill {
+        transition: none;
+    }
+
+    .spin {
+        animation: none;
+    }
+}

@@ -9,6 +9,8 @@
  * else from that answer.
  */
 
+import type { CanvasBaseline } from './composition';
+
 /** A card as the conversation holds it: its id and the turn that drew it. */
 type PlacedCard = { id: string; turn: number };
 
@@ -74,4 +76,32 @@ export const renameKey = <TValue>(
     const { [from]: value, ...rest } = record;
 
     return { ...rest, [to]: value as TValue };
+};
+
+/**
+ * The held manifest once card `from` is redrawn as `to`, before the
+ * harness's next manifest says so: `to` stands in `from`'s place and keeps
+ * its pin, so the canvas shows the replacement from the frame that brings
+ * it. The block revision recorded for `from` goes, since `to`'s comes with
+ * the next manifest. The same baseline when it does not hold `from`.
+ */
+export const withReplacedCard = (
+    canvas: CanvasBaseline | null,
+    from: string,
+    to: string,
+): CanvasBaseline | null => {
+    if (!canvas?.ids.includes(from)) {
+        return canvas;
+    }
+
+    return {
+        ...canvas,
+        ids: renameId(canvas.ids, from, to),
+        ...(canvas.pinned && { pinned: renameId(canvas.pinned, from, to) }),
+        ...(canvas.revisions && {
+            revisions: Object.fromEntries(
+                Object.entries(canvas.revisions).filter(([id]) => id !== from),
+            ),
+        }),
+    };
 };

@@ -5,6 +5,7 @@
  * with `react` aliased to hookRuntime.ts and `@` to `src`.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +18,10 @@ import type {
     ChatSnapshot,
     useChat as UseChat,
 } from '../../../components/organisms/Studio/hooks/useChat.ts';
+import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { OWED_RETRY_MS } from '../owedRemovals.ts';
+import { widgetFromComponent } from '../widgets.ts';
+import type { ComponentCreated } from '../wire.ts';
 import type { renderHook as RenderHook } from './hookRuntime.ts';
 
 const REPO = join(import.meta.dirname, '../../../..');
@@ -426,5 +430,112 @@ test('a picked example names its source on its own turn request alone, queued or
             ['What data is available?', 'availability'],
         ],
     );
+    page.unmount();
+});
+
+test('a card unit change writes its prompt marked edit, a question does not, and a reopened save keeps the mark', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 404 }));
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(console, 'error', () => {});
+
+    const page = renderHook(() => useChat());
+
+    page.result().applyUnit({
+        title: 'ODA',
+        offer: {
+            currencies: [{ code: 'USD', name: 'US dollars', prices: ['current', 'constant'] }],
+            presets: [],
+            start: { currency: 'USD', prices: 'current' },
+        },
+        request: {
+            component_id: 'cmp_1',
+            spec_id: 'spec_1',
+            turn: 1,
+            unit: { currency: 'USD', prices: 'constant', base_year: 2023 },
+        },
+    });
+    await page.settle(60);
+    page.result().send('What about Kenya?');
+    await page.settle(60);
+
+    const prompts = page.result().messages.filter((message) => message.role === 'user');
+
+    assert.deepEqual(
+        prompts.map((message) => message.edit),
+        [{ card: 'cmp_1', row: 'unit' }, undefined],
+    );
+
+    page.result().hydrate({
+        sessionId: 'conv_1',
+        messages: [
+            {
+                role: 'user',
+                text: 'Constant 2023 US dollars',
+                edit: { card: 'cmp_1', row: 'unit' },
+            },
+            { role: 'bot', text: '' },
+        ],
+        widgets: [],
+        turnCount: 1,
+    });
+    await page.settle();
+
+    const [reopened] = page.result().messages;
+
+    assert.deepEqual(reopened?.role === 'user' && reopened.edit, { card: 'cmp_1', row: 'unit' });
+    page.unmount();
+});
+
+test('a card redrawn under a new id is on the held canvas before the manifest frame names it', async (t) => {
+    const created = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-19-component-unit-change.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ComponentCreated;
+    const old = created.replaces ?? '';
+    const encoder = new TextEncoder();
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        if (!String(input).startsWith('/api/studio/turn')) {
+            return new Response('{}', { status: 404 });
+        }
+
+        // The card arrives and the stream stays open, so no manifest follows.
+        return new Response(
+            new ReadableStream({
+                start(controller) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(created)}\n\n`));
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': '2' } },
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat());
+    const oldCard = widgetFromComponent({ ...created, component_id: old, replaces: null });
+
+    assert.ok(oldCard);
+    page.result().hydrate({
+        sessionId: 'conv_1',
+        messages: [
+            { role: 'user', text: 'Q', turn: 1, harnessTurn: 1 },
+            { role: 'bot', text: 'A' },
+        ],
+        widgets: [{ ...oldCard, turn: 1 }],
+        turnCount: 1,
+        canvas: { compositionId: 'cps_1', revision: 1, ids: [old], pinned: [] },
+    });
+    await page.settle();
+    page.result().send('Make it constant prices');
+    await page.settle(60);
+
+    const { canvas, widgets } = page.result();
+    const shown = canvasWidgetsOf({ widgets, pinnedIds: [], removedIds: [], canvas }).map(
+        ({ id }) => id,
+    );
+
+    assert.deepEqual(shown, [created.component_id]);
     page.unmount();
 });
