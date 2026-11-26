@@ -1,0 +1,2 @@
+ALTER TABLE "limit_counter" ADD COLUMN "expires_at" timestamp with time zone DEFAULT 'infinity' NOT NULL;--> statement-breakpoint
+CREATE INDEX "limit_counter_expires_at_idx" ON "limit_counter" USING btree ("expires_at");

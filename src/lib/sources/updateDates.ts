@@ -1,10 +1,11 @@
 /**
  * The dates on a source page's License & Updates block. `last_update` is the
- * day DFO downloaded the data, a date ("2026-10-05") or a timestamp
- * ("2026-10-02T17:23:42Z"); `next_expected_update` is the publisher's next
- * release, usually a month ("2026-09"). Both read in UTC, so a timestamp
- * names the same day on every reader's clock. `shortDateText` also writes the
- * snapshot dates the citation and the /data banner share.
+ * day the data was last imported into its Data Commons (`lastDataRefreshDate`),
+ * a date ("2026-10-05") or a timestamp ("2026-10-02T17:23:42Z");
+ * `next_expected_update` is the importing pipeline's next scheduled refresh
+ * (`nextDataRefreshDate`), often a month ("2026-09"). Both read in UTC, so a
+ * timestamp names the same day on every reader's clock. `shortDateText` also
+ * writes the snapshot dates the citation and the /data banner share.
  */
 
 const MONTH = /^(\d{4})-(\d{2})$/;
@@ -87,10 +88,10 @@ export const shortDateText = (date: Date): string =>
 export const localShortDateText = (moment: Date): string =>
     shortDateText(new Date(Date.UTC(moment.getFullYear(), moment.getMonth(), moment.getDate())));
 
-/** Whether the next release is overdue: its month precedes `now`'s month in
- *  UTC. A release due this month is not overdue, nor is text that names no
+/** Whether the next refresh is overdue: its month precedes `now`'s month in
+ *  UTC. A refresh due this month is not overdue, nor is text that names no
  *  date. */
-export const releaseOverdue = (value: string, now: Date): boolean => {
+export const refreshOverdue = (value: string, now: Date): boolean => {
     const parsed = parseSourceDate(value);
 
     if (!parsed) {
@@ -102,7 +103,10 @@ export const releaseOverdue = (value: string, now: Date): boolean => {
     return due < now.getUTCFullYear() * 12 + now.getUTCMonth();
 };
 
-/** The "Next release expected" value: the release date in words, marked
- *  "(overdue)" once its month has passed. */
-export const nextReleaseText = (value: string, now: Date): string =>
-    releaseOverdue(value, now) ? `${sourceDateText(value)} (overdue)` : sourceDateText(value);
+/** The "Next refresh due" value: the date in words, marked "(overdue)" once
+ *  its month has passed when `markOverdue` is set. The source page sets it
+ *  only for DFO's own imports, the refreshes DFO runs. */
+export const nextRefreshText = (value: string, now: Date, markOverdue: boolean): string =>
+    markOverdue && refreshOverdue(value, now)
+        ? `${sourceDateText(value)} (overdue)`
+        : sourceDateText(value);

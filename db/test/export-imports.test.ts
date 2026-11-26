@@ -37,7 +37,12 @@ test('the export modules may not import a Postgres or BigQuery client or a pool 
     const source = `${lines.map(([line]) => line).join('\n')}\n`;
     const flagged = lines.flatMap(([, rule], index) => (rule === null ? [] : [[rule, index + 1]]));
 
-    for (const file of ['db/event-export.ts', 'db/account-export.ts', 'db/export-events.ts']) {
+    for (const file of [
+        'db/event-export.ts',
+        'db/account-export.ts',
+        'db/example-export.ts',
+        'db/export-events.ts',
+    ]) {
         await t.test(file, async () => {
             const [result] = await eslint.lintText(source, { filePath: file });
 

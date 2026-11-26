@@ -3,6 +3,8 @@ import { sql } from 'drizzle-orm';
 import {
     bigint,
     check,
+    customType,
+    date,
     index,
     integer,
     jsonb,
@@ -232,7 +234,9 @@ export type FeedbackRow = typeof feedback.$inferSelect;
  * turn produced, a sign-in… `name` is dotted (`search.query`), `props` the
  * event's own fields. Identity is loose on purpose: `userId` when signed
  * in (no FK — the row outlives the account), `visitorId` a random
- * browser id otherwise. No IPs, no prompt text.
+ * browser id otherwise, stored only with consent. `dayVisitor` is the
+ * request's daily visitor key (src/lib/events/dayVisitor), null for an event
+ * with no browser request or no client address. No IPs, no prompt text.
  */
 export const event = pgTable(
     'event',
@@ -242,6 +246,7 @@ export const event = pgTable(
         name: text('name').notNull(),
         userId: text('user_id'),
         visitorId: text('visitor_id'),
+        dayVisitor: text('day_visitor'),
         page: text('page'),
         props: jsonb('props').$type<Record<string, unknown>>().default({}).notNull(),
     },
@@ -259,8 +264,11 @@ export type EventRow = typeof event.$inferSelect;
  * hourly caps on sign-in codes sent. `key` names the allowance and the
  * caller (`api:203.0.113.7`, `studio-user:<inbox digest>`,
  * `sign-in-code:<digest>`); `count` is the hits in the window that started
- * at `windowStart`. The next hit after the window ends starts the row over,
- * and rows idle for two days are deleted.
+ * at `windowStart`, which ends at `expiresAt`. The next hit after the window
+ * ends starts the row over, and a row whose window has ended is deleted
+ * within minutes (pruneCounters). Every writer in limitCounter sets
+ * `expiresAt`. The default `infinity` marks a row written by a revision that
+ * does not set it, and pruneCounters deletes such a row by `windowStart` age.
  */
 export const limitCounter = pgTable(
     'limit_counter',
@@ -268,9 +276,29 @@ export const limitCounter = pgTable(
         key: text('key').primaryKey(),
         windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
         count: integer('count').notNull(),
+        expiresAt: timestamp('expires_at', { withTimezone: true })
+            .notNull()
+            .default(sql`'infinity'`),
     },
-    (table) => [index('limit_counter_window_start_idx').on(table.windowStart)],
+    (table) => [
+        index('limit_counter_window_start_idx').on(table.windowStart),
+        index('limit_counter_expires_at_idx').on(table.expiresAt),
+    ],
 );
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
+
+/**
+ * The random salt of one UTC day's visitor keys (src/lib/events/dayVisitor).
+ * The row for a day is created by the first event of that day, which also
+ * deletes every earlier day's row, so once its day has passed a key cannot be
+ * recomputed from the live database or linked to another day's. Backups keep
+ * a deleted row until they expire.
+ */
+export const daySalt = pgTable('day_salt', {
+    day: date('day', { mode: 'string' }).primaryKey(),
+    salt: bytea('salt').notNull(),
+});
 
 /**
  * The webmail and disposable email domains, lower case, from the

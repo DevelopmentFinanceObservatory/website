@@ -11,10 +11,12 @@ import { setAccount } from './account';
 import {
     decideAccess,
     honorsKeys as surfaceHonorsKeys,
+    limitHeaders as limitHeadersOf,
+    LIMIT_TIER_HEADER,
     type Access,
     type AccessDeps,
 } from './access';
-import { API_KEY_HEADER, carriesKey, hasKeyPrefix } from './apiKey';
+import { API_KEY_HEADER, carriesKey } from './apiKey';
 import { accountCaller, limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import {
     clientResponseHeaders,
@@ -25,17 +27,23 @@ import {
 } from './headers';
 import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
 import { keysEnabled } from './keysSwitch';
-import { rateLimitedProblem, unreachableProblem } from './problem';
-import { rateHeaders, type RateVerdict } from './rateHeaders';
+import { unreachableProblem } from './problem';
 import {
+    admit,
     hit,
     hitDaily,
     hitKey,
     refundDaily,
     ACCOUNT_DAILY_LIMIT,
+    ADDRESS_DAILY_LIMITS,
+    ANONYMOUS_DAILY_LIMITS,
+    BACKSTOP_LIMITS,
+    COOKIELESS_LIMITS,
     KEYED_LIMIT,
+    LIMITS,
     type Surface,
 } from './rateLimit';
+import { readVisitor, visitorLimitsOn } from './visitor';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -45,8 +53,14 @@ import {
  * /codes call the route forwards, is rate-limited per IP: /mcp and the
  * Datasets API's routes below /api/v1/datasets/ each on their own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
- * headers go out only on a counted call). A call on the 'api' or 'datasets'
- * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
+ * headers and x-dfo-limit-tier go out only on a counted call). While visitor
+ * limits are on, an anonymous 'api' or 'datasets' call with the site's
+ * visitor token is counted per visitor instead (src/lib/proxy/access). Each
+ * anonymous 'api' or 'datasets' call is also counted on a daily allowance,
+ * the visitor's or the address's cookieless one, and on its address's daily
+ * ceiling (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS and
+ * ADDRESS_DAILY_LIMITS). A call on the 'api' or 'datasets'
+ * surface may carry an API key, as `Authorization: Bearer dfo_…` or `X-API-Key: dfo_…`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
  * the account's limit on that surface and against the account's daily quota,
  * or refused with a 401 when the key is not valid (src/lib/proxy/access). A
@@ -62,6 +76,17 @@ import {
  * decoded it. Next drops the Content-Encoding and Content-Length of a route
  * handler's Response and does not compress one, so compression for clients
  * comes from Cloudflare in front of production.
+ *
+ * An answer to a call that carries an Authorization or X-API-Key header,
+ * whatever its value and whatever the status (a 304, 401 or 429 included),
+ * goes out `Cache-Control: private, no-store` with its X-RateLimit-*
+ * headers, so no browser or shared cache can hand it to a later call that
+ * skips the key check and the count. Cloudflare's cache skips such a call by
+ * the same test (dfo-infra, infra/stacks/edge/cloudflare_rules.tf). Any other
+ * answer keeps the upstream's Cache-Control, or `no-cache` when it sends
+ * none. One a shared cache may store (sharedCacheable) adds Authorization
+ * and X-API-Key to its Vary and drops its X-RateLimit-* headers, since every
+ * later reader would get them (cacheForCaller).
  *
  * The first chunk of a body is read before the response goes out, so a body
  * that fails before its first byte is answered with a logged 502 problem
@@ -126,6 +151,16 @@ export const accessDeps: AccessDeps = {
     verifier: createKeyVerifier(keyDb, cacheLifetimes(process.env.API_KEY_CACHE_S)),
     tagValid: keyTagValid,
     hitAddress: hit,
+    admit,
+    anonymousLimits: {
+        address: LIMITS,
+        cookieless: COOKIELESS_LIMITS,
+        backstop: BACKSTOP_LIMITS,
+        daily: ANONYMOUS_DAILY_LIMITS,
+        dailyAddress: ADDRESS_DAILY_LIMITS,
+    },
+    visitorLimits: visitorLimitsOn,
+    visitor: readVisitor,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
     hitDaily,
     refundDaily,
@@ -152,35 +187,32 @@ const logKeyUse = (surface: Surface | undefined, { identity, outcome }: Access):
     );
 };
 
-// While keys are off, one line per call on a keyed surface that sends an
-// X-API-Key header, so the callers who would get a 401 once keys are on (any
-// X-API-Key value is read as a key) can be counted first. It says whether the
-// value has our prefix, and nothing else of it.
-const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
-    const value = headers.get(API_KEY_HEADER);
-
-    if (value === null) {
-        return;
-    }
-
-    console.log(
-        JSON.stringify({
-            severity: 'INFO',
-            message: 'api key header while keys are off',
-            surface,
-            ours: hasKeyPrefix(value.trim()),
-        }),
-    );
-};
+/**
+ * Count an anonymous call on `surface` from `req` as forward() does, by
+ * visitor or by address (src/lib/proxy/access), any key ignored. For a
+ * caller that counts before forward() runs and passes the result as
+ * `counted`. `daily` says whether the call spends the daily allowances.
+ */
+export const countAnonymous = (
+    req: NextRequest,
+    surface: Surface,
+    { daily }: { daily: boolean },
+): Promise<Access> =>
+    decideAccess(accessDeps, {
+        surface,
+        keys: false,
+        headers: req.headers,
+        ip: clientIp(req),
+        daily,
+    });
 
 export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
-    // The verdict of a call the caller has already counted against its
-    // address (the Studio proxy counts before it reads a body), so forward()
-    // counts nothing more and the call is anonymous: a key on it is stripped
-    // and ignored.
-    counted?: RateVerdict;
+    // The decision on a call the caller has already counted as anonymous
+    // (the Studio proxy counts before it reads a body, with countAnonymous),
+    // so forward() counts nothing more: a key on it is stripped and ignored.
+    counted?: Access;
     // The upstream URL to hit (path + query already resolved).
     target: string;
     // A bearer the proxy attaches on the caller's behalf; when unset, the
@@ -252,28 +284,102 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
     });
 };
 
-export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
+/**
+ * `refusal` with the call's x-dfo-limit-tier, which `admit` answers after the
+ * call spent its count: the Studio's prompt allowance, for one, answers a 429
+ * of its own. The rate headers stay off, since they describe a count other
+ * than the one that refused. A refusal that names a tier keeps its own.
+ */
+const withTier = (refusal: Response, { tier }: Access): Response => {
+    if (!tier || refusal.headers.has(LIMIT_TIER_HEADER)) {
+        return refusal;
+    }
+
+    const headers = new Headers(refusal.headers);
+
+    headers.set(LIMIT_TIER_HEADER, tier);
+
+    return new Response(refusal.body, {
+        status: refusal.status,
+        statusText: refusal.statusText,
+        headers,
+    });
+};
+
+const KEYED_CACHE = 'private, no-store';
+const CREDENTIAL_VARY = ['Authorization', 'X-API-Key'];
+
+/** Whether a call carries a credential header, whatever its value. */
+const carriesCredential = (headers: Headers): boolean =>
+    headers.has('authorization') || headers.has(API_KEY_HEADER);
+
+/** Whether a shared cache may store an answer that has `cacheControl`. */
+export const sharedCacheable = (cacheControl: string | null): boolean => {
+    const directives = new Set(
+        (cacheControl ?? '').split(',').map((part) => part.split('=')[0]!.trim().toLowerCase()),
+    );
+
+    if (directives.has('no-store') || directives.has('private')) {
+        return false;
+    }
+
+    return ['public', 's-maxage', 'max-age'].some((name) => directives.has(name));
+};
+
+const appendVary = (headers: Headers, names: readonly string[]): void => {
+    const present = new Set(
+        (headers.get('vary') ?? '').split(',').map((name) => name.trim().toLowerCase()),
+    );
+
+    if (present.has('*')) {
+        return;
+    }
+
+    for (const name of names) {
+        if (!present.has(name.toLowerCase())) {
+            headers.append('Vary', name);
+        }
+    }
+};
+
+/**
+ * Apply the module comment's caching rule to `response`, the headers of the
+ * answer to a call with `request` headers. Returns whether a shared cache may store the
+ * answer.
+ */
+export const cacheForCaller = (request: Headers, response: Headers): boolean => {
+    if (carriesCredential(request)) {
+        response.set('Cache-Control', KEYED_CACHE);
+
+        return false;
+    }
+
+    if (!sharedCacheable(response.get('cache-control'))) {
+        return false;
+    }
+
+    appendVary(response, CREDENTIAL_VARY);
+
+    return true;
+};
+
+/**
+ * forward() before the caching rule, for forwardDatasets, which sets a read's
+ * Cache-Control itself and then applies the rule (cacheForCaller).
+ */
+export const relay = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     // Who the caller is and whether it is within its allowance, decided once.
     const honorsKeys = options.counted === undefined && surfaceHonorsKeys(options.surface);
     const keysOn = keysEnabled();
-    const access: Access = options.counted
-        ? {
-              identity: { kind: 'anonymous' },
-              verdict: options.counted,
-              refusal: options.counted.allowed
-                  ? undefined
-                  : rateLimitedProblem(options.counted, rateHeaders(options.counted)),
-          }
-        : await decideAccess(accessDeps, {
-              surface: options.surface,
-              keys: honorsKeys && keysOn,
-              headers: req.headers,
-              ip: clientIp(req),
-          });
-
-    if (honorsKeys && !keysOn) {
-        logKeyHeaderWhileOff(options.surface!, req.headers);
-    }
+    const access: Access =
+        options.counted ??
+        (await decideAccess(accessDeps, {
+            surface: options.surface,
+            keys: honorsKeys && keysOn,
+            headers: req.headers,
+            ip: clientIp(req),
+            daily: true,
+        }));
 
     logKeyUse(options.surface, access);
 
@@ -281,12 +387,12 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         return access.refusal;
     }
 
-    const limitHeaders = access.verdict ? rateHeaders(access.verdict) : {};
+    const limitHeaders = limitHeadersOf(access);
 
     const refusal = await options.admit?.();
 
     if (refusal) {
-        return refusal;
+        return withTier(refusal, access);
     }
 
     const headers = upstreamRequestHeaders(req.headers, new Headers(), options.pass?.request);
@@ -380,6 +486,26 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     }
 
     return new Response(body, { status: upstream.status, headers: out });
+};
+
+/** forward() with the caching rule applied to whatever it answers. */
+export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
+    const answer = await relay(req, options);
+
+    // The rule changes nothing, so the answer goes out as it is.
+    if (!carriesCredential(req.headers) && !sharedCacheable(answer.headers.get('cache-control'))) {
+        return answer;
+    }
+
+    const headers = new Headers(answer.headers);
+
+    cacheForCaller(req.headers, headers);
+
+    return new Response(answer.body, {
+        status: answer.status,
+        statusText: answer.statusText,
+        headers,
+    });
 };
 
 // A static asset's request and response headers: conditional requests out,

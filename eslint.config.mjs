@@ -28,7 +28,12 @@ const eslintConfig = defineConfig([
   // connector's setup from db/connection.ts and none of its pool builders,
   // and imports no module at run time, where these rules cannot follow it.
   {
-    files: ["db/event-export.ts", "db/account-export.ts", "db/export-events.ts"],
+    files: [
+      "db/event-export.ts",
+      "db/account-export.ts",
+      "db/example-export.ts",
+      "db/export-events.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",

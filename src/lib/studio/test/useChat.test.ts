@@ -376,3 +376,55 @@ test('a resend answered as a conversation the harness lost leaves the session an
     );
     page.unmount();
 });
+
+test('a picked example names its source on its own turn request alone, queued or not', async (t) => {
+    const bodies: Record<string, unknown>[] = [];
+    let endFirst = () => {};
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (!String(input).startsWith('/api/studio/turn')) {
+            return new Response('{}', { status: 404 });
+        }
+
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+
+        const done = 'data: {"event":"done","seq":1,"trace_id":"t"}\n\n';
+
+        if (bodies.length > 1) {
+            return new Response(done);
+        }
+
+        // The first turn runs until the test ends it, so the next two queue.
+        return new Response(
+            new ReadableStream({
+                start(controller) {
+                    endFirst = () => {
+                        controller.enqueue(new TextEncoder().encode(done));
+                        controller.close();
+                    };
+                },
+            }),
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat());
+
+    page.result().send('Compare remittances', undefined, undefined, undefined, 'example');
+    await page.settle();
+    page.result().send('my own question');
+    page.result().send('What data is available?', undefined, undefined, undefined, 'availability');
+    await page.settle();
+    endFirst();
+    await page.settle(60);
+
+    assert.deepEqual(
+        bodies.map((body) => [body['message'], body['prompt_source']]),
+        [
+            ['Compare remittances', 'example'],
+            ['my own question', undefined],
+            ['What data is available?', 'availability'],
+        ],
+    );
+    page.unmount();
+});

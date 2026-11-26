@@ -57,6 +57,54 @@ not document whether the proxy renews its token after an hour, so if calls
 start answering 401 or 403 later in a session, restart it.
 The scripts below reach the APIs the same way.
 
+### Run the whole stack
+
+`just stack` runs the dev apis proxy (8083) and the Studio harness (8080)
+from an `ai` checkout beside this one, Mailpit, and the dev server, in one
+terminal. Each output line starts with its service's name (`apis`, `ai`,
+`mail`, `web`), in its own colour on a terminal, with lines that look like
+errors in red (`NO_COLOR=1` turns colour off). Ctrl-C stops them all:
+
+```bash
+gcloud auth login   # the proxy cannot prompt for it under `stack`
+just stack
+```
+
+It looks for the `ai` checkout at `../ai`; pass `AI_DIR=<path>` for another
+one. The harness needs `ai`'s own setup first (`just setup` and `just env`
+there), and its environment synced after pulling (`uv sync --all-packages`
+in `ai`). The harness waits briefly for the proxy to serve the presentation
+release. If the release is unavailable, the harness starts with a warning.
+Restart the harness once the proxy is ready to load its presentation tools.
+A service that exits on its own leaves the others running. Postgres runs
+outside `stack` (see [Database](#database)).
+
+### Local email
+
+Mailpit catches the site's mail locally (`brew install mailpit`); `just
+stack` starts it when it is installed and port 1025 is free, and its inbox
+is at <http://localhost:8025>. It listens on 127.0.0.1 only, since the
+inbox holds sign-in codes that anyone on the network could otherwise read.
+Point the site at it in `.env.local`:
+
+```bash
+SMTP_HOST=localhost
+SMTP_PORT=1025
+```
+
+The SMTP transport requires STARTTLS and checks the server's certificate,
+so a plain `mailpit` refuses the site's mail. `just mail-cert` (run by
+`stack`) makes a self-signed certificate for localhost in `.mailpit/`, and
+`just dev` adds it to Node's trusted certificates, keeping any certificates
+already configured through `NODE_EXTRA_CA_CERTS`. To run Mailpit by hand,
+generate the certificate and bind both listeners to loopback:
+
+```bash
+just mail-cert
+mailpit --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025 \
+  --smtp-tls-cert .mailpit/cert.pem --smtp-tls-key .mailpit/key.pem --smtp-require-starttls
+```
+
 ## just
 
 The [justfile](../justfile) is the entry point for the commands below. It
@@ -67,7 +115,7 @@ workflows. `just` with no arguments lists everything. Install it with
 | Section               | Recipes                                                 |
 | --------------------- | ------------------------------------------------------- |
 | Setup & Configuration | `setup`, `env`                                          |
-| Development           | `dev`, `start`, `optimize-svg`                          |
+| Development           | `dev`, `stack`, `mail-cert`, `start`, `optimize-svg`    |
 | Database              | `db-up`, `db-migrate`, `db-reset`, `db-generate`        |
 | Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `check` |
 | Container             | `docker-build`, `run-local`, `clean`                    |
