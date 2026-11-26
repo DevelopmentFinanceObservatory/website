@@ -275,6 +275,12 @@ export type ApplyUnit = {
  *  question. */
 export type ClientFeature = 'unit_question' | 'multi_select';
 
+/** Where a turn's question came from when the reader picked it: a Studio
+ *  landing example (`example`), the "What data is available?" drawer's
+ *  question (`availability`), or a Data search example handed to Studio
+ *  (`search_example`). A typed question has none. */
+export type PromptSource = 'example' | 'availability' | 'search_example';
+
 export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
@@ -282,6 +288,8 @@ export type TurnRequest = {
     /** Absent only beside `apply_choice` or `apply_unit`. The harness reads
      *  an absent message as "". */
     message?: string;
+    /** Set only on the turn whose `message` is the picked question. */
+    prompt_source?: PromptSource;
     surface?: 'studio' | 'download' | 'embed';
     component_ref?: ComponentRef | null;
     /** The Search results a "… in Studio" action hands over, one per

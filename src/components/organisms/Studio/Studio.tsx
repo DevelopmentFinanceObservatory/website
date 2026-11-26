@@ -41,6 +41,7 @@ import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
+import { HANDOFF_VIA_PARAM, handoffPromptSource } from '@/lib/studio/examples';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -53,7 +54,7 @@ import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/prom
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
-import type { Seed, UnitChoice } from '@/lib/studio/wire';
+import type { PromptSource, Seed, UnitChoice } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
 
@@ -238,12 +239,14 @@ const Studio = ({
     // prompt the chat queues is counted here once; the queue's drain sends it
     // inside the chat, past this gate, except a new question a turn handed
     // back, which the drain sends through here with the count of prompts
-    // still queued behind it (`queued`). Returns whether the prompt went.
+    // still queued behind it (`queued`). `source` names the example a picked
+    // question came from. Returns whether the prompt went.
     const prompt = (
         intent: PromptIntent | undefined,
         length: number | undefined,
         run: () => void,
         queued = conversation.queued.length,
+        source?: PromptSource,
     ): boolean => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
@@ -254,6 +257,7 @@ const Studio = ({
             sent: sentCount,
             intent,
             length,
+            source,
         });
 
         if (!event) {
@@ -265,8 +269,14 @@ const Studio = ({
 
         return true;
     };
-    const send: typeof conversation.send = (text, options, seeds) =>
-        prompt(options?.intent, text.trim().length, () => conversation.send(text, options, seeds));
+    const send: typeof conversation.send = (text, options, seeds, asked, source) =>
+        prompt(
+            options?.intent,
+            text.trim().length,
+            () => conversation.send(text, options, seeds, asked, source),
+            undefined,
+            source,
+        );
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
     const applyUnit: typeof conversation.applyUnit = (change) =>
@@ -385,14 +395,17 @@ const Studio = ({
 
     // A new canvas from the prompt (or a suggestion).
     // A question handed over from the search page (`/studio?q=…&seed=…`),
-    // with the token its seeds are stored under. Consumed once, below, after
-    // `begin` exists.
+    // with the token its seeds are stored under and, for a search example,
+    // its source. Consumed once, below, after `begin` exists.
     const searchParams = useSearchParams();
     const handover = searchParams.get('q');
     const seedToken = searchParams.get('seed');
+    const handoverSource = handoffPromptSource(searchParams.get(HANDOFF_VIA_PARAM));
     const handedOver = useRef(false);
 
-    const begin = (text: string, seeds?: Seed[]) => {
+    // `source` names the example a picked question came from; a typed one
+    // has none.
+    const begin = (text: string, source?: PromptSource, seeds?: Seed[]) => {
         const trimmed = text.trim();
 
         if (!trimmed) {
@@ -412,7 +425,7 @@ const Studio = ({
         save.track(id, {});
         doc.reset();
         setQuery(trimmed);
-        chat.send(trimmed, undefined, seeds);
+        chat.send(trimmed, undefined, seeds, undefined, source);
         enterWorkspace();
     };
 
@@ -671,6 +684,7 @@ const Studio = ({
                 // Seeds that cannot be read leave the question alone.
                 begin(
                     handover,
+                    handoverSource,
                     (seedToken && takeSeeds(() => window.sessionStorage, seedToken)) || undefined,
                 );
             }
@@ -679,7 +693,7 @@ const Studio = ({
         return () => window.clearTimeout(handle);
         // `begin` is rebuilt every render; the ref is what makes this run once.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [handover, seedToken]);
+    }, [handover, handoverSource, seedToken]);
 
     // Card menu → Ask follow up: the question itself is typed in the chat
     // input, so this only arms the card as its target (chip above the input)
@@ -731,9 +745,9 @@ const Studio = ({
     // It then holds the follow-up draft, so that text carries into the chat's
     // follow-up field, and Enter sends it as a follow-up.
     const leaving = mode === 'leaving';
-    const sendDraft = (text: string) => {
+    const sendDraft = (text: string, source?: PromptSource) => {
         if (text.trim()) {
-            send(text);
+            send(text, undefined, undefined, undefined, source);
             setFollowDraft('');
         }
     };
