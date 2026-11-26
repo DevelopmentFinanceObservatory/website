@@ -200,8 +200,8 @@
     overflow-wrap: anywhere;
 }
 
-// The role, shown as the mockup's beige chip with a chevron. Disabled
-// selects fade by default; this one keeps full ink so it reads as a value.
+// The role, shown as the mockup's beige chip without its chevron, since
+// ADMIN_EMAILS sets it and the page cannot change it.
 .roleCell {
     width: rem(230);
 }
@@ -209,24 +209,15 @@
 .role {
     @include font-size(13px, 1);
 
+    display: inline-flex;
+    align-items: center;
     height: rem(26);
-    padding: 0 rem(28) 0 rem(10);
+    padding: 0 rem(10);
     font-family: var(--font-dm-mono);
     color: var(--color-charcoal);
-    appearance: none;
+    white-space: nowrap;
     background-color: var(--color-media-bg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23484842' stroke-width='1.2'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right rem(10) center;
-    background-size: rem(9) rem(6);
-    border: 0;
     border-radius: rem(4);
-
-    &:disabled {
-        color: var(--color-charcoal);
-        cursor: default;
-        opacity: 1;
-    }
 }
 
 .mono {

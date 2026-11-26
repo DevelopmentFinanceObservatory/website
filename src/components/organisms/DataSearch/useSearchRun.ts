@@ -216,6 +216,7 @@ import {
     type SearchPostTracker,
     type SearchSource,
 } from '@/lib/search/searchEvents';
+import { searchFromExample } from '@/lib/search/studioHandoff';
 import { sharedUnitEdit } from '@/lib/search/unitPicker';
 import { unmountTeardown } from '@/lib/search/unmountTeardown';
 import type { WindowApplyValue } from '@/lib/search/windowState';
@@ -389,12 +390,14 @@ export const useSearchRun = () => {
     // reproduces.
     const basePhraseByPartRef = useRef<(string | null)[]>([]);
     const opSeq = useRef(0);
-    // The current search's id and source, the last post number used, and the
+    // The current search's id and source, whether it asks a Data search
+    // example's text (searchFromExample), the last post number used, and the
     // trace of the post whose answer is on screen. Minted by every run start,
     // cleared by reset.
     const searchRef = useRef<{
         id: string;
         source: SearchSource;
+        fromExample: boolean;
         posts: number;
         traceId: string | null;
     } | null>(null);
@@ -417,6 +420,7 @@ export const useSearchRun = () => {
         const search = (searchRef.current ??= {
             id: uuid(),
             source: 'typed',
+            fromExample: false,
             posts: 0,
             traceId: null,
         });
@@ -478,6 +482,9 @@ export const useSearchRun = () => {
         }),
         [],
     );
+
+    // Whether the current search asks a Data search example's text.
+    const searchIsExample = useCallback(() => searchRef.current?.fromExample ?? false, []);
 
     const updateRuntime = useCallback(
         (index: number, fn: (runtime: PartRuntime) => PartRuntime) => {
@@ -780,7 +787,13 @@ export const useSearchRun = () => {
 
             runController.current = controller;
             runOp.current = op;
-            searchRef.current = { id: uuid(), source, posts: 0, traceId: null };
+            searchRef.current = {
+                id: uuid(),
+                source,
+                fromExample: searchFromExample(source, searchRef.current?.fromExample ?? false),
+                posts: 0,
+                traceId: null,
+            };
 
             const tracker = trackPost(null, label);
 
@@ -1432,5 +1445,6 @@ export const useSearchRun = () => {
         editParsed,
         editShared,
         searchIds,
+        searchIsExample,
     };
 };

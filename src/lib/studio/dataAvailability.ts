@@ -87,8 +87,3 @@ export const fetchCounts = (signal?: AbortSignal): Promise<CatalogueCounts | nul
  *  read fails. */
 export const fetchSources = (signal?: AbortSignal): Promise<PublisherOption[] | null> =>
     fetchHalf('/api/data-availability/sources', parseSources, signal);
-
-/** The question "Ask a follow-up" opens a fresh canvas with. It is specific
- *  enough that the agent answers it outright without asking what is meant. */
-export const DATA_AVAILABILITY_PROMPT =
-    'What data is available in DFO? Give me an overview of the datasets, publishers, countries and years covered, so I can ask about what interests me.';

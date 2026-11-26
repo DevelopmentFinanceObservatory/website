@@ -117,6 +117,7 @@ The table is partitioned by day on `created_at`:
 | `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one                                  |
 | `props`        | JSON      | the event's allow-listed props, `shareId` as its HMAC-SHA256 hex                |
 | `export_rules` | STRING    | the digest of the rules the row was exported under                              |
+| `day_visitor`  | STRING    | `event.day_visitor`, the daily visitor key, copied as it is; null without one   |
 
 `page` keeps a path only when it is a slash followed by letters, digits and `_ - . : /`, up to 300 characters, the characters the site's routes use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser posts as its page exports as null. The id in `/s/<id>`, `/embed/<id>` and the pages under them exports as `:id`, since a share id opens its share.
 
@@ -210,6 +211,17 @@ vars, so the `infra` foundation outputs slot into both repos the same way.
 
 The service names above are the ones infra defines; whatever appears in
 its `website` stack outputs goes in this var verbatim.
+
+### Studio examples
+
+Each run, as a phase of its own beside the event export, keeps the BigQuery table `studio_examples` (`db/example-export.ts`): one row per question the build offers as a pick, the Studio landing examples (`EXAMPLE_PROMPTS` in `src/lib/studio/examples.ts`) and the "What data is available?" question (`DATA_AVAILABILITY_PROMPT` in `src/lib/studio/examples.ts`). The run creates the table when it is missing, then sends one `MERGE` query, bounded as every BigQuery query is, that sets `last_seen_at` on each offered row and inserts a row for each new text. A text production offered before the export first ran (`OFFERED_BEFORE_EXPORT`) is inserted with the times of the releases that shipped and dropped it. Rows for texts a later build drops stay as they were. The run holds a Postgres advisory lock from the table check to the end of the merge, so a second execution waits for the first, up to five minutes, and finds its rows. Two overlapping merges would otherwise each insert the same new text. The merge runs at the same time as the event days. A failed merge fails the Job under its own `example export` step, and the event phase reports only events.
+
+| Column          | Type      | Value                                                                     |
+| --------------- | --------- | ------------------------------------------------------------------------- |
+| `kind`          | STRING    | `example` for a landing example, `availability` for the drawer's question |
+| `text`          | STRING    | the question as the build offers it                                       |
+| `first_seen_at` | TIMESTAMP | the release that first shipped the text, or the run that first found it   |
+| `last_seen_at`  | TIMESTAMP | the latest run that found it                                              |
 
 ## GCP prerequisites (infra)
 

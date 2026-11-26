@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 
 import type { GalleryKind } from '../src/components/organisms/Gallery/galleryData.ts';
 import type { PromptIntent } from '../src/lib/studio/promptAllowance.ts';
+import type { PromptSource } from '../src/lib/studio/wire.ts';
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
@@ -57,7 +58,9 @@ import {
  *
  * Rows keep no raw ids and no free text. `visitor_id` and `user_id` become
  * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, as does the `shareId` prop,
- * since a share id opens its share. `page` keeps a site path only
+ * since a share id opens its share. `day_visitor` is copied as it is: it is
+ * already a digest under a salt deleted once its day has passed
+ * (src/lib/events/dayVisitor.ts). `page` keeps a site path only
  * (PAGE_PATH), with the share id in /s/<id> and /embed/<id> written `:id`.
  * `props` keeps only the keys PROP_RULES names for the event, each only
  * when its value passes the key's rule. POST /api/events takes
@@ -142,6 +145,8 @@ const PROMPT_INTENTS = every<PromptIntent>()([
     'apply_choice',
     'apply_unit',
 ]);
+// A typed prompt has no `source`.
+const PROMPT_SOURCES = every<PromptSource>()(['example', 'availability', 'search_example']);
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
@@ -223,6 +228,7 @@ export const PROP_RULES = {
         intent: PROMPT_INTENTS,
         length: 'count',
         guest: 'boolean',
+        source: PROMPT_SOURCES,
     },
     // `unit` is text built from labels, and `years` an object of two years.
     'studio.card': {
@@ -285,6 +291,8 @@ export const PROP_RULES = {
         host: 'token',
         caller: 'caller',
     },
+    // A page shown (PageView in src/components/atoms/PageView), whose path is `page`.
+    'page.view': { ...EVERY_EVENT },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest (or exportDigest), passes, exportProps, exportPage or
@@ -349,6 +357,7 @@ export type SourceEvent = {
     name: string;
     userId: string | null;
     visitorId: string | null;
+    dayVisitor: string | null;
     page: string | null;
     props: Record<string, unknown>;
 };
@@ -364,6 +373,7 @@ export type ExportRow = {
     user_hash: string | null;
     props: Record<string, unknown>;
     export_rules: string;
+    day_visitor: string | null;
 };
 
 // The columns the table was created with that are REQUIRED. A load's
@@ -384,6 +394,7 @@ export const EXPORT_SCHEMA: ExportField[] = [
     { name: 'user_hash', type: 'STRING' },
     { name: 'props', type: 'JSON', mode: 'REQUIRED' },
     { name: 'export_rules', type: 'STRING' },
+    { name: 'day_visitor', type: 'STRING' },
 ];
 
 // The share pages and everything under them, /s/<id>/download/preparing
@@ -408,7 +419,7 @@ const exportPage = (page: string | null): string | null => {
 // change reaches every day (exportRules). READ_DAY_SQL, which shapes the
 // rows they take, enters the digest as its text and needs no bump. The
 // golden rows in db/test/event-export.test.ts pin each version's output.
-export const ROW_SHAPE_VERSION = 3;
+export const ROW_SHAPE_VERSION = 4;
 
 /**
  * One page of a UTC day's events (pgEventSource's readDay), with
@@ -420,7 +431,8 @@ export const ROW_SHAPE_VERSION = 3;
 const READ_DAY_SQL = `SELECT id::float8 AS id,
         to_char(created_at AT TIME ZONE 'UTC',
                 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
-        name, user_id AS "userId", visitor_id AS "visitorId", page,
+        name, user_id AS "userId", visitor_id AS "visitorId",
+        day_visitor AS "dayVisitor", page,
         coalesce((SELECT jsonb_object_agg(key, value)
                   FROM jsonb_each(props)
                   WHERE key = ANY($4::text[])), '{}') AS props
@@ -478,6 +490,7 @@ export const exportRow = (row: SourceEvent, hmacKey: string, rules: string): Exp
     user_hash: digest(hmacKey, row.userId),
     props: exportProps(row.name, row.props, hmacKey),
     export_rules: rules,
+    day_visitor: row.dayVisitor,
 });
 
 const DAY_MS = 86_400_000;
@@ -736,6 +749,8 @@ export type JobProgress = {
     events: string;
     /** The account export's step, `done`, or `failed: ` and its error's message. */
     accounts: string;
+    /** The Studio example export's step, `done`, or `failed: ` and its error's message. */
+    examples: string;
     /** The error each phase that failed rejected with. */
     failures: Partial<Record<JobPhase, Error>>;
     /** The loads in flight, each by its day or table. */
@@ -745,16 +760,17 @@ export type JobProgress = {
     faults: Record<JobPhase, () => readonly string[]>;
 };
 
-/** The export Job's two phases. */
-export type JobPhase = 'events' | 'accounts';
+/** The export Job's three phases. */
+export type JobPhase = 'events' | 'accounts' | 'examples';
 
 export const jobProgress = (): JobProgress => ({
     events: 'the start',
     accounts: 'the start',
+    examples: 'the start',
     failures: {},
     loading: new Set(),
     unstarted: [],
-    faults: { events: () => [], accounts: () => [] },
+    faults: { events: () => [], accounts: () => [], examples: () => [] },
 });
 
 /** A day a run failed, and what its partition holds after it: `kept` after a failed read. */
@@ -994,21 +1010,24 @@ export const runExport = async ({
 };
 
 /**
- * The export Job's run (db/export-events.ts): the event export and the
- * account export at once, each on its own pool and scratch file, so neither
- * waits on the other and a call that stalls in one costs that one alone.
+ * The export Job's run (db/export-events.ts): the event export, the
+ * account export and the Studio example export at once, the first two on
+ * their own pool and scratch file, so none waits on another and a call that
+ * stalls in one costs that one alone.
  * Each phase's step in `progress` turns `done` as it succeeds, or `failed: `
  * and its error's message as it rejects, its error kept in
- * `progress.failures`. Rejects once both are done with the one that failed,
- * or with both in one AggregateError.
+ * `progress.failures`. Rejects once all are done with the one that failed,
+ * or with every one that failed in one AggregateError.
  */
 export const runExportJob = async ({
     exportAccounts,
     exportEvents,
+    exportExamples = async () => undefined,
     progress = jobProgress(),
 }: {
     exportAccounts: () => Promise<void>;
     exportEvents: () => Promise<unknown>;
+    exportExamples?: () => Promise<void>;
     progress?: JobProgress;
 }): Promise<void> => {
     const run = async (phase: JobPhase, work: () => Promise<unknown>) => {
@@ -1023,33 +1042,46 @@ export const runExportJob = async ({
             throw failure;
         }
     };
-    const [events, accounts] = await Promise.allSettled([
+    const [events, accounts, examples] = await Promise.allSettled([
         run('events', exportEvents),
         run('accounts', exportAccounts),
+        run('examples', exportExamples),
     ]);
-    const eventFailure =
-        events.status === 'rejected'
-            ? events.reason instanceof Error
-                ? events.reason
-                : new Error(messageOf(events.reason))
-            : null;
-    const accountFailure =
-        accounts.status === 'rejected'
-            ? new Error(`account export failed: ${messageOf(accounts.reason)}`, {
-                  cause: accounts.reason,
-              })
-            : null;
-
     // A phase's own error names no phase, so the run's error names it.
-    if (eventFailure !== null && accountFailure !== null) {
+    const failures: { error: Error; line: string }[] = [];
+
+    if (accounts.status === 'rejected') {
+        const error = new Error(`account export failed: ${messageOf(accounts.reason)}`, {
+            cause: accounts.reason,
+        });
+
+        failures.push({ error, line: error.message });
+    }
+
+    if (events.status === 'rejected') {
+        const error =
+            events.reason instanceof Error ? events.reason : new Error(messageOf(events.reason));
+
+        failures.push({ error, line: `event export failed: ${error.message}` });
+    }
+
+    if (examples.status === 'rejected') {
+        const error = new Error(`example export failed: ${messageOf(examples.reason)}`, {
+            cause: examples.reason,
+        });
+
+        failures.push({ error, line: error.message });
+    }
+
+    if (failures.length > 1) {
         throw new AggregateError(
-            [accountFailure, eventFailure],
-            `${accountFailure.message}; event export failed: ${eventFailure.message}`,
+            failures.map(({ error }) => error),
+            failures.map(({ line }) => line).join('; '),
         );
     }
 
-    if (eventFailure !== null || accountFailure !== null) {
-        throw eventFailure ?? accountFailure;
+    if (failures[0] !== undefined) {
+        throw failures[0].error;
     }
 };
 
@@ -1064,6 +1096,7 @@ export const runExportJob = async ({
 export class ExportJobError extends Error {
     readonly events: string;
     readonly accounts: string;
+    readonly examples: string;
     readonly unknown: string[];
     readonly unstarted: string[];
     readonly faults: string[];
@@ -1071,7 +1104,7 @@ export class ExportJobError extends Error {
     constructor(lead: string, progress: JobProgress, { rejected }: { rejected?: unknown } = {}) {
         const unknown = [...progress.loading];
         const unstarted = [...progress.unstarted];
-        const phases: JobPhase[] = ['events', 'accounts'];
+        const phases: JobPhase[] = ['events', 'accounts', 'examples'];
         const faults = phases
             .filter((phase) => progress.failures[phase] === undefined)
             .flatMap((phase) => progress.faults[phase]());
@@ -1088,6 +1121,7 @@ export class ExportJobError extends Error {
                 lead,
                 `event export: ${progress.events}`,
                 `account export: ${progress.accounts}`,
+                `example export: ${progress.examples}`,
                 ...(unknown.length > 0
                     ? [`loads stopped, outcome unknown: ${unknown.join(', ')}`]
                     : []),
@@ -1100,6 +1134,7 @@ export class ExportJobError extends Error {
         this.name = 'ExportJobError';
         this.events = progress.events;
         this.accounts = progress.accounts;
+        this.examples = progress.examples;
         this.unknown = unknown;
         this.unstarted = unstarted;
         this.faults = faults;

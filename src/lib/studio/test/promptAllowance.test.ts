@@ -45,3 +45,16 @@ test('promptEvent: a chip counts as a turn, with its intent and no length', () =
         { turn: 3, intent: 'apply_choice', guest: true },
     );
 });
+
+test('promptEvent: a picked example carries its source, and a typed prompt none', () => {
+    for (const source of ['example', 'availability', 'search_example'] as const) {
+        assert.equal(
+            promptEvent({ guest: false, used: 0, queued: 0, sent: 0, length: 40, source })?.source,
+            source,
+        );
+    }
+
+    assert.ok(
+        !('source' in promptEvent({ guest: false, used: 0, queued: 0, sent: 0, length: 4 })!),
+    );
+});

@@ -11,7 +11,14 @@ import { MAX_PROPS_BYTES } from '../../events/limits.ts';
 import { EVENT_SAMPLE, searchEventName, searchEventProps } from '../searchEvents.ts';
 import { flattenSpec, unflattenSpec } from '../searchClient.ts';
 import { planSentenceText } from '../sentencePlan.ts';
-import { handoffEdited, handoffQuestion, handoffSeeds, studioHref } from '../studioHandoff.ts';
+import {
+    handoffEdited,
+    handoffFromExample,
+    handoffQuestion,
+    handoffSeeds,
+    searchFromExample,
+    studioHref,
+} from '../studioHandoff.ts';
 import {
     type HydratedPart,
     knownPart,
@@ -150,6 +157,10 @@ test('unflattenSpec keeps the trace flattenSpec also reads as `resolution`', () 
 test('studioHref carries the question, and the token when there is one', () => {
     assert.equal(studioHref('Aid to Kenya?', null), '/studio?q=Aid+to+Kenya%3F');
     assert.equal(studioHref('Aid to Kenya?', 'abc-123'), '/studio?q=Aid+to+Kenya%3F&seed=abc-123');
+    assert.equal(
+        studioHref('Aid to Kenya?', 'abc-123', true),
+        '/studio?q=Aid+to+Kenya%3F&seed=abc-123&via=example',
+    );
 });
 
 test('a Studio click after a place and year edit hands over the edited question and seed', () => {
@@ -411,4 +422,25 @@ test('searchEventName counts a resolution with nothing resolved as search.empty'
 
     assert.equal(searchEventName(props), 'search.empty');
     assert.equal(props.refused[0].reason, 'entity_ambiguous');
+});
+
+test('a search asks an example when it was picked as one or retries one that was', () => {
+    const cases: [Parameters<typeof searchFromExample>, boolean][] = [
+        [['example', false], true],
+        [['retry', true], true],
+        [['retry', false], false],
+        [['typed', true], false],
+        [['permalink', true], false],
+    ];
+
+    for (const [args, expected] of cases) {
+        assert.equal(searchFromExample(...args), expected, JSON.stringify(args));
+    }
+
+    // A retried example handed to Studio unedited is still the example.
+    assert.equal(
+        handoffFromExample({ fromExample: searchFromExample('retry', true), edited: false }),
+        true,
+    );
+    assert.equal(handoffFromExample({ fromExample: true, edited: true }), false);
 });

@@ -211,6 +211,13 @@
       "when": 1795621271546,
       "tag": "0030_limit_counter_expires_at",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795676266698,
+      "tag": "0031_day_visitor",
+      "breakpoints": true
     }
   ]
 }

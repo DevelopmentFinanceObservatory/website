@@ -34,7 +34,6 @@ import { revealIndex, useReveal } from '@/hooks/useReveal';
 import {
     catalogueChips,
     catalogueTiles,
-    roundedCount,
     STARTING_POINT_QUERY,
     type SearchCatalogue,
 } from '@/lib/search/catalogue';
@@ -71,6 +70,7 @@ import {
 import { earlySentenceTokens, tokenPart } from '@/lib/search/sentencePlan';
 import {
     handoffEdited,
+    handoffFromExample,
     handoffQuestion,
     handoffSeeds,
     studioHref,
@@ -188,6 +188,7 @@ const DataSearch = ({
         editShared,
         editFacet,
         searchIds,
+        searchIsExample,
     } = useSearchRun();
     // A version link runs with no question of its own: the resolved sentence
     // stands in for it wherever the page needs text (the Studio handoff, a
@@ -377,7 +378,13 @@ const DataSearch = ({
                 run: { ...(searchId && { searchId }), traceId },
             }),
         );
-        router.push(studioHref(question, token));
+        router.push(
+            studioHref(
+                question,
+                token,
+                handoffFromExample({ fromExample: searchIsExample(), edited }),
+            ),
+        );
     }, [
         router,
         query,
@@ -388,6 +395,7 @@ const DataSearch = ({
         answerKind,
         answerReason,
         searchIds,
+        searchIsExample,
     ]);
 
     // A visitor's action on the answer on screen (docs/analytics.md): the
@@ -794,7 +802,7 @@ const DataSearch = ({
             : refusalVersion
               ? 'This version of the dataset is no longer available.'
               : 'This dataset is not available.';
-    const tiles = catalogueTiles(catalogue);
+    const tiles = catalogueTiles(catalogue, 'publishers');
 
     // The one preview table's rows: every definite part, in part order, spec
     // deduped by spec_id (a folded part shares its representative's spec_id
@@ -979,10 +987,7 @@ const DataSearch = ({
                                 <h2 className={styles.buildTitle}>Build a Dataset</h2>
                                 <p className={styles.buildText}>
                                     Describe the data you need, tune the parameters, and export a
-                                    structured dataset drawn from{' '}
-                                    {catalogue &&
-                                        `${roundedCount(catalogue.counts.indicators)} indicators in `}
-                                    the DFO knowledge graph.
+                                    structured dataset from the DFO knowledge graph.
                                 </p>
                             </div>
                             {tiles.length > 0 && <StatTiles stats={tiles} />}
