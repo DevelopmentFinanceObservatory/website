@@ -188,12 +188,16 @@ test('aidLine gives the donors, recipients and years, and stops where the counts
     assert.equal(aidLine(null), null);
 });
 
-test('catalogueTiles shows indicators and datasets, or nothing without a catalogue', () => {
-    assert.deepEqual(catalogueTiles(whole), [
+test('catalogueTiles shows indicators beside publishers or datasets, or nothing without a catalogue', () => {
+    assert.deepEqual(catalogueTiles(whole, 'publishers'), [
+        { value: '100K+', label: 'Indicators' },
+        { value: '40', label: 'Publishers' },
+    ]);
+    assert.deepEqual(catalogueTiles(whole, 'datasets'), [
         { value: '100K+', label: 'Indicators' },
         { value: '90', label: 'Datasets' },
     ]);
-    assert.deepEqual(catalogueTiles(null), []);
+    assert.deepEqual(catalogueTiles(null, 'publishers'), []);
 });
 
 for (const [count, shown] of [

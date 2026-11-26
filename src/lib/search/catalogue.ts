@@ -236,10 +236,14 @@ export function aidLine(aid: AidCounts | null): string | null {
     return aid.years ? `${parties}, from ${aid.years.first} to ${aid.years.last}.` : `${parties}.`;
 }
 
-/** The stat tiles on /data and the homepage, and the Studio landing's data
- *  drawer: indicators and datasets, or none without a catalogue. */
+/** The stat tiles: indicators, then publishers or source datasets, or none
+ *  without a catalogue. /data and the homepage show publishers, because
+ *  beside "Build a Dataset" a dataset count reads as the number of tables a
+ *  reader can make. The Studio landing's data drawer shows datasets, which
+ *  its publisher list breaks down. */
 export function catalogueTiles(
     catalogue: Pick<SearchCatalogue, 'counts'> | null,
+    second: 'publishers' | 'datasets',
 ): { value: string; label: string }[] {
     if (!catalogue) {
         return [];
@@ -247,6 +251,8 @@ export function catalogueTiles(
 
     return [
         { value: roundedCount(catalogue.counts.indicators), label: 'Indicators' },
-        { value: formatCount(catalogue.counts.datasets), label: 'Datasets' },
+        second === 'publishers'
+            ? { value: formatCount(catalogue.counts.publishers), label: 'Publishers' }
+            : { value: formatCount(catalogue.counts.datasets), label: 'Datasets' },
     ];
 }

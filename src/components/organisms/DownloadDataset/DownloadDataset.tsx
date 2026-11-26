@@ -27,7 +27,7 @@ const DownloadDataset = ({ catalogue }: { catalogue: SearchCatalogue | null }) =
     const router = useRouter();
     const sectionRef = useReveal<HTMLElement>();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const tiles = catalogueTiles(catalogue);
+    const tiles = catalogueTiles(catalogue, 'publishers');
     const reducedMotion = usePrefersReducedMotion();
 
     // The net reads the motion preference itself when it starts (a still
