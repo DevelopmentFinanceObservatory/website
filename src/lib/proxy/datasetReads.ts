@@ -69,10 +69,10 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  * every alias of one version shares, so a revocation purges all of them by
  * one tag. Every other answer on these routes is `no-store`. A cacheable
  * answer drops the headers that describe one request (PER_REQUEST_HEADERS,
- * X-RateLimit-*), since every later reader would get them, and varies on
+ * X-RateLimit-*), since every later reader would get them. It varies on
  * Authorization and X-API-Key as well as Origin.
  *
- * forward()'s caching rule then applies to every read: an answer to a call
+ * forward()'s caching rule then applies to every read. An answer to a call
  * that carries an Authorization or X-API-Key header, a 304 included, is
  * `private, no-store`, untagged and keeps its X-RateLimit-* headers, whatever
  * the route and tier would give it.
@@ -255,7 +255,7 @@ const EXPOSED_PER_REQUEST_HEADERS = [
     'X-RateLimit-Reset',
 ];
 
-// Headers that describe one request: a cached copy would hand them to every
+// Headers that describe one request. A cached copy would hand them to every
 // later reader.
 const PER_REQUEST_HEADERS = ['server-timing', 'x-dfo-trace-id'];
 const RATE_LIMIT_PREFIX = 'x-ratelimit-';

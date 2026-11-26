@@ -60,7 +60,7 @@ import { readVisitor, visitorLimitsOn } from './visitor';
  * the visitor's or the address's cookieless one, and on its address's daily
  * ceiling (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS and
  * ADDRESS_DAILY_LIMITS). A call on the 'api' or 'datasets'
- * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
+ * surface may carry an API key, as `Authorization: Bearer dfo_…` or `X-API-Key: dfo_…`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
  * the account's limit on that surface and against the account's daily quota,
  * or refused with a 401 when the key is not valid (src/lib/proxy/access). A
@@ -307,7 +307,6 @@ const withTier = (refusal: Response, { tier }: Access): Response => {
 };
 
 const KEYED_CACHE = 'private, no-store';
-const RATE_LIMIT_PREFIX = 'x-ratelimit-';
 const CREDENTIAL_VARY = ['Authorization', 'X-API-Key'];
 
 /** Whether a call carries a credential header, whatever its value. */
@@ -360,13 +359,6 @@ export const cacheForCaller = (request: Headers, response: Headers): boolean => 
     }
 
     appendVary(response, CREDENTIAL_VARY);
-
-    // Copied first, since deleting while iterating skips entries.
-    for (const name of [...response.keys()]) {
-        if (name.startsWith(RATE_LIMIT_PREFIX)) {
-            response.delete(name);
-        }
-    }
 
     return true;
 };

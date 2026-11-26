@@ -305,7 +305,7 @@ test('forward: a keyed answer is private and no-store with its rate headers, wha
     for (const headers of [
         { 'x-api-key': KEY },
         { authorization: `Bearer ${KEY}` },
-        // Not a key, but a credential all the same.
+        // Any Authorization header is a credential.
         { authorization: 'Basic dXNlcjpwYXNz' },
     ] as Record<string, string>[]) {
         const res = await call(headers, { target: `${base}/public` });
@@ -314,9 +314,23 @@ test('forward: a keyed answer is private and no-store with its rate headers, wha
         assert.equal(res.headers.get('cache-control'), 'private, no-store');
         assert.ok(res.headers.has('x-ratelimit-limit'));
     }
+
+    // A key over its limit is answered 429, with the same cache rule and its count.
+    accessDeps.hitAccount = async (_surface, _accountId, limit) => ({
+        allowed: false,
+        limit,
+        remaining: 0,
+        reset: 30,
+    });
+
+    const limited = await call({ 'x-api-key': KEY }, { target: `${base}/public` });
+
+    assert.equal(limited.status, 429);
+    assert.equal(limited.headers.get('cache-control'), 'private, no-store');
+    assert.equal(limited.headers.get('x-ratelimit-remaining'), '0');
 });
 
-test('forward: an anonymous answer a shared cache may keep varies on the credential headers and drops its rate headers', async () => {
+test('forward: an anonymous answer a shared cache may keep varies on the credential headers and keeps its rate headers', async () => {
     fresh();
     fakes(VALID);
 
@@ -328,8 +342,8 @@ test('forward: an anonymous answer a shared cache may keep varies on the credent
 
     assert.equal(res.headers.get('cache-control'), PUBLIC_CACHE);
     assert.equal(res.headers.get('vary'), 'Origin, Authorization, X-API-Key');
-    assert.equal(res.headers.get('x-ratelimit-limit'), null);
-    // An answer no shared cache keeps carries its count and no Vary.
+    assert.ok(res.headers.has('x-ratelimit-limit'));
+    // An answer no shared cache keeps carries no Vary.
     assert.equal(plain.headers.get('cache-control'), 'no-cache');
     assert.equal(plain.headers.get('vary'), null);
     assert.ok(plain.headers.has('x-ratelimit-limit'));
