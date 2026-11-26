@@ -73,11 +73,23 @@ relock-client:
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f "{{MAIL_DIR}}/cert.pem" ]; then
-        export NODE_EXTRA_CA_CERTS="$PWD/{{MAIL_DIR}}/cert.pem"
+    port={{quote(PORT)}}
+    cert={{quote(MAIL_DIR)}}/cert.pem
+    if [[ "$cert" != /* ]]; then cert="$PWD/$cert"; fi
+    if [ -f "$cert" ]; then
+        if [ -z "${NODE_EXTRA_CA_CERTS:-}" ]; then
+            export NODE_EXTRA_CA_CERTS="$cert"
+        elif [ -f "$NODE_EXTRA_CA_CERTS" ] && [ -r "$NODE_EXTRA_CA_CERTS" ]; then
+            ca_bundle="$(mktemp "${TMPDIR:-/tmp}/dfo-website-ca.XXXXXX")"
+            trap 'rm -f -- "$ca_bundle"' EXIT
+            trap 'trap "" INT TERM; exit 130' INT
+            trap 'trap "" INT TERM; exit 143' TERM
+            { cat -- "$NODE_EXTRA_CA_CERTS"; printf '\n'; cat -- "$cert"; } > "$ca_bundle"
+            export NODE_EXTRA_CA_CERTS="$ca_bundle"
+        fi
     fi
-    echo "http://localhost:{{PORT}}"
-    exec pnpm dev --port {{PORT}}
+    echo "http://localhost:$port"
+    pnpm dev --port "$port"
 
 # The site's SMTP transport requires STARTTLS and checks the certificate
 # (src/lib/mail/smtp.ts), so the mail catcher needs one Node trusts. This
@@ -88,14 +100,15 @@ dev:
 mail-cert:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f "{{MAIL_DIR}}/cert.pem" ] && [ -f "{{MAIL_DIR}}/key.pem" ]; then
+    mail_dir={{quote(MAIL_DIR)}}
+    if [ -f "$mail_dir/cert.pem" ] && [ -f "$mail_dir/key.pem" ]; then
         exit 0
     fi
-    mkdir -p "{{MAIL_DIR}}"
+    mkdir -p -- "$mail_dir"
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost \
         -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
-        -keyout "{{MAIL_DIR}}/key.pem" -out "{{MAIL_DIR}}/cert.pem" 2>/dev/null
-    echo "ok Created {{MAIL_DIR}}/cert.pem for the local mail catcher."
+        -keyout "$mail_dir/key.pem" -out "$mail_dir/cert.pem" 2>/dev/null
+    echo "ok Created $mail_dir/cert.pem for the local mail catcher."
 
 # The site's whole local stack in one terminal: the dev apis proxy (8083)
 # and the Studio harness (8080) from an `ai` checkout beside this one,
@@ -108,9 +121,11 @@ mail-cert:
 # Run the apis proxy, the ai harness, Mailpit and the dev server together
 stack: mail-cert
     #!/usr/bin/env bash
-    set -uo pipefail
-    if [ ! -f "{{AI_DIR}}/justfile" ]; then
-        echo "No ai checkout at {{AI_DIR}}. Clone it there or pass AI_DIR=<path>." >&2
+    set -muo pipefail
+    ai_dir={{quote(AI_DIR)}}
+    mail_dir={{quote(MAIL_DIR)}}
+    if [ ! -f "$ai_dir/justfile" ]; then
+        echo "No ai checkout at $ai_dir. Clone it there or pass AI_DIR=<path>." >&2
         exit 1
     fi
     if ! gcloud auth print-access-token >/dev/null 2>&1; then
@@ -123,30 +138,57 @@ stack: mail-cert
     if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then color=1; fi
     run() {
         local name="$1" hue="$2"; shift 2
-        "$@" 2>&1 | awk -v name="$(printf '%-5s' "$name")" -v hue="$hue" -v color="$color" '
-            BEGIN {
-                esc = sprintf("%c", 27)
-                prefix = color ? esc "[" hue "m" name " |" esc "[0m " : name " | "
-                red = color ? esc "[31m" : ""
-                reset = color ? esc "[0m" : ""
-            }
-            /(^|[^[:alnum:]_])(ERROR|FATAL|CRITICAL|Traceback|[A-Za-z]*(Error|Exception))([^[:alnum:]_]|$)|^error[:[]|⨯/ {
-                print prefix red $0 reset; fflush(); next
-            }
-            { print prefix $0; fflush() }' &
+        (
+            # Keep the command, its descendants, and the log filter in one job group.
+            set +m
+            "$@" </dev/null 2>&1 | awk -v name="$(printf '%-5s' "$name")" -v hue="$hue" -v color="$color" '
+                BEGIN {
+                    esc = sprintf("%c", 27)
+                    prefix = color ? esc "[" hue "m" name " |" esc "[0m " : name " | "
+                    red = color ? esc "[31m" : ""
+                    reset = color ? esc "[0m" : ""
+                }
+                /(^|[^[:alnum:]_])(ERROR|FATAL|CRITICAL|Traceback|[A-Za-z]*(Error|Exception))([^[:alnum:]_]|$)|^error[:[]|⨯/ {
+                    print prefix red $0 reset; fflush(); next
+                }
+                { print prefix $0; fflush() }'
+        ) &
     }
-    trap 'trap - INT TERM EXIT; kill 0 2>/dev/null' INT TERM EXIT
-    run apis 36 just --justfile "{{AI_DIR}}/justfile" --working-directory "{{AI_DIR}}" apis-proxy
-    run ai   35 just --justfile "{{AI_DIR}}/justfile" --working-directory "{{AI_DIR}}" dev
+    cleanup() {
+        local pid
+        while IFS= read -r pid; do
+            kill -TERM -- "-$pid" 2>/dev/null || true
+        done < <(jobs -p)
+        wait 2>/dev/null
+    }
+    start_harness() {
+        # The harness mounts its presentation tools only during startup.
+        local deadline=$((SECONDS + 15))
+        while [[ "$(curl --noproxy '*' --silent --max-time 1 --output /dev/null \
+            --write-out '%{http_code}' http://127.0.0.1:8083/api/presentation/release)" != 200 ]]; do
+            if (( SECONDS >= deadline )) || ! kill -0 "$apis_pid" 2>/dev/null; then
+                echo "warning: the apis release is unavailable. Starting the harness anyway. Restart it when the proxy is ready." >&2
+                break
+            fi
+            sleep 1
+        done
+        just --justfile "$ai_dir/justfile" --working-directory "$ai_dir" dev
+    }
+    trap cleanup EXIT
+    trap 'trap "" INT TERM; exit 130' INT
+    trap 'trap "" INT TERM; exit 143' TERM
+    run apis 36 just --justfile "$ai_dir/justfile" --working-directory "$ai_dir" apis-proxy
+    apis_pid=$!
+    run ai 35 start_harness
     if ! command -v mailpit >/dev/null 2>&1; then
         echo "warning: no mailpit on PATH, so email is off. Install it (brew install mailpit)." >&2
     elif lsof -nP -iTCP:{{MAIL_SMTP}} -sTCP:LISTEN >/dev/null 2>&1; then
         echo "warning: port {{MAIL_SMTP}} is taken, so Mailpit isn't started. Stop the other mail catcher to use this one." >&2
     else
         run mail 33 mailpit --smtp 127.0.0.1:{{MAIL_SMTP}} --listen 127.0.0.1:{{MAIL_UI}} \
-            --smtp-tls-cert "{{MAIL_DIR}}/cert.pem" --smtp-tls-key "{{MAIL_DIR}}/key.pem" --smtp-require-starttls
+            --smtp-tls-cert "$mail_dir/cert.pem" --smtp-tls-key "$mail_dir/key.pem" --smtp-require-starttls
     fi
-    run web  32 just dev
+    run web 32 just PORT={{quote(PORT)}} MAIL_DIR={{quote(MAIL_DIR)}} dev
     wait
 
 # Needs 'just build' first -- this serves the production build, it doesn't

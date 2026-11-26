@@ -73,9 +73,11 @@ just stack
 It looks for the `ai` checkout at `../ai`; pass `AI_DIR=<path>` for another
 one. The harness needs `ai`'s own setup first (`just setup` and `just env`
 there), and its environment synced after pulling (`uv sync --all-packages`
-in `ai`). A service that exits on its own, such as the proxy after its login
-expires, leaves the others running. Postgres runs outside `stack` (see
-[Database](#database)).
+in `ai`). The harness waits briefly for the proxy to serve the presentation
+release. If the release is unavailable, the harness starts with a warning.
+Restart the harness once the proxy is ready to load its presentation tools.
+A service that exits on its own leaves the others running. Postgres runs
+outside `stack` (see [Database](#database)).
 
 ### Local email
 
@@ -93,11 +95,14 @@ SMTP_PORT=1025
 The SMTP transport requires STARTTLS and checks the server's certificate,
 so a plain `mailpit` refuses the site's mail. `just mail-cert` (run by
 `stack`) makes a self-signed certificate for localhost in `.mailpit/`, and
-`just dev` has Node trust it through `NODE_EXTRA_CA_CERTS`. To run Mailpit
-by hand instead, give it the same certificate:
+`just dev` adds it to Node's trusted certificates, keeping any certificates
+already configured through `NODE_EXTRA_CA_CERTS`. To run Mailpit by hand,
+generate the certificate and bind both listeners to loopback:
 
 ```bash
-mailpit --smtp-tls-cert .mailpit/cert.pem --smtp-tls-key .mailpit/key.pem --smtp-require-starttls
+just mail-cert
+mailpit --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025 \
+  --smtp-tls-cert .mailpit/cert.pem --smtp-tls-key .mailpit/key.pem --smtp-require-starttls
 ```
 
 ## just
