@@ -17,6 +17,7 @@ import {
 import { formatWindow } from './period.ts';
 import { warnDescriptionRefused } from './payload.ts';
 import type { ShareMint } from './shareDialog.ts';
+import type { HeldPeriod } from './wire.ts';
 
 // A `spec_` or `ops_` id names the card's own frame, a sum of indicators,
 // which no reader can look up.
@@ -41,6 +42,44 @@ const legacySources = (info: CardInfo): CardSource[] =>
           ]
         : []);
 
+// A share as a percentage: one decimal below 10%, whole above, "<0.1%" under.
+const percent = (share: number): string => {
+    const value = share * 100;
+
+    if (value > 0 && value < 0.05) {
+        return '<0.1%';
+    }
+
+    return `${value < 10 ? Number(value.toFixed(1)) : Math.round(value)}%`;
+};
+
+const span = ({ start, end }: HeldPeriod): string => (start === end ? start : `${start} to ${end}`);
+
+/** One label per served held period; a period held back shows nothing.
+ *  "2025 partial: 0.1% of 2024 value reported", or for a projection
+ *  "Reported to 2025 · projected 2026 to 2030". */
+export const heldLabels = (
+    held: readonly HeldPeriod[] | undefined,
+    dataThrough: string | null,
+): string[] =>
+    (held ?? [])
+        .filter((entry) => entry.served)
+        .map((entry) => {
+            if (entry.status === 'projected') {
+                return dataThrough
+                    ? `Reported to ${dataThrough} · projected ${span(entry)}`
+                    : `Projected ${span(entry)}`;
+            }
+
+            if (entry.share === null || !entry.against) {
+                return `${span(entry)} partial`;
+            }
+
+            const noun = entry.basis === 'series' ? 'series' : 'value';
+
+            return `${span(entry)} partial: ${percent(entry.share)} of ${entry.against} ${noun} reported`;
+        });
+
 /**
  * The legacy view: the citation, every source (whose graph name and link
  * the panel looks up by id on open), the years, indicator count, unit and
@@ -58,7 +97,7 @@ export const legacyPanel = (info: CardInfo): LegacyView => {
             ...(info.dataThrough ? [{ label: 'Data through', value: info.dataThrough }] : []),
             ...(info.lastRefreshed ? [{ label: 'Last refreshed', value: info.lastRefreshed }] : []),
         ],
-        items: [],
+        items: heldLabels(info.held, info.dataThrough),
     };
     const leftOut: PanelBlock = {
         key: 'left_out',
@@ -130,7 +169,16 @@ export const logRefusedDescriptions = (widgets: readonly Widget[]): void => {
 export const panelViewOf = (info: CardInfo, options: PanelOptions): PanelView => {
     const description = cardDescription(info);
 
-    return description ? describedPanel(description, options) : legacyPanel(info);
+    if (!description) {
+        return legacyPanel(info);
+    }
+
+    const view = describedPanel(description, options);
+
+    return {
+        ...view,
+        keepInMind: [...view.keepInMind, ...heldLabels(info.held, info.dataThrough)],
+    };
 };
 
 /** What asking for a snapshot link to cite came to: the snapshot share's

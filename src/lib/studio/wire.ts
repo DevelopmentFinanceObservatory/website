@@ -8,6 +8,7 @@
  * members and nothing else.
  */
 
+import { asRecord } from '../asRecord.ts';
 import type { PayloadUnit } from './payload.ts';
 
 // ---------------------------------------------------------------------------
@@ -29,12 +30,65 @@ export type Source = {
     ref?: string | null;
 };
 
+/** A period the data holds that is incomplete or a forecast:
+ *  `partial` (reported in part) or `projected` (a forecast). `served` is true
+ *  when the card's data includes it and false when it was held back. */
+export type HeldPeriod = {
+    status: 'partial' | 'projected';
+    start: string;
+    end: string;
+    served: boolean;
+    source_name: string | null;
+    share: number | null;
+    basis: 'value' | 'series' | null;
+    against: string | null;
+};
+
 export type Freshness = {
     data_through: string;
     last_refreshed: string;
     partial_period: boolean;
     next_expected?: string | null;
+    // Absent on a payload from before held periods existed.
+    held?: HeldPeriod[];
 };
+
+const heldText = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() !== '' ? value : null;
+
+/** The `held` list of a freshness block read from an untyped value. A
+ *  missing or non-list value is empty, and an entry without a status, a
+ *  start or an end is dropped. */
+export const readHeld = (value: unknown): HeldPeriod[] =>
+    (Array.isArray(value) ? value : []).flatMap((entry: unknown): HeldPeriod[] => {
+        const record = asRecord(entry);
+        const status = record?.['status'];
+        const start = heldText(record?.['start']);
+        const end = heldText(record?.['end']);
+
+        if ((status !== 'partial' && status !== 'projected') || !start || !end) {
+            return [];
+        }
+
+        const share = record?.['share'];
+        const basis = record?.['basis'];
+
+        return [
+            {
+                status,
+                start,
+                end,
+                served: record?.['served'] === true,
+                source_name:
+                    heldText(record?.['source_name']) ??
+                    heldText(record?.['source']) ??
+                    heldText(record?.['provenance']),
+                share: typeof share === 'number' && Number.isFinite(share) ? share : null,
+                basis: basis === 'value' || basis === 'series' ? basis : null,
+                against: heldText(record?.['against']),
+            },
+        ];
+    });
 
 export type WireWarning = {
     code: string;
