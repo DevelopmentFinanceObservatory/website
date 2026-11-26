@@ -34,7 +34,6 @@ import { revealIndex, useReveal } from '@/hooks/useReveal';
 import {
     catalogueChips,
     catalogueTiles,
-    roundedCount,
     STARTING_POINT_QUERY,
     type SearchCatalogue,
 } from '@/lib/search/catalogue';
@@ -803,7 +802,7 @@ const DataSearch = ({
             : refusalVersion
               ? 'This version of the dataset is no longer available.'
               : 'This dataset is not available.';
-    const tiles = catalogueTiles(catalogue);
+    const tiles = catalogueTiles(catalogue, 'publishers');
 
     // The one preview table's rows: every definite part, in part order, spec
     // deduped by spec_id (a folded part shares its representative's spec_id
@@ -988,10 +987,7 @@ const DataSearch = ({
                                 <h2 className={styles.buildTitle}>Build a Dataset</h2>
                                 <p className={styles.buildText}>
                                     Describe the data you need, tune the parameters, and export a
-                                    structured dataset drawn from{' '}
-                                    {catalogue &&
-                                        `${roundedCount(catalogue.counts.indicators)} indicators in `}
-                                    the DFO knowledge graph.
+                                    structured dataset from the DFO knowledge graph.
                                 </p>
                             </div>
                             {tiles.length > 0 && <StatTiles stats={tiles} />}
