@@ -84,6 +84,10 @@ const AdminApiKeys = ({
                             call is counted by address.
                         </p>
                     )}
+                    <p className={styles.summary}>
+                        Admins are the accounts listed in ADMIN_EMAILS. Every other account is a
+                        standard user.
+                    </p>
                     {query && (
                         <p className={styles.summary} role="status">
                             {count(matched)} of {count(total)} users
