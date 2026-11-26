@@ -599,8 +599,8 @@ for (const [origin, allowed] of [
     });
 }
 
-// What a cacheable read varies on: the page's origin, and the credential
-// headers, so no cache answers a keyed call with an anonymous copy.
+// A cacheable read varies on the page's origin and the credential headers,
+// so no cache answers a keyed call with an anonymous copy.
 const CACHED_VARY = 'Origin, Authorization, X-API-Key';
 
 test('cors: a DFO origin gets its origin back, and a cacheable read varies on Origin and the credential headers', async () => {

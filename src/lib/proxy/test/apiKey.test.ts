@@ -31,7 +31,7 @@ test('readApiKey: an X-API-Key that is not a dfo_ key is not a key', () => {
         assert.deepEqual(read({ 'x-api-key': value }), { kind: 'none' }, value);
     }
 
-    // A foreign alias beside a key neither conflicts with it nor replaces it.
+    // A foreign alias beside a key is ignored.
     assert.deepEqual(read({ authorization: `Bearer ${KEY}`, 'x-api-key': 'other' }), {
         kind: 'key',
         key: KEY,
@@ -85,7 +85,7 @@ test('readApiKey: a value over the maximum length is refused unread', () => {
         read({ 'x-api-key': `dfo_${'d'.repeat(MAX_KEY_LENGTH - 3)}` }).kind,
         'too-long',
     );
-    // A foreign value is not a key, so its length is no concern.
+    // A foreign value is read as no key, whatever its length.
     assert.deepEqual(read({ 'x-api-key': 'd'.repeat(MAX_KEY_LENGTH + 1) }), { kind: 'none' });
 });
 

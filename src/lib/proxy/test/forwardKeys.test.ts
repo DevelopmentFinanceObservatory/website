@@ -69,7 +69,7 @@ const addressCaller = `ip:${createHmac('sha256', 'test-hmac-key')
     .digest('hex')
     .slice(0, 32)}`;
 
-// What dfo-apis sends on many API routes: any cache may keep the answer.
+// dfo-apis sends this on many API routes, and any cache may keep the answer.
 const PUBLIC_CACHE = 'public, max-age=300';
 
 // What the upstream saw of each call. /public answers with PUBLIC_CACHE and
