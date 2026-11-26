@@ -1582,6 +1582,32 @@ test("the card face reads a described card's coverage gaps and a legacy card's l
     assert.deepEqual(leftOutOf(null), []);
 });
 
+test('the card face adds the label of a served partial or projected period, and none for a held-back one', () => {
+    const entry = {
+        status: 'partial' as const,
+        start: '2025',
+        end: '2025',
+        served: true,
+        source_name: null,
+        share: 0.001,
+        basis: 'value' as const,
+        against: '2024',
+    };
+
+    assert.deepEqual(
+        leftOutOf({ leftOut: ['No 2024 value for Ghana.'], held: [entry], dataThrough: '2024' }),
+        ['2025 partial: 0.1% of 2024 value reported', 'No 2024 value for Ghana.'],
+    );
+    assert.deepEqual(
+        leftOutOf({
+            held: [{ ...entry, status: 'projected', start: '2026', end: '2030' }],
+            dataThrough: '2025',
+        }),
+        ['Reported to 2025 · projected 2026 to 2030'],
+    );
+    assert.deepEqual(leftOutOf({ held: [{ ...entry, served: false }], dataThrough: '2024' }), []);
+});
+
 test('a saved card whose description the reader refuses shows the legacy panel', () => {
     // A saved widget is stored verbatim, so its description can be any JSON.
     const malformed = { ...vectorInput('description-card-revision.json'), caveats: 'none' };

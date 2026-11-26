@@ -14,6 +14,7 @@ import {
     payloadStat,
     payloadTitle,
 } from '../payload.ts';
+import { readHeld } from '../wire.ts';
 import { composedUnit, envelopeComposedUnit } from './fixtures/envelope-composed-unit.ts';
 import { envelopeCreated } from './fixtures/envelope-created.ts';
 import { envelopeRevised } from './fixtures/envelope-revised.ts';
@@ -196,4 +197,64 @@ test('payloadStat: a composed unit arrives whole, and a malformed one leaves the
         label: 'Malaria grant disbursements to Ethiopia per person',
         period: '2024',
     });
+});
+
+test('readHeld reads held periods, takes a missing list as empty and drops malformed entries', () => {
+    const entry = {
+        status: 'partial',
+        start: '2025',
+        end: '2025',
+        served: true,
+        source_name: 'OECD CRS',
+        share: 0.001,
+        basis: 'value',
+        against: '2024',
+    };
+
+    assert.deepEqual(readHeld([entry]), [entry]);
+    assert.deepEqual(readHeld(undefined), []);
+    assert.deepEqual(readHeld('partial'), []);
+    assert.deepEqual(
+        readHeld([
+            null,
+            4,
+            { ...entry, status: 'late' },
+            { ...entry, end: '' },
+            { status: 'projected', start: '2026', end: '2030' },
+        ]),
+        [
+            {
+                status: 'projected',
+                start: '2026',
+                end: '2030',
+                served: false,
+                source_name: null,
+                share: null,
+                basis: null,
+                against: null,
+            },
+        ],
+    );
+});
+
+test('readHeld takes the source name from source_name, then source, then provenance', () => {
+    const base = { status: 'projected', start: '2026', end: '2030' };
+    const names = readHeld([
+        { ...base, source_name: 'A', source: 'B', provenance: 'C' },
+        { ...base, source: 'B', provenance: 'C' },
+        { ...base, provenance: 'C' },
+    ]).map((entry) => entry.source_name);
+
+    assert.deepEqual(names, ['A', 'B', 'C']);
+});
+
+test('payloadProvenance carries the freshness held list, empty when absent', () => {
+    const held = { status: 'projected', start: '2026', end: '2030', served: true };
+    const withHeld = payloadProvenance({
+        provenance: { sources: [], freshness: { data_through: '2025', held: [held] } },
+    });
+    const without = payloadProvenance({ provenance: { sources: [], freshness: {} } });
+
+    assert.equal(withHeld?.held[0]?.status, 'projected');
+    assert.deepEqual(without?.held, []);
 });
