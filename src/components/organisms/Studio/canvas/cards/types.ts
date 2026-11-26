@@ -44,6 +44,13 @@ export type CardExtras = {
     // Opens the Share modal for this card (link / embed) — null on a
     // read-only sheet.
     onShare: (() => void) | null;
+    // Opens the research plan that made the card; the menu's first row.
+    // Absent on a card no plan made, and in the classic layout.
+    onViewPlan?: (() => void) | null;
+    // Hears the card menu and the download menu open and close.
+    onMenuOpenChange?: (open: boolean) => void;
+    // The menu takes its longest row's width, so no row wraps.
+    menuFit?: boolean;
     // A shared/embedded sheet: no pin, no menu, no drag or resize.
     readOnly?: boolean;
     // A data card of a live share: the share's id and creation time, and

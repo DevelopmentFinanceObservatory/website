@@ -123,19 +123,27 @@ export const tooCloseRects = (a: Rect, b: Rect) =>
 
 // First free spot scanning left→right, top→bottom, from the very corner —
 // the GAP cells of air apply BETWEEN cards (tooCloseRects), not to the
-// edges. The sheet grows downward, so the row scan is open-ended.
-export const findSpot = (w: number, h: number, taken: Rect[], cols: number): Spot => {
-    const maxCol = Math.max(0, cols - w);
+// edges. The sheet grows downward, so the row scan is open-ended. `from`
+// moves the corner: the scan starts at its row and never goes left of its
+// column (block placement, blocks.ts).
+export const findSpot = (
+    w: number,
+    h: number,
+    taken: Rect[],
+    cols: number,
+    from: Spot = { col: 0, row: 0 },
+): Spot => {
+    const maxCol = Math.max(from.col, cols - w);
 
-    for (let row = 0; row < 400; row++) {
-        for (let col = 0; col <= maxCol; col++) {
+    for (let row = from.row; row < from.row + 400; row++) {
+        for (let col = from.col; col <= maxCol; col++) {
             if (!taken.some((other) => tooCloseRects({ col, row, w, h }, other))) {
                 return { col, row };
             }
         }
     }
 
-    return { col: 0, row: 0 };
+    return from;
 };
 
 // Candidate offsets sorted by distance, precomputed once — the landing logic

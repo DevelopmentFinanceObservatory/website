@@ -241,3 +241,60 @@
         opacity: 1;
     }
 }
+
+// --- The Prompt layout ------------------------------------------------------
+
+// The selection blue of the Prompt layout's canvas.
+$select-blue: #6467de;
+
+// The sheet runs on below its last row by the floating prompt's height, so
+// the last row can be scrolled clear above it: the 20 px gap under the
+// prompt, the prompt's taller height (resting, or with a sheet open), and two
+// cells of air. The dock writes both heights on the shell root.
+.boardPrompt {
+    --board-foot: calc(
+        #{rem(20)} + max(var(--dock-rest, 0px), var(--dock-current, 0px)) + #{rem(40)}
+    );
+}
+
+// The card's selection toggle: in the tab order and read by screen readers,
+// drawn as the focus ring around the whole card (below).
+.selectToggle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip-path: inset(50%);
+}
+
+// Outlines, weakest first so a later one wins on the same card: a plan
+// sibling of the pointed card, then the selected card and the card the
+// session panel holds.
+.cardBox[data-lit] {
+    border-radius: rem(8);
+    outline: 2px solid rgb(100 103 222 / 45%);
+    outline-offset: 2px;
+}
+
+.cardBox[data-selected],
+.cardBox[data-held] {
+    border-radius: rem(8);
+    outline: 2px solid $select-blue;
+    outline-offset: 2px;
+}
+
+// Keyboard focus on the card's toggle rings the whole card, outside any
+// selection outline.
+.cardBox:has(> .selectToggle:focus-visible)::after {
+    position: absolute;
+    inset: -8px;
+    pointer-events: none;
+    content: "";
+    border: 2px solid var(--color-charcoal);
+    border-radius: rem(12);
+}

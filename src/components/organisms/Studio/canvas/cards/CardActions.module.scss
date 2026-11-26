@@ -104,6 +104,15 @@
     max-width: rem(140);
 }
 
+// The Prompt layout's menu: as wide as its longest row, so no row wraps.
+.cardMenuFit {
+    max-width: none;
+
+    .cardMenuLabel {
+        white-space: nowrap;
+    }
+}
+
 .cardMenuSection {
     display: flex;
     flex-direction: column;

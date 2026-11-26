@@ -33,9 +33,13 @@ const EDGE_CLASS = {
 const BeaconLayer = ({
     beacons,
     onFly,
+    clearPrompt = false,
 }: {
     beacons: Beacon[];
     onFly: (cx: number, cy: number) => void;
+    // The bottom edge's beacons stand above the floating prompt, by the
+    // resting height the dock writes as --dock-rest.
+    clearPrompt?: boolean;
 }) => {
     const [openKey, setOpenKey] = useState<string | null>(null);
 
@@ -58,7 +62,7 @@ const BeaconLayer = ({
     }, [openKey]);
 
     return (
-        <div className={styles.beaconLayer}>
+        <div className={classNames(styles.beaconLayer, clearPrompt && styles.beaconLayerPrompt)}>
             {beacons.map((beacon) => (
                 <div
                     key={beacon.key}
