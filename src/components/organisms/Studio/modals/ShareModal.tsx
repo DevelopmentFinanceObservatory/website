@@ -3,6 +3,7 @@
 import classNames from 'classnames';
 import { useEffect, useRef, useState } from 'react';
 
+import { useStudioVariant } from '../hooks/studioContext';
 import { useCopied } from '../hooks/useCopied';
 import { browserLiveDeps } from '../hooks/useLiveCards';
 import styles from './ShareModal.module.scss';
@@ -132,6 +133,7 @@ const embedSnippet = (id: string, title: string) =>
 const DataRow = ({ datum, options }: { datum: ShareDatum; options: CardDataOptions }) => {
     const [downloading, setDownloading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const variant = useStudioVariant();
     const download = async () => {
         setDownloading(true);
         setError(null);
@@ -147,6 +149,7 @@ const DataRow = ({ datum, options }: { datum: ShareDatum; options: CardDataOptio
                 cardId: datum.ref.component_id,
                 shared: false,
                 source: 'share_dialog',
+                variant,
             } satisfies StudioDownloadProps);
         } catch (caught) {
             setError(

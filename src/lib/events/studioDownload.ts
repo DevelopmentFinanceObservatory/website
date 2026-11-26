@@ -3,6 +3,7 @@
 
 import type { Widget } from '../chat/widgets.ts';
 import type { DatasetFormat } from '../search/searchClient.ts';
+import type { StudioVariant } from '../studio/variant.ts';
 
 /**
  * Where a `studio.download` started:
@@ -21,4 +22,5 @@ export type StudioDownloadProps = {
     cardId: string;
     shared: boolean;
     source: StudioDownloadSource;
+    variant: StudioVariant;
 };

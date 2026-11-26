@@ -4,6 +4,7 @@ import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryD
 import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
 import { isGraphExplorerPath, withRequestPath } from '@/lib/graphExplorer/signIn';
 import { issueVisitorCookie } from '@/lib/proxy/visitor';
+import { variantRedirect } from '@/lib/studio/variant';
 
 /** A Graph Explorer request carries its path and query (withRequestPath). */
 const graphExplorer = (request: NextRequest) =>
@@ -27,8 +28,37 @@ const dataPage = (request: NextRequest) => {
 
 const DATA_PATH = '/data';
 
+/**
+ * A Studio page carrying `?studio=prompt|classic` answers 307 to itself
+ * without the parameter and sets the session cookie the page reads
+ * (variantRedirect).
+ */
+const studioVariant = (request: NextRequest) => {
+    const { pathname, search } = request.nextUrl;
+    const redirect = variantRedirect(pathname, search, {
+        secure: process.env.NODE_ENV !== 'development',
+    });
+
+    if (!redirect) {
+        return null;
+    }
+
+    const response = NextResponse.redirect(new URL(redirect.location, request.nextUrl), 307);
+
+    if (redirect.cookie) {
+        response.cookies.set(redirect.cookie);
+    }
+
+    return response;
+};
+
 const pageResponse = (request: NextRequest) => {
     const { pathname } = request.nextUrl;
+    const variant = studioVariant(request);
+
+    if (variant) {
+        return variant;
+    }
 
     if (isGraphExplorerPath(pathname)) {
         return graphExplorer(request);
@@ -38,8 +68,8 @@ const pageResponse = (request: NextRequest) => {
 };
 
 /**
- * Every page request, document load or RSC fetch, gets its Graph Explorer
- * or /data handling, then a `dfo_v` visitor cookie when one is due
+ * Every page request, document load or RSC fetch, gets its Studio variant,
+ * Graph Explorer or /data handling, then a `dfo_v` visitor cookie when one is due
  * (issueVisitorCookie).
  */
 export const proxy = (request: NextRequest) => {

@@ -187,6 +187,32 @@ test('exportRow keeps the source of every picked prompt and refuses another', as
     }
 });
 
+test('exportRow keeps the Studio variant on each Studio event and refuses another', async (t) => {
+    const names = [
+        'studio.prompt',
+        'studio.card',
+        'studio.session_end',
+        'studio.download',
+        'guest.wall_hit',
+    ];
+
+    for (const name of names) {
+        await t.test(name, () => {
+            const kept = ['classic', 'prompt'].map(
+                (variant) => exportRow(sourceEvent({ name, props: { variant } }), KEY, RULES).props,
+            );
+            const refused = exportRow(
+                sourceEvent({ name, props: { variant: 'other' } }),
+                KEY,
+                RULES,
+            ).props;
+
+            assert.deepEqual(kept, [{ variant: 'classic' }, { variant: 'prompt' }]);
+            assert.deepEqual(refused, {});
+        });
+    }
+});
+
 test('exportRow keeps a measures entry joined with `|`', () => {
     const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
     const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);
@@ -289,6 +315,7 @@ test('exportRow keeps the props of a copied share and a share dialog download', 
                 cardId: 'c-1',
                 shared: false,
                 source: 'share_dialog',
+                variant: 'prompt',
             } satisfies StudioDownloadProps,
             {
                 format: 'csv',
@@ -297,6 +324,7 @@ test('exportRow keeps the props of a copied share and a share dialog download', 
                 cardId: 'c-1',
                 shared: false,
                 source: 'share_dialog',
+                variant: 'prompt',
             },
         ],
     ];
