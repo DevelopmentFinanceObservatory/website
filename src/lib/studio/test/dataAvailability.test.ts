@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { parseCatalogue } from '../../search/catalogue.ts';
 import { wholeCatalogueBody } from '../../search/test/fixtures/catalogue-bodies.ts';
+import { parsePublishers } from '../../sources/search.ts';
 import {
     fetchCounts,
     fetchSources,
@@ -17,14 +18,29 @@ import {
 } from '../dataAvailability.ts';
 
 const SOURCES = [
-    { id: 'dc/s/OECD', label: 'OECD', count: 2 },
-    { id: 'base', label: 'Data Commons by Google', count: 1 },
+    { label: 'World Bank', count: 6 },
+    { label: 'Central Statistics Office (CSO), Ireland', count: 1 },
 ];
 
 const pathOf = (call: { arguments: readonly unknown[] }): string => String(call.arguments[0]);
 
-test('a source links to the Sources page filtered to it, with its dataset count', () => {
-    assert.equal(sourceHref(SOURCES[0]!), '/data/sources?filter=dc%2Fs%2FOECD');
+test('a source links to the Sources page with its publisher picked, with its dataset count', () => {
+    // A name with a comma, a bar or a percent sign reaches the page whole.
+    const rows = [...SOURCES, { label: 'A|B 100%', count: 1 }];
+    const cards = rows.map(({ label }) => ({
+        title: label,
+        family: 'dc/s/Any',
+        publisher: label,
+        dataCommons: { id: 'dfo', label: 'Development Finance Observatory' } as const,
+    }));
+
+    for (const row of rows) {
+        const url = new URL(sourceHref(row), 'https://example.org');
+
+        assert.equal(url.pathname, '/data/sources', row.label);
+        assert.deepEqual(parsePublishers(url.searchParams.get('publisher'), cards), [row.label]);
+    }
+
     assert.equal(sourceDatasetCount(1), '1 dataset');
     assert.equal(sourceDatasetCount(1200), '1,200 datasets');
 });
@@ -42,7 +58,7 @@ test('opening the drawer reads a half that is unread or failed, and leaves one r
 
 test('parseSources keeps the rows and drops a malformed one', () => {
     assert.deepEqual(parseSources({ sources: SOURCES }), SOURCES);
-    assert.deepEqual(parseSources({ sources: [SOURCES[0], { id: 'x' }, null] }), [SOURCES[0]]);
+    assert.deepEqual(parseSources({ sources: [SOURCES[0], { label: 'x' }, null] }), [SOURCES[0]]);
     assert.deepEqual(parseSources({ sources: [] }), []);
 });
 

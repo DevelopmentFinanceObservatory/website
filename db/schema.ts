@@ -259,8 +259,11 @@ export type EventRow = typeof event.$inferSelect;
  * hourly caps on sign-in codes sent. `key` names the allowance and the
  * caller (`api:203.0.113.7`, `studio-user:<inbox digest>`,
  * `sign-in-code:<digest>`); `count` is the hits in the window that started
- * at `windowStart`. The next hit after the window ends starts the row over,
- * and rows idle for two days are deleted.
+ * at `windowStart`, which ends at `expiresAt`. The next hit after the window
+ * ends starts the row over, and a row whose window has ended is deleted
+ * within minutes (pruneCounters). Every writer in limitCounter sets
+ * `expiresAt`. The default `infinity` marks a row written by a revision that
+ * does not set it, and pruneCounters deletes such a row by `windowStart` age.
  */
 export const limitCounter = pgTable(
     'limit_counter',
@@ -268,8 +271,14 @@ export const limitCounter = pgTable(
         key: text('key').primaryKey(),
         windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
         count: integer('count').notNull(),
+        expiresAt: timestamp('expires_at', { withTimezone: true })
+            .notNull()
+            .default(sql`'infinity'`),
     },
-    (table) => [index('limit_counter_window_start_idx').on(table.windowStart)],
+    (table) => [
+        index('limit_counter_window_start_idx').on(table.windowStart),
+        index('limit_counter_expires_at_idx').on(table.expiresAt),
+    ],
 );
 
 /**

@@ -1,8 +1,9 @@
 /**
  * Where data comes from: the Observatory's own imports (`dfo`), Data Commons
  * by Google (`base`) or the UN System Data Commons (`un_system`). The APIs
- * send each as `{id, label}`. The site credits upstream data with "via" and
- * its label, and DFO's own with nothing.
+ * send each as `{id, label}`. Search results credit upstream data with "via"
+ * and its label, and DFO's own with nothing. The Sources pages credit every
+ * source, DFO's own as "via DFO" (sourceOriginLine).
  */
 
 import type { DataCommonsRef } from './search/types.ts';
@@ -34,3 +35,27 @@ export const originLine = (
         [named ? null : publisher?.label, viaLabel(dataCommons)].filter(Boolean).join(' ') || null
     );
 };
+
+/** A provenance's short name: "DFO" for the Observatory's own imports, else
+ *  the Data Commons' label. */
+export const provenanceName = (dataCommons: DataCommonsRef): string =>
+    dataCommons.id === 'dfo' ? 'DFO' : dataCommons.label;
+
+/** originLine for the Sources pages, which credit DFO's own imports too:
+ *  "OECD via DFO". */
+export const sourceOriginLine = (
+    titleRef: string | null | undefined,
+    publisher: { ref?: string | null; label?: string | null } | null | undefined,
+    dataCommons: DataCommonsRef | null | undefined,
+    title?: string | null,
+): string | null => {
+    const line = originLine(titleRef, publisher, dataCommons, title);
+
+    return dataCommons?.id === 'dfo' ? [line, 'via DFO'].filter(Boolean).join(' ') : line;
+};
+
+/** The label for a source's last import date (`lastDataRefreshDate`), naming
+ *  the Data Commons that imported it: "Last refreshed by DFO" or "Last
+ *  refreshed by Data Commons by Google". */
+export const refreshedByLabel = (dataCommons: DataCommonsRef | null | undefined): string =>
+    dataCommons?.label ? `Last refreshed by ${provenanceName(dataCommons)}` : 'Last refreshed';

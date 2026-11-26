@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { conversation } from '../../../db/schema.ts';
+import { likeContaining } from '../likePattern.ts';
 
 /**
  * Conversation search over the `conversation` table. It reads the title and,
@@ -67,7 +68,7 @@ export const searchConversations = async (
     userId: string,
     q: string,
 ): Promise<ConversationMeta[]> => {
-    const pattern = `%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+    const pattern = likeContaining(q);
     const rows = await db
         .select({
             id: conversation.id,

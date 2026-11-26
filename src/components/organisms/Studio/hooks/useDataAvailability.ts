@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { CatalogueCounts } from '@/lib/search/catalogue';
+import type { PublisherOption } from '@/lib/sources/search';
 import {
-    type DataSource,
     fetchCounts,
     fetchSources,
     type Half,
@@ -24,7 +24,7 @@ import {
 export const useDataAvailability = () => {
     const [open, setOpen] = useState(false);
     const [counts, setCounts] = useState<Half<CatalogueCounts>>(UNREAD);
-    const [sources, setSources] = useState<Half<DataSource[]>>(UNREAD);
+    const [sources, setSources] = useState<Half<PublisherOption[]>>(UNREAD);
     // Aborts the reads in flight when the landing unmounts.
     const controllerRef = useRef<AbortController | null>(null);
 

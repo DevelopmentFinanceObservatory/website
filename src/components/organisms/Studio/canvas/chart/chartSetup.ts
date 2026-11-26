@@ -19,7 +19,12 @@ import styles from '../cards/ChartCard.module.scss';
 import { formatAxis } from '@/lib/chat/widgets';
 import { GUTTER_SHARE, LABEL_LINE_HEIGHT, labelFontSize, wrapLabel } from '@/lib/studio/chartFit';
 import { largestFirst, nearestPoint, separatingAxis } from '@/lib/studio/chartHover';
-import { tooltipValue, valueAxisTitle, valueUnitOption } from '@/lib/studio/chartValue';
+import {
+    tooltipUnit,
+    tooltipValue,
+    valueAxisTitle,
+    valueUnitOption,
+} from '@/lib/studio/chartValue';
 import { legendLabels } from '@/lib/studio/seriesLabels';
 import type { SeriesPair, ThemeDerived } from '@/lib/studio/theme';
 
@@ -344,7 +349,12 @@ const htmlTooltip = ({ chart, tooltip }: { chart: ChartJS; tooltip: ChartTooltip
     const points = tooltip.dataPoints ?? [];
     // The slot's series with a value, largest first.
     const order = largestFirst(points.map(({ parsed }) => valueOf(chart, parsed)));
-    const title = `<span class="${styles.chartTipTitle}">${escapeHtml(tooltip.title.join(' '))}</span>`;
+    // Every series shares the chart's unit, so it shows once under the
+    // category and each row carries only its number.
+    const unit = tooltipUnit(chart);
+    const title =
+        `<span class="${styles.chartTipTitle}">${escapeHtml(tooltip.title.join(' '))}</span>` +
+        (unit ? `<span class="${styles.chartTipUnit}">${escapeHtml(unit)}</span>` : '');
 
     if (shiftHeld) {
         tip.innerHTML =
@@ -393,6 +403,7 @@ const htmlTooltip = ({ chart, tooltip }: { chart: ChartJS; tooltip: ChartTooltip
     }
 
     x = Math.max(edge, Math.min(window.innerWidth - tipW - edge, x));
+    y = Math.max(edge, Math.min(window.innerHeight - tipH - edge, y));
 
     tip.style.transform = `translate(${x}px, ${y}px)`;
 };

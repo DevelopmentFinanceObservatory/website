@@ -8,7 +8,7 @@ import test from 'node:test';
 
 import { BasePlatform, Chart, registerables, type LinearScale } from 'chart.js';
 
-import { tooltipValue, valueAxisTitle, valueUnitOption } from '../chartValue.ts';
+import { tooltipUnit, tooltipValue, valueAxisTitle, valueUnitOption } from '../chartValue.ts';
 
 Chart.register(...registerables);
 
@@ -61,6 +61,7 @@ const hovered = (unit: string | undefined, horizontal: boolean) => {
         return {
             unit: (chart.options as { valueUnit?: string }).valueUnit,
             value: tooltipValue(chart, point!.parsed as { x?: number; y?: number }),
+            tooltipUnit: tooltipUnit(chart),
             axisTitle: title.display ? String(title.text) : null,
         };
     } finally {
@@ -69,25 +70,26 @@ const hovered = (unit: string | undefined, horizontal: boolean) => {
 };
 
 test('the tooltip and the value axis write the hovered value in the chart unit', () => {
-    const cases: [string | undefined, boolean, string, string | null][] = [
-        ['Percent', false, '5.33%', null],
-        ['Percent', true, '5.33%', null],
-        ['USDollar', false, '5.33 US Dollar', 'US Dollar'],
+    const cases: [string | undefined, boolean, string, string | null, string | null][] = [
+        ['Percent', false, '5.33%', null, null],
+        ['Percent', true, '5.33%', null, null],
+        ['USDollar', false, '5.33', 'US Dollar', 'US Dollar'],
         [
             'USD millions (constant 2023)',
             true,
-            '5.33 USD millions (constant 2023)',
+            '5.33',
+            'USD millions (constant 2023)',
             'USD millions (constant 2023)',
         ],
-        ['Person', false, '5.33 Person', 'Person'],
-        [undefined, false, '5.33', null],
-        [undefined, true, '5.33', null],
+        ['Person', false, '5.33', 'Person', 'Person'],
+        [undefined, false, '5.33', null, null],
+        [undefined, true, '5.33', null, null],
     ];
 
-    for (const [unit, horizontal, value, axisTitle] of cases) {
+    for (const [unit, horizontal, value, unitLine, axisTitle] of cases) {
         assert.deepEqual(
             hovered(unit, horizontal),
-            { unit, value, axisTitle },
+            { unit, value, tooltipUnit: unitLine, axisTitle },
             `${unit} ${horizontal}`,
         );
     }

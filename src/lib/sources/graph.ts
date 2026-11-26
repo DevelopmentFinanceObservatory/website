@@ -22,7 +22,7 @@ import { unstable_cache } from 'next/cache.js';
 import { cache } from 'react';
 
 import { apisFetch } from '../apisAuth.ts';
-import { originLine } from '../dataCommons.ts';
+import { sourceOriginLine } from '../dataCommons.ts';
 import { searchApiBase } from '../searchApi.ts';
 import type {
     DatasetEntry,
@@ -80,12 +80,13 @@ export type SourceCard = {
     /** the publisher's dcid */
     family: string;
     publisher: string | null;
-    /** where the data comes from; the card's filter is its publisher when this
-     *  is `dfo`, and this origin otherwise (see filters.ts) */
+    /** where the data comes from: the Observatory's own import (`dfo`) or
+     *  the Data Commons that delivered it, the Sources page's provenance
+     *  (see search.ts) */
     dataCommons: DataCommonsRef;
-    /** the org line: "World Bank via Data Commons by Google", the publisher
-     *  alone for DFO's own data, "via UN System Data Commons" alone when the
-     *  card's Dataset is the publisher's own node (see originLine) */
+    /** the org line: "World Bank via Data Commons by Google", "OECD via
+     *  DFO", or "via UN System Data Commons" alone when the card's Dataset is
+     *  the publisher's own node (see sourceOriginLine) */
     origin: string | null;
     description: string | null;
     chips: SourceChip[];
@@ -228,7 +229,7 @@ export const toCard = (entry: SourceCatalogueEntry, dataset: SourceDataset): Sou
         family: entry.source.ref,
         publisher: entry.source.label,
         dataCommons: entry.data_commons,
-        origin: originLine(dataset.ref, entry.source, entry.data_commons, dataset.label),
+        origin: sourceOriginLine(dataset.ref, entry.source, entry.data_commons, dataset.label),
         description,
         chips,
         href: httpOnly(dataset.source_url) ?? null,

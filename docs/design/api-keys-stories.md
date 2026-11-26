@@ -1,0 +1,294 @@
+# API keys: user stories
+
+[Issue #142][issue] · [Design][design]
+
+These stories set the UX for API keys and quotas, and each acceptance criterion is meant to become a test case. They sit beside the [design][design], which covers how keys and limits work. Where a story depends on a design rule (keys apply to the API, the Datasets API included, one per-minute limit and one daily quota per account), it links to it rather than restating it.
+
+## Contents
+
+- [Personas][]
+- [Terms][]
+- [Stories: in scope][]
+    - [Using a key][]
+    - [Seeing usage][]
+    - [Hitting a limit][]
+    - [Managing keys][]
+    - [Admin support][]
+    - [Telemetry][]
+- [Stories: scope TBD][]
+- [Stories: out of scope][]
+- [Open questions][]
+
+## Personas
+
+**DFO user.** A signed-in account holder. Some work mainly in the Studio and the site; others mainly call the API from scripts, pipelines or the Python and TypeScript SDKs. Either kind can open the API keys panel from the account menu, so key management and usage live there.
+
+**DFO admin.** An operator, most likely from the ONE Data team, whose verified email is in `ADMIN_EMAILS`. Admins support users, debug problems and act in emergencies.
+
+## Terms
+
+- **Per-minute limit.** The number of API calls an account may make per 60-second window, shared by all of the account's keys. Empty on the account means the keyed default (`RATE_LIMIT_KEYED`, 600). See [Limits][design-limits].
+- **Daily quota.** The number of API calls an account may make per day, counted from 00:00 UTC and shared by all of the account's keys. Empty on the account means the deployment default (`API_KEY_DAILY_LIMIT`, 10,000). See [Limits][design-limits].
+- **Daily cap.** An optional lower number of API calls one key may make per day, set by an admin. Empty on the key means it has none, and spends only the account's quota.
+- **Surface.** API (`/api/v1/*`, `/openapi.json`, `/codes`) or MCP (`/mcp`). Keys apply to the API, the Datasets API included. A key sent to `/mcp` or the Studio is stripped and ignored, and the call is anonymous.
+- **Key.** A `dfo_k_…` secret in the client contract's key format, shown once at creation.
+- **Usage bar.** An account's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "4,000 of 10,000". A call the quota refuses is included. A key with a daily cap shows a bar of its own against the cap.
+- **Panel.** The right-side drawer that the account menu's "API keys" item opens on whatever page the user is on. It is the same drawer as the Studio's Customize panel.
+- **Limit alert.** A minute in which at least one of an account's keyed calls was refused for being over a limit.
+
+Stories are numbered by area (`U` user, `A` admin, `T` telemetry). A story keeps its number if it moves between sections, so gaps are expected. **Status** says where this branch stands: _built_, _partial_ or _not built_.
+
+## Stories: in scope
+
+### Using a key
+
+Keys are for programmatic use of the API. The MCP server and the Studio need no key ([design: Where Keys Apply][design-where]).
+
+#### U12. Use a key from a script, a pipeline or the SDK
+
+_As a DFO user running a pipeline, I want to give my script or the Python or TypeScript SDK a key, so its calls get my account's limits instead of the anonymous per-address limit._
+
+- [ ] A key from the panel works in the SDKs as given, through a client option (`api_key`, `apiKey`), the `DFO_API_KEY` environment variable, or `dfo auth login`, and passes the SDK's format check with no warning.
+- [ ] The SDK sends it as `Authorization: Bearer`, and a plain HTTP client can do the same, or send `X-API-Key`.
+- [ ] Keyed calls count against the account's per-minute limit and daily quota, and the account's usage bar and the key's last use on the panel move with them.
+- [ ] Without a key, the SDK and plain clients still work, counted per address at the anonymous limit (20 a minute on the API without the site's cookie, and a daily cap).
+- [ ] Wherever the SDK prints the key, it is masked (`dfo_k_***Qjsd`), and its last four characters match the end of the key's snippet on the panel and the admin page.
+
+#### U13. Use MCP and the Studio without a key
+
+_As a DFO user working through an MCP client or the Studio, I want them to work without a key, so connecting an assistant needs no setup._
+
+- [ ] `/mcp` and the Studio answer without a key, at their own allowances: 300 calls a minute per address on `/mcp`, and the Studio's daily prompt allowance per user.
+- [ ] A key sent to either is stripped and ignored ([U4][Hitting a limit]), and does not count against the account's daily quota or per-minute limit.
+- [ ] The panel and the docs page describe keys as being for the API and the SDKs, and say MCP and the Studio need none.
+
+### Seeing usage
+
+#### U1. See today's usage against the account's daily quota
+
+_As a DFO user, I want to see how much of my daily quota I have used today, so I know whether I am close to the quota before my client is refused._
+
+A per-minute count would be empty or full by the time anyone looked, so the bar shows the daily quota, which changes slowly enough to read.
+
+- [ ] The panel shows one usage bar and a count such as "4,000 of 10,000": the API calls made with any of the account's keys since 00:00 UTC, against the account's daily quota (its own, or the default). A key with a daily cap shows its own bar against the cap on its card.
+- [ ] The count includes calls the quota refuses, and the bar reads full once the quota is reached.
+- [ ] An account with no calls today shows "0 of N".
+- [ ] The panel says the count resets at 00:00 UTC.
+- [ ] Only this account's keys appear.
+- [ ] The admin page shows the same bar for each key, read from the same counter ([A1][Admin support]).
+- [ ] The count is read when the panel opens. Live updating is not required.
+
+#### U2. See which key is being used
+
+_As a DFO user, I want to see when each key was last used, so I can find keys that are stale or leaked._
+
+- [ ] Each key card shows name, the key's snippet (its first nine and last four characters, `dfo_k_RCd…Qjsd`, as the SDKs show a key), created date and last used ("never" if unused).
+- [ ] Last use is approximate (it is updated occasionally); the card says so on hover or in a footnote.
+- [ ] The panel states the account's per-minute limit as "N calls a minute on the API" and whether it is the default or set for this account.
+
+### Hitting a limit
+
+Keyed limits apply to API calls, which arrive from scripts, pipelines and SDKs, not from pages on the site. The Studio's daily prompt allowance is a separate limit and keys never change it ([design: Where Keys Apply][design-where]). So the moment a limit is hit, the user hears about it from the API response, not the site. Seeing the day's usage on the site is [U1][Seeing usage]. Seeing limits after the fact is [U11][Stories: scope TBD].
+
+#### U3. A clear refusal when my API client is over a limit
+
+_As a DFO user calling the API with a key, I want a refusal that tells me what happened and what to do next, so I'm not left guessing._
+
+- [ ] A call over the account's per-minute limit gets 429 with `Retry-After`, the `X-RateLimit-*` headers and a problem document.
+- [ ] A call over the account's daily quota, or a key's daily cap, gets 429 with code `allowance_exhausted`, `retryable` false and `Retry-After` to 00:00 UTC, with outcome `limited`, and its problem document's `detail` says the count resets at 00:00 UTC. The SDKs raise it as `QuotaExceededError` and do not retry it.
+- [ ] The problem document's `detail` says which limit was reached, the account's or the key's, when to retry, and names the API keys panel in the account menu.
+- [ ] The problem document's `type` (`/codes/rate_limited`) resolves to a page that explains limits and how to ask for a higher one (support flow TBD, see [Open questions][]).
+- [ ] The problem document's `detail` is plain sentences that a script can log as is.
+- [ ] Wording does not blame the user or suggest abuse.
+
+#### U4. A clear refusal when my key is bad
+
+_As a DFO user, I want a refused key to tell me why, so I can fix my configuration._
+
+- [ ] On the API, an unknown, deleted or forged key gets 401 with a problem document that says the key was not accepted and tells the user to create a new one from the API keys panel in the account menu.
+- [ ] The response does not say whether the key once existed, was deleted, or was never ours.
+- [ ] On the API, sending different keys in `Authorization` and `X-API-Key` gets 400 explaining the conflict.
+- [ ] On `/mcp` and the Studio, a `dfo_` value is stripped and ignored whatever its validity. The call is answered as an anonymous call and counted per address at the surface's anonymous limit.
+
+### Managing keys
+
+Patterned on GitHub's personal access tokens.
+
+Key management is the panel. The account menu's "API keys" item opens it on whatever page the user is on. It shows the user's name and email, then "API keys" with a "Create API key" button and one card per key: name, prefix, created, last used, the usage bar ([U1][Seeing usage]) and Delete. There is no `/account/api-keys` page. A user replaces a key by creating a new one and deleting the old one. A new key starts its day at 0 calls.
+
+#### U6. Create a key and see it once
+
+_As a DFO user, I want to create a named key and see the secret exactly once, so it is never stored anywhere I can't control._
+
+- [ ] "Create API key" swaps the list for a name field with Cancel and Create buttons. Creating takes a required name. The name is 1 to 32 characters and unique among the account's keys, compared without regard to case; a taken name is refused with "You already have a key with that name" and makes no key.
+- [ ] On success, the panel shows the full key with Copy and Close actions and a plain warning that it won't be shown again.
+- [ ] A click outside the panel does not dismiss the key while it is shown; closing needs the explicit Close action.
+- [ ] After Close, the key never appears again: not in the list, page source, a reload, the back button or a server response.
+- [ ] The panel includes a short example of using the key: a `curl` example with `Authorization: Bearer`.
+- [ ] The new key works on the next call (no cache delay for new keys).
+- [ ] A new key spends the account's daily quota from where it stands: making a key does not start the count again.
+
+#### U7. Hit the per-account key cap
+
+_As a DFO user with the maximum number of keys, I want to be told why I can't create another and what to do._
+
+- [ ] With `API_KEYS_MAX_PER_ACCOUNT` keys (5 by default), the "Create API key" button is disabled with a note: delete an unused key to make room.
+- [ ] Two creates sent at once at 4 keys never leave the account with 6 (the cap is rechecked after insert).
+
+#### U8. Delete a key
+
+_As a DFO user, I want to delete a key permanently, so a leaked or unused key stops working._
+
+Delete is the only way to stop a key. There is no disable: the plugin lets an owner re-enable a disabled key, so disabling is not revocation ([design: Revocation][design-identity]).
+
+- [ ] Delete asks for confirmation naming the key's name and prefix.
+- [ ] The confirmation says the key stops working within about a minute and that this can't be undone.
+- [ ] A deleted key is gone from the list immediately and refused within about a minute.
+- [ ] The panel offers no disable or enable control, and the plugin's update endpoint is not reachable to flip a key's `enabled` flag.
+- [ ] A user cannot delete or see another account's key, even with a crafted request.
+
+#### U9. Signed-out access
+
+_As a visitor who is not signed in, I want key management to be reachable only after I sign in._
+
+- [ ] The "API keys" item appears in the account menu only for a signed-in user.
+- [ ] The panel's actions refuse a request with no session.
+- [ ] A request to `/account/api-keys` gets 404.
+
+### Admin support
+
+#### A1. Find a user and see their keys, usage and limit
+
+_As a DFO admin, I want to find any user and see their keys, usage and limit, so I can answer "why am I being throttled?"_
+
+`/admin/api-keys` is a "User management" page. Expanding a user's row shows their keys in place, so no separate per-user view is needed.
+
+- [ ] The page opens with a dark hero holding the total user count as a badge and an email search.
+- [ ] Below it, a table lists all users with email, created date and active key count. It is paginated and filterable by email.
+- [ ] Expanding a user shows their keys, each with name, the key's snippet (so support can match a key a user reads out or pastes), created date, last used (date and time in UTC, or "Never used"), an editable daily cap (with its usage bar when set) and Delete. Above the keys, the account's usage bar (the same counter as [U1][Seeing usage]) sits beside a Reset usage icon. The expanded row ends with Create key and the account's per-minute rate limit and daily quota, each on a line of its own ("shared by all of this account's keys").
+- [ ] The Reset usage icon sets the account's API call count for the current UTC day to 0, and each of its keys' cap counts, so an account that used its daily quota works again on its next call. It asks for no confirmation, is disabled while it runs, reloads the account's keys when done so the usage bar shows 0, and writes a log line naming the operator.
+- [ ] If [U11][Stories: scope TBD] ships, the expanded row shows the same limit alerts too.
+- [ ] A non-admin gets 404 on every admin page and action, signed in or not.
+
+#### A2. Manage a user's keys
+
+_As a DFO admin, I want create and delete on any user's keys, for support and debugging._
+
+- [ ] An admin can create a key for an expanded user. The key is shown once, as in [U6][Managing keys], then never again, to the admin or the user.
+- [ ] An admin can never see an existing key's secret, only its name, prefix, dates and usage.
+- [ ] An admin can delete any key, with the same confirmations and "within a minute" note as the panel.
+- [ ] Keys an admin creates for a user appear in that user's panel like any other key.
+- [ ] Each admin change names the admin in the log line and in telemetry (T1).
+
+#### A3. Set or clear an account's per-minute limit
+
+_As a DFO admin, I want to raise, lower or reset one account's per-minute limit, so I can grant a partner more room or hold back a misbehaving one._
+
+- [ ] An admin can set a positive integer limit or clear it back to the default, from the user's expanded row.
+- [ ] The row shows both the account's override (if any) and the current default, so the effective limit is clear.
+- [ ] Invalid input (zero, negative, non-integer, absurdly large) is refused with a message.
+- [ ] The change reaches the proxy within about a minute; the page says so.
+
+#### A4. Stop one key fast
+
+_As a DFO admin responding to abuse, I want to kill one key from the admin page without a deploy._
+
+- [ ] Deleting a key from the admin page stops it within about a minute (A2).
+- [ ] The runbook's `API_KEYS_ENABLED=false` switch for all keys is linked from the admin page.
+
+#### A5. Set or clear an account's daily quota or a key's daily cap
+
+_As a DFO admin, I want to raise, lower or reset an account's daily quota, or cap one key, so I can grant a partner more API calls a day or hold back a key that is being abused._
+
+- [ ] In a user's expanded row, the account's daily quota is editable. An admin can set a positive integer or clear it back to the deployment default (`API_KEY_DAILY_LIMIT`, 10,000).
+- [ ] Each key's daily cap is editable, and empty means no cap of its own.
+- [ ] The account's usage bar shows the effective quota as its right-hand number, and the field shows whether it is the default or set for this account.
+- [ ] Invalid input (zero, negative, non-integer, absurdly large) is refused with a message.
+- [ ] The change reaches the proxy within about a minute; the page says so.
+
+### Telemetry
+
+#### T1. Sentry events for key management
+
+_As a DFO admin, I want a Sentry event for every key-management operation, so I can trace what happened to a key when debugging._
+
+- [ ] Create, delete, limit and quota changes each send an event, from both the panel and the admin page.
+- [ ] Each event carries the operation, the key's public id, the owning account id, the actor's account id and whether the actor was an admin.
+- [ ] No event ever carries the key, its hash, or request headers ([design][design-key-format]). A test pins this.
+- [ ] Failed operations (not found, cap reached, not authorised) are recorded with their reason.
+
+#### T2. Sentry events when a limit is hit
+
+_As a DFO admin, I want to know when keyed accounts hit a limit, so I can spot accounts that need a higher limit or are misbehaving._
+
+- [ ] A keyed 429 records a Sentry event with account id, key public id, which limit was hit (per-minute or daily) and its value.
+- [ ] Events are grouped per account and limit, so one account hammering a limit makes one issue, not thousands. Sampling or one event per account per window is acceptable.
+- [ ] Anonymous 429s are not in scope for this story.
+- [ ] Bad-key outcomes (`invalid`, `forged`) are counted, not sent as one event each.
+
+## Stories: scope TBD
+
+Stories we have not yet put in or out. Each needs a cost/benefit call before it moves to [Stories: in scope][] or [Stories: out of scope][].
+
+#### U11. See when my keys hit a limit
+
+_As a DFO user, I want to see when my keys hit a limit, so I can tell whether I need a higher limit or should slow my code down._
+
+The usage bar ([U1][Seeing usage]) shows how close an account is to its daily quota. It cannot show a per-minute refusal, which lasts a minute and is gone by the time anyone looks. Limit alerts list the minutes in which calls were refused.
+
+- [ ] The panel lists limit alerts, newest first. Each row shows the minute (in the viewer's time zone), which limit was hit, the key (name and prefix) and how many calls were refused in that minute.
+- [ ] The list covers the past day by default. A selector widens it to the past week or month.
+- [ ] With no alerts in range, the list says so ("No limits hit in the past day").
+- [ ] An alert for a key since deleted appears, marked as a deleted key.
+- [ ] Only this account's keyed refusals appear. Anonymous refusals from the user's address never do.
+- [ ] If an alert falls in the past hour, a banner at the top of the panel says which key hit which limit and how to ask for a higher one (support flow TBD).
+- [ ] The list is read when the panel opens. Live updating is not required.
+
+**Cost/benefit.** The cost depends on where the alerts are read from:
+
+- **Usage log lines.** `forward()` already logs each refused call with key id, account, surface and outcome `limited` ([design: Logs and Docs][design-logs]). Querying Cloud Logging from a page is slow, has its own quota, and needs the site to hold log-read rights.
+- **Sentry (T2).** Grouping and sampling in T2 drop the per-minute counts this list needs.
+- **A rollup table.** On each refused call, upsert a row (account, key, limit, minute, count) in Postgres, kept 30 days. Cheap to read, and bounded: at most one row per key and limit per minute. Costs a write on each 429, a migration, and a retention job.
+
+The benefit is that users and admins (A1) can answer "was I throttled, and when?" without asking support. The usage bar covers the daily quota. Until keyed accounts hit limits often, the 429 response (U3) and T2 may be enough.
+
+## Stories: out of scope
+
+Deliberately not part of this work. Some are listed in the design's [Future Features][design-future].
+
+1. **Soft limits.** No warnings as an account approaches a limit, and no usage projections. The usage bar (U1) shows how close an account is to its daily quota but sends no warning.
+2. **Fine-grained key permissions.** A key grants API access at the account's per-minute limit and daily quota. It is not scoped to datasets, tools or operations.
+3. **Gating who may hold a key.** Any signed-in account can create and use keys up to the cap. No approval step, waitlist or eligibility check.
+4. **Out-of-band alerting.** No email, Slack or other notification to a user or an admin when a limit is hit. Users learn from the API refusal (U3), on the site through the usage bar (U1) and, if it ships, limit alerts (U11); admins learn through Sentry (T2), which is not an alert routed to anyone.
+5. **Detailed usage monitoring.** No graph of how much of the quota an account used over time, with a time-range selector (hour, day, week) and marks where limits were hit. Today's count against the daily quota is in scope (U1); history over days is not. This can be built later, on whatever store U11 settles on.
+6. **Outreach to current users.** No flow to find current anonymous callers and encourage them onto keys. Keys are for prospective partners who want or need higher access, offered as we talk to them. No current caller is near a level we'd consider unsustainable, so nobody needs to be moved yet.
+7. **Disabling a key.** Keys are created and deleted, nothing in between. A user who wants a key off deletes it and makes a new one later (U8).
+8. **Keys on MCP and the Studio.** Keys apply to the API, the Datasets API included. A key sent to `/mcp` or the Studio is ignored and the call is anonymous, with no per-key or per-account allowance there. Signed-in MCP access, using OAuth, is a separate future feature ([design: Future Features][design-future]).
+9. **Rotating a key.** There is no rotate action, in the panel or on the admin page. A user rotates a key by creating a new one and deleting the old one. The daily quota is the account's, so the new key goes on from the account's count for the day ([design: Limits][design-limits]).
+
+## Open questions
+
+- [ ] **Support flow for a higher limit.** A support email address, a page on the site, or a ticketing system? U3, U11 and the `/codes/rate_limited` page all link to it.
+- [ ] **MCP refusals in clients.** How does an over-limit MCP call reach the user? It concerns the anonymous MCP limit, since `/mcp` ignores keys, and is part of signed-in MCP access ([design: Future Features][design-future]).
+- [ ] **Studio limit messaging.** The Studio's daily prompt allowance is separate from key limits. Should its refusal get the same treatment as U3, as a separate story?
+
+[issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
+[design]: api-keys.md
+[design-limits]: api-keys.md#limits
+[design-where]: api-keys.md#where-keys-apply
+[design-identity]: api-keys.md#identity-failure-and-abuse
+[design-key-format]: api-keys.md#key-format-and-communication
+[design-logs]: api-keys.md#logs-and-docs
+[design-future]: api-keys.md#future-features
+[Personas]: #personas
+[Terms]: #terms
+[Stories: in scope]: #stories-in-scope
+[Using a key]: #using-a-key
+[Seeing usage]: #seeing-usage
+[Hitting a limit]: #hitting-a-limit
+[Managing keys]: #managing-keys
+[Admin support]: #admin-support
+[Telemetry]: #telemetry
+[Stories: scope TBD]: #stories-scope-tbd
+[Stories: out of scope]: #stories-out-of-scope
+[Open questions]: #open-questions
