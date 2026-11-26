@@ -1,3 +1,5 @@
+import type { PromptSource } from './wire.ts';
+
 /**
  * Example prompts under the Studio landing's prompt box. Each one drew its
  * first card in under 50 seconds in production or on the dev agent, with no
@@ -17,6 +19,12 @@ export const EXAMPLE_PROMPTS = [
     'Which donor gave Kenya the most ODA in each year from 2018 to 2022?',
     "Show Kenya's and Nigeria's external debt as a share of GDP over time",
 ] as const;
+
+/** The question the Studio landing's data-availability button sends as the
+ *  first turn. It is specific enough that the agent answers it outright
+ *  without asking what is meant. */
+export const DATA_AVAILABILITY_PROMPT =
+    'What data is available in DFO? Give me an overview of the datasets, publishers, countries and years covered, so I can ask about what interests me.';
 
 export const EXAMPLES_SHOWN = 3;
 
@@ -38,3 +46,12 @@ export const pickExamples = (
 
     return deck.slice(0, drawn);
 };
+
+/** The `/studio` query param that marks a handed-over question as a Data
+ *  search example (studioHref in src/lib/search/studioHandoff.ts). */
+export const HANDOFF_VIA_PARAM = 'via';
+
+/** The prompt source of a `/studio?q=` arrival: `search_example` for
+ *  `via=example`, and none for anything else. */
+export const handoffPromptSource = (via: string | null): PromptSource | undefined =>
+    via === 'example' ? 'search_example' : undefined;

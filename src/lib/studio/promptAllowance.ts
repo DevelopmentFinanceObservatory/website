@@ -5,6 +5,8 @@
  * count.
  */
 
+import type { PromptSource } from './wire.ts';
+
 // Free prompts a day for a signed-out visitor, per network address.
 export const GUEST_PROMPTS = 5;
 
@@ -20,6 +22,7 @@ export type PromptEvent = {
     intent: PromptIntent;
     length?: number;
     guest: boolean;
+    source?: PromptSource;
 };
 
 /**
@@ -27,7 +30,8 @@ export type PromptEvent = {
  * guest has no free prompt left for it. `used` is the guest's prompts spent
  * so far, `queued` the prompts waiting behind the running turn (they hold
  * their place in the limit), and `sent` the prompts in the transcript.
- * `length` is the typed text's length; a chip has none.
+ * `length` is the typed text's length; a chip has none. `source` names
+ * the example a picked question came from, and a typed question has none.
  */
 export const promptEvent = ({
     guest,
@@ -36,6 +40,7 @@ export const promptEvent = ({
     sent,
     intent,
     length,
+    source,
 }: {
     guest: boolean;
     used: number;
@@ -43,6 +48,7 @@ export const promptEvent = ({
     sent: number;
     intent?: PromptIntent;
     length?: number;
+    source?: PromptSource;
 }): PromptEvent | null =>
     guest && used + queued >= GUEST_PROMPTS
         ? null
@@ -51,4 +57,5 @@ export const promptEvent = ({
               intent: intent ?? (sent === 0 ? 'new' : 'follow_up'),
               ...(length !== undefined && { length }),
               guest,
+              ...(source && { source }),
           };
