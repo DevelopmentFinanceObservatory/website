@@ -22,6 +22,7 @@ import {
     type JobProgress,
     type ExportRow,
     exportRules,
+    jobProgress,
     pgEventSource,
     PROP_RULES,
     runExport,
@@ -1505,6 +1506,27 @@ test('runExportJob runs both exports, failed or not, then fails with every failu
             assert.deepEqual(ran.toSorted(), ['accounts', 'events']);
         });
     }
+});
+
+test('runExportJob reports a failed example export under its own phase, events done', async () => {
+    const examplesError = new Error('quota');
+    const progress = jobProgress();
+
+    await assert.rejects(
+        runExportJob({
+            exportAccounts: async () => undefined,
+            exportEvents: async () => undefined,
+            exportExamples: async () => {
+                throw examplesError;
+            },
+            progress,
+        }),
+        (error: unknown) => (error as Error).cause === examplesError,
+    );
+    assert.equal(progress.events, 'done');
+    assert.equal(progress.accounts, 'done');
+    assert.match(progress.examples, /^failed: /);
+    assert.deepEqual(Object.keys(progress.failures), ['examples']);
 });
 
 const hang = () => new Promise<never>(() => undefined);

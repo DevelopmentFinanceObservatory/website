@@ -1,11 +1,10 @@
-import { DATA_AVAILABILITY_PROMPT } from '../src/lib/studio/dataAvailability.ts';
-import { EXAMPLE_PROMPTS } from '../src/lib/studio/examples.ts';
+import { DATA_AVAILABILITY_PROMPT, EXAMPLE_PROMPTS } from '../src/lib/studio/examples.ts';
 
 import type { ExportBigQuery, TableField } from './bounded.ts';
 
 /**
  * The Studio example export, which the export Job (db/export-events.ts) runs
- * beside the event export. It keeps the BigQuery table `studio_examples`,
+ * as a phase of its own beside the event export. It keeps the BigQuery table `studio_examples`,
  * one row per question the build offers as a pick: each landing example
  * (EXAMPLE_PROMPTS) as `example` and the "What data is available?"
  * question (DATA_AVAILABILITY_PROMPT) as `availability`. Each run sets
@@ -37,7 +36,7 @@ export const studioExamples = (
 
 // One statement, so a run either marks every offered row or none.
 // CURRENT_TIMESTAMP() is one value for the whole statement.
-export const MERGE_EXAMPLES_SQL = `MERGE ${STUDIO_EXAMPLES_TABLE} AS t
+const MERGE_EXAMPLES_SQL = `MERGE ${STUDIO_EXAMPLES_TABLE} AS t
  USING (SELECT JSON_VALUE(entry, '$.kind') AS kind, JSON_VALUE(entry, '$.text') AS text
         FROM UNNEST(JSON_QUERY_ARRAY(@examples)) AS entry) AS s
  ON t.kind = s.kind AND t.text = s.text
@@ -63,39 +62,4 @@ export const runExampleExport = async ({
 
     await bigquery.query(MERGE_EXAMPLES_SQL, { examples: JSON.stringify(examples) });
     log(`${STUDIO_EXAMPLES_TABLE}: marked ${examples.length} offered questions`);
-};
-
-const asError = (reason: unknown): Error =>
-    reason instanceof Error ? reason : new Error(String(reason));
-
-/**
- * Waits for the event export and the example export, which run at once in
- * the Job's event phase, and rejects once both are done: with the event
- * export's error as it is, the example export's under a lead naming it, or
- * both in one AggregateError.
- */
-export const settleWithExamples = async (
-    events: Promise<unknown>,
-    examples: Promise<void>,
-): Promise<void> => {
-    const [eventResult, exampleResult] = await Promise.allSettled([events, examples]);
-    const eventFailure = eventResult.status === 'rejected' ? asError(eventResult.reason) : null;
-    const exampleFailure =
-        exampleResult.status === 'rejected'
-            ? new Error(
-                  `${STUDIO_EXAMPLES_TABLE} export failed: ${asError(exampleResult.reason).message}`,
-                  { cause: exampleResult.reason },
-              )
-            : null;
-
-    if (eventFailure && exampleFailure) {
-        throw new AggregateError(
-            [eventFailure, exampleFailure],
-            `${eventFailure.message}; ${exampleFailure.message}`,
-        );
-    }
-
-    if (eventFailure ?? exampleFailure) {
-        throw eventFailure ?? exampleFailure;
-    }
 };

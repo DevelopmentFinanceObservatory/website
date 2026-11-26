@@ -14,7 +14,7 @@ import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import { revealIndex } from '@/hooks/useReveal';
 import type { ConversationMeta } from '@/lib/chat/historyClient';
-import { DATA_AVAILABILITY_PROMPT } from '@/lib/studio/dataAvailability';
+import { DATA_AVAILABILITY_PROMPT } from '@/lib/studio/examples';
 import type { PromptSource } from '@/lib/studio/wire';
 
 const LANDING_TABS = [

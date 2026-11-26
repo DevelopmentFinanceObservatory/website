@@ -20,6 +20,12 @@ export const EXAMPLE_PROMPTS = [
     "Show Kenya's and Nigeria's external debt as a share of GDP over time",
 ] as const;
 
+/** The question the Studio landing's data-availability button sends as the
+ *  first turn. It is specific enough that the agent answers it outright
+ *  without asking what is meant. */
+export const DATA_AVAILABILITY_PROMPT =
+    'What data is available in DFO? Give me an overview of the datasets, publishers, countries and years covered, so I can ask about what interests me.';
+
 export const EXAMPLES_SHOWN = 3;
 
 /** `count` distinct prompts from `pool`, in random order (a partial
