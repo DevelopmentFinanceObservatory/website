@@ -8,6 +8,7 @@ import { isBrowserEventName } from './browserEvents';
 import { dayVisitorResolver } from './dayVisitor';
 import { logEvent } from './eventLog';
 import { parseInternalEng, withInternalEng } from './internalEng';
+import { redactSharePage, safeErrorCode } from './limits';
 import { posthogConfigured, sendEventToPosthog } from './posthog';
 
 /**
@@ -47,9 +48,11 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - page.view         a page shown, on first load and on each in-app navigation, sent
  *                     whatever the visitor's consent (the path, as `page`)
  *
- * Every event the site's pages send (BROWSER_EVENT_NAMES) is stored with its
- * daily visitor key (`day_visitor`, see ./dayVisitor), which the log line and
- * PostHog do not get. share.open, embed.view, data.view and feedback.submit
+ * Every event the site's pages send (BROWSER_EVENT_NAMES) from a signed-out
+ * visitor is stored with its daily visitor key (`day_visitor`, see
+ * ./dayVisitor), which the log line and PostHog do not get. A signed-in user's
+ * events carry none, so no row holds a key beside a user id and a signed-out
+ * visit cannot be tied to the account it signs in to later that day. share.open, embed.view, data.view and feedback.submit
  * carry none, since they are built to name no visitor or account and a key
  * shared with a signed-in user's events would link them to that account.
  *
@@ -115,18 +118,21 @@ export const userWho = (
 const dayVisitor = dayVisitorResolver(db, trustedHops(process.env));
 
 /**
- * Record one event. Fire-and-forget: analytics never cost a request, so a
- * failed insert or forward is logged and swallowed, and each sink fails
+ * Record one event. A failed insert or forward is logged by its error code
+ * alone and swallowed, since the error's message lists the query's values, and each sink fails
  * independently of the others. The log line goes first and cannot throw, so
  * Cloud Logging has the event whether the insert or the forward fails. An
  * event whose request came from a crawler, link-preview fetcher or script
  * (isBotRequest) is not recorded anywhere, since no stored row or log line
- * keeps the user agent to tell it from a person's afterwards.
+ * keeps the user agent to tell it from a person's afterwards. A share id in
+ * the page (/s/<id>, /embed/<id>) is written `:id` before any sink sees it.
  */
-export const track = async (name: EventName, incoming: EventProps, who: Who) => {
-    if (isBotRequest(who.headers)) {
+export const track = async (name: EventName, incoming: EventProps, given: Who) => {
+    if (isBotRequest(given.headers)) {
         return;
     }
+
+    const who: Who = { ...given, page: given.page ? redactSharePage(given.page) : null };
 
     // Set here, after the browser's own props, so a caller cannot claim it.
     // Read from INTERNAL_ENG_EMAILS at write time, so a list change reaches new events only.
@@ -145,18 +151,19 @@ export const track = async (name: EventName, incoming: EventProps, who: Who) => 
             props,
             userId: who.userId ?? null,
             visitorId: who.visitorId ?? null,
-            dayVisitor: isBrowserEventName(name) ? await dayVisitor(who.headers, at) : null,
+            dayVisitor:
+                isBrowserEventName(name) && !who.userId ? await dayVisitor(who.headers, at) : null,
             page: who.page ?? null,
         });
     } catch (error) {
-        console.warn('event not recorded', name, error);
+        console.warn('event not recorded', name, safeErrorCode(error));
     }
 
     if (posthogConfigured()) {
         try {
             await sendEventToPosthog(name, props, who);
         } catch (error) {
-            console.warn('event not forwarded to PostHog', name, error);
+            console.warn('event not forwarded to PostHog', name, safeErrorCode(error));
         }
     }
 };

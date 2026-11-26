@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { clientAddress, limiterBucket } from '../proxy/caller.ts';
+import { safeErrorCode } from './limits.ts';
 
 /**
  * The daily visitor key on each event (`event.day_visitor`): the first 32
@@ -46,6 +47,8 @@ export const fetchDaySalt = (db: SaltDb, day: string): Promise<Buffer> =>
         // One get-or-create at a time across every server, so a call for an
         // earlier day cannot pass the later-day check on a snapshot taken
         // before another server's newer day committed.
+        // A server that stalls holding the lock costs the others a null key, not a wait.
+        await tx.execute(sql`set local lock_timeout = '2s'`);
         await tx.execute(sql`select pg_advisory_xact_lock(${SALT_LOCK})`);
         await tx.execute(sql`
             insert into day_salt (day, salt)
@@ -66,14 +69,41 @@ export const fetchDaySalt = (db: SaltDb, day: string): Promise<Buffer> =>
         return salt;
     });
 
+// Chrome 133 reached the stable channel on 4 Feb 2025, and a new major ships
+// every 28 days. Desktop Chrome updates itself, so a desktop browser more than
+// STALE_MAJORS behind the day's expected major is almost always a script that
+// runs the page with an old User-Agent: on 18 Nov 2026 such requests made up
+// 1,500 of 1,700 address and browser pairs that ran the site's scripts.
+// dfo-analytics applies the same rule to past request logs.
+const CHROME_BASE_MAJOR = 133;
+const CHROME_BASE_DAY = Date.UTC(2025, 1, 4);
+const CHROME_CYCLE_MS = 28 * 86_400_000;
+const STALE_MAJORS = 3;
+const DESKTOP = /Windows|Macintosh|X11; Linux|CrOS/;
+const MOBILE = /Android|Mobile/;
+
+/** Whether `userAgent` is desktop Chrome more than STALE_MAJORS behind the stable major at `at`. */
+export const isStaleDesktopChrome = (userAgent: string, at: Date): boolean => {
+    const major = /Chrome\/(\d+)/.exec(userAgent)?.[1];
+
+    if (major === undefined || !DESKTOP.test(userAgent) || MOBILE.test(userAgent)) {
+        return false;
+    }
+
+    const expected =
+        CHROME_BASE_MAJOR + Math.floor((at.getTime() - CHROME_BASE_DAY) / CHROME_CYCLE_MS);
+
+    return Number(major) < expected - STALE_MAJORS;
+};
+
 /** The visitor key for a client address bucket and user agent under `salt`. */
 export const dayVisitorKey = (salt: Buffer, bucket: string, userAgent: string): string =>
     createHmac('sha256', salt).update(`${bucket}\n${userAgent}`).digest('hex').slice(0, KEY_LENGTH);
 
 /**
  * The resolver for a request's daily visitor key, from `hops` (trustedHops):
- * null without headers, without a client address or with a malformed
- * TRUSTED_PROXY_HOPS. `at` is the moment the key is for, so a caller that
+ * null without headers, without a client address, for a stale desktop Chrome
+ * (isStaleDesktopChrome) or with a malformed TRUSTED_PROXY_HOPS. `at` is the moment the key is for, so a caller that
  * also stores a timestamp keys the row's own day. Each server reads a day's salt from the database once
  * and keeps it in memory for the rest of that day. A failed read gives null
  * and leaves the next call to try again.
@@ -114,12 +144,18 @@ export const dayVisitorResolver = (
             return null;
         }
 
+        const userAgent = headers.get('user-agent') ?? '';
+
+        if (isStaleDesktopChrome(userAgent, at)) {
+            return null;
+        }
+
         try {
             const salt = await saltFor(utcDay(at));
 
-            return dayVisitorKey(salt, limiterBucket(address), headers.get('user-agent') ?? '');
+            return dayVisitorKey(salt, limiterBucket(address), userAgent);
         } catch (error) {
-            console.warn('day visitor key not computed', error);
+            console.warn('day visitor key not computed', safeErrorCode(error));
 
             return null;
         }

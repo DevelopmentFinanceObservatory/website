@@ -2,7 +2,11 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { dayVisitorResolver, fetchDaySalt } from '../../src/lib/events/dayVisitor.ts';
+import {
+    dayVisitorResolver,
+    fetchDaySalt,
+    isStaleDesktopChrome,
+} from '../../src/lib/events/dayVisitor.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { createTestDatabase } from './harness.ts';
 
@@ -92,5 +96,43 @@ test('daily visitor keys', async (t) => {
             await dayVisitorResolver(db, { problem: 'bad hops' })(request('203.0.113.9')),
             null,
         );
+        assert.equal(
+            await resolve(
+                request('203.0.113.9', windowsChrome(110)),
+                new Date('2026-11-18T12:00:00Z'),
+            ),
+            null,
+        );
     });
+});
+
+const windowsChrome = (major: number) =>
+    `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+
+test('a desktop Chrome more than three majors behind the schedule is stale', () => {
+    // 18 Nov 2026 is 23 whole cycles of 28 days after Chrome 133's release, so 156 is expected.
+    const at = new Date('2026-11-18T12:00:00Z');
+    const cases: [string, boolean][] = [
+        [windowsChrome(156), false],
+        [windowsChrome(153), false],
+        [windowsChrome(152), true],
+        [windowsChrome(110), true],
+        [
+            windowsChrome(110).replace(
+                'Windows NT 10.0; Win64; x64',
+                'Macintosh; Intel Mac OS X 10_15_7',
+            ),
+            true,
+        ],
+        [
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36',
+            false,
+        ],
+        [UA, false],
+        ['Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0', false],
+    ];
+
+    for (const [userAgent, stale] of cases) {
+        assert.equal(isStaleDesktopChrome(userAgent, at), stale, userAgent);
+    }
 });
