@@ -394,7 +394,7 @@ Not built. The design leaves room for them.
 - **Expiring keys.** The verifier refuses an expired key, and no page sets an expiry. A key lives until it is revoked.
 - **Keys owned by an organisation.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0029_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organisation.
 - **Usage history.** The usage bar shows today's count. Counts for earlier days exist only in log lines.
-- **Signed-in MCP access** ([#176][issue-176]). `/mcp` accepts OAuth sign-in, so a signed-in user's calls count against their account. It is separate from API keys, which `/mcp` ignores. It includes how an MCP client shows a refusal: a 429 on a tool call reaches most clients as a raw transport error, so a refused `tools/call` would be better answered as a tool result with `isError: true`, as the MCP specification's own rate-limit example and the GitHub MCP server do.
+- **Signed-in MCP access** ([#176][issue-176], [design][mcp-oauth]). `/mcp` accepts OAuth sign-in, so a signed-in user's calls count against their account. It is separate from API keys, which `/mcp` ignores. It includes how an MCP client shows a refusal: a 429 on a tool call reaches most clients as a raw transport error, so a refused `tools/call` would be better answered as a tool result with `isError: true`, as the MCP specification's 2025-06-18 tool-error example and the GitHub MCP server do.
 - **Terms of use at key creation.**
 - **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future:
     - Soft vs. hard limits (warnings)
@@ -403,6 +403,7 @@ Not built. The design leaves room for them.
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
 [stories]: api-keys-stories.md
 [issue-176]: https://github.com/DevelopmentFinanceObservatory/website/issues/176
+[mcp-oauth]: mcp-oauth.md
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
 [cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
 [better-auth-api-key]: https://www.better-auth.com/docs/plugins/api-key
