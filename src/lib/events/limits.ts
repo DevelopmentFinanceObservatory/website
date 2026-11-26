@@ -35,3 +35,29 @@ export const MEASURE_PATTERN = /^[A-Za-z0-9][\w.:/|-]{0,127}$/;
  *  typed does not pass. The export keeps a page only when it matches
  *  (db/event-export.ts). */
 export const PAGE_PATH = /^\/[\w.:/-]{0,299}$/;
+
+// The share pages and everything under them. A share id opens its share, so
+// no sink keeps it.
+const SHARE_PATH = /^\/(s|embed)\/[^/?#]+/;
+
+/** `page` with a share id in /s/<id> or /embed/<id> written `:id`. */
+export const redactSharePage = (page: string): string => page.replace(SHARE_PATH, '/$1/:id');
+
+/**
+ * A failed write's error as a code safe to log: the Postgres SQLSTATE of the
+ * error or its cause, else the error's name. Drizzle's own message lists the
+ * query's parameters, so the error itself is never logged.
+ */
+export const safeErrorCode = (error: unknown): string => {
+    const code = (value: unknown): string | undefined =>
+        typeof value === 'object' &&
+        value !== null &&
+        'code' in value &&
+        typeof value.code === 'string'
+            ? value.code
+            : undefined;
+    const cause =
+        typeof error === 'object' && error !== null && 'cause' in error ? error.cause : undefined;
+
+    return code(error) ?? code(cause) ?? (error instanceof Error ? error.name : 'unknown');
+};

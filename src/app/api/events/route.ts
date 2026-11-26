@@ -13,7 +13,7 @@ import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
  * be one the site's pages send (BROWSER_EVENT_NAMES); props are capped so a stray payload can't bloat
  * the table. Answers 204 for an event taken, and a problem document
  * (`request_invalid`, `payload_too_large`) for one refused; the page never
- * waits on either.
+ * waits on either, and the route answers once the event is written.
  */
 const MAX_ID = 64;
 const MAX_PAGE = 300;
@@ -46,8 +46,10 @@ export const POST = async (request: Request) => {
     // A failed or stalled session read records the event as a signed-out one.
     const session = await boundedLookup(getSession, null, 'events: session read');
 
-    // Not awaited on purpose — the answer doesn't wait on the insert.
-    void track(name, props, {
+    // Awaited, so the insert finishes while the request still holds the
+    // instance's CPU: Cloud Run throttles an instance once its response is sent.
+    // The page sends with keepalive and never waits on the answer.
+    await track(name, props, {
         ...userWho(session?.user),
         visitorId: clip(body?.visitorId, MAX_ID),
         page: clip(body?.page, MAX_PAGE),

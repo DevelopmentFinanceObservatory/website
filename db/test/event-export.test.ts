@@ -47,6 +47,7 @@ const sourceEvent = (overrides: Partial<SourceEvent>): SourceEvent => ({
     name: 'feedback.submit',
     userId: null,
     visitorId: null,
+    dayVisitor: null,
     page: null,
     props: {},
     ...overrides,
@@ -103,6 +104,7 @@ test('exportRow keeps allow-listed props that pass their rule and drops the rest
             kind: 'resolution',
         },
         export_rules: RULES,
+        day_visitor: null,
     });
 });
 
@@ -369,10 +371,20 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
             internal_eng: true,
         },
     }),
+    sourceEvent({
+        id: 12,
+        name: 'page.view',
+        dayVisitor: '0123456789abcdef0123456789abcdef',
+        page: '/insights',
+        props: { internal_eng: false, path: '/insights' },
+    }),
 ];
 
+// A row as versions 1 to 3 wrote it, before `day_visitor`.
+type PastRow = Omit<ExportRow, 'day_visitor'>;
+
 // Version 1 pinned the first four sample rows, which version 2 leaves as they were.
-const VERSION_1_ROWS: ExportRow[] = [
+const VERSION_1_ROWS: PastRow[] = [
     {
         id: 1,
         created_at: '2026-10-20T13:04:05.123456Z',
@@ -433,7 +445,7 @@ const VERSION_1_ROWS: ExportRow[] = [
 ];
 
 // Rows 5 to 9 are the version 2 rows, and version 3 exports them unchanged.
-const VERSION_2_ROWS: ExportRow[] = [
+const VERSION_2_ROWS: PastRow[] = [
     ...VERSION_1_ROWS,
     {
         id: 5,
@@ -500,48 +512,68 @@ const VERSION_2_ROWS: ExportRow[] = [
     },
 ];
 
+// Rows 10 and 11 are the version 3 rows.
+const VERSION_3_ROWS: PastRow[] = [
+    ...VERSION_2_ROWS,
+    {
+        id: 10,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'data.view',
+        page: '/embed/:id',
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: {
+            specIds: ['spec_a1', '-'],
+            contentVersions: ['cv_9f2e', '-'],
+            via: 'share',
+            host: 'blog.example',
+            caller: 'ip:0123456789abcdef0123456789abcdef',
+            internal_eng: false,
+        },
+        export_rules: 'r',
+    },
+    {
+        id: 11,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'data.view',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // A `via` the site never sends, a share id the rule does not take
+        // and a malformed `caller` are dropped.
+        props: {
+            specIds: ['spec_a1'],
+            contentVersions: ['cv_9f2e'],
+            internal_eng: true,
+        },
+        export_rules: 'r',
+    },
+];
+
 // Each ROW_SHAPE_VERSION's rows for GOLDEN_SAMPLE under KEY, with rules
 // `r`. A change to the rows adds the next version with its rows, and an
 // entry never changes.
-const GOLDEN_ROWS: Record<number, ExportRow[]> = {
+const GOLDEN_ROWS: Record<number, (PastRow | ExportRow)[]> = {
     1: VERSION_1_ROWS,
     2: VERSION_2_ROWS,
-    3: [
-        ...VERSION_2_ROWS,
+    3: VERSION_3_ROWS,
+    // Version 4 adds `day_visitor`, copied as it is, and the `page.view` event.
+    4: [
+        ...VERSION_3_ROWS.map((row) => ({ ...row, day_visitor: null })),
         {
-            id: 10,
+            id: 12,
             created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'data.view',
-            page: '/embed/:id',
+            name: 'page.view',
+            page: '/insights',
             signed_in: false,
             visitor_hash: null,
             user_hash: null,
-            props: {
-                specIds: ['spec_a1', '-'],
-                contentVersions: ['cv_9f2e', '-'],
-                via: 'share',
-                host: 'blog.example',
-                caller: 'ip:0123456789abcdef0123456789abcdef',
-                internal_eng: false,
-            },
+            // `path` is no prop of page.view, so it is dropped.
+            props: { internal_eng: false },
             export_rules: 'r',
-        },
-        {
-            id: 11,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'data.view',
-            page: null,
-            signed_in: false,
-            visitor_hash: null,
-            user_hash: null,
-            // A `via` the site never sends, a share id the rule does not take
-            // and a malformed `caller` are dropped.
-            props: {
-                specIds: ['spec_a1'],
-                contentVersions: ['cv_9f2e'],
-                internal_eng: true,
-            },
-            export_rules: 'r',
+            day_visitor: '0123456789abcdef0123456789abcdef',
         },
     ],
 };

@@ -57,7 +57,9 @@ import {
  *
  * Rows keep no raw ids and no free text. `visitor_id` and `user_id` become
  * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, as does the `shareId` prop,
- * since a share id opens its share. `page` keeps a site path only
+ * since a share id opens its share. `day_visitor` is copied as it is: it is
+ * already a digest under a salt deleted once its day has passed
+ * (src/lib/events/dayVisitor.ts). `page` keeps a site path only
  * (PAGE_PATH), with the share id in /s/<id> and /embed/<id> written `:id`.
  * `props` keeps only the keys PROP_RULES names for the event, each only
  * when its value passes the key's rule. POST /api/events takes
@@ -285,6 +287,8 @@ export const PROP_RULES = {
         host: 'token',
         caller: 'caller',
     },
+    // A page shown (PageView in src/components/atoms/PageView), whose path is `page`.
+    'page.view': { ...EVERY_EVENT },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest (or exportDigest), passes, exportProps, exportPage or
@@ -349,6 +353,7 @@ export type SourceEvent = {
     name: string;
     userId: string | null;
     visitorId: string | null;
+    dayVisitor: string | null;
     page: string | null;
     props: Record<string, unknown>;
 };
@@ -364,6 +369,7 @@ export type ExportRow = {
     user_hash: string | null;
     props: Record<string, unknown>;
     export_rules: string;
+    day_visitor: string | null;
 };
 
 // The columns the table was created with that are REQUIRED. A load's
@@ -384,6 +390,7 @@ export const EXPORT_SCHEMA: ExportField[] = [
     { name: 'user_hash', type: 'STRING' },
     { name: 'props', type: 'JSON', mode: 'REQUIRED' },
     { name: 'export_rules', type: 'STRING' },
+    { name: 'day_visitor', type: 'STRING' },
 ];
 
 // The share pages and everything under them, /s/<id>/download/preparing
@@ -408,7 +415,7 @@ const exportPage = (page: string | null): string | null => {
 // change reaches every day (exportRules). READ_DAY_SQL, which shapes the
 // rows they take, enters the digest as its text and needs no bump. The
 // golden rows in db/test/event-export.test.ts pin each version's output.
-export const ROW_SHAPE_VERSION = 3;
+export const ROW_SHAPE_VERSION = 4;
 
 /**
  * One page of a UTC day's events (pgEventSource's readDay), with
@@ -420,7 +427,8 @@ export const ROW_SHAPE_VERSION = 3;
 const READ_DAY_SQL = `SELECT id::float8 AS id,
         to_char(created_at AT TIME ZONE 'UTC',
                 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
-        name, user_id AS "userId", visitor_id AS "visitorId", page,
+        name, user_id AS "userId", visitor_id AS "visitorId",
+        day_visitor AS "dayVisitor", page,
         coalesce((SELECT jsonb_object_agg(key, value)
                   FROM jsonb_each(props)
                   WHERE key = ANY($4::text[])), '{}') AS props
@@ -478,6 +486,7 @@ export const exportRow = (row: SourceEvent, hmacKey: string, rules: string): Exp
     user_hash: digest(hmacKey, row.userId),
     props: exportProps(row.name, row.props, hmacKey),
     export_rules: rules,
+    day_visitor: row.dayVisitor,
 });
 
 const DAY_MS = 86_400_000;
