@@ -16,7 +16,7 @@ import {
     type Access,
     type AccessDeps,
 } from './access';
-import { API_KEY_HEADER, carriesKey, hasKeyPrefix } from './apiKey';
+import { API_KEY_HEADER, carriesKey } from './apiKey';
 import { accountCaller, limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import {
     clientResponseHeaders,
@@ -60,7 +60,7 @@ import { readVisitor, visitorLimitsOn } from './visitor';
  * the visitor's or the address's cookieless one, and on its address's daily
  * ceiling (src/lib/proxy/rateLimit's ANONYMOUS_DAILY_LIMITS and
  * ADDRESS_DAILY_LIMITS). A call on the 'api' or 'datasets'
- * surface may carry an API key, `Authorization: Bearer dfo_…` or `X-API-Key`
+ * surface may carry an API key, as `Authorization: Bearer dfo_…` or `X-API-Key: dfo_…`
  * (src/lib/proxy/apiKey), and is then counted against the key's account at
  * the account's limit on that surface and against the account's daily quota,
  * or refused with a 401 when the key is not valid (src/lib/proxy/access). A
@@ -76,6 +76,17 @@ import { readVisitor, visitorLimitsOn } from './visitor';
  * decoded it. Next drops the Content-Encoding and Content-Length of a route
  * handler's Response and does not compress one, so compression for clients
  * comes from Cloudflare in front of production.
+ *
+ * An answer to a call that carries an Authorization or X-API-Key header,
+ * whatever its value and whatever the status (a 304, 401 or 429 included),
+ * goes out `Cache-Control: private, no-store` with its X-RateLimit-*
+ * headers, so no browser or shared cache can hand it to a later call that
+ * skips the key check and the count. Cloudflare's cache skips such a call by
+ * the same test (dfo-infra, infra/stacks/edge/cloudflare_rules.tf). Any other
+ * answer keeps the upstream's Cache-Control, or `no-cache` when it sends
+ * none. One a shared cache may store (sharedCacheable) adds Authorization
+ * and X-API-Key to its Vary and drops its X-RateLimit-* headers, since every
+ * later reader would get them (cacheForCaller).
  *
  * The first chunk of a body is read before the response goes out, so a body
  * that fails before its first byte is answered with a logged 502 problem
@@ -172,27 +183,6 @@ const logKeyUse = (surface: Surface | undefined, { identity, outcome }: Access):
             outcome,
             keyId: identity.kind === 'keyed' ? identity.keyId : null,
             accountId: identity.kind === 'keyed' ? identity.accountId : null,
-        }),
-    );
-};
-
-// While keys are off, one line per call on a keyed surface that sends an
-// X-API-Key header, so the callers who would get a 401 once keys are on (any
-// X-API-Key value is read as a key) can be counted first. It says whether the
-// value has our prefix, and nothing else of it.
-const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
-    const value = headers.get(API_KEY_HEADER);
-
-    if (value === null) {
-        return;
-    }
-
-    console.log(
-        JSON.stringify({
-            severity: 'INFO',
-            message: 'api key header while keys are off',
-            surface,
-            ours: hasKeyPrefix(value.trim()),
         }),
     );
 };
@@ -316,7 +306,68 @@ const withTier = (refusal: Response, { tier }: Access): Response => {
     });
 };
 
-export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
+const KEYED_CACHE = 'private, no-store';
+const CREDENTIAL_VARY = ['Authorization', 'X-API-Key'];
+
+/** Whether a call carries a credential header, whatever its value. */
+const carriesCredential = (headers: Headers): boolean =>
+    headers.has('authorization') || headers.has(API_KEY_HEADER);
+
+/** Whether a shared cache may store an answer that has `cacheControl`. */
+export const sharedCacheable = (cacheControl: string | null): boolean => {
+    const directives = new Set(
+        (cacheControl ?? '').split(',').map((part) => part.split('=')[0]!.trim().toLowerCase()),
+    );
+
+    if (directives.has('no-store') || directives.has('private')) {
+        return false;
+    }
+
+    return ['public', 's-maxage', 'max-age'].some((name) => directives.has(name));
+};
+
+const appendVary = (headers: Headers, names: readonly string[]): void => {
+    const present = new Set(
+        (headers.get('vary') ?? '').split(',').map((name) => name.trim().toLowerCase()),
+    );
+
+    if (present.has('*')) {
+        return;
+    }
+
+    for (const name of names) {
+        if (!present.has(name.toLowerCase())) {
+            headers.append('Vary', name);
+        }
+    }
+};
+
+/**
+ * Apply the module comment's caching rule to `response`, the headers of the
+ * answer to a call with `request` headers. Returns whether a shared cache may store the
+ * answer.
+ */
+export const cacheForCaller = (request: Headers, response: Headers): boolean => {
+    if (carriesCredential(request)) {
+        response.set('Cache-Control', KEYED_CACHE);
+
+        return false;
+    }
+
+    if (!sharedCacheable(response.get('cache-control'))) {
+        return false;
+    }
+
+    appendVary(response, CREDENTIAL_VARY);
+
+    return true;
+};
+
+/**
+ * forward() before the caching rule, for forwardDatasets, which sets a read's
+ * Cache-Control itself and then applies the rule (cacheForCaller).
+ */
+export const relay = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     // Who the caller is and whether it is within its allowance, decided once.
     const honorsKeys = options.counted === undefined && surfaceHonorsKeys(options.surface);
     const keysOn = keysEnabled();
@@ -329,10 +380,6 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             ip: clientIp(req),
             daily: true,
         }));
-
-    if (honorsKeys && !keysOn) {
-        logKeyHeaderWhileOff(options.surface!, req.headers);
-    }
 
     logKeyUse(options.surface, access);
 
@@ -439,6 +486,26 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     }
 
     return new Response(body, { status: upstream.status, headers: out });
+};
+
+/** forward() with the caching rule applied to whatever it answers. */
+export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
+    const answer = await relay(req, options);
+
+    // The rule changes nothing, so the answer goes out as it is.
+    if (!carriesCredential(req.headers) && !sharedCacheable(answer.headers.get('cache-control'))) {
+        return answer;
+    }
+
+    const headers = new Headers(answer.headers);
+
+    cacheForCaller(req.headers, headers);
+
+    return new Response(answer.body, {
+        status: answer.status,
+        statusText: answer.statusText,
+        headers,
+    });
 };
 
 // A static asset's request and response headers: conditional requests out,

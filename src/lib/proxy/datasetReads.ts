@@ -3,7 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { apisCallerFor, requestSurface, type ApisSurface } from './caller';
-import { forward, isApisTarget, type ForwardOptions } from './forward';
+import { cacheForCaller, forward, isApisTarget, relay, type ForwardOptions } from './forward';
 import { clientToken, NON_PRINTABLE, pick } from './headers';
 
 /**
@@ -31,7 +31,8 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  * matches them (dfo-infra, infra/stacks/edge/cloudflare_rules.tf). Every other
  * datasets path, such as operations/{id}, exports/{id}, {spec}/versions,
  * {spec}/options and a derived frame's manifest and file selector, is
- * forwarded as forward() does, with the upstream's own Cache-Control.
+ * forwarded as forward() does, with the upstream's own Cache-Control under
+ * forward()'s caching rule.
  *
  * dfo-apis answers a file with a 302 to a signed storage.googleapis.com URL.
  * The gateway follows it and streams the bytes back as a 200, so the edge can
@@ -68,13 +69,20 @@ import { clientToken, NON_PRINTABLE, pick } from './headers';
  * every alias of one version shares, so a revocation purges all of them by
  * one tag. Every other answer on these routes is `no-store`. A cacheable
  * answer drops the headers that describe one request (PER_REQUEST_HEADERS,
- * X-RateLimit-*), since every later reader would get them.
+ * X-RateLimit-*), since every later reader would get them. It varies on
+ * Authorization and X-API-Key as well as Origin.
+ *
+ * forward()'s caching rule then applies to every read. An answer to a call
+ * that carries an Authorization or X-API-Key header, a 304 included, is
+ * `private, no-store`, untagged and keeps its X-RateLimit-* headers, whatever
+ * the route and tier would give it.
  *
  * A heads read keeps the Cache-Control dfo-apis sends on a 200 (`public,
  * max-age=300`), so dfo-apis owns its lifetime, and every other answer is
- * `no-store`. Its query goes to dfo-apis as the page sent it, repeated
- * `spec_id` parameters in their order, since dfo-apis refuses any other
- * parameter and the edge keys its cache on the query. It names no content
+ * `no-store`, both under forward()'s caching rule. Its query goes to
+ * dfo-apis as the page sent it, repeated `spec_id` parameters in their order,
+ * since dfo-apis refuses any other parameter and the edge keys its cache on
+ * the query. It names no content
  * version, so it carries no Cache-Tag and passes no If-None-Match. HEAD is
  * read as GET is on this route.
  *
@@ -234,10 +242,11 @@ export const isDfoOrigin = (origin: string | null): origin is string =>
 // Only GET gets read handling on every route, so only GET is offered
 // cross-origin; a HEAD on heads sends no custom header unless the page adds one.
 const READ_METHODS = 'GET';
-// What the SDK clients send: X-DFO-Client on every call, Authorization with a
-// publishable key, Accept, If-None-Match on a revalidation, and Content-Type
-// on a body.
-const ALLOWED_HEADERS = 'Accept, Authorization, Content-Type, If-None-Match, X-DFO-Client';
+// What the SDK clients send: X-DFO-Client on every call, a key in
+// Authorization or X-API-Key, Accept, If-None-Match on a revalidation, and
+// Content-Type on a body.
+const ALLOWED_HEADERS =
+    'Accept, Authorization, Content-Type, If-None-Match, X-API-Key, X-DFO-Client';
 const EXPOSED_HEADERS = ['Content-Disposition', 'ETag', 'Retry-After', 'X-DFO-Freshness'];
 const EXPOSED_PER_REQUEST_HEADERS = [
     'X-DFO-Trace-Id',
@@ -246,7 +255,7 @@ const EXPOSED_PER_REQUEST_HEADERS = [
     'X-RateLimit-Reset',
 ];
 
-// Headers that describe one request: a cached copy would hand them to every
+// Headers that describe one request. A cached copy would hand them to every
 // later reader.
 const PER_REQUEST_HEADERS = ['server-timing', 'x-dfo-trace-id'];
 const RATE_LIMIT_PREFIX = 'x-ratelimit-';
@@ -641,7 +650,8 @@ export const forwardDatasets = async (
     let tier: string | null = null;
     let traceId: string | null = null;
 
-    const relayed = await forward(req, {
+    // The caching rule applies below, once the read's Cache-Control is set.
+    const relayed = await relay(req, {
         ...options,
         // A file's If-None-Match goes to storage, in followStorage.
         pass: {
@@ -693,7 +703,7 @@ export const forwardDatasets = async (
     headers.set('Cache-Control', cacheControl);
     headers.set('Vary', 'Origin');
 
-    const cacheable = cacheControl !== NO_STORE;
+    const cacheable = cacheForCaller(req.headers, headers);
 
     if (cacheable) {
         if (contentVersion !== null) {

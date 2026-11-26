@@ -20,6 +20,7 @@ process.env.DFO_CALLER_PRINCIPAL = 'principal-secret';
 process.env.CALLER_HMAC_KEY = 'caller-key';
 
 const { dropPerRequestHeaders, forwardDatasets, isDfoOrigin } = await import('../datasetReads.ts');
+const { accessDeps } = await import('../forward.ts');
 
 const SPEC = 'spec_abc';
 const CV = 'cv_123';
@@ -238,10 +239,12 @@ const call = (
         method = 'GET',
         headers = {},
         storageBounds,
+        surface,
     }: {
         method?: string;
         headers?: Record<string, string>;
         storageBounds?: { headersMs: number; stallMs: number };
+        surface?: 'datasets';
     } = {},
 ): Promise<Response> =>
     forwardDatasets(
@@ -255,6 +258,7 @@ const call = (
             unreachable: 'The Datasets API is unreachable.',
             storageOrigin: base,
             storageBounds,
+            surface,
         },
     );
 
@@ -595,16 +599,20 @@ for (const [origin, allowed] of [
     });
 }
 
-test('cors: a DFO origin gets its origin back, and every read varies on Origin', async () => {
+// A cacheable read varies on the page's origin and the credential headers,
+// so no cache answers a keyed call with an anonymous copy.
+const CACHED_VARY = 'Origin, Authorization, X-API-Key';
+
+test('cors: a DFO origin gets its origin back, and a cacheable read varies on Origin and the credential headers', async () => {
     const origin = 'https://pr-163-dfo-prototypes.one-org.workers.dev';
     const allowed = await call(file('pinned'), { headers: { origin } });
     const refused = await call(file('pinned'), { headers: { origin: 'https://example.org' } });
 
     assert.equal(allowed.headers.get('access-control-allow-origin'), origin);
     assert.match(allowed.headers.get('access-control-expose-headers') ?? '', /\bETag\b/);
-    assert.equal(allowed.headers.get('vary'), 'Origin');
+    assert.equal(allowed.headers.get('vary'), CACHED_VARY);
     assert.equal(refused.headers.get('access-control-allow-origin'), null);
-    assert.equal(refused.headers.get('vary'), 'Origin');
+    assert.equal(refused.headers.get('vary'), CACHED_VARY);
     await Promise.all([allowed.body?.cancel(), refused.body?.cancel()]);
 });
 
@@ -622,6 +630,7 @@ test('cors: the gateway answers a DFO origin preflight for GET only', async () =
     assert.equal(res.headers.get('access-control-allow-origin'), 'http://localhost:3000');
     assert.equal(res.headers.get('access-control-allow-methods'), 'GET');
     assert.match(res.headers.get('access-control-allow-headers') ?? '', /\bX-DFO-Client\b/i);
+    assert.match(res.headers.get('access-control-allow-headers') ?? '', /\bX-API-Key\b/i);
     assert.equal(res.headers.get('vary'), 'Origin');
 });
 
@@ -773,7 +782,7 @@ for (const etag of ETAGS) {
 
         assert.equal(res.status, 200);
         assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
-        assert.equal(res.headers.get('vary'), 'Origin');
+        assert.equal(res.headers.get('vary'), CACHED_VARY);
         assert.equal(res.headers.get('cache-tag'), CV);
         assert.equal(res.headers.get('etag'), etag);
         assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
@@ -803,7 +812,7 @@ for (const etag of ETAGS) {
         assert.equal(res.status, 304);
         assert.equal(res.headers.get('etag'), etag);
         assert.equal(res.headers.get('cache-control'), 'public, max-age=60, s-maxage=60');
-        assert.equal(res.headers.get('vary'), 'Origin');
+        assert.equal(res.headers.get('vary'), CACHED_VARY);
         assert.equal(res.headers.get('cache-tag'), CV);
         assert.equal(res.headers.get('x-dfo-freshness'), 'pending');
         assert.equal(res.headers.get('x-dfo-content-version'), null);
@@ -878,7 +887,7 @@ test('heads: a 200 keeps dfo-apis Cache-Control, varies on Origin, is open to a 
 
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('cache-control'), HEADS_CACHE_CONTROL);
-    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('vary'), CACHED_VARY);
     assert.equal(res.headers.get('cache-tag'), null);
     assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
     assert.doesNotMatch(res.headers.get('access-control-expose-headers')!, /Trace|RateLimit/i);
@@ -898,7 +907,7 @@ test('heads: a HEAD is read as a GET', async () => {
 
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('cache-control'), HEADS_CACHE_CONTROL);
-    assert.equal(res.headers.get('vary'), 'Origin');
+    assert.equal(res.headers.get('vary'), CACHED_VARY);
     assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
     assert.equal(res.headers.get('x-dfo-trace-id'), null);
     await res.body?.cancel();
@@ -929,7 +938,7 @@ test('heads: the preflight is answered and a foreign origin gets no CORS headers
     assert.equal(preflight.headers.get('vary'), 'Origin');
     assert.equal(foreign.status, 200);
     assert.equal(foreign.headers.get('access-control-allow-origin'), null);
-    assert.equal(foreign.headers.get('vary'), 'Origin');
+    assert.equal(foreign.headers.get('vary'), CACHED_VARY);
     await foreign.arrayBuffer();
 
     const refused = lines(logged.mock.calls).filter((e) => e.message === 'gateway.cors_refused');
@@ -966,4 +975,77 @@ test('heads: another method is forwarded with no read handling', async () => {
     assert.equal(res.headers.get('access-control-allow-origin'), null);
     await res.arrayBuffer();
     assert.equal(loggedReads().length, 0);
+});
+
+// An access check that takes any `dfo_` key as a valid one and counts it.
+const acceptKeys = (): (() => void) => {
+    const original = { ...accessDeps };
+    const verdict = { allowed: true, limit: 600, remaining: 599, reset: 60 };
+
+    accessDeps.tagValid = () => true;
+    accessDeps.verifier = {
+        cacheSize: () => 0,
+        cachedValid: async () => ({
+            kind: 'valid',
+            keyId: 'key-1',
+            accountId: 'acct-1',
+            rateLimit: null,
+            accountDailyLimit: null,
+            dailyLimit: null,
+            expiresAt: null,
+        }),
+        verify: async () => ({ kind: 'invalid' }),
+    };
+    accessDeps.hitAccount = async () => verdict;
+    accessDeps.hitDaily = async () => verdict;
+
+    return () => Object.assign(accessDeps, original);
+};
+
+const KEY = `dfo_k_${'k'.repeat(32)}`;
+
+for (const [name, rest, headers, status] of [
+    ['a manifest read with X-API-Key', `${SPEC}/${CV}`, { 'x-api-key': KEY }, 200],
+    [
+        'a manifest revalidation with a bearer key',
+        `${SPEC}/${CV}`,
+        { authorization: `Bearer ${KEY}`, 'if-none-match': MANIFEST_ETAG },
+        304,
+    ],
+    ['a pinned file read with X-API-Key', file('pinned'), { 'x-api-key': KEY }, 200],
+    ['a heads read with X-API-Key', HEADS, { 'x-api-key': KEY }, 200],
+] as const) {
+    test(`keyed: ${name} is private, no-store, untagged and keeps its rate headers`, async () => {
+        const restore = acceptKeys();
+
+        try {
+            const res = await call(rest, {
+                headers: { origin: ORIGIN, ...headers },
+                surface: 'datasets',
+            });
+            const cacheControl = directives(res.headers.get('cache-control'));
+
+            assert.equal(res.status, status);
+            assert.ok(cacheControl.has('private') && cacheControl.has('no-store'));
+            assert.ok(!cacheControl.has('public') && !cacheControl.has('max-age'));
+            assert.equal(res.headers.get('cache-tag'), null);
+            assert.equal(res.headers.get('x-ratelimit-limit'), '600');
+            assert.match(
+                res.headers.get('access-control-expose-headers')!,
+                /\bX-RateLimit-Remaining\b/,
+            );
+            await res.body?.cancel();
+        } finally {
+            restore();
+        }
+    });
+}
+
+test("keyed: any Authorization value, such as the preview's Basic auth, makes a read private", async () => {
+    const res = await call(`${SPEC}/${CV}`, { headers: { authorization: 'Basic dXNlcjpwYXNz' } });
+    const cacheControl = directives(res.headers.get('cache-control'));
+
+    assert.equal(res.status, 200);
+    assert.ok(cacheControl.has('private') && cacheControl.has('no-store'));
+    await res.body?.cancel();
 });
