@@ -4,12 +4,14 @@
  * saved note stays a string everywhere it is stored and shared. Only http
  * and https targets are links. Any other bracketed text stays text. A
  * link's words hold no brackets and no line break, and its target's
- * parentheses are percent-encoded, so neither can end the link early.
+ * parentheses are percent-encoded, so neither can end the link early. The
+ * words and the target are bounded in length, which keeps the read of a
+ * long run of unclosed links linear.
  */
 
 export type NotePart = { text: string; href?: string };
 
-const LINK = /\[([^[\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+const LINK = /\[([^[\]\n]{1,500})\]\((https?:\/\/[^\s)]{1,2048})\)/g;
 
 /** The note as runs of text, each with its link target when it has one. */
 export const noteParts = (note: string): NotePart[] => {
@@ -43,11 +45,15 @@ export const noteText = (parts: NotePart[]): string =>
         .join('');
 
 /** Whether words can be one link: some text, with no bracket or line break. */
-export const linkable = (words: string): boolean => words.trim() !== '' && !/[[\]\n]/.test(words);
+export const linkable = (words: string): boolean =>
+    words.trim() !== '' && words.length <= 500 && !/[[\]\n\r]/.test(words);
 
 /** A typed link target as an http(s) URL, or null when it is not one. A
- *  target typed without a scheme takes https, and then needs a dot in its
- *  host, so a lone word is not read as a site. */
+ *  target typed without a scheme takes https, and then needs a host whose
+ *  last label starts with a letter, so a lone word or a number such as `1.2`
+ *  is not read as a site. An address with a user part, which an email typed
+ *  here would become, is refused, and so is one past the length a note
+ *  keeps. */
 export const linkTarget = (typed: string): string | null => {
     const trimmed = typed.trim();
     // A colon followed by digits is a port (`imf.org:443`), not a scheme.
@@ -61,7 +67,11 @@ export const linkTarget = (typed: string): string | null => {
         const url = new URL(schemed ? trimmed : `https://${trimmed}`);
         const web = url.protocol === 'https:' || url.protocol === 'http:';
 
-        return web && (schemed || url.hostname.includes('.')) ? url.href : null;
+        const named = /\.[a-z][^.]*$/i.test(url.hostname);
+
+        return web && (schemed || named) && !url.username && url.href.length <= 2048
+            ? url.href
+            : null;
     } catch {
         return null;
     }

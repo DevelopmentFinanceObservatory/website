@@ -36,7 +36,7 @@ const InfoTag = ({ label, content }: { label: string; content?: string }) =>
 // underlined as a link, and how many more the card cites. "Source:" is read
 // out and not shown. A card DFO computed from sources it credits none of
 // reads "Source: DFO calculation". A click anywhere on it opens the More Info
-// panel, which lists every source in full; a card that names no source shows
+// panel, which lists every source in full. A card that names no source shows
 // the mark alone. Without the frame's info (a text card, an older save) the
 // bar keeps the plain tag.
 const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) => {

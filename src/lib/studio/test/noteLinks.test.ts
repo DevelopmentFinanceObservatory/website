@@ -40,6 +40,7 @@ test('an unmatched bracket stays text and keeps the link after it whole', () => 
     ]);
     assert.equal(linkable('2010 see [IMF'), false);
     assert.equal(linkable('two\nlines'), false);
+    assert.equal(linkable('two\rlines'), false);
     assert.equal(linkable('  '), false);
     assert.equal(linkable('IMF data'), true);
 });
@@ -53,5 +54,15 @@ test('a typed target is an http(s) URL or nothing', () => {
     assert.equal(linkTarget('javascript:alert(1)'), null);
     assert.equal(linkTarget('mailto:a@b.c'), null);
     assert.equal(linkTarget('word'), null);
+    assert.equal(linkTarget('1.2'), null);
+    assert.equal(linkTarget('user@host.com'), null);
+    assert.equal(linkTarget('//imf.org/x'), 'https://imf.org/x');
+    assert.equal(linkTarget(`imf.org/${'a'.repeat(2100)}`), null);
     assert.equal(linkTarget(''), null);
+});
+
+test('a target past the length a note keeps stays text', () => {
+    const long = `[IMF](https://imf.org/${'a'.repeat(2100)})`;
+
+    assert.deepEqual(noteParts(long), [{ text: long }]);
 });

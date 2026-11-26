@@ -32,9 +32,15 @@ const fill = (field: HTMLElement, note: string) =>
 // A line break the browser writes as an element (a <br>, or a <div> per line).
 const BREAKS = 'br, div';
 
+// The link a node of the field sits in, or null.
+const linkOf = (node: Node): Element | null =>
+    (node instanceof Element ? node : node.parentElement)?.closest('a') ?? null;
+
 // The words selected in `field` as a range, or null when they cannot be one
-// link: no selection, one outside the field, or words across a line break or
-// holding a bracket.
+// link. That is no selection, one outside the field, words across a line
+// break or holding a bracket, and words that take in part of a link or a
+// whole link with text beside it.
+
 const pickOf = (field: HTMLElement | null): Range | null => {
     const selection = document.getSelection();
     const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
@@ -44,7 +50,9 @@ const pickOf = (field: HTMLElement | null): Range | null => {
         !range.collapsed &&
         field.contains(range.commonAncestorContainer) &&
         linkable(range.toString()) &&
-        !range.cloneContents().querySelector(BREAKS)
+        !range.cloneContents().querySelector(BREAKS) &&
+        linkOf(range.startContainer) === linkOf(range.endContainer) &&
+        (linkOf(range.startContainer) !== null || !range.cloneContents().querySelector('a'))
         ? range.cloneRange()
         : null;
 };
@@ -247,11 +255,11 @@ const NoteModal = ({
                         aria-multiline="true"
                         aria-labelledby="note-label"
                         aria-placeholder="Enter note…"
-                        data-empty={note === '' ? '' : undefined}
+                        data-empty={note.trim() === '' ? '' : undefined}
                         onInput={(event) => setNote(noteText(read(event.currentTarget)))}
                         onKeyDown={(event) => {
                             if (
-                                event.key.toLowerCase() !== 'k' ||
+                                (event.code !== 'KeyK' && event.key.toLowerCase() !== 'k') ||
                                 !(event.metaKey || event.ctrlKey)
                             ) {
                                 return;

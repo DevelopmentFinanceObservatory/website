@@ -15,7 +15,7 @@ import {
     GAP,
     heightIsDerived,
     heightIsFree,
-    heightRange,
+    gripRange,
     resolveCardView,
     widgetTitle,
 } from './layout';
@@ -400,7 +400,7 @@ const Whiteboard = ({
                 // ratio) within the view's range.
                 const widthOnly =
                     heightIsDerived(widget, cardView) && !heightIsFree(cardView, chartSource);
-                const hRange = heightRange(widget, cardView);
+                const hRange = gripRange(widget, cardView, slot.h);
                 const dimmed = !!dimKind && effectiveKind(widget, views[widget.id]) !== dimKind;
                 const unitOffer =
                     onChangeUnit && !readOnly && !isLeaving ? cardUnitOffer(widget) : null;

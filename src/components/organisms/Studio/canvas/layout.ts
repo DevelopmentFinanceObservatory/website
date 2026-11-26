@@ -384,6 +384,22 @@ export const heightRange = (
     };
 };
 
+// The heights a card's grip may set. A stat card's fitted room is for its
+// content alone, so its grip stops at the stat span, or at the height the
+// card already has when a long note took it past that.
+export const gripRange = (
+    widget: Widget,
+    view: CardView | null,
+    rows: number,
+): { min: number; max: number } => {
+    const range = heightRange(widget, view);
+    const kind = effectiveKind(widget, view ?? undefined);
+
+    return kind === 'key_number'
+        ? { min: range.min, max: Math.max(SPAN_MAX[kind].h, rows) }
+        : range;
+};
+
 // The footprint a fresh card spawns at, estimated from its content so the
 // measured fit that follows moves it by a cell or two at most. A chart view
 // takes the height its shape needs at the default width. A table view takes

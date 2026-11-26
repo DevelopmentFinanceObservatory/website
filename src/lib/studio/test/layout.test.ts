@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
     heightIsDerived,
     heightIsFree,
+    gripRange,
     heightRange,
     resolveCardView,
     SPAN_DEFAULT,
@@ -78,6 +79,10 @@ test('the height range follows the kind the card reads as', () => {
         min: SPAN_MIN.key_number.h,
         max: FITTED_ROWS_MAX,
     });
+    // The grip stops at the stat span, or at a height a note already gave.
+    assert.equal(gripRange(stat, null, 9).max, SPAN_MAX.key_number.h);
+    assert.equal(gripRange(stat, null, 20).max, 20);
+    assert.deepEqual(gripRange(kenya, null, 12), tableRange);
 });
 
 test('a fresh table spawns at its estimated width and rows', () => {
