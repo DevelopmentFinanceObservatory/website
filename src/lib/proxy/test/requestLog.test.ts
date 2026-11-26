@@ -72,7 +72,7 @@ test('requestLogEntry: kind and prerender for pages, API calls, RSC, prefetch an
     }
 });
 
-test('isStaticAsset: framework files, images and fonts', () => {
+test('isStaticAsset: framework files, images and fonts, outside the API paths', () => {
     const cases: [string, boolean][] = [
         ['/_next/static/chunks/main.js', true],
         ['/_next/image', true],
@@ -82,6 +82,7 @@ test('isStaticAsset: framework files, images and fonts', () => {
         ['/', false],
         ['/docs/guide.md', false],
         ['/api/v1/search', false],
+        ['/api/v1/presentation/chart.png', false],
     ];
 
     for (const [path, expected] of cases) {
@@ -262,6 +263,7 @@ test('logRequest: one line with the caller digest and no address or query', () =
             agent: 'browser',
             agent_name: null,
             prerender: false,
+            tier: null,
         },
     ]);
 
@@ -557,6 +559,7 @@ test(
                 agent: 'other_bot',
                 agent_name: null,
                 prerender: false,
+                tier: null,
             },
         ]);
     },
@@ -598,6 +601,82 @@ test('server logging writes one line with finished true for a response that fini
         [true],
     );
 });
+
+test(
+    'server logging records the limit tier a response names, and null for any other value, and sends no tier header',
+    { timeout: 5000 },
+    async (t) => {
+        const lines: unknown[] = [];
+        t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+        t.after(registerRequestLogging());
+        const port = await listen(t, (request, response) => {
+            const query = new URL(request.url ?? '/', 'http://localhost').searchParams;
+            const tiers = query.getAll('tier');
+
+            if (query.has('object')) {
+                // A tier passed in writeHead's headers object wins over one
+                // already set.
+                response.setHeader('x-dfo-limit-tier', 'key');
+                response.writeHead(200, { 'X-Dfo-Limit-Tier': tiers, 'x-kept': '1' });
+            } else if (query.has('array')) {
+                response.writeHead(200, 'OK', ['x-kept', '1', 'x-dfo-limit-tier', tiers[0]!]);
+            } else if (tiers.length > 0) {
+                // Next's sendResponse copies a route handler's Response
+                // headers through NodeNextResponse.appendHeader, which stores
+                // each one as an array of values.
+                response.setHeader('x-dfo-limit-tier', tiers);
+            }
+
+            response.end('ok');
+        });
+
+        const targets = [
+            '/api/v1/search?tier=key',
+            '/api/v1/search?tier=visitor',
+            '/api/v1/search?tier=address',
+            '/api/v1/search?tier=v-1234',
+            '/api/v1/search?tier=key&tier=visitor',
+            '/api/v1/search',
+            '/api/v1/search?object&tier=visitor',
+            '/api/v1/search?array&tier=address',
+            // An API path with an image ending is a counted call, and logged.
+            '/api/v1/presentation/chart.png?tier=visitor',
+            // A static asset writes no line, and its header is removed all the same.
+            '/images/logo.png?tier=key',
+        ];
+        const sent: (string | null)[] = [];
+        const kept: (string | null)[] = [];
+
+        for (const target of targets) {
+            const res = await fetch(`http://127.0.0.1:${port}${target}`);
+            await res.text();
+            sent.push(res.headers.get('x-dfo-limit-tier'));
+            kept.push(res.headers.get('x-kept'));
+        }
+
+        // The close listener writes each line after the response ends. The
+        // wait is bounded, so a missing line fails the assertion below.
+        for (let waits = 0; lines.length < targets.length - 1 && waits < 200; waits += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+
+        assert.deepEqual(
+            lines.map((line) => {
+                const { path, tier } = line as { path: string; tier: unknown };
+
+                return `${path} ${tier}`;
+            }),
+            [
+                ...['key', 'visitor', 'address', null, null, null, 'visitor', 'address'].map(
+                    (tier) => `/api/v1/search ${tier}`,
+                ),
+                '/api/v1/presentation/chart.png visitor',
+            ],
+        );
+        assert.deepEqual(sent, Array(targets.length).fill(null));
+        assert.deepEqual(kept.slice(6, 8), ['1', '1']);
+    },
+);
 
 test(
     'server logging writes one line with finished false for a response closed early',

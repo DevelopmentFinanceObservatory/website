@@ -7,7 +7,8 @@
  *   the scope line, the aid line and the indicator and dataset tiles.
  * - The sources come from the graph's source catalogue
  *   (`GET /api/graph/sources`, served at `GET /api/data-availability/sources`)
- *   as the Sources page's filter rows, each with its dataset count.
+ *   as the Sources page's publisher list, one row per publisher name with
+ *   its source count. Each row links to that page with `?publisher=`.
  *
  * A route answers 503 when its read fails. The drawer then shows that half
  * as empty, meaning the scope line without counts or no source rows, and
@@ -16,12 +17,7 @@
  */
 
 import { type CatalogueCounts, formatCount, parseCatalogue } from '../search/catalogue.ts';
-import type { FilterGroup } from '../sources/filters.ts';
-
-/** One row of the Sources page's filter chips: a publisher the Observatory
- *  imports itself, or a Data Commons that serves many publishers. `id` is
- *  what its chip filters by (lib/sources/filters.ts). */
-export type DataSource = FilterGroup;
+import { type PublisherOption, serializePublishers } from '../sources/search.ts';
 
 /** One half of the drawer: not read yet, on its way, read, or failed. A
  *  failed half shows as empty. */
@@ -43,24 +39,19 @@ export const settledHalf = <T>(value: T | null): Half<T> =>
 export const sourceDatasetCount = (count: number): string =>
     `${formatCount(count)} ${count === 1 ? 'dataset' : 'datasets'}`;
 
-/** The Sources page filtered to one row, the way its chips filter it
- *  (`?filter=<id>`). */
-export const sourceHref = (source: DataSource): string =>
-    `/data/sources?filter=${encodeURIComponent(source.id)}`;
+/** The Sources page with the row's publisher picked (`?publisher=`). */
+export const sourceHref = (source: PublisherOption): string =>
+    `/data/sources?${new URLSearchParams({ publisher: serializePublishers([source.label])! })}`;
 
-const isSource = (value: unknown): value is DataSource => {
-    const source = value as Partial<DataSource> | null;
+const isSource = (value: unknown): value is PublisherOption => {
+    const source = value as Partial<PublisherOption> | null;
 
-    return (
-        typeof source?.id === 'string' &&
-        typeof source.label === 'string' &&
-        typeof source.count === 'number'
-    );
+    return typeof source?.label === 'string' && typeof source.count === 'number';
 };
 
 /** The sources route's body (`{ sources }`) read off the wire, or null when
  *  it is not one. A malformed row is dropped. */
-export const parseSources = (body: unknown): DataSource[] | null => {
+export const parseSources = (body: unknown): PublisherOption[] | null => {
     const sources = (body as { sources?: unknown } | null)?.sources;
 
     return Array.isArray(sources) ? sources.filter(isSource) : null;
@@ -92,9 +83,9 @@ export const fetchCounts = (signal?: AbortSignal): Promise<CatalogueCounts | nul
         signal,
     );
 
-/** The Sources page's rows, in its chip order, or null when the read
- *  fails. */
-export const fetchSources = (signal?: AbortSignal): Promise<DataSource[] | null> =>
+/** The Sources page's publisher list, most sources first, or null when the
+ *  read fails. */
+export const fetchSources = (signal?: AbortSignal): Promise<PublisherOption[] | null> =>
     fetchHalf('/api/data-availability/sources', parseSources, signal);
 
 /** The question "Ask a follow-up" opens a fresh canvas with. It is specific

@@ -58,6 +58,27 @@ export async function register(): Promise<void> {
         console.warn(error instanceof Error ? error.message : String(error));
     }
 
+    const { tagSecrets } = await import('./lib/auth/keyTag');
+    const { keysEnabled } = await import('./lib/proxy/keysSwitch');
+
+    try {
+        tagSecrets();
+    } catch (error) {
+        // Without the key tag secrets no key can be made or checked, so every
+        // keyed call would be a 401; a production server with keys on refuses
+        // to start. With keys off (API_KEYS_ENABLED) every call is anonymous,
+        // so the server starts and warns. In dev, keys are refused and the
+        // rest of the site works.
+        if (process.env.NODE_ENV === 'production' && keysEnabled()) {
+            throw error;
+        }
+
+        console.warn(error instanceof Error ? error.message : String(error));
+    }
+
+    const { checkVisitorKey } = await import('./lib/proxy/visitor');
+    checkVisitorKey(process.env.NODE_ENV === 'production');
+
     const { resolveRuntimeConnection, connectCloudSqlRuntime, setCloudSqlRuntimeStream } =
         await import('../db/connection');
 

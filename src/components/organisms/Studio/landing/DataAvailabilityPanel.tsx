@@ -7,20 +7,16 @@ import styles from './DataAvailabilityPanel.module.scss';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import { aidLine, type CatalogueCounts, catalogueTiles, scopeLine } from '@/lib/search/catalogue';
-import {
-    type DataSource,
-    type Half,
-    sourceDatasetCount,
-    sourceHref,
-} from '@/lib/studio/dataAvailability';
+import type { PublisherOption } from '@/lib/sources/search';
+import { type Half, sourceDatasetCount, sourceHref } from '@/lib/studio/dataAvailability';
 
 type DataAvailabilityPanelProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** the search catalogue's counts */
     counts: Half<CatalogueCounts>;
-    /** the Sources page's rows */
-    sources: Half<DataSource[]>;
+    /** the Sources page's publisher list */
+    sources: Half<PublisherOption[]>;
     // Start a canvas on the data-availability question. Null past the guest
     // wall, where there is nothing to start, so the action is left out.
     onAsk: (() => void) | null;
@@ -32,11 +28,11 @@ const isPending = (half: Half<unknown>): boolean =>
 /**
  * The landing's "What data is available?" drawer. From the search
  * catalogue's counts it shows the scope line, the aid line, and the
- * indicator and dataset tiles. Below them come the Sources page's rows, each
- * with its dataset count and a link to that page filtered to it. Each half
- * shows its own placeholder until it arrives, and a failed half shows as
- * empty. The footer links to the Sources page and offers a canvas where the
- * agent answers questions about the data.
+ * indicator and dataset tiles. Below them comes the Sources page's publisher
+ * list, each publisher with its dataset count and a link to that page with
+ * the publisher picked. Each half shows its own placeholder until it
+ * arrives, and a failed half shows as empty. The footer links to the Sources
+ * page and offers a canvas where the agent answers questions about the data.
  *
  * Every link here sets `prefetch={false}` because /data/sources is
  * force-dynamic, and a viewport prefetch renders it in full, one graph read
@@ -109,7 +105,7 @@ const DataAvailabilityPanel = ({
                             <p className={styles.text}>Sources:</p>
                             <ul className={styles.sources}>
                                 {rows.map((source) => (
-                                    <li key={source.id} className={styles.source}>
+                                    <li key={source.label} className={styles.source}>
                                         <Link
                                             href={sourceHref(source)}
                                             prefetch={false}

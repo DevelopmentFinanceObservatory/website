@@ -4,6 +4,7 @@ import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { CODE_LIMITS, codeLimitKeys, takeCodeAllowance } from '../../src/lib/auth/codeLimit.ts';
 import {
+    admitHit,
     countHit,
     pruneCounters,
     refundReservation,
@@ -176,11 +177,59 @@ test('limit counters and Studio prompt allowances', async (t) => {
         assert.equal(start?.toISOString().slice(11), '00:00:00.000Z');
     });
 
-    await t.test('pruning deletes counters idle for two days and keeps the rest', async () => {
+    await t.test('each write dates its row to the end of its window', async () => {
+        await countHit(db, 'api:192.0.2.60', 1, 60);
+        await reserveHit(db, 'studio-user:expiry', 1, DAY_S);
+        await admitHit(
+            db,
+            {
+                minute: { key: 'api:visitor:expiry', limit: 1 },
+                day: { key: 'anonday:api:visitor:expiry', limit: 1 },
+            },
+            60,
+        );
+
+        const { rows } = await admin.query<{ key: string; window_s: number }>(
+            `select key, extract(epoch from expires_at - window_start)::int as window_s
+             from limit_counter
+             where key in ('api:192.0.2.60', 'studio-user:expiry', 'api:visitor:expiry',
+                           'anonday:api:visitor:expiry')
+             order by key`,
+        );
+        assert.deepEqual(
+            rows.map(({ key, window_s }) => [key, window_s]),
+            [
+                ['anonday:api:visitor:expiry', DAY_S],
+                ['api:192.0.2.60', 60],
+                ['api:visitor:expiry', 60],
+                ['studio-user:expiry', DAY_S],
+            ],
+        );
+
+        // A row that starts a new window moves its end with it.
+        await admin.query(
+            `update limit_counter
+             set window_start = window_start - interval '120 seconds',
+                 expires_at = expires_at - interval '120 seconds'
+             where key = 'api:192.0.2.60'`,
+        );
+        await countHit(db, 'api:192.0.2.60', 1, 60);
+
+        const moved = await admin.query<{ ahead: boolean }>(
+            `select expires_at = window_start + interval '60 seconds' and expires_at > now() as ahead
+             from limit_counter where key = 'api:192.0.2.60'`,
+        );
+        assert.equal(moved.rows[0]?.ahead, true);
+    });
+
+    await t.test('pruning deletes counters whose window has ended and keeps the rest', async () => {
         await countHit(db, 'api:192.0.2.50', 1, 60);
         await countHit(db, 'api:192.0.2.51', 1, 60);
         await admin.query(
-            `update limit_counter set window_start = now() - interval '3 days' where key = $1`,
+            `update limit_counter
+             set window_start = now() - interval '61 seconds',
+                 expires_at = now() - interval '1 second'
+             where key = $1`,
             ['api:192.0.2.50'],
         );
 
@@ -194,6 +243,183 @@ test('limit counters and Studio prompt allowances', async (t) => {
             ['api:192.0.2.51'],
         );
     });
+
+    await t.test(
+        'pruning keeps an ended row whose expires_at is not after its window_start until it is two days old',
+        async () => {
+            await countHit(db, 'api:192.0.2.52', 1, 60);
+            await countHit(db, 'api:192.0.2.53', 1, 60);
+            await admin.query(
+                `update limit_counter
+                 set window_start = now() - interval '30 seconds', expires_at = now() - interval '30 seconds'
+                 where key = 'api:192.0.2.52'`,
+            );
+            await admin.query(
+                `update limit_counter
+                 set window_start = now() - interval '3 days', expires_at = now() - interval '3 days'
+                 where key = 'api:192.0.2.53'`,
+            );
+
+            await pruneCounters(db);
+
+            const { rows } = await admin.query<{ key: string }>(
+                `select key from limit_counter where key in ('api:192.0.2.52', 'api:192.0.2.53')`,
+            );
+            assert.deepEqual(
+                rows.map(({ key }) => key),
+                ['api:192.0.2.52'],
+            );
+        },
+    );
+
+    await t.test(
+        'pruning deletes a row without a trusted expiry only once its window is two days old, and keeps an open window',
+        async () => {
+            // An older revision inserts without expires_at, so the row takes
+            // the column default, infinity.
+            const day = `date_bin(interval '1 day', now(), timestamptz 'epoch')`;
+            const row = async (key: string, windowStart: string, expiresAt?: string) => {
+                await admin.query(
+                    'insert into limit_counter (key, window_start, count) values ($1, now(), 1)',
+                    [key],
+                );
+                await admin.query(
+                    `update limit_counter
+                     set window_start = ${windowStart}${expiresAt ? `, expires_at = ${expiresAt}` : ''}
+                     where key = $1`,
+                    [key],
+                );
+            };
+
+            await row('anonday:api:visitor:legacy-today', day);
+            await row('anonday:api:visitor:legacy-old', `${day} - interval '3 days'`);
+            // A window longer than two days that has not ended.
+            await row(
+                'anonday:api:visitor:long-open',
+                `${day} - interval '3 days'`,
+                `now() + interval '1 day'`,
+            );
+
+            await pruneCounters(db);
+
+            const { rows } = await admin.query<{ key: string }>(
+                `select key from limit_counter
+                 where key like 'anonday:api:visitor:legacy-%' or key = 'anonday:api:visitor:long-open'
+                 order by key`,
+            );
+            assert.deepEqual(
+                rows.map(({ key }) => key),
+                ['anonday:api:visitor:legacy-today', 'anonday:api:visitor:long-open'],
+            );
+        },
+    );
+
+    await t.test(
+        'fresh visitor ids at an address past its backstop or ceiling create no rows',
+        async () => {
+            const rowCount = async (pattern: string) =>
+                (
+                    await admin.query<{ n: number }>(
+                        'select count(*)::int as n from limit_counter where key like $1',
+                        [pattern],
+                    )
+                ).rows[0]!.n;
+
+            for (const [name, ip, gate] of [
+                ['backstop', '198.51.100.70', 'backstop'],
+                ['ceiling', '198.51.100.71', 'ceiling'],
+            ] as const) {
+                const plan = (visitor: string) => ({
+                    minute: { key: `api:visitor:${ip}-${visitor}`, limit: 120 },
+                    day: { key: `anonday:api:visitor:${ip}-${visitor}`, limit: 1000 },
+                    backstop: {
+                        key: `api:backstop:${ip}`,
+                        limit: gate === 'backstop' ? 3 : 240,
+                    },
+                    ceiling: {
+                        key: `anonday:api:addr:${ip}`,
+                        limit: gate === 'ceiling' ? 3 : 5000,
+                    },
+                });
+                const outcomes = [];
+
+                for (let visitor = 0; visitor < 53; visitor++) {
+                    outcomes.push((await admitHit(db, plan(`v${visitor}`), 60)).refusedBy);
+                }
+
+                assert.deepEqual(outcomes, [null, null, null, ...Array(50).fill(gate)], name);
+                // Three visitors' minute and day rows, and none for the fifty refused.
+                assert.equal(await rowCount(`%:visitor:${ip}-%`), 6, name);
+                assert.equal(await rowCount(`%${ip}`), 2, name);
+            }
+        },
+    );
+
+    await t.test(
+        'a call its own count refuses spends nothing on the daily or address counts',
+        async () => {
+            const plan = {
+                minute: { key: 'api:visitor:own-refusal', limit: 1 },
+                day: { key: 'anonday:api:visitor:own-refusal', limit: 1000 },
+                backstop: { key: 'api:backstop:198.51.100.72', limit: 240 },
+                ceiling: { key: 'anonday:api:addr:198.51.100.72', limit: 5000 },
+            };
+
+            assert.equal((await admitHit(db, plan, 60)).refusedBy, null);
+
+            const refused = await admitHit(db, plan, 60);
+
+            assert.equal(refused.refusedBy, 'minute');
+            assert.equal(refused.verdicts.minute?.remaining, 0);
+
+            const { rows } = await admin.query<{ key: string; count: number }>(
+                `select key, count from limit_counter
+                 where key in ('api:visitor:own-refusal', 'anonday:api:visitor:own-refusal',
+                               'api:backstop:198.51.100.72', 'anonday:api:addr:198.51.100.72')
+                 order by key`,
+            );
+            assert.deepEqual(
+                rows.map(({ key, count }) => [key, count]),
+                [
+                    ['anonday:api:addr:198.51.100.72', 1],
+                    ['anonday:api:visitor:own-refusal', 1],
+                    ['api:backstop:198.51.100.72', 1],
+                    ['api:visitor:own-refusal', 2],
+                ],
+            );
+        },
+    );
+
+    await t.test(
+        'concurrent visitors at one address are admitted up to the backstop exactly',
+        async () => {
+            const handles = Array.from({ length: 12 }, () => drizzle(database.runtimePool()));
+            const admissions = await Promise.all(
+                handles.map((handle, visitor) =>
+                    admitHit(
+                        handle,
+                        {
+                            minute: { key: `api:visitor:race-${visitor}`, limit: 120 },
+                            day: { key: `anonday:api:visitor:race-${visitor}`, limit: 1000 },
+                            backstop: { key: 'api:backstop:198.51.100.73', limit: 5 },
+                            ceiling: { key: 'anonday:api:addr:198.51.100.73', limit: 5000 },
+                        },
+                        60,
+                    ),
+                ),
+            );
+
+            assert.equal(admissions.filter(({ refusedBy }) => refusedBy === null).length, 5);
+            assert.ok(
+                admissions.every(({ refusedBy }) => refusedBy === null || refusedBy === 'backstop'),
+            );
+
+            const ceiling = await admin.query<{ count: number }>(
+                `select count from limit_counter where key = 'anonday:api:addr:198.51.100.73'`,
+            );
+            assert.equal(ceiling.rows[0]?.count, 5);
+        },
+    );
 
     await t.test('a guest past the allowance is refused whatever the browser', async () => {
         // spendPrompt reads nothing from the browser, so a cleared or

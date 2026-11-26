@@ -107,16 +107,43 @@ test('forward: sends the body option in place of a client body already read', as
     assert.equal(await res.text(), '{"conversation_id":"conv-b"}');
 });
 
-test('forward: takes the verdict of a call already counted and counts nothing more', async () => {
+test('forward: takes the decision on a call already counted and counts nothing more', async () => {
+    const verdict = { allowed: true, limit: 120, remaining: 119, reset: 30 };
     const res = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
         surface: 'api',
-        counted: { allowed: false, limit: 120, remaining: 0, reset: 30, counted: true },
+        counted: { identity: { kind: 'anonymous' }, verdict, tier: 'visitor' },
         target: `${base}/empty`,
         unreachable: 'The API is unreachable.',
     });
 
-    assert.equal(res.status, 429);
-    assert.equal((await res.json()).code, 'rate_limited');
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('x-ratelimit-remaining'), '119');
+    assert.equal(res.headers.get('x-dfo-limit-tier'), 'visitor');
+
+    const refusal = new Response(null, { status: 429 });
+    const refused = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
+        surface: 'api',
+        counted: { identity: { kind: 'anonymous' }, verdict, refusal },
+        target: `${base}/empty`,
+        unreachable: 'The API is unreachable.',
+    });
+
+    assert.equal(refused, refusal);
+
+    // An admit refusal, such as the Studio's prompt allowance, comes after
+    // the count, so it carries the tier and none of the rate headers.
+    const admitted = await forward(new Request('http://site.test/api/v1/echo') as NextRequest, {
+        surface: 'api',
+        counted: { identity: { kind: 'anonymous' }, verdict, tier: 'visitor' },
+        target: `${base}/empty`,
+        unreachable: 'The API is unreachable.',
+        admit: async () => new Response('{}', { status: 429, headers: { 'Retry-After': '60' } }),
+    });
+
+    assert.equal(admitted.status, 429);
+    assert.equal(admitted.headers.get('x-dfo-limit-tier'), 'visitor');
+    assert.equal(admitted.headers.get('retry-after'), '60');
+    assert.equal(admitted.headers.get('x-ratelimit-remaining'), null);
 });
 
 for (const acceptEncoding of ['gzip, deflate, br', null]) {
