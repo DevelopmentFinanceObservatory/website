@@ -12,7 +12,7 @@ import {
     percentNumber,
     type StatValue,
 } from '../studio/statFace.ts';
-import type { UnitChange } from '../studio/wire.ts';
+import type { HeldPeriod, UnitChange } from '../studio/wire.ts';
 
 /** One source a card cites, as the platform names it. */
 export type CardSource = {
@@ -50,6 +50,8 @@ export type CardInfo = {
     licence: string | null;
     dataThrough: string | null;
     lastRefreshed: string | null;
+    // Partial or projected periods the card's data holds or was held back from.
+    held?: HeldPeriod[];
     citation?: string | null;
     sources?: CardSource[];
     // What the card's data leaves out, one sentence per gap in the platform's

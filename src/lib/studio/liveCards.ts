@@ -7,7 +7,7 @@ import { shortDateText } from '../sources/updateDates.ts';
 import type { LiveCard } from './liveBackend.ts';
 import type { Description } from './description.ts';
 import { gateOf } from './gate.ts';
-import { cardDescription } from './infoPanel.ts';
+import { cardDescription, heldLabels } from './infoPanel.ts';
 import { describedBy, payloadDescription, payloadProvenance } from './payload.ts';
 import { reviseWidget } from './widgets.ts';
 import type { FactSummary } from './wire.ts';
@@ -497,15 +497,21 @@ export const widgetFromLiveCard = (held: Widget, card: LiveCard): Widget | null 
  *  shown: the owner's Studio, a snapshot, an embed, or a live share. A
  *  described card reads the sentences of its coverage gaps, and its other
  *  caveats stay in More Info. A legacy card reads the coverage gaps its
- *  provenance warned of. */
+ *  provenance warned of. A served partial or projected period's label
+ *  (`heldLabels`) comes first, ahead of any gap folded into "+N more". */
 export const leftOutOf = (
-    info: Pick<CardInfo, 'leftOut' | 'description'> | null | undefined,
+    info:
+        | (Pick<CardInfo, 'leftOut' | 'description'> &
+              Partial<Pick<CardInfo, 'held' | 'dataThrough'>>)
+        | null
+        | undefined,
 ): string[] => {
     const description = info && cardDescription(info);
-
-    return description
+    const gaps = description
         ? description.caveats.filter(({ kind }) => kind === 'coverage_gap').map(({ text }) => text)
         : (info?.leftOut ?? []);
+
+    return [...heldLabels(info?.held, info?.dataThrough ?? null), ...gaps];
 };
 
 /** A data card of a live canvas: every card but the user's text cards and

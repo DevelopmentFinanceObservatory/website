@@ -32,6 +32,7 @@ import {
     withoutUnsentQuestion,
 } from './transcript.ts';
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
+import { readHeld } from './wire.ts';
 import { placeCard } from './cardReplace.ts';
 import type {
     ClosedTurn,
@@ -718,6 +719,7 @@ const provenanceOfRead = (read: ComponentRead): Provenance => {
             data_through: text(freshness?.['data_through']),
             last_refreshed: text(freshness?.['last_refreshed']),
             partial_period: freshness?.['partial_period'] === true,
+            held: readHeld(freshness?.['held']),
         },
         warnings: list('warnings'),
         generated_at: text(provenance?.['generated_at']),
