@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
 import Analytics from '@/components/atoms/Analytics/Analytics';
+import PageView from '@/components/atoms/PageView/PageView';
 import { SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
 import '@fontsource/outfit/300.css';
@@ -50,6 +51,7 @@ const RootLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => {
         <html lang="en">
             <body className="page">
                 <Analytics />
+                <PageView />
                 {children}
             </body>
         </html>

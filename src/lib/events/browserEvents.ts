@@ -25,6 +25,7 @@ export const BROWSER_EVENT_NAMES = [
     'share.copy',
     'guest.wall_hit',
     'gallery.open',
+    'page.view',
 ] as const satisfies readonly EventName[];
 
 export type BrowserEventName = (typeof BROWSER_EVENT_NAMES)[number];
