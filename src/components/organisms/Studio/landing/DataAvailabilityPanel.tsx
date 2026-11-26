@@ -47,7 +47,7 @@ const DataAvailabilityPanel = ({
 }: DataAvailabilityPanelProps) => {
     const read = counts.status === 'read' ? counts.value : null;
     const aid = aidLine(read?.aid ?? null);
-    const tiles = catalogueTiles(read && { counts: read });
+    const tiles = catalogueTiles(read && { counts: read }, 'datasets');
     const rows = sources.status === 'read' ? sources.value : [];
 
     return (
