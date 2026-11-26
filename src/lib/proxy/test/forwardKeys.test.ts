@@ -69,11 +69,18 @@ const addressCaller = `ip:${createHmac('sha256', 'test-hmac-key')
     .digest('hex')
     .slice(0, 32)}`;
 
-// What the upstream saw of each call.
+// What dfo-apis sends on many API routes: any cache may keep the answer.
+const PUBLIC_CACHE = 'public, max-age=300';
+
+// What the upstream saw of each call. /public answers with PUBLIC_CACHE and
+// varies on Origin.
 const seen: IncomingHttpHeaders[] = [];
 const upstream = createServer((req, res) => {
     seen.push(req.headers);
-    res.writeHead(200, { 'content-type': 'application/json' }).end('{}');
+    res.writeHead(200, {
+        'content-type': 'application/json',
+        ...(req.url === '/public' ? { 'cache-control': PUBLIC_CACHE, vary: 'Origin' } : {}),
+    }).end('{}');
 });
 
 upstream.listen(0, '127.0.0.1');
@@ -284,9 +291,48 @@ test('forward: a key on the Datasets API counts against the account and its dail
 
     assert.equal(revoked.status, 401);
     assert.equal((await revoked.json()).code, 'invalid_api_key');
-    // The call was counted on its address, so the 401 carries the tier.
+    // The call was counted on its address, so the 401 carries the tier and its count.
     assert.equal(revoked.headers.get('x-dfo-limit-tier'), 'address');
+    assert.ok(revoked.headers.has('x-ratelimit-limit'));
+    assert.equal(revoked.headers.get('cache-control'), 'private, no-store');
     assert.equal(seen.length, 0);
+});
+
+test('forward: a keyed answer is private and no-store with its rate headers, whatever the upstream allows', async () => {
+    fresh();
+    fakes(VALID);
+
+    for (const headers of [
+        { 'x-api-key': KEY },
+        { authorization: `Bearer ${KEY}` },
+        // Not a key, but a credential all the same.
+        { authorization: 'Basic dXNlcjpwYXNz' },
+    ] as Record<string, string>[]) {
+        const res = await call(headers, { target: `${base}/public` });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('cache-control'), 'private, no-store');
+        assert.ok(res.headers.has('x-ratelimit-limit'));
+    }
+});
+
+test('forward: an anonymous answer a shared cache may keep varies on the credential headers and drops its rate headers', async () => {
+    fresh();
+    fakes(VALID);
+
+    const res = await call(
+        {},
+        { target: `${base}/public`, pass: { request: [], response: ['vary'] } },
+    );
+    const plain = await call({});
+
+    assert.equal(res.headers.get('cache-control'), PUBLIC_CACHE);
+    assert.equal(res.headers.get('vary'), 'Origin, Authorization, X-API-Key');
+    assert.equal(res.headers.get('x-ratelimit-limit'), null);
+    // An answer no shared cache keeps carries its count and no Vary.
+    assert.equal(plain.headers.get('cache-control'), 'no-cache');
+    assert.equal(plain.headers.get('vary'), null);
+    assert.ok(plain.headers.has('x-ratelimit-limit'));
 });
 
 test('forward: an unavailable key store goes on as anonymous with the key still stripped', async () => {
@@ -547,43 +593,16 @@ for (const [name, visitorLimitsOff] of [
     });
 }
 
-test('forward: while keys are off, a call with X-API-Key is logged without its value', async () => {
+test('forward: a foreign X-API-Key is anonymous, counted by address, and stripped before the upstream call', async () => {
     fresh();
-    process.env.API_KEYS_ENABLED = 'false';
     fakes(VALID);
 
-    await call({ 'x-api-key': 'another-service-secret' });
-    await call({ 'x-api-key': KEY });
-    await call({ authorization: `Bearer ${KEY}` });
-    // /mcp ignores keys, so there is nothing to count.
-    await call({ 'x-api-key': KEY }, { surface: 'mcp' });
-    // The Studio ignores keys whatever the switch says.
-    await call(
-        { 'x-api-key': KEY },
-        {
-            counted: { identity: { kind: 'anonymous' }, verdict: verdictOf(120) },
-            surface: undefined,
-        },
-    );
+    const res = await call({ 'x-api-key': 'another-service-secret' });
 
-    assert.deepEqual(
-        lines.map((line) => JSON.parse(line)),
-        [
-            {
-                severity: 'INFO',
-                message: 'api key header while keys are off',
-                surface: 'api',
-                ours: false,
-            },
-            {
-                severity: 'INFO',
-                message: 'api key header while keys are off',
-                surface: 'api',
-                ours: true,
-            },
-        ],
-    );
-    assert.doesNotMatch(lines.join('\n'), /another-service-secret|dfo_k_/);
+    assert.equal(res.status, 200);
+    assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
+    assert.equal(seen[0]!['x-api-key'], undefined);
+    assert.deepEqual(lines, []);
 });
 
 test('forward: logs one line per keyed call with the key id, account, surface and outcome, never the key', async () => {

@@ -1,7 +1,7 @@
 /**
  * `apiKey.ts`: where a call's API key is read from. A `dfo_` bearer or
- * `X-API-Key` is a key, any other bearer is not, two different keys are a
- * conflict, and an over-long value is refused unread.
+ * `X-API-Key` is a key only with the `dfo_` prefix, any other bearer is not,
+ * two different keys are a conflict, and an over-long key is refused unread.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -24,6 +24,18 @@ test('readApiKey: a dfo_ bearer is a key, whatever the scheme case or spacing', 
 test('readApiKey: X-API-Key is a key', () => {
     assert.deepEqual(read({ 'x-api-key': KEY }), { kind: 'key', key: KEY });
     assert.deepEqual(read({ 'X-API-Key': ` ${KEY} ` }), { kind: 'key', key: KEY });
+});
+
+test('readApiKey: an X-API-Key that is not a dfo_ key is not a key', () => {
+    for (const value of ['another-service-secret', 'DFO_X', `x${KEY}`]) {
+        assert.deepEqual(read({ 'x-api-key': value }), { kind: 'none' }, value);
+    }
+
+    // A foreign alias beside a key neither conflicts with it nor replaces it.
+    assert.deepEqual(read({ authorization: `Bearer ${KEY}`, 'x-api-key': 'other' }), {
+        kind: 'key',
+        key: KEY,
+    });
 });
 
 test('readApiKey: a bearer that is not a dfo_ key is not a key', () => {
@@ -54,7 +66,7 @@ test('readApiKey: both headers with different values conflict', () => {
     assert.deepEqual(read({ authorization: `Bearer ${KEY}`, 'x-api-key': `${KEY}b` }), {
         kind: 'conflict',
     });
-    assert.deepEqual(read({ authorization: `Bearer ${KEY}`, 'x-api-key': 'other' }), {
+    assert.deepEqual(read({ authorization: `Bearer ${KEY}`, 'x-api-key': 'dfo_other' }), {
         kind: 'conflict',
     });
 });
@@ -68,8 +80,13 @@ test('readApiKey: a value over the maximum length is refused unread', () => {
 
     assert.deepEqual(read({ authorization: `Bearer ${long}` }), { kind: 'too-long' });
     assert.deepEqual(read({ 'x-api-key': long }), { kind: 'too-long' });
-    assert.deepEqual(read({ 'x-api-key': 'd'.repeat(MAX_KEY_LENGTH) }).kind, 'key');
-    assert.deepEqual(read({ 'x-api-key': 'd'.repeat(MAX_KEY_LENGTH + 1) }).kind, 'too-long');
+    assert.deepEqual(read({ 'x-api-key': `dfo_${'d'.repeat(MAX_KEY_LENGTH - 4)}` }).kind, 'key');
+    assert.deepEqual(
+        read({ 'x-api-key': `dfo_${'d'.repeat(MAX_KEY_LENGTH - 3)}` }).kind,
+        'too-long',
+    );
+    // A foreign value is not a key, so its length is no concern.
+    assert.deepEqual(read({ 'x-api-key': 'd'.repeat(MAX_KEY_LENGTH + 1) }), { kind: 'none' });
 });
 
 test('bearerKey: names the key in an Authorization value, or nothing', () => {
