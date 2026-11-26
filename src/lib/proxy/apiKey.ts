@@ -2,12 +2,12 @@
  * Where an API key is read from on a call to the platform proxy, kept apart
  * from the route so `node --test` can load it.
  *
- * A key is `Authorization: Bearer dfo_…` or `X-API-Key: …`. A bearer that
- * does not start with `dfo_` is not a key, whatever else it is (the harness
- * token on /mcp, say), so it is left alone and the call is handled as an anonymous
- * call. `X-API-Key` always names a key. A call that sends both with
- * different values is refused, and a value over MAX_KEY_LENGTH is refused
- * unread. The key is never put in a query string.
+ * A key is `Authorization: Bearer dfo_…` or `X-API-Key: dfo_…`. A value in
+ * either header that does not start with `dfo_` is not a key, whatever else
+ * it is (the harness token on /mcp, another service's key), so the call is
+ * handled as an anonymous call. A call that sends two key values that
+ * differ is refused, and a key past MAX_KEY_LENGTH is refused unread. The
+ * key is never put in a query string.
  */
 
 /** The prefix every key carries (API_KEY_PREFIX in src/lib/auth/apiKeyOptions). */
@@ -36,10 +36,17 @@ export const bearerKey = (authorization: string | null): string | undefined => {
     return token?.startsWith(KEY_PREFIX) ? token : undefined;
 };
 
+/** An X-API-Key value when it has our prefix, or undefined when it is blank or foreign. */
+const aliasKey = (value: string | null): string | undefined => {
+    const trimmed = value?.trim();
+
+    return trimmed?.startsWith(KEY_PREFIX) ? trimmed : undefined;
+};
+
 /** The key a call carries, if any. */
 export const readApiKey = (headers: Headers): KeyRead => {
     const bearer = bearerKey(headers.get('authorization'));
-    const alias = headers.get(API_KEY_HEADER)?.trim() || undefined;
+    const alias = aliasKey(headers.get(API_KEY_HEADER));
 
     if (bearer !== undefined && alias !== undefined && bearer !== alias) {
         return { kind: 'conflict' };

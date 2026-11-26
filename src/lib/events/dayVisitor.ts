@@ -72,9 +72,11 @@ export const fetchDaySalt = (db: SaltDb, day: string): Promise<Buffer> =>
 // Chrome 133 reached the stable channel on 4 Feb 2025, and a new major ships
 // every 28 days. Desktop Chrome updates itself, so a desktop browser more than
 // STALE_MAJORS behind the day's expected major is almost always a script that
-// runs the page with an old User-Agent: on 18 Nov 2026 such requests made up
-// 1,500 of 1,700 address and browser pairs that ran the site's scripts.
-// dfo-analytics applies the same rule to past request logs.
+// runs the page under an old User-Agent; on days scrapers visit, such browsers
+// make up most of the address and browser pairs that run the site's scripts.
+// The rule also drops managed or distro desktop Chrome that far behind.
+// dfo-analytics applies the same rule to past request logs (macro
+// is_stale_desktop_chrome).
 const CHROME_BASE_MAJOR = 133;
 const CHROME_BASE_DAY = Date.UTC(2025, 1, 4);
 const CHROME_CYCLE_MS = 28 * 86_400_000;
