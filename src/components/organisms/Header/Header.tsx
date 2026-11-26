@@ -87,6 +87,11 @@ export type HeaderProps = {
     fixed?: boolean;
     /** Studio: extra actions rendered before the divider + account button. */
     children?: React.ReactNode;
+    /** Studio: drawn after the title, in the left group (the Prompt
+     *  layout's session title). */
+    titleAfter?: React.ReactNode;
+    /** Studio: icon buttons at the start of the actions, kept on a phone. */
+    tools?: React.ReactNode;
 };
 
 const Header = ({
@@ -99,6 +104,8 @@ const Header = ({
     account = true,
     fixed = false,
     children,
+    titleAfter,
+    tools,
 }: HeaderProps) => {
     const studio = variant === 'studio';
     const pathname = usePathname();
@@ -391,6 +398,7 @@ const Header = ({
                         className={classNames(
                             styles.studioTitle,
                             titleWrapped && styles.studioTitleWrapped,
+                            titleAfter !== undefined && styles.studioTitleHeld,
                         )}
                         title={title}
                     >
@@ -406,8 +414,10 @@ const Header = ({
                             </button>
                         )}
                     </p>
+                    {titleAfter}
                 </div>
                 <div className={styles.actions}>
+                    {tools && <span className={styles.tools}>{tools}</span>}
                     {children}
                     {/* The divider separates the bar's actions from the account —
                         nothing to separate when there are none. */}

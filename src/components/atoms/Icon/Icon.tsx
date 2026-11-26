@@ -22,8 +22,12 @@ import Edit from '@/assets/svg/edit.svg';
 import EditTitle from '@/assets/svg/edit-title.svg';
 import Embed from '@/assets/svg/embed.svg';
 import Feedback from '@/assets/svg/feedback.svg';
+import FocusContract from '@/assets/svg/focus-contract.svg';
+import FocusExpand from '@/assets/svg/focus-expand.svg';
 import Info from '@/assets/svg/info.svg';
+import KeyNumber from '@/assets/svg/key-number.svg';
 import Kebab from '@/assets/svg/kebab.svg';
+import List from '@/assets/svg/list.svg';
 import Lock from '@/assets/svg/lock.svg';
 import Menu from '@/assets/svg/menu.svg';
 import Note from '@/assets/svg/note.svg';
@@ -32,6 +36,7 @@ import Pin from '@/assets/svg/pin.svg';
 import Remove from '@/assets/svg/remove.svg';
 import Reorder from '@/assets/svg/reorder.svg';
 import Search from '@/assets/svg/search.svg';
+import SessionPanel from '@/assets/svg/session-panel.svg';
 import Share from '@/assets/svg/share.svg';
 import Thumb from '@/assets/svg/thumb.svg';
 import Unit from '@/assets/svg/unit.svg';
@@ -63,8 +68,12 @@ export const icons = {
     'edit-title': EditTitle,
     embed: Embed,
     feedback: Feedback,
+    'focus-contract': FocusContract,
+    'focus-expand': FocusExpand,
     info: Info,
     kebab: Kebab,
+    'key-number': KeyNumber,
+    list: List,
     lock: Lock,
     menu: Menu,
     note: Note,
@@ -73,6 +82,7 @@ export const icons = {
     remove: Remove,
     reorder: Reorder,
     search: Search,
+    'session-panel': SessionPanel,
     share: Share,
     thumb: Thumb,
     unit: Unit,

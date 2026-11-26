@@ -18,6 +18,16 @@ export const VARIANT_COOKIE = 'studio_variant';
 export const variantOf = (value: string | undefined): StudioVariant =>
     value === 'prompt' ? 'prompt' : 'classic';
 
+/** Whether STUDIO_PROMPT_ENABLED (`value`) lets a page show the prompt
+ *  variant. On unless set to `false`, `0`, `off` or `no`. */
+export const promptEnabled = (value: string | undefined): boolean =>
+    !['false', '0', 'off', 'no'].includes(value?.trim().toLowerCase() ?? '');
+
+/** The variant a Studio page draws from its `studio_variant` cookie, or
+ *  `classic` whatever the cookie says while the switch is off. */
+export const pageVariant = (cookie: string | undefined, enabled: boolean): StudioVariant =>
+    enabled ? variantOf(cookie) : 'classic';
+
 /** The `studio_variant` cookie, in the shape Next's `response.cookies.set`
  *  takes. A session cookie (no `maxAge`), scoped to the Studio pages. */
 export type VariantCookie = {

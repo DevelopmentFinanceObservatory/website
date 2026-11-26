@@ -32,6 +32,13 @@ at a mail catcher. To open the dev server from a
 phone/tablet on the same network, put the machine's LAN IP in
 `DEV_ORIGINS`.
 
+The Studio has two layouts: `classic`, with the chat column, and `prompt`,
+with the prompt box over the canvas. `/studio?studio=prompt` or
+`?studio=classic` sets the `studio_variant` session cookie that picks one,
+and a page with no cookie draws `classic`. Shares and gallery items always
+draw `classic`. Setting `STUDIO_PROMPT_ENABLED=false` draws `classic` on
+every page whatever the cookie says.
+
 A live Studio share draws each card from dfo-apis' public slot card route
 (`GET /api/presentation/shares/{id}/slots/{n}`), which checks for newer data
 at most once per 15 minutes and takes no credential.

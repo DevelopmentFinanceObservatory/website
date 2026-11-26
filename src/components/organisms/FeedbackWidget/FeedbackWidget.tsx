@@ -19,7 +19,8 @@ const DONE_MS = 2500;
  * carries the page it was sent from, so a report can be placed without the
  * sender describing where they were.
  */
-const FeedbackWidget = () => {
+/** `className` places the widget on a page that needs it elsewhere. */
+const FeedbackWidget = ({ className }: { className?: string }) => {
     const [open, setOpen] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
     const [message, setMessage] = useState('');
@@ -170,7 +171,7 @@ const FeedbackWidget = () => {
     };
 
     return (
-        <div className={classNames(styles.widget, light && styles.light)}>
+        <div className={classNames(styles.widget, light && styles.light, className)}>
             {open && (
                 <div
                     ref={panelRef}
