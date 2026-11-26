@@ -15,6 +15,7 @@ import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import { revealIndex } from '@/hooks/useReveal';
 import type { ConversationMeta } from '@/lib/chat/historyClient';
 import { DATA_AVAILABILITY_PROMPT } from '@/lib/studio/dataAvailability';
+import type { PromptSource } from '@/lib/studio/wire';
 
 const LANDING_TABS = [
     { id: 'try', label: 'Try one of these' },
@@ -24,8 +25,9 @@ const LANDING_TABS = [
 type StudioLandingProps = {
     query: string;
     onQueryChange: (value: string) => void;
-    // Start a canvas from the prompt or a suggestion.
-    onBegin: (text: string) => void;
+    // Start a canvas from the prompt or a suggestion, with the source of a
+    // picked question.
+    onBegin: (text: string, source?: PromptSource) => void;
     // The visit's example prompts (pickExamples), drawn by the page.
     examples: readonly string[];
     inputRef: RefObject<PromptField | null>;
@@ -107,7 +109,7 @@ const StudioLanding = ({
                         ? null
                         : () => {
                               data.onOpenChange(false);
-                              onBegin(DATA_AVAILABILITY_PROMPT);
+                              onBegin(DATA_AVAILABILITY_PROMPT, 'availability');
                           }
                 }
             />
@@ -166,7 +168,7 @@ const StudioLanding = ({
                                             className={styles.suggestion}
                                             data-reveal
                                             style={revealIndex(index)}
-                                            onClick={() => onBegin(suggestion)}
+                                            onClick={() => onBegin(suggestion, 'example')}
                                         >
                                             {suggestion}
                                         </button>

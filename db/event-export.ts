@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 
 import type { GalleryKind } from '../src/components/organisms/Gallery/galleryData.ts';
 import type { PromptIntent } from '../src/lib/studio/promptAllowance.ts';
+import type { PromptSource } from '../src/lib/studio/wire.ts';
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
@@ -144,6 +145,8 @@ const PROMPT_INTENTS = every<PromptIntent>()([
     'apply_choice',
     'apply_unit',
 ]);
+// A typed prompt has no `source`.
+const PROMPT_SOURCES = every<PromptSource>()(['example', 'availability', 'search_example']);
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
@@ -225,6 +228,7 @@ export const PROP_RULES = {
         intent: PROMPT_INTENTS,
         length: 'count',
         guest: 'boolean',
+        source: PROMPT_SOURCES,
     },
     // `unit` is text built from labels, and `years` an object of two years.
     'studio.card': {

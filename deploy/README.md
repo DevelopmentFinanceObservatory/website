@@ -212,6 +212,17 @@ vars, so the `infra` foundation outputs slot into both repos the same way.
 The service names above are the ones infra defines; whatever appears in
 its `website` stack outputs goes in this var verbatim.
 
+### Studio examples
+
+Beside the event export, in its phase, each run keeps the BigQuery table `studio_examples` (`db/example-export.ts`): one row per question the build offers as a pick, the Studio landing examples (`EXAMPLE_PROMPTS` in `src/lib/studio/examples.ts`) and the "What data is available?" question (`DATA_AVAILABILITY_PROMPT` in `src/lib/studio/dataAvailability.ts`). The run creates the table when it is missing, then sends one `MERGE` query, bounded as every BigQuery query is, that sets `last_seen_at` on each offered row and inserts a row for each new text. Rows for texts a later build drops stay as they were. The merge runs at the same time as the event days, and the phase fails once both are done if either failed, its error naming `studio_examples` for a failed merge.
+
+| Column          | Type      | Value                                                                     |
+| --------------- | --------- | ------------------------------------------------------------------------- |
+| `kind`          | STRING    | `example` for a landing example, `availability` for the drawer's question |
+| `text`          | STRING    | the question as the build offers it                                       |
+| `first_seen_at` | TIMESTAMP | the run that first found the text in a build                              |
+| `last_seen_at`  | TIMESTAMP | the latest run that found it                                              |
+
 ## GCP prerequisites (infra)
 
 For dev, infra has set up:

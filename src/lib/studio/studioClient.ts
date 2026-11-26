@@ -263,7 +263,10 @@ export const runTurn = (
     handlers: StreamHandlers,
     signal?: AbortSignal,
     extras?: Partial<
-        Pick<TurnRequest, 'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn'>
+        Pick<
+            TurnRequest,
+            'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn' | 'prompt_source'
+        >
     >,
 ): Promise<void> =>
     streamStudio(

@@ -1,3 +1,5 @@
+import type { PromptSource } from './wire.ts';
+
 /**
  * Example prompts under the Studio landing's prompt box. Each one drew its
  * first card in under 50 seconds in production or on the dev agent, with no
@@ -38,3 +40,12 @@ export const pickExamples = (
 
     return deck.slice(0, drawn);
 };
+
+/** The `/studio` query param that marks a handed-over question as a Data
+ *  search example (studioHref in src/lib/search/studioHandoff.ts). */
+export const HANDOFF_VIA_PARAM = 'via';
+
+/** The prompt source of a `/studio?q=` arrival: `search_example` for
+ *  `via=example`, and none for anything else. */
+export const handoffPromptSource = (via: string | null): PromptSource | undefined =>
+    via === 'example' ? 'search_example' : undefined;

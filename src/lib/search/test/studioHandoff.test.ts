@@ -11,7 +11,13 @@ import { MAX_PROPS_BYTES } from '../../events/limits.ts';
 import { EVENT_SAMPLE, searchEventName, searchEventProps } from '../searchEvents.ts';
 import { flattenSpec, unflattenSpec } from '../searchClient.ts';
 import { planSentenceText } from '../sentencePlan.ts';
-import { handoffEdited, handoffQuestion, handoffSeeds, studioHref } from '../studioHandoff.ts';
+import {
+    handoffEdited,
+    handoffFromExample,
+    handoffQuestion,
+    handoffSeeds,
+    studioHref,
+} from '../studioHandoff.ts';
 import {
     type HydratedPart,
     knownPart,
@@ -150,6 +156,10 @@ test('unflattenSpec keeps the trace flattenSpec also reads as `resolution`', () 
 test('studioHref carries the question, and the token when there is one', () => {
     assert.equal(studioHref('Aid to Kenya?', null), '/studio?q=Aid+to+Kenya%3F');
     assert.equal(studioHref('Aid to Kenya?', 'abc-123'), '/studio?q=Aid+to+Kenya%3F&seed=abc-123');
+    assert.equal(
+        studioHref('Aid to Kenya?', 'abc-123', true),
+        '/studio?q=Aid+to+Kenya%3F&seed=abc-123&via=example',
+    );
 });
 
 test('a Studio click after a place and year edit hands over the edited question and seed', () => {
@@ -411,4 +421,18 @@ test('searchEventName counts a resolution with nothing resolved as search.empty'
 
     assert.equal(searchEventName(props), 'search.empty');
     assert.equal(props.refused[0].reason, 'entity_ambiguous');
+});
+
+test('handoffFromExample: only an unedited search from an example hands over an example', () => {
+    const cases: [Parameters<typeof handoffFromExample>[0], boolean][] = [
+        [{ source: 'example', edited: false }, true],
+        [{ source: 'example', edited: true }, false],
+        [{ source: 'typed', edited: false }, false],
+        [{ source: 'permalink', edited: false }, false],
+        [{ source: null, edited: false }, false],
+    ];
+
+    for (const [input, expected] of cases) {
+        assert.equal(handoffFromExample(input), expected, JSON.stringify(input));
+    }
 });

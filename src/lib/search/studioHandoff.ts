@@ -6,9 +6,11 @@
  * all describe the data the user sees.
  */
 
+import { HANDOFF_VIA_PARAM } from '../studio/examples.ts';
 import type { Seed, SeedOperation } from '../studio/wire.ts';
 
 import { unflattenSpec } from './searchClient.ts';
+import type { SearchSource } from './searchEvents.ts';
 import { type HydratedPart, knownPart, type Operation } from './types.ts';
 import { statVarsUnreadable } from './view.ts';
 
@@ -100,13 +102,31 @@ const isSeedOperation = (op: Operation): op is Operation & SeedOperation =>
 const operationKey = ({ verb, phrase, over, target_year }: Operation): string =>
     JSON.stringify([verb, phrase, over ?? null, target_year ?? null]);
 
-/** Studio's URL for a handoff: the question, and the token the seeds are
- *  stored under when there are any. */
-export function studioHref(question: string, token: string | null): string {
+/** Whether the question handed to Studio is a Data search example's text:
+ *  the search on screen came from an example and no part was edited, so
+ *  the question is the example as offered. */
+export function handoffFromExample({
+    source,
+    edited,
+}: {
+    source: SearchSource | null;
+    edited: boolean;
+}): boolean {
+    return source === 'example' && !edited;
+}
+
+/** Studio's URL for a handoff: the question, the token the seeds are
+ *  stored under when there are any, and `via=example` for a search
+ *  example's question. */
+export function studioHref(question: string, token: string | null, fromExample = false): string {
     const params = new URLSearchParams({ q: question });
 
     if (token) {
         params.set('seed', token);
+    }
+
+    if (fromExample) {
+        params.set(HANDOFF_VIA_PARAM, 'example');
     }
 
     return `/studio?${params}`;

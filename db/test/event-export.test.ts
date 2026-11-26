@@ -165,6 +165,27 @@ test('exportRow keeps the intent of every prompt Studio sends', async (t) => {
     }
 });
 
+test('exportRow keeps the source of every picked prompt and refuses another', async (t) => {
+    const cases: [unknown, Record<string, unknown>][] = [
+        ['example', { source: 'example' }],
+        ['availability', { source: 'availability' }],
+        ['search_example', { source: 'search_example' }],
+        ['typed', {}],
+    ];
+
+    for (const [source, props] of cases) {
+        await t.test(String(source), () => {
+            const row = exportRow(
+                sourceEvent({ name: 'studio.prompt', props: { source } }),
+                KEY,
+                RULES,
+            );
+
+            assert.deepEqual(row.props, props);
+        });
+    }
+});
+
 test('exportRow keeps a measures entry joined with `|`', () => {
     const measures = ['schema:FinancialFlow|amount|Nominal|measuredValue|-', 'sv:Count_Person'];
     const row = exportRow(sourceEvent({ name: 'search.query', props: { measures } }), KEY, RULES);

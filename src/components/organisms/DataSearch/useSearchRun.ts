@@ -479,6 +479,12 @@ export const useSearchRun = () => {
         [],
     );
 
+    // Where the current search's text came from, or null before any run.
+    const searchSource = useCallback(
+        (): SearchSource | null => searchRef.current?.source ?? null,
+        [],
+    );
+
     const updateRuntime = useCallback(
         (index: number, fn: (runtime: PartRuntime) => PartRuntime) => {
             setRuntimes((prev) => {
@@ -1432,5 +1438,6 @@ export const useSearchRun = () => {
         editParsed,
         editShared,
         searchIds,
+        searchSource,
     };
 };
