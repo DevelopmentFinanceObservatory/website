@@ -117,6 +117,7 @@ The table is partitioned by day on `created_at`:
 | `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one                                  |
 | `props`        | JSON      | the event's allow-listed props, `shareId` as its HMAC-SHA256 hex                |
 | `export_rules` | STRING    | the digest of the rules the row was exported under                              |
+| `day_visitor`  | STRING    | `event.day_visitor`, the daily visitor key, copied as it is; null without one   |
 
 `page` keeps a path only when it is a slash followed by letters, digits and `_ - . : /`, up to 300 characters, the characters the site's routes use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser posts as its page exports as null. The id in `/s/<id>`, `/embed/<id>` and the pages under them exports as `:id`, since a share id opens its share.
 

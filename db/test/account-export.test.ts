@@ -60,6 +60,7 @@ const eventUserHash = (userId: string) =>
             name: 'search.query',
             userId,
             visitorId: null,
+            dayVisitor: null,
             page: null,
             props: {},
         },
