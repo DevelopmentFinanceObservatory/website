@@ -412,7 +412,7 @@ const Whiteboard = ({
     // Placeholders that appear are announced once as a batch, and the view
     // goes to the first of them as it goes to a block's first card, once
     // their places have settled (comingGhosts.ts RESEAT_MS), unless the reader
-    // has pressed, scrolled or typed on the canvas since they appeared: the
+    // has pressed, scrolled or typed on the canvas since they appeared. The
     // view then stays with what the reader is using, as a running glide
     // yields to the same input. The cards that later take their places move
     // nothing.
@@ -637,7 +637,7 @@ const Whiteboard = ({
             return undefined;
         }
 
-        // The width before the panel moves: a second move is due only when
+        // The width before the panel moves. A second move is due only when
         // the panel's slide changed it.
         const width = scrollerOf(boardRef)?.clientWidth ?? 0;
 

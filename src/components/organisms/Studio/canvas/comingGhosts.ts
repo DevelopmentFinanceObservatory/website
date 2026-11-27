@@ -109,12 +109,12 @@ const floorOfGhost = (ghost: Ghost): FloorItem => ({
 
 /**
  * The placeholders after the announced list or the cards change. A placeholder
- * whose card has landed (`claimed`) starts leaving and fades out under the
- * card. One that left the list with no card starts leaving and stops holding
- * its rect until it is pruned. Either records when it started leaving
- * (`leftAt`). A new entry takes the first spot of its question's block clear of the
- * cards and the placeholders already standing. Returns `current` itself when
- * nothing changed.
+ * whose card has landed (`claimed`), or that left the list with no card,
+ * starts leaving and stops holding its rect until it is pruned. It records
+ * when it started leaving (`leftAt`), and one whose card landed fades out
+ * under the card. A new entry takes the first spot of its question's block
+ * clear of the cards and the placeholders already standing. Returns `current`
+ * itself when nothing changed.
  */
 export const placeGhosts = ({
     current,

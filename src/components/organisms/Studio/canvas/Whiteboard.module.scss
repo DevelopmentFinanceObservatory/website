@@ -269,8 +269,8 @@ $prompt-arrive: 240ms;
     border: 1px dashed var(--color-scrollbar);
     border-radius: rem(6);
 
-    // A transition rather than keyframes, so an outline that leaves while it
-    // fades in turns back from the opacity it has reached.
+    // A transition, so an outline that leaves while it fades in turns back
+    // from the opacity it has reached.
     transition: opacity 200ms $ease-out;
 
     @starting-style {

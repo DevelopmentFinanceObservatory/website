@@ -293,8 +293,8 @@ export const useGrow = (onPage: boolean) => {
             cancel('rest');
             later('leave', sync, SHRINK_AFTER_MS);
         };
-        // Focus from the keyboard grows the panel at once; the rest is for a
-        // pointer, which may only be passing through.
+        // Focus from the keyboard grows the panel at once. A pointer rests
+        // first, since it may only be passing through.
         const onFocusIn = () => later('focus', sync, grow.current.keyboard ? 0 : GROW_REST_MS);
         // The next focused element is known one tick later.
         const onFocusOut = () => later('blur', () => later('leave', sync, SHRINK_AFTER_MS), 0);

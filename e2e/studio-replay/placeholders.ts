@@ -261,8 +261,8 @@ export const PLACEHOLDERS: Regression[] = [
 
                     void held.then(async () => {
                         await settle(page);
-                        // The Planned outline fades out before it goes from
-                        // the page.
+                        // The Planned outline fades out before it leaves the
+                        // page.
                         await page
                             .waitForFunction(
                                 () =>

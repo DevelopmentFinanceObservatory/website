@@ -4,8 +4,10 @@
  * layout. Pure, so the rules run under `node --test`.
  */
 
-/** Pointer rest before the panel grows (ms): long enough that a pointer
- *  slowing on its way across the panel does not count. */
+/**
+ * Pointer rest before the panel grows (ms). A pointer slowing on its way
+ * across the panel does not rest that long.
+ */
 export const GROW_REST_MS = 120;
 
 /** Pointer and focus absent this long before the panel shrinks (ms). */

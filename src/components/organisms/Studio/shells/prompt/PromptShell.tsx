@@ -210,7 +210,7 @@ const LandingTravel = ({ onLanded, onDone }: { onLanded: () => void; onDone: () 
         const landed = window.setTimeout(() => {
             onLanded();
             // The dock's identical shadow lies under the copy, so the copy's
-            // own goes at once rather than doubling it while it fades.
+            // own goes at once and the two do not double while it fades.
             node.style.removeProperty('transition-delay');
             node.style.removeProperty('transition-duration');
             node.style.boxShadow = 'none';
