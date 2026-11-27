@@ -171,7 +171,7 @@ test('a streaming reply opens at its first words and folds when its first card l
 
     assert.equal(dockView({ ...streaming, messages: [ask('Q', 1), reply('')] }).sheet, 'none');
     assert.equal(dockView(streaming).sheet, 'reply');
-    // Words still in the reply store open it too.
+    // Words held in the reply store open it too.
     assert.equal(
         dockView({ ...streaming, messages: [ask('Q', 1), reply('')], streamed: true }).sheet,
         'reply',

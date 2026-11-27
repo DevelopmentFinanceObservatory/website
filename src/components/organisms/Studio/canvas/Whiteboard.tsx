@@ -92,7 +92,7 @@ const scrollBehavior = (): ScrollBehavior =>
  * and the bottom beacons and the arrival scroll keep clear of it.
  */
 export type PromptCanvas = {
-    // Px the session panel is about to take at the right: fresh cards are
+    // Px the session panel is about to take at the right. Fresh cards are
     // placed against the narrower width. 0 while the panel is open already.
     reserveRight: number;
     // The selected card, whose value the parent owns. With `onSelect` each
@@ -100,12 +100,12 @@ export type PromptCanvas = {
     // Space, selects or clears it, and a press on the empty sheet clears.
     selectedId: string | null;
     onSelect: (id: string | null) => void;
-    // The card the session panel shows: outlined, and brought into view.
+    // The card the session panel shows, outlined and brought into view.
     heldId: string | null;
     // Cards outlined faintly as the same plan's cards.
     litIds: readonly string[];
-    // The card the pointer or keyboard focus rests on, after POINT_REST_MS;
-    // null at once when it leaves. Silent while a card menu is open.
+    // The card the pointer or keyboard focus rests on, after POINT_REST_MS.
+    // Null at once when it leaves. Silent while a card menu is open.
     onPoint: (id: string | null) => void;
     // Cards a research plan made, whose menu opens with View Research Plan.
     viewPlanIds: ReadonlySet<string>;
@@ -184,8 +184,7 @@ export type WhiteboardProps = {
     // card with the share's id and creation time. Absent for a snapshot and
     // in the owner's Studio.
     live?: LiveCanvas;
-    // The Prompt layout's canvas. Absent in the classic layout, which then
-    // behaves as it always has.
+    // The Prompt layout's canvas. Absent in the classic layout.
     prompt?: PromptCanvas;
 };
 
@@ -433,7 +432,7 @@ const Whiteboard = ({
         CELL,
         spawnWave,
         busy: () => dragging.isDragging() || pan.isPanning(),
-        // The Prompt canvas: a card seated in a placeholder's rect moves the
+        // On the Prompt canvas, a card seated in a placeholder's rect moves the
         // view no further, since it went to the placeholder.
         quiet: prompt ? (newest) => claimed.has(newest.widget.id) : undefined,
         // A new block comes up to one cell under the top; a card joining a
@@ -455,7 +454,7 @@ const Whiteboard = ({
 
     // Placeholders that appear are announced once as a batch, and the view
     // goes to the first of them as it goes to a block's first card, once
-    // their places have settled (comingGhosts.ts RESEAT_MS); the cards that
+    // their places have settled (comingGhosts.ts RESEAT_MS). The cards that
     // later take their places move nothing.
     const seenGhosts = useRef<Set<string>>(new Set());
     const showTimer = useRef(0);
@@ -712,9 +711,10 @@ const Whiteboard = ({
         Math.max(bottomRow + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.rows ?? 0) * CELL;
 
     // From one question to the next the sheet keeps the tallest height it
-    // reached: a card that lands a few rows shorter than its placeholder, or
-    // an old card that leaves, would clamp a scroll that has come to rest
-    // back by the difference. Set before the browser lays the change out.
+    // reached. A card that lands a few rows shorter than its placeholder, or
+    // an old card that leaves, would otherwise clamp a scroll that has come
+    // to rest back by the difference. Set before the browser lays the change
+    // out.
     useLayoutEffect(() => {
         if (!dockAware) {
             return;
@@ -861,8 +861,8 @@ const Whiteboard = ({
             )}
 
             {/* The cards a running turn announced stand as dashed outlines at the
-                place and size their cards will take. They are not cards: no
-                focus stop, no menu, no selection; the status below announces
+                place and size their cards will take. They take no focus, open
+                no menu and cannot be selected, and the status below announces
                 each batch once. */}
             {Object.values(ghosts).map((ghost) => (
                 <div

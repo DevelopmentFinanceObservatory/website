@@ -123,7 +123,7 @@ test('a running plan shows its answering step as planned until the turn’s firs
         );
 
     assert.ok(drawingAt > 1);
-    // From the approval until the drawing line: one planned place for s4.
+    // From the approval until the drawing line there is one planned place for s4.
     assert.deepEqual(shown(at(1)), [['planned:plan_replay_gates_g7/s4', null]]);
     assert.deepEqual(shown(at(drawingAt)), [['planned:plan_replay_gates_g7/s4', null]]);
     // The drawing line's cards replace it, with no plan-id match.

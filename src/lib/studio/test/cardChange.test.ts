@@ -393,8 +393,8 @@ test('a card offers its years and one places row per role, labelled from the rol
     assert.notEqual(label, roleLabel('origin', false));
 
     // The data's own word names the role in the form the row needs: plural
-    // for several places, singular for one. Without that form, the page's
-    // own word.
+    // for several places, singular for one. A row without that form takes
+    // the page's own word.
     for (const [multiple, given, expected] of [
         [true, { singular: 'debtor', plural: 'debtors' }, 'Debtors'],
         [false, { singular: 'debtor', plural: 'debtors' }, 'Debtor'],

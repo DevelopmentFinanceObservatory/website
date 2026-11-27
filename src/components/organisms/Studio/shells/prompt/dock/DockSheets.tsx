@@ -47,7 +47,7 @@ const Markdown = memo(function Markdown({ text }: { text: string }) {
 });
 
 /** Page turn `turn`'s reply as Markdown, with the words streamed in since
- *  the transcript's last commit (useStreamedText); nothing before the first.
+ *  the transcript's last commit (useStreamedText), and nothing before the first.
  *  While it streams, each finished block keeps its rendering and only the
  *  last one renders again. */
 const ReplyText = ({

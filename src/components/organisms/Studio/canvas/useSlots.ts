@@ -64,9 +64,9 @@ export const useSlots = ({
     replacedIds,
     coming = NONE,
 }: UseSlotsArgs) => {
-    // One state for the cards and the placeholders (slotsBoard.ts): every
+    // One state for the cards and the placeholders (slotsBoard.ts). Every
     // change is a functional update of it, so a fit that commits between two
-    // placements is never overwritten.
+    // placements survives.
     const [board, setBoard] = useState<Board>(EMPTY_BOARD);
     const { slots, ghosts, claimed } = board;
     const setSlots = useCallback(

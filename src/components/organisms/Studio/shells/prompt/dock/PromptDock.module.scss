@@ -823,8 +823,8 @@ $dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), 
         animation-timeline: scroll(self);
         animation-range: calc(100% - #{rem(24)}) 100%;
 
-        // The focus ring (.scroll, 2 px inside the edge) stays whole: two more
-        // layers keep the sides and the foot opaque under the fade.
+        // The focus ring (.scroll, 2 px inside the edge) stays whole because two
+        // more layers keep the sides and the foot opaque under the fade.
         &:focus-visible {
             mask-image:
                 $dock-fade-mask,

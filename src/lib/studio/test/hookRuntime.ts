@@ -1,8 +1,7 @@
 /**
  * The hooks `useChat` calls (useState, useRef, useMemo, useCallback,
  * useEffect, useLayoutEffect), run outside React so node --test can drive
- * the hook. A test
- * bundles the hook with `react` aliased to this module (loadUseChat).
+ * the hook. A test bundles the hook with `react` aliased to this module (loadUseChat).
  * `renderHook` renders once, and renders again on the microtask after each
  * state change (or, with `rendersLater`, on a later task, as React's
  * scheduler does in a browser, so work done in the same task as the state

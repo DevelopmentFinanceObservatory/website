@@ -30,8 +30,8 @@ export const updateSlots = (board: Board, update: SetStateAction<Slots>): Board 
 
 /**
  * The board after the widgets, the announced cards or the layout inputs
- * change: the cards are placed, then the placeholders around them, so a card
- * that lands takes its placeholder's rect in the update that drops it.
+ * change. The cards are placed first, then the placeholders around them, so a
+ * card that lands takes its placeholder's rect in the update that drops it.
  */
 export const placeBoard = (
     board: Board,
@@ -52,7 +52,7 @@ export const placeBoard = (
         placement: args.placement,
         now,
     });
-    // The cards new to the sheet that name a placeholder standing now.
+    // The cards new to the sheet that name a placeholder already standing.
     const seated = args.widgets
         .filter((widget) => {
             const ghost = board.ghosts[placeholderOf(widget) ?? ''];

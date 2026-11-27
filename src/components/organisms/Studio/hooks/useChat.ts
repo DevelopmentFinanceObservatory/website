@@ -621,8 +621,8 @@ export const useChat = (
     );
     // Moves the text streamed into every reply since the last commit into the
     // transcript in one commit, before a state read rewrites replies
-    // (takeRead): the read's reply holds that text already, so the store and
-    // the transcript can then never both hold it.
+    // (takeRead). The read's reply holds that text already, so only one of
+    // the store and the transcript holds it afterwards.
     const flushReplies = useCallback(() => {
         const pending = replyStore
             .turns()
@@ -756,8 +756,8 @@ export const useChat = (
     // The page turn of the stream that offered the pending pause, which the
     // answer's stream carries on, so it writes into that turn's reply.
     const pauseTurnRef = useRef(0);
-    // The cards on their way (comingCards.ts), from the stream's frames
-    // only: never saved, never read back, cleared by reset and hydrate.
+    // The cards on their way (comingCards.ts). They come from the stream's
+    // frames alone, a save holds none, and reset and hydrate clear them.
     const comingRef = useRef<ComingState>(NO_COMING);
     const [coming, setComing] = useState<ComingState>(NO_COMING);
     const takeComing = useCallback((next: ComingState) => {
@@ -2809,7 +2809,7 @@ export const useChat = (
             // request that failed before any turn opened ends in an error
             // frame).
             // A page that moved on to another conversation, or left this
-            // one's session, keeps the pause it holds now.
+            // one's session, keeps the pause it holds.
             let admitted = false;
             const generation = generationRef.current;
             const sessionLeft = sessionLeftRef.current;
