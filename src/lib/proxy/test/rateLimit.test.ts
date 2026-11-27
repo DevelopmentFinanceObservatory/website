@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
 import { applyMigrations } from '../../../../db/apply-migrations.ts';
@@ -19,12 +20,10 @@ import { createFallbackCounter } from '../limitFallback.ts';
 
 const { createLimiter, dailyAllowance } = await import('../rateLimit.ts');
 
-/** Whole seconds from `nowMs` to the next 00:00 UTC. */
-const secondsToUtcMidnight = (nowMs: number): number => {
-    const dayMs = 86_400_000;
+// The in-memory counters read Date.now(), so a test that takes them over freezes it.
+const NOON_UTC = Date.UTC(2026, 0, 1, 12);
 
-    return Math.ceil((dayMs - (nowMs % dayMs)) / 1000);
-};
+type Tx = Parameters<Parameters<ReturnType<typeof drizzle>['transaction']>[0]>[0];
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../../../../db/migrations');
 
@@ -53,24 +52,34 @@ test('limiter: counts an address and an account apart, per surface, at the limit
         warn: () => assert.fail('warned'),
     });
 
+    // Postgres fixes now() at the start of a transaction, so every hit in one
+    // shares a window and no window boundary can fall between them.
+    const inOneWindow = <T>(run: (tx: Tx) => Promise<T>): Promise<T> =>
+        drizzle(pool).transaction(run);
+    const limiterOver = (tx: Tx) =>
+        createLimiter(tx, { windowS: 3600, warn: () => assert.fail('warned'), prune: false });
+
     await t.test('an account is held to its limit, and an address to its own', async () => {
-        const account = [];
+        await inOneWindow(async (tx) => {
+            const limiter = limiterOver(tx);
+            const account = [];
 
-        for (let i = 0; i < 4; i++) {
-            account.push(await limiter.hitKey('api', 'acct:a', 3));
-        }
+            for (let i = 0; i < 4; i++) {
+                account.push(await limiter.hitKey('api', 'acct:a', 3));
+            }
 
-        assert.deepEqual(
-            account.map(({ allowed, remaining }) => [allowed, remaining]),
-            [
-                [true, 2],
-                [true, 1],
-                [true, 0],
-                [false, 0],
-            ],
-        );
-        assert.equal(account[0]!.limit, 3);
-        assert.equal((await limiter.hitKey('api', '203.0.113.7', 120)).remaining, 119);
+            assert.deepEqual(
+                account.map(({ allowed, remaining }) => [allowed, remaining]),
+                [
+                    [true, 2],
+                    [true, 1],
+                    [true, 0],
+                    [false, 0],
+                ],
+            );
+            assert.equal(account[0]!.limit, 3);
+            assert.equal((await limiter.hitKey('api', '203.0.113.7', 120)).remaining, 119);
+        });
     });
 
     await t.test('the same account counts on each surface apart', async () => {
@@ -79,131 +88,151 @@ test('limiter: counts an address and an account apart, per surface, at the limit
     });
 
     await t.test('a daily counter is counted in a one-day window under its own key', async () => {
-        const before = secondsToUtcMidnight(Date.now());
-        const first = await limiter.hitDaily('apiday:user:k1', 2);
-        const after = secondsToUtcMidnight(Date.now());
-        const second = await limiter.hitDaily('apiday:user:k1', 2);
-        const third = await limiter.hitDaily('apiday:user:k1', 2);
+        await inOneWindow(async (tx) => {
+            const limiter = limiterOver(tx);
+            const first = await limiter.hitDaily('apiday:user:k1', 2);
+            const second = await limiter.hitDaily('apiday:user:k1', 2);
+            const third = await limiter.hitDaily('apiday:user:k1', 2);
 
-        assert.deepEqual(
-            [first, second, third].map(({ allowed, remaining }) => [allowed, remaining]),
-            [
-                [true, 1],
-                [true, 0],
-                [false, 0],
-            ],
-        );
-        // The window is a UTC day, whatever window the per-minute counts use.
-        // Postgres counts the seconds, so allow its rounding and the call's own latency. When
-        // the day turned during the call, the window it counted in is the new one.
-        const turned = after > before;
+            assert.deepEqual(
+                [first, second, third].map(({ allowed, remaining }) => [allowed, remaining]),
+                [
+                    [true, 1],
+                    [true, 0],
+                    [false, 0],
+                ],
+            );
 
-        assert.ok(
-            turned
-                ? first.reset >= 86_400 - 2 || first.reset <= before + 1
-                : first.reset >= after - 1 && first.reset <= before + 1,
-            `reset ${first.reset} outside the seconds to midnight UTC, ${after} to ${before}`,
-        );
+            // The row the hits wrote, read on the transaction's own clock. A daily window
+            // spans 86,400 seconds from 00:00 UTC, and a shorter one would not.
+            const { rows } = await tx.execute<{
+                count: number;
+                span: number;
+                start: number;
+                reset: number;
+            }>(
+                sql`select count,
+                        extract(epoch from expires_at - window_start)::int as span,
+                        extract(epoch from window_start)::bigint::float8 as start,
+                        ceil(extract(epoch from expires_at - now()))::int as reset
+                    from limit_counter where key = 'apiday:user:k1'`,
+            );
 
-        const { rows } = await pool.query(
-            "select count from limit_counter where key = 'apiday:user:k1'",
-        );
+            assert.equal(rows.length, 1);
+            assert.equal(rows[0]!.count, 3);
+            assert.equal(rows[0]!.span, 86_400);
+            assert.equal(rows[0]!.start % 86_400, 0);
+            assert.equal(first.reset, rows[0]!.reset);
+        });
 
-        assert.equal(rows[0].count, 3);
         // The same key's per-window count is separate.
         assert.equal((await limiter.hitKey('api', 'k1', 2)).remaining, 1);
     });
 
     await t.test(
         'a caller refused on the shared count stays refused when it then fails',
-        async () => {
-            // Postgres answers, then stops answering, within one window.
-            let down = false;
-            const real = drizzle(pool);
-            const flaky = {
-                execute: (...args: Parameters<typeof real.execute>) =>
-                    down ? Promise.reject(new Error('database is down')) : real.execute(...args),
-            };
-            const limiter = createLimiter(flaky as never, {
-                windowS: 3600,
-                warn: () => {},
-                prune: false,
+        async (st) => {
+            st.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
+
+            await inOneWindow(async (tx) => {
+                // Postgres answers, then stops answering, within one window.
+                let down = false;
+                const flaky = {
+                    execute: (...args: Parameters<typeof tx.execute>) =>
+                        down ? Promise.reject(new Error('database is down')) : tx.execute(...args),
+                };
+                const limiter = createLimiter(flaky as never, {
+                    windowS: 3600,
+                    warn: () => assert.ok(down, 'the database failed while up'),
+                    prune: false,
+                });
+
+                assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, true);
+                assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, false);
+
+                down = true;
+                assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, false);
+
+                // A caller with room left goes on from its shared count, not from zero.
+                down = false;
+                assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 2);
+                down = true;
+                assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 1);
             });
-
-            assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, true);
-            assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, false);
-
-            down = true;
-            assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, false);
-
-            // A caller with room left goes on from its shared count, not from zero.
-            down = false;
-            assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 2);
-            down = true;
-            assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 1);
         },
     );
 
     await t.test(
         'an admission refused on the shared counts stays refused when the database then fails',
-        async () => {
-            let down = false;
-            const real = drizzle(pool);
-            const flaky = {
-                execute: (...args: Parameters<typeof real.execute>) =>
-                    down ? Promise.reject(new Error('database is down')) : real.execute(...args),
-            };
-            const limiter = createLimiter(flaky as never, {
-                windowS: 3600,
-                warn: () => {},
-                prune: false,
-            });
-            const plan = (visitor: string) => ({
-                minute: { key: `api:visitor:${visitor}`, limit: 1 },
-                backstop: { key: 'api:backstop:198.51.100.40', limit: 2 },
-            });
+        async (st) => {
+            st.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
 
-            assert.equal((await limiter.admit(plan('a'))).refusedBy, null);
-            assert.equal((await limiter.admit(plan('a'))).refusedBy, 'minute');
-            assert.equal((await limiter.admit(plan('b'))).refusedBy, null);
+            await inOneWindow(async (tx) => {
+                let down = false;
+                const flaky = {
+                    execute: (...args: Parameters<typeof tx.execute>) =>
+                        down ? Promise.reject(new Error('database is down')) : tx.execute(...args),
+                };
+                const limiter = createLimiter(flaky as never, {
+                    windowS: 3600,
+                    warn: () => assert.ok(down, 'the database failed while up'),
+                    prune: false,
+                });
+                const plan = (visitor: string) => ({
+                    minute: { key: `api:visitor:${visitor}`, limit: 1 },
+                    backstop: { key: 'api:backstop:198.51.100.40', limit: 2 },
+                });
 
-            // The in-memory count goes on from the shared counts it saw: the
-            // visitor's own, and the backstop its admitted calls spent.
-            down = true;
-            assert.equal((await limiter.admit(plan('a'))).refusedBy, 'backstop');
-            assert.equal((await limiter.admit(plan('c'))).refusedBy, 'backstop');
+                assert.equal((await limiter.admit(plan('a'))).refusedBy, null);
+                assert.equal((await limiter.admit(plan('a'))).refusedBy, 'minute');
+                assert.equal((await limiter.admit(plan('b'))).refusedBy, null);
+
+                // The in-memory count goes on from the shared counts it saw: the
+                // visitor's own, and the backstop its admitted calls spent.
+                down = true;
+                assert.equal((await limiter.admit(plan('a'))).refusedBy, 'backstop');
+                assert.equal((await limiter.admit(plan('c'))).refusedBy, 'backstop');
+            });
         },
     );
 
     await t.test(
         'a daily hit given back leaves the shared count and the in-memory count one lower',
-        async () => {
-            let down = false;
-            const real = drizzle(pool);
-            const flaky = {
-                execute: (...args: Parameters<typeof real.execute>) =>
-                    down ? Promise.reject(new Error('database is down')) : real.execute(...args),
-            };
-            const limiter = createLimiter(flaky as never, { warn: () => {}, prune: false });
+        async (st) => {
+            st.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
 
-            assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, true);
-            await limiter.refundDaily('apiday:key:refund');
+            await inOneWindow(async (tx) => {
+                let down = false;
+                const flaky = {
+                    execute: (...args: Parameters<typeof tx.execute>) =>
+                        down ? Promise.reject(new Error('database is down')) : tx.execute(...args),
+                };
+                const limiter = createLimiter(flaky as never, {
+                    warn: () => assert.ok(down, 'the database failed while up'),
+                    prune: false,
+                });
 
-            const { rows } = await pool.query(
-                "select count from limit_counter where key = 'apiday:key:refund'",
-            );
+                assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, true);
+                await limiter.refundDaily('apiday:key:refund');
 
-            assert.equal(rows[0].count, 0);
+                const { rows } = await tx.execute<{ count: number }>(
+                    sql`select count from limit_counter where key = 'apiday:key:refund'`,
+                );
 
-            // With the database down, the count goes on from the refunded one.
-            down = true;
-            assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, true);
-            assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, false);
+                assert.equal(rows.length, 1);
+                assert.equal(rows[0]!.count, 0);
+
+                // With the database down, the count goes on from the refunded one.
+                down = true;
+                assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, true);
+                assert.equal((await limiter.hitDaily('apiday:key:refund', 1)).allowed, false);
+            });
         },
     );
 });
 
-test('limiter: a count that fails is counted in memory instead of passing, and warns', async () => {
+test('limiter: a count that fails is counted in memory instead of passing, and warns', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
     const warned: string[] = [];
     const broken = {
         execute: async () => {
@@ -277,7 +306,8 @@ test('limiter: a failed count warns with the error code or class, never the quer
     }
 });
 
-test('limiter: a count that times out falls back too', async () => {
+test('limiter: a count that times out falls back too', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
     const slow = {
         execute: () =>
             new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10)),
