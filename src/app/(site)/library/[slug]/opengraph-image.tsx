@@ -16,6 +16,10 @@ export const contentType = CARD_TYPE;
 // `next build` needs no database.
 export const dynamic = 'force-dynamic';
 
+// ImageResponse defaults to a one-year immutable cache, but the card changes
+// when an artifact is edited or withdrawn and the og:image URL does not.
+const CACHE_CONTROL = 'public, max-age=300, must-revalidate';
+
 // At most `max` characters, cut at a word break when one is near.
 const shorten = (text: string, max: number) => {
     if (text.length <= max) {
@@ -53,7 +57,11 @@ const LibraryOpenGraphImage = async ({ params }: { params: Promise<{ slug: strin
     const found = libraryEnabled() ? await lookUp((await params).slug) : null;
 
     if (found?.status !== 'published') {
-        return SiteOpenGraphImage();
+        const fallback = await SiteOpenGraphImage();
+
+        fallback.headers.set('Cache-Control', CACHE_CONTROL);
+
+        return fallback;
     }
 
     const { artifact } = found;
@@ -129,7 +137,7 @@ const LibraryOpenGraphImage = async ({ params }: { params: Promise<{ slug: strin
                 <path d="M46.012 21.807c-6.571 0-11.434-4.685-11.434-10.933C34.578 4.627 39.382 0 45.953 0 52.525 0 57.33 4.627 57.33 10.904c0 6.247-4.804 10.903-11.317 10.903m-.059-5.186c3.301 0 5.364-2.24 5.364-5.747 0-3.477-2.092-5.687-5.364-5.687-3.3 0-5.363 2.21-5.363 5.687 0 3.507 2.063 5.747 5.363 5.747" />
             </svg>
         </div>,
-        { ...size, fonts: await cardFonts() },
+        { ...size, fonts: await cardFonts(), headers: { 'Cache-Control': CACHE_CONTROL } },
     );
 };
 

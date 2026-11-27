@@ -134,10 +134,22 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHe
         };
         // The card or the sheet can mount after the frame does. A child held
         // at the frame's height by its min-height keeps its box when its
-        // content shrinks, so a change to an inline size or place under the
-        // root (the whiteboard's height, a card's slot) also measures.
+        // content shrinks, so an inline style change on a root child (the
+        // whiteboard's height) also measures. Style changes deeper down, such
+        // as chart tooltips and animations, cannot move a root child's bottom
+        // and are ignored.
         const changed = new MutationObserver((records) => {
-            if (records.some((record) => record.type === 'childList' && record.target === root)) {
+            const relevant = records.filter(
+                (record) =>
+                    record.type === 'childList' ||
+                    (record.target instanceof Element && record.target.parentElement === root),
+            );
+
+            if (relevant.length === 0) {
+                return;
+            }
+
+            if (relevant.some((record) => record.type === 'childList' && record.target === root)) {
                 observeAll();
             }
 
