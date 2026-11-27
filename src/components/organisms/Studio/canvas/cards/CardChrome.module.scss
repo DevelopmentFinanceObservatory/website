@@ -223,6 +223,13 @@ button.leftOut {
     }
 }
 
+// Download Image photographs a copy of the card marked data-export
+// (lib/studio/cardImage.ts), which writes the note in full.
+[data-export] .noteText {
+    max-height: none;
+    overflow: visible;
+}
+
 .noteLink {
     color: inherit;
     text-decoration: underline dotted;
