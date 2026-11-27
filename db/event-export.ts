@@ -12,6 +12,7 @@ import type { ShareCopied } from '../src/lib/events/shareCopy.ts';
 import type { DataViewVia } from '../src/lib/events/dataView.ts';
 import type { ShareViewer } from '../src/lib/events/shareView.ts';
 import type { StudioDownloadSource } from '../src/lib/events/studioDownload.ts';
+import { type LayoutMember, STUDIO_LAYOUT_EVENTS } from '../src/lib/events/studioLayoutEvents.ts';
 import type { EventName } from '../src/lib/events/track.ts';
 import { exportDigest } from '../src/lib/proxy/account.ts';
 import type { DatasetFormat } from '../src/lib/search/searchClient.ts';
@@ -199,6 +200,19 @@ const ANSWER: Record<string, PropRule> = {
 // INTERNAL_ENG_EMAILS (src/lib/events/internalEng.ts).
 const EVERY_EVENT: Record<string, PropRule> = { internal_eng: 'boolean' };
 
+// A Prompt layout event keeps every member it takes (STUDIO_LAYOUT_EVENTS in
+// src/lib/events/studioLayoutEvents.ts), each a fixed list or a boolean.
+const layoutRules = (members: Record<string, LayoutMember>): Record<string, PropRule> => ({
+    ...EVERY_EVENT,
+    ...Object.fromEntries(
+        Object.entries(members).map(([key, member]) => [
+            key,
+            typeof member === 'object' && 'optional' in member ? member.optional : member,
+        ]),
+    ),
+    variant: STUDIO_VARIANTS,
+});
+
 /** The props each event keeps, from its emit sites (docs/analytics.md). */
 export const PROP_RULES = {
     'search.query': { ...EVERY_EVENT, ...RUN, ...SETTLE, ...ANSWER },
@@ -303,6 +317,14 @@ export const PROP_RULES = {
     },
     // A page shown (PageView in src/components/atoms/PageView), whose path is `page`.
     'page.view': { ...EVERY_EVENT },
+    'studio.panel': layoutRules(STUDIO_LAYOUT_EVENTS['studio.panel']),
+    'studio.panel_page': layoutRules(STUDIO_LAYOUT_EVENTS['studio.panel_page']),
+    'studio.card_select': layoutRules(STUDIO_LAYOUT_EVENTS['studio.card_select']),
+    'studio.focus': layoutRules(STUDIO_LAYOUT_EVENTS['studio.focus']),
+    'studio.change': layoutRules(STUDIO_LAYOUT_EVENTS['studio.change']),
+    'studio.sheet': layoutRules(STUDIO_LAYOUT_EVENTS['studio.sheet']),
+    'studio.plan': layoutRules(STUDIO_LAYOUT_EVENTS['studio.plan']),
+    'studio.new_session': layoutRules(STUDIO_LAYOUT_EVENTS['studio.new_session']),
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest (or exportDigest), passes, exportProps, exportPage or

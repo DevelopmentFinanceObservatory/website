@@ -14,7 +14,7 @@ import {
     replyBlockTop,
     revealOffset,
 } from './blocks';
-import { scrollerOf } from './board';
+import { scrollerOf, scrollView } from './board';
 import { DRAG_THRESHOLD, selectionAfter, type SelectTarget, selectTarget } from './cardPress';
 import CardBody from './cards/CardBody';
 import CardNote from './cards/CardNote';
@@ -306,8 +306,19 @@ const Whiteboard = ({
 
         void downloadCardImage(node, cardImageName(title));
     };
-    const dragging = useCardDrag({ boardRef, CELL, f, slots, setSlots, raise, widgetIds });
-    const pan = usePan(boardRef);
+    // The Prompt layout's canvas on a phone is one column that scrolls.
+    const column = blocks && isPhone;
+    const dragging = useCardDrag({
+        boardRef,
+        CELL,
+        f,
+        slots,
+        setSlots,
+        raise,
+        widgetIds,
+        column,
+    });
+    const pan = usePan(boardRef, column);
     const { canvasRef: fxCanvasRef, spawnWave } = useShockwave({
         boardRef,
         CELL,
@@ -418,6 +429,40 @@ const Whiteboard = ({
             : undefined,
     });
 
+    // The sheet's foot never shortens: the prompt's height falls as its reply
+    // sheet folds, and a shorter sheet would clamp a scroll that has already
+    // come to rest back by the difference.
+    const footHold = useRef(0);
+    const holdFoot = useEffectEvent(() => {
+        const board = boardRef.current;
+        const probe = board?.querySelector<HTMLElement>('[data-board-foot]');
+
+        if (!board || !probe) {
+            return;
+        }
+
+        const height = probe.getBoundingClientRect().height;
+
+        footHold.current = Math.max(footHold.current, height);
+        board.style.setProperty('--board-foot-held', `${footHold.current}px`);
+    });
+
+    useEffect(() => {
+        const probe = boardRef.current?.querySelector<HTMLElement>('[data-board-foot]');
+
+        if (!dockAware || !probe) {
+            return undefined;
+        }
+
+        holdFoot();
+
+        const watch = new ResizeObserver(() => holdFoot());
+
+        watch.observe(probe);
+
+        return () => watch.disconnect();
+    }, [dockAware]);
+
     // The live cards when the running turn began, to tell which landed in it.
     const turnStart = useRef<ReadonlySet<string> | null>(null);
     const markTurn = useEffectEvent(() => {
@@ -444,7 +489,7 @@ const Whiteboard = ({
         }
 
         pan.stopGlide();
-        scroller.scrollTo({
+        scrollView(scroller, {
             left: scroller.scrollLeft,
             top: Math.max(0, origin.y + (top - BLOCK_INSET) * CELL),
             behavior: scrollBehavior(),
@@ -488,7 +533,7 @@ const Whiteboard = ({
         const target = revealRect(slot, scroller);
 
         if (target) {
-            scroller.scrollTo(target);
+            scrollView(scroller, target);
         }
     });
 
@@ -577,7 +622,9 @@ const Whiteboard = ({
                     origin.x +
                     Math.max(rightCol + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.cols ?? 0) *
                         CELL,
-                height: dockAware ? `calc(${sheetHeight}px + var(--board-foot))` : sheetHeight,
+                height: dockAware
+                    ? `calc(${sheetHeight}px + max(var(--board-foot), var(--board-foot-held, 0px)))`
+                    : sheetHeight,
             }}
             {...(onSelect && {
                 // Pointer capture can retarget the click that ends a press

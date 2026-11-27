@@ -47,6 +47,9 @@ import { type PlanState, planView } from '@/lib/studio/plan';
 import { ESCAPE_DOCK_SHEET, type Sheet } from '@/lib/studio/promptShell';
 import { questionsOf } from '@/lib/studio/questions';
 
+/** Markdown as a screen reader should hear it: the emphasis marks go. */
+const plainText = (markdown: string) => markdown.replace(/[_*`]+/g, '').trim();
+
 // The control that takes focus when the focused one leaves with a redraw.
 const COUNTERPART: Record<string, string> = {
     fold: 'open',
@@ -56,6 +59,9 @@ const COUNTERPART: Record<string, string> = {
 };
 
 type Target = 'chart' | 'number' | 'table' | 'note';
+
+// What folded a sheet, for its usage event.
+type FoldHow = 'button' | 'keyboard' | 'canvas';
 
 const TARGET_OF: Record<string, Target> = {
     chart: 'chart',
@@ -82,7 +88,7 @@ const PromptDock = () => {
     const model = useStudioModel();
     const shell = usePromptShell();
     const { chat, drafts, canvas, doc, walled } = model;
-    const { state, dispatch, rootRef, announce, registerField } = shell;
+    const { state, dispatch, rootRef, announce, registerField, report } = shell;
     const draft = drafts.followDraft;
     const setDraft = drafts.setFollowDraft;
     const editTarget = drafts.editTarget;
@@ -161,7 +167,22 @@ const PromptDock = () => {
 
     // The reader's sheet choice holds for the question it was made on.
     const choose = (sheet: Sheet) => dispatch({ type: 'sheet.set', sheet, turn: question?.turn });
-    const fold = () => choose('folded');
+    const openSheet = (sheet: 'open' | 'thread') => {
+        choose(sheet);
+        report('studio.sheet', {
+            sheet: sheet === 'thread' ? 'conversation' : 'reply',
+            action: 'open',
+            how: 'button',
+        });
+    };
+    const fold = (how: FoldHow) => {
+        choose('folded');
+        report('studio.sheet', {
+            sheet: view.sheet === 'thread' ? 'conversation' : 'reply',
+            action: 'fold',
+            how,
+        });
+    };
 
     const send = () => {
         const action = followUpAction({ draft, plan: chat.plan, editTarget });
@@ -195,11 +216,6 @@ const PromptDock = () => {
     // --- Heights for the canvas foot ---------------------------------------
 
     const restBox = useRef(0);
-    const measured = useRef({ sheetNone: true, pills: false });
-
-    useEffect(() => {
-        measured.current = { sheetNone: view.sheet === 'none', pills: view.pills };
-    });
 
     useEffect(() => {
         const frame = frameRef.current;
@@ -208,17 +224,19 @@ const PromptDock = () => {
             return;
         }
 
+        // Read from the drawn frame, since the observer can fire before
+        // this render's effects run.
         const measure = () => {
             const box = boxRef.current;
             const root = rootRef.current;
             const current = frame.getBoundingClientRect().height;
             const boxHeight = box?.getBoundingClientRect().height ?? 0;
 
-            if (measured.current.sheetNone && boxHeight > 0) {
+            if (frame.dataset.sheet === 'none' && boxHeight > 0) {
                 restBox.current = boxHeight;
             }
 
-            const pillsRow = measured.current.pills ? current - boxHeight : 0;
+            const pillsRow = frame.querySelector(`.${styles.pills}`) ? current - boxHeight : 0;
             const rest = (restBox.current || boxHeight) + Math.max(0, pillsRow);
 
             root?.style.setProperty('--dock-rest', `${rest}px`);
@@ -253,7 +271,7 @@ const PromptDock = () => {
         lastFocus.current = null;
 
         if ((view.sheet === 'reply' && !view.held) || view.sheet === 'thread') {
-            fold();
+            fold('canvas');
         }
     });
 
@@ -284,7 +302,7 @@ const PromptDock = () => {
     useEscape(
         ESCAPE_DOCK_SHEET,
         () => {
-            fold();
+            fold('keyboard');
 
             return true;
         },
@@ -315,7 +333,10 @@ const PromptDock = () => {
     }, [state.focus]);
 
     // A press on the focus pill leaves focus and puts the caret in the field.
-    const leaveFocus = () => shell.focusField();
+    const leaveFocus = () => {
+        shell.focusField();
+        report('studio.focus', { on: false, how: 'pill' });
+    };
 
     // The shell puts the caret in the field for the panel and the card page
     // too. The field shows only while the mode is the input.
@@ -341,9 +362,11 @@ const PromptDock = () => {
         }
 
         const name = was.dataset.dock ? COUNTERPART[was.dataset.dock] : undefined;
+        // The guest wall takes the field's place, and its `Sign in` takes
+        // the field's focus.
         const next = name
             ? boxRef.current?.querySelector<HTMLElement>(`[data-dock="${name}"]`)
-            : null;
+            : boxRef.current?.querySelector<HTMLElement>(`.${styles.wall} button`);
 
         // Cleared first: the focus below records the counterpart, which a
         // later redraw may remove in turn.
@@ -397,6 +420,9 @@ const PromptDock = () => {
 
     const replyStarted = !!question?.reply.trim() || streamed;
     const streaming = chat.thinking && !chat.plan && !chat.clarify && !view.running;
+    // The turn ended in an error, its reply the error's own words.
+    const failed =
+        !!question && !!chat.activity.find((entry) => entry.turn === question.turn)?.failed;
     const said = useRef({ turn: -1, started: false, ready: false });
 
     useEffect(() => {
@@ -415,9 +441,33 @@ const PromptDock = () => {
 
         if (!chat.thinking && replyStarted && !said.current.ready) {
             said.current.ready = true;
-            announce('Answer ready');
+
+            if (failed) {
+                announce(`The answer failed: ${plainText(question.reply)}`, 'error');
+            } else {
+                announce('Answer ready');
+            }
         }
-    }, [question, streaming, replyStarted, chat.thinking, announce]);
+    }, [question, streaming, replyStarted, failed, chat.thinking, announce]);
+
+    // A waiting plan or question is said once, when it arrives.
+    const saidPending = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!pending || pending === saidPending.current) {
+            return;
+        }
+
+        saidPending.current = pending;
+
+        const asked = chat.clarify?.questions[0]?.question;
+
+        announce(
+            chat.plan?.live
+                ? 'A research plan is waiting for your approval'
+                : `A question is waiting for your answer${asked ? `: ${asked}` : ''}`,
+        );
+    }, [pending, chat.plan, chat.clarify, announce]);
 
     // --- Draw ------------------------------------------------------------
 
@@ -441,12 +491,13 @@ const PromptDock = () => {
     const plan = chat.plan;
     const planLive = plan?.live ?? false;
 
-    const respond = (decision: 'approve' | 'reject') => {
+    const respond = (decision: 'approve' | 'reject', from: 'dock' | 'full_plan') => {
         if (decision === 'reject' && chat.plan && question) {
             setSetAside({ turn: question.turn, plan: chat.plan });
         }
 
         chat.respondPlan(decision);
+        report('studio.plan', { decision: decision === 'reject' ? 'cancel' : 'approve', from });
     };
 
     const sheet = (() => {
@@ -501,8 +552,8 @@ const PromptDock = () => {
                             onFold={() => setPlanFolded(planKey(question.turn, plan.version))}
                             onOpen={() => setPlanFolded(null)}
                             onSwitch={walled ? undefined : chat.switchChoice}
-                            onApprove={() => respond('approve')}
-                            onCancel={() => respond('reject')}
+                            onApprove={() => respond('approve', 'full_plan')}
+                            onCancel={() => respond('reject', 'full_plan')}
                             announce={announce}
                         />
                     )
@@ -514,10 +565,11 @@ const PromptDock = () => {
                             question={question}
                             count={view.questions.length}
                             stream={chat.replyStream}
+                            failed={failed}
                             streaming={streaming}
                             chips={chips}
-                            onThread={() => choose('thread')}
-                            onFold={fold}
+                            onThread={() => openSheet('thread')}
+                            onFold={() => fold('button')}
                         />
                     )
                 );
@@ -529,7 +581,7 @@ const PromptDock = () => {
                         runningTurn={streaming ? (question?.turn ?? null) : null}
                         focusTurn={view.threadTurn}
                         chips={chips}
-                        onClose={fold}
+                        onClose={() => fold('button')}
                     />
                 );
             case 'none':
@@ -552,8 +604,8 @@ const PromptDock = () => {
                 return (
                     <ApprovalRow
                         busy={!!chat.plan?.switching}
-                        onCancel={() => respond('reject')}
-                        onApprove={() => respond('approve')}
+                        onCancel={() => respond('reject', 'dock')}
+                        onApprove={() => respond('approve', 'dock')}
                     />
                 );
             case 'set_aside':
@@ -573,7 +625,7 @@ const PromptDock = () => {
                 return (
                     <FoldedRow
                         text={view.row.text}
-                        onOpen={view.row.openable ? () => choose('open') : null}
+                        onOpen={view.row.openable ? () => openSheet('open') : null}
                     />
                 );
             case undefined:

@@ -22,7 +22,7 @@ import PromptDock from './dock/PromptDock';
 import SessionPanel from './panel/SessionPanel';
 import styles from './PromptShell.module.scss';
 import { PromptShellProvider, useEscape, usePromptShell } from './shellContext';
-import { TopBarTitle, TopBarTools } from './TopBar';
+import { PANEL_ID, TopBarTitle, TopBarTools } from './TopBar';
 
 import Button from '@/components/atoms/Button/Button';
 import FeedbackWidget from '@/components/organisms/FeedbackWidget/FeedbackWidget';
@@ -103,9 +103,18 @@ const LandingTravel = ({ onDone }: { onDone: () => void }) => {
         void node.offsetWidth;
         node.dataset.moving = '';
 
+        // The copy stands in for the landing's prompt, which hides while
+        // the landing fades, so one prompt shows at a time.
+        const landing = inputRef.current?.closest('form');
+
+        landing?.style.setProperty('visibility', 'hidden');
+
         const timer = window.setTimeout(onDone, TRAVEL_MS);
 
-        return () => window.clearTimeout(timer);
+        return () => {
+            window.clearTimeout(timer);
+            landing?.style.removeProperty('visibility');
+        };
         // Measured once, on mount: the move starts from where the landing's
         // prompt stood when the question left it.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,6 +175,7 @@ const PromptStage = () => {
         heldCard,
         focusField,
         plans: links,
+        report,
     } = shell;
     const unit = useDesignUnit();
     // A question's turn is running. A card change's turn (its prompt marked
@@ -184,11 +194,26 @@ const PromptStage = () => {
             ? (PANEL_WIDTH + SHELL_GUTTER) * unit
             : 0;
 
+    // A card's `More info` or `View plan` opens its page, and the panel too
+    // when it was closed.
+    const reportCardOpens = useCallback(
+        (page: 'card' | 'plan') => {
+            if (!panelOpen) report('studio.panel', { action: 'open', how: 'card' });
+            report('studio.panel_page', { page, from: 'card' });
+        },
+        [panelOpen, report],
+    );
     const planOf = links.planOf;
     const { titleOf } = canvas;
+    const editId = editTarget?.id ?? null;
     const selectCard = useCallback(
-        (id: string | null) => setEditTarget(id ? { id, title: titleOf(id) } : null),
-        [setEditTarget, titleOf],
+        (id: string | null) => {
+            if (id === editId) return;
+
+            setEditTarget(id ? { id, title: titleOf(id) } : null);
+            report('studio.card_select', { selected: id !== null });
+        },
+        [editId, setEditTarget, titleOf, report],
     );
     const pointCard = useCallback(
         (id: string | null) => dispatch({ type: 'point', card: id }),
@@ -200,11 +225,11 @@ const PromptStage = () => {
 
             if (plan) {
                 dispatch({ type: 'panel.show', page: { kind: 'plan', turn: plan.turn } });
+                reportCardOpens('plan');
             }
         },
-        [planOf, dispatch],
+        [planOf, dispatch, reportCardOpens],
     );
-    const editId = editTarget?.id ?? null;
     const promptCanvas = useMemo<PromptCanvas>(
         () => ({
             reserveRight,
@@ -246,12 +271,24 @@ const PromptStage = () => {
     useEscape(
         ESCAPE_OVERLAY_PANEL,
         () => {
+            // The closing panel turns inert and drops the focus it holds, so
+            // focus goes back to the toggle that opened it.
+            if (panelRef.current?.contains(document.activeElement)) {
+                document.querySelector<HTMLElement>(`[aria-controls="${PANEL_ID}"]`)?.focus();
+            }
+
             dispatch({ type: 'panel.dismiss' });
+            report('studio.panel', { action: 'close', how: 'keyboard' });
 
             return true;
         },
         overlay && panelOpen,
     );
+
+    const newSession = (how: 'button' | 'back') => {
+        report('studio.new_session', { how });
+        startNew();
+    };
 
     const docked = mode !== 'start';
     // One callback for the life of the shell, so a re-render never detaches
@@ -277,7 +314,7 @@ const PromptStage = () => {
 
             <Header
                 variant="studio"
-                onBack={mode === 'start' ? undefined : startNew}
+                onBack={mode === 'start' ? undefined : () => newSession('back')}
                 // A phone has room for the session title alone, in place of
                 // the bar's own `Studio`. The bar settles once, as the move
                 // into the workspace starts.
@@ -287,7 +324,7 @@ const PromptStage = () => {
             >
                 {docked && (
                     <>
-                        <Button variant="bordered" onClick={startNew}>
+                        <Button variant="bordered" onClick={() => newSession('button')}>
                             New Session
                         </Button>
                         <Button
@@ -330,7 +367,13 @@ const PromptStage = () => {
             {inWorkspace && (
                 <>
                     <div className={styles.canvasRegion} data-studio-canvas="">
-                        <div className={styles.board} style={themeVars(theme) as CSSProperties}>
+                        <div
+                            className={styles.board}
+                            style={themeVars(theme) as CSSProperties}
+                            // Its cards carry the focus stops; an empty board
+                            // is no stop of its own.
+                            tabIndex={-1}
+                        >
                             <Whiteboard
                                 {...whiteboardProps(model)}
                                 filter={undefined}
@@ -338,9 +381,10 @@ const PromptStage = () => {
                                     canvas.askFollowUp(id, cardTitle);
                                     focusField();
                                 }}
-                                onCardInfo={(id) =>
-                                    dispatch({ type: 'panel.show', page: { kind: 'card', id } })
-                                }
+                                onCardInfo={(id) => {
+                                    dispatch({ type: 'panel.show', page: { kind: 'card', id } });
+                                    reportCardOpens('card');
+                                }}
                                 prompt={promptCanvas}
                             />
                         </div>
@@ -350,6 +394,7 @@ const PromptStage = () => {
                     </div>
                     <aside
                         ref={panelRef}
+                        id={PANEL_ID}
                         className={styles.panel}
                         aria-label="This session"
                         // The closed panel keeps its place off the stage and

@@ -1,4 +1,5 @@
 @use "mixins" as *;
+@use "../../textFloor" as *;
 
 // The session panel's shared parts. The panel sits on the page colour with
 // no surface of its own; rows take the wash on hover, on keyboard focus and
@@ -15,7 +16,7 @@
     --sp-pointed: var(--color-pointed);
 
     font-family: var(--font-outfit);
-    font-size: rem(13);
+    font-size: rem-floor(13);
     font-weight: 400;
     line-height: rem(18);
     letter-spacing: -0.01em;
@@ -50,7 +51,7 @@
 
 .mono {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
 }
@@ -62,6 +63,15 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+// Space the panel's growth holds so a row keeps its place (useGrow.ts).
+.spacer {
+    flex-shrink: 0;
+
+    &[data-easing] {
+        transition: height 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
 }
 
 .one {
@@ -95,7 +105,7 @@
 
 .label {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     font-weight: 500;
     line-height: rem(16);
     letter-spacing: -0.02em;
@@ -125,7 +135,7 @@
     flex-shrink: 0;
     align-self: flex-start;
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -192,7 +202,7 @@
     gap: rem(4);
     margin-left: rem(8);
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -305,7 +315,7 @@
     max-width: 100%;
     min-height: rem(20);
     padding: rem(1) rem(6);
-    font-size: rem(12);
+    font-size: rem-floor(12);
     line-height: rem(16);
     color: var(--color-charcoal);
     border: 1px solid var(--color-sage);
@@ -328,29 +338,39 @@
 
 .countChip {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     letter-spacing: -0.02em;
     color: var(--color-stone);
 }
 
 // ---- label and value pairs
 
+// One label column as wide as the longest label, at most 96 px, shared by
+// every row, so the values take the rest of the width.
 .pairs {
-    display: flex;
-    flex-direction: column;
-    gap: rem(6);
+    display: grid;
+    grid-template-columns: fit-content(rem(96)) minmax(0, 1fr);
+    gap: rem(6) rem(8);
     padding: 0 rem(8);
 }
 
 .pair {
     display: grid;
-    grid-template-columns: rem(96) minmax(0, 1fr);
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     gap: rem(6) rem(8);
+}
+
+// A long label takes the row's width, with its value under it.
+.pair[data-stacked] {
+    display: flex;
+    flex-direction: column;
+    gap: rem(2);
 }
 
 .pairLabel {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(18);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -364,7 +384,7 @@
 
 .pairAction {
     float: right;
-    margin: rem(1) 0 0 rem(8);
+    margin: 0 0 0 rem(8);
 }
 
 .pairBelow {
@@ -434,7 +454,7 @@
     gap: rem(6);
     width: auto;
     padding: 0 rem(8) 0 rem(6);
-    font-size: rem(12);
+    font-size: rem-floor(12);
     line-height: rem(16);
     color: var(--color-charcoal);
     border: 1px solid var(--color-sage);
@@ -454,37 +474,55 @@
     }
 }
 
-// The back row sticks to the top of the scroller on the panel's own ground.
-// Its negative margins cover the scroller's 14 px padding, so rows scrolling
-// under it stay hidden; sticky offsets count from the scroller's content
-// edge, so `top` takes back that padding.
+// The back row sticks to the top of the scroller on the panel's own ground,
+// with a hairline under it at rest and while scrolled. Its negative margins
+// cover the scroller's 14 px padding, so rows scrolling under it stay
+// hidden; sticky offsets count from the scroller's content edge, so `top`
+// takes back that padding. A short fade under the hairline keeps a row that
+// slides beneath it from touching the line.
 .backRow {
     position: sticky;
     top: rem(-14);
     z-index: 2;
     display: flex;
-    margin: rem(-14) rem(-14) rem(6);
-    padding: rem(12) rem(14) rem(6);
+    margin: rem(-14) rem(-14) rem(10);
+    padding: rem(12) rem(14) rem(8);
     background-color: var(--color-bg);
-    transition: box-shadow 0.2s ease;
+    box-shadow: 0 1px 0 var(--sp-rule);
 
-    :global([data-sp-scrolled]) & {
-        box-shadow: 0 1px 0 var(--sp-rule);
+    &::after {
+        position: absolute;
+        inset: 100% 0 auto;
+        height: rem(10);
+        pointer-events: none;
+        content: "";
+        background: linear-gradient(to bottom, var(--color-bg), transparent);
     }
 }
 
+// Outfit, as the design draws it. A parent title longer than the row ends in
+// an ellipsis after its last whole word.
 .back {
     display: flex;
     align-items: center;
     gap: rem(4);
     max-width: 100%;
+    min-height: rem(24);
     padding: rem(4) rem(8) rem(4) rem(4);
-    font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
-    letter-spacing: -0.02em;
     color: var(--color-stone);
     border-radius: rem(6);
+}
+
+.backLabel {
+    display: -webkit-box;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
 }
 
 @media (hover: hover) {
@@ -496,7 +534,7 @@
 
 .title {
     padding: 0 rem(8);
-    font-size: rem(15);
+    font-size: rem-floor(15);
     font-weight: 500;
     line-height: rem(20);
 }
@@ -505,7 +543,7 @@
     margin-top: rem(2);
     padding: 0 rem(8);
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -525,7 +563,7 @@
     }
 
     .chev,
-    .backRow,
+    .spacer[data-easing],
     .act,
     .chip {
         transition: none;

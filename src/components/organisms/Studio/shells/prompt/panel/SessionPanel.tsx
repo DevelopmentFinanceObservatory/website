@@ -12,7 +12,7 @@ import styles from './SessionPanel.module.scss';
 import { useGrow } from './useGrow';
 import { useSession } from './useSession';
 
-import { standingFor } from '@/lib/studio/cardReplace';
+import { standingFor } from '@/lib/studio/cardIdentity';
 import { ESCAPE_PANEL_PAGE, type PanelPage, samePage } from '@/lib/studio/promptShell';
 import {
     datasetsOf,
@@ -115,7 +115,7 @@ const resolves = (page: PanelPage, input: SessionInput): boolean => {
  */
 const SessionPanel = () => {
     const { canvas } = useStudioModel();
-    const { state, dispatch, panelOpen, focusCard, plans: links } = usePromptShell();
+    const { state, dispatch, panelOpen, focusCard, plans: links, report } = usePromptShell();
     const { input, overview } = useSession();
     const { trail } = state;
     const top = trail.at(-1) ?? null;
@@ -153,15 +153,18 @@ const SessionPanel = () => {
             show: (page, opener) => {
                 pending.current = { page, opener: opener ?? null };
                 dispatch({ type: 'panel.show', page });
+                report('studio.panel_page', { page: page.kind, from: 'panel' });
             },
             back: () => {
                 backTo.current = openers.current[trail.length - 1] ?? null;
                 dispatch({ type: 'panel.back' });
+                report('studio.panel_page', { page: behind?.kind ?? 'overview', from: 'panel' });
             },
             backLabel,
             fly: (id) => flyTo.current(id),
+            topSpacer,
         }),
-        [trail.length, backLabel, dispatch],
+        [trail.length, backLabel, behind?.kind, dispatch, report, topSpacer],
     );
 
     useEffect(() => {
@@ -379,7 +382,14 @@ const SessionPanel = () => {
                     updateFades(box);
                 }}
             >
-                <div ref={topSpacer} className={styles.spacer} aria-hidden="true" data-end="top" />
+                {!shown && (
+                    <div
+                        ref={topSpacer}
+                        className={partStyles.spacer}
+                        aria-hidden="true"
+                        data-end="top"
+                    />
+                )}
                 {!overview.empty &&
                     (shown ? (
                         <PageView page={shown} input={input} newestTurn={newestTurn} />
@@ -388,7 +398,7 @@ const SessionPanel = () => {
                     ))}
                 <div
                     ref={footSpacer}
-                    className={styles.spacer}
+                    className={partStyles.spacer}
                     aria-hidden="true"
                     data-end="foot"
                 />
@@ -413,10 +423,8 @@ const scrollTo = (box: HTMLElement, top: number) => {
     box.scrollTop = top;
 };
 
-// The foot fade while content lies below, and the back row's hairline once
-// a page has scrolled.
+// The foot fade while content lies below.
 const updateFades = (box: HTMLElement) => {
-    box.toggleAttribute('data-sp-scrolled', box.scrollTop > 0);
     box.toggleAttribute('data-more-below', box.scrollTop + box.clientHeight < box.scrollHeight - 1);
 };
 

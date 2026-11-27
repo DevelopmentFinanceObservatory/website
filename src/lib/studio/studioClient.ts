@@ -22,6 +22,7 @@ import type {
     MutationOperation,
     CardChanges,
     PlaceOption,
+    PlacesLabel,
     PlacesOffer,
     PlacesOptions,
     PlanRevisionStaleError,
@@ -829,13 +830,36 @@ const placesOfferOf = (value: unknown): PlacesOffer[] => {
         return typeof id === 'string' && typeof label === 'string' ? [{ id, label }] : [];
     });
 
-    return places.length === chosen.length ? [{ role, multiple, chosen: places }] : [];
+    if (places.length !== chosen.length) return [];
+
+    const max = record?.['max'];
+    const label = asRecord(record?.['label']);
+    const word = (form: keyof PlacesLabel): string | undefined => {
+        const value = label?.[form];
+
+        return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+    };
+    const singular = word('singular');
+    const plural = word('plural');
+
+    return [
+        {
+            role,
+            multiple,
+            chosen: places,
+            ...(typeof max === 'number' && Number.isInteger(max) && max >= 1 && { max }),
+            ...((singular || plural) && {
+                label: { ...(singular && { singular }), ...(plural && { plural }) },
+            }),
+        },
+    ];
 };
 
 /** A frame's or stored card's `card_changes`, narrowed: a `window` with whole
  *  years inside 1900 to 2200, the drawn range inside the data's, one year
  *  when `single`, and `missing_years` whole years; each `places` entry with a
  *  string `role`, a boolean `multiple` and `chosen` places of string `id` and
+ *  `label`, keeping a whole `max` of 1 or more and the non-blank forms of
  *  `label`. A part that fails is dropped and the others stand. Null without a
  *  `spec_id`. */
 export const cardChangesOf = (value: unknown): CardChanges | null => {
@@ -860,10 +884,11 @@ const isAbort = (error: unknown): boolean => error instanceof Error && error.nam
 
 /**
  * Read the places role `role` of card `componentId` can change to. The read
- * spends no prompt. A 5xx, a 429 or no answer may succeed later; the
- * harness's 4xx refusals (`scope_choice_stale` for a card off the canvas,
- * `change_not_offered` for a role it does not offer, `not_found` for the
- * conversation) will not.
+ * spends no prompt. A 5xx, a 429 or no answer may succeed later, unless the
+ * refusal says `do_not_retry` (`capability_unavailable` from a deployment
+ * that lists no places); the harness's 4xx refusals (`scope_choice_stale`
+ * for a card off the canvas, `change_not_offered` for a role it does not
+ * offer, `not_found` for the conversation) will not.
  */
 export const runPlaceOptions = async (
     conversationId: string,
@@ -922,7 +947,7 @@ export const runPlaceOptions = async (
         status: res.status,
         code: error?.constraint_id ?? error?.error ?? proxy?.code ?? null,
         detail: error?.detail ?? null,
-        retry: res.status >= 500 || res.status === 429,
+        retry: error?.retry !== 'do_not_retry' && (res.status >= 500 || res.status === 429),
     };
 };
 

@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import { type ReactNode, useId } from 'react';
 
+import { Count } from './Count';
 import styles from './parts.module.scss';
 
 type SectionProps = {
@@ -40,7 +41,7 @@ export const Section = ({
                     <h3 id={id} className={styles.label}>
                         {label}
                         {count !== undefined && count !== null && count !== '' && (
-                            <span className={styles.count}>{count}</span>
+                            <Count>{count}</Count>
                         )}
                     </h3>
                     {action}

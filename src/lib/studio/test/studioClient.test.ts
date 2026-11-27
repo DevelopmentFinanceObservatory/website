@@ -988,6 +988,22 @@ test('runPlaceOptions reads a card role’s places, and says which failures a re
             },
         ],
         [
+            'a deployment that lists no places',
+            () =>
+                problem(503, {
+                    error: 'capability_unavailable',
+                    retry: 'do_not_retry',
+                    detail: "Changing a card's places is not enabled on this deployment.",
+                }),
+            {
+                kind: 'failed',
+                status: 503,
+                code: 'capability_unavailable',
+                detail: "Changing a card's places is not enabled on this deployment.",
+                retry: false,
+            },
+        ],
+        [
             'a card off the canvas',
             () =>
                 problem(422, {

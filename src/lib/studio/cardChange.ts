@@ -8,6 +8,7 @@
  * its reply holds text only when the harness refused it.
  */
 
+import { capitalise } from '../capitalise.ts';
 import type { Widget } from '../chat/widgets.ts';
 import { cardUnitOffer, SCOPE_CHOICE_STALE } from './cardUnit.ts';
 import type { StreamRefusal } from './studioClient.ts';
@@ -16,6 +17,7 @@ import type {
     ApplyChange,
     CardChangeMark,
     PlaceOption,
+    PlacesLabel,
     UnitChoice,
     UnitOffer,
     WindowOffer,
@@ -54,6 +56,8 @@ export type ChangeOffer =
           role: string;
           label: string;
           multiple: boolean;
+          /** The most places a change of the role can name. */
+          max: number;
           chosen: PlaceOption[];
       };
 
@@ -130,8 +134,15 @@ const ROLE_LABELS: Record<string, { one: string; many: string }> = {
     destination: { one: 'Recipient', many: 'Recipients' },
 };
 
-/** The row label of a places offer for `role`. */
-export const roleLabel = (role: string, multiple: boolean): string => {
+/** The name of a places offer's role, as its row and its picker heading
+ *  show it: the card data's own word for the role's places (`label`, plural
+ *  for a role that takes several, singular for one, either form standing in
+ *  for the other), capitalised, else the page's word for `role`. */
+export const roleLabel = (role: string, multiple: boolean, label?: PlacesLabel): string => {
+    const own = multiple ? (label?.plural ?? label?.singular) : (label?.singular ?? label?.plural);
+
+    if (own?.trim()) return capitalise(own.trim());
+
     const words = ROLE_LABELS[role];
 
     return words ? (multiple ? words.many : words.one) : 'Shows';
@@ -144,15 +155,24 @@ const showsOffers = (widget: Widget): ChangeOffer[] => {
 
     return (changes.places ?? [])
         .filter((places) => places.chosen.length > 0)
-        .map((places) => ({
-            key: 'shows',
-            id: `shows:${places.role}`,
-            specId: changes.spec_id,
-            role: places.role,
-            label: roleLabel(places.role, places.multiple),
-            multiple: places.multiple,
-            chosen: places.chosen,
-        }));
+        .map((places) => {
+            // The most places a change can name: the card's own `max`, a
+            // card stored before it was kept taking the request's cap, and
+            // one for a role that takes one place.
+            const max = places.multiple ? Math.min(places.max ?? MAX_PLACES, MAX_PLACES) : 1;
+            const multiple = max > 1;
+
+            return {
+                key: 'shows',
+                id: `shows:${places.role}`,
+                specId: changes.spec_id,
+                role: places.role,
+                label: roleLabel(places.role, multiple, places.label),
+                multiple,
+                max,
+                chosen: places.chosen,
+            };
+        });
 };
 
 /** The changes `widget` carries: its unit when it has at least two to choose
@@ -291,12 +311,7 @@ const placesRequest = (
 ): CardChangeRequest | null => {
     const offer = showsOffers(widget).find((other) => other.key === 'shows' && other.role === role);
 
-    if (
-        offer?.key !== 'shows' ||
-        entities.length === 0 ||
-        entities.length > MAX_PLACES ||
-        (!offer.multiple && entities.length > 1)
-    ) {
+    if (offer?.key !== 'shows' || entities.length === 0 || entities.length > offer.max) {
         return null;
     }
 
@@ -398,6 +413,56 @@ const queuedFor = (item: QueuedChange, cardId: string, key: ChangeRowKey, role?:
 /** A queued change that could not be sent: the card standing in its card's
  *  place when its turn came (`card`), its row and role, and why. */
 export type DroppedChange = { card: string; row: ChangeRowKey; role?: string; detail: string };
+
+/** What the assistant can wait on the user for: a plan's approval or the
+ *  answer to a question. */
+export type ChangePause = 'plan' | 'question';
+
+/** Why a card's `Change` rows wait, or null when they can go: a question
+ *  waiting on an answer, or a plan waiting on approval (`live`), would be
+ *  discarded by the change, since the harness closes a paused turn when it
+ *  admits the next. */
+export const changesHeld = (
+    plan: { live: boolean } | null,
+    question: unknown | null = null,
+): string | null => {
+    if (question) return 'Answer the question to change this card.';
+
+    return plan?.live ? 'Approve or cancel the plan to change this card.' : null;
+};
+
+const PAUSE_DROPS: Record<ChangePause, string> = {
+    plan: 'A plan came before this change went. Approve or cancel the plan, then change the card.',
+    question: 'A question came before this change went. Answer it, then change the card.',
+};
+
+/** The queue once a pause arrives: its card changes leave it, each dropped
+ *  with the reason (DroppedChange), since sending one would discard the
+ *  pause. Every other item stays, in order. */
+export const dropChangesForPause = <TItem extends QueuedChange>(
+    queue: readonly TItem[],
+    pause: ChangePause,
+): { kept: TItem[]; dropped: DroppedChange[] } => {
+    const kept: TItem[] = [];
+    const dropped: DroppedChange[] = [];
+
+    for (const item of queue) {
+        const card = item.unit?.request.component_id ?? item.change?.request.component_id;
+
+        if (card === undefined) {
+            kept.push(item);
+        } else {
+            dropped.push({
+                card,
+                row: item.unit ? 'unit' : (item.change?.row ?? 'years'),
+                ...(item.change?.role !== undefined && { role: item.change.role }),
+                detail: PAUSE_DROPS[pause],
+            });
+        }
+    }
+
+    return { kept, dropped };
+};
 
 /** Whether a change to row `key` (role `role`) of any of `cardIds` waits in
  *  the queue. */

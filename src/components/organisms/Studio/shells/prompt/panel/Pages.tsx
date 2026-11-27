@@ -4,6 +4,7 @@ import PlanModal from '../../../workspace/PlanModal';
 import { usePromptShell } from '../shellContext';
 import { usePanelNav } from './panelNav';
 import { CardChip, Chips } from './parts/CardChip';
+import { Count } from './parts/Count';
 import { Chevron } from './parts/Glyphs';
 import { Mark } from './parts/Mark';
 import { PageShell, PageText } from './parts/PageShell';
@@ -25,7 +26,7 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 /** A question's page: its reply's first sentence, the data it used, its
  *  plan and its cards. */
 export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean }) => {
-    const { dispatch, focusField } = usePromptShell();
+    const { dispatch, focusField, report } = usePromptShell();
     const { show } = usePanelNav();
     const stageKey = `stage:${page.turn}:find`;
 
@@ -42,6 +43,11 @@ export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean
                                 type: 'sheet.set',
                                 sheet: newest ? 'open' : 'thread',
                                 turn: page.turn,
+                            });
+                            report('studio.sheet', {
+                                sheet: newest ? 'reply' : 'conversation',
+                                action: 'open',
+                                how: 'panel',
                             });
                             // On an older question the conversation sheet
                             // moves focus to that question itself.
@@ -72,9 +78,7 @@ export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean
                                     <span className={styles.sourceTop}>
                                         <span className={styles.sourceName}>
                                             Data used
-                                            <span className={partStyles.count}>
-                                                {page.datasets}
-                                            </span>
+                                            <Count>{page.datasets}</Count>
                                         </span>
                                         <Chevron direction="right" />
                                     </span>

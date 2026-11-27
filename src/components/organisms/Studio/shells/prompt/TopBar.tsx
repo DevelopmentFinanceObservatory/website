@@ -7,6 +7,9 @@ import styles from './TopBar.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
 
+/** The id of the session panel's frame, which `Session panel` controls. */
+export const PANEL_ID = 'studio-session-panel';
+
 /**
  * The session title after `Studio` in the top bar, renamed in place: Enter
  * and blur commit, Escape cancels, and a blank name keeps the old one.
@@ -80,7 +83,7 @@ export const TopBarTitle = ({ compact = false }: { compact?: boolean }) => {
 
 /** `Focus canvas` and `Session panel`, then the rule before `New Session`. */
 export const TopBarTools = () => {
-    const { state, dispatch, panelOpen, overlay } = usePromptShell();
+    const { state, dispatch, panelOpen, overlay, report } = usePromptShell();
     const focusName = state.focus ? 'Exit focus' : 'Focus canvas';
 
     return (
@@ -91,7 +94,10 @@ export const TopBarTools = () => {
                 aria-pressed={state.focus}
                 aria-label={focusName}
                 title={focusName}
-                onClick={() => dispatch({ type: 'focus.set', on: !state.focus })}
+                onClick={() => {
+                    dispatch({ type: 'focus.set', on: !state.focus });
+                    report('studio.focus', { on: !state.focus, how: 'button' });
+                }}
             >
                 <Icon name={state.focus ? 'focus-contract' : 'focus-expand'} />
             </button>
@@ -100,16 +106,18 @@ export const TopBarTools = () => {
                 className={styles.icon}
                 aria-pressed={panelOpen}
                 aria-expanded={panelOpen}
+                aria-controls={PANEL_ID}
                 aria-label="Session panel"
                 title="Session panel"
-                onClick={() =>
+                onClick={() => {
                     // Closing an overlay records no choice for wider windows.
                     dispatch(
                         overlay && panelOpen
                             ? { type: 'panel.dismiss' }
                             : { type: 'panel.toggle', shown: panelOpen },
-                    )
-                }
+                    );
+                    report('studio.panel', { action: panelOpen ? 'close' : 'open', how: 'button' });
+                }}
             >
                 <Icon name="session-panel" />
             </button>

@@ -55,6 +55,8 @@
 .summary {
     @include font-size(12px, 1.1);
 
+    font-size: max(var(--text-floor, 0px), #{rem(12)});
+
     // flex-basis 0 and min-width 0 stop a long title widening the panel.
     flex: 1 1 0;
     width: 0;
@@ -151,6 +153,7 @@
     @include flex(row, center, center);
     @include font-size(11px, 1.09);
 
+    font-size: max(var(--text-floor, 0px), #{rem(11)});
     gap: rem(4);
     flex-shrink: 0;
     height: rem(20);
@@ -173,6 +176,7 @@
 .plus {
     @include font-size(14px, 1);
 
+    font-size: max(var(--text-floor, 0px), #{rem(14)});
     font-weight: 400;
 }
 
@@ -280,6 +284,7 @@
 .menuRow {
     @include font-size(10px, 1);
 
+    font-size: max(var(--text-floor, 0px), #{rem(10)});
     display: flex;
     gap: rem(8);
     align-items: center;

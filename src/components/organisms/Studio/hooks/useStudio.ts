@@ -344,6 +344,9 @@ export const useStudio = ({
         // A new question a turn handed back joins the queue past the gate
         // below, so the queue sends it through the gate.
         admitHandedBack: (text, queued, run) => prompt(undefined, text.trim().length, run, queued),
+        // The Prompt layout's card pages hold card changes while a plan or
+        // a question waits.
+        pausesDropChanges: variant === 'prompt',
     });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);

@@ -588,11 +588,18 @@ const componentWidget = (
     }
 };
 
-/** The plan step a frame's `created_from` names, when it names both ids. */
-export const planStepOf = (from: CreatedFrom | null | undefined): PlanStepLink | null =>
-    from?.plan_version_id && from.plan_step_id
-        ? { plan_version_id: from.plan_version_id, plan_step_id: from.plan_step_id }
+/** The plan step a frame's `created_from`, or a stored card, names, when it
+ *  names both ids as non-empty strings. */
+export const planStepOf = (
+    from: Pick<CreatedFrom, 'plan_version_id' | 'plan_step_id'> | null | undefined,
+): PlanStepLink | null => {
+    const version: unknown = from?.plan_version_id;
+    const step: unknown = from?.plan_step_id;
+
+    return typeof version === 'string' && version && typeof step === 'string' && step
+        ? { plan_version_id: version, plan_step_id: step }
         : null;
+};
 
 /** One created component → one canvas widget. */
 export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { holdRow } from '../panelGrow.ts';
+import { grownWidth, holdRow } from '../panelGrow.ts';
 
 test('holdRow scrolls to keep the row in place when the range allows it', () => {
     // The row sat 100 px down the panel and now starts 300 px into the content.
@@ -33,4 +33,27 @@ test('holdRow holds only the foot space that passes the panel foot', () => {
         top: 0,
         foot: 30,
     });
+});
+
+const strip = { restLeft: 1114, grownLeft: 979, right: 1429, panel: { top: 79, bottom: 889 } };
+const card = (left: number, right: number, top = 326, bottom = 686) => ({
+    left,
+    right,
+    top,
+    bottom,
+});
+
+test('grownWidth grows into a strip with no card in it', () => {
+    assert.equal(grownWidth({ ...strip, cards: [card(34, 529), card(551, 960)] }), 450);
+});
+
+test('grownWidth keeps the rest width when a card reaches into the strip', () => {
+    assert.equal(grownWidth({ ...strip, cards: [card(34, 529), card(551, 1046)] }), 315);
+});
+
+test('grownWidth ignores a card that only touches the strip or lies out of the panel height', () => {
+    assert.equal(
+        grownWidth({ ...strip, cards: [card(551, 979), card(551, 1046, 900, 1200)] }),
+        450,
+    );
 });

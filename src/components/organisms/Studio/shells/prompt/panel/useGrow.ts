@@ -6,6 +6,7 @@ import {
     EDGE_MS,
     FADE_OUT_MS,
     GROW_REST_MS,
+    grownWidth,
     holdRow,
     SHRINK_AFTER_MS,
     SPACER_EASE_MS,
@@ -21,7 +22,10 @@ const canHover = () => matchMedia('(hover: hover)').matches;
 /**
  * Grows the session panel from its rest width to the wide one while the
  * pointer rests in it, or keyboard focus is inside, on a page (never on the
- * overview, and never while the panel overlays a narrow canvas), and shrinks it once both have been gone SHRINK_AFTER_MS. The
+ * overview, never while the panel overlays a narrow canvas, and never over a
+ * card: the panel stays at its rest width while a card lies under the strip
+ * the wide panel adds), and shrinks it once both have been gone
+ * SHRINK_AFTER_MS. The
  * aside around the scroller carries the state the stylesheets read:
  * `data-sp-grow` (`open` or `closing`), `data-sp-wide` from the layout switch
  * at the start of a grow to the one at the end of a shrink, and
@@ -196,11 +200,46 @@ export const useGrow = (onPage: boolean) => {
         later('shrinkEnd', endShrink, EDGE_MS + 40);
     };
 
+    // Whether the strip the wide panel adds is empty canvas. The wide edge
+    // comes from the stylesheet: the grown state is applied for one forced
+    // layout with transitions off, read, and put back before anything paints.
+    const roomToGrow = () => {
+        const region = aside();
+
+        if (!region) return false;
+
+        const rest = region.getBoundingClientRect();
+        const { transition } = region.style;
+
+        region.style.transition = 'none';
+        region.setAttribute('data-sp-grow', 'open');
+
+        const wide = region.getBoundingClientRect();
+
+        region.removeAttribute('data-sp-grow');
+        region.getBoundingClientRect();
+        region.style.transition = transition;
+
+        const cards = [...document.querySelectorAll('[data-studio-canvas] [data-card-id]')].map(
+            (card) => card.getBoundingClientRect(),
+        );
+
+        return (
+            grownWidth({
+                restLeft: rest.left,
+                grownLeft: wide.left,
+                right: rest.right,
+                panel: rest,
+                cards,
+            }) > rest.width
+        );
+    };
+
     const sync = () => {
         const want =
             onPageRef.current && ((grow.current.inside && grow.current.rested) || keyboardInside());
 
-        if (want && grow.current.phase !== 'open') startGrow();
+        if (want && grow.current.phase !== 'open' && roomToGrow()) startGrow();
         if (!want && grow.current.phase === 'open') startShrink();
     };
 

@@ -10,7 +10,9 @@
  * inside it is that row's.
  * With a mouse or pen a press on the content clicks and selects text; with
  * touch it pans the board, as does any press on a read-only card. Controls
- * keep the press to themselves.
+ * keep the press to themselves. On a canvas that is one scrolling column (a
+ * phone in the Prompt layout) a touch on the head row or frame scrolls it
+ * too, and cards move by mouse or pen alone.
  */
 
 /**
@@ -36,9 +38,17 @@ export type Press = {
     pointerType: string;
     zone: PressZone;
     readOnly: boolean;
+    // The canvas is one scrolling column, where a touch scrolls and never
+    // drags a card.
+    column?: boolean;
 };
 
-export const pressAction = ({ pointerType, zone, readOnly }: Press): PressAction => {
+export const pressAction = ({
+    pointerType,
+    zone,
+    readOnly,
+    column = false,
+}: Press): PressAction => {
     if (zone === 'control') {
         return 'none';
     }
@@ -48,7 +58,7 @@ export const pressAction = ({ pointerType, zone, readOnly }: Press): PressAction
     }
 
     if (zone === 'handle') {
-        return 'drag';
+        return column && pointerType === 'touch' ? 'pan' : 'drag';
     }
 
     // A finger has no other way to move the board, so content pans it.
@@ -83,10 +93,13 @@ export const pressZone = (target: PressTarget, box: unknown): PressZone => {
  * The action for a pointer press on the board, or null when it did not land
  * on a card.
  */
-export const cardPressAction = (event: {
-    target: EventTarget | null;
-    pointerType: string;
-}): PressAction | null => {
+export const cardPressAction = (
+    event: {
+        target: EventTarget | null;
+        pointerType: string;
+    },
+    column = false,
+): PressAction | null => {
     const target = event.target as Element | null;
     const box = target?.closest?.(BOX);
 
@@ -98,6 +111,7 @@ export const cardPressAction = (event: {
         pointerType: event.pointerType,
         zone: pressZone(target, box),
         readOnly: !box.hasAttribute('data-draggable'),
+        column,
     });
 };
 

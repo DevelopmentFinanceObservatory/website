@@ -8,8 +8,9 @@
 import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
 
 import type { CardInfo, Widget } from '../chat/widgets.ts';
+import type { CardHistory } from './cardReplace';
 import type { ActivityEntry, ActivityTool } from './activity';
-import { standingFor } from './cardReplace.ts';
+import { standingFor } from './cardIdentity.ts';
 import { producedTurns } from './planLink.ts';
 import type { Clarify } from './clarify';
 import { type PanelSource, sourceEntries } from './descriptionBlocks.ts';
@@ -454,9 +455,22 @@ const cardRows = (input: SessionInput, turns: Turn[]) => {
 };
 
 /** How far a card's data runs, as a source row's meta line: `data through
- *  <year>`, with projections when a served year is projected. */
-export const throughOf = (info: CardInfo): string | null => {
-    const year = info.dataThrough?.match(/\d{4}/)?.[0];
+ *  <year>`, with projections when a served year is projected. The
+ *  freshness's `data_through` is the last year the card was served, so a
+ *  card drawn to end before its data does (its window's `end_year` before
+ *  `last_year`, the last year its data holds) reads `last_year`. A card
+ *  changed by a card change with no window to read shows no year, since its
+ *  served year may stop short of its data. */
+export const throughOf = (info: CardInfo, card?: Widget & CardHistory): string | null => {
+    const window = card && card.kind !== 'text' ? card.cardChanges?.window : undefined;
+    const served = info.dataThrough?.match(/\d{4}/)?.[0];
+    const year = window
+        ? window.end_year < window.last_year
+            ? String(window.last_year)
+            : served
+        : card?.changedIn?.length
+          ? undefined
+          : served;
 
     if (!year) return null;
 
@@ -544,7 +558,7 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
             };
             const citation = citationOf(info);
 
-            row.through ??= throughOf(info);
+            row.through ??= throughOf(info, widget);
             row.lastRefreshed ??= info.lastRefreshed;
 
             if (citation && !row.citations.includes(citation)) row.citations.push(citation);

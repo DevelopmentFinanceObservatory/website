@@ -130,29 +130,27 @@ const CardsSection = ({ view, links, folds, setFolds }: OverviewProps) => {
                     >
                         {view.removed.length} removed
                     </Fold>
-                    {folds.removed && (
-                        <ul id={removedId} className={styles.gones}>
-                            {view.removed.map((row) => (
-                                <li key={row.id} className={styles.gone}>
-                                    <span className={styles.glyph} aria-hidden="true">
-                                        <Icon name={row.glyph} />
-                                    </span>
-                                    <span className={styles.goneTitle} title={row.title}>
-                                        {row.title}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        className={styles.restore}
-                                        aria-label={`Restore ${row.title} to the canvas`}
-                                        data-sp-restore={row.id}
-                                        onClick={() => canvas.add(row.id)}
-                                    >
-                                        Restore
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    <ul id={removedId} className={styles.gones} hidden={!folds.removed}>
+                        {view.removed.map((row) => (
+                            <li key={row.id} className={styles.gone}>
+                                <span className={styles.glyph} aria-hidden="true">
+                                    <Icon name={row.glyph} />
+                                </span>
+                                <span className={styles.goneTitle} title={row.title}>
+                                    {row.title}
+                                </span>
+                                <button
+                                    type="button"
+                                    className={styles.restore}
+                                    aria-label={`Restore ${row.title} to the canvas`}
+                                    data-sp-restore={row.id}
+                                    onClick={() => canvas.add(row.id)}
+                                >
+                                    Restore
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
                 </>
             )}
         </Section>

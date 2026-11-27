@@ -33,13 +33,16 @@ const ANNOUNCE_AFTER_MS = 500;
  * the role takes one place. The places the card shows come first. The list
  * loads when the picker opens (`chat.placeOptions`, read once per card and
  * role); until it does, the picker lists the places the card shows and a
- * quiet loading row. At least one place stays chosen.
+ * quiet loading row. At least one place stays chosen, and at most `max`:
+ * once that many are ticked, the others wait and a line says how many the
+ * card can show.
  */
 const PlacesPick = ({
     componentId,
     role,
     label,
     multiple,
+    max,
     shown,
     picked,
     onChange,
@@ -48,6 +51,8 @@ const PlacesPick = ({
     role: string;
     label: string;
     multiple: boolean;
+    /** The most places the card can show for the role. */
+    max: number;
     /** The places the card shows now. */
     shown: PlaceOption[];
     /** The places the reader has ticked. */
@@ -84,9 +89,19 @@ const PlacesPick = ({
         return () => stop.abort();
     }, [read, componentId, role, attempt, announce]);
 
-    const places = pickablePlaces(shown, list.state === 'ready' ? list.options : []);
+    // The places the card shows and those the reader has ticked since open
+    // lead the list, chosen ones first, whatever the filter; the rest follow
+    // in the service's order.
+    const [ticked, setTicked] = useState<PlaceOption[]>([]);
+    const isPicked = (place: PlaceOption) => picked.some((other) => other.id === place.id);
+    const lead = pickablePlaces(shown, ticked);
+    const places = pickablePlaces(
+        [...lead.filter(isPicked), ...lead.filter((place) => !isPicked(place))],
+        list.state === 'ready' ? list.options : [],
+    );
     const matching = places.filter((place) => placeMatches(place, filter));
     const count = matching.length;
+    const full = multiple && picked.length >= max;
 
     // The match count, once the reader pauses typing.
     useEffect(() => {
@@ -100,13 +115,17 @@ const PlacesPick = ({
         return () => clearTimeout(timer);
     }, [filter, count, list.state, announce]);
 
-    const isPicked = (place: PlaceOption) => picked.some((other) => other.id === place.id);
     const toggle = (place: PlaceOption) => {
         if (!multiple) {
             onChange([place]);
+            setTicked((before) => pickablePlaces(before, [place]));
 
             return;
         }
+
+        if (!isPicked(place) && full) return;
+
+        if (!isPicked(place)) setTicked((before) => pickablePlaces(before, [place]));
 
         onChange(
             isPicked(place) ? picked.filter((other) => other.id !== place.id) : [...picked, place],
@@ -133,8 +152,9 @@ const PlacesPick = ({
             >
                 {matching.map((place) => {
                     const checked = isPicked(place);
-                    // The last ticked place stays ticked.
-                    const locked = multiple && checked && picked.length === 1;
+                    // The last ticked place stays ticked, and an unticked
+                    // one waits while the card shows all it can.
+                    const locked = multiple && (checked ? picked.length === 1 : full);
 
                     return (
                         <label key={place.id} className={styles.option}>
@@ -151,6 +171,11 @@ const PlacesPick = ({
                     );
                 })}
                 {list.state === 'loading' && <p className={styles.listNote}>Loading places</p>}
+                {full && (
+                    <p className={styles.listNote}>
+                        This card shows up to {max === 1 ? '1 place' : `${max} places`}.
+                    </p>
+                )}
                 {list.state === 'ready' && count === 0 && (
                     <p className={styles.listNote}>No place matches.</p>
                 )}

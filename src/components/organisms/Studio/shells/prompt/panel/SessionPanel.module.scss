@@ -1,4 +1,5 @@
 @use "mixins" as *;
+@use "../textFloor" as *;
 
 // The scroller fills the aside the shell draws (its 1 px hairline, radius
 // and clip). While the panel grows the scroller keeps one width, anchored to
@@ -22,8 +23,11 @@
     // Paint stays inside the scroller's own box at every scroll position.
     contain: paint;
 
+    // The card page's change frame caps its height by this box (`cqh`).
+    container: sp-scroll / size;
+
     &[data-more-below] {
-        mask-image: linear-gradient(to bottom, #000 calc(100% - #{rem(24)}), transparent);
+        mask-image: linear-gradient(to bottom, #000 calc(100% - #{rem(40)}), transparent);
     }
 
     :global([data-sp-grow]) > & {
@@ -39,14 +43,6 @@
     :global([data-sp-fade]) > & {
         opacity: 0;
         transition: opacity 80ms ease;
-    }
-}
-
-.spacer {
-    flex-shrink: 0;
-
-    &[data-easing] {
-        transition: height 200ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 }
 
@@ -97,7 +93,7 @@
 .state {
     padding: 0 rem(8) rem(2);
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -133,7 +129,7 @@
 
 .note {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -250,7 +246,7 @@
     gap: rem(8);
     padding: 0 rem(8) rem(6) rem(22);
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -343,7 +339,7 @@ button.didTitle {
 
 .words {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
     color: var(--color-stone);
@@ -363,6 +359,11 @@ button.didTitle {
     flex-direction: column;
     gap: rem(6);
     padding: 0 rem(8);
+}
+
+// Its toggle controls it, so the list stays in the page while shut.
+.gones[hidden] {
+    display: none;
 }
 
 .gone {
@@ -386,7 +387,7 @@ button.didTitle {
     flex-shrink: 0;
     min-height: rem(24);
     padding: 0 rem(8);
-    font-size: rem(12);
+    font-size: rem-floor(12);
     line-height: rem(20);
     color: var(--sp-ok);
     border: 1px solid var(--sp-ok);
@@ -501,7 +502,7 @@ button.didTitle {
     flex-shrink: 0;
     width: rem(12);
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(18);
     color: var(--color-stone);
     text-align: right;
@@ -542,10 +543,39 @@ button.didTitle {
     }
 }
 
+@media (pointer: coarse) {
+    // Every control in the panel and on its pages reaches a 40 px square hit
+    // area, drawn as a transparent layer centred on the control so nothing
+    // moves at rest. A control that clips its own overflow takes the area as
+    // padding that its negative margin takes back.
+    .scroller :is(button, a[href]):not(.question, .didTitle) {
+        position: relative;
+
+        &::before {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: max(100%, 40px);
+            height: max(100%, 40px);
+            content: "";
+            translate: -50% -50%;
+        }
+    }
+
+    .question,
+    .didTitle {
+        padding-block: calc(var(--sp-pad, 0px) + 9px);
+        margin-block: -9px;
+    }
+
+    .question {
+        --sp-pad: #{rem(2)};
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .scroller,
     :global([data-sp-fade]) > .scroller,
-    .spacer[data-easing],
     .card,
     .question,
     .planLine,

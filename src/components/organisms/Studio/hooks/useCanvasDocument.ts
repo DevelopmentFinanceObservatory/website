@@ -8,6 +8,7 @@ import type { TurnWidget } from './useChat';
 import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation, ShareMark } from '@/lib/chat/history';
 import type { TextWidget, Widget } from '@/lib/chat/widgets';
+import { replacementsOf } from '@/lib/studio/cardIdentity';
 import { renameId, renameKey } from '@/lib/studio/cardReplace';
 import {
     type CanvasBaseline,
@@ -101,7 +102,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         // The saved title IS the display title (a rename or the first prompt).
         setConversationTitle(saved.title);
         setShareMarks(saved.shareMarks ?? []);
-        setReplacedIds({});
+        setReplacedIds(replacementsOf(saved.widgets));
     }, []);
 
     const setPinnedIds = useCallback(

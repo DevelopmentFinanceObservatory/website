@@ -147,7 +147,12 @@
                         "id": "country/ETH",
                         "label": "Ethiopia"
                     }
-                ]
+                ],
+                "max": 1,
+                "label": {
+                    "singular": "country",
+                    "plural": "countries"
+                }
             }
         ]
     }

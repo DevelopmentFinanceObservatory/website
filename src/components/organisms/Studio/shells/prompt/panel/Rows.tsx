@@ -1,3 +1,4 @@
+import classNames from 'classnames';
 import { useEffect, useRef } from 'react';
 
 import { useStudioModel } from '../../../hooks/studioContext';
@@ -241,7 +242,11 @@ export const SourceRowButton = ({
                 <span className={styles.sourceName}>{source.name}</span>
                 <Chevron direction="right" />
             </span>
-            {source.meta && <span className={partStyles.mono}>{source.meta}</span>}
+            {source.meta && (
+                <span className={classNames(partStyles.mono, partStyles.one)} title={source.meta}>
+                    {source.meta}
+                </span>
+            )}
         </button>
     );
 };

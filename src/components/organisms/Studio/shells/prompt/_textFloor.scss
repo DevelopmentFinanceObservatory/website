@@ -1,0 +1,25 @@
+@use "sass:math";
+@use "mixins" as *;
+
+// The Prompt layout's text follows the site's fluid rem() but never renders
+// under 11 px, however narrow the window's band makes the root font.
+$text-floor: 11px;
+
+// A fluid size that stops at the floor.
+
+@function rem-floor($size) {
+    @return max(#{$text-floor}, #{rem($size)});
+}
+
+// The site's font-size mixin with the floor: the same line-height rule (a
+// ratio under 4, else a px line height turned into a ratio).
+
+@mixin font-size-floor($size, $line: 1.5) {
+    font-size: rem-floor($size);
+
+    @if strip-units($line) < 4 {
+        line-height: strip-units($line);
+    } @else {
+        line-height: math.div(strip-units($line), strip-units($size));
+    }
+}

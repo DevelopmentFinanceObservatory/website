@@ -347,9 +347,21 @@ export type PlaceOption = { id: string; label: string };
 
 /** A role of a card whose places can change: the role as the card's spec
  *  names it (`observationAbout`, `origin`, `destination`), the places it shows
- *  now (at least one), and whether it takes several at once. The places it
- *  can change to are read on demand (GET /api/studio/places, `PlacesOptions`). */
-export type PlacesOffer = { role: string; multiple: boolean; chosen: PlaceOption[] };
+ *  now (at least one), whether it takes several at once, the most it can
+ *  draw (`max`, absent on a card stored before it was kept), and what the
+ *  card's data calls its places (`label`, one form or both, absent where the
+ *  data names none). The places it can change to are read on demand (GET
+ *  /api/studio/places, `PlacesOptions`). */
+export type PlacesOffer = {
+    role: string;
+    multiple: boolean;
+    chosen: PlaceOption[];
+    max?: number;
+    label?: PlacesLabel;
+};
+
+/** What a card's data calls a role's places, in one form or both. */
+export type PlacesLabel = { singular?: string; plural?: string };
 
 /** On a `component.created` frame, and on a stored card, whose card draws one
  *  retrieval's own frame: the spec the card reads, which `apply_change`
@@ -712,7 +724,9 @@ export type ActivityStepFrame = {
     duration_ms?: number | null;
     produced?: { component_id: string; revision: number } | null;
     progress?: StepProgress | null;
-    // The approved plan's step this line runs, absent off a plan.
+    // The approved plan and its step this line runs, both or neither,
+    // absent off a plan.
+    plan_version_id?: string | null;
     plan_step_id?: string | null;
 };
 
@@ -904,8 +918,9 @@ export type TurnState = {
 /** A card a closed turn made or changed, as the conversation stores it.
  *  `unit_change`, `card_changes` and `replaces` are its `component.created`
  *  frame's: the offers its changes open on, and the card whose canvas slot it
- *  took. A card an older harness stored carries none of them. A stored card
- *  names no plan. */
+ *  took. `plan_version_id` and `plan_step_id` are the plan and step its
+ *  `created_from` named, both or neither. A card an older harness stored
+ *  carries none of them. */
 export type StoredCard = {
     component_id: string;
     type: string;
@@ -915,6 +930,8 @@ export type StoredCard = {
     unit_change?: UnitChange | null;
     card_changes?: CardChanges | null;
     replaces?: string | null;
+    plan_version_id?: string | null;
+    plan_step_id?: string | null;
 };
 
 /** One closed turn: the user's message as the turn recorded it, the reply it

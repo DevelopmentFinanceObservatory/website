@@ -14,6 +14,9 @@ export type PairRow = {
     below?: ReactNode;
 };
 
+// A label longer than this goes above its value, at the row's full width.
+const STACK_AFTER = 14;
+
 const present = (value: ReactNode): boolean =>
     value !== null &&
     value !== undefined &&
@@ -21,8 +24,9 @@ const present = (value: ReactNode): boolean =>
     value !== '' &&
     !(Array.isArray(value) && value.length === 0);
 
-/** Label and value rows on a 96 px label column. Nothing is drawn for an
- *  empty value. */
+/** Label and value rows on one label column shared by the rows, at most 96
+ *  px wide; a long label sits above its value. Nothing is drawn for an empty
+ *  value. */
 export const Pairs = ({ rows, className }: { rows: PairRow[]; className?: string }) => {
     const shown = rows.filter((row) => present(row.value));
 
@@ -31,7 +35,12 @@ export const Pairs = ({ rows, className }: { rows: PairRow[]; className?: string
     return (
         <dl className={classNames(styles.pairs, className)}>
             {shown.map((row) => (
-                <div key={row.key} className={styles.pair} data-sp-row={row.key}>
+                <div
+                    key={row.key}
+                    className={styles.pair}
+                    data-sp-row={row.key}
+                    data-stacked={row.label.length > STACK_AFTER || undefined}
+                >
                     <dt className={styles.pairLabel}>{row.label}</dt>
                     <dd className={styles.pairValue}>
                         {row.action && <span className={styles.pairAction}>{row.action}</span>}

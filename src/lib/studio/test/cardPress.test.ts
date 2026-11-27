@@ -36,6 +36,17 @@ describe('pressAction', () => {
     }
 });
 
+describe('pressAction on a one-column canvas', () => {
+    it('pans on a touch of the head or frame and still drags by mouse or pen', () => {
+        const press = (pointerType: string) =>
+            pressAction({ pointerType, zone: 'handle', readOnly: false, column: true });
+
+        assert.equal(press('touch'), 'pan');
+        assert.equal(press('mouse'), 'drag');
+        assert.equal(press('pen'), 'drag');
+    });
+});
+
 describe('dragLifts', () => {
     it('waits for a 4px move', () => {
         assert.equal(dragLifts(0, 0), false);

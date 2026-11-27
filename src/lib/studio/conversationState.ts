@@ -31,9 +31,10 @@ import {
     withOfferedQuestion,
     withoutUnsentQuestion,
 } from './transcript.ts';
-import { reviseWidget, widgetFromComponent } from './widgets.ts';
+import { planStepOf, reviseWidget, widgetFromComponent } from './widgets.ts';
 import { readHeld } from './wire.ts';
 import { placeCard } from './cardReplace.ts';
+import { rowValues } from './changeNote.ts';
 import { cardChangesOf } from './studioClient.ts';
 import type {
     ClosedTurn,
@@ -579,9 +580,10 @@ export const replacedCard = (
  * `widgets` with the cards `ids`, which the page drew from a read before
  * their turn closed and so without their stored cards, brought to what
  * their frames would have drawn once a read carries those cards (`stored`):
- * a card with no unit offer, or no offer of years and places, takes its
- * stored card's, and a card that replaced a card the page holds off the
- * canvas (`onCanvas` lacks it, replacedCard) takes that card's slot.
+ * a card with no unit offer, no offer of years and places, or no plan step
+ * takes its stored card's, and a card that replaced a card the page holds off the
+ * canvas (`onCanvas` lacks it, replacedCard) takes that card's slot, and its
+ * turn too when a card change turn drew it (`changes`, changeTurns).
  * `replaced` lists each swap, old card first, so the canvas moves the old
  * card's settings. The same array when nothing changed.
  */
@@ -590,6 +592,7 @@ export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
     stored: ReadonlyMap<string, StoredCard>,
     ids: Iterable<string>,
     onCanvas: ReadonlySet<string>,
+    changes: ReadonlySet<number> = new Set(),
 ): { widgets: TWidget[]; replaced: [string, string][] } => {
     let next = widgets;
     const replaced: [string, string][] = [];
@@ -616,6 +619,13 @@ export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
             next = next.map((widget) => (widget.id === id ? drawn : widget));
         }
 
+        const planStep = planStepOf(card);
+
+        if (planStep && drawn.kind !== 'text' && !drawn.planStep) {
+            drawn = { ...drawn, planStep };
+            next = next.map((widget) => (widget.id === id ? drawn : widget));
+        }
+
         const from = replacedCard(
             id,
             stored,
@@ -623,7 +633,11 @@ export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
         );
 
         if (from) {
-            next = placeCard(next, drawn, { replaces: from });
+            next = placeCard(next, drawn, {
+                replaces: from,
+                keepTurn: changes.has(drawn.turn),
+                values: rowValues,
+            });
             replaced.push([from, id]);
         }
     }
@@ -782,6 +796,13 @@ export const widgetFromRead = (
                   provenance: provenanceOfRead(read),
                   unit_change: stored?.unit_change ?? null,
                   card_changes: stored?.card_changes ?? null,
+                  ...(stored && {
+                      created_from: {
+                          step_id: '',
+                          plan_version_id: stored.plan_version_id ?? null,
+                          plan_step_id: stored.plan_step_id ?? null,
+                      },
+                  }),
               });
     } catch {
         return null;

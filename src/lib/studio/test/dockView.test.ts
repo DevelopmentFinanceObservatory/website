@@ -369,7 +369,10 @@ test('Step n of m names the plan step the newest running line runs, when the lin
         steps: ['s1', 's2', 's3', 's4'].map((id) => ({ id, label: id })),
     };
     // Seven lines after the approval: each names its plan step, or none.
-    const entry = (lines: [string | undefined, 'running' | 'complete'][]): ActivityEntry => ({
+    const entry = (
+        lines: [string | undefined, 'running' | 'complete'][],
+        planVersionId?: string,
+    ): ActivityEntry => ({
         turn: 1,
         prompt: 'Q',
         startedAt: 0,
@@ -382,10 +385,31 @@ test('Step n of m names the plan step the newest running line runs, when the lin
             state,
             startOrder: 2 + at,
             ...(planStepId && { planStepId }),
+            ...(planVersionId && { planVersionId }),
         })),
     });
-    const step = (lines: [string | undefined, 'running' | 'complete'][]) =>
-        planStep(plan, entry(lines))?.step;
+    const step = (lines: [string | undefined, 'running' | 'complete'][], planVersionId?: string) =>
+        planStep(plan, entry(lines, planVersionId))?.step;
+
+    // Lines naming another plan's version name none of this plan's steps,
+    // since step ids repeat across plans; this plan's version reads them.
+    for (const [version, expected] of [
+        [plan.plan_version_id, 2],
+        ['pv-other', 3],
+    ] as const) {
+        assert.equal(
+            step(
+                [
+                    ['s2', 'running'],
+                    [undefined, 'running'],
+                    [undefined, 'running'],
+                ],
+                version,
+            ),
+            expected,
+            version,
+        );
+    }
 
     assert.equal(
         step([

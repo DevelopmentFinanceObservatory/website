@@ -16,9 +16,11 @@ import { build } from 'esbuild';
 
 import type {
     ChatSnapshot,
+    TurnWidget,
     useChat as UseChat,
 } from '../../../components/organisms/Studio/hooks/useChat.ts';
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
+import { rowValues } from '../changeNote.ts';
 import { OWED_RETRY_MS } from '../owedRemovals.ts';
 import { streamedText } from '../replyStream.ts';
 import { widgetFromComponent } from '../widgets.ts';
@@ -1097,4 +1099,450 @@ test('a places read stops once every caller has left it, and a caller that stays
     assert.equal(signals.length, 3);
     assert.equal(signals[2]?.aborted, false);
     page.unmount();
+});
+
+// Card identity: the harness's card frame (`event-06`) under `id`, offering a
+// change of years, and what a reply's chips name (DockSheets' ReplyContent
+// lists the cards whose `turn` is the reply's).
+const cardFrame = (id: string, replaces?: string): ComponentCreated => ({
+    ...(JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-06-component-created.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ComponentCreated),
+    component_id: id,
+    ...(replaces && { replaces }),
+    card_changes: {
+        spec_id: `spec_${id}`,
+        window: { start_year: 2016, end_year: 2024, first_year: 2000, last_year: 2024 },
+    },
+});
+const yearsCard = (id: string, turn: number) => {
+    const widget = widgetFromComponent(cardFrame(id));
+
+    assert.ok(widget);
+
+    return { ...widget, turn };
+};
+const yearsChange = (id: string) => ({
+    title: 'Aid',
+    row: 'years' as const,
+    label: 'Years',
+    words: '2010 to 2020',
+    request: {
+        component_id: id,
+        spec_id: `spec_${id}`,
+        change: { kind: 'window' as const, start_year: 2010, end_year: 2020 },
+    },
+});
+const manifestOf = (ids: string[]) => ({
+    composition_id: 'cps_1',
+    revision: 9,
+    actor: 'assistant',
+    blocks: ids.map((id) => ({ component_id: id, revision: 1, type: 'line_chart', title: id })),
+    counts: { all: ids.length, stats: 0, charts: ids.length, tables: 0, notes: 0 },
+});
+// One response body, so every frame reaches the page in one chunk.
+const chunk = (turnIndex: number, frames: unknown[]) =>
+    new Response(frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join(''), {
+        headers: { 'x-dfo-turn-index': String(turnIndex) },
+    });
+const done = (manifest?: ReturnType<typeof manifestOf>) => ({
+    event: 'done',
+    seq: 99,
+    trace_id: 't',
+    ...(manifest && { composition: manifest }),
+});
+const chipsOf = (widgets: readonly { id: string; turn: number }[], turn: number) =>
+    widgets.filter((widget) => widget.turn === turn).map((widget) => widget.id);
+const drawn = (): ChatSnapshot => ({
+    sessionId: 'conv_1',
+    messages: [
+        { role: 'user', text: 'Aid to Kenya', turn: 1, harnessTurn: 1 },
+        { role: 'bot', text: 'Here.' },
+    ],
+    widgets: [yearsCard('cmp_1', 1)],
+    turnCount: 1,
+    canvas: { compositionId: 'cps_1', revision: 1, ids: ['cmp_1'] },
+});
+
+test('a card change redraws the card under the question that drew it, each time, and the card records only the changes that drew it, also once saved and reopened', async (t) => {
+    let index = 1;
+    const changes: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        const body = JSON.parse(String(init?.body));
+
+        index += 1;
+
+        if (!body.apply_change) return chunk(index, [done()]);
+
+        const change = body.apply_change;
+
+        changes.push(change.component_id);
+
+        // The first change is refused before any turn opens.
+        if (changes.length === 1) {
+            index -= 1;
+
+            return Response.json(
+                { error: 'constraint_violation', retry: 'do_not_retry', detail: 'Refused.' },
+                { status: 422 },
+            );
+        }
+
+        return chunk(index, [cardFrame(`cmp_${index}`, change.component_id as string), done()]);
+    });
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(console, 'error', () => {});
+
+    const page = renderHook(() => useChat(), { rendersLater: true });
+
+    page.result().hydrate(drawn());
+    await page.settle();
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(60);
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(60);
+    page.result().applyChange(yearsChange('cmp_2'));
+    await page.settle(60);
+
+    const history = ({ id, turn, replaced, changedIn, before }: TurnWidget) => ({
+        id,
+        turn,
+        replaced,
+        changedIn,
+        before,
+    });
+    // Page turn 2 is the refused change, 3 and 4 the ones that drew cmp_2
+    // and cmp_3.
+    // `before` holds the rows as the reply drew cmp_1.
+    const expected = [
+        {
+            id: 'cmp_3',
+            turn: 1,
+            replaced: ['cmp_2', 'cmp_1'],
+            changedIn: [3, 4],
+            before: rowValues(yearsCard('cmp_1', 1)),
+        },
+    ];
+
+    assert.deepEqual(page.result().widgets.map(history), expected);
+
+    // As useConversationSave saves it, through JSON.
+    const { messages, widgets, activity, snapshot } = page.result();
+    const saved = JSON.parse(
+        JSON.stringify({ ...snapshot(), messages, widgets, activity }),
+    ) as ChatSnapshot;
+
+    page.unmount();
+
+    const reopened = renderHook(() => useChat(), { rendersLater: true });
+
+    reopened.result().hydrate(saved);
+    await reopened.settle();
+    assert.deepEqual(reopened.result().widgets.map(history), expected);
+    // The reopened page knows the chain, so a change of the first card,
+    // queued behind a question, goes to the card standing for it.
+    reopened.result().send('And to Uganda?');
+    reopened.result().applyChange(yearsChange('cmp_1'));
+    await reopened.settle(80);
+    assert.equal(changes.at(-1), 'cmp_3');
+    assert.deepEqual(reopened.result().dropped, []);
+    reopened.unmount();
+});
+
+test('a change queued behind a question goes to the card the question drew in its place, also from the chunk that ended the turn', async (t) => {
+    const changes: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        const body = JSON.parse(String(init?.body));
+
+        if (!body.apply_change) {
+            return chunk(2, [cardFrame('cmp_2', 'cmp_1'), done(manifestOf(['cmp_2']))]);
+        }
+
+        changes.push(body.apply_change);
+
+        return chunk(3, [cardFrame('cmp_3', 'cmp_2'), done(manifestOf(['cmp_3']))]);
+    });
+
+    const page = renderHook(() => useChat(), { rendersLater: true });
+
+    page.result().hydrate(drawn());
+    await page.settle();
+    page.result().send('Start it in 2012.');
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(80);
+
+    assert.deepEqual(changes, [{ ...yearsChange('cmp_2').request, spec_id: 'spec_cmp_2' }]);
+    // The question drew the card again, so the card and its change are that
+    // question's.
+    assert.deepEqual(chipsOf(page.result().widgets, 2), ['cmp_3']);
+    assert.deepEqual(page.result().dropped, []);
+    page.unmount();
+});
+
+test('a change queued behind a question that takes its card off is dropped, and the card stays with its reply', async (t) => {
+    const turns: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        turns.push(JSON.parse(String(init?.body)));
+
+        return chunk(2, [done(manifestOf([]))]);
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat(), { rendersLater: true });
+
+    page.result().hydrate(drawn());
+    await page.settle();
+    page.result().send('Take the chart off.');
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(80);
+
+    assert.equal(turns.length, 1);
+    assert.deepEqual(
+        page.result().dropped.map(({ card, row }) => [card, row]),
+        [['cmp_1', 'years']],
+    );
+    assert.deepEqual(chipsOf(page.result().widgets, 1), ['cmp_1']);
+    page.unmount();
+});
+
+test('a card change carried on after a reload, or read back closed, keeps the card with the question that drew it', async (t) => {
+    const openTurn = {
+        index: 2,
+        status: 'running',
+        trace_id: 'tr_2',
+        user_message: '2010 to 2020',
+        card_change: { component_id: 'cmp_1', kind: 'window' },
+        lease_live: false,
+    };
+    const closedTurn = {
+        turn_index: 2,
+        user_message: '2010 to 2020',
+        reply: '',
+        component_ids: ['cmp_2'],
+        cards: [
+            {
+                component_id: 'cmp_2',
+                type: 'line_chart',
+                title: 'Aid',
+                revision: 1,
+                replaces: 'cmp_1',
+            },
+        ],
+        card_change: { component_id: 'cmp_1', kind: 'window' },
+    };
+    const read = cardFrame('cmp_2');
+
+    for (const path of ['resumed', 'rebuilt'] as const) {
+        let reads = 0;
+        const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+            const url = String(input);
+
+            if (url.startsWith('/api/studio/state')) {
+                reads += 1;
+
+                return Response.json(
+                    path === 'resumed' && reads === 1
+                        ? {
+                              conversation_id: 'conv_1',
+                              turn: openTurn,
+                              closed_since: [],
+                              closed_total: 1,
+                              manifest: manifestOf(['cmp_1']),
+                          }
+                        : {
+                              conversation_id: 'conv_1',
+                              turn: { ...openTurn, status: 'done' },
+                              closed_since: [closedTurn],
+                              closed_total: 2,
+                              manifest: manifestOf(['cmp_2']),
+                          },
+                );
+            }
+
+            if (url === '/api/studio/resume') {
+                return chunk(2, [cardFrame('cmp_2', 'cmp_1'), done(manifestOf(['cmp_2']))]);
+            }
+
+            if (url.startsWith('/api/presentation/components/cmp_2')) {
+                return Response.json({
+                    resolved_payload: read.payload,
+                    fact_summary: read.fact_summary,
+                    catalog_version: read.catalog_version,
+                });
+            }
+
+            return new Response('{}', { status: 404 });
+        };
+        const page = await reopen(t, drawn(), fetch);
+
+        await page.settle(60);
+
+        const { widgets, messages } = page.result();
+        const prompt = messages.find((message) => message.role === 'user' && message.edit);
+
+        assert.deepEqual(chipsOf(widgets, 1), ['cmp_2'], path);
+        assert.deepEqual(
+            widgets.map(({ replaced, changedIn }) => [replaced, changedIn]),
+            [[['cmp_1'], [prompt?.role === 'user' ? prompt.turn : -1]]],
+            path,
+        );
+        assert.deepEqual(
+            prompt?.role === 'user' && prompt.edit,
+            { card: 'cmp_1', row: 'years' },
+            path,
+        );
+        page.unmount();
+        t.mock.restoreAll();
+    }
+});
+
+test('a card change the harness refuses leaves a waiting plan waiting, and one it admits ends the pause', async (t) => {
+    const proposed = JSON.parse(
+        readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
+    );
+    const unitCard = (): Parameters<ReturnType<typeof useChat>['applyUnit']>[0] => ({
+        title: 'Aid',
+        offer: {
+            currencies: [{ code: 'USD', name: 'US dollars', prices: ['current', 'constant'] }],
+            presets: [],
+            start: { currency: 'USD', prices: 'current' },
+        },
+        request: {
+            component_id: 'cmp_1',
+            spec_id: 'spec_cmp_1',
+            turn: 1,
+            unit: { currency: 'USD', prices: 'constant', base_year: 2023 },
+        },
+    });
+    const placesChange = {
+        title: 'Aid',
+        row: 'shows' as const,
+        role: 'destination',
+        label: 'Recipient',
+        words: 'Kenya',
+        request: {
+            component_id: 'cmp_1',
+            spec_id: 'spec_cmp_1',
+            change: { kind: 'places' as const, role: 'destination', entities: ['country/KEN'] },
+        },
+    };
+
+    for (const kind of ['unit', 'years', 'places'] as const) {
+        for (const admitted of [false, true]) {
+            const name = `${kind}, ${admitted ? 'admitted' : 'refused'}`;
+
+            t.mock.method(
+                globalThis,
+                'fetch',
+                async (input: RequestInfo | URL, init?: RequestInit) => {
+                    if (String(input) !== '/api/studio/turn')
+                        return new Response('{}', { status: 404 });
+
+                    const body = JSON.parse(String(init?.body));
+
+                    if (body.message) return chunk(2, [proposed]);
+
+                    if (!admitted) {
+                        return Response.json(
+                            {
+                                error: 'constraint_violation',
+                                retry: 'do_not_retry',
+                                detail: 'Refused.',
+                                constraint_id: 'change_no_data',
+                                pointer: kind === 'unit' ? '/apply_unit' : '/apply_change',
+                            },
+                            { status: 422 },
+                        );
+                    }
+
+                    return chunk(3, [cardFrame('cmp_2', 'cmp_1'), done()]);
+                },
+            );
+            t.mock.method(console, 'warn', () => {});
+            t.mock.method(console, 'error', () => {});
+
+            const page = renderHook(() => useChat(), { rendersLater: true });
+
+            page.result().hydrate(drawn());
+            await page.settle();
+            page.result().send('Aid to Ethiopia for health');
+            await page.settle(60);
+            assert.ok(page.result().plan, name);
+
+            if (kind === 'unit') page.result().applyUnit(unitCard());
+            else if (kind === 'years') page.result().applyChange(yearsChange('cmp_1'));
+            else page.result().applyChange(placesChange);
+
+            await page.settle(60);
+
+            assert.equal(page.result().plan === null, admitted, name);
+            page.unmount();
+            t.mock.restoreAll();
+        }
+    }
+});
+
+test('a card change queued behind a question that pauses on a plan or a question is dropped where pauses drop changes, and waits elsewhere', async (t) => {
+    const fixture = (name: string) =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const pauses = {
+        plan: fixture('event-03-plan-proposed.json'),
+        question: fixture('event-14-elicitation-questions.json'),
+    };
+
+    for (const [pause, frame] of Object.entries(pauses)) {
+        for (const pausesDropChanges of [true, false]) {
+            const name = `${pause}, ${pausesDropChanges ? 'drops' : 'waits'}`;
+            const turns: unknown[] = [];
+
+            t.mock.method(
+                globalThis,
+                'fetch',
+                async (input: RequestInfo | URL, init?: RequestInit) => {
+                    if (String(input) !== '/api/studio/turn') {
+                        return new Response('{}', { status: 404 });
+                    }
+
+                    turns.push(JSON.parse(String(init?.body)));
+
+                    return chunk(2, [frame]);
+                },
+            );
+
+            const page = renderHook(() => useChat(undefined, { pausesDropChanges }), {
+                rendersLater: true,
+            });
+
+            page.result().hydrate(drawn());
+            await page.settle();
+            assert.equal(page.result().changesHeld, null, name);
+            page.result().send('Aid to Ethiopia for health');
+            page.result().applyChange(yearsChange('cmp_1'));
+            await page.settle(60);
+
+            assert.equal(turns.length, 1, name);
+            assert.ok(pause === 'plan' ? page.result().plan : page.result().clarify, name);
+            assert.notEqual(page.result().changesHeld, null, name);
+            assert.equal(page.result().queued.length, pausesDropChanges ? 0 : 1, name);
+            assert.deepEqual(
+                page.result().dropped.map(({ card, row }) => [card, row]),
+                pausesDropChanges ? [['cmp_1', 'years']] : [],
+                name,
+            );
+            page.unmount();
+            t.mock.restoreAll();
+        }
+    }
 });
