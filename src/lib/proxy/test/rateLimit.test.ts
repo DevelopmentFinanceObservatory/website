@@ -19,6 +19,13 @@ import { createFallbackCounter } from '../limitFallback.ts';
 
 const { createLimiter, dailyAllowance } = await import('../rateLimit.ts');
 
+/** Whole seconds from `nowMs` to the next 00:00 UTC. */
+const secondsToUtcMidnight = (nowMs: number): number => {
+    const dayMs = 86_400_000;
+
+    return Math.ceil((dayMs - (nowMs % dayMs)) / 1000);
+};
+
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../../../../db/migrations');
 
 test('limiter: counts an address and an account apart, per surface, at the limit given', async (t) => {
@@ -72,7 +79,9 @@ test('limiter: counts an address and an account apart, per surface, at the limit
     });
 
     await t.test('a daily counter is counted in a one-day window under its own key', async () => {
+        const before = secondsToUtcMidnight(Date.now());
         const first = await limiter.hitDaily('apiday:user:k1', 2);
+        const after = secondsToUtcMidnight(Date.now());
         const second = await limiter.hitDaily('apiday:user:k1', 2);
         const third = await limiter.hitDaily('apiday:user:k1', 2);
 
@@ -85,7 +94,16 @@ test('limiter: counts an address and an account apart, per surface, at the limit
             ],
         );
         // The window is a UTC day, whatever window the per-minute counts use.
-        assert.ok(first.reset > 3600 && first.reset <= 86_400);
+        // Postgres counts the seconds, so allow its rounding and the call's own latency. When
+        // the day turned during the call, the window it counted in is the new one.
+        const turned = after > before;
+
+        assert.ok(
+            turned
+                ? first.reset >= 86_400 - 2 || first.reset <= before + 1
+                : first.reset >= after - 1 && first.reset <= before + 1,
+            `reset ${first.reset} outside the seconds to midnight UTC, ${after} to ${before}`,
+        );
 
         const { rows } = await pool.query(
             "select count from limit_counter where key = 'apiday:user:k1'",
