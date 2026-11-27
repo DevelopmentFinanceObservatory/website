@@ -14,7 +14,6 @@ import SectionHeading from '@/components/molecules/SectionHeading/SectionHeading
 import { useGridCell } from '@/hooks/useGridCell';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
-import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 
 // The showcase renders real Studio cards (Chart.js and all) — loaded after
 // the page, browser-only, so the homepage's own bundle stays light.
@@ -206,21 +205,11 @@ const CreateCanvas = () => {
                         insights without weeks of data processing.
                     </p>
                     <div className={styles.actions}>
-                        {GALLERY_PUBLISHED && (
-                            <Button
-                                variant="dark"
-                                data-reveal
-                                style={revealIndex(1)}
-                                onClick={() => router.push('/insights/gallery')}
-                            >
-                                Browse Gallery
-                            </Button>
-                        )}
                         <Button
                             icon="arrow-up-right"
                             wide
                             data-reveal
-                            style={revealIndex(GALLERY_PUBLISHED ? 2 : 1)}
+                            style={revealIndex(1)}
                             onClick={() => router.push('/studio')}
                         >
                             Open Studio

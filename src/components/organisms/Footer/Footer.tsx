@@ -9,28 +9,26 @@ import styles from './Footer.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import TextFill from '@/components/atoms/TextFill/TextFill';
+import { useLibraryEnabled } from '@/hooks/useLibraryEnabled';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { useScrollFrame } from '@/hooks/useScrollFrame';
 import { enterProgress } from '@/utils/scroll';
 import { showPrivacySettings } from '@/lib/consent';
 import { DOCS_MENU } from '@/lib/docs/nav';
-import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 import { IS_SITE, siteHref } from '@/lib/site';
 import Logo from '@/assets/svg/logo.svg';
 import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
-// The Data column mirrors the header's Data dropdown exactly — same
-// entries, same order (Coverage is left out of both until it's built).
+// The Data column holds the header's Data dropdown in the same order, then
+// Library (while LIBRARY_ENABLED is on) and Studio, which the header leaves
+// out. Coverage is left out of
+// both until it is built.
 const columns = [
-    {
-        title: 'Insights',
-        links: GALLERY_PUBLISHED ? ['Chat', 'Gallery', 'Publications'] : ['Chat', 'Publications'],
-    },
-    { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data'] },
+    { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data', 'Library', 'Studio'] },
     // Status is hidden for launch — see src/app/(site)/docs/status/page.tsx.
     { title: 'Docs', links: DOCS_MENU.map((entry) => entry.label) },
-    { title: 'About', links: ['About DFO', 'Contact us'] },
+    { title: 'About', links: ['About DFO', 'Publications', 'Contact us'] },
 ];
 
 // Contact opens a mail draft to the DFO team — the same address the
@@ -41,9 +39,9 @@ const CONTACT_MAILTO = 'mailto:data@one.org';
 const FOOTER_ROUTES: Record<string, string> = {
     'About DFO': '/about',
     'Contact us': CONTACT_MAILTO,
-    Chat: '/studio',
-    Gallery: '/insights/gallery',
-    Publications: '/insights/publications',
+    Library: '/library',
+    Studio: '/studio',
+    Publications: '/about/publications',
     Sources: '/data/sources',
     Roadmap: '/data/roadmap',
     'Get Data': '/data',
@@ -55,6 +53,7 @@ const Footer = () => {
     const footerRef = useReveal<HTMLElement>(0);
     const dfoRef = useRef<HTMLDivElement>(null);
     const reducedMotion = usePrefersReducedMotion();
+    const libraryEnabled = useLibraryEnabled() === true;
 
     // The giant DFO rises from below the fold over the map — the whole
     // wordmark as one piece (17/22 of the logo's viewBox height ≈ the old
@@ -142,19 +141,30 @@ const Footer = () => {
                         >
                             <p className={styles.columnTitle}>{title}</p>
                             <ul className={styles.columnLinks}>
-                                {links.map((link) => (
-                                    <li key={link}>
-                                        {!FOOTER_ROUTES[link] ? (
-                                            <a href="#">{link}</a>
-                                        ) : FOOTER_ROUTES[link].startsWith('mailto:') ? (
-                                            // A plain anchor — router prefetch
-                                            // has no business on a mailto.
-                                            <a href={FOOTER_ROUTES[link]}>{link}</a>
-                                        ) : (
-                                            <Link href={siteHref(FOOTER_ROUTES[link])}>{link}</Link>
-                                        )}
-                                    </li>
-                                ))}
+                                {links
+                                    .filter((link) => link !== 'Library' || libraryEnabled)
+                                    .map((link) => (
+                                        <li key={link}>
+                                            {!FOOTER_ROUTES[link] ? (
+                                                <a href="#">{link}</a>
+                                            ) : FOOTER_ROUTES[link].startsWith('mailto:') ? (
+                                                // A plain anchor — router prefetch
+                                                // has no business on a mailto.
+                                                <a href={FOOTER_ROUTES[link]}>{link}</a>
+                                            ) : (
+                                                // /library is force-dynamic and reads
+                                                // the database, so it is not prefetched.
+                                                <Link
+                                                    href={siteHref(FOOTER_ROUTES[link])}
+                                                    prefetch={
+                                                        link === 'Library' ? false : undefined
+                                                    }
+                                                >
+                                                    {link}
+                                                </Link>
+                                            )}
+                                        </li>
+                                    ))}
                             </ul>
                         </div>
                     ))}

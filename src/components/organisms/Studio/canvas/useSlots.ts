@@ -44,8 +44,8 @@ type UseSlotsArgs = {
  * their slot is pruned. A fresh newcomer takes the first spot clear of every
  * live card (blocks.ts `newcomerSpot`); a restored one takes its saved rect,
  * and any unpinned veteran that rect crowds slides to the nearest place that
- * still fits. Also owns the content-fit of every card
- * but a stat card (rows follow the content) and the z-order counter.
+ * still fits. Also owns the content-fit of every card (rows follow the
+ * content; a stat card's only grow to hold it) and the z-order counter.
  */
 export const useSlots = ({
     widgets,
@@ -120,9 +120,11 @@ export const useSlots = ({
         onLayoutChange(layout);
     }, [slots, onLayoutChange]);
 
-    // Sets the slot's rows for a derived height (every card but a stat card),
-    // within the range of its current view, and lets the neighbours make
-    // room. Pinned ones move too, since the card cannot take less.
+    // Sets the slot's rows a card's content needs, within the range of its
+    // current view, and lets the neighbours make room. Pinned ones move too,
+    // since the card cannot take less. A stat card's slot only grows, so a
+    // height the user dragged larger holds, and it keeps the rows as its
+    // `need`, the floor of its grip (layout's floorRange).
     const fitRows = useCallback(
         (id: string, rows: number) => {
             setSlots((prev) => {
@@ -136,13 +138,30 @@ export const useSlots = ({
                     slot.widget,
                     resolveCardView(slot.widget, views[id]).view,
                 );
-                const h = clamp(rows, min, max);
 
-                if (h === slot.h) {
+                if (slot.widget.kind !== 'key_number') {
+                    const h = clamp(rows, min, max);
+
+                    return h === slot.h && slot.need === undefined
+                        ? prev
+                        : settleAround(
+                              { ...prev, [id]: { ...slot, h, need: undefined } },
+                              [id],
+                              pinnedIds,
+                              true,
+                          );
+                }
+
+                const need = clamp(rows, min, max);
+                const h = Math.max(slot.h, need);
+
+                if (h === slot.h && need === slot.need) {
                     return prev;
                 }
 
-                return settleAround({ ...prev, [id]: { ...slot, h } }, [id], pinnedIds, true);
+                const next = { ...prev, [id]: { ...slot, h, need } };
+
+                return h === slot.h ? next : settleAround(next, [id], pinnedIds, true);
             });
         },
         [pinnedIds, views],

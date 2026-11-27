@@ -72,13 +72,19 @@ export const placeSlots = (
             // card): the slot re-points at the fresh widget. Its
             // height stays inside what its view allows, so a chart
             // switched to the table view comes back into the
-            // grip's range.
+            // grip's range. A new widget drops the old one's
+            // need, and a stat card measures its own again.
             const fresh = byId.get(id)!;
             const { min, max } = heightRange(fresh, resolveCardView(fresh, views[id]).view);
             const h = clamp(slot.h, min, max);
 
             if (fresh !== slot.widget || h !== slot.h) {
-                next[id] = { ...slot, widget: fresh, h };
+                next[id] = {
+                    ...slot,
+                    widget: fresh,
+                    h,
+                    need: fresh === slot.widget ? slot.need : undefined,
+                };
                 changed = true;
             } else {
                 next[id] = slot;
