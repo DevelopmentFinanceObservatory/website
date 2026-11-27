@@ -460,6 +460,7 @@ test('library store', async (t) => {
         // The same text with a new topic.
         assert.deepEqual(await store.updateArtifact(id, { ...text, topics: ['Health'] }, 0), {
             slug: 'edited-chart',
+            revision: 1,
         });
 
         const retopiced = await dates();
@@ -501,7 +502,7 @@ test('library store', async (t) => {
                 { ...base, title: 'Raced chart, revised', content: 'Aid rose.' },
                 0,
             ),
-            { slug: 'raced-chart' },
+            { slug: 'raced-chart', revision: 1 },
         );
 
         // A's write, made from revision 0, would put "Aid doubled." back.

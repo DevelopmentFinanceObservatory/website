@@ -9,6 +9,7 @@ import {
     publishRefusalText,
     readEvergreenAnswer,
     readEvergreenWarnings,
+    readRevision,
     sameField,
 } from '../client.ts';
 
@@ -186,4 +187,11 @@ test('readEvergreenWarnings narrows the flagged sentences and drops unreadable o
     );
     assert.deepEqual(readEvergreenWarnings({ slug: 'a' }), []);
     assert.deepEqual(readEvergreenWarnings(null), []);
+});
+
+test('readRevision reads the revision an edit wrote and nothing else', () => {
+    assert.equal(readRevision({ slug: 'a', revision: 3, warnings: [] }), 3);
+    assert.equal(readRevision({ slug: 'a', revision: '3' }), null);
+    assert.equal(readRevision({ slug: 'a' }), null);
+    assert.equal(readRevision(null), null);
 });
