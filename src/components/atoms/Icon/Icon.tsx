@@ -8,6 +8,7 @@ import ArrowSmall from '@/assets/svg/arrow-small.svg';
 import ArrowUpRight from '@/assets/svg/arrow-up-right.svg';
 import Ask from '@/assets/svg/ask.svg';
 import Bulb from '@/assets/svg/bulb.svg';
+import Canvas from '@/assets/svg/canvas.svg';
 import ChartBar from '@/assets/svg/chart-bar.svg';
 import ChartLine from '@/assets/svg/chart-line.svg';
 import ChartTable from '@/assets/svg/chart-table.svg';
@@ -24,6 +25,7 @@ import Embed from '@/assets/svg/embed.svg';
 import Feedback from '@/assets/svg/feedback.svg';
 import Info from '@/assets/svg/info.svg';
 import Kebab from '@/assets/svg/kebab.svg';
+import LinkIcon from '@/assets/svg/link.svg';
 import Lock from '@/assets/svg/lock.svg';
 import Menu from '@/assets/svg/menu.svg';
 import Note from '@/assets/svg/note.svg';
@@ -49,6 +51,7 @@ export const icons = {
     'arrow-up-right': ArrowUpRight,
     ask: Ask,
     bulb: Bulb,
+    canvas: Canvas,
     'chart-bar': ChartBar,
     'chart-line': ChartLine,
     'chart-table': ChartTable,
@@ -65,6 +68,7 @@ export const icons = {
     feedback: Feedback,
     info: Info,
     kebab: Kebab,
+    link: LinkIcon,
     lock: Lock,
     menu: Menu,
     note: Note,

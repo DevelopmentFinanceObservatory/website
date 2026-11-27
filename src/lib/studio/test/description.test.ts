@@ -1510,14 +1510,11 @@ test('an undescribed card renders the legacy rows', () => {
     assert.deepEqual(rowsOf(view, 'facts'), { Years: '2010–2024', Indicators: '3' });
 });
 
-test('a saved gallery card without a description renders the legacy rows', () => {
-    const gallery = JSON.parse(
-        readFileSync(
-            new URL('../../../content/gallery/ghana-debt-indicators.json', import.meta.url),
-            'utf8',
-        ),
-    ) as { widgets: { info?: CardInfo }[] };
-    const infos = gallery.widgets.flatMap((widget) => (widget.info ? [widget.info] : []));
+test('a saved card without a description renders the legacy rows', () => {
+    // The info of eight cards saved before descriptions existed.
+    const infos = JSON.parse(
+        readFileSync(new URL('./fixtures/legacy-card-infos.json', import.meta.url), 'utf8'),
+    ) as CardInfo[];
 
     assert.equal(infos.length, 8);
 

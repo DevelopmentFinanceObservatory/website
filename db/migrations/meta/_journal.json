@@ -218,6 +218,20 @@
       "when": 1795676266698,
       "tag": "0031_day_visitor",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795777078948,
+      "tag": "0032_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795788972857,
+      "tag": "0033_library_erase_withdrawn",
+      "breakpoints": true
     }
   ]
 }

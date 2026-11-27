@@ -52,6 +52,14 @@ const nextConfig: NextConfig = {
                 destination: '/graph-explorer/seed',
                 permanent: false,
             },
+            // Publications sits under About. Every other /insights path, the
+            // section's own and its gallery's, goes to the home page.
+            {
+                source: '/insights/publications',
+                destination: '/about/publications',
+                permanent: true,
+            },
+            { source: '/insights/:path*', destination: '/', permanent: false },
         ];
     },
     // A docs page's raw markdown sits beside it: /docs/<path>.md serves the

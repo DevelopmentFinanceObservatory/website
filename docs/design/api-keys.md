@@ -150,7 +150,7 @@ Not covered by an account's limits or a key's cap:
 
 - The proxy's third allowance, `/api/download-pin` at 10 calls a minute, belongs to the site's download UI and is not part of the public API.
 - The Studio's daily prompt allowance is for the site's own chat UI.
-- dfo-apis keeps its own daily allowances per caller: 10 shares and 500 presentation cards, plus pins. A keyed API caller is named by its account and gets these at the default values. Raising them for a partner would be a dfo-apis setting, not part of the account's limit.
+- dfo-apis keeps its own daily allowances per caller: 250 shares and 500 presentation cards, plus pins. A keyed API caller is named by its account and gets these at the default values. Raising them for a partner would be a dfo-apis setting, not part of the account's limit.
 
 ### Cloudflare integration
 
