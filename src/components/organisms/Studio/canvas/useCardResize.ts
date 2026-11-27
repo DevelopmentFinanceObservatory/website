@@ -10,12 +10,22 @@ import {
 } from 'react';
 
 import { edgeScrollSpeed, scrollerOf } from './board';
-import { clamp, GAP, settleAround, type Slots, SPAN_MAX, SPAN_MIN, tooCloseRects } from './layout';
+import {
+    clamp,
+    floorRange,
+    GAP,
+    settleAround,
+    type Slots,
+    SPAN_MAX,
+    SPAN_MIN,
+    tooCloseRects,
+} from './layout';
 import { DRAG_SLACK } from './useCardDrag';
 
 /**
  * Literal corner-grip resizing: snapped to cells, the width clamped to the
- * per-kind range and the height to the range the grip is started with. A
+ * per-kind range and the height to the range the grip is started with,
+ * floored on every step at the rows the slot's content needs (its `need`). A
  * card whose height is derived (layout's heightIsDerived) resizes in width
  * only, and its height follows through the card's own fit; a chart view with
  * a free height (heightIsFree) resizes in both, and the card reads its plot
@@ -49,7 +59,8 @@ export const useCardResize = ({
     const startRef = useRef<{
         id: string;
         widthOnly: boolean;
-        // The heights the card may take, in cells (layout's heightRange).
+        // The heights the grip may set at grab, in cells (layout's
+        // gripRange). Each step floors them at the slot's live need.
         range: { min: number; max: number };
         // Whether the pointer has moved a whole cell in the vertical. Until
         // it has, a free height is still the card's own (its fit answers
@@ -105,10 +116,11 @@ export const useCardResize = ({
 
             start.moved ||= steps !== 0;
 
+            const range = floorRange(start.range, slot.need);
             const h =
                 start.widthOnly || !start.moved
                     ? slot.h
-                    : clamp(start.h + steps, start.range.min, start.range.max);
+                    : clamp(start.h + steps, range.min, range.max);
 
             if (w === slot.w && h === slot.h) {
                 return prev;

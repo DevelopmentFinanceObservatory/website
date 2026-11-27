@@ -1,6 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
+import { useEffect, useState } from 'react';
 
 import BuiltWithMark from './BuiltWithMark';
 import styles from './CardChrome.module.scss';
@@ -64,33 +65,73 @@ const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) =>
     );
 };
 
+// Whether a note runs past its capped height. The observer reports on
+// observe() and whenever the note's box changes size; a new note
+// re-observes, since a note that stays at the cap keeps the same box.
+const useNoteScrolls = (note: string) => {
+    const [node, setNode] = useState<HTMLElement | null>(null);
+    const [scrolls, setScrolls] = useState(false);
+
+    useEffect(() => {
+        if (!node) {
+            return;
+        }
+
+        const observer = new ResizeObserver(() =>
+            setScrolls(node.scrollHeight > node.clientHeight),
+        );
+
+        observer.observe(node);
+
+        return () => observer.disconnect();
+    }, [node, note]);
+
+    return [setNode, scrolls] as const;
+};
+
 // The user's note under the source, in the same indented form, with the
-// links written into it (lib/studio/noteLinks).
-const NoteLine = ({ note }: { note: string }) => (
-    <p className={styles.note}>
-        <Icon name="note" className={styles.noteIcon} />
-        {/* Read out, so a listener hears where the source ends and the
-            note begins. */}
-        <span className={styles.srOnly}>Note: </span>
-        <span className={styles.noteText}>
-            {noteParts(note).map((part, index) =>
-                part.href ? (
-                    <a
-                        key={index}
-                        href={part.href}
-                        className={styles.noteLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        {part.text}
-                    </a>
-                ) : (
-                    part.text
-                ),
-            )}
-        </span>
-    </p>
-);
+// links written into it (lib/studio/noteLinks). A long note stops at a fixed
+// height, the same on every card, and scrolls inside the foot. The scroller
+// takes focus for the arrow keys, and `data-no-drag` keeps a press on it from
+// panning the board (cardPress.ts), so a finger scrolls the note.
+const NoteLine = ({ note }: { note: string }) => {
+    const [noteRef, scrolls] = useNoteScrolls(note);
+
+    return (
+        <p className={styles.note}>
+            <Icon name="note" className={styles.noteIcon} />
+            {/* Read out, so a listener hears where the source ends and the
+                note begins. A scrolling note says it in its region's name. */}
+            {!scrolls && <span className={styles.srOnly}>Note: </span>}
+            <span
+                ref={noteRef}
+                className={styles.noteText}
+                {...(scrolls && {
+                    role: 'region',
+                    'aria-label': 'Note',
+                    tabIndex: 0,
+                    'data-no-drag': '',
+                })}
+            >
+                {noteParts(note).map((part, index) =>
+                    part.href ? (
+                        <a
+                            key={index}
+                            href={part.href}
+                            className={styles.noteLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {part.text}
+                        </a>
+                    ) : (
+                        part.text
+                    ),
+                )}
+            </span>
+        </p>
+    );
+};
 
 // What the card's data leaves out, on one line above the source. It shows
 // the first gap in the platform's words, clipped to the card's width, and

@@ -1,7 +1,7 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import styles from './NoteModal.module.scss';
 import formStyles from './TextCardModal.module.scss';
@@ -29,8 +29,9 @@ const fill = (field: HTMLElement, note: string) =>
         }),
     );
 
-// A line break the browser writes as an element (a <br>, or a <div> per line).
-const BREAKS = 'br, div';
+// A line break the browser writes as an element: a <br>, or a block per line.
+const BREAKS = 'br, div, p';
+const BLOCKS = new Set(['DIV', 'P']);
 
 // The link a node of the field sits in, or null.
 const linkOf = (node: Node): Element | null =>
@@ -57,9 +58,12 @@ const pickOf = (field: HTMLElement | null): Range | null => {
         : null;
 };
 
-// The note read back from the field. A line break written as an element is a
-// newline, and a link keeps its target only while that is an http(s) URL and
-// its words can be one link (linkable).
+// The note read back from the field. A <br> is a newline, and so is the start
+// of every block after the first. A <br> that is a block's only child holds
+// an empty line open, so the block's own newline stands for it. Any other
+// element, such as a <span> the browser inserts, reads as its contents. A
+// link keeps its target only while that is an http(s) URL and its words can
+// be one link (linkable); one that cannot keeps its words and line breaks.
 const read = (node: Node): NotePart[] =>
     [...node.childNodes].flatMap((child, index): NotePart[] => {
         if (child.nodeType === Node.TEXT_NODE) {
@@ -71,7 +75,9 @@ const read = (node: Node): NotePart[] =>
         }
 
         if (child.tagName === 'BR') {
-            return [{ text: '\n' }];
+            return BLOCKS.has(node.nodeName) && node.childNodes.length === 1
+                ? []
+                : [{ text: '\n' }];
         }
 
         if (child.tagName === 'A') {
@@ -80,11 +86,37 @@ const read = (node: Node): NotePart[] =>
 
             return href && linkable(text) && !child.querySelector(BREAKS)
                 ? [{ text, href }]
-                : [{ text }];
+                : read(child);
         }
 
-        return [...(index > 0 ? [{ text: '\n' }] : []), ...read(child)];
+        return [
+            ...(BLOCKS.has(child.tagName) && index > 0 ? [{ text: '\n' }] : []),
+            ...read(child),
+        ];
     });
+
+// The shortcut that opens the URL panel: ⌘K or Ctrl+K, matched on the
+// letter typed. A layout whose K key types no Latin letter, such as
+// Cyrillic, matches on the physical K key instead.
+const isLinkShortcut = (event: React.KeyboardEvent) => {
+    const key = event.key.toLowerCase();
+
+    return (
+        (event.metaKey || event.ctrlKey) &&
+        (key === 'k' || (!/^[a-z]$/.test(key) && event.code === 'KeyK'))
+    );
+};
+
+// Puts the caret at the end of the field's text.
+const caretToEnd = (field: HTMLElement) => {
+    const range = document.createRange();
+
+    range.selectNodeContents(field);
+    range.collapse(false);
+    field.focus();
+    document.getSelection()?.removeAllRanges();
+    document.getSelection()?.addRange(range);
+};
 
 /**
  * A user's note on a data card (menu → Add Note / Edit Note). Selecting
@@ -117,6 +149,10 @@ const NoteModal = ({
     const [url, setUrl] = useState('');
     const [urlInvalid, setUrlInvalid] = useState(false);
     const fieldRef = useRef<HTMLDivElement | null>(null);
+    // The words the URL panel opened over, given back to the field when the
+    // panel closes without Apply.
+    const askedRef = useRef<Range | null>(null);
+    const labelId = useId();
     const canSave = note.trim().length > 0;
 
     // The field fills once, as it mounts, and takes the caret at the end of
@@ -130,15 +166,7 @@ const NoteModal = ({
 
             fieldRef.current = field;
             fill(field, initial ?? '');
-            requestAnimationFrame(() => {
-                const range = document.createRange();
-
-                range.selectNodeContents(field);
-                range.collapse(false);
-                field.focus();
-                document.getSelection()?.removeAllRanges();
-                document.getSelection()?.addRange(range);
-            });
+            requestAnimationFrame(() => caretToEnd(field));
         },
         [initial],
     );
@@ -155,6 +183,11 @@ const NoteModal = ({
 
         return () => document.removeEventListener('selectionchange', onChange);
     }, [asking]);
+
+    const openAsk = (words: Range) => {
+        askedRef.current = words.cloneRange();
+        setAsking(true);
+    };
 
     const closeAsk = () => {
         setAsking(false);
@@ -194,6 +227,7 @@ const NoteModal = ({
             range.insertNode(link);
         }
 
+        askedRef.current = null;
         field.normalize();
         setNote(noteText(read(field)));
         setPick(null);
@@ -243,7 +277,13 @@ const NoteModal = ({
         >
             <form className={formStyles.form} onSubmit={submit}>
                 <div className={formStyles.field}>
-                    <span id="note-label" className={formStyles.label}>
+                    {/* The field is a contenteditable <div>, which a <label>
+                        cannot point at, so the heading focuses it by hand. */}
+                    <span
+                        id={labelId}
+                        className={formStyles.label}
+                        onClick={() => fieldRef.current && caretToEnd(fieldRef.current)}
+                    >
                         Note
                     </span>
                     <div
@@ -253,26 +293,30 @@ const NoteModal = ({
                         suppressContentEditableWarning
                         role="textbox"
                         aria-multiline="true"
-                        aria-labelledby="note-label"
+                        aria-labelledby={labelId}
                         aria-placeholder="Enter note…"
-                        data-empty={note.trim() === '' ? '' : undefined}
+                        // The placeholder sits in front of the first line, so
+                        // it shows only while the field holds nothing at all,
+                        // spaces and line breaks included.
+                        data-empty={note === '' ? '' : undefined}
                         onInput={(event) => setNote(noteText(read(event.currentTarget)))}
                         onKeyDown={(event) => {
-                            if (
-                                (event.code !== 'KeyK' && event.key.toLowerCase() !== 'k') ||
-                                !(event.metaKey || event.ctrlKey)
-                            ) {
+                            if (!isLinkShortcut(event)) {
                                 return;
                             }
+
+                            // Taken even with no words selected, since the
+                            // browser's own Ctrl+K moves focus to its search
+                            // bar, out of the dialog.
+                            event.preventDefault();
 
                             // Read here, since a selection made a moment ago
                             // may not have reached `pick` yet.
                             const words = pickOf(fieldRef.current);
 
                             if (words) {
-                                event.preventDefault();
                                 setPick(words);
-                                setAsking(true);
+                                openAsk(words);
                             }
                         }}
                     />
@@ -312,7 +356,26 @@ const NoteModal = ({
                                         event.preventDefault();
                                     }
                                 }}
-                                onCloseAutoFocus={(event) => event.preventDefault()}
+                                // Closing the URL panel without Apply (Escape)
+                                // unmounts the focused input, which leaves
+                                // focus on the page. The field takes it back
+                                // with the words selected as before. Focus
+                                // the reader moved elsewhere stays there.
+                                onCloseAutoFocus={(event) => {
+                                    event.preventDefault();
+
+                                    const field = fieldRef.current;
+                                    const words = askedRef.current;
+                                    const active = document.activeElement;
+
+                                    askedRef.current = null;
+
+                                    if (field && words && (!active || active === document.body)) {
+                                        field.focus();
+                                        document.getSelection()?.removeAllRanges();
+                                        document.getSelection()?.addRange(words);
+                                    }
+                                }}
                             >
                                 {asking ? (
                                     <>
@@ -349,7 +412,7 @@ const NoteModal = ({
                                         icon="link"
                                         // Pressing it must not take the selection away.
                                         onMouseDown={(event) => event.preventDefault()}
-                                        onClick={() => setAsking(true)}
+                                        onClick={() => pick && openAsk(pick)}
                                     >
                                         Link
                                     </Button>
@@ -359,7 +422,7 @@ const NoteModal = ({
                     </Popover.Root>
                     <p className={styles.hint}>
                         <Icon name="info" className={styles.hintIcon} />
-                        Select text to add a link, or press ⌘K / Ctrl+K
+                        Select words, then press ⌘K / Ctrl+K or Link
                     </p>
                 </div>
                 <div className={formStyles.actions}>

@@ -16,7 +16,8 @@ type CardBodyProps = {
     chartSource: ChartWidget | null;
     scale: number;
     theme: ThemeDerived;
-    // Every card reports the rows its content needs. A stat card's only grow.
+    // Every card reports the rows its content needs. A stat card's slot only
+    // grows to them (useSlots' fitRows).
     widthCells: number;
     // The card's current height in cells. A chart keeps it while it fits.
     heightCells?: number;
@@ -54,15 +55,7 @@ const CardBody = ({
     }
 
     if (widget.kind === 'key_number') {
-        return (
-            <KeyNumberCard
-                widget={widget}
-                widthCells={widthCells}
-                heightCells={heightCells}
-                onFit={onFit}
-                {...extras}
-            />
-        );
+        return <KeyNumberCard widget={widget} widthCells={widthCells} onFit={onFit} {...extras} />;
     }
 
     if (widget.kind === 'text') {

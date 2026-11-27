@@ -98,8 +98,9 @@ button.leftOut {
 
 // The attribution line: the info mark, then the first source's full name
 // dotted underlined as a link and "+N more", wrapping under itself clear of
-// the mark. Under a left-out line it keeps to one line, with the name giving
-// way to an ellipsis, so the foot takes two lines at most before the note.
+// the mark. Under a left-out line it keeps to one line: the name gives way to
+// an ellipsis and "+N more" stays whole, so the foot takes two lines at most
+// before the note.
 .sourceLine {
     @include flex(row, flex-start, flex-start);
     @include font-size(11px, 1.35);
@@ -127,8 +128,8 @@ button.leftOut {
     overflow-wrap: anywhere;
 
     .footLeftOut & {
-        overflow: hidden;
-        text-overflow: ellipsis;
+        @include flex(row, flex-start, baseline);
+
         white-space: nowrap;
     }
 }
@@ -143,10 +144,17 @@ button.leftOut {
         text-decoration-style: solid;
         text-decoration-color: currentColor;
     }
+
+    .footLeftOut & {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }
 
 .creditMore {
-    white-space: nowrap;
+    flex-shrink: 0;
+    white-space: pre;
 }
 
 // Centred on the first line of the 11 px type beside it.
@@ -188,10 +196,28 @@ button.leftOut {
     color: var(--th-caption, var(--color-gray-1500));
 }
 
+// About five and a half lines of the 11 px type, in rem so every card's fit
+// reads the same height. The half line shows there is more. A note that runs
+// past it scrolls: overflow-y auto makes it a scroller, which takes a vertical
+// finger drag under the board's touch-action none. A short note stays clipped
+// and unscrollable, so a finger on it pans the board.
 .noteText {
     min-width: 0;
+    max-height: rem(82);
+    overflow: hidden;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+
+    &[data-no-drag] {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--th-text, var(--color-charcoal));
+        outline-offset: 2px;
+    }
 }
 
 .noteLink {

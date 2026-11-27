@@ -224,9 +224,11 @@ export const useSlots = ({
         onLayoutChange(layout);
     }, [slots, onLayoutChange]);
 
-    // Sets the slot's rows a card's content needs (a stat card's grow only),
-    // within the range of its current view, and lets the neighbours make
-    // room. Pinned ones move too, since the card cannot take less.
+    // Sets the slot's rows a card's content needs, within the range of its
+    // current view, and lets the neighbours make room. Pinned ones move too,
+    // since the card cannot take less. A stat card's slot only grows, so a
+    // height the user dragged larger holds, and it keeps the rows as its
+    // `need`, the floor of its grip (layout's floorRange).
     const fitRows = useCallback(
         (id: string, rows: number) => {
             setSlots((prev) => {
@@ -240,13 +242,25 @@ export const useSlots = ({
                     slot.widget,
                     resolveCardView(slot.widget, views[id]).view,
                 );
-                const h = clamp(rows, min, max);
 
-                if (h === slot.h) {
+                if (slot.widget.kind !== 'key_number') {
+                    const h = clamp(rows, min, max);
+
+                    return h === slot.h
+                        ? prev
+                        : settleAround({ ...prev, [id]: { ...slot, h } }, [id], pinnedIds, true);
+                }
+
+                const need = clamp(rows, min, max);
+                const h = Math.max(slot.h, need);
+
+                if (h === slot.h && need === slot.need) {
                     return prev;
                 }
 
-                return settleAround({ ...prev, [id]: { ...slot, h } }, [id], pinnedIds, true);
+                const next = { ...prev, [id]: { ...slot, h, need } };
+
+                return h === slot.h ? next : settleAround(next, [id], pinnedIds, true);
             });
         },
         [pinnedIds, views],

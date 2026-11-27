@@ -59,10 +59,35 @@ test('a typed target is an http(s) URL or nothing', () => {
     assert.equal(linkTarget('//imf.org/x'), 'https://imf.org/x');
     assert.equal(linkTarget(`imf.org/${'a'.repeat(2100)}`), null);
     assert.equal(linkTarget(''), null);
+    assert.equal(linkTarget('https://:secret@imf.org'), null);
+    assert.equal(linkTarget('https://:www.imf.org@evil.example'), null);
 });
 
 test('a target past the length a note keeps stays text', () => {
     const long = `[IMF](https://imf.org/${'a'.repeat(2100)})`;
 
     assert.deepEqual(noteParts(long), [{ text: long }]);
+});
+
+test('one bound applies to the encoded target, in linkTarget and when read back', () => {
+    const pad = (total: number, parens: number) =>
+        `https://imf.org/${'a'.repeat(total - 'https://imf.org/'.length - parens)}${'()'.repeat(parens / 2)}`;
+    const roundTrip = (href: string) => noteParts(noteText([{ text: 'x', href }]));
+
+    // 2040 characters plus three parentheses encoded is 2046: kept, and read back whole.
+    const kept = linkTarget(pad(2040, 4))!;
+
+    assert.equal(kept.length, 2040);
+    assert.deepEqual(roundTrip(kept), [
+        { text: 'x', href: kept.replace(/\(/g, '%28').replace(/\)/g, '%29') },
+    ]);
+
+    // 2046 characters with four parentheses encodes to 2054: refused up front.
+    assert.equal(linkTarget(pad(2046, 4)), null);
+
+    // The bound is on the whole target: 2048 reads as a link, 2049 stays text.
+    const edge = `https://imf.org/${'a'.repeat(2048 - 'https://imf.org/'.length)}`;
+
+    assert.equal(noteParts(`[x](${edge})`)[0]?.href, edge);
+    assert.equal(noteParts(`[x](${edge}a)`)[0]?.href, undefined);
 });

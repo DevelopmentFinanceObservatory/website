@@ -11,7 +11,15 @@
 
 export type NotePart = { text: string; href?: string };
 
-const LINK = /\[([^[\]\n]{1,500})\]\((https?:\/\/[^\s)]{1,2048})\)/g;
+// The longest target a note keeps, counted as written, with parentheses
+// encoded. `linkTarget` checks the same bound, and the lookahead in LINK
+// applies it to the whole target, scheme included.
+const MAX_TARGET = 2048;
+
+const LINK = new RegExp(
+    `\\[([^[\\]\\n]{1,500})\\]\\((?=[^\\s)]{1,${MAX_TARGET}}\\))(https?:\\/\\/[^\\s)]+)\\)`,
+    'g',
+);
 
 /** The note as runs of text, each with its link target when it has one. */
 export const noteParts = (note: string): NotePart[] => {
@@ -51,9 +59,9 @@ export const linkable = (words: string): boolean =>
 /** A typed link target as an http(s) URL, or null when it is not one. A
  *  target typed without a scheme takes https, and then needs a host whose
  *  last label starts with a letter, so a lone word or a number such as `1.2`
- *  is not read as a site. An address with a user part, which an email typed
- *  here would become, is refused, and so is one past the length a note
- *  keeps. */
+ *  is not read as a site. An address with a user or password part, which an
+ *  email typed here would become, is refused, and so is one whose encoded
+ *  form is past the length a note keeps. */
 export const linkTarget = (typed: string): string | null => {
     const trimmed = typed.trim();
     // A colon followed by digits is a port (`imf.org:443`), not a scheme.
@@ -69,9 +77,10 @@ export const linkTarget = (typed: string): string | null => {
 
         const named = /\.[a-z][^.]*$/i.test(url.hostname);
 
-        return web && (schemed || named) && !url.username && url.href.length <= 2048
-            ? url.href
-            : null;
+        const keepable =
+            !url.username && !url.password && encodeParens(url.href).length <= MAX_TARGET;
+
+        return web && (schemed || named) && keepable ? url.href : null;
     } catch {
         return null;
     }

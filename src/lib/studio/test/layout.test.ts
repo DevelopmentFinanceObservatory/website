@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
     heightIsDerived,
     heightIsFree,
+    floorRange,
     gripRange,
     heightRange,
     resolveCardView,
@@ -83,6 +84,14 @@ test('the height range follows the kind the card reads as', () => {
     assert.equal(gripRange(stat, null, 9).max, SPAN_MAX.key_number.h);
     assert.equal(gripRange(stat, null, 20).max, 20);
     assert.deepEqual(gripRange(kenya, null, 12), tableRange);
+    // Each grip step floors the range at the rows the content needs, even
+    // past the max taken at grab.
+    assert.deepEqual(floorRange(gripRange(stat, null, 9), 12), {
+        min: 12,
+        max: SPAN_MAX.key_number.h,
+    });
+    assert.deepEqual(floorRange(gripRange(stat, null, 9), 15), { min: 15, max: 15 });
+    assert.deepEqual(floorRange(tableRange), tableRange);
 });
 
 test('a fresh table spawns at its estimated width and rows', () => {

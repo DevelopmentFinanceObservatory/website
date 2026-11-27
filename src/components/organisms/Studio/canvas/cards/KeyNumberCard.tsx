@@ -10,22 +10,21 @@ import type { CardExtras } from './types';
 import { cardEdges, type Fit, useFittedRows, useFontsReady } from './useFittedRows';
 
 import type { KeyNumberWidget } from '@/lib/chat/widgets';
+import { CARD_BORDERS } from '@/lib/studio/chartFit';
 import { keyNumberFace } from '@/lib/studio/statFace';
 
 // The stat card: one big number (a per cent sign lighter after it), one
 // muted caption close under it (unit, price basis, period, change), then
-// the source and the user's note. Its height is its kind's or the user's,
-// and a source line or note taller than that room grows the card to fit it.
+// the source and the user's note. The card reports the rows its content
+// needs; its slot grows to them and the grip stops there (useSlots' fitRows).
 const KeyNumberCard = ({
     widget,
     widthCells,
-    heightCells,
     onFit,
     ...extras
 }: {
     widget: KeyNumberWidget;
     widthCells: number;
-    heightCells?: number;
     onFit: (rows: number) => void;
 } & CardExtras) => {
     const { amount, suffix, caption } = keyNumberFace(widget);
@@ -34,11 +33,18 @@ const KeyNumberCard = ({
 
     const measure = useCallback(
         (card: HTMLElement, cell: number): Fit | null => {
+            // Text measured in the fallback face runs high, and the slot keeps
+            // any row it grows by.
+            if (!fontsReady) {
+                return null;
+            }
+
             const cs = getComputedStyle(card);
-            const edges = cardEdges(cs, 'vertical');
+            // The borders count as a share of the cell (CARD_BORDERS), so the
+            // rows come out the same at every cell size.
             let px =
-                edges.padding +
-                edges.border +
+                cardEdges(cs, 'vertical').padding +
+                CARD_BORDERS * cell +
                 (parseFloat(cs.rowGap) || 0) * (card.children.length - 1);
 
             // The foot's auto margin is spare space and is left out.
@@ -46,24 +52,21 @@ const KeyNumberCard = ({
                 px += parseFloat(getComputedStyle(child).height) || 0;
             }
 
-            // A hundredth of a cell of slack absorbs float noise. Any more would
-            // clip the note's last line, since the card only grows.
-            const need = Math.ceil(px / cell - 0.01);
-
-            return { rows: Math.max(need, heightCells ?? need), settled: true };
+            // A fifth of a cell of slack, as in TableCard and TextCard, falls
+            // inside the card's bottom padding.
+            return { rows: Math.max(1, Math.ceil(px / cell - 0.2)), settled: true };
         },
-        [heightCells],
+        [fontsReady],
     );
     const token = useMemo(
         () => ({
             widget,
             widthCells,
-            heightCells,
             title: extras.title,
             note: extras.note,
             fontsReady,
         }),
-        [widget, widthCells, heightCells, extras.title, extras.note, fontsReady],
+        [widget, widthCells, extras.title, extras.note, fontsReady],
     );
 
     useFittedRows({ cardRef, widthCells, token, measure, onFit });
