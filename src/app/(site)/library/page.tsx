@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 import Library from '@/components/organisms/Library/Library';
+import { libraryView } from '@/lib/library/admin';
 import { listArtifacts } from '@/lib/library/store';
 import { pageOpenGraph } from '@/lib/site';
 
@@ -11,11 +13,14 @@ export const dynamic = 'force-dynamic';
 const DESCRIPTION =
     'A citable collection of DFO charts, datasets, and canvases using live data or point-in-time snapshots.';
 
-export const metadata: Metadata = {
+// While LIBRARY_ENABLED is off, admins see the page and search engines are
+// told to leave it out.
+export const generateMetadata = async (): Promise<Metadata> => ({
     title: 'Library — DFO',
     description: DESCRIPTION,
     openGraph: pageOpenGraph({ title: 'Library', description: DESCRIPTION }),
-};
+    ...((await libraryView()) === 'preview' && { robots: { index: false, follow: false } }),
+});
 
 // The list reads no artifact's text section or build steps, so they stay on
 // the server.
@@ -27,10 +32,16 @@ const listed = async () =>
         steps: [],
     }));
 
-const LibraryPage = async () => (
-    <main>
-        <Library artifacts={await listed()} />
-    </main>
-);
+const LibraryPage = async () => {
+    if ((await libraryView()) === null) {
+        notFound();
+    }
+
+    return (
+        <main>
+            <Library artifacts={await listed()} />
+        </main>
+    );
+};
 
 export default LibraryPage;

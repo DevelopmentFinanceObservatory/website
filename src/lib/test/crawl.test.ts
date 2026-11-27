@@ -167,7 +167,18 @@ test('the sitemap lists docs, About and source pages', () => {
     assert.ok(paths.includes('/docs/tools/pydeflate'));
     assert.ok(paths.includes('/about/publications'));
     assert.ok(paths.includes('/data/sources/dc/d/WorldBank_IDS'));
+    assert.ok(paths.includes('/library'));
     assert.ok(paths.includes('/library/health-oda'));
+});
+
+test('the sitemap leaves the Library out while it is off', () => {
+    const off = sitemapPaths({ docs, sourceIds: [], librarySlugs: null });
+
+    assert.deepEqual(
+        off.filter((path) => path.startsWith('/library')),
+        [],
+    );
+    assert.ok(off.includes('/about'));
 });
 
 test('every page the sitemap lists may be fetched and indexed', () => {

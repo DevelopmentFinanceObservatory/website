@@ -14,21 +14,22 @@ const STATIC_PATHS = [
     '/data',
     '/data/roadmap',
     '/data/sources',
-    '/library',
 ];
 
 export const sitemapPaths = ({
     docs,
     sourceIds,
-    librarySlugs = [],
+    librarySlugs,
 }: {
     docs: readonly DocsPage[];
     // Source dcids, slashes and all.
     sourceIds: readonly string[];
-    librarySlugs?: readonly string[];
+    // The artifacts' slugs, or null while LIBRARY_ENABLED is off, which
+    // leaves /library out too.
+    librarySlugs: readonly string[] | null;
 }): string[] => [
     ...STATIC_PATHS,
     ...docs.map((page) => docsHref(page.path)),
     ...sourceIds.map((dcid) => `/data/sources/${dcid}`),
-    ...librarySlugs.map((slug) => `/library/${slug}`),
+    ...(librarySlugs ? ['/library', ...librarySlugs.map((slug) => `/library/${slug}`)] : []),
 ];

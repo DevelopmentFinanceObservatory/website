@@ -19,6 +19,7 @@ import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
+import { libraryEnabled } from './enabled';
 import {
     publishedFacts,
     publishedKind,
@@ -88,6 +89,20 @@ const publishRefusal = async (refusal: Response, at?: string): Promise<Response>
 /** The Library's publishers. One list covers publishing, editing, deleting
  *  and adding topics. */
 export const libraryAdmin = async () => adminFrom(await getUser(), process.env.ADMIN_EMAILS);
+
+/**
+ * Who sees the Library's pages: everyone while LIBRARY_ENABLED is on
+ * (`open`), its admins alone while it is off (`preview`, which search
+ * engines are told not to index), and nobody else (`null`, answered with the
+ * site's 404).
+ */
+export const libraryView = async (): Promise<'open' | 'preview' | null> => {
+    if (libraryEnabled()) {
+        return 'open';
+    }
+
+    return (await libraryAdmin()) ? 'preview' : null;
+};
 
 // The admin behind a request, or the refusal to send.
 const gate = async (request: Request, mutating: boolean) => {
