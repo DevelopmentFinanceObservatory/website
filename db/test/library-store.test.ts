@@ -11,14 +11,15 @@ const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 
 /**
  * The Library's store (src/lib/library/store.ts) against the migrated tables
- * as the runtime role: a publish key makes one artifact however many tries
- * send it, at once or in turn; a withdrawn artifact keeps its slug and its
- * owed take-down; and a topic label is taken in any case.
+ * as the runtime role. A publish key makes one artifact however many tries
+ * send it, at once or in turn. A withdrawn artifact keeps its slug, and its
+ * share token until the take-down is settled. A topic label is taken in any
+ * case.
  */
 test('library store', async (t) => {
     const database = await createTestDatabase();
 
-    // src/lib/db caches its pools on globalThis; they end before the
+    // src/lib/db caches its pools on globalThis. They end before the
     // database goes.
     t.after(async () => {
         const pools = globalThis as unknown as { pool?: Pool; counterPool?: Pool; keyPool?: Pool };
@@ -73,13 +74,18 @@ test('library store', async (t) => {
     await t.test('a retried publish answers the first artifact', async () => {
         assert.deepEqual(await store.insertArtifact(input('key-a'), 'admin'), {
             slug: 'health-oda',
+            title: 'Health ODA',
             created: true,
         });
         assert.deepEqual(await store.insertArtifact(input('key-a', 'Another title'), 'admin'), {
             slug: 'health-oda',
+            title: 'Health ODA',
             created: false,
         });
-        assert.deepEqual(await store.artifactByPublishKey('key-a'), { slug: 'health-oda' });
+        assert.deepEqual(await store.artifactByPublishKey('key-a'), {
+            slug: 'health-oda',
+            title: 'Health ODA',
+        });
         assert.equal(await store.artifactByPublishKey('key-none'), null);
         assert.equal(await rowCount(), 1);
     });

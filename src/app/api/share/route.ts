@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
 import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
@@ -17,7 +16,7 @@ import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
 // A search result's link: dataset references only, no numbers. The search
 // page is public, so an account is optional here. A signed-in sharer's
 // write token is kept. A guest's share stays as made.
-const shareSearch = async (body: any, headers: Headers) => {
+const shareSearch = async (body: unknown, headers: Headers) => {
     const request = readSearchShareRequest(body);
 
     if (!request) {
@@ -112,13 +111,13 @@ const snapshotServedAt = async (id: string): Promise<string | null> => {
 // the card's citation gives as "data as of" (`snapshotServedAt`).
 // Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (request: NextRequest) => {
-    const body: any = await readShareJson(request.body);
+    const body: unknown = await readShareJson(request.body);
 
     if (body instanceof Response) {
         return body;
     }
 
-    if (body?.kind === 'search') {
+    if (typeof body === 'object' && body !== null && 'kind' in body && body.kind === 'search') {
         return shareSearch(body, request.headers);
     }
 

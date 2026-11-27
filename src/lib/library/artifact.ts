@@ -14,9 +14,8 @@ import type { LibrarySource, LibraryStep } from '../../../db/schema.ts';
 
 export type { LibrarySource, LibraryStep };
 
-/** What an artifact shows: one card, by the card's kind, or a canvas of
- *  cards. The check constraint on `library_artifact.kind` holds the same
- *  values. */
+/** The kinds an artifact can have. The check constraint on
+ *  `library_artifact.kind` holds the same values. */
 export const ARTIFACT_KINDS = ['chart', 'table', 'key_number', 'canvas', 'data'] as const;
 
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
@@ -43,7 +42,7 @@ export type LibraryArtifact = {
     publishedAt: string;
 };
 
-/** What the address of a withdrawn artifact still shows. */
+/** What the address of a withdrawn artifact shows. */
 export type WithdrawnArtifact = {
     slug: string;
     title: string;
@@ -139,9 +138,34 @@ const optionsOf = (
         .sort((a, b) => collate(a.label, b.label));
 };
 
-/** The values each filter offers, from the artifacts there are. Types and
- *  statuses keep their fixed order. */
-export const filterOptions = (artifacts: readonly LibraryArtifact[]) => {
+// A value's name in `labels`, or the value itself when `labels` lacks it.
+const labelIn =
+    (labels: Readonly<Record<string, string>>) =>
+    (value: string): string =>
+        Object.hasOwn(labels, value) ? labels[value] : value;
+
+// `options`, then each picked value they lack with a count of 0, so a pick
+// a stale link carries can be unticked.
+const withPicked = (
+    options: FilterOption[],
+    picked: readonly string[],
+    labelOf: (value: string) => string,
+): FilterOption[] => [
+    ...options,
+    ...picked
+        .filter((value) => !options.some((option) => option.value === value))
+        .map((value) => ({ value, label: labelOf(value), count: 0 })),
+];
+
+const NO_PICKS: Omit<LibraryFilters, 'q'> = { types: [], topics: [], sources: [], statuses: [] };
+
+/** The values each filter offers, from the artifacts there are, then each
+ *  value in `picked` no artifact carries, under its name and with a count
+ *  of 0. Types and statuses keep their fixed order. */
+export const filterOptions = (
+    artifacts: readonly LibraryArtifact[],
+    picked: Omit<LibraryFilters, 'q'> = NO_PICKS,
+) => {
     const fixed = <K extends string>(labels: Record<K, string>, pick: (a: LibraryArtifact) => K) =>
         (Object.keys(labels) as K[])
             .map((value) => ({
@@ -150,12 +174,29 @@ export const filterOptions = (artifacts: readonly LibraryArtifact[]) => {
                 count: artifacts.filter((artifact) => pick(artifact) === value).length,
             }))
             .filter((option) => option.count > 0);
+    const asIs = (value: string) => value;
 
     return {
-        types: fixed(KIND_LABELS, (artifact) => artifact.kind),
-        topics: optionsOf(artifacts, (artifact) => artifact.topics),
-        sources: optionsOf(artifacts, (artifact) => artifact.sources.map((source) => source.name)),
-        statuses: fixed(MODE_LABELS, (artifact) => artifact.mode),
+        types: withPicked(
+            fixed(KIND_LABELS, (artifact) => artifact.kind),
+            picked.types,
+            labelIn(KIND_LABELS),
+        ),
+        topics: withPicked(
+            optionsOf(artifacts, (artifact) => artifact.topics),
+            picked.topics,
+            asIs,
+        ),
+        sources: withPicked(
+            optionsOf(artifacts, (artifact) => artifact.sources.map((source) => source.name)),
+            picked.sources,
+            asIs,
+        ),
+        statuses: withPicked(
+            fixed(MODE_LABELS, (artifact) => artifact.mode),
+            picked.statuses,
+            labelIn(MODE_LABELS),
+        ),
     };
 };
 

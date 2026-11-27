@@ -18,8 +18,8 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
         return { title: 'Library — DFO' };
     }
 
-    // A withdrawn artifact's address answers 200, so it asks search engines to
-    // drop it; Next has no page-level 410.
+    // A withdrawn artifact's address answers 200, since Next has no
+    // page-level 410, so it asks search engines to drop it.
     if (found.status === 'withdrawn') {
         return {
             title: `${found.artifact.title} — DFO Library`,

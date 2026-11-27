@@ -28,7 +28,7 @@ const isEnabled = () =>
 // (atoms/Analytics/consentScripts.ts) defines gtag and sets the defaults (all
 // denied) before Usercentrics loads, and Usercentrics sends the updates.
 // ConsentRecovery mounts this component only after that script has run, and
-// the gtag check keeps GA4 off wherever it has not: it never loads without the
+// the gtag check keeps GA4 off wherever it has not, so GA4 loads only after the
 // defaults.
 // Enhanced measurement records App Router navigations, so this sends only the
 // config call.

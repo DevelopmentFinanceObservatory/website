@@ -450,7 +450,7 @@ export const takeDown = (backend: SharesBackend, id: string, token: string): Pro
     send(backend, sharePath(id), { method: 'DELETE', token });
 
 /** Keep a share its take-down could not remove in `share_cleanup`, for an
- *  operator. The log line is the alert hook: a log-based alert matches its
+ *  operator. The log line is the alert hook. A log-based alert matches its
  *  first argument, `share_cleanup_recorded`, so that text stays as it is. */
 export const keepForCleanup = async (
     db: ShareTokenDb,

@@ -98,6 +98,31 @@ test('the filters offer what the artifacts carry, with counts', () => {
         filterOptions([ethiopia]).statuses.map((option) => option.value),
         ['live'],
     );
+
+    // A stale link's picks are listed last, by name, with a count of 0.
+    const stale = filterOptions([ethiopia], {
+        types: ['chart', 'key_number', 'bogus'],
+        topics: ['Gone'],
+        sources: [],
+        statuses: ['snapshot'],
+    });
+    const named = (options: readonly { label: string; count: number }[]) =>
+        options.map((option) => [option.label, option.count]);
+
+    assert.deepEqual(named(stale.types), [
+        ['Chart', 1],
+        ['Key number', 0],
+        ['bogus', 0],
+    ]);
+    assert.deepEqual(named(stale.topics), [
+        ['Health', 1],
+        ['ODA', 1],
+        ['Gone', 0],
+    ]);
+    assert.deepEqual(named(stale.statuses), [
+        ['Live', 1],
+        ['Snapshot', 0],
+    ]);
 });
 
 test('a list param keeps names with commas, each once', () => {

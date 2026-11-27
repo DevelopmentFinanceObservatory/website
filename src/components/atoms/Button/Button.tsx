@@ -32,7 +32,7 @@ export type ButtonProps = {
     | ({ href?: undefined } & React.ButtonHTMLAttributes<HTMLButtonElement>)
     | ({
           href: string;
-          // Next's Link prefetch; false for a per-item dynamic page (AGENTS.md).
+          // Next's Link prefetch, false for a per-item dynamic page (AGENTS.md).
           prefetch?: boolean;
       } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>)
 );

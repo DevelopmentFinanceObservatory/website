@@ -45,7 +45,7 @@ const Library = ({ artifacts }: { artifacts: LibraryArtifact[] }) => {
     const [sources, setSources] = useUrlParam('source', parseList, serializeList, PICKED);
     const [statuses, setStatuses] = useUrlParam('status', parseList, serializeList, PICKED);
 
-    const options = filterOptions(artifacts);
+    const options = filterOptions(artifacts, { types, topics, sources, statuses });
     const visible = filterArtifacts(artifacts, { q, types, topics, sources, statuses });
 
     return (

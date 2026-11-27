@@ -54,7 +54,7 @@ type PublishPanelProps = {
     // The cards on the sheet, and each one's title as its face shows it.
     widgets: readonly Widget[];
     titleOf: (id: string) => string;
-    // The conversation as it is saved, which the publish sends; null when
+    // The conversation as it is saved, which the publish sends, or null when
     // there is none to send.
     snapshot: () => SavedConversation | null;
 };
@@ -81,7 +81,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     const [live, setLive] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [slug, setSlug] = useState<string | null>(null);
+    const [published, setPublished] = useState<{ slug: string; title: string } | null>(null);
     // One key per artifact and mode, made on its first try and sent again
     // on every retry, so a publish whose answer was lost makes no second
     // artifact.
@@ -148,7 +148,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
         setBusy(false);
 
         if (answer.ok) {
-            setSlug(answer.value.slug);
+            setPublished(answer.value);
         } else {
             setError(
                 publishRefusalText(
@@ -161,15 +161,15 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
         }
     };
 
-    if (slug) {
+    if (published) {
         return (
             <div className={styles.done} role="status">
                 <p className={styles.doneTitle}>Published to the Library</p>
                 <p className={styles.copyText}>
-                    “{text.title}” has its own page, which anyone can open and cite.
+                    “{published.title}” has its own page, which anyone can open and cite.
                 </p>
                 <Button
-                    href={artifactPath(slug)}
+                    href={artifactPath(published.slug)}
                     prefetch={false}
                     variant="dark"
                     full

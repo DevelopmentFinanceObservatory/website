@@ -322,8 +322,8 @@ export type LibraryStep = { title: string; detail: string | null };
 /**
  * The Library: Studio and search outputs that DFO staff publish under a
  * citable URL, `/library/<slug>`. `share_id` names the share in dfo-apis that
- * draws the artifact, which the Library creates and owns: `share_write_token`
- * is its owner token, kept here and never in `share_token`. `kind` (`chart`,
+ * draws the artifact, which the Library creates and owns. `share_write_token`
+ * is its owner token, kept in this table. `kind` (`chart`,
  * `table`, `key_number`, `canvas` or `data`) and `mode` (`live` or
  * `snapshot`) follow the share. `publish_key` is the id the publish dialog
  * sends with every try of one publish, so a retry finds the artifact the
@@ -335,8 +335,9 @@ export type LibraryStep = { title: string; detail: string | null };
  *
  * A withdrawn artifact keeps its row, so its slug stays taken and its URL
  * shows a withdrawn notice. `withdrawn_at` marks it, and the share is taken
- * down in dfo-apis. `share_write_token` is cleared once dfo-apis confirms the
- * share is gone, so a withdrawn row that still holds one owes a take-down.
+ * down in dfo-apis. `share_write_token` is cleared once the share is gone
+ * from dfo-apis or recorded in `share_cleanup`, so a withdrawn row that
+ * holds one owes a take-down.
  */
 export const libraryArtifact = pgTable(
     'library_artifact',

@@ -35,7 +35,7 @@ export type ArtifactText = {
     topics: string[];
 };
 
-/** What the Library shows: the canvas, or one card of it. */
+/** What the Library shows, the canvas or one card of it. */
 export type PublishedShare = {
     kind: 'canvas' | 'card';
     conversation: SavedConversation;
@@ -56,8 +56,8 @@ export type PublishInput = ArtifactText & {
     share: PublishedShare;
 };
 
-/** A publish as the route reads it. `share` is checked for its kind alone;
- *  the share route's reader (`readStudioShareRequest`) reads the rest. */
+/** A publish as the route reads it. `share` is checked for its kind alone,
+ *  and the share route's reader (`readStudioShareRequest`) reads the rest. */
 export type PublishRequest = {
     text: ArtifactText;
     publishKey: string;

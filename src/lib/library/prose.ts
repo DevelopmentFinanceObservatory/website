@@ -12,7 +12,7 @@ export const parseProse = (text: string): ProseBlock[] => {
     const blocks: ProseBlock[] = [];
 
     for (const chunk of text.split(/\n\s*\n/)) {
-        // The block the chunk's lines are adding to; a chunk starts a new one.
+        // The block the chunk's lines are adding to. Each chunk starts a new one.
         let current: ProseBlock | null = null;
 
         for (const line of chunk.split('\n').map((raw) => raw.trim())) {

@@ -56,7 +56,7 @@ export const addTopic = (label: string) =>
     );
 
 export const publishArtifact = (input: PublishInput) =>
-    call<{ slug: string }>(
+    call<{ slug: string; title: string }>(
         '/api/library/artifacts',
         send('POST', input),
         'It was not published. Try again.',
@@ -67,7 +67,7 @@ const AS_SNAPSHOT = 'Publish it as a snapshot.';
 /**
  * The sentence a publish refusal shows. The share refusals read as the
  * Share dialog words them (`withdrawalText`), with the way out a publisher
- * has: a live share over the card cap or with cards that cannot show live
+ * has. A live share over the card cap or with cards that cannot show live
  * data can go as a snapshot. `cards` is the data cards the publish shows,
  * which name the blocked ones, and `single` is a publish of one card. Any
  * other refusal shows `detail`.

@@ -13,7 +13,8 @@ import { pruneForShare } from '@/lib/chat/sharePrune';
 import { sharesRefusal } from '@/lib/chat/shareRefusal';
 import { keepShareForCleanup, makeTokenShare, takeDownTokenShare } from '@/lib/chat/shareStore';
 import { buildStudioShare, readShareJson } from '@/lib/chat/studioShare';
-import { track, userWho } from '@/lib/events/track';
+import { anonymousWho } from '@/lib/events/internalEng';
+import { track } from '@/lib/events/track';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { panelViewOf } from '@/lib/studio/infoPanel';
 
@@ -59,6 +60,30 @@ const notFound = (): Response =>
 
 const unknownTopic = (): Response =>
     requestInvalidProblem('A topic is not one of the Library’s.', '/topics', NO_STORE);
+
+// A refusal from the steps the publish shares with `POST /api/share`, sent
+// with NO_STORE as every answer here is. `at` names the member of the
+// publish body the refused request sits in, which its pointer then starts
+// with. A refusal with no pointer points at `at` itself.
+const publishRefusal = async (refusal: Response, at?: string): Promise<Response> => {
+    const body: unknown = await refusal.json();
+    const headers = new Headers(refusal.headers);
+
+    headers.set('Cache-Control', NO_STORE['Cache-Control']);
+
+    const document =
+        at && typeof body === 'object' && body !== null
+            ? {
+                  ...body,
+                  pointer:
+                      'pointer' in body && typeof body.pointer === 'string'
+                          ? at + body.pointer
+                          : at,
+              }
+            : body;
+
+    return new Response(JSON.stringify(document), { status: refusal.status, headers });
+};
 
 /** The Library's publishers. One list covers publishing, editing, deleting
  *  and adding topics. */
@@ -129,9 +154,11 @@ export const createTopic = async (request: Request): Promise<Response> => {
     return Response.json({ topics: await listTopics() }, { headers: NO_STORE });
 };
 
-// Take down a share the Library made and holds no row for. When dfo-apis
+// Take down a share no artifact on show holds: one the Library made and
+// stored no row for, or a withdrawn artifact's. When dfo-apis
 // cannot, the share goes to `share_cleanup` for an operator, under the
-// admin who published it.
+// admin who asked, with the alerted `share_cleanup_recorded` line. A failed
+// cleanup write is logged, so the caller's answer stands.
 const dropShare = async (
     headers: Headers,
     share: { shareId: string; writeToken: string },
@@ -156,8 +183,8 @@ const dropShare = async (
 
 /**
  * POST /api/library/artifacts (PublishInput, src/lib/library/publish.ts)
- * → 201 { slug } for a new artifact, 200 { slug } for the one an earlier
- * try with the same `publishKey` made.
+ * → 201 { slug, title } for a new artifact, 200 { slug, title } for the one
+ * an earlier try with the same `publishKey` made, with the title it stored.
  *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
@@ -177,7 +204,7 @@ export const publish = async (request: Request): Promise<Response> => {
     const body = await readShareJson(request.body);
 
     if (body instanceof Response) {
-        return body;
+        return publishRefusal(body);
     }
 
     const read = readPublish(body);
@@ -187,22 +214,22 @@ export const publish = async (request: Request): Promise<Response> => {
     }
 
     const { text, publishKey } = read.value;
+    const earlier = await artifactByPublishKey(publishKey);
+
+    if (earlier) {
+        return Response.json(earlier, { headers: NO_STORE });
+    }
+
     const known = new Set(await listTopics());
 
     if (!text.topics.every((topic) => known.has(topic))) {
         return unknownTopic();
     }
 
-    const earlier = await artifactByPublishKey(publishKey);
-
-    if (earlier) {
-        return Response.json({ slug: earlier.slug }, { headers: NO_STORE });
-    }
-
     const shareRequest = readStudioShareRequest(read.value.share);
 
     if (shareRequest instanceof Response) {
-        return shareRequest;
+        return publishRefusal(shareRequest, '/share');
     }
 
     const shown = savedCanvasWidgetsOf(
@@ -221,7 +248,7 @@ export const publish = async (request: Request): Promise<Response> => {
     const share = await buildStudioShare(request.headers, shareRequest);
 
     if (share instanceof Response) {
-        return share;
+        return publishRefusal(share);
     }
 
     let created: { id: string; writeToken: string };
@@ -230,7 +257,7 @@ export const publish = async (request: Request): Promise<Response> => {
         created = await makeTokenShare(request.headers, share);
     } catch (error) {
         if (error instanceof SharesError) {
-            return sharesRefusal(error);
+            return publishRefusal(sharesRefusal(error));
         }
 
         throw error;
@@ -268,14 +295,16 @@ export const publish = async (request: Request): Promise<Response> => {
 
         return made === 'unknown_topic'
             ? unknownTopic()
-            : Response.json({ slug: made.slug }, { headers: NO_STORE });
+            : Response.json({ slug: made.slug, title: made.title }, { headers: NO_STORE });
     }
 
     // Recorded after the response, as `POST /api/share` records its own, so
-    // the views of the artifact's share join to its creation.
+    // the views of the artifact's share join to its creation. The share
+    // belongs to the Library, so the event names no account
+    // (docs/analytics.md, `share.create`).
     after(() =>
         track('share.create', shareCreateProps({ id: created.id, kind: share.kind, mode }), {
-            ...userWho({ ...admin, emailVerified: true }),
+            ...anonymousWho({ ...admin, emailVerified: true }),
             headers: request.headers,
         }),
     );
@@ -283,7 +312,10 @@ export const publish = async (request: Request): Promise<Response> => {
     log('publish', admin.email, made.slug);
     refresh(made.slug);
 
-    return Response.json({ slug: made.slug }, { status: 201, headers: NO_STORE });
+    return Response.json(
+        { slug: made.slug, title: made.title },
+        { status: 201, headers: NO_STORE },
+    );
 };
 
 /** PATCH /api/library/artifacts/<id> (ArtifactText) → { slug } */
@@ -319,12 +351,11 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 /**
  * DELETE /api/library/artifacts/<id> → 204
  *
- * Withdraws the artifact: its page keeps its address and shows that it was
- * withdrawn, and its share is taken down in dfo-apis. The row forgets the
- * share's token once dfo-apis holds no such share. A share whose token
- * dfo-apis refuses goes to `share_cleanup` for an operator. Any other
- * failure keeps the token, so a second DELETE tries the take-down again; an
- * artifact withdrawn with its share gone answers 404.
+ * Withdraws the artifact. Its page keeps its address and shows that it was
+ * withdrawn, and its share is taken down in dfo-apis. A take-down that
+ * fails for any reason puts the share in `share_cleanup` for an operator
+ * (`dropShare`). Either way the row then forgets the share's token, and a
+ * second DELETE answers 404.
  */
 export const remove = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -342,22 +373,12 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
     log('delete', admin.email, withdrawn.slug);
     refresh(withdrawn.slug);
 
-    const share = { shareId: withdrawn.shareId, writeToken: withdrawn.shareWriteToken };
-    const removed = await takeDownTokenShare(request.headers, share);
-
-    if (removed.startsWith('write_token_')) {
-        await keepShareForCleanup({ ...share, userId: admin.id, reason: removed });
-    }
-
-    if (removed === 'done' || removed.startsWith('write_token_')) {
-        await forgetShareWriteToken(id);
-    } else {
-        console.error('library: the share of a withdrawn artifact was not taken down', {
-            artifact: withdrawn.slug,
-            share: withdrawn.shareId,
-            reason: removed,
-        });
-    }
+    await dropShare(
+        request.headers,
+        { shareId: withdrawn.shareId, writeToken: withdrawn.shareWriteToken },
+        admin.id,
+    );
+    await forgetShareWriteToken(id);
 
     return new Response(null, { status: 204, headers: NO_STORE });
 };

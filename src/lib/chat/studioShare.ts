@@ -15,7 +15,7 @@ import { liveCardsRefusal } from '@/lib/studio/slotCards';
  * artifact's share is made exactly as a share link is.
  */
 
-/** The largest share request read, in bytes; a larger one gets 413. */
+/** The largest share request read, in bytes. A larger one gets 413. */
 export const MAX_SHARE_BODY = 10_000_000;
 
 /** A share request's JSON body, null when it is not JSON, or the 413

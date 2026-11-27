@@ -14,8 +14,8 @@ import {
 
 /**
  * What a withdrawn artifact's address shows: its title, the day it was
- * withdrawn and a way back to the Library. The artifact itself, its actions
- * and its text are gone; the address stays so a citation to it still leads
+ * withdrawn, and a way back to the Library. The artifact itself, its actions,
+ * and its text are gone. The address stays, so a citation to it leads
  * somewhere that says what happened.
  */
 const WithdrawnArtifact = ({ artifact }: { artifact: Withdrawn }) => (

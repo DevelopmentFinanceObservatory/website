@@ -163,6 +163,8 @@ test("a card's facts are cut to the Library's limits", () => {
             [
                 { name: 'Plain | bar', url: 'http://plain.example', page: null },
                 { name: 'n'.repeat(400), url: 'https://long.example', page: null },
+                { name: 'Script', url: 'javascript:alert(1)', page: null },
+                { name: 'Off site', url: null, page: '/evil.example' },
             ],
             1,
         ),
@@ -170,4 +172,8 @@ test("a card's facts are cut to the Library's limits", () => {
 
     assert.deepEqual(facts.sources[0], { name: 'Plain / bar', url: null });
     assert.equal(facts.sources[1].name.length, 300);
+    assert.deepEqual(facts.sources.slice(2), [
+        { name: 'Script', url: null },
+        { name: 'Off site', url: null },
+    ]);
 });
