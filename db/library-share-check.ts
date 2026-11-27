@@ -4,20 +4,26 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { asRecord } from '../src/lib/asRecord.ts';
 import {
-    readShare,
+    bodyText,
+    readShareRecord,
+    readSlotCard,
     readSlotFile,
     SharesError,
     type SharesBackend,
 } from '../src/lib/chat/apisShares.ts';
+import { BackendError, componentReadOf } from '../src/lib/studio/liveBackend.ts';
+import { pageSlots } from '../src/lib/studio/slotCards.ts';
 import { libraryArtifact } from './schema.ts';
 
 /**
  * The Library share check (db/check-library-shares.ts): every published
  * Library artifact's share read from dfo-apis' public share routes, as a
- * reader's page reads it. The share (`GET .../shares/{id}`), then the rows
- * of each slot that draws a frame (`GET .../shares/{id}/slots/{n}/data`,
- * JSON). A slot that draws no frame, a note's, has no rows to read.
- * docs/development.md ("Library share check") describes the run.
+ * reader's page reads it. The share (`GET .../shares/{id}`), then, for each
+ * slot the page draws (`pageSlots`), the slot's card (`GET
+ * .../shares/{id}/slots/{n}`), and for a data card the slot's rows (`GET
+ * .../shares/{id}/slots/{n}/data`, JSON). A note or source card has no rows
+ * to read. A refusal of any read fails the artifact. docs/development.md
+ * ("Library share check") describes the run.
  */
 
 /** The event name of each failure line, which a log-based metric matches. */
@@ -27,10 +33,11 @@ export const SUMMARY_EVENT = 'library_share_check_summary';
 
 /**
  * Why a read failed. `share_gone`: dfo-apis holds no share under the id
- * (404). `frame_unavailable`: a slot's frame can no longer be drawn (404
+ * (404). `frame_unavailable`: dfo-apis cannot draw a slot's frame (404
  * `frame_unavailable`). `no_rows`: a live slot answered 200 with no rows.
- * `refused`: any other refusal or an answer the check cannot read.
- * `transient`: a server fault (5xx), a 429, a timeout or no answer.
+ * `refused`: any other refusal, a data card with no frame, or an answer the
+ * check cannot read. `transient`: a server fault (5xx), a 429, a timeout, or
+ * an answer that stopped before its end or never came.
  */
 export type FailureClass = 'share_gone' | 'frame_unavailable' | 'no_rows' | 'refused' | 'transient';
 
@@ -49,11 +56,14 @@ export type ArtifactCheck = { artifact: LiveArtifact; failures: Failure[] };
 
 const NO_ANSWER = new Set(['backend_unreachable', 'backend_timeout']);
 
+// The card types that draw no frame, so their slot serves no rows.
+const NOTE_TYPES = new Set(['note_narration', 'source_card']);
+
 /** The failure a share route's error stands for, read at `slot` (null for
- *  the share itself). Anything other than a SharesError is a fault of the
- *  check, and is thrown. */
+ *  the share itself). Anything other than a SharesError or BackendError is
+ *  a fault of the check, and is thrown. */
 export const failureOf = (error: unknown, slot: number | null): Failure => {
-    if (!(error instanceof SharesError)) {
+    if (!(error instanceof SharesError || error instanceof BackendError)) {
         throw error;
     }
 
@@ -102,49 +112,79 @@ export const rowsFailure = (
         : null;
 };
 
-/** Read `artifact`'s share and the rows of each of its slots that draws a
- *  frame, in turn. A share that cannot be read ends the check there. */
+const parsed = (text: string): unknown => {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+};
+
+// Slot `slot`'s card as the page reads it, then its rows for a data card:
+// the failure of the first read that fails, or null.
+const checkSlot = async (
+    backend: SharesBackend,
+    {
+        shareId,
+        slot,
+        live,
+        framed,
+    }: { shareId: string; slot: number; live: boolean; framed: boolean },
+): Promise<Failure | null> => {
+    try {
+        const { body } = await readSlotCard(backend, shareId, slot);
+
+        if (body === null) {
+            return { class: 'refused', slot, status: 304, code: 'backend_invalid' };
+        }
+
+        componentReadOf(body);
+
+        const type = asRecord(body['stored_intent'])?.['type'];
+
+        if (typeof type === 'string' && NOTE_TYPES.has(type)) {
+            return null;
+        }
+
+        if (!framed) {
+            return { class: 'refused', slot, status: null, code: 'no_frame' };
+        }
+
+        const res = await readSlotFile(backend, shareId, slot, { format: 'json', bundle: 'false' });
+
+        return rowsFailure(parsed(await bodyText(res)), { slot, live });
+    } catch (error) {
+        return failureOf(error, slot);
+    }
+};
+
+/** Read `artifact`'s share and each slot its page draws, in turn. A share
+ *  that cannot be read ends the check there. */
 export const checkArtifact = async (
     backend: SharesBackend,
     artifact: LiveArtifact,
 ): Promise<ArtifactCheck> => {
-    const share = await readShare(backend, artifact.shareId).catch((error: unknown) =>
-        failureOf(error, null),
-    );
+    let share;
 
-    if (share === null) {
-        return {
-            artifact,
-            failures: [{ class: 'share_gone', slot: null, status: 404, code: 'not_found' }],
-        };
-    }
-
-    if ('class' in share) {
-        return { artifact, failures: [share] };
+    try {
+        share = await readShareRecord(backend, artifact.shareId);
+    } catch (error) {
+        return { artifact, failures: [failureOf(error, null)] };
     }
 
     const failures: Failure[] = [];
 
-    for (const { slot, card } of share.slots) {
-        if (card?.frame == null) {
-            continue;
-        }
+    for (const slot of pageSlots(share)) {
+        const card = share.slots.find((entry) => entry.slot === slot)?.card;
+        const failure = await checkSlot(backend, {
+            shareId: artifact.shareId,
+            slot,
+            live: share.mode === 'live',
+            framed: card?.frame != null,
+        });
 
-        try {
-            const res = await readSlotFile(backend, artifact.shareId, slot, {
-                format: 'json',
-                bundle: 'false',
-            });
-            const failure = rowsFailure(await res.json().catch(() => null), {
-                slot,
-                live: share.mode === 'live',
-            });
-
-            if (failure) {
-                failures.push(failure);
-            }
-        } catch (error) {
-            failures.push(failureOf(error, slot));
+        if (failure) {
+            failures.push(failure);
         }
     }
 
@@ -269,4 +309,39 @@ export const checkLibraryShares = async ({
     );
 
     return failed === 0 ? 0 : 1;
+};
+
+/**
+ * Run `check`, the whole run, and give its exit code. A run that fails
+ * before it can count its artifacts (no settings, no database, a fault of
+ * the check) logs one `FAILURE_EVENT` line with class `check_failed` and the
+ * error's code, so the same alert fires, and gives 1.
+ */
+export const guardCheck = async (
+    check: () => Promise<0 | 1>,
+    log: (line: string) => void,
+): Promise<0 | 1> => {
+    try {
+        return await check();
+    } catch (error) {
+        const code = asRecord(error)?.['code'];
+
+        log(
+            JSON.stringify({
+                severity: 'ERROR',
+                event: FAILURE_EVENT,
+                message: `${FAILURE_EVENT}: the check could not run`,
+                class: 'check_failed',
+                code:
+                    typeof code === 'string'
+                        ? code
+                        : error instanceof Error
+                          ? error.name
+                          : 'unknown',
+                detail: error instanceof Error ? error.message : String(error),
+            }),
+        );
+
+        return 1;
+    }
 };

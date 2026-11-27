@@ -161,6 +161,26 @@ const slotWidgets = (record: ShareRecord): PayloadWidget[] =>
         card ? [{ kind: 'table', id: `slot-${slot}`, turn: 1, slot: slot - 1 }] : [],
     );
 
+// The widgets a share's page draws: its payload's, or one per filled slot
+// for a payload with none.
+const pageWidgets = (record: ShareRecord): PayloadWidget[] => {
+    const payloadWidgets = widgetsOf(record.payload);
+
+    return payloadWidgets.length ? payloadWidgets : slotWidgets(record);
+};
+
+/** The slots whose cards a share's page reads (`sharedViewOfRecord`): the
+ *  slot of each held widget it draws, in order, each once. */
+export const pageSlots = (record: ShareRecord): number[] => [
+    ...new Set(
+        pageWidgets(record).flatMap((widget) => {
+            const slotted = isHeld(record, widget) ? slotCardOf(record, widget) : null;
+
+            return slotted ? [slotted.slot] : [];
+        }),
+    ),
+];
+
 // The canvas a share's payload holds, with `widgets` in place of its own.
 // Fields a payload leaves out, as an SDK share's leaves them all, read as an
 // empty canvas named by the share's title.
@@ -257,7 +277,6 @@ export const sharedViewOfRecord = async (
     const gate = gateOf(READ_CONCURRENCY);
     const undrawn: string[] = [];
     const slots: Record<string, number> = {};
-    const payloadWidgets = widgetsOf(record.payload);
 
     // Read beside the cards, within the same deadline.
     const firstServed = live
@@ -271,7 +290,7 @@ export const sharedViewOfRecord = async (
     };
 
     const widgets = await Promise.all(
-        (payloadWidgets.length ? payloadWidgets : slotWidgets(record)).map(async (widget) => {
+        pageWidgets(record).map(async (widget) => {
             if (!isHeld(record, widget)) {
                 return widget as unknown as Widget;
             }
