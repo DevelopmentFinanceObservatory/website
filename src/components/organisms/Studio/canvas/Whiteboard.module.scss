@@ -283,6 +283,12 @@ $prompt-arrive: 240ms;
     transition-duration: $prompt-arrive;
 }
 
+// The card's own title takes the label's line, so a leaving placeholder's
+// label goes at once while its outline fades.
+.comingLeaving .comingLabel {
+    visibility: hidden;
+}
+
 .comingLabel {
     position: absolute;
     top: rem(14);

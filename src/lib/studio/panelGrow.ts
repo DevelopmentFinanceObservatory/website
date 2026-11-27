@@ -6,7 +6,7 @@
 
 /** Pointer rest before the panel grows (ms): long enough that a pointer
  *  slowing on its way across the panel does not count. */
-export const GROW_REST_MS = 200;
+export const GROW_REST_MS = 120;
 
 /** Pointer and focus absent this long before the panel shrinks (ms). */
 export const SHRINK_AFTER_MS = 220;
