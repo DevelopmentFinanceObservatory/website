@@ -31,6 +31,7 @@ import {
 import {
     addTopic,
     artifactShare,
+    isArtifactWithdrawn,
     insertArtifact,
     listTopics,
     publishTarget,
@@ -209,11 +210,11 @@ const dropShare = async (
     await settleShare(settling(headers), share, adminId);
 };
 
-const withdrawalUnsettled = (): Response =>
-    unreachableProblem(
+const WITHDRAWAL_RETRY = {
+    unsettled:
         'Its chart could not be taken down or queued for removal, so it is still published. Try again.',
-        NO_STORE,
-    );
+    unwritten: 'Its chart is taken down, but the withdrawal was not saved. Try again.',
+};
 
 /**
  * POST /api/library/artifacts (PublishInput, src/lib/library/publish.ts)
@@ -413,10 +414,13 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
  * Takes the artifact's share down in dfo-apis, or, when dfo-apis cannot,
  * records it in `share_cleanup` for an operator. Once one of those holds, it
  * withdraws the artifact, erases its title and text and forgets the share's
- * token, and answers 204. Its address stays and shows that it was withdrawn,
- * and a second DELETE answers 404. When neither holds, nothing changes: the
+ * token, and answers 204, as does a DELETE that meets the row withdrawn by
+ * another one meanwhile. Its address stays and shows that it was withdrawn,
+ * and a later DELETE answers 404. When neither holds, nothing changes: the
  * artifact stays published and the answer is a retryable 502, so the Edit
- * dialog's Delete tries again (./withdraw.ts).
+ * dialog's Delete tries again. When the share is settled and the row write
+ * fails, the answer is the same retryable 502, and the retry withdraws the
+ * row (./withdraw.ts).
  */
 export const remove = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -426,7 +430,12 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
     }
 
     const withdrawn = await withdraw(
-        { ...settling(request.headers), share: artifactShare, withdraw: withdrawArtifact },
+        {
+            ...settling(request.headers),
+            share: artifactShare,
+            withdraw: withdrawArtifact,
+            isWithdrawn: isArtifactWithdrawn,
+        },
         id,
         admin.id,
     );
@@ -435,10 +444,10 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
         return notFound();
     }
 
-    if (!withdrawn.settled) {
-        log('delete.unsettled', admin.email, withdrawn.slug);
+    if (withdrawn.outcome !== 'withdrawn') {
+        log(`delete.${withdrawn.outcome}`, admin.email, withdrawn.slug);
 
-        return withdrawalUnsettled();
+        return unreachableProblem(WITHDRAWAL_RETRY[withdrawn.outcome], NO_STORE);
     }
 
     log('delete', admin.email, withdrawn.slug);

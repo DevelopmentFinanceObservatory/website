@@ -422,6 +422,15 @@ export const artifactShare = async (id: string): Promise<ArtifactShare | null> =
     return row?.shareWriteToken ? { ...row, shareWriteToken: row.shareWriteToken } : null;
 };
 
+/** Whether artifact `id` is withdrawn. False for an id no artifact has. */
+export const isArtifactWithdrawn = async (id: string): Promise<boolean> =>
+    (
+        await db
+            .select({ id: libraryArtifact.id })
+            .from(libraryArtifact)
+            .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.withdrawnAt)))
+    ).length > 0;
+
 /**
  * Withdraws an artifact and drops its share token, in one statement. Call it
  * only once the share is gone from dfo-apis or its `share_cleanup` record

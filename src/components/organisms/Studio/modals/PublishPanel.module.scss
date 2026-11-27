@@ -178,6 +178,15 @@
     letter-spacing: -0.01em;
 }
 
+// Under the URL field while the slug follows the title.
+.addressNote {
+    @include font-size(11px, 1.35);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+}
+
 .addressInput {
     @include font-size(14px, 1.2);
 

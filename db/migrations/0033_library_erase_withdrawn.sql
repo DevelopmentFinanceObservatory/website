@@ -1,9 +1,9 @@
 -- Erases the publisher's text from every library_artifact row written with
 -- withdrawn_at set, whichever release writes it. The deploy runs migrations
 -- before the new image serves, so a release that sets withdrawn_at alone can
--- still withdraw after this migration. The trigger is BEFORE, so the erased
--- values are the ones stored, and it runs with the writer's rights, which
--- cover library_artifact_topic.
+-- withdraw after this migration, and the trigger erases its rows as well.
+-- The trigger is BEFORE, so the erased values are the ones stored, and it
+-- runs with the writer's rights, which cover library_artifact_topic.
 CREATE FUNCTION "library_artifact_erase_withdrawn"() RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public

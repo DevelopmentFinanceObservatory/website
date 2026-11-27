@@ -22,7 +22,7 @@ import {
     publishArtifact,
     publishRefusalText,
 } from '@/lib/library/client';
-import { LIMITS, readArtifactText, readSlug, slugOf } from '@/lib/library/publish';
+import { LIMITS, publishKeySlot, readArtifactText, readSlug, slugOf } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 
 /**
@@ -58,6 +58,7 @@ const COPY = {
     noLive: 'This output draws no data, so it is published as a snapshot.',
     failed: 'It was not published. Try again.',
     none: 'A text card cannot be published. Publish a chart, a table or a key number.',
+    numbered: 'A number is added if another artifact uses this address.',
 };
 
 // The cards the Library takes on their own: a chart, a table or a key number.
@@ -108,9 +109,8 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     const [error, setError] = useState<string | null>(null);
     const [slugError, setSlugError] = useState<string | null>(null);
     const [published, setPublished] = useState<{ slug: string; title: string } | null>(null);
-    // One key per artifact and mode, made on its first try and sent again
-    // on every retry, so a publish whose answer was lost makes no second
-    // artifact.
+    // One key per slot (`publishKeySlot`: artifact, mode and chosen slug),
+    // made on its first try and sent again on every retry.
     const keysRef = useRef(new Map<string, string>());
     const ids = useId();
     const libraryEnabled = useLibraryEnabled();
@@ -121,8 +121,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     const shownSlug = slug ?? (text.title.trim() ? slugOf(text.title) : '');
     const mode: ShareMode = canLive && live ? 'live' : 'snapshot';
 
-    const publishKey = (): string => {
-        const at = `${picked}:${mode}`;
+    const publishKey = (at: string): string => {
         const known = keysRef.current.get(at);
 
         if (known) {
@@ -172,9 +171,10 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
         setSlugError(null);
 
         const single = picked !== CANVAS;
+        const slot = publishKeySlot(picked, mode, chosen.value);
         const answer = await publishArtifact({
             ...checked.value,
-            publishKey: publishKey(),
+            publishKey: publishKey(slot),
             ...(chosen.value ? { slug: chosen.value } : {}),
             share: {
                 kind: single ? 'card' : 'canvas',
@@ -192,7 +192,10 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             if (isWithdrawnRefusal(answer.problem)) {
                 // The withdrawn artifact owns this key, so the next try
                 // starts a new one.
-                keysRef.current.delete(`${picked}:${mode}`);
+                keysRef.current.delete(slot);
+                // A new try follows the title, so the server numbers the
+                // slug the withdrawn artifact keeps.
+                setSlug(null);
             }
 
             const refusal = publishRefusalText(
@@ -262,7 +265,13 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 spellCheck={false}
                                 autoCapitalize="off"
                                 aria-invalid={slugError !== null}
-                                aria-describedby={slugError ? `${ids}-slug-error` : undefined}
+                                aria-describedby={
+                                    slugError
+                                        ? `${ids}-slug-error`
+                                        : typedSlug === null
+                                          ? `${ids}-slug-note`
+                                          : undefined
+                                }
                                 onChange={(event) => {
                                     setSlug(event.target.value);
                                     setSlugError(null);
@@ -277,10 +286,16 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 }
                             />
                         </span>
-                        {slugError && (
+                        {slugError ? (
                             <p className={styles.error} id={`${ids}-slug-error`} role="alert">
                                 {slugError}
                             </p>
+                        ) : (
+                            typedSlug === null && (
+                                <p className={styles.addressNote} id={`${ids}-slug-note`}>
+                                    {COPY.numbered}
+                                </p>
+                            )
                         )}
                     </div>
                 }
@@ -296,6 +311,9 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 const next = event.target.value;
 
                                 setPicked(next);
+                                // The URL follows the new artifact's title.
+                                setSlug(null);
+                                setSlugError(null);
                                 // The title follows the artifact until it is edited.
                                 setText((current) => {
                                     const was = prefill(

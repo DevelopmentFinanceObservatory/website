@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { withdraw, type WithdrawDeps } from '../withdraw.ts';
+import { withdraw, type WithdrawDeps, type WithdrawOutcome } from '../withdraw.ts';
 
 const SHARE = { slug: 'health-oda', shareId: 'Share001', shareWriteToken: 'shw_1' };
 
@@ -44,6 +44,7 @@ const fakes = ({
 
             return { slug: SHARE.slug };
         },
+        isWithdrawn: async () => row.withdrawn,
     };
 
     return { deps, cleanup, row };
@@ -60,7 +61,7 @@ test('an artifact is withdrawn only once its share is settled', async (t) => {
         setup: Parameters<typeof fakes>[0];
         // What each call answers and the row it leaves, in turn.
         calls: {
-            answer: { slug: string; settled: boolean } | 'not_found' | 'throws';
+            answer: WithdrawOutcome | 'not_found';
             row: object;
         }[];
         cleanup: string[];
@@ -69,7 +70,7 @@ test('an artifact is withdrawn only once its share is settled', async (t) => {
             name: 'taken down',
             setup: { takeDown: ['done'] },
             calls: [
-                { answer: { slug: 'health-oda', settled: true }, row: WITHDRAWN },
+                { answer: 'withdrawn', row: WITHDRAWN },
                 { answer: 'not_found', row: WITHDRAWN },
             ],
             cleanup: [],
@@ -77,15 +78,15 @@ test('an artifact is withdrawn only once its share is settled', async (t) => {
         {
             name: 'recorded for cleanup',
             setup: { takeDown: ['transient_unavailable'], cleanupCommits: [true] },
-            calls: [{ answer: { slug: 'health-oda', settled: true }, row: WITHDRAWN }],
+            calls: [{ answer: 'withdrawn', row: WITHDRAWN }],
             cleanup: ['transient_unavailable'],
         },
         {
             name: 'neither, then a retry',
             setup: { takeDown: ['transient_unavailable'], cleanupCommits: [false] },
             calls: [
-                { answer: { slug: 'health-oda', settled: false }, row: PUBLISHED },
-                { answer: { slug: 'health-oda', settled: true }, row: WITHDRAWN },
+                { answer: 'unsettled', row: PUBLISHED },
+                { answer: 'withdrawn', row: WITHDRAWN },
             ],
             cleanup: [],
         },
@@ -93,8 +94,8 @@ test('an artifact is withdrawn only once its share is settled', async (t) => {
             name: 'settled, the row write fails, then a retry',
             setup: { takeDown: ['done'], rowWrites: [false] },
             calls: [
-                { answer: 'throws', row: PUBLISHED },
-                { answer: { slug: 'health-oda', settled: true }, row: WITHDRAWN },
+                { answer: 'unwritten', row: PUBLISHED },
+                { answer: 'withdrawn', row: WITHDRAWN },
             ],
             cleanup: [],
         },
@@ -106,11 +107,13 @@ test('an artifact is withdrawn only once its share is settled', async (t) => {
         for (const [index, call] of one.calls.entries()) {
             const label = `${one.name}, call ${index + 1}`;
 
-            if (call.answer === 'throws') {
-                await assert.rejects(withdraw(deps, 'a1', 'admin'), label);
-            } else {
-                assert.deepEqual(await withdraw(deps, 'a1', 'admin'), call.answer, label);
-            }
+            assert.deepEqual(
+                await withdraw(deps, 'a1', 'admin'),
+                call.answer === 'not_found'
+                    ? call.answer
+                    : { slug: SHARE.slug, outcome: call.answer },
+                label,
+            );
 
             assert.deepEqual(row, call.row, label);
         }
@@ -122,4 +125,28 @@ test('an artifact is withdrawn only once its share is settled', async (t) => {
         quiet.mock.calls.some((call) => call.arguments[0] === 'share_cleanup_not_recorded'),
         true,
     );
+});
+
+test('two withdrawals at once both answer withdrawn', async () => {
+    const { deps, row } = fakes({});
+    let takeDowns = 0;
+    const counted: WithdrawDeps = {
+        ...deps,
+        takeDown: async (share) => {
+            takeDowns += 1;
+
+            return deps.takeDown(share);
+        },
+    };
+
+    assert.deepEqual(
+        await Promise.all([withdraw(counted, 'a1', 'admin'), withdraw(counted, 'a1', 'admin')]),
+        [
+            { slug: SHARE.slug, outcome: 'withdrawn' },
+            { slug: SHARE.slug, outcome: 'withdrawn' },
+        ],
+    );
+    // Both read the share before either withdrew the row.
+    assert.equal(takeDowns, 2);
+    assert.deepEqual(row, WITHDRAWN);
 });

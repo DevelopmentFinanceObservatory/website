@@ -225,13 +225,14 @@ export const readArtifactText = (body: unknown): Read<ArtifactText> => {
 };
 
 /**
- * A chosen slug: null when there is none, which leaves the server to make
- * one from the title, or a slug already in `slugOf` form. The publish route
+ * A chosen slug: null when there is none (the body's `slug` absent or
+ * null), which leaves the server to make one from the title, or a slug
+ * already in `slugOf` form. The publish route
  * reads the body's `slug` with it, and the Publish tab checks its URL field
  * with it before sending.
  */
 export const readSlug = (raw: unknown): Read<string | null> => {
-    if (raw === undefined) {
+    if (raw === undefined || raw === null) {
         return { ok: true, value: null };
     }
 
@@ -242,6 +243,16 @@ export const readSlug = (raw: unknown): Read<string | null> => {
               `Give it a URL of 1 to ${LIMITS.slug} lower-case letters, digits and single hyphens.`,
           );
 };
+
+/**
+ * The publish key's slot in the Publish tab: one key per artifact picked,
+ * mode and chosen slug (`readSlug`'s value, null while the slug follows the
+ * title). A retry with all three unchanged sends the key again, so a publish
+ * whose answer was lost makes no second artifact. A changed slug gets a new
+ * key, so the retry is not answered with an artifact under the old one.
+ */
+export const publishKeySlot = (picked: string, mode: string, slug: string | null): string =>
+    JSON.stringify([picked, mode, slug]);
 
 /** The body of a publish, or the first field at fault. A conversation
  *  share is not an artifact, so `share.kind` is `canvas` or `card`. */

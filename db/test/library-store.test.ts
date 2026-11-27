@@ -192,8 +192,11 @@ test('library store', async (t) => {
             shareId: listed.shareId,
             shareWriteToken: 'shw_1',
         });
+        assert.equal(await store.isArtifactWithdrawn(id), false);
         assert.deepEqual(await store.withdrawArtifact(id), { slug: 'health-oda' });
         assert.equal(await store.artifactShare(id), null);
+        assert.equal(await store.isArtifactWithdrawn(id), true);
+        assert.equal(await store.isArtifactWithdrawn('no-such-id'), false);
 
         assert.equal(
             (await store.listArtifacts()).some((a) => a.slug === 'health-oda'),

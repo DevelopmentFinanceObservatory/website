@@ -4,6 +4,7 @@ import test from 'node:test';
 import type { PanelView } from '../../studio/descriptionBlocks.ts';
 import {
     freeSlug,
+    publishKeySlot,
     publishedFacts,
     publishedKind,
     readArtifactText,
@@ -65,7 +66,6 @@ test('a publish body is refused at the first field at fault', () => {
         [{ publishKey: undefined }, '/publishKey'],
         [{ publishKey: 'not-a-key' }, '/publishKey'],
         [{ slug: '' }, '/slug'],
-        [{ slug: null }, '/slug'],
         [{ slug: 7 }, '/slug'],
         [{ slug: 'Health-ODA' }, '/slug'],
         [{ slug: 'health--oda' }, '/slug'],
@@ -124,6 +124,12 @@ test('a chosen slug is sent as it is, and typing keeps to the slug rules', () =>
 
     assert.ok(read.ok);
     assert.equal(read.value.slug, 'x'.repeat(80));
+
+    // A null slug is no choice, as an absent one is.
+    const none = readPublish(body({ slug: null }));
+
+    assert.ok(none.ok);
+    assert.equal(none.value.slug, null);
 });
 
 const view = (sources: { name: string; url: string | null; page: string | null }[], steps = 0) =>
@@ -191,4 +197,14 @@ test("a card's facts are cut to the Library's limits", () => {
         { name: 'Script', url: null },
         { name: 'Off site', url: null },
     ]);
+});
+
+test('a retry keeps its publish key until the artifact, mode or chosen slug changes', () => {
+    const slot = publishKeySlot('w1', 'live', 'aid-chart');
+
+    assert.equal(publishKeySlot('w1', 'live', 'aid-chart'), slot);
+    assert.notEqual(publishKeySlot('w1', 'live', 'aid-chart-2'), slot);
+    assert.notEqual(publishKeySlot('w1', 'live', null), slot);
+    assert.notEqual(publishKeySlot('w1', 'snapshot', 'aid-chart'), slot);
+    assert.notEqual(publishKeySlot('canvas', 'live', 'aid-chart'), slot);
 });
