@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { publishRefusalText } from '../client.ts';
+import { isWithdrawnRefusal, publishRefusalText } from '../client.ts';
 
 const CARDS = [
     { id: 'w1', title: 'Health ODA' },
@@ -36,8 +36,15 @@ test('publishRefusalText words each share refusal apart from the route detail', 
     assert.match(blocked, /Debt service/);
     assert.doesNotMatch(blocked, /Health ODA/);
     assert.notEqual(cap, blocked);
+    assert.equal(isWithdrawnRefusal(refusal('artifact_withdrawn')), true);
+    assert.equal(isWithdrawnRefusal(refusal('share_limit')), false);
 
-    for (const code of ['share_limit', 'share_refused', 'payload_too_large']) {
+    for (const code of [
+        'share_limit',
+        'share_refused',
+        'payload_too_large',
+        'artifact_withdrawn',
+    ]) {
         assert.notEqual(publishRefusalText(refusal(code), DETAIL, CARDS, false), DETAIL, code);
     }
 });

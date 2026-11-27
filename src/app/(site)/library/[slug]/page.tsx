@@ -29,7 +29,7 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
     // LIBRARY_ENABLED is off, admins see every artifact page unindexed.
     if (found.status === 'withdrawn' || view === 'preview') {
         return {
-            title: `${found.artifact.title} — DFO Library`,
+            title: 'Withdrawn artifact — DFO',
             robots: { index: false, follow: false },
         };
     }

@@ -123,7 +123,6 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
             status: 'withdrawn',
             artifact: {
                 slug: row.slug,
-                title: row.title,
                 kind: row.kind as ArtifactKind,
                 publishedAt: row.publishedAt.toISOString(),
                 withdrawnAt: row.withdrawnAt.toISOString(),
@@ -137,13 +136,18 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
     };
 });
 
-/** The slug and title of the artifact a publish with `publishKey` made,
- *  withdrawn or not, or null when none did. */
+/** The artifact a publish with `publishKey` made, withdrawn or not, or null
+ *  when none did. A withdrawn artifact has no title left, so `title` is empty
+ *  and `withdrawn` is true. */
 export const artifactByPublishKey = async (
     publishKey: string,
-): Promise<{ slug: string; title: string } | null> => {
+): Promise<{ slug: string; title: string; withdrawn: boolean } | null> => {
     const [row] = await db
-        .select({ slug: libraryArtifact.slug, title: libraryArtifact.title })
+        .select({
+            slug: libraryArtifact.slug,
+            title: libraryArtifact.title,
+            withdrawn: sql<boolean>`${libraryArtifact.withdrawnAt} is not null`,
+        })
         .from(libraryArtifact)
         .where(eq(libraryArtifact.publishKey, publishKey));
 
@@ -333,26 +337,45 @@ export const updateArtifact = (
 export type Withdrawal = { slug: string; shareId: string; shareWriteToken: string };
 
 /**
- * Withdraws an artifact. Its row stays, with its slug, and lists, the
- * sitemap and edits leave it out. Answers the share to take down with its
- * token. A second call before the token is forgotten
- * (`forgetShareWriteToken`) answers the same share, and keeps the first
- * withdrawal's date. Answers `not_found` for an id no artifact has, and for
- * a withdrawn one whose token is forgotten.
+ * Withdraws an artifact and erases what it published: the title becomes the
+ * empty string, the description the empty string, and the content title,
+ * content, sources, steps and topic links are cleared. The row keeps its id,
+ * slug, kind, mode, dates, share id and share token, so the slug stays taken
+ * and the address can say the artifact was withdrawn. Lists, the sitemap and
+ * edits leave it out. Answers the share to take down with its token. A
+ * second call before the token is forgotten (`forgetShareWriteToken`)
+ * answers the same share, and keeps the first withdrawal's date. Answers
+ * `not_found` for an id no artifact has, and for a withdrawn one whose token
+ * is forgotten.
  */
-export const withdrawArtifact = async (id: string): Promise<Withdrawal | 'not_found'> => {
-    const [row] = await db
-        .update(libraryArtifact)
-        .set({ withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())` })
-        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
-        .returning({
-            slug: libraryArtifact.slug,
-            shareId: libraryArtifact.shareId,
-            shareWriteToken: libraryArtifact.shareWriteToken,
-        });
+export const withdrawArtifact = async (id: string): Promise<Withdrawal | 'not_found'> =>
+    db.transaction(async (tx) => {
+        const [row] = await tx
+            .update(libraryArtifact)
+            .set({
+                withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())`,
+                title: '',
+                description: '',
+                contentTitle: null,
+                content: null,
+                sources: [],
+                steps: [],
+            })
+            .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
+            .returning({
+                slug: libraryArtifact.slug,
+                shareId: libraryArtifact.shareId,
+                shareWriteToken: libraryArtifact.shareWriteToken,
+            });
 
-    return row?.shareWriteToken ? { ...row, shareWriteToken: row.shareWriteToken } : 'not_found';
-};
+        if (!row?.shareWriteToken) {
+            return 'not_found';
+        }
+
+        await tx.delete(libraryArtifactTopic).where(eq(libraryArtifactTopic.artifactId, id));
+
+        return { ...row, shareWriteToken: row.shareWriteToken };
+    });
 
 /** Forgets a withdrawn artifact's share token, once its share is gone from
  *  dfo-apis or recorded in `share_cleanup`. */

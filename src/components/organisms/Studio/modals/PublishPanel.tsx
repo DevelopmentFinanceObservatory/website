@@ -15,7 +15,7 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode } from '@/lib/chat/shareMode';
 import type { Widget } from '@/lib/chat/widgets';
 import { artifactPath, kindLabel } from '@/lib/library/artifact';
-import { publishArtifact, publishRefusalText } from '@/lib/library/client';
+import { isWithdrawnRefusal, publishArtifact, publishRefusalText } from '@/lib/library/client';
 import { LIMITS, readArtifactText } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 
@@ -150,6 +150,12 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
         if (answer.ok) {
             setPublished(answer.value);
         } else {
+            if (isWithdrawnRefusal(answer.problem)) {
+                // The withdrawn artifact still owns this key, so the next
+                // try starts a new one.
+                keysRef.current.delete(`${picked}:${mode}`);
+            }
+
             setError(
                 publishRefusalText(
                     answer.problem,

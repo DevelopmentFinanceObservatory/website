@@ -199,7 +199,8 @@ const dropShare = async (
 /**
  * POST /api/library/artifacts (PublishInput, src/lib/library/publish.ts)
  * → 201 { slug, title } for a new artifact, 200 { slug, title } for the one
- * an earlier try with the same `publishKey` made, with the title it stored.
+ * an earlier try with the same `publishKey` made, with the title it stored,
+ * and 409 `artifact_withdrawn` when that artifact has since been withdrawn.
  *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
@@ -231,8 +232,18 @@ export const publish = async (request: Request): Promise<Response> => {
     const { text, publishKey } = read.value;
     const earlier = await artifactByPublishKey(publishKey);
 
+    if (earlier?.withdrawn) {
+        return problem({
+            status: 409,
+            code: 'artifact_withdrawn',
+            detail: 'This was published and then withdrawn.',
+            retryable: false,
+            headers: NO_STORE,
+        });
+    }
+
     if (earlier) {
-        return Response.json(earlier, { headers: NO_STORE });
+        return Response.json({ slug: earlier.slug, title: earlier.title }, { headers: NO_STORE });
     }
 
     const known = new Set(await listTopics());
@@ -366,8 +377,8 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 /**
  * DELETE /api/library/artifacts/<id> → 204
  *
- * Withdraws the artifact. Its page keeps its address and shows that it was
- * withdrawn, and its share is taken down in dfo-apis. A take-down that
+ * Withdraws the artifact and erases its title and text. Its address stays and
+ * shows that it was withdrawn, and its share is taken down in dfo-apis. A take-down that
  * fails for any reason puts the share in `share_cleanup` for an operator
  * (`dropShare`). Either way the row then forgets the share's token, and a
  * second DELETE answers 404.

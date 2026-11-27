@@ -85,6 +85,7 @@ test('library store', async (t) => {
         assert.deepEqual(await store.artifactByPublishKey('key-a'), {
             slug: 'health-oda',
             title: 'Health ODA',
+            withdrawn: false,
         });
         assert.equal(await store.artifactByPublishKey('key-none'), null);
         assert.equal(await rowCount(), 1);
@@ -188,6 +189,43 @@ test('library store', async (t) => {
         const atSlug = await store.artifactBySlug('health-oda');
 
         assert.equal(atSlug?.status, 'withdrawn');
+        assert.equal('title' in (atSlug?.artifact ?? {}), false);
+
+        const erased = (
+            await admin.query<Record<string, unknown>>(
+                `select title, description, content_title, content, sources, steps, kind, mode,
+                        share_id, share_write_token, withdrawn_at is not null as withdrawn,
+                        (select count(*)::int from library_artifact_topic where artifact_id = $1) as topics
+                   from library_artifact where id = $1`,
+                [id],
+            )
+        ).rows[0];
+
+        assert.equal(erased.title, '');
+        assert.equal(erased.description, '');
+        assert.equal(erased.content_title, null);
+        assert.equal(erased.content, null);
+        assert.deepEqual(erased.sources, []);
+        assert.deepEqual(erased.steps, []);
+        assert.equal(erased.topics, 0);
+        assert.equal(erased.withdrawn, true);
+        assert.equal(erased.share_id, listed.shareId);
+        assert.equal(erased.share_write_token, 'shw_1');
+        assert.equal(erased.kind, listed.kind);
+        assert.equal(erased.mode, listed.mode);
+
+        const [{ publish_key: key }] = (
+            await admin.query<{ publish_key: string }>(
+                'select publish_key from library_artifact where id = $1',
+                [id],
+            )
+        ).rows;
+
+        assert.deepEqual(await store.artifactByPublishKey(key), {
+            slug: 'health-oda',
+            title: '',
+            withdrawn: true,
+        });
         assert.equal('shareWriteToken' in (atSlug?.artifact ?? {}), false);
         assert.equal(await store.artifactBySlug('never-published'), null);
 

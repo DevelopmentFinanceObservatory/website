@@ -335,7 +335,9 @@ export type LibraryStep = { title: string; detail: string | null };
  *
  * A withdrawn artifact keeps its row, so its slug stays taken and its URL
  * shows a withdrawn notice. `withdrawn_at` marks it, and the share is taken
- * down in dfo-apis. `share_write_token` is cleared once the share is gone
+ * down in dfo-apis. Withdrawing erases the publisher's text: `title` and
+ * `description` become the empty string, `content_title` and `content` are
+ * null, `sources` and `steps` are empty, and the topic links are deleted. `share_write_token` is cleared once the share is gone
  * from dfo-apis or recorded in `share_cleanup`, so a withdrawn row that
  * holds one owes a take-down.
  */
