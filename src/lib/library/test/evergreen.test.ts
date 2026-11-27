@@ -5,7 +5,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 
 import { TypeSafeClient } from '@typesafe-ai/sdk';
 
-const { BATCH_CONCURRENCY, CLIENT_CONFIG, MODEL, checkEvergreenKey, evergreenRefusal } =
+const { BATCH_CONCURRENCY, CLIENT_CONFIG, MAX_CANDIDATES, MODEL, evergreenRefusal } =
     await import('../evergreen.ts');
 const { GROUP_SIZE, REASONS, candidatesOf } = await import('../evergreenRule.ts');
 const { LIMITS } = await import('../publish.ts');
@@ -115,7 +115,7 @@ const standIn = (
 
 const SUBJECT = { publishKey: 'key-1' };
 
-const ENV = ['LIBRARY_EVERGREEN_CHECK', 'TYPESAFE_API_KEY'] as const;
+const ENV = ['TYPESAFE_API_KEY'] as const;
 const saved = new Map<string, string | undefined>();
 let logged: string[] = [];
 const consoleWarn = console.warn;
@@ -276,42 +276,55 @@ test('a text near the length limit is asked about in parallel batches of GROUP_S
     );
 });
 
-test('without an API key the check answers 503', async () => {
-    const response = await evergreenRefusal(
-        TEXT,
-        SUBJECT,
-        () => new TypeSafeClient({ ...CLIENT_CONFIG }),
-    );
+test('without an API key the check answers 503 and logs the missing key', async () => {
+    const response = await evergreenRefusal(TEXT, SUBJECT);
 
     assert.equal(response?.status, 503);
+    assert.equal(response?.headers.get('Retry-After'), '5');
     assert.equal((await body(response)).code, 'evergreen_check_unavailable');
+    assert.deepEqual(
+        [JSON.parse(logged[0]).message, JSON.parse(logged[0]).cause],
+        ['library_evergreen_unavailable', 'missing_key'],
+    );
 });
 
-test('the switch turned off, or no text, skips the call', async () => {
+test('no text skips the call', async () => {
     const { calls, client } = standIn({ status: 500 });
 
     assert.equal(await evergreenRefusal({ content: null }, SUBJECT, client), null);
-    assert.equal(logged.length, 0);
-
-    process.env.LIBRARY_EVERGREEN_CHECK = ' OFF ';
-
-    assert.equal(await evergreenRefusal(TEXT, SUBJECT, client), null);
     assert.equal(calls.length, 0);
-    assert.equal(JSON.parse(logged[0]).message, 'library_evergreen_check_off');
+    assert.equal(logged.length, 0);
 });
 
-test('a production server refuses to start without the key unless the check is off', () => {
-    const warnings: string[] = [];
+test('a text of more than MAX_CANDIDATES sentences is refused at its field before any call', async () => {
+    const lines = (count: number) =>
+        Array.from({ length: count }, (_, n) => `Line ${n + 1} names a donor.`).join('\n');
+    const title = 'ODA by donor';
+    const within = standIn({});
 
-    assert.throws(() => checkEvergreenKey(true));
+    // The title is one sentence, so the content holds the rest.
+    assert.equal(
+        await evergreenRefusal(
+            { title, content: lines(MAX_CANDIDATES - 1) },
+            SUBJECT,
+            within.client,
+        ),
+        null,
+    );
+    assert.equal(within.calls.length, MAX_CANDIDATES / GROUP_SIZE);
 
-    checkEvergreenKey(false, (message) => warnings.push(message));
-    assert.equal(warnings.length, 1);
+    const over = standIn({});
+    const response = await evergreenRefusal(
+        { title, content: lines(MAX_CANDIDATES) },
+        SUBJECT,
+        over.client,
+    );
+    const document = await body(response);
 
-    process.env.LIBRARY_EVERGREEN_CHECK = 'off';
-    checkEvergreenKey(true);
-
-    delete process.env.LIBRARY_EVERGREEN_CHECK;
-    process.env.TYPESAFE_API_KEY = 'key';
-    checkEvergreenKey(true);
+    assert.equal(response?.status, 400);
+    assert.deepEqual(
+        [document.code, document.pointer, document.limit],
+        ['evergreen_too_long', '/content', MAX_CANDIDATES],
+    );
+    assert.equal(over.calls.length, 0);
 });

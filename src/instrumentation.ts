@@ -79,11 +79,6 @@ export async function register(): Promise<void> {
     const { checkVisitorKey } = await import('./lib/proxy/visitor');
     checkVisitorKey(process.env.NODE_ENV === 'production');
 
-    // Without the TypeSafe key every publish and text edit answers 503, so a
-    // production server with the evergreen check on refuses to start.
-    const { checkEvergreenKey } = await import('./lib/library/evergreen');
-    checkEvergreenKey(process.env.NODE_ENV === 'production');
-
     const { resolveRuntimeConnection, connectCloudSqlRuntime, setCloudSqlRuntimeStream } =
         await import('../db/connection');
 

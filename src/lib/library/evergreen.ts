@@ -17,11 +17,15 @@ import {
     type EvergreenDoubt,
     type EvergreenRefusal,
     type EvergreenText,
+    MAX_CANDIDATES,
     MODEL,
     batchesOf,
     candidatesOf,
     decide,
+    BATCH_CONCURRENCY,
+    CHECK_DEADLINE_MS,
     evergreenRequest,
+    overBudget,
 } from './evergreenRule';
 
 export { KIND_MIN, MODEL, T_HIGH, T_LOW } from './evergreenRule';
@@ -31,41 +35,15 @@ export { KIND_MIN, MODEL, T_HIGH, T_LOW } from './evergreenRule';
  * (./evergreenRule.ts has the rule and the questions). It fails closed. When
  * TypeSafe cannot answer, the route answers 503 `evergreen_check_unavailable`
  * and nothing is stored, since a publish that skipped the check would show
- * the stale text the check exists to stop. LIBRARY_EVERGREEN_CHECK=off is the
- * operator's switch for an outage. No line logged here carries the text.
+ * the stale text the check exists to stop. Publishing stays closed until
+ * TypeSafe answers again. Pages and other routes never call TypeSafe, so a
+ * missing key or an outage touches only these two routes. No line logged
+ * here carries the text.
  * TypeSafe's own errors echo their input, so neither their message nor the
  * SDK's logger is used.
  */
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
-
-const KEY_PROBLEM =
-    'TYPESAFE_API_KEY is not set, so the Library cannot check that published text is evergreen and refuses every publish and text edit. Set it, or set LIBRARY_EVERGREEN_CHECK=off to publish unchecked.';
-
-/** False when LIBRARY_EVERGREEN_CHECK is `off`, which publishes text
- *  unchecked. Read per call, so a test can flip it. */
-export const evergreenCheckOn = (): boolean =>
-    process.env.LIBRARY_EVERGREEN_CHECK?.trim().toLowerCase() !== 'off';
-
-/**
- * Throws in production when the check is on and TYPESAFE_API_KEY is unset,
- * so the server refuses to start (src/instrumentation.ts). Elsewhere it logs
- * the problem, and each publish answers 503.
- */
-export const checkEvergreenKey = (
-    production: boolean,
-    log: (message: string) => void = console.warn,
-): void => {
-    if (!evergreenCheckOn() || process.env.TYPESAFE_API_KEY?.trim()) {
-        return;
-    }
-
-    if (production) {
-        throw new Error(KEY_PROBLEM);
-    }
-
-    log(KEY_PROBLEM);
-};
 
 /**
  * The client's settings. Each attempt is capped at 5 s and the model is
@@ -81,20 +59,21 @@ export const CLIENT_CONFIG = {
     logLevel: 'off',
 } as const satisfies TypeSafeClientConfig;
 
-/** Requests in flight at once for one text. The longest text makes about
- *  15 batches, so it takes two rounds. */
-export const BATCH_CONCURRENCY = 8;
-
-/** The most a check waits for all its batches, across retries and rounds.
- *  The batches still running then are cancelled and the check is
- *  unavailable. */
-export const CHECK_DEADLINE_MS = 12_000;
+export { BATCH_CONCURRENCY, CHECK_DEADLINE_MS, MAX_CANDIDATES } from './evergreenRule';
 
 let shared: TypeSafeClient | undefined;
 
-// The constructor throws without an API key, which the check reads as
-// unavailable, so a key set later is picked up by the next call.
-const sharedClient = (): TypeSafeClient => (shared ??= new TypeSafeClient(CLIENT_CONFIG));
+// The client for TYPESAFE_API_KEY, made at the first check that has a key.
+// Without one the check is unavailable, logged as `missing_key`.
+const sharedClient = (): TypeSafeClient => {
+    const apiKey = process.env.TYPESAFE_API_KEY?.trim();
+
+    if (!apiKey) {
+        throw new CheckFailure('missing_key');
+    }
+
+    return (shared ??= new TypeSafeClient({ ...CLIENT_CONFIG, apiKey }));
+};
 
 /** What the log lines name the artifact by. That is its id on an edit and
  *  its publish key on a publish, which has no id yet. */
@@ -105,9 +84,9 @@ const warn = (message: string, fields: Record<string, unknown>) =>
 
 // A failure of the check that is not the SDK's own error.
 class CheckFailure extends Error {
-    readonly reason: 'unanswered' | 'model';
+    readonly reason: 'unanswered' | 'model' | 'missing_key';
 
-    constructor(reason: 'unanswered' | 'model') {
+    constructor(reason: 'unanswered' | 'model' | 'missing_key') {
         super(reason);
         this.reason = reason;
     }
@@ -240,10 +219,12 @@ const everyBatch = async <TResult>(
 
 /**
  * Checks `text` against the evergreen rule, in batches of `GROUP_SIZE`
- * sentences sent in parallel. Null when every sentence passes, when there is
- * no text to check, or when the check is switched off. Otherwise it is the
- * answer to send. That is 400 `not_evergreen` with one entry in `errors`
- * per refused sentence and `pointer` naming the first one's field, or 503
+ * sentences sent in parallel. Null when every sentence passes or there is
+ * no text to check. Otherwise it is the answer to send. That is 400
+ * `evergreen_too_long` at the field that takes the text past
+ * `MAX_CANDIDATES` sentences, with `limit`, before any call. It is 400
+ * `not_evergreen` with one entry in `errors` per refused sentence and
+ * `pointer` naming the first one's field, or 503
  * `evergreen_check_unavailable` with Retry-After when TypeSafe cannot answer
  * (no key, a timeout, a 429, a 5xx, an auth error, an unanswered question or
  * another model), or 502 `evergreen_check_refused` when TypeSafe refuses the
@@ -254,16 +235,23 @@ export const evergreenRefusal = async (
     subject: EvergreenSubject,
     client: () => TypeSafeClient = sharedClient,
 ): Promise<Response | null> => {
-    if (!evergreenCheckOn()) {
-        warn('library_evergreen_check_off', subject);
-
-        return null;
-    }
-
     const candidates = candidatesOf(text);
 
     if (candidates.length === 0) {
         return null;
+    }
+
+    const over = overBudget(candidates);
+
+    if (over) {
+        return problem({
+            status: 400,
+            code: 'evergreen_too_long',
+            detail: `The text is too long to check. Keep it to ${MAX_CANDIDATES} sentences in all.`,
+            retryable: false,
+            headers: NO_STORE,
+            extra: { pointer: over.pointer, limit: MAX_CANDIDATES, sentences: candidates.length },
+        });
     }
 
     let decisions: Awaited<ReturnType<typeof judge>>[];

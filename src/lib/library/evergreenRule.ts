@@ -45,6 +45,29 @@ export const batchesOf = <TItem>(items: readonly TItem[]): TItem[][] => {
     return batches;
 };
 
+/** Requests in flight at once for one text. */
+export const BATCH_CONCURRENCY = 8;
+
+/** The most a check waits for all its batches, across retries and rounds.
+ *  The batches still running then are cancelled and the check is
+ *  unavailable. */
+export const CHECK_DEADLINE_MS = 12_000;
+
+/** The most sentences one check takes, before any call. That is two rounds
+ *  of `BATCH_CONCURRENCY` requests of `GROUP_SIZE`, so even two rounds of
+ *  5 s timeouts end inside `CHECK_DEADLINE_MS`. */
+export const MAX_CANDIDATES = 2 * BATCH_CONCURRENCY * GROUP_SIZE;
+
+/** Where text of `candidates` runs past `MAX_CANDIDATES`. That is the field
+ *  of the first sentence over the limit, or null within it. */
+export const overBudget = (
+    candidates: readonly { field: EvergreenField }[],
+): { pointer: `/${EvergreenField}` } | null => {
+    const over = candidates[MAX_CANDIDATES];
+
+    return over ? { pointer: `/${over.field}` } : null;
+};
+
 export const EVERGREEN_FIELDS = ['title', 'description', 'contentTitle', 'content'] as const;
 
 export type EvergreenField = (typeof EVERGREEN_FIELDS)[number];
@@ -168,6 +191,8 @@ const SENTENCE_START = /^(?:\*{1,2}|_{1,2})?["'“‘([]?[\p{Lu}\p{Nd}]/u;
 
 const HAS_LETTER = /\p{L}/u;
 
+const HAS_DIGIT = /\p{Nd}/u;
+
 // U.S., U.K., an initial such as "J." or a one-letter word.
 const INITIALS = /^(?:\p{L}\.)*\p{L}$/u;
 
@@ -191,18 +216,32 @@ const continuesAfter = (before: string, next: string): boolean => {
  * stop, `!` or `?` that a space and a capital, a digit or an emphasis mark
  * follow. A full stop after an abbreviation does not end a sentence, nor
  * does a decimal point. One after an initial ends it only before a word that
- * opens a sentence (`OPENERS`). A piece with no letter in it, such as a
- * year, joins the sentence after it, and a line with no letter is none.
+ * opens a sentence (`OPENERS`). A piece with no letter but a digit, such as
+ * a year or a figure, stays with a sentence beside it. One that opens a
+ * sentence joins the sentence after it, and one that ends a line or fills
+ * one joins the sentence before it. A piece with neither is no sentence.
  */
 export const sentenceSpans = (text: string): { start: number; end: number }[] => {
-    const spans: { start: number; end: number }[] = [];
-    const push = (start: number, end: number) => {
+    // Each piece, and whether it has a letter. A piece with neither a letter
+    // nor a digit is left out.
+    const pieces: { start: number; end: number; lettered: boolean }[] = [];
+    const push = (start: number, end: number, lineStart: number) => {
         const piece = text.slice(start, end);
         const lead = piece.length - piece.trimStart().length;
         const trimmed = piece.trim();
+        const span = { start: start + lead, end: start + lead + trimmed.length };
+        const last = pieces.at(-1);
 
         if (HAS_LETTER.test(trimmed)) {
-            spans.push({ start: start + lead, end: start + lead + trimmed.length });
+            pieces.push({ ...span, lettered: true });
+        } else if (!HAS_DIGIT.test(trimmed)) {
+            return;
+        } else if (last && last.start >= lineStart) {
+            // A figure that ends a line, as in "It rose. 25%.", goes with the
+            // sentence before it.
+            last.end = span.end;
+        } else {
+            pieces.push({ ...span, lettered: false });
         }
     };
 
@@ -231,11 +270,36 @@ export const sentenceSpans = (text: string): { start: number; end: number }[] =>
                 continue;
             }
 
-            push(from + start, from + stop);
+            push(from + start, from + stop, line.index);
             start = end.index + end[0].length;
         }
 
-        push(from + start, from + body.length);
+        push(from + start, from + body.length, line.index);
+    }
+
+    // A line holding only a figure, as in a list of values, goes with the
+    // sentence before it, or the one after it when it comes first. Alone, it
+    // is a sentence of its own.
+    const spans: { start: number; end: number }[] = [];
+    let pending: number | null = null;
+
+    for (const piece of pieces) {
+        const last = spans.at(-1);
+
+        if (!piece.lettered && last) {
+            last.end = piece.end;
+        } else if (!piece.lettered) {
+            pending ??= piece.start;
+        } else {
+            spans.push({ start: pending ?? piece.start, end: piece.end });
+            pending = null;
+        }
+    }
+
+    const lone = pieces.find((piece) => !piece.lettered);
+
+    if (spans.length === 0 && lone) {
+        spans.push({ start: lone.start, end: pieces.at(-1)?.end ?? lone.end });
     }
 
     return spans;

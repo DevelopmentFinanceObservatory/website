@@ -56,7 +56,13 @@ test('text splits into sentences at their ends and at line breaks', () => {
             '## How to read it\n1. Pick a donor\n> Quoted line',
             ['How to read it', 'Pick a donor', 'Quoted line'],
         ],
-        ['---\n\n2024\nA line', ['A line']],
+        ['---\n\n2024\nA line', ['2024\nA line']],
+        ['ODA rose. 25%.', ['ODA rose. 25%.']],
+        ['Total ODA\n$250,000,000', ['Total ODA\n$250,000,000']],
+        ['$250,000,000\nIn aid to Africa.', ['$250,000,000\nIn aid to Africa.']],
+        ['- Norway\n- 25%\n- Sweden\n- 20%', ['Norway\n- 25%', 'Sweden\n- 20%']],
+        ['25%', ['25%']],
+        ['25%\n30%', ['25%\n30%']],
         ['', []],
     ];
 

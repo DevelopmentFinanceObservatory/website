@@ -8,9 +8,17 @@
 // recorded.json and makes no call. src/lib/library/test/evergreenReplay.test.ts
 // replays recorded.json in CI.
 //
+// With --eval it sends each artifact of eval-candidates.json exactly as the
+// publish route does, in the route's batches, writes eval-recorded.json, and
+// prints the sentences eval-labelled.json says it gets wrong at T_HIGH.
+// src/lib/library/test/evergreenEvalReplay.test.ts replays it in CI.
+// --eval --sweep reads eval-recorded.json and makes no call.
+//
 //   TYPESAFE_API_KEY=<dev key> node scripts/fit-evergreen.mjs
 //   node scripts/fit-evergreen.mjs --sweep
-import { readFileSync, writeFileSync } from 'node:fs';
+//   TYPESAFE_API_KEY=<dev key> node scripts/fit-evergreen.mjs --eval
+//   node scripts/fit-evergreen.mjs --eval --sweep
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { TypeSafeClient } from '@typesafe-ai/sdk';
 
@@ -21,6 +29,13 @@ import {
     evergreenRequest,
     kindId,
 } from '../src/lib/library/evergreenRule.ts';
+import {
+    evalBatches,
+    evalReplay,
+    readEvalArtifacts,
+    readEvalLabelled,
+    readEvalRecorded,
+} from '../src/lib/library/test/evergreen/evaluate.ts';
 import {
     groupRequest,
     groupsOf,
@@ -33,8 +48,83 @@ import {
 const DIR = new URL('../src/lib/library/test/evergreen/', import.meta.url);
 const LABELLED = new URL('labelled.json', DIR);
 const RECORDED = new URL('recorded.json', DIR);
+const EVAL_ARTIFACTS = new URL('eval-candidates.json', DIR);
+const EVAL_LABELLED = new URL('eval-labelled.json', DIR);
+const EVAL_RECORDED = new URL('eval-recorded.json', DIR);
 
-const labelled = readLabelled(JSON.parse(readFileSync(LABELLED, 'utf8')));
+const read = (file) => JSON.parse(readFileSync(file, 'utf8'));
+const sweepOnly = process.argv.includes('--sweep');
+
+const answered = (model) => {
+    if (model !== MODEL) {
+        throw new Error(`TypeSafe answered with ${model}, not ${MODEL}.`);
+    }
+};
+
+const evaluate = async () => {
+    const artifacts = readEvalArtifacts(read(EVAL_ARTIFACTS));
+    let recorded;
+
+    if (sweepOnly) {
+        recorded = readEvalRecorded(read(EVAL_RECORDED));
+    } else {
+        const client = new TypeSafeClient({ defaultModel: MODEL, timeout: 30_000 });
+
+        recorded = { model: MODEL, artifacts: [] };
+
+        for (const artifact of artifacts) {
+            const batches = await Promise.all(
+                evalBatches(artifact).map(async ({ request, digest }) => {
+                    const { model, answers } = await client.systemOne({ ...request, model: MODEL });
+
+                    answered(model);
+
+                    return { digest, answers };
+                }),
+            );
+
+            recorded.artifacts.push({ id: artifact.id, batches });
+            console.log(`${artifact.id}: ${batches.length} requests`);
+        }
+
+        writeFileSync(EVAL_RECORDED, `${JSON.stringify(recorded, null, 4)}\n`);
+        console.log(`wrote ${EVAL_RECORDED.pathname}`);
+    }
+
+    if (!existsSync(EVAL_LABELLED)) {
+        console.log('No eval-labelled.json yet, so nothing to compare.');
+
+        return;
+    }
+
+    const labelled = readEvalLabelled(read(EVAL_LABELLED));
+    const text = new Map(
+        labelled.flatMap((artifact) =>
+            artifact.sentences.map((each) => [
+                `${artifact.id} ${each.pointer} ${each.start}`,
+                each.text,
+            ]),
+        ),
+    );
+    const show = (key) => `  ${key} ${text.get(key)}`;
+    const { falseBlocks, misses, unanswered } = evalReplay(artifacts, labelled, recorded);
+
+    console.log(`\nAt T_HIGH ${T_HIGH}, evergreen sentences refused:`);
+    console.log(falseBlocks.map(show).join('\n') || '  none');
+    console.log('Sentences that are not evergreen and pass:');
+    console.log(misses.map(show).join('\n') || '  none');
+
+    if (unanswered.length > 0) {
+        console.log(`Unanswered: ${unanswered.join(', ')}`);
+    }
+};
+
+if (process.argv.includes('--eval')) {
+    await evaluate();
+    process.exit(0);
+}
+
+const labelled = readLabelled(read(LABELLED));
 const groups = groupsOf(labelled);
 
 const record = async () => {
@@ -48,9 +138,7 @@ const record = async () => {
             model: MODEL,
         });
 
-        if (model !== MODEL) {
-            throw new Error(`TypeSafe answered with ${model}, not ${MODEL}.`);
-        }
+        answered(model);
 
         recorded.groups.push({ ids: group.ids, content: group.content, digest, answers });
         console.log(`group ${index + 1} of ${groups.length}: ${candidates.length} sentences`);
@@ -133,8 +221,6 @@ const sweep = (recorded) => {
     );
 };
 
-const recorded = process.argv.includes('--sweep')
-    ? readRecorded(JSON.parse(readFileSync(RECORDED, 'utf8')))
-    : await record();
+const recorded = sweepOnly ? readRecorded(read(RECORDED)) : await record();
 
 sweep(recorded);
