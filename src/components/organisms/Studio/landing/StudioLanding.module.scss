@@ -115,6 +115,11 @@
 .accordionInner {
     min-height: 0;
     overflow: hidden;
+
+    // Room for the focus ring of an entry at the edges, which the clip would
+    // cut. The negative margin gives the width back.
+    padding: rem(3);
+    margin: rem(-3);
 }
 
 .suggestions {

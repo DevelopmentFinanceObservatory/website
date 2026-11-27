@@ -112,9 +112,16 @@
     // 14 px design size. Scrollable overflow counts that spill, so without
     // this padding a column that fits draws a bar. The padding has headroom
     // and scales with the fluid root font, as the spill does.
-    padding-bottom: rem(2);
+    padding-bottom: rem(5);
     max-height: calc(100svh - #{rem(140)});
     overflow-y: auto;
+
+    // The scroll clip cuts the focus ring of a full-width row, and of the
+    // first and last rows. The padding (the bottom one is the 2px above plus
+    // 3px) holds the ring, and the margin keeps the rows where they were.
+    padding-top: rem(3);
+    padding-inline: rem(3);
+    margin: rem(-3);
 }
 
 @include breakpoint(not-phone) {
