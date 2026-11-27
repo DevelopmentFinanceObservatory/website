@@ -29,6 +29,7 @@ const artifact = (slug: string, partial: Partial<LibraryArtifact> = {}): Library
     cardDates: [],
     publishedAt: '2026-12-12T10:00:00.000Z',
     updatedAt: '2026-12-12T10:00:00.000Z',
+    revision: 0,
     ...partial,
 });
 

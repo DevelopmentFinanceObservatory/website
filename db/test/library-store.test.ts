@@ -195,7 +195,10 @@ test('library store', async (t) => {
             shareWriteToken: 'shw_1',
         });
         assert.equal(await store.isArtifactWithdrawn(id), false);
-        assert.deepEqual(await store.withdrawArtifact(id), { slug: 'health-oda' });
+        assert.deepEqual(await store.withdrawArtifact(id), {
+            slug: 'health-oda',
+            replacement: 'none',
+        });
         assert.equal(await store.artifactShare(id), null);
         assert.equal(await store.isArtifactWithdrawn(id), true);
         assert.equal(await store.isArtifactWithdrawn('no-such-id'), false);
@@ -257,7 +260,7 @@ test('library store', async (t) => {
             topics: [],
         };
 
-        assert.equal(await store.updateArtifact(id, edit), 'not_found');
+        assert.equal(await store.updateArtifact(id, edit, 0), 'not_found');
 
         assert.equal(await store.withdrawArtifact(id), 'not_found');
         assert.equal(await store.withdrawArtifact('no-such-id'), 'not_found');
@@ -455,7 +458,7 @@ test('library store', async (t) => {
         };
 
         // The same text with a new topic.
-        assert.deepEqual(await store.updateArtifact(id, { ...text, topics: ['Health'] }), {
+        assert.deepEqual(await store.updateArtifact(id, { ...text, topics: ['Health'] }, 0), {
             slug: 'edited-chart',
         });
 
@@ -464,11 +467,71 @@ test('library store', async (t) => {
         assert.deepEqual(retopiced.topics, ['Health']);
         assert.equal(retopiced.updatedAt, retopiced.publishedAt);
 
-        await store.updateArtifact(id, { ...text, content: 'New findings.', topics: ['Health'] });
+        assert.equal(retopiced.revision, 1);
+        await store.updateArtifact(
+            id,
+            { ...text, content: 'New findings.', topics: ['Health'] },
+            1,
+        );
 
         const rewritten = await dates();
 
         assert.ok(rewritten.updatedAt > rewritten.publishedAt);
+        assert.equal(rewritten.revision, 2);
+    });
+
+    await t.test('an edit from an older revision changes nothing', async () => {
+        await store.insertArtifact(
+            { ...input('key-u', 'Raced chart'), content: 'Aid doubled.' },
+            'admin',
+        );
+
+        const id = await idOf('raced-chart');
+        const base = { description: 'Aid to health.', contentTitle: null, topics: [] };
+        // Editor A opens the artifact at revision 0 and starts a slow edit
+        // that keeps the old content.
+        const opened = await store.artifactText(id);
+
+        assert.equal(opened?.revision, 0);
+
+        // Editor B replaces the title and the content meanwhile.
+        assert.deepEqual(
+            await store.updateArtifact(
+                id,
+                { ...base, title: 'Raced chart, revised', content: 'Aid rose.' },
+                0,
+            ),
+            { slug: 'raced-chart' },
+        );
+
+        // A's write, made from revision 0, would put "Aid doubled." back.
+        assert.equal(
+            await store.updateArtifact(
+                id,
+                { ...base, title: 'Raced chart', content: 'Aid doubled.' },
+                0,
+            ),
+            'artifact_changed',
+        );
+
+        const stored = await store.artifactText(id);
+
+        assert.deepEqual(
+            [stored?.title, stored?.content, stored?.revision],
+            ['Raced chart, revised', 'Aid rose.', 1],
+        );
+
+        // Two edits from one revision at once: one lands.
+        const raced = await Promise.all(
+            ['First', 'Second'].map((title) =>
+                store.updateArtifact(id, { ...base, title, content: null }, 1),
+            ),
+        );
+
+        assert.deepEqual(raced.map((one) => (typeof one === 'object' ? 'saved' : one)).sort(), [
+            'artifact_changed',
+            'saved',
+        ]);
     });
 
     await t.test(
@@ -508,6 +571,7 @@ test('library store', async (t) => {
             // The erasing trigger leaves the pointer as the withdrawal wrote it.
             assert.deepEqual(await store.withdrawArtifact(replaced, replacement), {
                 slug: 'replaced',
+                replacement: 'set',
             });
 
             const [row] = (
@@ -561,8 +625,8 @@ test('library store', async (t) => {
     );
 
     await t.test('a withdrawn address follows its replacements to a published one', async () => {
-        // chain-0 to chain-6, each withdrawn one replaced by the next, and
-        // chain-6 published.
+        // chain-0 to chain-6, each withdrawn in turn naming the next while it
+        // is still on show, and chain-6 published.
         const ids: string[] = [];
 
         for (let n = 0; n <= 6; n += 1) {
@@ -570,9 +634,10 @@ test('library store', async (t) => {
             ids.push(await idOf(`chain-${n}`));
         }
 
-        for (let n = 5; n >= 0; n -= 1) {
+        for (let n = 0; n <= 5; n += 1) {
             assert.deepEqual(await store.withdrawArtifact(ids[n], ids[n + 1]), {
                 slug: `chain-${n}`,
+                replacement: 'set',
             });
         }
 
@@ -585,7 +650,45 @@ test('library store', async (t) => {
         assert.equal(await store.replacementOf(ids[6]), null);
 
         // A loop of withdrawn artifacts links nowhere.
-        await store.setReplacement(ids[5], ids[4]);
+        // The store writes no pointer to a withdrawn artifact, so the loop is
+        // written as an older release could.
+        assert.equal(await store.setReplacement(ids[5], ids[4]), 'replacement_unavailable');
+        await admin.query('update library_artifact set replaced_by = $1 where id = $2', [
+            ids[4],
+            ids[5],
+        ]);
         assert.equal(await store.replacementOf(ids[4]), null);
+    });
+    await t.test('two withdrawals naming each other leave no loop', async () => {
+        await store.insertArtifact(input('key-v', 'Mutual one'), 'admin');
+        await store.insertArtifact(input('key-w', 'Mutual two'), 'admin');
+
+        const one = await idOf('mutual-one');
+        const two = await idOf('mutual-two');
+        // Both read the other as on show before either commits, as two
+        // admins' Delete checks do.
+        const done = await Promise.all([
+            store.withdrawArtifact(one, two),
+            store.withdrawArtifact(two, one),
+        ]);
+
+        assert.deepEqual(
+            done.map((answer) => (typeof answer === 'object' ? answer.replacement : answer)).sort(),
+            ['refused', 'set'],
+        );
+
+        const { rows } = await admin.query<{ id: string; replaced_by: string | null }>(
+            'select id, replaced_by from library_artifact where id in ($1, $2)',
+            [one, two],
+        );
+
+        assert.equal(rows.filter((row) => row.replaced_by !== null).length, 1);
+        assert.ok(rows.every((row) => row.replaced_by !== row.id));
+        assert.equal(await store.replacementOf(one), null);
+        assert.equal(await store.replacementOf(two), null);
+
+        // A later pointer to a withdrawn artifact, or to itself, is refused.
+        assert.equal(await store.setReplacement(one, two), 'replacement_unavailable');
+        assert.equal(await store.setReplacement(one, one), 'replacement_unavailable');
     });
 });

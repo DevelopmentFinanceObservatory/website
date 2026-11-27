@@ -15,17 +15,20 @@ import { replaceArtifact } from '@/lib/library/client';
  * An admin's form on a withdrawn artifact's address: the pick of the
  * artifact on show it links to, and Save. When the artifact it names has
  * since been withdrawn too, so the picker lacks it, a line says so and
- * names where the chain leads (`replacement`). Clear removes the link.
+ * names where the chain leads (`replacement`). `lost` says the replacement
+ * the withdrawal named was withdrawn first. Clear removes the link.
  */
 const SetReplacement = ({
     id,
     replacedBy,
     replacement,
+    lost = false,
     choices,
 }: {
     id: string;
     replacedBy: string | null;
     replacement: Replacement | null;
+    lost?: boolean;
     choices: readonly ReplacementChoice[];
 }) => {
     const router = useRouter();
@@ -58,6 +61,12 @@ const SetReplacement = ({
 
     return (
         <form className={classNames(styles.form, styles.replacementForm)} onSubmit={save}>
+            {lost && (
+                <p className={styles.error} role="alert">
+                    The replacement you named was withdrawn before this withdrawal was saved, so
+                    this page links nowhere. Name another replacement.
+                </p>
+            )}
             {named && (
                 <p className={styles.current}>
                     {replacement

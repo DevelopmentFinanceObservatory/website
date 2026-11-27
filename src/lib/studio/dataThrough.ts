@@ -52,6 +52,13 @@ const endDay = (period: string): string => {
     return monthEnd(year, Number(index) * months);
 };
 
+// The distinct periods the cards name, by the day each ends.
+const byEnd = (periods: readonly (string | null)[]): string[] =>
+    [...new Set(periods.filter((period) => period !== null).map(lastPoint))]
+        .map((point) => ({ point, end: endDay(point) }))
+        .toSorted((a, b) => a.end.localeCompare(b.end) || a.point.localeCompare(b.point))
+        .map(({ point }) => point);
+
 /**
  * What "Data through" reads for these cards: the one period they all reach,
  * or the earliest and latest with an en dash ("2022–2024"). Null when no
@@ -59,24 +66,37 @@ const endDay = (period: string): string => {
  * before "2024", which runs to December.
  */
 export const dataThroughText = (periods: readonly (string | null)[]): string | null => {
-    const points = [...new Set(periods.filter((period) => period !== null).map(lastPoint))]
-        .map((point) => ({ point, end: endDay(point) }))
-        .toSorted((a, b) => a.end.localeCompare(b.end) || a.point.localeCompare(b.point));
+    const points = byEnd(periods);
+    const [first] = points;
+    const last = points.at(-1);
 
-    if (points.length === 0) {
+    if (first === undefined || last === undefined) {
         return null;
     }
-
-    const first = points[0].point;
-    const last = points.at(-1)?.point ?? first;
 
     return first === last ? first : `${first}–${last}`;
 };
 
-/** What "Data through" reads for a live canvas: the periods of the cards
- *  filled so far (`dataThroughText`). Held and failed cards name none. */
-export const liveDataThrough = (widgets: readonly Widget[], live: LiveCanvas): string | null =>
-    dataThroughText(
+/** The latest period the cards name, and whether every card that names one
+ *  names that one. Null when none does. */
+export type LatestPeriod = { period: string; shared: boolean };
+
+/** The latest period the cards name (`byEnd`), for a live canvas whose cards
+ *  each reach their own. */
+export const latestPeriod = (periods: readonly (string | null)[]): LatestPeriod | null => {
+    const points = byEnd(periods);
+    const period = points.at(-1);
+
+    return period === undefined ? null : { period, shared: points.length === 1 };
+};
+
+/** The latest period of a live canvas's cards filled so far. Held and
+ *  failed cards name none. */
+export const liveDataThrough = (
+    widgets: readonly Widget[],
+    live: LiveCanvas,
+): LatestPeriod | null =>
+    latestPeriod(
         widgets.map((widget) =>
             widget.kind !== 'text' && live.states[widget.id]?.status === 'ready'
                 ? cardDataDates(widget.info).dataThrough

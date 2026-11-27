@@ -20,14 +20,17 @@ import {
  * back to the Library. The artifact itself, its title, its actions, and its
  * text are erased. The address stays, so a citation to it leads somewhere
  * that says what happened. `replacements` gives an admin the form that
- * names or changes the replacement.
+ * names or changes the replacement, and `replacementLost` tells them the
+ * replacement their withdrawal named was withdrawn first.
  */
 const WithdrawnArtifact = ({
     artifact,
     replacements,
+    replacementLost = false,
 }: {
     artifact: Withdrawn;
     replacements?: readonly ReplacementChoice[];
+    replacementLost?: boolean;
 }) => (
     <section className={styles.section}>
         <PageHero tone="dark" boxMinHeight={220}>
@@ -59,6 +62,7 @@ const WithdrawnArtifact = ({
                     id={artifact.id}
                     replacedBy={artifact.replacedBy}
                     replacement={artifact.replacement}
+                    lost={replacementLost && artifact.replacedBy === null}
                     choices={replacements}
                 />
             )}

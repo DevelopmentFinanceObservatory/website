@@ -170,7 +170,7 @@ const LibraryArtifact = ({
                             <dd>
                                 {artifact.mode === 'live'
                                     ? 'Live: follows the source'
-                                    : `Showing data as published on ${libraryDate(artifact.publishedAt)}`}
+                                    : `Pinned: shows the data as published on ${libraryDate(artifact.publishedAt)}`}
                             </dd>
                         </div>
                         {dataThrough && (

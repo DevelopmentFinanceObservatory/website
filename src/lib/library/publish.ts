@@ -244,6 +244,26 @@ export const readSlug = (raw: unknown): Read<string | null> => {
           );
 };
 
+/** An edit's body: the text and topics, and the revision they were read at
+ *  (`LibraryArtifact.revision`). */
+export type ArtifactEdit = { text: ArtifactText; revision: number };
+
+/** Reads an edit: the text as `readArtifactText` reads it, and `revision`, a
+ *  whole number from 0. */
+export const readEdit = (body: unknown): Read<ArtifactEdit> => {
+    const text = readArtifactText(body);
+
+    if (!text.ok) {
+        return text;
+    }
+
+    const revision = isRecord(body) ? body.revision : undefined;
+
+    return typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 0
+        ? { ok: true, value: { text: text.value, revision } }
+        : refuse('/revision', 'Send the revision the text was loaded at.');
+};
+
 /**
  * The `replacedBy` of a withdrawal or of a later change to it: the id of the
  * artifact the withdrawn one's address links to, or null for none.

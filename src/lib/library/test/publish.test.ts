@@ -8,6 +8,7 @@ import {
     publishedFacts,
     publishedKind,
     readArtifactText,
+    readEdit,
     readPublish,
     readReplacement,
     slugOf,
@@ -235,6 +236,46 @@ test('a withdrawal names its replacement by id, or none', () => {
             read.ok ? read : { ok: false, pointer: read.pointer },
             expected,
             JSON.stringify({ input, required }),
+        );
+    }
+});
+
+test('an edit names the revision its text was loaded at', () => {
+    const text = { title: 'T', description: 'D', topics: [] };
+    const cases: [unknown, unknown][] = [
+        [
+            { ...text, revision: 3 },
+            { ok: true, revision: 3 },
+        ],
+        [
+            { ...text, revision: 0 },
+            { ok: true, revision: 0 },
+        ],
+        [text, { ok: false, pointer: '/revision' }],
+        [
+            { ...text, revision: -1 },
+            { ok: false, pointer: '/revision' },
+        ],
+        [
+            { ...text, revision: 1.5 },
+            { ok: false, pointer: '/revision' },
+        ],
+        [
+            { ...text, revision: '3' },
+            { ok: false, pointer: '/revision' },
+        ],
+        [{ revision: 3 }, { ok: false, pointer: '/title' }],
+    ];
+
+    for (const [input, expected] of cases) {
+        const read = readEdit(input);
+
+        assert.deepEqual(
+            read.ok
+                ? { ok: true, revision: read.value.revision }
+                : { ok: false, pointer: read.pointer },
+            expected,
+            JSON.stringify(input),
         );
     }
 });

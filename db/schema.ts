@@ -353,6 +353,10 @@ export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: stri
  * recorded in `share_cleanup`, and the same write clears
  * `share_write_token`.
  *
+ * `revision` counts the edits to the text and topics. An edit names the
+ * revision it was made from and applies only while the row is still at it,
+ * so an edit from an older read cannot overwrite a newer one.
+ *
  * `replaced_by` names the artifact a withdrawn one's address points readers
  * to. Only a withdrawn row holds one, it names another row, and it is null
  * once the replacement's row is deleted. The replacement was published when the
@@ -388,6 +392,7 @@ export const libraryArtifact = pgTable(
         publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
         publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+        revision: integer('revision').notNull().default(0),
         withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
         replacedBy: text('replaced_by').references((): AnyPgColumn => libraryArtifact.id, {
             onDelete: 'set null',

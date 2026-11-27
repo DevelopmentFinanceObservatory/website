@@ -1,5 +1,5 @@
 {
-  "id": "79cec09d-ebc2-4ba2-b704-4acd3215e56a",
+  "id": "b263616d-fa9c-402e-b07b-b2ea9e700516",
   "prevId": "5ed531bf-0cd1-4370-ad8d-17bb84cf6708",
   "version": "7",
   "dialect": "postgresql",
@@ -447,6 +447,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "withdrawn_at": {
           "name": "withdrawn_at",

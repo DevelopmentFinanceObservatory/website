@@ -27,7 +27,7 @@ import { type LibraryView, libraryViewOf } from './switch';
 import {
     publishedFacts,
     publishedKind,
-    readArtifactText,
+    readEdit,
     readPublish,
     readReplacement,
     topicLabel,
@@ -406,11 +406,25 @@ export const publish = async (request: Request): Promise<Response> => {
     );
 };
 
+const artifactChanged = (): Response =>
+    problem({
+        status: 409,
+        code: 'artifact_changed',
+        detail: 'Someone changed this artifact after you opened it. Reload the page and edit it again.',
+        retryable: false,
+        headers: NO_STORE,
+    });
+
 /**
- * PATCH /api/library/artifacts/<id> (ArtifactText) → { slug, warnings }. The
- * text fields the edit changes are held to the evergreen rule first, with
- * the publish's 400, 502 and 503 answers. `warnings` lists the sentences
- * that passed with a doubt (./evergreen.ts, `EvergreenNotice`).
+ * PATCH /api/library/artifacts/<id> (ArtifactEdit: the text and the
+ * `revision` it was loaded at) → { slug, warnings }. An edit from a revision
+ * the artifact has moved on from answers 409 `artifact_changed`, before the
+ * check and again at the write, which applies only while the row is still
+ * at that revision. So the text the evergreen rule passed is the text that
+ * goes live, however long the check takes. The text fields the edit changes
+ * are held to the evergreen rule first, outside any transaction, with the
+ * publish's 400, 502 and 503 answers. `warnings` lists the sentences that
+ * passed with a doubt (./evergreen.ts, `EvergreenNotice`).
  */
 export const edit = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -419,28 +433,37 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
         return refusal;
     }
 
-    const read = readArtifactText(await request.json().catch(() => null));
+    const read = readEdit(await request.json().catch(() => null));
 
     if (!read.ok) {
         return requestInvalidProblem(read.detail, read.pointer || undefined, NO_STORE);
     }
 
+    const { text, revision } = read.value;
     const stored = await artifactText(id);
 
     if (!stored) {
         return notFound();
     }
 
-    const checked = await evergreenCheck(changedText(stored, read.value), { artifact: id });
+    if (stored.revision !== revision) {
+        return artifactChanged();
+    }
+
+    const checked = await evergreenCheck(changedText(stored, text), { artifact: id });
 
     if ('refusal' in checked) {
         return checked.refusal;
     }
 
-    const changed = await updateArtifact(id, read.value);
+    const changed = await updateArtifact(id, text, revision);
 
     if (changed === 'not_found') {
         return notFound();
+    }
+
+    if (changed === 'artifact_changed') {
+        return artifactChanged();
     }
 
     if (changed === 'unknown_topic') {
@@ -452,6 +475,16 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 
     return Response.json({ ...changed, warnings: checked.warnings }, { headers: NO_STORE });
 };
+
+const replacementUnavailable = (): Response =>
+    problem({
+        status: 400,
+        code: 'replacement_unavailable',
+        detail: 'The replacement must be another artifact on show in the Library.',
+        retryable: false,
+        extra: { pointer: '/replacedBy' },
+        headers: NO_STORE,
+    });
 
 // The replacement a withdrawal or a later change names, or the refusal to
 // send: a body that cannot be read or is not one (with `required`, one
@@ -496,16 +529,7 @@ const namedReplacement = async (
     }
 
     if (read.value !== null && (read.value === id || !(await isArtifactPublished(read.value)))) {
-        return {
-            refusal: problem({
-                status: 400,
-                code: 'replacement_unavailable',
-                detail: 'The replacement must be another artifact on show in the Library.',
-                retryable: false,
-                extra: { pointer: '/replacedBy' },
-                headers: NO_STORE,
-            }),
-        };
+        return { refusal: replacementUnavailable() };
     }
 
     return { replacedBy: read.value };
@@ -519,7 +543,12 @@ const namedReplacement = async (
  * address then links to. A body that cannot be read or parsed answers 400
  * and withdraws nothing, and a replacement that is the
  * artifact itself or not on show answers 400 `replacement_unavailable` at
- * `/replacedBy` before anything changes.
+ * `/replacedBy` before anything changes. The withdrawal checks the
+ * replacement again as it commits (`withdrawArtifact`). When the
+ * replacement has been withdrawn meanwhile, the share is settled by then,
+ * so the artifact is withdrawn without it, and the answer is 409
+ * `withdrawn_without_replacement` with its `slug`, whose page lets an admin
+ * name another.
  *
  * Takes the artifact's share down in dfo-apis, or, when dfo-apis cannot,
  * records it in `share_cleanup` for an operator. Once one of those holds, it
@@ -545,11 +574,18 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
         return named.refusal;
     }
 
+    let replacementRefused = false;
     const withdrawn = await withdraw(
         {
             ...settling(request.headers),
             share: artifactShare,
-            withdraw: (artifactId) => withdrawArtifact(artifactId, named.replacedBy),
+            withdraw: async (artifactId) => {
+                const done = await withdrawArtifact(artifactId, named.replacedBy);
+
+                replacementRefused = done !== 'not_found' && done.replacement === 'refused';
+
+                return done;
+            },
             isWithdrawn: isArtifactWithdrawn,
         },
         id,
@@ -569,6 +605,17 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
     log('delete', admin.email, withdrawn.slug);
     refresh(withdrawn.slug);
 
+    if (replacementRefused) {
+        return problem({
+            status: 409,
+            code: 'withdrawn_without_replacement',
+            detail: 'It was withdrawn, but its replacement was withdrawn meanwhile, so its page links nowhere. Name another replacement on its page.',
+            retryable: false,
+            extra: { slug: withdrawn.slug },
+            headers: NO_STORE,
+        });
+    }
+
     return new Response(null, { status: 204, headers: NO_STORE });
 };
 
@@ -579,7 +626,8 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
  * nothing with null. A body without `replacedBy` answers 400 at
  * `/replacedBy`. Answers 404 for an id no withdrawn artifact has, and
  * the withdrawal's 400 `replacement_unavailable` for a replacement that is
- * the artifact itself or not on show.
+ * the artifact itself or not on show, checked again under a lock as the
+ * write commits.
  */
 export const replace = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -598,6 +646,10 @@ export const replace = async (request: Request, id: string): Promise<Response> =
 
     if (changed === 'not_found') {
         return notFound();
+    }
+
+    if (changed === 'replacement_unavailable') {
+        return replacementUnavailable();
     }
 
     log('replace', admin.email, changed.slug);

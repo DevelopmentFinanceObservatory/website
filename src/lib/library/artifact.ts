@@ -46,6 +46,8 @@ export type LibraryArtifact = {
     /** ISO 8601. The last change to the text or topics, or `publishedAt`
      *  when there was none. */
     updatedAt: string;
+    /** The edit the text and topics are at, which an edit sends back. */
+    revision: number;
 };
 
 /** An artifact a withdrawn one's address links to. */

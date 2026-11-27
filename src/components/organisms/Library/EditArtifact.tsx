@@ -9,8 +9,8 @@ import ReplacementPicker from './ReplacementPicker';
 
 import Button from '@/components/atoms/Button/Button';
 import Modal from '@/components/molecules/Modal/Modal';
-import type { LibraryArtifact, ReplacementChoice } from '@/lib/library/artifact';
-import { deleteArtifact, editArtifact } from '@/lib/library/client';
+import { artifactPath, type LibraryArtifact, type ReplacementChoice } from '@/lib/library/artifact';
+import { deleteArtifact, editArtifact, withdrawnWithoutReplacement } from '@/lib/library/client';
 import type { ArtifactText } from '@/lib/library/publish';
 
 /**
@@ -67,7 +67,7 @@ const EditArtifact = ({
         setBusy('save');
         setError(null);
 
-        const answer = await editArtifact(artifact.id, text);
+        const answer = await editArtifact(artifact.id, text, artifact.revision);
 
         setBusy(null);
 
@@ -84,9 +84,14 @@ const EditArtifact = ({
         setError(null);
 
         const answer = await deleteArtifact(artifact.id, replacedBy);
+        const unreplaced = answer.ok ? null : withdrawnWithoutReplacement(answer.problem);
 
         if (answer.ok) {
             router.push('/library');
+            router.refresh();
+        } else if (unreplaced) {
+            // Withdrawn, and its page is where another replacement is named.
+            router.push(`${artifactPath(unreplaced)}?replacement=withdrawn`);
             router.refresh();
         } else {
             setBusy(null);

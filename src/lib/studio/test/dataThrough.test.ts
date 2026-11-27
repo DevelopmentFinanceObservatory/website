@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { CardInfo } from '../../chat/widgets.ts';
-import { cardDataDates, dataThroughText } from '../dataThrough.ts';
+import { cardDataDates, dataThroughText, latestPeriod } from '../dataThrough.ts';
 
 const info = (partial: Partial<CardInfo>): CardInfo => ({
     label: 'OECD CRS',
@@ -58,4 +58,10 @@ test('the cards read as one period, or as the earliest and latest by the day eac
     for (const [periods, expected] of cases) {
         assert.equal(dataThroughText(periods), expected, JSON.stringify(periods));
     }
+});
+
+test('a live canvas names its latest period, and whether every card reaches it', () => {
+    assert.equal(latestPeriod([null]), null);
+    assert.deepEqual(latestPeriod(['2024', null, '2024']), { period: '2024', shared: true });
+    assert.deepEqual(latestPeriod(['2024', '2024-06', '2022']), { period: '2024', shared: false });
 });

@@ -9,7 +9,10 @@ import { NOT_FOUND_METADATA, pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
-type LibraryArtifactPageProps = { params: Promise<{ slug: string }> };
+type LibraryArtifactPageProps = {
+    params: Promise<{ slug: string }>;
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Promise<Metadata> => {
     const view = await libraryView();
@@ -45,7 +48,7 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
     };
 };
 
-const LibraryArtifactPage = async ({ params }: LibraryArtifactPageProps) => {
+const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPageProps) => {
     if ((await libraryView()) === null) {
         notFound();
     }
@@ -66,7 +69,13 @@ const LibraryArtifactPage = async ({ params }: LibraryArtifactPageProps) => {
     if (found.status === 'withdrawn') {
         return (
             <main>
-                <WithdrawnArtifact artifact={found.artifact} replacements={replacements} />
+                <WithdrawnArtifact
+                    artifact={found.artifact}
+                    replacements={replacements}
+                    // The Edit dialog's Delete lands here when the replacement it
+                    // named was withdrawn before the withdrawal committed.
+                    replacementLost={(await searchParams)?.['replacement'] === 'withdrawn'}
+                />
             </main>
         );
     }
