@@ -185,17 +185,10 @@ const PromptStage = () => {
             : 0;
 
     const planOf = links.planOf;
-    // `titleOf` is a new function on every render; the ref keeps `selectCard`
-    // stable while it reads the current titles.
-    const titleOfRef = useRef(canvas.titleOf);
-
-    useLayoutEffect(() => {
-        titleOfRef.current = canvas.titleOf;
-    });
-
+    const { titleOf } = canvas;
     const selectCard = useCallback(
-        (id: string | null) => setEditTarget(id ? { id, title: titleOfRef.current(id) } : null),
-        [setEditTarget],
+        (id: string | null) => setEditTarget(id ? { id, title: titleOf(id) } : null),
+        [setEditTarget, titleOf],
     );
     const pointCard = useCallback(
         (id: string | null) => dispatch({ type: 'point', card: id }),

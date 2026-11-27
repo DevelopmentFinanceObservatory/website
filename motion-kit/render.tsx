@@ -40,6 +40,7 @@ import planStyles from '@/components/organisms/Studio/workspace/PlanCard.module.
 import WorkspaceToolbar from '@/components/organisms/Studio/workspace/WorkspaceToolbar';
 import type { ChartWidget, Widget } from '@/lib/chat/widgets';
 import { cardRefOf } from '@/lib/studio/cardDownload';
+import { createReplyStore } from '@/lib/studio/replyStream';
 import { legendLabels } from '@/lib/studio/seriesLabels';
 import { DEFAULT_THEME, deriveTheme, type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import { isPrompt } from '@/lib/studio/transcript';
@@ -282,6 +283,8 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         syncCanvas: noop,
         canvas: null,
         pendingCards: new Map(),
+        replyStream: { store: createReplyStore(), at: 0 },
+        withStreamedReply: (messages) => messages,
         owedRemovals: [],
         send: noop,
         unqueue: noop,

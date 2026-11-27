@@ -1,6 +1,7 @@
 /**
  * The hooks `useChat` calls (useState, useRef, useMemo, useCallback,
- * useEffect), run outside React so node --test can drive the hook. A test
+ * useEffect, useLayoutEffect), run outside React so node --test can drive
+ * the hook. A test
  * bundles the hook with `react` aliased to this module (loadUseChat).
  * `renderHook` renders once, and renders again on the microtask after each
  * state change, running the effects whose dependencies changed after each
@@ -120,6 +121,10 @@ export const useEffect = (effect: () => void | (() => void), deps: Deps) => {
         next.cleanup = effect() ?? undefined;
     });
 };
+
+// Every effect here runs right after its render, in order, so a layout
+// effect is one more of them.
+export const useLayoutEffect = useEffect;
 
 /** Render `hook` and keep it rendered: `result()` is its latest return,
  *  `settle()` waits until no render or timer-free async work is pending,

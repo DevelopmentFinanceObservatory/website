@@ -44,7 +44,7 @@ export const useConversationSave = ({
     // it for newcomers it finds there.
     const [openedLayout, setOpenedLayout] = useState<CardLayout>(initialLayout ?? {});
     const saveTimer = useRef(0);
-    const { snapshot: takeChatSnapshot } = chat;
+    const { snapshot: takeChatSnapshot, withStreamedReply } = chat;
     // The latest saveable state, refreshed by effect (the save fires from a
     // timer, so it can't read render-time values).
     const snapshotRef = useRef<{
@@ -90,7 +90,7 @@ export const useConversationSave = ({
             title: (snap.doc.conversationTitle ?? firstUser.text).slice(0, 400),
             updatedAt: Date.now(),
             ...saveStamp(),
-            messages: snap.messages,
+            messages: withStreamedReply(snap.messages),
             widgets: snap.widgets,
             activity: snap.activity,
             pinnedIds: snap.doc.pinnedIds,
@@ -107,7 +107,7 @@ export const useConversationSave = ({
             notes: snap.doc.notes,
             shareMarks: snap.doc.shareMarks,
         };
-    }, [takeChatSnapshot, saveStamp]);
+    }, [takeChatSnapshot, withStreamedReply, saveStamp]);
 
     // Callers waiting on a conversation's next save (whenSaved).
     const [waiters] = useState(createSaveWaiters);

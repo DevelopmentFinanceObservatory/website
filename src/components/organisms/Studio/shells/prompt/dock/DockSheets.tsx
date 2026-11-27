@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import styles from './PromptDock.module.scss';
 import type { CardView } from '../../../canvas/layout';
 import type { TurnWidget } from '../../../hooks/useChat';
+import { useStreamedText } from '../../../hooks/useStreamedText';
 import ApprovedPlanPill from '../../../workspace/ApprovedPlanPill';
 import MessageFeedback from '../../../workspace/MessageFeedback';
 import WidgetChips from '../../../workspace/WidgetChips';
@@ -13,6 +14,7 @@ import WidgetChips from '../../../workspace/WidgetChips';
 import Icon from '@/components/atoms/Icon/Icon';
 import { streamBlocks } from '@/lib/studio/dockView';
 import type { Question } from '@/lib/studio/questions';
+import type { ReplyStream } from '@/lib/studio/replyStream';
 
 /** What a reply's card chips need: the cards, their names and the way to
  *  each on the canvas. */
@@ -43,30 +45,52 @@ const Markdown = memo(function Markdown({ text }: { text: string }) {
     );
 });
 
-/** The reply's Markdown. While it streams, each finished block keeps its
- *  rendering and only the last one renders again. */
-const ReplyText = ({ text, streaming }: { text: string; streaming: boolean }) => (
-    <div className={styles.replyText}>
-        {streaming ? (
-            streamBlocks(text).map((block, index) => (
-                // Blocks only ever append, so a block keeps its index.
-                <Markdown key={index} text={block} />
-            ))
-        ) : (
-            <Markdown text={text} />
-        )}
-    </div>
-);
+/** Page turn `turn`'s reply as Markdown, with the words streamed in since
+ *  the transcript's last commit (useStreamedText); nothing before the first.
+ *  While it streams, each finished block keeps its rendering and only the
+ *  last one renders again. */
+const ReplyText = ({
+    text: committed,
+    turn,
+    stream,
+    streaming,
+}: {
+    text: string;
+    turn: number;
+    stream: ReplyStream;
+    streaming: boolean;
+}) => {
+    const text = useStreamedText(stream, turn, committed);
+
+    if (!text) {
+        return null;
+    }
+
+    return (
+        <div className={styles.replyText}>
+            {streaming ? (
+                streamBlocks(text).map((block, index) => (
+                    // Blocks only ever append, so a block keeps its index.
+                    <Markdown key={index} text={block} />
+                ))
+            ) : (
+                <Markdown text={text} />
+            )}
+        </div>
+    );
+};
 
 /** A reply as the chat draws one: Markdown, the feedback controls, the
  *  approved plan's pill and the question's card chips. */
 const ReplyContent = ({
     question,
+    stream,
     streaming,
     feedback,
     chips,
 }: {
     question: Question;
+    stream: ReplyStream;
     streaming: boolean;
     feedback: boolean;
     chips: ChipActions;
@@ -75,7 +99,12 @@ const ReplyContent = ({
 
     return (
         <>
-            {question.reply && <ReplyText text={question.reply} streaming={streaming} />}
+            <ReplyText
+                text={question.reply}
+                turn={question.turn}
+                stream={stream}
+                streaming={streaming}
+            />
             {feedback && question.reply && !streaming && (
                 <MessageFeedback text={question.reply} id={String(question.turn)} />
             )}
@@ -102,6 +131,7 @@ const ReplyContent = ({
 export const ReplySheet = ({
     question,
     count,
+    stream,
     streaming,
     chips,
     onThread,
@@ -109,6 +139,8 @@ export const ReplySheet = ({
 }: {
     question: Question;
     count: number;
+    /** The streaming reply's text since the transcript's last commit. */
+    stream: ReplyStream;
     streaming: boolean;
     chips: ChipActions;
     onThread: () => void;
@@ -150,7 +182,13 @@ export const ReplySheet = ({
             // The body scrolls, and a keyboard reader scrolls it from here.
             tabIndex={0}
         >
-            <ReplyContent question={question} streaming={streaming} feedback chips={chips} />
+            <ReplyContent
+                question={question}
+                stream={stream}
+                streaming={streaming}
+                feedback
+                chips={chips}
+            />
         </div>
     </section>
 );
@@ -158,12 +196,15 @@ export const ReplySheet = ({
 /** Every question with its reply, opened at its foot. */
 export const ThreadSheet = ({
     questions,
+    stream,
     runningTurn,
     focusTurn,
     chips,
     onClose,
 }: {
     questions: Question[];
+    /** The streaming reply's text since the transcript's last commit. */
+    stream: ReplyStream;
     /** The turn still streaming, null when none is. */
     runningTurn: number | null;
     /** The question to open on, at the top with focus; null opens at the
@@ -241,6 +282,7 @@ export const ThreadSheet = ({
                         <p className={styles.threadQuestion}>{question.text}</p>
                         <ReplyContent
                             question={question}
+                            stream={stream}
                             streaming={question.turn === runningTurn}
                             feedback={false}
                             chips={chips}

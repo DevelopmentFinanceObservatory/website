@@ -20,6 +20,7 @@ import type {
 } from '../../../components/organisms/Studio/hooks/useChat.ts';
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { OWED_RETRY_MS } from '../owedRemovals.ts';
+import { streamedText } from '../replyStream.ts';
 import { widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated } from '../wire.ts';
 import type { renderHook as RenderHook } from './hookRuntime.ts';
@@ -432,6 +433,84 @@ test('a picked example names its source on its own turn request alone, queued or
     );
     page.unmount();
 });
+
+for (const ending of ['done', 'stop'] as const) {
+    test(`an answer’s deltas leave the transcript alone until the turn ends (${ending}), and a save mid-stream holds them`, async (t) => {
+        const encoder = new TextEncoder();
+        const frame = (body: object) => encoder.encode(`data: ${JSON.stringify(body)}\n\n`);
+        let send: (body: object) => void = () => {};
+        let end = () => {};
+
+        t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+            if (!String(input).startsWith('/api/studio/turn')) {
+                return new Response('{}', { status: 404 });
+            }
+
+            return new Response(
+                new ReadableStream({
+                    start(controller) {
+                        send = (body) => controller.enqueue(frame(body));
+                        end = () => {
+                            end = () => {};
+                            controller.close();
+                        };
+                    },
+                }),
+            );
+        });
+        t.mock.method(console, 'warn', () => {});
+
+        const page = renderHook(() => useChat());
+        const reply = () => page.result().messages.at(-1)?.text ?? null;
+
+        page.result().send('What data is there?');
+        await page.settle();
+        send({
+            event: 'activity.step',
+            seq: 0,
+            step_id: 's1',
+            label: 'Reading the catalogue',
+            status: 'complete',
+            detail: null,
+            tool: 'sources',
+            duration_ms: 10,
+            produced: null,
+        });
+        await page.settle();
+
+        const transcript = page.result().messages;
+
+        send({ event: 'message.delta', seq: 1, text: 'The DFO holds ' });
+        send({ event: 'message.delta', seq: 2, text: '95 datasets.' });
+        await page.settle();
+
+        assert.equal(page.result().messages, transcript);
+        assert.equal(reply(), '');
+        assert.equal(
+            streamedText(page.result().replyStream, 1, reply() ?? ''),
+            'The DFO holds 95 datasets.',
+        );
+        assert.equal(
+            page.result().withStreamedReply(page.result().messages).at(-1)?.text,
+            'The DFO holds 95 datasets.',
+        );
+
+        if (ending === 'done') {
+            send({ event: 'done', seq: 3, trace_id: 't' });
+            end();
+        } else {
+            page.result().stop();
+        }
+
+        await page.settle(60);
+
+        assert.equal(reply(), 'The DFO holds 95 datasets.');
+        assert.equal(streamedText(page.result().replyStream, 1, reply() ?? ''), reply());
+        assert.equal(page.result().thinking, false);
+        end();
+        page.unmount();
+    });
+}
 
 test('a card unit change writes its prompt marked edit, a question does not, and a reopened save keeps the mark', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 404 }));

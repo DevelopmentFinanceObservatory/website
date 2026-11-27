@@ -26,6 +26,7 @@ import { type ChipActions, ReplySheet, ThreadSheet } from './DockSheets';
 import PlanSheet from './PlanSheet';
 import styles from './PromptDock.module.scss';
 import { useStudioModel } from '../../../hooks/studioContext';
+import { useStreamedWords } from '../../../hooks/useStreamedText';
 import GuestWall from '../../../GuestWall';
 import CharCount from '../../../prompt/CharCount';
 import ClarifyPicker from '../../../workspace/ClarifyPicker';
@@ -44,6 +45,7 @@ import {
 } from '@/lib/studio/dockView';
 import { type PlanState, planView } from '@/lib/studio/plan';
 import { ESCAPE_DOCK_SHEET, type Sheet } from '@/lib/studio/promptShell';
+import { questionsOf } from '@/lib/studio/questions';
 
 // The control that takes focus when the focused one leaves with a redraw.
 const COUNTERPART: Record<string, string> = {
@@ -95,6 +97,15 @@ const PromptDock = () => {
           'chart')
         : null;
 
+    // The newest question's reply begins with the first words to stream in,
+    // which re-render the dock once; its later words re-render the reply
+    // alone (ReplyText).
+    const newestTurn = useMemo(
+        () => questionsOf(chat.messages, chat.activity).at(-1)?.turn ?? null,
+        [chat.messages, chat.activity],
+    );
+    const streamed = useStreamedWords(chat.replyStream, newestTurn);
+
     const view = useMemo(
         () =>
             dockView({
@@ -111,6 +122,7 @@ const PromptDock = () => {
                 sheet: state.sheet,
                 sheetTurn: state.sheetTurn,
                 focus: state.focus,
+                streamed,
                 setAside: setAside?.turn ?? null,
                 planFolded,
             }),
@@ -128,6 +140,7 @@ const PromptDock = () => {
             state.sheet,
             state.sheetTurn,
             state.focus,
+            streamed,
             setAside,
             planFolded,
         ],
@@ -382,7 +395,7 @@ const PromptDock = () => {
 
     // --- Announcements ------------------------------------------------------
 
-    const replyStarted = !!question?.reply.trim();
+    const replyStarted = !!question?.reply.trim() || streamed;
     const streaming = chat.thinking && !chat.plan && !chat.clarify && !view.running;
     const said = useRef({ turn: -1, started: false, ready: false });
 
@@ -500,6 +513,7 @@ const PromptDock = () => {
                         <ReplySheet
                             question={question}
                             count={view.questions.length}
+                            stream={chat.replyStream}
                             streaming={streaming}
                             chips={chips}
                             onThread={() => choose('thread')}
@@ -511,6 +525,7 @@ const PromptDock = () => {
                 return (
                     <ThreadSheet
                         questions={view.questions}
+                        stream={chat.replyStream}
                         runningTurn={streaming ? (question?.turn ?? null) : null}
                         focusTurn={view.threadTurn}
                         chips={chips}

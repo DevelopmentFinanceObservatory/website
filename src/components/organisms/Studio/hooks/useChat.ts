@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
     endTurnActivity,
@@ -188,6 +188,7 @@ import {
     type StreamHandlers,
     type StreamRefusal,
 } from '@/lib/studio/studioClient';
+import { createReplyStore, type ReplyStream } from '@/lib/studio/replyStream';
 import { sessionLeftChat, sessionRecap } from '@/lib/studio/sessionLeft';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
 import type {
@@ -533,6 +534,59 @@ export const useChat = (
         clarify: null,
         plan: null,
     }));
+    // The answer text a stream has received since the transcript last took
+    // it (replyStream.ts), and the number of the transcript's latest commit
+    // of that text, which the ref holds ahead of the render. Only the
+    // components that draw a reply, or change when it begins, read the
+    // store, so a delta re-renders nothing else.
+    const [replyStore] = useState(createReplyStore);
+    const replyAtRef = useRef(0);
+    const [replyAt, setReplyAt] = useState(0);
+
+    useLayoutEffect(() => {
+        replyStore.prune(replyAt);
+    }, [replyStore, replyAt]);
+
+    const replyStream = useMemo<ReplyStream>(
+        () => ({ store: replyStore, at: replyAt }),
+        [replyStore, replyAt],
+    );
+    // Writes `fn` into page turn `turn`'s reply (pageTurnReplyAt) as a new
+    // commit, so the text streamed in before it stops counting as pending.
+    const commitReply = useCallback(
+        (turn: number, fn: (reply: Extract<ChatMessage, { role: 'bot' }>) => ChatMessage) => {
+            replyAtRef.current += 1;
+            setReplyAt(replyAtRef.current);
+            setState((prev) => {
+                const messages = withReplyAt(
+                    prev.messages,
+                    pageTurnReplyAt(prev.messages, turn),
+                    fn,
+                );
+
+                return messages === prev.messages ? prev : { ...prev, messages };
+            });
+        },
+        [],
+    );
+    // Moves the text streamed into page turn `turn`'s reply since the last
+    // commit into the transcript.
+    const flushReply = useCallback(
+        (turn: number) => {
+            const pending = replyStore.since(turn, replyAtRef.current);
+
+            if (pending) {
+                commitReply(turn, (reply) => ({ ...reply, text: reply.text + pending }));
+            }
+        },
+        [replyStore, commitReply],
+    );
+    // Leaving the conversation drops any text no commit took.
+    const dropReply = useCallback(() => {
+        replyAtRef.current += 1;
+        setReplyAt(replyAtRef.current);
+    }, []);
+
     // The conversation id doubles as the snapshot's sessionId, so saves and
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
@@ -1240,7 +1294,8 @@ export const useChat = (
             // Deltas BEFORE any step are the agent's preamble ("Checking the
             // growth of …"). The chat line shows its first sentence; the full
             // text reaches the transcript with message.complete. Deltas after
-            // the steps are the answer streaming in.
+            // the steps are the answer streaming in, which wait in the reply
+            // store until a commit (flushReply).
             let sawStep = false;
             let preamble = '';
             const stepLine = createStepLine();
@@ -1297,13 +1352,13 @@ export const useChat = (
                         // Deltas after the steps are the answer.
                         grace.cancel();
                         showLine('Writing the answer');
-                        patchBot((last) => ({ ...last, text: last.text + frame.text }));
+                        replyStore.append(turn, replyAtRef.current, frame.text);
                         break;
                     case 'message.complete':
                         // The authoritative text replaces the deltas. Pause
                         // decisions ("Plan approved.") show on the status
                         // line and do not enter the record.
-                        patchBot((last) => ({ ...last, text: frame.text }));
+                        commitReply(turn, (last) => ({ ...last, text: frame.text }));
                         break;
                     case 'activity.step': {
                         sawStep = true;
@@ -1439,6 +1494,7 @@ export const useChat = (
                         // since the turn's first plan.
                         stall.stop();
                         grace.cancel();
+                        flushReply(turn);
                         pauseTurnRef.current = turn;
                         offerPlan(planFromFrame(frame, turnPlanRef.current ?? undefined));
 
@@ -1491,6 +1547,7 @@ export const useChat = (
 
                         stall.stop();
                         grace.cancel();
+                        flushReply(turn);
                         pauseTurnRef.current = turn;
                         pendingInterruptRef.current = questionPause(
                             clarify,
@@ -1652,6 +1709,7 @@ export const useChat = (
 
                 muted = true;
                 stall.stop();
+                flushReply(turn);
 
                 setState((prev) => {
                     const messages = withReplyAt(
@@ -1714,6 +1772,7 @@ export const useChat = (
 
                 if (!finished) {
                     finished = true;
+                    flushReply(turn);
                     (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed, sent });
                     onSettled?.();
                 }
@@ -1762,7 +1821,8 @@ export const useChat = (
                 return true;
             };
             // The turn ended failed, with `note` as an empty reply's text.
-            const failWith = (note: string) =>
+            const failWith = (note: string) => {
+                flushReply(turn);
                 setState((prev) => {
                     const messages = withReplyAt(
                         prev.messages,
@@ -1777,6 +1837,7 @@ export const useChat = (
                         hasAnswer(prev.messages, turn),
                     );
                 });
+            };
             // A state read found the conversation begun afresh under its id
             // (carryOnTurn): the page leaves the session, as for a refusal
             // saying the harness holds none, and the turn ends with that
@@ -1928,7 +1989,17 @@ export const useChat = (
                     }
                 });
         },
-        [applyManifest, askNewQuestion, leaveSession, offerPlan, patchWidget, requestCancel],
+        [
+            applyManifest,
+            askNewQuestion,
+            commitReply,
+            flushReply,
+            leaveSession,
+            offerPlan,
+            patchWidget,
+            replyStore,
+            requestCancel,
+        ],
     );
 
     // While a request is in flight a new turn waits its turn; the settle
@@ -3634,6 +3705,7 @@ export const useChat = (
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         recapRef.current = null;
+        dropReply();
         setState({
             messages: [],
             widgets: [],
@@ -3645,7 +3717,7 @@ export const useChat = (
             clarify: null,
             plan: null,
         });
-    }, [leaveStream, setOwed, setOwedHeld, setPendingCards]);
+    }, [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards]);
 
     const hydrate = useCallback(
         (saved: ChatSnapshot) => {
@@ -3681,6 +3753,7 @@ export const useChat = (
             turnCount.current = restoredTurnCount(saved.turnCount, messagesRef.current);
             approvalsRef.current = approvalKeys(messagesRef.current);
             widgetsRef.current = restoredWidgets(saved);
+            dropReply();
             setState({
                 messages: messagesRef.current,
                 widgets: widgetsRef.current,
@@ -3705,7 +3778,23 @@ export const useChat = (
             // removals wait for reattach's read before any goes again.
             setOwedHeld(saved.sessionId !== null);
         },
-        [leaveStream, setOwed, setOwedHeld, setPendingCards, startLegacy],
+        [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards, startLegacy],
+    );
+
+    // The transcript as last drawn, `messages`, with the answer text that
+    // has streamed in since (replyStream.ts), for a save taken mid-turn.
+    // The pieces the store keeps are the ones no drawn commit holds.
+    const withStreamedReply = useCallback(
+        (messages: ChatMessage[]): ChatMessage[] =>
+            replyStore.turns().reduce((withText, turn) => {
+                const pending = replyStore.since(turn, 0);
+
+                return withReplyAt(withText, pageTurnReplyAt(withText, turn), (reply) => ({
+                    ...reply,
+                    text: reply.text + pending,
+                }));
+            }, messages),
+        [replyStore],
     );
 
     const snapshot = useCallback(
@@ -3731,6 +3820,10 @@ export const useChat = (
         // unanswered adds and removes, which editedCanvasCards shows on it.
         canvas,
         pendingCards,
+        // The streaming reply's text since the transcript's last commit,
+        // which the component that draws the reply adds (useStreamedText).
+        replyStream,
+        withStreamedReply,
         // The harness cards owed removal, which every canvas this page draws
         // or saves leaves off (canvasWidgetsOf).
         owedRemovals,

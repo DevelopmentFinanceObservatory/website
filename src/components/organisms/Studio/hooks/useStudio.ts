@@ -5,6 +5,7 @@ import {
     type Dispatch,
     type RefObject,
     type SetStateAction,
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -729,12 +730,21 @@ export const useStudio = ({
     // refresh answers, and their states. A snapshot's cards its page could
     // not draw are filled the same way. The owner's own widgets pass
     // through untouched.
-    const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
-        shared,
-        editedCanvasCards(chat.canvas, chat.pendingCards, (canvas) =>
-            doc.visibleWidgets(chat.widgets, canvas, chat.owedRemovals),
-        ),
+    const {
+        canvas: harnessCanvas,
+        pendingCards,
+        widgets: turnWidgets,
+        owedRemovals,
+    } = conversation;
+    const { visibleWidgets: canvasWidgetsOf } = doc;
+    const editedWidgets = useMemo(
+        () =>
+            editedCanvasCards(harnessCanvas, pendingCards, (canvas) =>
+                canvasWidgetsOf(turnWidgets, canvas, owedRemovals),
+            ),
+        [harnessCanvas, pendingCards, turnWidgets, owedRemovals, canvasWidgetsOf],
     );
+    const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(shared, editedWidgets);
 
     useLayoutEffect(() => {
         shownIdsRef.current = visibleWidgets.map((widget) => widget.id);
@@ -744,11 +754,15 @@ export const useStudio = ({
     // The follow-up's card follows its replacements to the card standing in
     // its place, and the target goes once no card of its chain is on the
     // canvas.
-    const cardTitleOf = (id: string): string => {
-        const widget = visibleWidgets.find((other) => other.id === id);
+    const { titles } = doc;
+    const cardTitleOf = useCallback(
+        (id: string): string => {
+            const widget = visibleWidgets.find((other) => other.id === id);
 
-        return doc.titles[id] ?? (widget ? widgetTitle(widget) : 'Card');
-    };
+            return titles[id] ?? (widget ? widgetTitle(widget) : 'Card');
+        },
+        [visibleWidgets, titles],
+    );
     const followedTarget = standingTarget(
         editTarget,
         { has: isOnCanvas },

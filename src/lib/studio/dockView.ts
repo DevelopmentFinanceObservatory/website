@@ -54,6 +54,9 @@ export type DockInput = {
     sheet: Sheet;
     sheetTurn: number | null;
     focus: boolean;
+    /** Words have streamed into the newest question's reply since the
+     *  transcript's last commit (replyStream.ts). */
+    streamed: boolean;
     /** The turn whose plan the reader cancelled, null with none. */
     setAside: number | null;
     /** The plan sheet the reader folded (planKey), null with none. */
@@ -222,7 +225,7 @@ const questionView = (
             ? input.sheet
             : 'auto';
     const placed = !!question && input.widgets.some((widget) => widget.turn === question.turn);
-    const hasText = !!question?.reply.trim();
+    const hasText = !!question && (!!question.reply.trim() || input.streamed);
     const running = !!question && thinking && !plan && !clarify;
     const answered = !!question && !thinking && (hasText || placed || !!question.plan);
     // An answer in words on an empty canvas stays open until the reader
