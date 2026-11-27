@@ -411,9 +411,16 @@ const Whiteboard = ({
 
     // Placeholders that appear are announced once as a batch, and the view
     // goes to the first of them as it goes to a block's first card, once
-    // their places have settled (comingGhosts.ts RESEAT_MS). The cards that
-    // later take their places move nothing.
+    // their places have settled (comingGhosts.ts RESEAT_MS), unless the reader
+    // has pressed, scrolled or typed on the canvas since they appeared: the
+    // view then stays with what the reader is using, as a running glide
+    // yields to the same input. The cards that later take their places move
+    // nothing.
     const seenGhosts = useRef<Set<string>>(new Set());
+    // When the waiting batch appeared, and the reader's latest input on the
+    // canvas (performance.now()).
+    const ghostsSince = useRef(0);
+    const readerAt = useRef(-Infinity);
     const showTimer = useRef(0);
     const noticeTimer = useRef(0);
     const waitingGhosts = useRef<Set<string>>(new Set());
@@ -427,7 +434,14 @@ const Whiteboard = ({
         showTimer.current = 0;
         ids.clear();
 
-        if (!blocks || !scroller || !first || dragging.isDragging() || pan.isPanning()) {
+        if (
+            !blocks ||
+            !scroller ||
+            !first ||
+            dragging.isDragging() ||
+            pan.isPanning() ||
+            (dockAware && readerAt.current >= ghostsSince.current)
+        ) {
             return;
         }
 
@@ -450,6 +464,10 @@ const Whiteboard = ({
         const fresh = Object.values(ghosts).filter(
             (ghost) => !ghost.leaving && !seenGhosts.current.has(ghost.id),
         );
+
+        if (fresh.length > 0 && waitingGhosts.current.size === 0) {
+            ghostsSince.current = performance.now();
+        }
 
         for (const ghost of fresh) {
             seenGhosts.current.add(ghost.id);
@@ -475,6 +493,26 @@ const Whiteboard = ({
         },
         [],
     );
+
+    useEffect(() => {
+        const scroller = scrollerOf(boardRef);
+
+        if (!dockAware || !scroller) {
+            return undefined;
+        }
+
+        const mark = () => {
+            readerAt.current = performance.now();
+        };
+        const events = ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const;
+
+        events.forEach((name) =>
+            scroller.addEventListener(name, mark, { capture: true, passive: true }),
+        );
+
+        return () =>
+            events.forEach((name) => scroller.removeEventListener(name, mark, { capture: true }));
+    }, [dockAware]);
 
     // The sheet's foot never shortens: the prompt's height falls as its reply
     // sheet folds, and a shorter sheet would clamp a scroll that has already
