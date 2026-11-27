@@ -19,8 +19,9 @@
  *   GET  /api/presentation/components/{id}   a card the scenario drew
  *
  * Anything else, a request out of the scenario's order or a question other
- * than the scenario's is a fault, kept in `faults`. Every turn request's
- * body is kept in `requests`.
+ * than the scenario's, and a turn or interrupt request while a stream is
+ * open, is a fault, kept in `faults`. Every turn request's body is kept in
+ * `requests`.
  */
 import { EventEmitter } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -125,6 +126,35 @@ export class Player extends EventEmitter {
         this.hold = { at, until: new Promise<void>((resolve) => (release = resolve)), drop };
 
         return () => release();
+    }
+
+    /** Whether a card change runs with no stream (Hold). */
+    get changeRunning(): boolean {
+        return this.running !== null;
+    }
+
+    /** Ends the card change running with no stream (Hold) as the harness
+     *  does on its own: its cards drawn, its canvas set and the turn closed,
+     *  with nothing sent. */
+    finishRunning() {
+        const running = this.running;
+
+        if (!running) {
+            this.fault('no card change is running to finish');
+
+            return;
+        }
+
+        for (const frame of running.rest) {
+            if (frame.event === 'component.created') {
+                this.cards.set(String(frame.component_id), frame as Card);
+            }
+        }
+
+        this.running = null;
+        this.manifest = manifestAfter(running.answer.frames, this.manifest);
+        this.close(running.answer.userMessage, running.answer.frames, running.answer.change);
+        this.emit('change-end', { index: running.index });
     }
 
     // Sends `frames` on `res` as one turn's stream, paced. Resolves with the
@@ -309,7 +339,24 @@ export class Player extends EventEmitter {
         };
         const turn = this.scenario.turns[this.turn - 1];
 
-        switch (`${req.method} ${url.pathname}`) {
+        const route = `${req.method} ${url.pathname}`;
+
+        // A page sends one request at a time for a conversation: a second
+        // turn or answer while a stream is open would be streamed twice.
+        if (
+            this.open &&
+            (route === 'POST /api/studio/turn' || route === 'POST /api/studio/interrupt')
+        ) {
+            this.fault(`${route} while turn ${this.index}'s stream is open`);
+
+            return json(409, {
+                error: 'edit_conflict',
+                retry: 'do_not_retry',
+                detail: 'A stream is open.',
+            });
+        }
+
+        switch (route) {
             case 'POST /api/studio/turn': {
                 this.requests.push(body ?? {});
 

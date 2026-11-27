@@ -6,7 +6,7 @@ The site runs Next.js 16, whose APIs changed after most training data. Read the 
 
 ## Commands
 
-- `just check` runs what CI runs, in CI's order: the client provenance check, lint (ESLint and Stylelint), typecheck, test and build. CI also builds the `db/` bundles and smoke-tests them, so a change under `db/` also runs `pnpm build:migrate`, `pnpm build:export-events` and `pnpm build:migrate-shares`.
+- `just check` runs what CI runs, in CI's order: the client provenance check, lint (ESLint and Stylelint), typecheck, test, build and the Studio replay test (`pnpm test:studio-replay`, which needs the same Postgres as `test`). CI also builds the `db/` bundles and smoke-tests them, so a change under `db/` also runs `pnpm build:migrate`, `pnpm build:export-events` and `pnpm build:migrate-shares`.
 - `just format` applies Prettier and the Stylelint fixes. Neither CI nor `just check` runs Prettier, so run it before committing.
 - `node --test path/to/file.test.ts` runs one test file. Tests that touch the database need Postgres (see the port trap below).
 - Report which checks ran and passed, and name any that did not run.

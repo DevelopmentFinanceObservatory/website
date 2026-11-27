@@ -38,6 +38,8 @@ export const makeReader = async (): Promise<Reader> => {
             migratorDbUser: database.migratorUser,
         });
 
+        // Made for this run alone and kept out of every log: the site gets
+        // the secret in its own environment only.
         const secret = randomBytes(32).toString('base64');
         const token = randomBytes(24).toString('base64url');
         const userId = randomUUID();
@@ -45,7 +47,7 @@ export const makeReader = async (): Promise<Reader> => {
 
         await admin.query(
             'insert into "user" (id, name, email, email_verified) values ($1, $2, $3, true)',
-            [userId, 'Replay reader', 'reader@replay.example'],
+            [userId, 'Replay reader', `reader-${userId.slice(0, 8)}@example.test`],
         );
         await admin.query(
             `insert into session (id, token, user_id, expires_at, updated_at)
@@ -60,6 +62,9 @@ export const makeReader = async (): Promise<Reader> => {
         return {
             databaseUrl: `postgresql://${runtime}@${host}:${port}/${database.databaseName}`,
             secret,
+            // Signed as better-call's signCookieValue signs it (Better Auth's
+            // setSignedCookie): the token, a dot and the base64 HMAC-SHA256
+            // of the token under the secret, URI-encoded.
             cookie: {
                 name: 'better-auth.session_token',
                 value: encodeURIComponent(`${token}.${await makeSignature(token, secret)}`),

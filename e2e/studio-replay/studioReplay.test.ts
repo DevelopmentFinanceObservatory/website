@@ -5,7 +5,9 @@
  * route answers, a request the scenario did not expect, or a page that does
  * not show what the recording says: the plan or question at each pause, and
  * at the end as many cards as the last canvas holds and the start of the
- * last reply. Run with `pnpm test:studio-replay` after `pnpm build`.
+ * last reply. The card-change regressions (regressions.ts) play after
+ * them; the signed-in ones need Postgres (account.ts). Run with
+ * `pnpm test:studio-replay` after `pnpm build`.
  */
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
@@ -14,6 +16,7 @@ import { type Browser, chromium } from 'playwright-core';
 
 import { makeReader, postgresAt, type Reader } from './account.ts';
 import { type Layout, openStudio, play, type Session } from './page.ts';
+import { canvasView, EIGHT_LAST, PLACEHOLDERS, todayView } from './placeholders.ts';
 import { REGRESSIONS } from './regressions.ts';
 import { endState, loadScenario, pauseWords, type Scenario, SCENARIOS } from './scenario.ts';
 import { startSite } from './site.ts';
@@ -58,6 +61,12 @@ for (const layout of LAYOUTS) {
 
             try {
                 await playScenario(session, scenario);
+
+                // The placeholder scenario on today's layout compares its
+                // canvas with this one's.
+                if (name === 'eight' && layout === 'classic') {
+                    todayView.eight = await canvasView(session.page, EIGHT_LAST);
+                }
             } finally {
                 await session.close();
             }
@@ -65,11 +74,37 @@ for (const layout of LAYOUTS) {
     }
 }
 
-for (const regression of REGRESSIONS) {
-    test(`${regression.name} on ${regression.layout}`, { timeout: 60_000 }, async () => {
+// The chart on the Prompt layout at a phone's width, and with reduced
+// motion, which draw the dock, the sheet and the canvas by other rules.
+const VARIANTS = {
+    'at phone width': { viewport: { width: 390, height: 844 } },
+    'with reduced motion': { reducedMotion: 'reduce' },
+} as const;
+
+for (const [variant, options] of Object.entries(VARIANTS)) {
+    test(`chart plays on prompt ${variant}`, async () => {
+        const scenario = loadScenario('chart');
+        const session = await openStudio(browser, site.url, scenario, 'prompt', options);
+
+        try {
+            await playScenario(session, scenario);
+        } finally {
+            await session.close();
+        }
+    });
+}
+
+for (const regression of [...REGRESSIONS, ...PLACEHOLDERS]) {
+    test(`${regression.name} on ${regression.layout}`, { timeout: 60_000 }, async (t) => {
         if (regression.signedIn && reader instanceof Error) {
+            if (process.env.STUDIO_REPLAY_NO_DB === '1') {
+                t.skip(`no Postgres at ${postgresAt()}, and STUDIO_REPLAY_NO_DB=1`);
+
+                return;
+            }
+
             throw new Error(
-                `This regression signs a reader in, which needs Postgres at ${postgresAt()} (PGHOST, PGPORT, PGUSER, PGPASSWORD): ${reader.message}`,
+                `This regression signs a reader in, which needs Postgres at ${postgresAt()} (PGHOST, PGPORT, PGUSER, PGPASSWORD), or STUDIO_REPLAY_NO_DB=1 to skip it: ${reader.message}`,
             );
         }
 
@@ -78,7 +113,7 @@ for (const regression of REGRESSIONS) {
             site.url,
             regression.scenario(),
             regression.layout,
-            regression.signedIn && !(reader instanceof Error) ? reader.cookie : undefined,
+            regression.signedIn && !(reader instanceof Error) ? { cookie: reader.cookie } : {},
         );
 
         try {
@@ -136,35 +171,54 @@ const playScenario = async (session: Session, scenario: Scenario) => {
 
     const end = endState(scenario);
 
+    // The last reply shows once: a reply drawn twice is a fault. A live
+    // region's announcement of it is not a reply.
+    let replies = 0;
+
     if (end.words) {
         const words = end.words;
+        const shown = session.page.getByText(words, { exact: false }).filter({ visible: true });
 
-        await step(() =>
-            session.page
-                .getByText(words, { exact: false })
-                .filter({ visible: true })
-                .first()
-                .waitFor({ timeout: SHOW_MS }),
+        await step(() => shown.first().waitFor({ timeout: SHOW_MS }));
+        replies = await shown.evaluateAll(
+            (matches) =>
+                matches.filter(
+                    (match) => !match.closest('[aria-live], [role="alert"], [role="status"]'),
+                ).length,
         );
     }
 
-    // Each card on the canvas carries its id once.
-    const cards = await session.page.evaluate(
-        () =>
-            new Set(
-                [...document.querySelectorAll<HTMLElement>('[data-card-id]')]
-                    .filter((card) => card.checkVisibility())
-                    .map((card) => card.dataset.cardId),
-            ).size,
-    );
+    // Each card on the canvas carries its id once; a placeholder carries
+    // `data-coming`, and none outlives the turn once its fade is over.
+    await session.page
+        .waitForFunction(() => !document.querySelector('[data-coming]'), null, { timeout: 3000 })
+        .catch(() => {});
+
+    const { cards, coming } = await session.page.evaluate(() => ({
+        cards: new Set(
+            [...document.querySelectorAll<HTMLElement>('[data-card-id]')]
+                .filter((card) => card.checkVisibility())
+                .map((card) => card.dataset.cardId),
+        ).size,
+        coming: document.querySelectorAll('[data-coming]').length,
+    }));
 
     assert.deepEqual(
         {
             cards,
+            replies,
+            coming,
             errors: session.errors,
             unanswered: session.unanswered,
             faults: session.player.faults,
         },
-        { cards: end.cards, errors: [], unanswered: [], faults: [] },
+        {
+            cards: end.cards,
+            replies: end.words ? 1 : 0,
+            coming: 0,
+            errors: [],
+            unanswered: [],
+            faults: [],
+        },
     );
 };

@@ -390,7 +390,9 @@ build:
 
 # Plays the recorded Studio conversations on both layouts against the
 # production build, in headless Chromium (`pnpm exec playwright-core install
-# --only-shell chromium` once). See "Studio replay test" in docs/development.md.
+# --only-shell chromium` once). The signed-in scenarios need the same Postgres
+# as `test` (PGHOST, PGPORT, PGUSER, PGPASSWORD). See "Studio replay test" in
+# docs/development.md.
 #
 # Play the recorded Studio conversations on both layouts
 studio-replay: build

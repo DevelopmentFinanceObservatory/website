@@ -33,9 +33,10 @@ const UNIT_STALE = 'This card has changed since its unit menu opened, so nothing
 const PLAN_HOLDS = 'Approve or cancel the plan to change this card.';
 const PLACES_OFF = "Changing a card's places is not enabled on this deployment.";
 
-const turnOf = (name: string, at = 0): Turn => structuredClone(loadScenario(name).turns[at]!);
+export const turnOf = (name: string, at = 0): Turn =>
+    structuredClone(loadScenario(name).turns[at]!);
 
-const chartCanvas = (): Manifest =>
+export const chartCanvas = (): Manifest =>
     loadScenario('chart').turns[0]!.segments[0]!.frames.findLast((frame) => frame.event === 'done')!
         .composition as Manifest;
 
@@ -44,7 +45,7 @@ const chartCanvas = (): Manifest =>
  * turn sends is that canvas's own, a revision on, with the turn's cards
  * after `before`'s. The recordings each began on an empty canvas.
  */
-const onCanvas = (turn: Turn, before: Manifest): Turn => {
+export const onCanvas = (turn: Turn, before: Manifest): Turn => {
     let revision = before.revision;
     const moved = (manifest: Manifest): Manifest => {
         revision += 1;
@@ -77,27 +78,31 @@ const chartThenPlan = (): Scenario => ({
     turns: [turnOf('chart'), onCanvas(turnOf('plan'), chartCanvas())],
 });
 
-const errorsBut = (session: Session, ...statuses: number[]) =>
+// The page's errors past those a scenario draws on purpose: a refusal's
+// status, or a stream the harness broke (`net::ERR_INCOMPLETE_CHUNKED_ENCODING`).
+const errorsBut = (session: Session, ...drawn: (number | string)[]) =>
     session.errors.filter(
         (error) =>
-            !statuses.some((status) =>
-                error.includes(`the server responded with a status of ${status}`),
+            !drawn.some((one) =>
+                error.includes(
+                    typeof one === 'number' ? `the server responded with a status of ${one}` : one,
+                ),
             ),
     );
 
-// The checks every regression ends on: no page error past the refusals it
-// drew (`statuses`), no unanswered request, no harness fault.
-const clean = (session: Session, ...statuses: number[]) =>
+// The checks every regression ends on: no page error past those it drew
+// (`drawn`), no unanswered request, no harness fault.
+export const clean = (session: Session, ...drawn: (number | string)[]) =>
     assert.deepEqual(
         {
-            errors: errorsBut(session, ...statuses),
+            errors: errorsBut(session, ...drawn),
             unanswered: session.unanswered,
             faults: session.player.faults,
         },
         { errors: [], unanswered: [], faults: [] },
     );
 
-const until = async (what: string, done: () => boolean, ms = SHOW_MS) => {
+export const until = async (what: string, done: () => boolean, ms = SHOW_MS) => {
     for (let waited = 0; !done(); waited += 50) {
         if (waited > ms) throw new Error(`${what}: not within ${ms / 1000} s`);
 
@@ -106,7 +111,7 @@ const until = async (what: string, done: () => boolean, ms = SHOW_MS) => {
 };
 
 // Resolves with `promise`, or fails naming `what` after `ms`.
-const within = <T>(what: string, promise: Promise<T>, ms = 2 * SHOW_MS): Promise<T> =>
+export const within = <T>(what: string, promise: Promise<T>, ms = 2 * SHOW_MS): Promise<T> =>
     Promise.race([
         promise,
         new Promise<never>((_, reject) =>
@@ -115,7 +120,7 @@ const within = <T>(what: string, promise: Promise<T>, ms = 2 * SHOW_MS): Promise
     ]);
 
 // Resolves when the harness has ended the next `count` change turns.
-const changesEnd = (player: Player, count = 1) =>
+export const changesEnd = (player: Player, count = 1) =>
     new Promise<void>((resolve) => {
         let left = count;
         const ended = () => {
@@ -133,10 +138,10 @@ const changesEnd = (player: Player, count = 1) =>
 const cardChanges = (player: Player) =>
     player.requests.filter((request) => request.apply_change || request.apply_unit);
 
-const visible = (page: Page, text: string | RegExp) =>
+export const visible = (page: Page, text: string | RegExp) =>
     page.getByText(text).filter({ visible: true }).first();
 
-const shownCards = (page: Page) =>
+export const shownCards = (page: Page) =>
     page.evaluate(() => [
         ...new Set(
             [...document.querySelectorAll<HTMLElement>('[data-card-id]')]
@@ -147,7 +152,7 @@ const shownCards = (page: Page) =>
 
 // The Prompt layout's card page of the card titled `title` (the first card
 // when none is named), opened from the card's source line.
-const openCardPage = async (page: Page, title?: string) => {
+export const openCardPage = async (page: Page, title?: string) => {
     const canvas = page.locator('[data-studio-canvas]');
     const card = title
         ? canvas.locator('[data-card-id]').filter({ hasText: title }).first()
@@ -173,7 +178,7 @@ const changeYears = async (page: Page, from: number, to: number) => {
 };
 
 // The canvas card menu's Change unit, sent with currency `currency`.
-const changeCurrency = async (page: Page, currency: string) => {
+export const changeCurrency = async (page: Page, currency: string) => {
     const card = page.locator('[data-card-id]').filter({ visible: true }).first();
 
     await card.getByRole('button', { name: 'Card menu' }).click();
@@ -198,11 +203,11 @@ const changedFor = (page: Page) =>
             ),
         );
 
-const created = (frame: Frame) => frame.event === 'component.created';
+export const created = (frame: Frame) => frame.event === 'component.created';
 
 // When each save the page made of its conversation (PUT
 // /api/conversations/{id}) began, once the save is done, as a getter.
-const saves = (page: Page) => {
+export const saves = (page: Page) => {
     const began: number[] = [];
 
     page.on('requestfinished', (request) => {
@@ -216,15 +221,56 @@ const saves = (page: Page) => {
 
 // Reopens the conversation by its own URL, as a reload does, once a save
 // that began after `after` (ms since the epoch) is done.
-const reopen = async (page: Page, saved: () => number[], after: number) => {
+export const reopen = async (page: Page, saved: () => number[], after: number) => {
     await until('the conversation saved', () => saved().some((at) => at >= after), 2 * SHOW_MS);
     assert.match(new URL(page.url()).pathname, /^\/studio\/[\w-]+$/);
     await page.reload({ waitUntil: 'load' });
-    await page.locator('[data-studio-canvas] [data-card-id]').first().waitFor({ timeout: SHOW_MS });
+    // A reopened canvas draws its cards in well under this.
+    await page.locator('[data-studio-canvas] [data-card-id]').first().waitFor({ timeout: 5000 });
     await settle(page);
 };
 
+// After a refused change while a plan waits, the approved plan leaves the
+// earlier card on the canvas, as the harness's canvas keeps it. The Prompt
+// layout checks the same within its fuller scenario below.
+const refusedThenApproved = (layout: Layout): Regression => ({
+    name: 'a card refused a change while a plan waits stays on the canvas once the plan is approved',
+    layout,
+    scenario: chartThenPlan,
+    run: async (session) => {
+        const { page, player } = session;
+
+        player.answerChange = () => refused('scope_choice_stale', UNIT_STALE, '/apply_unit');
+        await playTurn(session, 1);
+        await playTurn(session, 2, { until: 2 });
+        await changeCurrency(page, 'Euros');
+        await until('the unit change sent', () => cardChanges(player).length === 1);
+        await settle(page);
+
+        const ended = new Promise<void>((resolve) =>
+            player.on('segment-end', ({ turn, segment }) => {
+                if (turn === 2 && segment === 3) resolve();
+            }),
+        );
+
+        await page
+            .getByRole('button', { name: /^approve/i })
+            .filter({ visible: true })
+            .first()
+            .click();
+        await within('the plan', ended);
+        await settle(page);
+        assert.deepEqual((await shownCards(page)).toSorted(), [
+            CHART,
+            'cmp_replay_plan_c1',
+            'cmp_replay_plan_c2',
+        ]);
+        clean(session, 422);
+    },
+});
+
 export const REGRESSIONS: Regression[] = [
+    refusedThenApproved('classic'),
     {
         // A change queued behind another goes to the card that replaced its
         // card, also when the replacement and `done` arrive in one chunk.
@@ -328,8 +374,9 @@ export const REGRESSIONS: Regression[] = [
     },
     {
         // A change the harness refuses while a plan waits leaves the plan
-        // waiting and approvable; the card page holds its Change rows.
-        name: 'a refused change leaves a waiting plan approvable',
+        // waiting and approvable, and the approved plan leaves the card on
+        // the canvas; the card page holds its Change rows.
+        name: 'a refused change leaves a waiting plan approvable and its card on the canvas',
         layout: 'prompt',
         scenario: chartThenPlan,
         run: async (session) => {
@@ -373,15 +420,11 @@ export const REGRESSIONS: Regression[] = [
             await within('the change turns', ended);
             await settle(page);
             assert.equal(player.interrupts, interrupts + 1);
-            // The plan drew its cards. The chart card leaves the page's
-            // canvas here although the harness's canvas keeps it, a fault of
-            // its own that this regression does not cover.
-            const shown = await shownCards(page);
-
-            assert.ok(
-                ['cmp_replay_plan_c1', 'cmp_replay_plan_c2'].every((id) => shown.includes(id)),
-                `the plan's cards are drawn: ${shown.join(', ')}`,
-            );
+            assert.deepEqual((await shownCards(page)).toSorted(), [
+                CHART,
+                'cmp_replay_plan_c1',
+                'cmp_replay_plan_c2',
+            ]);
             clean(session, 422);
         },
     },
@@ -435,10 +478,12 @@ export const REGRESSIONS: Regression[] = [
         },
     },
     {
-        // A change whose page leaves mid-stream runs on in the harness, and
-        // the reopened page that resumes it places the redrawn card under the
+        // A change runs on in the harness when its stream breaks: the page
+        // that leaves mid-change and comes back resumes it, and a page whose
+        // stream dropped and that reopens after the harness finished the
+        // turn reads it back. Either way the redrawn card stands under the
         // answer that drew the card it replaced.
-        name: 'a resumed change keeps its card under its answer',
+        name: 'a resumed or finished change keeps its card under its answer',
         layout: 'prompt',
         signedIn: true,
         scenario: () => loadScenario('chart'),
@@ -446,13 +491,23 @@ export const REGRESSIONS: Regression[] = [
             const { page, player } = session;
             const saved = saves(page);
             const question = player.scenario.turns[0]!.question;
+            const madeFor = async () =>
+                assert.match(
+                    (await visible(page, 'Made for:').locator('..').textContent()) ?? '',
+                    new RegExp(question.slice(0, 30)),
+                );
+            let drawn = 0;
 
-            player.answerChange = (request) => yearsRedraw(player, request, `${CHART}_m1`);
+            player.answerChange = (request) => {
+                drawn += 1;
+
+                return yearsRedraw(player, request, `${CHART}_m${drawn}`);
+            };
             await playTurn(session, 1);
             await until('the conversation saved', () => saved().length > 0);
             await openCardPage(page);
 
-            const held = new Promise((resolve) => player.once('held', resolve));
+            let held = new Promise((resolve) => player.once('held', resolve));
             const ended = changesEnd(player);
 
             player.holdNext(created);
@@ -463,11 +518,22 @@ export const REGRESSIONS: Regression[] = [
             await settle(page);
             await openCardPage(page);
             assert.deepEqual(await shownCards(page), [`${CHART}_m1`]);
-            assert.match(
-                (await visible(page, 'Made for:').locator('..').textContent()) ?? '',
-                new RegExp(question.slice(0, 30)),
-            );
-            clean(session);
+            await madeFor();
+
+            held = new Promise((resolve) => player.once('held', resolve));
+            player.holdNext(created, { drop: true })();
+            await changeYears(page, 2018, 2024);
+            await within('the second change held', held);
+            await until('the stream broken', () => player.changeRunning);
+
+            const broke = Date.now();
+
+            player.finishRunning();
+            await reopen(page, saved, broke);
+            assert.deepEqual(await shownCards(page), [`${CHART}_m2`]);
+            await openCardPage(page);
+            await madeFor();
+            clean(session, 'ERR_INCOMPLETE_CHUNKED_ENCODING');
         },
     },
     {

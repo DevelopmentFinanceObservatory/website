@@ -98,6 +98,11 @@ jobs:
               run: pnpm exec playwright-core install --with-deps --only-shell chromium
 
             - name: Studio replay
+              env:
+                  PGHOST: localhost
+                  PGPORT: 5432
+                  PGUSER: postgres
+                  PGPASSWORD: postgres
               run: pnpm test:studio-replay
 
             # dist/** is eslint-ignored (eslint.config.mjs), so this runs after

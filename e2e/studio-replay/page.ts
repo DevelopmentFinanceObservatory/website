@@ -5,12 +5,14 @@
  */
 import type { Browser, Page } from 'playwright-core';
 
-import { type Act, type Scenario } from './scenario.ts';
+import { type Act, type Frame, type Scenario } from './scenario.ts';
 import { Player, serveHarness } from './harness.ts';
 
 export type Layout = 'classic' | 'prompt';
 
 export type Session = {
+    browser: Browser;
+    siteUrl: string;
     page: Page;
     player: Player;
     /** Console errors and page errors, in order. */
@@ -70,20 +72,41 @@ export const openStudio = async (
     siteUrl: string,
     scenario: Scenario,
     layout: Layout,
-    // The session cookie of a signed-in reader (account.ts), whose session
-    // and saved conversations the site itself answers; none for a guest.
-    cookie?: { name: string; value: string },
+    {
+        cookie,
+        viewport = { width: 1440, height: 900 },
+        reducedMotion = 'no-preference',
+    }: {
+        // The session cookie of a signed-in reader (account.ts), whose
+        // session and saved conversations the site itself answers; none for
+        // a guest.
+        cookie?: { name: string; value: string };
+        viewport?: { width: number; height: number };
+        reducedMotion?: 'reduce' | 'no-preference';
+    } = {},
 ): Promise<Session> => {
     const player = new Player(scenario);
     const harness = await serveHarness(player);
     const context = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
+        viewport,
+        reducedMotion,
         colorScheme: 'light',
     });
     const page = await context.newPage();
 
     if (cookie) {
         await context.addCookies([{ ...cookie, url: siteUrl }]);
+
+        // A cookie the site does not take would play the scenario as a
+        // guest's, so it fails here as a setup error.
+        const session = await context.request.get(`${siteUrl}/api/auth/get-session`);
+        const body = (await session.json().catch(() => null)) as { user?: unknown } | null;
+
+        if (!body?.user) {
+            await context.close();
+            await harness.close();
+            throw new Error(`setup: the site does not sign the reader in (${session.status()})`);
+        }
     }
 
     // A control the layout does not draw fails the run in 10 s.
@@ -174,6 +197,8 @@ export const openStudio = async (
     await page.goto(`${siteUrl}/studio?studio=${layout}`, { waitUntil: 'load' });
 
     return {
+        browser,
+        siteUrl,
         page,
         player,
         errors,
@@ -232,10 +257,11 @@ export const ask = async (page: Page, question: string) => {
 };
 
 // Answers a pause as a reader would: approves a plan, or picks each
-// clarifying answer and sends the form when the last pick did not send it.
-export const answer = async (page: Page, player: Player, act: Act) => {
-    const sent = player.interrupts;
-
+// clarifying answer. The pause's own frame (`pause`) says whether the last
+// pick sends the answer: one question of single choice sends when its
+// option is picked (ClarifyPicker), and any other form sends with its
+// submit button.
+export const answer = async (page: Page, act: Act, pause?: Frame) => {
     if (act.kind === 'approve') {
         await page
             .getByRole('button', { name: /^approve/i })
@@ -256,11 +282,10 @@ export const answer = async (page: Page, player: Player, act: Act) => {
             .click();
     }
 
-    for (let waited = 0; waited < 1500 && player.interrupts === sent; waited += 100) {
-        await page.waitForTimeout(100);
-    }
+    const questions = (pause?.questions ?? []) as { input?: string }[];
+    const sendsOnPick = questions.length === 1 && questions[0]!.input === 'single_select';
 
-    if (player.interrupts === sent) {
+    if (!sendsOnPick) {
         await page
             .getByRole('button', { name: /^(submit|continue|answer|done|next)\b/i })
             .filter({ visible: true })
@@ -302,23 +327,30 @@ export const playTurn = async (
             await ask(page, turn.question);
         } else {
             await atPause(at, index - 1);
-            await answer(page, player, segment.act!);
+            await answer(page, segment.act!, turn.segments[index - 1]!.frames.at(-1));
         }
 
-        await Promise.race([
-            ended,
-            new Promise((_, reject) =>
-                setTimeout(
-                    () =>
-                        reject(
-                            new Error(
-                                `turn ${at} segment ${index}: no stream ended in ${segmentMs / 1000} s`,
+        let timer: ReturnType<typeof setTimeout> | undefined;
+
+        try {
+            await Promise.race([
+                ended,
+                new Promise((_, reject) => {
+                    timer = setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `turn ${at} segment ${index}: no stream ended in ${segmentMs / 1000} s`,
+                                ),
                             ),
-                        ),
-                    segmentMs,
-                ),
-            ),
-        ]);
+                        segmentMs,
+                    );
+                }),
+            ]);
+        } finally {
+            clearTimeout(timer);
+        }
+
         await settle(page);
     }
 };
