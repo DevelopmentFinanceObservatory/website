@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 
+import { useStudioVariant } from './studioContext';
+
 import type { DownloadSheetState } from '@/components/organisms/DataSearch/DatasetDownload';
 import type { CardRef, Widget } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
@@ -32,6 +34,7 @@ export const useCardDownload = (
     const [optionsOpen, setOptionsOpen] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const variant = useStudioVariant();
 
     const download = async () => {
         setDownloading(true);
@@ -48,6 +51,7 @@ export const useCardDownload = (
                 cardId: ref.component_id,
                 shared: shared !== null,
                 source: 'card',
+                variant,
             } satisfies StudioDownloadProps);
         } catch (caught) {
             setError(

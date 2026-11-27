@@ -18,7 +18,13 @@ import PromptForm, { type PromptField } from '../prompt/PromptForm';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
 import { messageTurns, plansByTurn } from '@/lib/studio/activityView';
-import { interruptTextCount } from '@/lib/studio/interruptText';
+import {
+    amendmentCount as countAmendment,
+    composerField,
+    composerMode,
+    type EditTarget,
+    followUpAction,
+} from '@/lib/studio/composer';
 import { shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
@@ -47,7 +53,7 @@ type ChatPanelProps = {
     onRemove: (id: string) => void;
     // Set by a card's "Ask follow up": the next message carries the card's
     // component_ref, so the agent answers about (or reworks) that card.
-    editTarget: { id: string; title: string } | null;
+    editTarget: EditTarget | null;
     onClearEditTarget: () => void;
     // The follow-up field's text, held by the Studio so text typed into the
     // landing as it leaves carries into it.
@@ -111,30 +117,27 @@ const ChatPanel = ({
         }
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
-    // The text of a plan's "Propose changes" travels as an amendment, which
-    // the harness caps; a follow-up turn has no such cap here.
-    const amendmentCount = interruptTextCount(chat.plan?.live ? follow.trim() : '');
+    // The rules live in src/lib/studio/composer.ts.
+    const amendmentCount = countAmendment(follow, chat.plan);
+    const mode = composerMode({ walled: !!wall, plan: chat.plan, clarify: !!chat.clarify });
+    const field = composerField({ plan: chat.plan, editTarget });
 
     const sendFollow = () => {
-        // A plan switch in flight has the pause, so the text waits in the input.
-        if (!follow.trim() || chat.plan?.switching || amendmentCount.over) {
-            return;
-        }
+        const action = followUpAction({ draft: follow, plan: chat.plan, editTarget });
 
-        // While a plan awaits review, the input is the "Propose changes"
-        // channel, and the text travels as an amendment, not a new turn. A
-        // read-only card awaits nothing, so the text asks again.
-        if (chat.plan?.live) {
-            chat.respondPlan('amend', follow.trim());
-        } else if (editTarget) {
-            chat.send(follow, {
-                componentId: editTarget.id,
-                intent: 'follow_up',
-                title: editTarget.title,
-            });
-            onClearEditTarget();
-        } else {
-            chat.send(follow);
+        switch (action.kind) {
+            case 'hold':
+                return;
+            case 'amend':
+                chat.respondPlan('amend', action.text);
+                break;
+            case 'card':
+                chat.send(action.text, action.options);
+                onClearEditTarget();
+                break;
+            case 'send':
+                chat.send(action.text);
+                break;
         }
 
         setFollow('');
@@ -245,9 +248,9 @@ const ChatPanel = ({
                                     onSwitch={wall ? undefined : chat.switchChoice}
                                 />
                             )}
-                            {wall ? (
+                            {mode === 'wall' ? (
                                 wall
-                            ) : !chat.plan && chat.clarify ? (
+                            ) : mode === 'clarify' && chat.clarify ? (
                                 <ClarifyPicker
                                     clarify={chat.clarify}
                                     onAnswer={chat.answerClarify}
@@ -277,20 +280,8 @@ const ChatPanel = ({
                                         value={follow}
                                         onChange={setFollow}
                                         onSubmit={sendFollow}
-                                        placeholder={
-                                            chat.plan?.live
-                                                ? 'Propose changes or ask a follow up...'
-                                                : editTarget
-                                                  ? 'Ask about this card...'
-                                                  : 'Ask a follow up...'
-                                        }
-                                        label={
-                                            chat.plan?.live
-                                                ? 'Propose changes'
-                                                : editTarget
-                                                  ? 'Ask about this card'
-                                                  : 'Ask a follow up'
-                                        }
+                                        placeholder={field.placeholder}
+                                        label={field.label}
                                         submitLabel="Send"
                                         invalid={amendmentCount.over}
                                         describedBy={countId}

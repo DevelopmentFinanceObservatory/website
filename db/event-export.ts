@@ -2,6 +2,7 @@ import { createHash, createHmac } from 'node:crypto';
 import fs from 'node:fs/promises';
 
 import type { PromptIntent } from '../src/lib/studio/promptAllowance.ts';
+import type { StudioVariant } from '../src/lib/studio/variant.ts';
 import type { PromptSource } from '../src/lib/studio/wire.ts';
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
@@ -155,6 +156,8 @@ const DATA_VIEW_VIA = every<DataViewVia>()(['share']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
 const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
+// The Studio layout the event came from; absent on rows recorded before the prop.
+const STUDIO_VARIANTS = every<StudioVariant>()(['classic', 'prompt']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -230,6 +233,7 @@ export const PROP_RULES = {
         length: 'count',
         guest: 'boolean',
         source: PROMPT_SOURCES,
+        variant: STUDIO_VARIANTS,
     },
     // `unit` is text built from labels, and `years` an object of two years.
     'studio.card': {
@@ -238,6 +242,7 @@ export const PROP_RULES = {
         turn: 'count',
         source: 'token',
         guest: 'boolean',
+        variant: STUDIO_VARIANTS,
     },
     'studio.download': {
         ...EVERY_EVENT,
@@ -247,6 +252,7 @@ export const PROP_RULES = {
         cardId: 'token',
         shared: 'boolean',
         source: DOWNLOAD_SOURCES,
+        variant: STUDIO_VARIANTS,
     },
     'studio.session_end': {
         ...EVERY_EVENT,
@@ -254,9 +260,10 @@ export const PROP_RULES = {
         cards: 'count',
         pins: 'count',
         guest: 'boolean',
+        variant: STUDIO_VARIANTS,
     },
     'auth.signin': { ...EVERY_EVENT, provider: 'token' },
-    'guest.wall_hit': { ...EVERY_EVENT, prompts: 'count' },
+    'guest.wall_hit': { ...EVERY_EVENT, prompts: 'count', variant: STUDIO_VARIANTS },
     // Literals in src/app/api/feedback/route.ts, without a named type.
     'feedback.submit': { ...EVERY_EVENT, kind: ['chat', 'widget'] },
     'embed.view': {

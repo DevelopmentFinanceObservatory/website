@@ -113,3 +113,16 @@ test('other pages get neither the /data noindex nor the Graph Explorer path', ()
     assert.equal(other.headers.get('x-robots-tag'), null);
     assert.equal(other.headers.get('x-middleware-request-x-dfo-request-path'), null);
 });
+
+test('a flagged Studio page answers 307 without the flag and sets the variant cookie', () => {
+    const response = proxy(
+        request('/studio/abc?studio=prompt&q=x', { 'sec-fetch-dest': 'document' }),
+    );
+    const cookie = setCookie(response);
+
+    assert.equal(response.status, 307);
+    assert.equal(response.headers.get('location'), 'https://developmentfinance.org/studio/abc?q=x');
+    assert.match(cookie, /studio_variant=prompt; Path=\/studio/);
+    assert.doesNotMatch(cookie, /studio_variant=[^;]*;[^,]*(Max-Age|Expires)/i);
+    assert.match(cookie, /dfo_v=/);
+});
