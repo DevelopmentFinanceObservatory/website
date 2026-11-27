@@ -36,8 +36,11 @@ The Studio has two layouts: `classic`, with the chat column, and `prompt`,
 with the prompt box over the canvas. `/studio?studio=prompt` or
 `?studio=classic` sets the `studio_variant` session cookie that picks one,
 and a page with no cookie draws `classic`. Shares and gallery items always
-draw `classic`. Setting `STUDIO_PROMPT_ENABLED=false` draws `classic` on
-every page whatever the cookie says.
+draw `classic`. The cookie picks `prompt` only while `STUDIO_PROMPT_ENABLED`
+is `true`, `1`, `on` or `yes`. Unset or any other value draws `classic` on
+every page. Every `prompt` request carries `hold_removals`, which an older
+harness refuses, so turn the switch on after the harness that accepts
+`hold_removals` is deployed, and off before that harness is rolled back.
 
 A live Studio share draws each card from dfo-apis' public slot card route
 (`GET /api/presentation/shares/{id}/slots/{n}`), which checks for newer data

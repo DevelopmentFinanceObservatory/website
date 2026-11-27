@@ -92,6 +92,7 @@ const DownloadMenu = ({
 // The menu's close-focus event comes after its content has unmounted.
 const CardMenu = ({
     onOpenUnit,
+    unitHeld,
     pinned,
     view,
     viewChoices,
@@ -163,6 +164,7 @@ const CardMenu = ({
                         {onOpenUnit && (
                             <MenuRow
                                 icon="unit"
+                                held={unitHeld}
                                 onSelect={() => {
                                     unitAfterClose.current = true;
                                 }}
@@ -213,22 +215,42 @@ const CardMenu = ({
     );
 };
 
-// One menu row: icon + label (red for the destructive one).
+// One menu row: icon + label (red for the destructive one). A row `held`
+// says why under its label and does nothing when chosen. It stays focusable,
+// so the reason is read with it.
 const MenuRow = ({
     icon,
     onSelect,
     danger,
+    held,
     children,
 }: {
     icon: IconProps['name'];
     onSelect: () => void;
     danger?: boolean;
+    held?: string | null;
     children: React.ReactNode;
 }) => (
-    <DropdownMenu.Item asChild onSelect={onSelect}>
+    <DropdownMenu.Item
+        asChild
+        onSelect={(event) => {
+            if (held) {
+                event.preventDefault();
+
+                return;
+            }
+
+            onSelect();
+        }}
+    >
         <button
             type="button"
-            className={classNames(styles.cardMenuRow, danger && styles.cardMenuDanger)}
+            className={classNames(
+                styles.cardMenuRow,
+                danger && styles.cardMenuDanger,
+                held && styles.cardMenuHeld,
+            )}
+            aria-disabled={held ? true : undefined}
         >
             <Icon
                 name={icon}
@@ -237,7 +259,10 @@ const MenuRow = ({
                     icon === 'info' && styles.cardMenuIconTight,
                 )}
             />
-            <span className={styles.cardMenuLabel}>{children}</span>
+            <span className={styles.cardMenuLabel}>
+                {children}
+                {held && <span className={styles.cardMenuReason}>{held}</span>}
+            </span>
         </button>
     </DropdownMenu.Item>
 );
@@ -344,8 +369,11 @@ const UnitPanel = ({
 const CardActions = (extras: CardExtras) => {
     const [unitOpen, setUnitOpen] = useState(false);
     const actionsRef = useRef<HTMLDivElement>(null);
-    const { unitOffer, onChangeUnit } = extras;
+    const { unitOffer, onChangeUnit, unitHeld } = extras;
     const unit = unitOffer && onChangeUnit ? { offer: unitOffer, send: onChangeUnit } : null;
+    // A panel open when changes become held closes, since its Send would
+    // send nothing.
+    if (unitOpen && unitHeld) setUnitOpen(false);
     const closeUnit = useCallback(() => setUnitOpen(false), []);
 
     if (extras.readOnly) {

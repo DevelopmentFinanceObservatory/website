@@ -295,8 +295,8 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         respondPlan: noop,
         switchChoice: noop,
         applyChoice: noop,
-        applyUnit: noop,
-        applyChange: noop,
+        applyUnit: () => false,
+        applyChange: () => false,
         placeOptions: async () => ({
             kind: 'failed',
             status: null,

@@ -1066,7 +1066,7 @@ test('unit change: the offer goes when the redrawn frame reads another spec than
     assert.ok(asTable(reviseWidget(drawn, revisedFrame(2, table('spec_b')))).unitChange);
 });
 
-test('unit change: a created card keeps its offer while revisions read its frame', () => {
+test('card offers: a revision that names card_changes sets that offer, null removes it, and one that names none keeps the created offers while they read its frame', () => {
     const offer = {
         currencies: [{ code: 'USD', name: 'US dollars', prices: ['current' as const] }],
         presets: ['USD'],
@@ -1085,20 +1085,44 @@ test('unit change: a created card keeps its offer while revisions read its frame
         widgetFromComponent({
             ...frame('table', table('spec_a')),
             unit_change: { spec_id: 'spec_a', offer },
+            card_changes: { spec_id: 'spec_a' },
         }),
     );
 
     assert.deepEqual(drawn.unitChange, { spec_id: 'spec_a', offer });
+    assert.deepEqual(drawn.cardChanges, { spec_id: 'spec_a' });
     assert.equal(
         asTable(widgetFromComponent(frame('table', table('spec_a')))).unitChange,
         undefined,
     );
-    assert.deepEqual(
-        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_a')))).unitChange,
-        drawn.unitChange,
-    );
-    assert.equal(
-        asTable(reviseWidget(drawn, revisedFrame(2, table('spec_b')))).unitChange,
-        undefined,
-    );
+
+    for (const [name, reads, members, unitChange, cardChanges] of [
+        ['absent, same spec', 'spec_a', {}, drawn.unitChange, drawn.cardChanges],
+        ['absent, another spec', 'spec_b', {}, undefined, undefined],
+        [
+            'present',
+            'spec_b',
+            { card_changes: { spec_id: 'spec_b' } },
+            undefined,
+            { spec_id: 'spec_b' },
+        ],
+        // `null` removes the years and places offer and leaves the unit offer.
+        ['null', 'spec_a', { card_changes: null }, drawn.unitChange, undefined],
+        // A card_changes without a spec_id, as read off the wire, narrows to
+        // none, so it removes the offer.
+        [
+            'malformed',
+            'spec_a',
+            JSON.parse('{"card_changes": {"window": {}}}'),
+            drawn.unitChange,
+            undefined,
+        ],
+    ] as const) {
+        const revised = asTable(
+            reviseWidget(drawn, { ...revisedFrame(2, table(reads)), ...members }),
+        );
+
+        assert.deepEqual(revised.unitChange, unitChange, name);
+        assert.deepEqual(revised.cardChanges, cardChanges, name);
+    }
 });

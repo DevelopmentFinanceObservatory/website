@@ -218,8 +218,9 @@ export type StudioModel = {
         titleOf: (id: string) => string;
         flyTo: (id: string) => void;
         /** Move card `id` to `unit`. Each change returns whether a turn went
-         *  (sent or queued): false when the card's offer does not take it or
-         *  the guest gate stopped it. */
+         *  (sent or queued): false when the card's offer does not take it,
+         *  a plan or a question holds changes (`chat.changesHeld`), or the
+         *  guest gate stopped it. */
         changeUnit: (id: string, unit: UnitChoice) => boolean;
         /** A card page's change of years: redraw card `id` over `from` to `to`. */
         changeYears: (id: string, from: number, to: number) => boolean;
@@ -335,9 +336,9 @@ export const useStudio = ({
         // A new question a turn handed back joins the queue past the gate
         // below, so the queue sends it through the gate.
         admitHandedBack: (text, queued, run) => prompt(undefined, text.trim().length, run, queued),
-        // The Prompt layout's card pages hold card changes while a plan or
-        // a question waits.
-        pausesDropChanges: variant === 'prompt',
+        // The Prompt layout holds every card change, from its card pages
+        // and from the canvas card menu, while a plan or a question waits.
+        pausesHoldChanges: variant === 'prompt',
         // The Prompt layout's canvas moves cards in one step with the cards
         // on their way, so it asks the harness to hold removals.
         holdRemovals: variant === 'prompt',
@@ -416,9 +417,13 @@ export const useStudio = ({
         );
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
+    // A card change the chat holds (changesHeld) sends nothing, so it
+    // spends no prompt of the reader's allowance.
     const applyUnit = (change: CardUnitChange): boolean =>
+        conversation.changesHeld === null &&
         prompt('apply_unit', undefined, () => conversation.applyUnit(change));
     const applyChange = (change: CardChangeRequest): boolean =>
+        conversation.changesHeld === null &&
         prompt(change.row === 'years' ? 'apply_years' : 'apply_places', undefined, () =>
             conversation.applyChange(change),
         );

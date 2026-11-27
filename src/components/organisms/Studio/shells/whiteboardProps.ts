@@ -15,6 +15,7 @@ export const whiteboardProps = ({
     view,
     canvas,
     panels,
+    chat,
 }: StudioModel): SharedWhiteboardProps => ({
     widgets: canvas.widgets,
     filter: view.cardsTab,
@@ -23,6 +24,7 @@ export const whiteboardProps = ({
     onRemove: canvas.remove,
     onAskFollowUp: canvas.askFollowUp,
     onChangeUnit: readOnly ? undefined : canvas.changeUnit,
+    changesHeld: chat.changesHeld,
     onEditText: modals.textCard.show,
     onEditTitle: modals.cardTitle.show,
     titles: doc.titles,

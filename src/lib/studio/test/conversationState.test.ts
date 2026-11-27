@@ -35,7 +35,7 @@ import {
     withTurnApprovals,
     type AttachStep,
 } from '../conversationState.ts';
-import { placeCard, takenOver } from '../cardReplace.ts';
+import { placeCard, takenOver, type CardHistory } from '../cardReplace.ts';
 import { planLinks } from '../planLink.ts';
 import { approvedFromFrame, planFromFrame, withApprovedPlan } from '../plan.ts';
 import {
@@ -1612,7 +1612,7 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
     });
     // The page holds cmp_a (its slot), and drew cmp_c from a poll while
     // another tab's turn ran: two Change unit swaps, cmp_a to cmp_b to cmp_c.
-    const page: (Widget & { turn: number; madeIn?: number })[] = [
+    const page: (Widget & { turn: number; madeIn?: number } & CardHistory)[] = [
         chart('cmp_a'),
         chart('cmp_other'),
         { ...chart('cmp_c'), turn: 3 },
@@ -1651,7 +1651,7 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
         widgets.map((widget) => widget.id),
         ['cmp_c', 'cmp_other'],
     );
-    assert.deepEqual(replaced, [['cmp_a', 'cmp_c']]);
+    assert.deepEqual(replaced, [['cmp_a', 'cmp_b', 'cmp_c']]);
     // The card keeps the question that made cmp_a, so the panel groups it there.
     assert.deepEqual(
         widgets.map((widget) => [widget.id, widget.turn, widget.madeIn]),
@@ -1676,6 +1676,33 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
             ['cmp_other', 1],
         ],
     );
+
+    // cmp_b was drawn in page turn 2 and cmp_c in turn 3. Each replacement
+    // goes through the live rules in order, so the card's turn and history
+    // follow whichever drew cmp_b.
+    const turnOf = new Map([
+        ['cmp_b', 2],
+        ['cmp_c', 3],
+    ]);
+    const cases: [string, Set<number>, [number, number[] | undefined, number | undefined]][] = [
+        ['both card changes', new Set([2, 3]), [1, [2, 3], 1]],
+        ['a follow-up question drew cmp_b', new Set([3]), [2, [3], 1]],
+    ];
+
+    for (const [name, changes, expected] of cases) {
+        const [card] = reconcileStoredCards(
+            page,
+            stored,
+            ['cmp_c'],
+            onCanvas,
+            changes,
+            turnOf,
+        ).widgets;
+
+        assert.equal(card?.id, 'cmp_c', name);
+        assert.deepEqual([card?.turn, card?.changedIn, card?.madeIn], expected, name);
+        assert.deepEqual(card?.replaced, ['cmp_b', 'cmp_a'], name);
+    }
 });
 
 // A plan.approved frame of revision `revision`, titled after it.

@@ -78,6 +78,7 @@ export const startSite = async (database?: {
             BETTER_AUTH_URL: url,
             API_KEYS_ENABLED: 'false',
             VISITOR_LIMITS_ENABLED: 'false',
+            STUDIO_PROMPT_ENABLED: 'true',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
     });

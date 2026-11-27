@@ -14,17 +14,11 @@ test('only `prompt` names the prompt variant', () => {
     );
 });
 
-test('STUDIO_PROMPT_ENABLED is on unless set to an off word, and off means classic', () => {
-    assert.deepEqual([undefined, '', 'true', '1', 'false', ' OFF ', '0', 'no'].map(promptEnabled), [
-        true,
-        true,
-        true,
-        true,
-        false,
-        false,
-        false,
-        false,
-    ]);
+test('STUDIO_PROMPT_ENABLED is off unless set to an on word, and off means classic', () => {
+    assert.deepEqual(
+        [undefined, '', 'false', '0', 'other', 'true', ' ON ', '1', 'Yes'].map(promptEnabled),
+        [false, false, false, false, false, true, true, true, true],
+    );
     assert.deepEqual(
         [
             pageVariant('prompt', true),
