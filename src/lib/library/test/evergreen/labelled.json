@@ -1,0 +1,602 @@
+[
+    {
+        "id": "e01",
+        "text": "This chart shows official development assistance (ODA) as a share of gross national income for each DAC member.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n01",
+        "text": "ODA fell by 7.1% in 2024, the largest drop in a decade.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e02",
+        "text": "Debt service is principal repaid plus interest paid on external debt in the year shown.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n02",
+        "text": "Germany is now the second-largest donor, behind the United States.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e03",
+        "text": "Each bar splits debt service by creditor type: bilateral, multilateral and private.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n03",
+        "text": "Debt service payments have risen sharply since 2020 and are expected to keep climbing.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e04",
+        "text": "Donors report climate finance under their own methods, so the amount of private finance counted as mobilised differs between countries.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n04",
+        "text": "The latest data, for 2023, show climate finance at USD 115 billion.",
+        "label": "not_evergreen",
+        "kind": "recency"
+    },
+    {
+        "id": "e05",
+        "text": "Values are in constant US dollars, adjusted to a base year, so changes over time reflect volumes rather than price rises.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n05",
+        "text": "Only five donors currently meet the 0.7% target.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e06",
+        "text": "The UN target for ODA is 0.7% of gross national income.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n06",
+        "text": "Norway gives the most as a share of income.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e07",
+        "text": "The dotted line marks the 0.7% target.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n07",
+        "text": "Total ODA reached USD 223 billion in 2023.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e08",
+        "text": "Select a country to compare it with its income group.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n08",
+        "text": "Sub-Saharan Africa receives about a third of all bilateral ODA.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e09",
+        "text": "Hover over a segment to see its value.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n09",
+        "text": "Low-income countries now spend more on debt service than on health.",
+        "label": "not_evergreen",
+        "kind": "recency"
+    },
+    {
+        "id": "e10",
+        "text": "ODA counts grants in full and loans at their grant equivalent, under the method the DAC adopted in 2018.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n10",
+        "text": "China is the largest bilateral creditor to low-income countries.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e11",
+        "text": "In-donor refugee costs count as ODA when they cover a refugee's first year in the donor country.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n11",
+        "text": "In-donor refugee costs make up 14% of the total.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e12",
+        "text": "The table lists every country that reports to the International Debt Statistics.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n12",
+        "text": "Climate finance has doubled over the past decade.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e13",
+        "text": "Multilateral development banks lend on concessional terms to low-income countries and on market terms to middle-income countries.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n13",
+        "text": "The United Kingdom has cut its aid to 0.5% of gross national income.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e14",
+        "text": "The key number is the sum of all disbursements in the latest year the source reports.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n14",
+        "text": "Ukraine is the largest single recipient.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e15",
+        "text": "Commitments are what a donor promises; disbursements are what it pays out in the year.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n15",
+        "text": "External debt of low- and middle-income countries stands at USD 8.8 trillion.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e16",
+        "text": "A country's income group follows the World Bank's classification for the fiscal year of the data.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n16",
+        "text": "Interest payments are at a record high.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e17",
+        "text": "Figures before 2018 use the cash-flow method, so the line has a break at that year.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n17",
+        "text": "Most donors are below the target.",
+        "label": "not_evergreen",
+        "kind": "other"
+    },
+    {
+        "id": "e18",
+        "text": "Shares are calculated from current prices, so they do not depend on the base year.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n18",
+        "text": "Health is the sector that receives the most ODA.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e19",
+        "text": "Use the filter above the chart to switch between commitments and disbursements.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n19",
+        "text": "The share going to least developed countries has fallen for three years in a row.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e20",
+        "text": "Under the Paris Agreement's new goal, developed countries are to lead in providing at least USD 300 billion a year in climate finance by 2035.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n20",
+        "text": "As of 2024, 34 countries are in or at high risk of debt distress.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e21",
+        "text": "Climate finance here covers mitigation, adaptation and projects that serve both.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n21",
+        "text": "Private creditors hold 40% of these countries' external debt.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e22",
+        "text": "Private finance mobilised is the private money that official interventions bring into a project.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n22",
+        "text": "Ethiopia receives more ODA than any other African country.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e23",
+        "text": "Darker shades mean a larger share of government revenue goes to external debt service.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n23",
+        "text": "The gap between commitments and disbursements has narrowed this year.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e24",
+        "text": "Data come from the OECD Creditor Reporting System, which records each aid project a donor reports.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n24",
+        "text": "Multilateral lending rose 12% last year.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e25",
+        "text": "A country appears in grey when its source reports no value for the year selected.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n25",
+        "text": "Sweden gives 0.9% of its national income.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e26",
+        "text": "The IMF's Special Drawing Rights are a reserve asset, so allocating them adds no debt service.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n26",
+        "text": "This is the highest level of climate finance on record.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e27",
+        "text": "Net flows are disbursements minus repayments, so they can be negative.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n27",
+        "text": "Debt service will peak in 2026.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e28",
+        "text": "Each dot is one country, placed by its income per person and its debt as a share of GDP.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n28",
+        "text": "The figure for 2024 is preliminary and may be revised.",
+        "label": "not_evergreen",
+        "kind": "recency"
+    },
+    {
+        "id": "e29",
+        "text": "Gross national income is the income a country's residents earn, at home and abroad.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n29",
+        "text": "Twelve countries spend more than a fifth of revenue on debt service.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e30",
+        "text": "The chart follows the latest data from the source, so its values change when the source publishes new figures.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n30",
+        "text": "Adaptation finance is still far below what countries need.",
+        "label": "not_evergreen",
+        "kind": "other"
+    },
+    {
+        "id": "e31",
+        "text": "Bilateral ODA goes directly from a donor to a recipient; multilateral ODA passes through an organisation such as the World Bank.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n31",
+        "text": "Aid to Gaza has surged since October 2023.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e32",
+        "text": "Amounts are in billions of US dollars.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n32",
+        "text": "The United States provides about 30% of all DAC ODA.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e33",
+        "text": "The heat map orders recipients by the ODA they receive, with the largest at the top.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n33",
+        "text": "France has moved ahead of Japan in the donor ranking.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e34",
+        "text": "A projection is drawn as a dashed line, and reported years as a solid one.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n34",
+        "text": "Zambia is so far the only country to have finished a restructuring under the Common Framework.",
+        "label": "not_evergreen",
+        "kind": "recency"
+    },
+    {
+        "id": "e35",
+        "text": "The 0.15-0.20% target is the share of gross national income donors agreed to give to least developed countries.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n35",
+        "text": "Spending on education has stagnated since 2019.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e36",
+        "text": "A debt sustainability analysis judges whether a country can meet its debt payments without exceptional support.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n36",
+        "text": "The average interest rate on new loans is 5.2%.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e37",
+        "text": "Sort the table by any column to compare countries.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n37",
+        "text": "Kenya pays more to bondholders than to any other creditor.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e38",
+        "text": "Concessional loans carry interest rates below market rates and long grace periods.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n38",
+        "text": "Grants make up the bulk of ODA to fragile states this year.",
+        "label": "not_evergreen",
+        "kind": "recency"
+    },
+    {
+        "id": "e39",
+        "text": "The World Bank's International Development Association gives grants and low-interest loans to the poorest countries.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n39",
+        "text": "The total is down from USD 240 billion a year earlier.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e40",
+        "text": "This card counts a project once, under the sector its donor assigned it.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n40",
+        "text": "Mobilised private finance remains small, at under USD 20 billion.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e41",
+        "text": "Percentages may not add to 100 because of rounding.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n41",
+        "text": "Most of the increase comes from support to Ukraine.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e42",
+        "text": "Emergency response covers relief, food aid and short-term reconstruction after a crisis.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n42",
+        "text": "Net flows to Africa turned negative in 2023.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e43",
+        "text": "A country is in debt distress when it cannot meet its payments without restructuring.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n43",
+        "text": "Pakistan has the highest debt service of any lower-middle-income country.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e44",
+        "text": "Each line shows one donor's ODA as a share of its gross national income over time.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n44",
+        "text": "The figures show donors falling further behind their pledges.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e45",
+        "text": "Imputed multilateral shares assign core contributions to the countries those organisations spend in.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n45",
+        "text": "Asia's share of ODA is smaller than it was in 2010.",
+        "label": "not_evergreen",
+        "kind": "trend"
+    },
+    {
+        "id": "e46",
+        "text": "Country names follow the source's own spelling.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n46",
+        "text": "Four of the top five recipients are in conflict.",
+        "label": "not_evergreen",
+        "kind": "ranking"
+    },
+    {
+        "id": "e47",
+        "text": "The Common Framework is the G20's process for restructuring the debt of eligible low-income countries.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n47",
+        "text": "The latest year shown is 2023.",
+        "label": "not_evergreen",
+        "kind": "recency"
+    },
+    {
+        "id": "e48",
+        "text": "Read the bars from left to right: each segment is one sector's share of the total.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n48",
+        "text": "New commitments by the World Bank hit USD 128 billion.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e49",
+        "text": "The source revises earlier years when donors correct their reports.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n49",
+        "text": "Humanitarian aid accounts for one in every seven dollars of ODA.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    },
+    {
+        "id": "e50",
+        "text": "Switch on \"per person\" to divide each value by the country's population.",
+        "label": "evergreen",
+        "kind": null
+    },
+    {
+        "id": "n50",
+        "text": "Ghana's debt-to-GDP ratio is above 80%.",
+        "label": "not_evergreen",
+        "kind": "figure"
+    }
+]

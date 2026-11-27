@@ -20,6 +20,8 @@ import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
 import { libraryEnabled } from './enabled';
+import { evergreenRefusal } from './evergreen';
+import { changedText } from './evergreenRule';
 import { type LibraryView, libraryViewOf } from './switch';
 import {
     publishedFacts,
@@ -31,6 +33,7 @@ import {
 import {
     addTopic,
     artifactShare,
+    artifactText,
     isArtifactWithdrawn,
     insertArtifact,
     listTopics,
@@ -226,6 +229,11 @@ const WITHDRAWAL_RETRY = {
  * included. Without one, the slug is made from the title, with a number
  * after it when that is taken.
  *
+ * Before the share is made, the text is held to the evergreen rule
+ * (./evergreen.ts): 400 `not_evergreen` names each sentence that states
+ * what the data shows now, and 503 `evergreen_check_unavailable` says the
+ * check could not run.
+ *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
  * the Library keeps in the artifact's row. The artifact's kind, mode,
@@ -294,6 +302,12 @@ export const publish = async (request: Request): Promise<Response> => {
             '/share/cardId',
             NO_STORE,
         );
+    }
+
+    const notEvergreen = await evergreenRefusal(text);
+
+    if (notEvergreen) {
+        return notEvergreen;
     }
 
     const share = await buildStudioShare(request.headers, shareRequest);
@@ -378,7 +392,11 @@ export const publish = async (request: Request): Promise<Response> => {
     );
 };
 
-/** PATCH /api/library/artifacts/<id> (ArtifactText) → { slug } */
+/**
+ * PATCH /api/library/artifacts/<id> (ArtifactText) → { slug }. The text
+ * fields the edit changes are held to the evergreen rule first, with the
+ * publish's 400 `not_evergreen` and 503 `evergreen_check_unavailable`.
+ */
 export const edit = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
 
@@ -390,6 +408,18 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 
     if (!read.ok) {
         return requestInvalidProblem(read.detail, read.pointer || undefined, NO_STORE);
+    }
+
+    const stored = await artifactText(id);
+
+    if (!stored) {
+        return notFound();
+    }
+
+    const notEvergreen = await evergreenRefusal(changedText(stored, read.value));
+
+    if (notEvergreen) {
+        return notEvergreen;
     }
 
     const changed = await updateArtifact(id, read.value);

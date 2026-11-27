@@ -1,0 +1,1785 @@
+{
+    "model": "jev-1.14.0",
+    "groups": [
+        {
+            "ids": [
+                "e01",
+                "n01",
+                "e02",
+                "n02",
+                "e03",
+                "n03",
+                "e04",
+                "n04",
+                "e05",
+                "n05"
+            ],
+            "content": "This chart shows official development assistance (ODA) as a share of gross national income for each DAC member.\nODA fell by 7.1% in 2024, the largest drop in a decade.\nDebt service is principal repaid plus interest paid on external debt in the year shown.\nGermany is now the second-largest donor, behind the United States.\nEach bar splits debt service by creditor type: bilateral, multilateral and private.\nDebt service payments have risen sharply since 2020 and are expected to keep climbing.\nDonors report climate finance under their own methods, so the amount of private finance counted as mobilised differs between countries.\nThe latest data, for 2023, show climate finance at USD 115 billion.\nValues are in constant US dollars, adjusted to a base year, so changes over time reflect volumes rather than price rises.\nOnly five donors currently meet the 0.7% target.",
+            "digest": "fa6cced989280a9f703e08ca228dc29943799b3e35630bf801e1ceb86264f8a1",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.13
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.87,
+                    "probabilities": {
+                        "figure": 0.06,
+                        "ranking": 0.03,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0.9
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.81,
+                    "probabilities": {
+                        "figure": 0.06,
+                        "ranking": 0.09,
+                        "trend": 0.85,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.04
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.99,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.08
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.97
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.08
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.86,
+                    "probabilities": {
+                        "figure": 0.89,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0.11,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.07
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.8,
+                    "probabilities": {
+                        "figure": 0.11,
+                        "ranking": 0.01,
+                        "trend": 0.03,
+                        "recency": 0.01,
+                        "other": 0.84
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.94,
+                    "probabilities": {
+                        "figure": 0.04,
+                        "ranking": 0.95,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e06",
+                "n06",
+                "e07",
+                "n07",
+                "e08",
+                "n08",
+                "e09",
+                "n09",
+                "e10",
+                "n10"
+            ],
+            "content": "The UN target for ODA is 0.7% of gross national income.\nNorway gives the most as a share of income.\nThe dotted line marks the 0.7% target.\nTotal ODA reached USD 223 billion in 2023.\nSelect a country to compare it with its income group.\nSub-Saharan Africa receives about a third of all bilateral ODA.\nHover over a segment to see its value.\nLow-income countries now spend more on debt service than on health.\nODA counts grants in full and loans at their grant equivalent, under the method the DAC adopted in 2018.\nChina is the largest bilateral creditor to low-income countries.",
+            "digest": "70071955af262063671431b2b6a16ae91163e42804710094a463109e1fa490d1",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.01
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 1,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.12
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.71,
+                    "probabilities": {
+                        "figure": 0.77,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.23
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0.98,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0.02,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 1,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.3,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0.44,
+                        "trend": 0.18,
+                        "recency": 0.32,
+                        "other": 0.03
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.13
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.82,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0.1,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0.86
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 1,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e11",
+                "n11",
+                "e12",
+                "n12",
+                "e13",
+                "n13",
+                "e14",
+                "n14",
+                "e15",
+                "n15"
+            ],
+            "content": "In-donor refugee costs count as ODA when they cover a refugee's first year in the donor country.\nIn-donor refugee costs make up 14% of the total.\nThe table lists every country that reports to the International Debt Statistics.\nClimate finance has doubled over the past decade.\nMultilateral development banks lend on concessional terms to low-income countries and on market terms to middle-income countries.\nThe United Kingdom has cut its aid to 0.5% of gross national income.\nThe key number is the sum of all disbursements in the latest year the source reports.\nUkraine is the largest single recipient.\nCommitments are what a donor promises; disbursements are what it pays out in the year.\nExternal debt of low- and middle-income countries stands at USD 8.8 trillion.",
+            "digest": "7c31f038ca91c4e71050b110e56896bfa6ea8064baa34ef46a82b26066ab189c",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.07
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.98
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 1,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.57
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.54,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0.34,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0.63
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.18
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.5,
+                    "probabilities": {
+                        "figure": 0.4,
+                        "ranking": 0,
+                        "trend": 0.6,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.37
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "recency",
+                    "confidence": 0.51,
+                    "probabilities": {
+                        "figure": 0.13,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0.61,
+                        "other": 0.25
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 1,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.92,
+                    "probabilities": {
+                        "figure": 0.05,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.94
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e16",
+                "n16",
+                "e17",
+                "n17",
+                "e18",
+                "n18",
+                "e19",
+                "n19",
+                "e20",
+                "n20"
+            ],
+            "content": "A country's income group follows the World Bank's classification for the fiscal year of the data.\nInterest payments are at a record high.\nFigures before 2018 use the cash-flow method, so the line has a break at that year.\nMost donors are below the target.\nShares are calculated from current prices, so they do not depend on the base year.\nHealth is the sector that receives the most ODA.\nUse the filter above the chart to switch between commitments and disbursements.\nThe share going to least developed countries has fallen for three years in a row.\nUnder the Paris Agreement's new goal, developed countries are to lead in providing at least USD 300 billion a year in climate finance by 2035.\nAs of 2024, 34 countries are in or at high risk of debt distress.",
+            "digest": "396194e6a15fc3cd5d15c65f15aea44bdb1efb3842e5c301d684afb4aa6b337b",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.11
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0.03,
+                        "other": 0.96
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.02,
+                        "trend": 0.98,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.13
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.85,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0.11,
+                        "recency": 0.01,
+                        "other": 0.88
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.56,
+                    "probabilities": {
+                        "figure": 0.07,
+                        "ranking": 0.65,
+                        "trend": 0.05,
+                        "recency": 0,
+                        "other": 0.23
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0.04,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.96
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 1,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.19
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.68,
+                    "probabilities": {
+                        "figure": 0.74,
+                        "ranking": 0,
+                        "trend": 0.25,
+                        "recency": 0,
+                        "other": 0.01
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.71,
+                    "probabilities": {
+                        "figure": 0.15,
+                        "ranking": 0.77,
+                        "trend": 0,
+                        "recency": 0.08,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e21",
+                "n21",
+                "e22",
+                "n22",
+                "e23",
+                "n23",
+                "e24",
+                "n24",
+                "e25",
+                "n25"
+            ],
+            "content": "Climate finance here covers mitigation, adaptation and projects that serve both.\nPrivate creditors hold 40% of these countries' external debt.\nPrivate finance mobilised is the private money that official interventions bring into a project.\nEthiopia receives more ODA than any other African country.\nDarker shades mean a larger share of government revenue goes to external debt service.\nThe gap between commitments and disbursements has narrowed this year.\nData come from the OECD Creditor Reporting System, which records each aid project a donor reports.\nMultilateral lending rose 12% last year.\nA country appears in grey when its source reports no value for the year selected.\nSweden gives 0.9% of its national income.",
+            "digest": "de3091d77af574c899a79708b23247fd6c42fcc58e424aff8301d1a2230db56d",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 1,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 1,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.11
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.49,
+                    "probabilities": {
+                        "figure": 0.29,
+                        "ranking": 0.12,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.59
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.08
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0,
+                        "trend": 0.97,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.12
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.9,
+                    "probabilities": {
+                        "figure": 0.06,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0.92
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 1,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e26",
+                "n26",
+                "e27",
+                "n27",
+                "e28",
+                "n28",
+                "e29",
+                "n29",
+                "e30",
+                "n30"
+            ],
+            "content": "The IMF's Special Drawing Rights are a reserve asset, so allocating them adds no debt service.\nThis is the highest level of climate finance on record.\nNet flows are disbursements minus repayments, so they can be negative.\nDebt service will peak in 2026.\nEach dot is one country, placed by its income per person and its debt as a share of GDP.\nThe figure for 2024 is preliminary and may be revised.\nGross national income is the income a country's residents earn, at home and abroad.\nTwelve countries spend more than a fifth of revenue on debt service.\nThe chart follows the latest data from the source, so its values change when the source publishes new figures.\nAdaptation finance is still far below what countries need.",
+            "digest": "590543ea4122cc9b790f4d866208f57c9b0100ca0db40a0b3f1b62def3b3a8cd",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.45,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.56,
+                        "trend": 0.44,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.04
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0,
+                        "trend": 0.01,
+                        "recency": 0,
+                        "other": 0.97
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.02,
+                        "trend": 0.98,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.09
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.97
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.76
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "recency",
+                    "confidence": 0.56,
+                    "probabilities": {
+                        "figure": 0.06,
+                        "ranking": 0,
+                        "trend": 0.04,
+                        "recency": 0.65,
+                        "other": 0.25
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.03
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0.97,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.12
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "recency",
+                    "confidence": 0.31,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0.23,
+                        "recency": 0.45,
+                        "other": 0.32
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.86
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.66,
+                    "probabilities": {
+                        "figure": 0.15,
+                        "ranking": 0.02,
+                        "trend": 0.07,
+                        "recency": 0.03,
+                        "other": 0.73
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e31",
+                "n31",
+                "e32",
+                "n32",
+                "e33",
+                "n33",
+                "e34",
+                "n34",
+                "e35",
+                "n35"
+            ],
+            "content": "Bilateral ODA goes directly from a donor to a recipient; multilateral ODA passes through an organisation such as the World Bank.\nAid to Gaza has surged since October 2023.\nAmounts are in billions of US dollars.\nThe United States provides about 30% of all DAC ODA.\nThe heat map orders recipients by the ODA they receive, with the largest at the top.\nFrance has moved ahead of Japan in the donor ranking.\nA projection is drawn as a dashed line, and reported years as a solid one.\nZambia is so far the only country to have finished a restructuring under the Common Framework.\nThe 0.15-0.20% target is the share of gross national income donors agreed to give to least developed countries.\nSpending on education has stagnated since 2019.",
+            "digest": "184fa08fd90bb19103b58ac9ca7c774e2ed61bba88f4970275919d646f2b4736",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.04
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.94
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.49,
+                    "probabilities": {
+                        "figure": 0.41,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.59
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.26
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.89,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.91,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.09
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.57,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.66,
+                        "trend": 0.34,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0.03,
+                        "recency": 0,
+                        "other": 0.96
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.96,
+                        "trend": 0,
+                        "recency": 0.03,
+                        "other": 0.01
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.14
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0.98,
+                        "ranking": 0,
+                        "trend": 0.01,
+                        "recency": 0,
+                        "other": 0.01
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e36",
+                "n36",
+                "e37",
+                "n37",
+                "e38",
+                "n38",
+                "e39",
+                "n39",
+                "e40",
+                "n40"
+            ],
+            "content": "A debt sustainability analysis judges whether a country can meet its debt payments without exceptional support.\nThe average interest rate on new loans is 5.2%.\nSort the table by any column to compare countries.\nKenya pays more to bondholders than to any other creditor.\nConcessional loans carry interest rates below market rates and long grace periods.\nGrants make up the bulk of ODA to fragile states this year.\nThe World Bank's International Development Association gives grants and low-interest loans to the poorest countries.\nThe total is down from USD 240 billion a year earlier.\nThis card counts a project once, under the sector its donor assigned it.\nMobilised private finance remains small, at under USD 20 billion.",
+            "digest": "9f63795dd16575e4992dd5c1903e6d10eafe6863232471ce180614a74487d0cc",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 1,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.07
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.99,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.01
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.08
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0.04,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.96
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.77,
+                    "probabilities": {
+                        "figure": 0.11,
+                        "ranking": 0.82,
+                        "trend": 0,
+                        "recency": 0.07,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.13
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0.02,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.96
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0,
+                        "trend": 0.98,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.09
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.86,
+                    "probabilities": {
+                        "figure": 0.04,
+                        "ranking": 0.07,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.89
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.97
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e41",
+                "n41",
+                "e42",
+                "n42",
+                "e43",
+                "n43",
+                "e44",
+                "n44",
+                "e45",
+                "n45"
+            ],
+            "content": "Percentages may not add to 100 because of rounding.\nMost of the increase comes from support to Ukraine.\nEmergency response covers relief, food aid and short-term reconstruction after a crisis.\nNet flows to Africa turned negative in 2023.\nA country is in debt distress when it cannot meet its payments without restructuring.\nPakistan has the highest debt service of any lower-middle-income country.\nEach line shows one donor's ODA as a share of its gross national income over time.\nThe figures show donors falling further behind their pledges.\nImputed multilateral shares assign core contributions to the countries those organisations spend in.\nAsia's share of ODA is smaller than it was in 2010.",
+            "digest": "67f4f43dcca96ca2cc4b8c77d7f42f226dea56657010ba71e8259f0de32a2066",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.15
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.97
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.77,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0.82,
+                        "trend": 0.16,
+                        "recency": 0,
+                        "other": 0.01
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.04
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.62,
+                    "probabilities": {
+                        "figure": 0.16,
+                        "ranking": 0,
+                        "trend": 0.7,
+                        "recency": 0.13,
+                        "other": 0.01
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.05
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0.01,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.99
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 1,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.07
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.37,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0,
+                        "trend": 0.48,
+                        "recency": 0,
+                        "other": 0.5
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.95
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 1,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.98
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.01,
+                        "ranking": 0,
+                        "trend": 0.99,
+                        "recency": 0,
+                        "other": 0
+                    }
+                }
+            }
+        },
+        {
+            "ids": [
+                "e46",
+                "n46",
+                "e47",
+                "n47",
+                "e48",
+                "n48",
+                "e49",
+                "n49",
+                "e50",
+                "n50"
+            ],
+            "content": "Country names follow the source's own spelling.\nFour of the top five recipients are in conflict.\nThe Common Framework is the G20's process for restructuring the debt of eligible low-income countries.\nThe latest year shown is 2023.\nRead the bars from left to right: each segment is one sector's share of the total.\nNew commitments by the World Bank hit USD 128 billion.\nThe source revises earlier years when donors correct their reports.\nHumanitarian aid accounts for one in every seven dollars of ODA.\nSwitch on \"per person\" to divide each value by the country's population.\nGhana's debt-to-GDP ratio is above 80%.",
+            "digest": "d27cc71c1b80f5520321a9f159f2933859891f1d39536fea736f93a710399c44",
+            "answers": {
+                "volatile_0": {
+                    "type": "noul",
+                    "noul": 0.07
+                },
+                "kind_0": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_1": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_1": {
+                    "type": "choice",
+                    "choice": "ranking",
+                    "confidence": 0.95,
+                    "probabilities": {
+                        "figure": 0.04,
+                        "ranking": 0.96,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_2": {
+                    "type": "noul",
+                    "noul": 0.07
+                },
+                "kind_2": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 1,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 1
+                    }
+                },
+                "volatile_3": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_3": {
+                    "type": "choice",
+                    "choice": "recency",
+                    "confidence": 0.86,
+                    "probabilities": {
+                        "figure": 0.11,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0.89,
+                        "other": 0
+                    }
+                },
+                "volatile_4": {
+                    "type": "noul",
+                    "noul": 0.04
+                },
+                "kind_4": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.98,
+                    "probabilities": {
+                        "figure": 0.02,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.98
+                    }
+                },
+                "volatile_5": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_5": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0,
+                        "trend": 0.01,
+                        "recency": 0,
+                        "other": 0
+                    }
+                },
+                "volatile_6": {
+                    "type": "noul",
+                    "noul": 0.09
+                },
+                "kind_6": {
+                    "type": "choice",
+                    "choice": "trend",
+                    "confidence": 0.45,
+                    "probabilities": {
+                        "figure": 0,
+                        "ranking": 0,
+                        "trend": 0.56,
+                        "recency": 0,
+                        "other": 0.44
+                    }
+                },
+                "volatile_7": {
+                    "type": "noul",
+                    "noul": 0.92
+                },
+                "kind_7": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.01
+                    }
+                },
+                "volatile_8": {
+                    "type": "noul",
+                    "noul": 0.06
+                },
+                "kind_8": {
+                    "type": "choice",
+                    "choice": "other",
+                    "confidence": 0.96,
+                    "probabilities": {
+                        "figure": 0.03,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0,
+                        "other": 0.97
+                    }
+                },
+                "volatile_9": {
+                    "type": "noul",
+                    "noul": 0.96
+                },
+                "kind_9": {
+                    "type": "choice",
+                    "choice": "figure",
+                    "confidence": 0.99,
+                    "probabilities": {
+                        "figure": 0.99,
+                        "ranking": 0,
+                        "trend": 0,
+                        "recency": 0.01,
+                        "other": 0
+                    }
+                }
+            }
+        }
+    ]
+}
