@@ -19,11 +19,59 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { liveDataThrough } from '@/lib/studio/dataThrough';
+import { embedHeightMessage, neededEmbedHeight } from '@/lib/studio/embedHeight';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
 
 const noop = () => undefined;
+
+// Inside a frame, tells the host page the height the content needs whenever
+// the frame or what it holds changes size and the content overflows
+// (lib/studio/embedHeight). The message carries one number and goes to any
+// origin, since any site may frame a share.
+const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>) => {
+    useEffect(() => {
+        const root = rootRef.current;
+
+        if (!root || window.parent === window) {
+            return undefined;
+        }
+
+        let sent: number | null = null;
+        const report = () => {
+            const needed = neededEmbedHeight({
+                scrollHeight: root.scrollHeight,
+                clientHeight: root.clientHeight,
+                viewportHeight: window.innerHeight,
+            });
+
+            if (needed !== null && needed !== sent) {
+                sent = needed;
+                window.parent.postMessage(embedHeightMessage(needed), '*');
+            }
+        };
+        const observer = new ResizeObserver(report);
+        const observeAll = () => {
+            observer.disconnect();
+            observer.observe(root);
+
+            for (const child of root.children) {
+                observer.observe(child);
+            }
+        };
+        // The card or the sheet can mount after the frame does.
+        const children = new MutationObserver(observeAll);
+
+        observeAll();
+        children.observe(root, { childList: true });
+
+        return () => {
+            observer.disconnect();
+            children.disconnect();
+        };
+    }, [rootRef]);
+};
 
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
 // no menu; the legend, tooltips and the source line still work.
@@ -111,9 +159,13 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);
     const dataThrough = noted ? liveDataThrough(widgets, live) : null;
+    const rootRef = useRef<HTMLDivElement>(null);
+
+    useReportHeight(rootRef);
 
     return (
         <div
+            ref={rootRef}
             className={classNames(
                 kind === 'card' ? styles.single : styles.sheet,
                 kind === 'card' && single?.kind === 'text' && styles.singleText,
