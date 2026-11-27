@@ -7,6 +7,7 @@ import { event } from '../../../db/schema';
 import { isBrowserEventName } from './browserEvents';
 import { dayVisitorResolver } from './dayVisitor';
 import { logEvent } from './eventLog';
+import { LAYOUT_EVENT_NAMES } from './studioLayoutEvents';
 import { parseInternalEng, withInternalEng } from './internalEng';
 import { redactSharePage, safeErrorCode } from './limits';
 import { posthogConfigured, sendEventToPosthog } from './posthog';
@@ -47,6 +48,10 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  *                     versions, host site, the viewer's caller digest)
  * - page.view         a page shown, on first load and on each in-app navigation, sent
  *                     whatever the visitor's consent (the path, as `page`)
+ * - studio.panel, studio.panel_page, studio.card_select, studio.focus,
+ *   studio.change, studio.sheet, studio.plan, studio.new_session
+ *                     the Prompt layout's own controls (STUDIO_LAYOUT_EVENTS in
+ *                     ./studioLayoutEvents, which lists each one's members)
  *
  * Every event the site's pages send (BROWSER_EVENT_NAMES) from a signed-out
  * visitor is stored with its daily visitor key (`day_visitor`, see
@@ -82,6 +87,7 @@ export const EVENT_NAMES = [
     'studio.download',
     'data.view',
     'page.view',
+    ...LAYOUT_EVENT_NAMES,
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

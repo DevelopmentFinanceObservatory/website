@@ -113,11 +113,18 @@ export const runningLabel = (status: string | null): string =>
 
 // The position (from 1) among the approved steps of the step the turn's
 // newest running line runs, else of the newest line's step, reading only
-// lines that name a step of the plan. Null when no line names one, or the
-// approved steps carry no ids (a save or a harness from before them).
-const namedStep = (steps: ApprovedPlan['steps'], lines: ActivityEntry['tools']) => {
-    const ids = steps.map((step) => step.id);
-    const named = lines.filter((tool) => tool.planStepId && ids.includes(tool.planStepId));
+// lines that name a step of the plan: its step id, and its version where the
+// line names one, since step ids repeat across plans. Null when no line
+// names one, or the approved steps carry no ids (a save or a harness from
+// before them).
+const namedStep = (plan: ApprovedPlan | null, lines: ActivityEntry['tools']) => {
+    const ids = (plan?.steps ?? []).map((step) => step.id);
+    const named = lines.filter(
+        (tool) =>
+            tool.planStepId &&
+            ids.includes(tool.planStepId) &&
+            (tool.planVersionId === undefined || tool.planVersionId === plan?.plan_version_id),
+    );
     const line =
         named.findLast((tool) => tool.state === 'running' || tool.state === 'pending') ??
         named.at(-1);
@@ -147,7 +154,7 @@ export const planStep = (
             ? tool.startOrder > entry.approvedOrder
             : tool.startedAt >= (entry?.approvedAt ?? Infinity),
     );
-    const named = namedStep(plan?.steps ?? [], after);
+    const named = namedStep(plan, after);
     const running = after.some((tool) => tool.state === 'running' || tool.state === 'pending');
     const step = named ?? (running ? after.length : after.length + 1);
 

@@ -9,12 +9,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
+import { replacementsOf, standingFor } from '../cardIdentity.ts';
 import {
     placeCard,
     renameId,
     renameKey,
     replacedChain,
-    standingFor,
     standingTarget,
     takenOver,
     withReplacedCard,
@@ -200,15 +200,22 @@ test('a replaced card is followed forward to the card standing in its place, and
     assert.deepEqual(replacedChain('a', { a: 'b', b: 'a' }), ['a', 'b']);
 });
 
-test('placeCard records the turn of the question that made a chain’s first card, through every replacement', () => {
+test('placeCard records the question that made a chain’s first card, its ids and the card changes that drew it, through every replacement', () => {
+    // b is a question's redraw of a; c and d are card changes (turns 5 and 7).
     const first = placeCard([{ id: 'a', turn: 1 }], { id: 'b', turn: 3 }, { replaces: 'a' });
-    const second = placeCard(first, { id: 'c', turn: 5 }, { replaces: 'b' });
-    // A card redrawn under its own id keeps the turn it records.
-    const updated = placeCard(second, { id: 'c', turn: 6 }, {});
+    const second = placeCard(first, { id: 'c', turn: 5 }, { replaces: 'b', keepTurn: true });
+    const third = placeCard(second, { id: 'd', turn: 7 }, { replaces: 'c', keepTurn: true });
+    // A card redrawn under its own id keeps what it records.
+    const updated = placeCard(third, { id: 'd', turn: 8 }, {});
 
-    assert.deepEqual(first, [{ id: 'b', turn: 3, madeIn: 1 }]);
-    assert.deepEqual(second, [{ id: 'c', turn: 5, madeIn: 1 }]);
-    assert.deepEqual(updated, [{ id: 'c', turn: 6, madeIn: 1 }]);
+    assert.deepEqual(first, [{ id: 'b', turn: 3, madeIn: 1, replaced: ['a'] }]);
+    assert.deepEqual(second, [
+        { id: 'c', turn: 3, madeIn: 1, replaced: ['b', 'a'], changedIn: [5] },
+    ]);
+    assert.deepEqual(updated, [
+        { id: 'd', turn: 8, madeIn: 1, replaced: ['c', 'b', 'a'], changedIn: [5, 7] },
+    ]);
+    assert.deepEqual(replacementsOf(updated), { d: 'c', c: 'b', b: 'a' });
 });
 
 test('a follow-up target follows its card to the replacement, and goes when none stands', () => {

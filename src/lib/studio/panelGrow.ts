@@ -56,3 +56,36 @@ export const holdRow = ({
 
     return { scrollTop: wanted, top: 0, foot: Math.max(0, wanted + viewport - content) };
 };
+
+/** A rectangle in viewport px. */
+export type Box = { left: number; right: number; top: number; bottom: number };
+
+/**
+ * The width the panel grows to. The panel keeps its rest width unless the
+ * strip the wide panel adds, from `grownLeft` to `restLeft` and across the
+ * panel's height (`panel.top` to `panel.bottom`), holds no part of a card.
+ * Both widths run to `right`.
+ */
+export const grownWidth = ({
+    restLeft,
+    grownLeft,
+    right,
+    panel,
+    cards,
+}: {
+    restLeft: number;
+    grownLeft: number;
+    right: number;
+    panel: Pick<Box, 'top' | 'bottom'>;
+    cards: readonly Box[];
+}): number => {
+    const covered = cards.some(
+        (card) =>
+            card.right > grownLeft &&
+            card.left < restLeft &&
+            card.bottom > panel.top &&
+            card.top < panel.bottom,
+    );
+
+    return right - (covered ? restLeft : grownLeft);
+};

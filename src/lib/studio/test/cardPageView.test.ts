@@ -7,9 +7,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { CardInfo, Widget } from '../../chat/widgets.ts';
+import type { CardInfo, KeyNumberWidget, Widget } from '../../chat/widgets.ts';
 import type { ChangeOffer } from '../cardChange.ts';
 import { cardPageView, type CardPageInput } from '../cardPageView.ts';
+import type { CardHistory } from '../cardReplace.ts';
 import { approvedFromFrame, type ApprovedPlan } from '../plan.ts';
 import type { PlanApproved } from '../wire.ts';
 
@@ -130,11 +131,36 @@ test('each source row opens the source page the session lists it under', () => {
         keysOf(info(undefined, { sourceId: 'dcid:OECD_CRS', sourceName: 'OECD CRS' })),
         ['dcid:OECD_CRS'],
     );
-    assert.equal(
-        page({ widget: card(info(undefined, { sources: [source], dataThrough: '2024' })) })
-            ?.sourceRows[0]?.through,
-        'data through 2024',
-    );
+    // `data_through` is the last year served: a card drawn to end before its
+    // data does reads the last year its data holds, and a changed card with
+    // no window to read shows none.
+    const sourced = info(undefined, { sources: [source], dataThrough: '2015' });
+    const keyNumber = (extra: Partial<KeyNumberWidget> & CardHistory = {}) => ({
+        kind: 'key_number' as const,
+        id: 'c1',
+        label: 'Health aid',
+        value: '1',
+        info: sourced,
+        turn: 1,
+        ...extra,
+    });
+    const window = (end: number) => ({
+        spec_id: 's1',
+        window: { start_year: 2000, end_year: end, first_year: 1990, last_year: 2025 },
+    });
+    const rows: [CardPageInput['widget'], string | undefined][] = [
+        [keyNumber(), 'data through 2015'],
+        [keyNumber({ cardChanges: window(2015) }), 'data through 2025'],
+        [
+            keyNumber({ cardChanges: window(2025), info: { ...sourced, dataThrough: '2025' } }),
+            'data through 2025',
+        ],
+        [keyNumber({ changedIn: [2] }), undefined],
+    ];
+
+    for (const [widget, through] of rows) {
+        assert.equal(page({ widget })?.sourceRows[0]?.through ?? undefined, through);
+    }
 });
 
 test('a source row reads how far the data runs and the licence, each only when known', () => {
@@ -182,30 +208,44 @@ test('a plan card linked by its turn names its plan, lists every choice and its 
     assert.deepEqual(view?.plan?.others, ['c1', 'c3']);
 });
 
-test('the changes that replaced a card are listed, and a refused one is not', () => {
-    const edit = (id: string, text: string) => ({
+test('the changes that drew a card of its chain are listed, and a refused one is not', () => {
+    const edit = (id: string, text: string, turn: number) => ({
         role: 'user' as const,
         text,
+        turn,
         card: { title: 'Health aid' },
         edit: { card: id, row: 'unit' as const },
     });
-    const view = page({
-        widget: card(info(DESCRIBED), 'c1b'),
-        replaced: ['c1'],
-        messages: [
-            { role: 'user', text: 'How much health aid?', turn: 1 },
-            { role: 'bot', text: '' },
-            edit('c1', 'Constant 2023 US dollars'),
-            { role: 'bot', text: '' },
-            edit('c9', 'Current Euros'),
-            { role: 'bot', text: '' },
-            edit('c1b', 'Current Euros'),
-            { role: 'bot', text: '_That unit is not offered for this card._' },
-        ],
-    });
+    const messages = [
+        { role: 'user' as const, text: 'How much health aid?', turn: 1 },
+        { role: 'bot' as const, text: '' },
+        edit('c1', 'Current Euros', 2),
+        { role: 'bot' as const, text: '_That unit is not offered for this card._' },
+        edit('c1', 'Constant 2023 US dollars', 3),
+        { role: 'bot' as const, text: '' },
+        edit('c1b', 'Start it in 2012', 4),
+        { role: 'bot' as const, text: '' },
+    ];
 
-    assert.deepEqual(view?.changedFor, ['Constant 2023 US dollars']);
-    assert.deepEqual(view?.origin, { kind: 'turn', turn: 1, question: 'How much health aid?' });
+    for (const [changedIn, listed] of [
+        [[3], ['Constant 2023 US dollars']],
+        [
+            [3, 4],
+            ['Constant 2023 US dollars', 'Start it in 2012'],
+        ],
+        [undefined, []],
+    ] as const) {
+        const view = page({
+            widget: {
+                ...card(info(DESCRIBED), 'c1c'),
+                ...(changedIn && { changedIn: [...changedIn] }),
+            },
+            messages,
+        });
+
+        assert.deepEqual(view?.changedFor, listed);
+        assert.deepEqual(view?.origin, { kind: 'turn', turn: 1, question: 'How much health aid?' });
+    }
 });
 
 test('a text card has no page', () => {
@@ -267,6 +307,7 @@ test('Set by the plan lists the choices of the card’s step, less those a card 
         role: 'destination',
         label: 'Recipient',
         multiple: false,
+        max: 1,
         chosen: [{ id: 'country/KEN', label: 'Kenya' }],
     };
 
@@ -303,10 +344,17 @@ test('an offer rides on the row it changes, or on a row of its own', () => {
         role: 'destination',
         label: 'Recipient',
         multiple: false,
+        max: 1,
         chosen: [{ id: 'country/KEN', label: 'Kenya' }],
     };
     const view = page({ widget: card(info(DESCRIBED)), offers: [years, shows] });
     const changed = view?.measures.filter((row) => row.offer);
+    // A card offering neither years nor places keeps its own rows, with no
+    // row of an offer and no Change.
+    const none = page({ widget: card(info(DESCRIBED)), offers: [] });
+
+    assert.ok(none?.measures.length);
+    assert.ok(none.measures.every((row) => row.offer === null));
 
     assert.deepEqual(
         changed?.map((row) => [row.key, row.label, row.value]),
@@ -324,4 +372,33 @@ test('an offer rides on the row it changes, or on a row of its own', () => {
         beside?.measures.filter((row) => row.key.startsWith('shows')).map((row) => row.label),
         ['Shows', 'Place'],
     );
+});
+
+test('a property the service leaves as its key shows its value alone, and a single-year offer reads Year', () => {
+    const raw = structuredClone(DESCRIBED) as unknown as {
+        about: { fixed: { property: { label: string } }[] };
+    };
+
+    raw.about.fixed[0]!.property.label = 'observationAbout';
+
+    const view = page({
+        widget: card(info(raw)),
+        offers: [
+            {
+                key: 'years',
+                id: 'years',
+                specId: 'spec_1',
+                window: {
+                    start_year: 2024,
+                    end_year: 2024,
+                    first_year: 2010,
+                    last_year: 2024,
+                    single: true,
+                },
+            },
+        ],
+    });
+
+    assert.equal(view?.measures.find((row) => row.key === 'within')?.value, 'Nigeria');
+    assert.equal(view?.measures.find((row) => row.key === 'years')?.label, 'Year');
 });

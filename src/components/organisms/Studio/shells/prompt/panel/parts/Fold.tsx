@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
+import { Count } from './Count';
 import { Chevron } from './Glyphs';
 import styles from './parts.module.scss';
 
@@ -34,7 +35,7 @@ export const Fold = ({
         onClick={onToggle}
     >
         {children}
-        {count !== undefined && <span className={styles.count}>{count}</span>}
+        {count !== undefined && <Count>{count}</Count>}
         <Chevron direction="down" />
     </button>
 );

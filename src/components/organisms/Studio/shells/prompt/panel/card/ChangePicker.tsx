@@ -42,6 +42,32 @@ const ChangePicker = ({
             box?.querySelector<HTMLElement>('input, select, button');
 
         target?.focus({ preventScroll: true });
+
+        // Brings the frame, with its `Apply`, into the panel's view, and
+        // again when it changes size (a places list that loads). Only the
+        // panel's own scroller moves. The back row pinned over its top hides
+        // the first rows of its content, and the foot fade the last 40 px.
+        const scroller = box?.closest<HTMLElement>('[data-sp-scroll]');
+        const pinned = scroller?.querySelector<HTMLElement>('[data-sp-backrow]');
+
+        if (!box || !scroller) return;
+
+        const reveal = () => {
+            const frame = scroller.getBoundingClientRect();
+            const at = box.getBoundingClientRect();
+            const top = frame.top + (pinned?.offsetHeight ?? 0);
+            const foot = frame.bottom - 44;
+
+            if (at.top < top) scroller.scrollTop += at.top - top;
+            else if (at.bottom > foot) {
+                scroller.scrollTop += Math.min(at.bottom - foot, at.top - top);
+            }
+        };
+        const watch = new ResizeObserver(reveal);
+
+        watch.observe(box);
+
+        return () => watch.disconnect();
     }, []);
 
     return (

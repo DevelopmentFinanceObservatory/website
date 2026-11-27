@@ -69,6 +69,9 @@ type UseCardDragArgs = {
     // The ids currently on the sheet: a card can't stay grabbed while it's
     // being replaced.
     widgetIds: Set<string>;
+    // The canvas is one scrolling column: a touch scrolls it and never drags
+    // a card (cardPress.ts).
+    column?: boolean;
 };
 
 export const useCardDrag = ({
@@ -79,6 +82,7 @@ export const useCardDrag = ({
     setSlots,
     raise,
     widgetIds,
+    column = false,
 }: UseCardDragArgs) => {
     const [drag, setDrag] = useState<Drag | null>(null);
     // Where the card is held, relative to its slot — the rotation/scale pivot.
@@ -199,7 +203,7 @@ export const useCardDrag = ({
     const startDrag = (id: string) => (event: React.PointerEvent<HTMLElement>) => {
         // Only the head row and the frame drag; the board's pan handler reads
         // the same decision, so a drag press needs no stopPropagation.
-        if (cardPressAction(event) !== 'drag') {
+        if (cardPressAction(event, column) !== 'drag') {
             return;
         }
 

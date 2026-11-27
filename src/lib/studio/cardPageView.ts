@@ -12,6 +12,7 @@ import type { Widget } from '@/lib/chat/widgets';
 
 import type { ActivityEntry } from './activity';
 import { type ChangeOffer, editedCard, offerText } from './cardChange.ts';
+import type { CardHistory } from './cardReplace';
 import { messageTurns } from './activityView.ts';
 import { capitalise } from '../capitalise.ts';
 import type { About } from './description';
@@ -97,14 +98,12 @@ export type CardSourceRow = {
 };
 
 export type CardPageInput = {
-    widget: Widget & { turn: number };
+    widget: Widget & { turn: number } & CardHistory;
     /** The card's title as the canvas shows it, renamed or as drawn. */
     title: string;
     options: PanelOptions;
     messages: readonly ChatMessage[];
     activity?: readonly ActivityEntry[];
-    /** The ids this card replaced, newest first. */
-    replaced?: readonly string[];
     /** The approved plan the card belongs to, from `planLinks`, with the plan
      *  itself. */
     plan?: { link: CardPlan; approved: ApprovedPlan } | null;
@@ -166,6 +165,10 @@ const describedMeasures = (view: DescribedView, widget: Widget): MeasureRow[] =>
     ];
 };
 
+// A property label the service leaves as its key (`observationAbout`) has no
+// words to show, so only the value is shown for it.
+const isRawKey = (label: string): boolean => /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(label);
+
 // Every value the card is fixed to, such as its recipient, as
 // `property: value` joined with semicolons.
 const withinRow = (about: About | undefined): MeasureRow[] => {
@@ -177,7 +180,11 @@ const withinRow = (about: About | undefined): MeasureRow[] => {
                   'within',
                   'Within',
                   fixed
-                      .map(({ property, value }) => `${property.label}: ${value.label}`)
+                      .map(({ property, value }) =>
+                          isRawKey(property.label)
+                              ? value.label
+                              : `${property.label}: ${value.label}`,
+                      )
                       .join('; '),
               ),
           ]
@@ -196,29 +203,32 @@ const legacyMeasures = (view: LegacyView): MeasureRow[] =>
         row(LEGACY_KEYS[entry.label] ?? entry.label.toLowerCase(), entry.label, entry.value),
     );
 
-// The question the card's turn asked, and the words of each change made to
-// it since (an edit turn naming a card this one replaced).
+// The question the card's turn asked, and the words of each card change
+// that drew a card of its chain (`changedIn`, which placeCard records only
+// when the change drew a card), oldest first. A change the harness refused,
+// or one still running, drew none.
 const originOf = ({
     widget,
     messages,
     activity = [],
-    replaced = [],
     plan,
 }: CardPageInput): { origin: CardOrigin | null; changedFor: string[] } => {
     const turns = messageTurns(messages, activity);
-    // An edit naming the card itself is running or was refused; one that
-    // took effect named a card this one replaced.
-    const ids = new Set(replaced);
     const asked = messages.find(
         (message, index) =>
             isPrompt(message) &&
             turns[index] === widget.turn &&
             !(message.role === 'user' && message.edit),
     );
-    const changedFor = messages.flatMap((message) => {
-        const edited = editedCard(message);
+    const changedFor = (widget.changedIn ?? []).flatMap((turn) => {
+        const prompt = messages.find(
+            (message) =>
+                message.role === 'user' &&
+                message.turn === turn &&
+                editedCard(message) !== undefined,
+        );
 
-        return edited !== undefined && ids.has(edited) ? [message.text] : [];
+        return prompt ? [prompt.text] : [];
     });
 
     if (plan) {
@@ -269,15 +279,24 @@ export const rowsWithOffers = (
 
         placed.add(offer.id);
 
-        return offer.key === 'shows'
-            ? { ...row, key: offer.id, label: offer.label, offer }
+        if (offer.key === 'shows') return { ...row, key: offer.id, label: offer.label, offer };
+
+        return offer.key === 'years' && offer.window?.single
+            ? { ...row, label: 'Year', offer }
             : { ...row, offer };
     });
     const missing = offers
         .filter((offer) => !placed.has(offer.id))
         .map((offer): MeasureRow => ({
             key: offer.id,
-            label: offer.key === 'shows' ? offer.label : offer.key === 'unit' ? 'Unit' : 'Years',
+            label:
+                offer.key === 'shows'
+                    ? offer.label
+                    : offer.key === 'unit'
+                      ? 'Unit'
+                      : offer.window?.single
+                        ? 'Year'
+                        : 'Years',
             value: offerText(offer),
             terms: null,
             offer,
@@ -347,12 +366,12 @@ const planSection = (
 
 // The card's sources as the session's source rows read them (`cardSources`),
 // with the line under each name built by the same rule (`sourceMeta`).
-const sourceRowsOf = (widget: Widget): CardSourceRow[] => {
+const sourceRowsOf = (widget: CardPageInput['widget']): CardSourceRow[] => {
     const { info } = widget;
 
     if (!info) return [];
 
-    const through = throughOf(info);
+    const through = throughOf(info, widget);
 
     return cardSources(info).map((source) => ({
         key: source.key,

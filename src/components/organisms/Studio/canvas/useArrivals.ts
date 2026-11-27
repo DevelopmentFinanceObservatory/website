@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect, useRef } from 'react';
 
-import { scrollerOf } from './board';
+import { scrollerOf, scrollView } from './board';
 import type { Rect, Slot, Slots } from './layout';
 
 type UseArrivalsArgs = {
@@ -67,7 +67,7 @@ export const useArrivals = ({
             const target = placeView(newest, new Set(fresh.map(([id]) => id)), scroller);
 
             if (target) {
-                scroller.scrollTo(target);
+                scrollView(scroller, target);
             }
 
             return;
@@ -93,7 +93,7 @@ export const useArrivals = ({
         }
 
         if (left !== scroller.scrollLeft || top !== scroller.scrollTop) {
-            scroller.scrollTo({ left, top, behavior: 'smooth' });
+            scrollView(scroller, { left, top, behavior: 'smooth' });
         }
         // spawnWave/busy/placeView only read refs and the DOM; slots (and the
         // origin) are the real trigger.

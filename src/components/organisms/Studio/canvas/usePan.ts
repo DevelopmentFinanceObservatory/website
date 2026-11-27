@@ -16,7 +16,7 @@ import { cardPressAction } from './cardPress';
 const PAN_FOLLOW = 0.25;
 const PAN_DECAY = 0.92;
 
-export const usePan = (boardRef: RefObject<HTMLDivElement | null>) => {
+export const usePan = (boardRef: RefObject<HTMLDivElement | null>, column = false) => {
     const [panning, setPanning] = useState(false);
     // Pointer + scroll offsets at pan start, the eased target while held,
     // and the glide velocity after release.
@@ -74,7 +74,7 @@ export const usePan = (boardRef: RefObject<HTMLDivElement | null>) => {
     const startPan = (event: React.PointerEvent<HTMLDivElement>) => {
         // Interactive bits on the sheet (beacons, inputs) keep the pointer to
         // themselves; on a card, the card's press decision rules.
-        const card = cardPressAction(event);
+        const card = cardPressAction(event, column);
 
         if (
             (card !== null && card !== 'pan') ||

@@ -4,6 +4,7 @@ import { hasServiceConsent, onServiceConsent, USAGE_STATS_SERVICE } from '@/lib/
 import { uuid } from '@/lib/uuid';
 
 import type { BrowserEventName } from './browserEvents';
+import type { LayoutEventName, LayoutEventProps } from './studioLayoutEvents';
 import type { EventProps } from './track';
 
 // A random id per browser so a visitor's events string together without an
@@ -82,3 +83,7 @@ export const track = (
         // Analytics never break the page.
     }
 };
+
+/** A Prompt layout event, typed by the members STUDIO_LAYOUT_EVENTS lists for it. */
+export const trackLayout = <N extends LayoutEventName>(name: N, props: LayoutEventProps<N>) =>
+    track(name, props);

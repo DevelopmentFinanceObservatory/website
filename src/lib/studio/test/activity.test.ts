@@ -219,4 +219,6 @@ test('a line keeps the plan step its frame names, through a save', () => {
 
     assert.equal(entry.tools[0]?.planStepId, 's2');
     assert.equal(saved?.tools[0]?.planStepId, 's2');
+    assert.equal(saved?.tools[0]?.planVersionId, frame.plan_version_id);
+    assert.ok(saved?.tools[0]?.planVersionId);
 });

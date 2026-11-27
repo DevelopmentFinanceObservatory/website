@@ -1,0 +1,18 @@
+// On a coarse pointer, a press area of at least 40 by 40 px centred on the
+// control. An empty ::after draws it, so the control looks the same at
+// rest; a control already 40 px across keeps its own edge.
+
+@mixin touch-target {
+    @media (pointer: coarse) {
+        position: relative;
+
+        // Above the scrolling bodies, which their masks lift into layers
+        // of their own.
+        &::after {
+            position: absolute;
+            inset: min(0px, calc(50% - 20px));
+            z-index: 1;
+            content: "";
+        }
+    }
+}

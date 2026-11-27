@@ -3,8 +3,10 @@
  * useEffect), run outside React so node --test can drive the hook. A test
  * bundles the hook with `react` aliased to this module (loadUseChat).
  * `renderHook` renders once, and renders again on the microtask after each
- * state change, running the effects whose dependencies changed after each
- * render, as React does. Each slot holds what its hook stored there, so
+ * state change (or, with `rendersLater`, on a later task, as React's
+ * scheduler does in a browser, so work done in the same task as the state
+ * change sees no render), running the effects whose dependencies changed
+ * after each render, as React does. Each slot holds what its hook stored there, so
  * reading it back casts to that hook's type.
  */
 
@@ -16,6 +18,7 @@ type Instance = {
     effects: (() => void)[];
     scheduled: boolean;
     unmounted: boolean;
+    later: boolean;
     render: () => void;
 };
 
@@ -41,13 +44,20 @@ const schedule = (owner: Instance) => {
     }
 
     owner.scheduled = true;
-    queueMicrotask(() => {
+
+    const run = () => {
         owner.scheduled = false;
 
         if (!owner.unmounted) {
             owner.render();
         }
-    });
+    };
+
+    if (owner.later) {
+        setImmediate(run);
+    } else {
+        queueMicrotask(run);
+    }
 };
 
 export const useState = <T>(init: T | (() => T)) => {
@@ -124,7 +134,7 @@ export const useEffect = (effect: () => void | (() => void), deps: Deps) => {
 /** Render `hook` and keep it rendered: `result()` is its latest return,
  *  `settle()` waits until no render or timer-free async work is pending,
  *  and `unmount()` runs every effect's cleanup. */
-export const renderHook = <T>(hook: () => T) => {
+export const renderHook = <T>(hook: () => T, { rendersLater = false } = {}) => {
     let result: T;
     const owner: Instance = {
         slots: [],
@@ -132,6 +142,7 @@ export const renderHook = <T>(hook: () => T) => {
         effects: [],
         scheduled: false,
         unmounted: false,
+        later: rendersLater,
         render: () => {
             current = owner;
             owner.at = 0;

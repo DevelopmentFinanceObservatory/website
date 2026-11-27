@@ -1,6 +1,7 @@
 // The browser's event names, in their own module (no db or server-only
 // imports) so src/lib/test/events-browser.test.ts can run it under plain node.
 
+import { LAYOUT_EVENT_NAMES } from './studioLayoutEvents.ts';
 import type { EventName } from './track.ts';
 
 /**
@@ -26,6 +27,7 @@ export const BROWSER_EVENT_NAMES = [
     'guest.wall_hit',
     'gallery.open',
     'page.view',
+    ...LAYOUT_EVENT_NAMES,
 ] as const satisfies readonly EventName[];
 
 export type BrowserEventName = (typeof BROWSER_EVENT_NAMES)[number];

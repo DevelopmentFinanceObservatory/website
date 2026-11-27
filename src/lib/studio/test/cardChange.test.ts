@@ -12,8 +12,11 @@ import {
     changeOffers,
     changeRefusalDetail,
     changeRefusalStale,
+    changesHeld,
     changeStatus,
     type ChangeMessage,
+    dropChangesForPause,
+    MAX_PLACES,
     pickablePlaces,
     PLACE_OPTIONS_UNAVAILABLE,
     placeMatches,
@@ -370,6 +373,53 @@ test('a card offers its years and one places row per role, labelled from the rol
     assert.ok(label);
     assert.equal(label, roleLabel('anotherRole', false));
     assert.notEqual(label, roleLabel('origin', false));
+
+    // The data's own word names the role: plural for several places,
+    // singular for one, either form standing in for a missing one.
+    for (const [multiple, given, expected] of [
+        [true, { singular: 'debtor', plural: 'debtors' }, 'Debtors'],
+        [false, { singular: 'debtor', plural: 'debtors' }, 'Debtor'],
+        [true, { singular: 'debtor' }, 'Debtor'],
+        [false, { plural: 'debtors' }, 'Debtors'],
+        [true, undefined, roleLabel('origin', true)],
+    ] as const) {
+        assert.equal(roleLabel('origin', multiple, given), expected);
+    }
+});
+
+test('a places offer stops at its max, one place making it a single choice', () => {
+    const chosen = [{ id: 'country/FRA', label: 'France' }];
+    const offerOf = (max?: number) =>
+        changeOffers(
+            changeable(
+                changes({
+                    window: null,
+                    places: [{ role: 'origin', multiple: true, chosen, ...(max && { max }) }],
+                }),
+            ),
+        ).find((offer) => offer.key === 'shows');
+    const pick = (count: number) =>
+        Array.from({ length: count }, (_, at) => ({ id: `country/${at}`, label: `P${at}` }));
+
+    for (const [max, expected] of [
+        [8, { max: 8, multiple: true }],
+        [1, { max: 1, multiple: false }],
+        [undefined, { max: MAX_PLACES, multiple: true }],
+    ] as const) {
+        const offer = offerOf(max);
+
+        assert.ok(offer?.key === 'shows');
+        assert.deepEqual({ max: offer.max, multiple: offer.multiple }, expected, String(max));
+    }
+
+    const card = changeable(
+        changes({ window: null, places: [{ role: 'origin', multiple: true, chosen, max: 8 }] }),
+    );
+
+    assert.ok(placesChange(card, 'Aid', 'origin', pick(8)));
+    assert.equal(placesChange(card, 'Aid', 'origin', pick(9)), null);
+    // A redrawn card that arrives with no years and no places offers none.
+    assert.deepEqual(changeOffers(changeable(changes({ window: null, places: null }))), []);
 });
 
 test('a years offer needs a range other than the one drawn', () => {
@@ -614,6 +664,13 @@ test('the harness card frame with card_changes offers one year and its place, an
         changeOffers(card).map((offer) => offer.id),
         ['unit', 'years', 'shows:observationAbout'],
     );
+    // The places offer's `max` and `label` arrive with it, and name the row.
+    assert.deepEqual(
+        changeOffers(card).flatMap((offer) =>
+            offer.key === 'shows' ? [[offer.max, offer.multiple, offer.label]] : [],
+        ),
+        [[1, false, 'Country']],
+    );
     assert.deepEqual(
         placesChange(card, 'Debt service', 'observationAbout', [
             { id: 'country/KEN', label: 'Kenya' },
@@ -629,4 +686,50 @@ test('the harness card frame with card_changes offers one year and its place, an
         start_year: 1990,
         end_year: 1990,
     });
+});
+
+test('a plan waiting on approval or a question waiting on an answer holds the card changes, and drops the ones queued behind it', () => {
+    const question = { interruptId: 'i1' };
+
+    assert.equal(changesHeld(null), null);
+    assert.equal(changesHeld({ live: false }), null);
+
+    const held = [changesHeld({ live: true }), changesHeld(null, question)];
+
+    assert.ok(held.every((line) => typeof line === 'string'));
+    assert.notEqual(held[0], held[1]);
+    assert.equal(changesHeld({ live: true }, question), held[1]);
+
+    for (const pause of ['plan', 'question'] as const) {
+        const { kept, dropped } = dropChangesForPause(
+            [
+                { id: 'q1' },
+                { id: 'q2', unit: { request: { component_id: 'c1' } } },
+                {
+                    id: 'q3',
+                    change: {
+                        row: 'shows' as const,
+                        role: 'donor',
+                        request: { component_id: 'c2' },
+                    },
+                },
+                { id: 'q4' },
+            ],
+            pause,
+        );
+
+        assert.deepEqual(
+            kept.map((item) => item.id),
+            ['q1', 'q4'],
+            pause,
+        );
+        assert.deepEqual(
+            dropped.map(({ card, row, role }) => [card, row, role]),
+            [
+                ['c1', 'unit', undefined],
+                ['c2', 'shows', 'donor'],
+            ],
+            pause,
+        );
+    }
 });

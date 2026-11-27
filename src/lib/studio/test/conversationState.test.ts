@@ -36,6 +36,7 @@ import {
     type AttachStep,
 } from '../conversationState.ts';
 import { placeCard, takenOver } from '../cardReplace.ts';
+import { planLinks } from '../planLink.ts';
 import { approvedFromFrame, planFromFrame, withApprovedPlan } from '../plan.ts';
 import {
     ensureTurn,
@@ -1537,6 +1538,63 @@ test('a card a missed unit change drew takes the slot of the card it replaced, w
     );
 });
 
+test('a reloaded card links to the plan and step its stored card names, drawn from the read or held', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ ...bodyOf('component_read.at_revision'), revision: 1 }),
+    );
+
+    const turn: ClosedTurn = {
+        ...closed(2),
+        component_ids: [CARD],
+        cards: [
+            {
+                component_id: CARD,
+                type: 'line_chart',
+                title: 'ODA',
+                revision: 1,
+                plan_version_id: 'pv-rev-a',
+                plan_step_id: 's1',
+            },
+        ],
+    };
+    const stored = storedCards([turn]);
+    const read = await readComponent(CARD, 1);
+    const drawn = widgetFromRead(
+        manifestOf([[CARD, 1]]).blocks[0]!,
+        read!,
+        undefined,
+        stored.get(CARD),
+    );
+    // A card the page drew before the turn closed, with no plan, takes it.
+    const { widgets: held } = reconcileStoredCards(
+        [{ ...drawn!, planStep: undefined, turn: 1 }],
+        stored,
+        [CARD],
+        new Set([CARD]),
+    );
+    // The plan is turn 2's, which the read restores; the card sits under
+    // turn 1, so only the named link puts it in the plan.
+    const messages = withTurnApprovals(
+        stamped([
+            [1, 1],
+            [2, 2],
+        ]),
+        2,
+        [approvedOf('rev-a')],
+        new Set(),
+    );
+
+    for (const widget of [drawn!, held[0]!]) {
+        const { planOf, plans } = planLinks({ messages, widgets: [{ ...widget, turn: 1 }] });
+
+        assert.equal(planOf(CARD)?.stepId, 's1');
+        assert.deepEqual(
+            plans.map((plan) => [plan.turn, plan.cards]),
+            [[2, [CARD]]],
+        );
+    }
+});
+
 test('the read that closes a turn corrects the cards drawn from it while it ran', () => {
     const offer: UnitOffer = {
         currencies: [{ code: 'USD', name: 'US dollars', prices: ['current'] }],
@@ -1608,6 +1666,16 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
     });
     // Corrected once, the card stays as it is.
     assert.equal(reconcileStoredCards(widgets, stored, ['cmp_c'], onCanvas).widgets, widgets);
+    // Turn 3 a card change: the card keeps the turn of the card it replaced.
+    assert.deepEqual(
+        reconcileStoredCards(page, stored, ['cmp_c'], onCanvas, new Set([3])).widgets.map(
+            (widget) => [widget.id, widget.turn],
+        ),
+        [
+            ['cmp_c', 1],
+            ['cmp_other', 1],
+        ],
+    );
 });
 
 // A plan.approved frame of revision `revision`, titled after it.

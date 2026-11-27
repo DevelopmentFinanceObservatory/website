@@ -35,6 +35,7 @@ import {
 } from '../event-export.ts';
 import { EXPORT_READER_ROLE } from '../local-roles.ts';
 import { shareCopyProps } from '../../src/lib/events/shareCopy.ts';
+import { LAYOUT_EVENT_NAMES } from '../../src/lib/events/studioLayoutEvents.ts';
 import type { StudioDownloadProps } from '../../src/lib/events/studioDownload.ts';
 import { createTestDatabase } from './harness.ts';
 
@@ -202,6 +203,7 @@ test('exportRow keeps the Studio variant on each Studio event and refuses anothe
         'studio.session_end',
         'studio.download',
         'guest.wall_hit',
+        ...LAYOUT_EVENT_NAMES,
     ];
 
     for (const name of names) {
@@ -219,6 +221,15 @@ test('exportRow keeps the Studio variant on each Studio event and refuses anothe
             assert.deepEqual(refused, {});
         });
     }
+});
+
+test("exportRow keeps a Prompt layout event's members and drops free text", () => {
+    const props = { step: 'refused', kind: 'places', why: 'No data for Kenya', title: 'Aid' };
+
+    assert.deepEqual(exportRow(sourceEvent({ name: 'studio.change', props }), KEY, RULES).props, {
+        step: 'refused',
+        kind: 'places',
+    });
 });
 
 test('exportRow keeps a measures entry joined with `|`', () => {

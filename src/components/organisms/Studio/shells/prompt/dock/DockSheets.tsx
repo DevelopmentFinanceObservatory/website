@@ -4,13 +4,14 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import styles from './PromptDock.module.scss';
-import type { CardView } from '../../../canvas/layout';
+import { type CardView, widgetTitle } from '../../../canvas/layout';
 import type { TurnWidget } from '../../../hooks/useChat';
 import ApprovedPlanPill from '../../../workspace/ApprovedPlanPill';
 import MessageFeedback from '../../../workspace/MessageFeedback';
 import WidgetChips from '../../../workspace/WidgetChips';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import { changeNote } from '@/lib/studio/changeNote';
 import { streamBlocks } from '@/lib/studio/dockView';
 import type { Question } from '@/lib/studio/questions';
 
@@ -72,10 +73,13 @@ const ReplyContent = ({
     chips: ChipActions;
 }) => {
     const widgets = chips.widgets.filter((widget) => widget.turn === question.turn);
+    // What the reply's cards show since a card change redrew them.
+    const note = changeNote(widgets, (card) => chips.titles[card.id] ?? widgetTitle(card));
 
     return (
         <>
             {question.reply && <ReplyText text={question.reply} streaming={streaming} />}
+            {note && <p className={styles.changeNote}>{note}</p>}
             {feedback && question.reply && !streaming && (
                 <MessageFeedback text={question.reply} id={String(question.turn)} />
             )}
@@ -102,6 +106,7 @@ const ReplyContent = ({
 export const ReplySheet = ({
     question,
     count,
+    failed,
     streaming,
     chips,
     onThread,
@@ -109,12 +114,17 @@ export const ReplySheet = ({
 }: {
     question: Question;
     count: number;
+    /** The turn ended in an error: its text shows without the feedback
+     *  actions. */
+    failed: boolean;
     streaming: boolean;
     chips: ChipActions;
     onThread: () => void;
     onFold: () => void;
 }) => (
-    <section className={styles.sheet} aria-label="Reply">
+    // The scrolling body is the `Reply` region; a second landmark of that
+    // name around it would repeat it.
+    <section className={styles.sheet}>
         <div className={styles.sheetHead}>
             {question.about && (
                 <p className={styles.aboutLine}>
@@ -150,7 +160,12 @@ export const ReplySheet = ({
             // The body scrolls, and a keyboard reader scrolls it from here.
             tabIndex={0}
         >
-            <ReplyContent question={question} streaming={streaming} feedback chips={chips} />
+            <ReplyContent
+                question={question}
+                streaming={streaming}
+                feedback={!failed}
+                chips={chips}
+            />
         </div>
     </section>
 );

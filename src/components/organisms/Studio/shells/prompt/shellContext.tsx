@@ -17,6 +17,8 @@ import { useStudioModel } from '../../hooks/studioContext';
 import styles from './PromptShell.module.scss';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { trackLayout } from '@/lib/events/client';
+import type { LayoutEventName, LayoutMembers } from '@/lib/events/studioLayoutEvents';
 import { type PlanLinks, planLinks } from '@/lib/studio/planLink';
 import {
     heldCard,
@@ -59,8 +61,12 @@ export type PromptShellValue = {
     /** The approved plans and their cards on the canvas (planLinks), for
      *  the canvas, the panel and the card page. */
     plans: PlanLinks;
-    /** Speaks `text` through the shell's polite live region. */
-    announce: (text: string) => void;
+    /** Speaks `text` through the shell's polite live region, or through its
+     *  alert region for an `error`. */
+    announce: (text: string, kind?: 'error') => void;
+    /** Records a usage event for a reader's action on the layout's own
+     *  controls (STUDIO_LAYOUT_EVENTS), with the Studio's variant. */
+    report: <N extends LayoutEventName>(name: N, members: LayoutMembers<N>) => void;
 };
 
 const ShellContext = createContext<PromptShellValue | null>(null);
@@ -135,7 +141,7 @@ const escapeElsewhere = (
 
 /**
  * The Prompt layout's shell state (promptShell.ts), the one Escape listener,
- * the one polite live region, and the plan links. Shell state resets with
+ * the live regions (one polite, one for errors), and the plan links. Shell state resets with
  * the session: whenever the Studio returns to its landing.
  */
 export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
@@ -145,6 +151,7 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
     const panelRef = useRef<HTMLElement | null>(null);
     const escapes = useRef(new Set<EscapeEntry>());
     const live = useRef<HTMLParagraphElement | null>(null);
+    const alert = useRef<HTMLParagraphElement | null>(null);
     const mode = model.mode.current;
     const [seenMode, setSeenMode] = useState(mode);
 
@@ -242,8 +249,8 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const frame = useRef(0);
-    const announce = useCallback((text: string) => {
-        const node = live.current;
+    const announce = useCallback((text: string, kind?: 'error') => {
+        const node = kind === 'error' ? alert.current : live.current;
 
         if (!node) return;
 
@@ -257,6 +264,13 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     useEffect(() => () => cancelAnimationFrame(frame.current), []);
+
+    const { variant } = model;
+    const report = useCallback(
+        <N extends LayoutEventName>(name: N, members: LayoutMembers<N>) =>
+            trackLayout(name, { ...members, variant }),
+        [variant],
+    );
 
     const { messages, widgets: turnWidgets, activity } = model.chat;
     const replaced = model.doc.replacedIds;
@@ -289,8 +303,9 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
             focusCard,
             plans,
             announce,
+            report,
         }),
-        [state, cardCount, overlay, plans, focusField, registerField, focusCard, announce],
+        [state, cardCount, overlay, plans, focusField, registerField, focusCard, announce, report],
     );
 
     return (
@@ -298,6 +313,7 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
             <ShellContext.Provider value={value}>
                 {children}
                 <p ref={live} className={styles.live} aria-live="polite" />
+                <p ref={alert} className={styles.live} role="alert" />
             </ShellContext.Provider>
         </EscapeContext.Provider>
     );
