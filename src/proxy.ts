@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
 import { isGraphExplorerPath, withRequestPath } from '@/lib/graphExplorer/signIn';
 import { issueVisitorCookie } from '@/lib/proxy/visitor';
@@ -11,14 +10,13 @@ const graphExplorer = (request: NextRequest) =>
 
 /**
  * `X-Robots-Tag` on a /data response the page's metadata keeps out of
- * search (dataPageRobots): a version link, or a search share no gallery
- * item opens. The header holds whatever the render does, redirects and
- * errors included.
+ * search (dataPageRobots): a version link or a search share. The header
+ * holds whatever the render does, redirects and errors included.
  */
 const dataPage = (request: NextRequest) => {
     const response = NextResponse.next();
 
-    if (dataPageNoindex(request.nextUrl.searchParams, PUBLISHED_GALLERY_ITEMS)) {
+    if (dataPageNoindex(request.nextUrl.searchParams)) {
         response.headers.set(NOINDEX_HEADER.key, NOINDEX_HEADER.value);
     }
 

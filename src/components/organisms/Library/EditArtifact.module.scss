@@ -1,0 +1,37 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.form {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+.actions {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(4);
+    margin-top: rem(8);
+}
+
+// The Button atom's label and icon cells, ringed and lettered in red.
+.form .actions .delete > * {
+    color: var(--color-red);
+    box-shadow: inset 0 0 0 1px var(--color-red);
+}
+
+.warning,
+.error {
+    @include font-size(13px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+}
+
+.warning {
+    margin-top: rem(4);
+
+    &:empty {
+        display: none;
+    }
+}

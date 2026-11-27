@@ -458,7 +458,7 @@
     animation: none;
 }
 
-// A section heading inside the phone menu (Insights / Data / Docs): an
+// A section heading inside the phone menu (Library / Data / Docs): an
 // accordion toggle — its pages unfold indented below, the chevron flips.
 .menuSection {
     @include flex(row, space-between, center);

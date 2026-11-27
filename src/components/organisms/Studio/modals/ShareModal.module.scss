@@ -17,6 +17,12 @@
     }
 }
 
+// Four tabs, with Publish, fit the panel on one line at a closer spacing.
+.tabsClose button {
+    padding-inline: rem(6);
+    white-space: nowrap;
+}
+
 .copyText {
     @include font-size(13px, 1.35);
 
