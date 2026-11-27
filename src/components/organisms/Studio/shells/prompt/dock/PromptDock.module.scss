@@ -141,10 +141,10 @@
     box-shadow: var(--dock-shadow-rest);
     transform: translateX(-50%);
     transform-origin: 50% 100%;
-    scale: 1.6 1;
+    scale: 0.96;
     transition:
-        opacity 0.2s var(--dock-ease),
-        scale 0.2s var(--dock-ease),
+        opacity 160ms var(--dock-ease),
+        scale 160ms var(--dock-ease),
         border-color 0.2s ease;
 
     @media (hover: hover) {
@@ -166,7 +166,7 @@
         pointer-events: auto;
         opacity: 1;
         transform: none;
-        scale: 1 1;
+        scale: 1;
     }
 }
 
@@ -201,8 +201,8 @@
     transform-origin: 50% 100%;
     transition:
         border-color 0.2s ease,
-        opacity 0.2s var(--dock-ease),
-        scale 0.2s var(--dock-ease);
+        opacity 160ms var(--dock-ease),
+        scale 160ms var(--dock-ease);
 
     // The field's focus indicator, in the colour of every other control's.
     &:has(.field:focus-visible) {
@@ -224,7 +224,7 @@
         bottom: 0;
         pointer-events: none;
         opacity: 0;
-        scale: 0.5 1;
+        scale: 0.96;
     }
 }
 
@@ -1195,8 +1195,16 @@ $dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), 
 // --- Reduced motion ----------------------------------------------------------
 
 @media (prefers-reduced-motion: reduce) {
+    // Focus mode swaps the box and the pill by a short fade alone, at rest
+    // size in both states.
     .box,
     .focusPill,
+    .dock[data-focus] .box,
+    .dock[data-focus] .focusPill {
+        scale: 1;
+        transition: opacity 120ms ease;
+    }
+
     .pill {
         transition: none;
     }

@@ -18,6 +18,11 @@
     --dock-foot: #{rem(20)};
     --dock-gap: #{rem(10)};
 
+    // The panel's open and close, and the canvas edge beside it, once the
+    // move into the workspace has landed.
+
+    --pr-panel-dur: 280ms;
+
     @media (max-height: 520px) {
         // A short window (a phone held sideways, a zoomed page) gives the
         // prompt's frame the canvas frame's whole height.
@@ -74,6 +79,12 @@
         border: 1px solid var(--color-net-mid);
         border-radius: rem(10);
     }
+}
+
+// While the landing leaves, the region holds the dock alone, out of sight, so
+// the landing's travelling prompt knows the dock's box from its first frame.
+.canvasRegion[data-early] {
+    visibility: hidden;
 }
 
 // The scroller under the cards. It pans by drag and hides its bars, as in
@@ -163,6 +174,57 @@
     box-shadow: rem(-6) 0 rem(16) rgb(72 72 66 / 8%);
 }
 
+// After entry the panel, the canvas region and the backdrop's right edge
+// move together on the panel's clock with no delay, and a closing panel
+// stays visible until its slide ends. The entry itself, while the shell
+// carries data-transition, keeps the Studio's clock.
+.shell:not([data-transition]) .backdropDocked {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        border-color var(--ws-dur) ease var(--ws-delay),
+        border-radius var(--ws-dur) ease var(--ws-delay);
+}
+
+.shell:not([data-transition]) .canvasRegion {
+    transition: right var(--pr-panel-dur) var(--ws-ease);
+}
+
+.shell:not([data-transition]) .panel {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
+.shell:not([data-transition]) .panel[data-sp-grow] {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        width var(--sp-edge),
+        box-shadow var(--sp-edge),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
+// Last of the panel rules: a closing panel outranks the grow rule. A wide
+// panel narrows as it slides, on the same clock.
+.shell[data-panel="closed"]:not([data-transition]) .panel {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        width var(--pr-panel-dur) var(--ws-ease),
+        box-shadow var(--pr-panel-dur) var(--ws-ease),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear var(--pr-panel-dur);
+}
+
+// A grow begun from the keyboard moves its edge at once (useGrow.ts). It
+// holds only while the panel is open, so a closing panel keeps its exit.
+.shell[data-panel="open"]:not([data-transition]) .panel[data-sp-grow][data-sp-snap] {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
 // A narrow window: the panel lies over the canvas on the page colour.
 .shell[data-overlay] .panel {
     z-index: 5;
@@ -213,13 +275,12 @@
     visibility: hidden;
 }
 
-// The landing's prompt on its way into the dock.
+// The landing's prompt on its way into the dock. It lands on the dock's box,
+// with the question where the dock's head row draws it (PromptShell.tsx
+// LandingTravel).
 .travel {
     position: fixed;
     z-index: 4;
-    display: flex;
-    align-items: center;
-    padding: 0 rem(16);
     overflow: hidden;
     pointer-events: none;
     background-color: var(--color-white);
@@ -231,14 +292,38 @@
             left var(--ws-dur) var(--ws-ease) var(--ws-delay),
             top var(--ws-dur) var(--ws-ease) var(--ws-delay),
             width var(--ws-dur) var(--ws-ease) var(--ws-delay),
-            height var(--ws-dur) var(--ws-ease) var(--ws-delay);
+            height var(--ws-dur) var(--ws-ease) var(--ws-delay),
+            box-shadow var(--ws-dur) var(--ws-ease) var(--ws-delay);
+
+        .travelText {
+            transition:
+                transform var(--ws-dur) var(--ws-ease) var(--ws-delay),
+                opacity var(--ws-dur) var(--ws-ease) var(--ws-delay);
+        }
+    }
+
+    // Landed on the shown dock, the copy fades away, so the dock's rows under
+    // the question come in by a short fade while its box holds still.
+    &[data-fading] {
+        opacity: 0;
+        transition: opacity 120ms $ease-out;
     }
 }
 
+// The question in the dock's type, 10 in from the box's left edge. The first
+// copy takes the landing field's type and place from LandingTravel.
 .travelText {
+    @include font-size-floor(13px, 1.45);
+
+    position: absolute;
+    top: 0;
+    right: rem(10);
+    left: rem(10);
     overflow: hidden;
+    transform-origin: 0 50%;
     font-family: var(--font-outfit);
-    font-size: rem-floor(14);
+    font-weight: 500;
+    line-height: rem(32);
     color: var(--color-charcoal);
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -255,6 +340,31 @@
 
     .board {
         animation: none;
+    }
+
+    .shell:not([data-transition]) .backdropDocked,
+    .shell:not([data-transition]) .canvasRegion {
+        transition: none;
+    }
+
+    // The panel appears and leaves in place, with a short fade.
+    .shell:not([data-transition]) .panel,
+    .shell:not([data-transition]) .panel[data-sp-grow],
+    .shell[data-panel="open"]:not([data-transition]) .panel[data-sp-grow][data-sp-snap] {
+        transition:
+            opacity 150ms ease,
+            visibility 0s linear 0s;
+    }
+
+    // A closing panel stays where it stands while it fades.
+    .shell[data-panel="closed"] .panel {
+        right: var(--pr-right);
+    }
+
+    .shell[data-panel="closed"]:not([data-transition]) .panel {
+        transition:
+            opacity 150ms ease,
+            visibility 0s linear 150ms;
     }
 }
 

@@ -9,7 +9,8 @@ import { clamp, type Rect, SPAN_DEFAULT, SPAN_MAX, SPAN_MIN, type Slots } from '
  * The placeholders of the cards a running turn has announced, and where each
  * stands. A placeholder holds the place and size its card will take, so the
  * card lands with nothing moving. The card that names it (`placeholderId`)
- * takes over its rect in the same update that drops it.
+ * takes over its rect in the same update that marks it leaving, and the
+ * outline fades out under the card.
  */
 
 /** A card the answer announced (comingCards.ts). A `type` names the kind on
@@ -25,6 +26,8 @@ export type Ghost = Rect & {
     // When it was placed (ms), for the re-seat below.
     at: number;
     leaving?: boolean;
+    // When it started leaving (ms), so it is pruned only once its fade ends.
+    leftAt?: number;
 };
 
 export type Ghosts = Record<string, Ghost>;
@@ -106,9 +109,10 @@ const floorOfGhost = (ghost: Ghost): FloorItem => ({
 
 /**
  * The placeholders after the announced list or the cards change. A placeholder
- * whose card has landed (`claimed`) is dropped at once. One that left the list
- * with no card starts leaving and stops holding its rect until it is
- * pruned. A new entry takes the first spot of its question's block clear of the
+ * whose card has landed (`claimed`) starts leaving and fades out under the
+ * card. One that left the list with no card starts leaving and stops holding
+ * its rect until it is pruned. Either records when it started leaving
+ * (`leftAt`). A new entry takes the first spot of its question's block clear of the
  * cards and the placeholders already standing. Returns `current` itself when
  * nothing changed.
  */
@@ -141,15 +145,21 @@ export const placeGhosts = ({
     for (const [id, ghost] of Object.entries(current)) {
         const entry = wanted.get(id);
 
-        if (claimed.has(id)) {
-            changed = true;
-        } else if (!entry) {
-            next[id] = ghost.leaving ? ghost : { ...ghost, leaving: true };
+        if (claimed.has(id) || !entry) {
+            // A claimed one's card stands in its place, and the outline fades
+            // out under it.
+            next[id] = ghost.leaving ? ghost : { ...ghost, leaving: true, leftAt: now };
             changed ||= !ghost.leaving;
         } else if (!ghost.leaving && now - ghost.at < RESEAT_MS) {
             born.set(id, ghost.at);
         } else if (ghost.leaving || ghost.type !== entry.type || ghost.title !== entry.title) {
-            next[id] = { ...ghost, type: entry.type, title: entry.title, leaving: false };
+            next[id] = {
+                ...ghost,
+                type: entry.type,
+                title: entry.title,
+                leaving: false,
+                leftAt: undefined,
+            };
             changed = true;
         } else {
             next[id] = ghost;

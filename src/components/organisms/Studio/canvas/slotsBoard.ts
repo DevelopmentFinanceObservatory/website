@@ -2,7 +2,7 @@
 import type { SetStateAction } from 'react';
 
 import { type Coming, type Ghosts, placeGhosts, placeholderOf } from './comingGhosts.ts';
-import type { Slots } from './layout.ts';
+import { LEAVE_MS, type Slots } from './layout.ts';
 import { placeSlots, type PlaceSlotsArgs } from './placeSlots.ts';
 
 /**
@@ -31,7 +31,8 @@ export const updateSlots = (board: Board, update: SetStateAction<Slots>): Board 
 /**
  * The board after the widgets, the announced cards or the layout inputs
  * change. The cards are placed first, then the placeholders around them, so a
- * card that lands takes its placeholder's rect in the update that drops it.
+ * card that lands takes its placeholder's rect in the update that marks it
+ * leaving.
  */
 export const placeBoard = (
     board: Board,
@@ -67,12 +68,18 @@ export const placeBoard = (
         : { slots, ghosts, claimed };
 };
 
-/** The board without the cards and placeholders that finished leaving. */
-export const pruneBoard = (board: Board): Board => {
+/**
+ * The board without the cards and placeholders that finished leaving at
+ * `now`. A placeholder goes once LEAVE_MS has passed since it started leaving,
+ * so an earlier placement's prune does not cut a later one's fade short.
+ */
+export const pruneBoard = (board: Board, now = Infinity): Board => {
     const slotEntries = Object.entries(board.slots);
     const ghostEntries = Object.entries(board.ghosts);
     const slots = slotEntries.filter(([, slot]) => !slot.leaving);
-    const ghosts = ghostEntries.filter(([, ghost]) => !ghost.leaving);
+    const ghosts = ghostEntries.filter(
+        ([, ghost]) => !ghost.leaving || now - (ghost.leftAt ?? -Infinity) < LEAVE_MS,
+    );
 
     return slots.length === slotEntries.length && ghosts.length === ghostEntries.length
         ? board

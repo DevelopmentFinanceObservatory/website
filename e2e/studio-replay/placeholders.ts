@@ -261,6 +261,20 @@ export const PLACEHOLDERS: Regression[] = [
 
                     void held.then(async () => {
                         await settle(page);
+                        // The Planned outline fades out before it goes from
+                        // the page.
+                        await page
+                            .waitForFunction(
+                                () =>
+                                    ![...document.querySelectorAll('[data-coming]')].some(
+                                        (ghost) =>
+                                            ghost.querySelector('[class*="comingKind"]')
+                                                ?.textContent === 'Planned',
+                                    ),
+                                null,
+                                { timeout: LEAVE_MS },
+                            )
+                            .catch(() => {});
                         drawing = await labels();
                         release();
                     });

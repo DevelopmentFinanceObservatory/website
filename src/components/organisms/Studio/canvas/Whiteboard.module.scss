@@ -253,6 +253,10 @@
     }
 }
 
+// The clock a card on the Prompt canvas fades in on, and the outline of the
+// placeholder it lands in fades out on.
+$prompt-arrive: 240ms;
+
 // A card the running turn has announced stands as a dashed outline with no
 // fill, at the place and size its card will take, so the card lands with
 // nothing moving. Its radius is the card's own. The border is the scrollbar
@@ -264,19 +268,19 @@
     pointer-events: none;
     border: 1px dashed var(--color-scrollbar);
     border-radius: rem(6);
-    transition: opacity 0.3s ease;
-    animation: coming-in 0.3s ease both;
+
+    // A transition rather than keyframes, so an outline that leaves while it
+    // fades in turns back from the opacity it has reached.
+    transition: opacity 200ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
 }
 
 .comingLeaving {
     opacity: 0;
-    animation: none;
-}
-
-@keyframes coming-in {
-    from {
-        opacity: 0;
-    }
+    transition-duration: $prompt-arrive;
 }
 
 .comingLabel {
@@ -315,15 +319,31 @@
     white-space: nowrap;
 }
 
+// A card on the Prompt canvas fades in place, with no rise. The fade sits on
+// the card's box, which mounts once per card, so a change of view that
+// remounts the card's content does not replay it.
+.boardPrompt .cardBox {
+    animation: prompt-card-in $prompt-arrive $ease-out both;
+}
+
+.boardPrompt .cardBox > article {
+    animation: none;
+}
+
+@keyframes prompt-card-in {
+    from {
+        opacity: 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     // A card on the Prompt canvas appears at once.
-    .boardPrompt article {
+    .boardPrompt .cardBox {
         animation: none;
     }
 
     .coming {
         transition: none;
-        animation: none;
     }
 }
 

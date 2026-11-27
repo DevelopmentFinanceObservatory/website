@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { arrivalToShow } from '../../../components/organisms/Studio/canvas/blocks.ts';
 import type { Coming } from '../../../components/organisms/Studio/canvas/comingGhosts.ts';
+import { LEAVE_MS } from '../../../components/organisms/Studio/canvas/layout.ts';
 import {
     EMPTY_BOARD,
     placeBoard,
@@ -70,11 +71,20 @@ describe('the board takes every change as an update of itself', () => {
 describe('the cards seated in a standing placeholder', () => {
     const standing = place(EMPTY_BOARD, [], [stands]);
 
-    it('are reported once, and the placeholder goes with them', () => {
+    it('are reported once, and the placeholder fades out under them', () => {
         const landed = place(standing, [stat('c1', 'p1')], [], 1000);
 
         assert.deepEqual([...landed.claimed], ['c1']);
-        assert.deepEqual(Object.keys(landed.ghosts), []);
+        assert.deepEqual(Object.keys(landed.ghosts), ['p1']);
+        assert.equal(landed.ghosts['p1']?.leaving, true);
+    });
+
+    it('leave their placeholder for its whole fade, whatever prune comes first', () => {
+        const landed = place(standing, [stat('c1', 'p1')], [], 1000);
+
+        // An earlier placement's prune, due before this fade ends.
+        assert.deepEqual(Object.keys(pruneBoard(landed, 1000 + LEAVE_MS - 50).ghosts), ['p1']);
+        assert.deepEqual(Object.keys(pruneBoard(landed, 1000 + LEAVE_MS).ghosts), []);
     });
 
     it('are not reported for a placeholder that never stood', () => {

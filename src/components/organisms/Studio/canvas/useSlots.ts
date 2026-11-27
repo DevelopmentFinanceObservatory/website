@@ -105,8 +105,14 @@ export const useSlots = ({
                 }),
             );
 
-            // Prune whatever finished fading — a no-op when nothing left.
-            leaveTimersRef.current.push(window.setTimeout(() => setBoard(pruneBoard), LEAVE_MS));
+            // Prune whatever finished fading — a no-op when nothing left. A
+            // placeholder this placement set leaving is due at `now` plus
+            // LEAVE_MS, and one a later placement set leaving is not yet.
+            const due = now + LEAVE_MS;
+
+            leaveTimersRef.current.push(
+                window.setTimeout(() => setBoard((prev) => pruneBoard(prev, due)), LEAVE_MS),
+            );
         });
 
         return () => cancelAnimationFrame(frame);

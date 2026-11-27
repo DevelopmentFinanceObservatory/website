@@ -105,7 +105,8 @@ const gliding = new WeakMap<HTMLElement, () => void>();
  * eased glide over `--ws-dur`, in one direction, or at once under reduced
  * motion (once the sheet has settled) or with behavior `instant`. A new glide takes over from a
  * running one, and a wheel, touch, key or press from the reader ends it.
- * The target is held inside the scroll range as the range changes.
+ * The target is held inside the scroll range as the range changes, so the
+ * glide eases all the way to an edge it was sent past.
  */
 export const scrollView = (scroller: HTMLElement, options: ScrollToOptions): void => {
     gliding.get(scroller)?.();
@@ -158,8 +159,8 @@ export const scrollView = (scroller: HTMLElement, options: ScrollToOptions): voi
         const maxTop = scroller.scrollHeight - scroller.clientHeight;
 
         scroller.scrollTo({
-            left: fromLeft + (Math.min(toLeft, maxLeft) - fromLeft) * eased,
-            top: fromTop + (Math.min(toTop, maxTop) - fromTop) * eased,
+            left: fromLeft + (Math.max(0, Math.min(toLeft, maxLeft)) - fromLeft) * eased,
+            top: fromTop + (Math.max(0, Math.min(toTop, maxTop)) - fromTop) * eased,
             behavior: 'auto',
         });
 

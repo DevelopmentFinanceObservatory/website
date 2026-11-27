@@ -257,7 +257,7 @@
         inset: rem(2);
         background-color: var(--sp-run);
         border-radius: 50%;
-        animation: pulse 1s ease-in-out infinite;
+        animation: pulse 1.8s ease-in-out infinite;
     }
 }
 
@@ -289,8 +289,7 @@
 
 @keyframes pulse {
     50% {
-        opacity: 0.25;
-        scale: 0.7;
+        opacity: 0.4;
     }
 }
 

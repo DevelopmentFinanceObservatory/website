@@ -25,14 +25,15 @@ const canHover = () => matchMedia('(hover: hover)').matches;
  * overview, never while the panel overlays a narrow canvas, and never over a
  * card: the panel stays at its rest width while a card lies under the strip
  * the wide panel adds), and shrinks it once both have been gone
- * SHRINK_AFTER_MS. The
- * aside around the scroller carries the state the stylesheets read:
- * `data-sp-grow` (`open` or `closing`), `data-sp-wide` from the layout switch
- * at the start of a grow to the one at the end of a shrink, and
- * `data-sp-fade` for the dissolve across each switch. Across a switch the
- * row under the pointer, or the focused control, keeps its place, with
- * spacers where the scroll range runs out; they stay while the pointer is
- * inside and ease away once a shrink lands without it.
+ * SHRINK_AFTER_MS. The aside around the scroller carries the state the
+ * stylesheets read: `data-sp-grow` (`open` or `closing`), `data-sp-wide` from
+ * the layout switch at the start of a grow to the one at the end of a shrink,
+ * and `data-sp-fade` for the dissolve across each switch. A grow begun from
+ * keyboard focus carries `data-sp-snap` and switches at once, with no
+ * dissolve and no edge move. Across a switch the row under the pointer, or
+ * the focused control, keeps its place, with spacers where the scroll range
+ * runs out; they stay while the pointer is inside and ease away once a
+ * shrink lands without it.
  */
 export const useGrow = (onPage: boolean) => {
     const { panelRef, overlay } = usePromptShell();
@@ -119,7 +120,7 @@ export const useGrow = (onPage: boolean) => {
 
         if (!region) return;
 
-        if (reducedMotion()) {
+        if (reducedMotion() || keyboardInside()) {
             switchLayout(wide);
 
             return;
@@ -144,6 +145,9 @@ export const useGrow = (onPage: boolean) => {
         cancel('shrinkFade', 'shrinkEnd', 'release');
         grow.current.phase = 'open';
         region.setAttribute('data-sp-grow', 'open');
+        // From the keyboard the edge moves at once (data-sp-snap), and so does
+        // its shrink.
+        region.toggleAttribute('data-sp-snap', keyboardInside());
 
         // A re-entry mid-shrink that kept the wide layout reverses the edge
         // with no dissolve.
@@ -169,6 +173,7 @@ export const useGrow = (onPage: boolean) => {
 
         region.removeAttribute('data-sp-fade');
         region.removeAttribute('data-sp-grow');
+        region.removeAttribute('data-sp-snap');
         grow.current.phase = 'rest';
         later('release', release, reducedMotion() ? 0 : SPACER_EASE_MS);
     };
@@ -181,7 +186,7 @@ export const useGrow = (onPage: boolean) => {
         grow.current.phase = 'closing';
         region.setAttribute('data-sp-grow', 'closing');
 
-        if (now || reducedMotion()) {
+        if (now || reducedMotion() || region.hasAttribute('data-sp-snap')) {
             endShrink();
 
             return;
@@ -288,7 +293,9 @@ export const useGrow = (onPage: boolean) => {
             cancel('rest');
             later('leave', sync, SHRINK_AFTER_MS);
         };
-        const onFocusIn = () => later('focus', sync, GROW_REST_MS);
+        // Focus from the keyboard grows the panel at once; the rest is for a
+        // pointer, which may only be passing through.
+        const onFocusIn = () => later('focus', sync, grow.current.keyboard ? 0 : GROW_REST_MS);
         // The next focused element is known one tick later.
         const onFocusOut = () => later('blur', () => later('leave', sync, SHRINK_AFTER_MS), 0);
         const onKey = (event: KeyboardEvent) => {

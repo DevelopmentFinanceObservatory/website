@@ -648,10 +648,6 @@ const PromptDock = () => {
 
     const pillShows = state.focus;
 
-    if (!inWorkspace) {
-        return null;
-    }
-
     return (
         <div
             ref={frameRef}
@@ -697,6 +693,8 @@ const PromptDock = () => {
             <div
                 ref={boxRef}
                 className={styles.box}
+                // The landing's travelling prompt lands on this box (PromptShell.tsx).
+                data-dock-box=""
                 // Focus falls back here when the control that held it
                 // leaves with a redraw, so the arrow keys and Escape still
                 // reach the page.

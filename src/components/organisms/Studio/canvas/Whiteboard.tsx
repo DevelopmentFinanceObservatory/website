@@ -54,6 +54,7 @@ import styles from './Whiteboard.module.scss';
 
 import GridPattern, { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import { useGridCell } from '@/hooks/useGridCell';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
@@ -65,7 +66,8 @@ import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import type { UnitChoice } from '@/lib/studio/wire';
 
 // The held card is brought into view again once the session panel's width
-// change has settled the canvas's width.
+// change has settled the canvas's width: the panel moves over --pr-panel-dur
+// (280 ms, PromptShell.module.scss), and this waits a little longer.
 const HELD_SETTLE_MS = 320;
 
 // The pause between emptying the status and filling it, so the same words
@@ -224,6 +226,7 @@ const Whiteboard = ({
     // math uses it; `f` scales the raw-px interaction constants (scroll
     // zones, beacon spacing, chart fonts) by the same factor.
     const dockAware = !!prompt;
+    const reducedMotion = usePrefersReducedMotion();
     const placement: Placement = prompt ? 'blocks' : 'pack';
     const reserveRight = prompt?.reserveRight ?? 0;
     const selectedId = prompt?.selectedId ?? null;
@@ -292,7 +295,8 @@ const Whiteboard = ({
         origin,
         view,
         theme,
-        enabled: !centerSingle,
+        // The Prompt canvas draws no wave under reduced motion.
+        enabled: !centerSingle && !(dockAware && reducedMotion),
     });
 
     const { drag, grab, dragged, swap, landing } = dragging;
@@ -590,8 +594,16 @@ const Whiteboard = ({
             return undefined;
         }
 
+        // The width before the panel moves: a second move is due only when
+        // the panel's slide changed it.
+        const width = scrollerOf(boardRef)?.clientWidth ?? 0;
+
         revealHeld();
-        const timer = window.setTimeout(revealHeld, HELD_SETTLE_MS);
+        const timer = window.setTimeout(() => {
+            if ((scrollerOf(boardRef)?.clientWidth ?? 0) !== width) {
+                revealHeld();
+            }
+        }, HELD_SETTLE_MS);
 
         return () => window.clearTimeout(timer);
     }, [heldId]);
@@ -622,7 +634,24 @@ const Whiteboard = ({
 
     useFilterFly({ boardRef, filter, slots, views, origin, view, CELL, stopGlide: pan.stopGlide });
 
-    const flyTo = (cx: number, cy: number) => pan.flyTo(cx, cy, view.width, view.height);
+    const flyTo = (cx: number, cy: number) => {
+        const scroller = scrollerOf(boardRef);
+
+        // The Prompt canvas moves on its one glide, which also honours
+        // reduced motion.
+        if (dockAware && scroller) {
+            pan.stopGlide();
+            scrollView(scroller, {
+                left: cx - view.width / 2,
+                top: cy - view.height / 2,
+                behavior: scrollBehavior(),
+            });
+
+            return;
+        }
+
+        pan.flyTo(cx, cy, view.width, view.height);
+    };
 
     // Fly to a card by id (Activity's "View on whiteboard", the chat chips),
     // published to the parent through the ref.
@@ -712,9 +741,9 @@ const Whiteboard = ({
             onPointerMove={pan.movePan}
             onPointerUp={pan.endPan}
             onPointerCancel={pan.endPan}
-            // Test rig for the arrival shockwave: a plain click on the empty
-            // sheet (no pan, no card, no interactive target) ripples from
-            // wherever you clicked.
+            // Test rig for the arrival shockwave: on the classic canvas a plain
+            // click on the empty sheet (no pan, no card, no interactive
+            // target) ripples from wherever you clicked.
             onClick={(event) => {
                 const press = pressRef.current;
 
@@ -745,6 +774,12 @@ const Whiteboard = ({
                         'article, button, a, input, textarea, select, [data-beacon], [data-nowave]',
                     )
                 ) {
+                    return;
+                }
+
+                // On the Prompt canvas a press on the empty sheet clears the
+                // selection, and draws no ripple.
+                if (dockAware) {
                     return;
                 }
 

@@ -54,11 +54,12 @@ describe('placeGhosts', () => {
         assert.equal(second['a'], first['a']);
     });
 
-    it('drops a placeholder whose card landed and fades one whose line ended with no card', () => {
+    it('fades a placeholder whose card landed and one whose line ended with no card', () => {
         const both = ghosts([line('a'), line('b')]);
         const after = ghosts([line('b')], both, {}, new Set(['a']), 1000);
 
-        assert.equal(after['a'], undefined);
+        assert.equal(after['a']?.leaving, true);
+        assert.equal(after['a']?.col, both['a']?.col);
         assert.equal(after['b']?.leaving, undefined);
 
         const failed = ghosts([], both, {}, new Set(), 1000);

@@ -4,8 +4,9 @@
  * layout. Pure, so the rules run under `node --test`.
  */
 
-/** Pointer rest, or keyboard focus, before the panel grows (ms). */
-export const GROW_REST_MS = 60;
+/** Pointer rest before the panel grows (ms): long enough that a pointer
+ *  slowing on its way across the panel does not count. */
+export const GROW_REST_MS = 200;
 
 /** Pointer and focus absent this long before the panel shrinks (ms). */
 export const SHRINK_AFTER_MS = 220;
