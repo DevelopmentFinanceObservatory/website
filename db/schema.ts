@@ -335,9 +335,14 @@ export type LibraryStep = { title: string; detail: string | null };
  *
  * A withdrawn artifact keeps its row, so its slug stays taken and its URL
  * shows a withdrawn notice. `withdrawn_at` marks it, and the share is taken
- * down in dfo-apis. `share_write_token` is cleared once the share is gone
- * from dfo-apis or recorded in `share_cleanup`, so a withdrawn row that
- * holds one owes a take-down.
+ * down in dfo-apis. The `library_artifact_erase_withdrawn` trigger
+ * (migration 0033) erases the publisher's text from any row written with
+ * `withdrawn_at` set: `title` and `description` become the empty string,
+ * `content_title` and `content` null, `sources` and `steps` empty, and the
+ * topic links are deleted. The slug, kind, mode, dates, `published_by`,
+ * `share_id` and `publish_key` stay. An artifact is withdrawn only once its
+ * share is gone from dfo-apis or recorded in `share_cleanup`, and the same
+ * write clears `share_write_token`.
  */
 export const libraryArtifact = pgTable(
     'library_artifact',

@@ -45,7 +45,6 @@ export type LibraryArtifact = {
 /** What the address of a withdrawn artifact shows. */
 export type WithdrawnArtifact = {
     slug: string;
-    title: string;
     kind: ArtifactKind;
     /** ISO 8601. */
     publishedAt: string;
