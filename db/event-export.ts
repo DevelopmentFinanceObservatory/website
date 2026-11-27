@@ -20,6 +20,7 @@ import type {
     SearchSource,
 } from '../src/lib/search/searchEvents.ts';
 import type { SearchShareMode } from '../src/lib/search/searchShareRequest.ts';
+import type { HandoffTrigger } from '../src/lib/search/studioHandoff.ts';
 import type { DeclinedReason, Known, ResolveResponse } from '../src/lib/search/types.ts';
 
 import {
@@ -155,6 +156,7 @@ const DATA_VIEW_VIA = every<DataViewVia>()(['share']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
 const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
+const HANDOFF_TRIGGERS = every<HandoffTrigger>()(['auto', 'offer', 'button']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -209,6 +211,7 @@ export const PROP_RULES = {
         searchId: 'token',
         traceId: 'token',
         seeds: 'count',
+        trigger: HANDOFF_TRIGGERS,
     },
     'search.action': {
         ...EVERY_EVENT,
@@ -256,6 +259,7 @@ export const PROP_RULES = {
         guest: 'boolean',
     },
     'auth.signin': { ...EVERY_EVENT, provider: 'token' },
+    'studio.route_back': { ...EVERY_EVENT, traceId: 'token' },
     'guest.wall_hit': { ...EVERY_EVENT, prompts: 'count' },
     // Literals in src/app/api/feedback/route.ts, without a named type.
     'feedback.submit': { ...EVERY_EVENT, kind: ['chat', 'widget'] },

@@ -73,8 +73,12 @@
  *   edit post waits out the whole grace for an event that isn't coming.
  * - edits: every part's latest successful identity/parsed entry, ready
  *   for permalink.ts's encodePermalinkState.
- * - `run(input, label, source)`: a fresh raw_text query; full replace,
- *   aborts any edit post in flight too.
+ * - `run(input, label, source, { studioRouting })`: a fresh raw_text query;
+ *   full replace, aborts any edit post in flight too. `studioRouting` opts
+ *   the run in to the search API's Studio router (buildRequest).
+ * - `route: StudioRoute | null`: the router's verdict on the current run,
+ *   from the early `route` frame or the response's `route`. Null before
+ *   one arrives, and on every run that did not opt in.
  * - `showStartingPoint(label, source)`: settles on a catalogue answer with
  *   no place and no search call, for the page to fill from the catalogue it
  *   holds, and records `search.start_point`.
@@ -208,6 +212,7 @@ import {
     type Slot,
     type Spec,
     type SpecObservations,
+    type StudioRoute,
 } from '@/lib/search/types';
 import {
     searchPostTracker,
@@ -327,6 +332,7 @@ export const useSearchRun = () => {
     const [partSentencePlans, setPartSentencePlans] = useState<(SentenceToken[] | null)[]>([]);
     const [response, setResponse] = useState<Resolution | null>(null);
     const [answer, setAnswer] = useState<PartlessAnswer | null>(null);
+    const [route, setRoute] = useState<StudioRoute | null>(null);
     const [expectedParts, setExpectedParts] = useState<ExpectedPart[]>([]);
     const [runtimes, setRuntimes] = useState<PartRuntime[]>([]);
     const [editsByPart, setEditsByPart] = useState<Record<number, PermalinkEdit>>({});
@@ -626,18 +632,22 @@ export const useSearchRun = () => {
             controller: AbortController,
             input: Extract<SearchInput, { kind: 'raw_text' | 'dataset_resubmit' }>,
             tracker: SearchPostTracker,
-            onResponse?: (normalized: Resolution) => void,
+            onResponse: ((normalized: Resolution) => void) | undefined,
+            studioRouting: boolean,
         ) => {
             const isCurrent = () => runOp.current === op;
             // This post's own answer, for its usage event (`settlePost`).
             let landed: ResolveResponse | null = null;
 
             resolveStream(
-                buildRequest(input, true),
+                buildRequest(input, true, { studioRouting }),
                 (event) => {
                     if (!isCurrent()) return;
                     if (applyTrailingEvent(event)) return;
                     switch (event.kind) {
+                        case 'route':
+                            setRoute(event.route);
+                            break;
                         case 'interpretation':
                             setExpectedParts(
                                 event.variables.map((variableText, i) => ({
@@ -680,6 +690,11 @@ export const useSearchRun = () => {
                             tracker.respond(normalized);
                             if (searchRef.current) {
                                 searchRef.current.traceId = normalized.diagnostics.trace_id;
+                            }
+                            // The response repeats the early frame's route; a
+                            // response without one keeps the frame's.
+                            if (normalized.route) {
+                                setRoute(normalized.route);
                             }
                             // A catalogue or declined answer has no parts:
                             // the run settles on its own `done` with no
@@ -765,6 +780,7 @@ export const useSearchRun = () => {
             label: string,
             source: SearchSource,
             onResponse?: (normalized: Resolution) => void,
+            studioRouting = false,
         ): boolean => {
             if (leaveRef.current?.left()) {
                 return false;
@@ -807,6 +823,7 @@ export const useSearchRun = () => {
             setPartSentencePlans([]);
             setResponse(null);
             setAnswer(null);
+            setRoute(null);
             setExpectedParts([]);
             setRuntimes([]);
             setEditsByPart({});
@@ -820,7 +837,7 @@ export const useSearchRun = () => {
             setPendingSnapshotSpecs(new Set());
             setUnreadableRefs(new Set());
 
-            runBaseStream(op, controller, input, tracker, onResponse);
+            runBaseStream(op, controller, input, tracker, onResponse, studioRouting);
 
             return true;
         },
@@ -834,8 +851,9 @@ export const useSearchRun = () => {
             input: Extract<SearchInput, { kind: 'raw_text' }>,
             label: string,
             source: SearchSource,
+            { studioRouting = false }: { studioRouting?: boolean } = {},
         ) => {
-            startRun(input, label, source);
+            startRun(input, label, source, undefined, studioRouting);
         },
         [startRun],
     );
@@ -862,6 +880,7 @@ export const useSearchRun = () => {
         setPartSentencePlans([]);
         setResponse(null);
         setAnswer(null);
+        setRoute(null);
         setExpectedParts([]);
         setRuntimes([]);
         setEditsByPart({});
@@ -1424,6 +1443,7 @@ export const useSearchRun = () => {
         partSentencePlans,
         response,
         answer,
+        route,
         parts,
         expectedParts,
         optionsBySpec,

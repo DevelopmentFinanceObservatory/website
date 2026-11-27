@@ -10,6 +10,21 @@ import type { PromptSource } from './wire.ts';
 // Free prompts a day for a signed-out visitor, per network address.
 export const GUEST_PROMPTS = 5;
 
+// The localStorage key under which Studio counts a guest's prompts in this
+// browser. The proxy holds the real allowance; this count decides when the
+// guest wall goes up and whether Get Data moves a guest to Studio.
+export const GUEST_PROMPTS_KEY = 'dfo-guest-prompts';
+
+/** The guest prompt count `storage` holds under GUEST_PROMPTS_KEY, 0 when
+ *  it holds none. */
+export const guestPromptsUsed = (storage: Pick<Storage, 'getItem'>): number =>
+    Number(storage.getItem(GUEST_PROMPTS_KEY)) || 0;
+
+/** Whether a guest has no free prompt left, having spent or queued `used`.
+ *  A signed-in user is never out. */
+export const guestOutOfPrompts = ({ guest, used }: { guest: boolean; used: number }): boolean =>
+    guest && used >= GUEST_PROMPTS;
+
 // Prompts a day for a signed-in user, shared by every account on one inbox.
 export const USER_DAILY_PROMPTS = 75;
 
@@ -50,7 +65,7 @@ export const promptEvent = ({
     length?: number;
     source?: PromptSource;
 }): PromptEvent | null =>
-    guest && used + queued >= GUEST_PROMPTS
+    guestOutOfPrompts({ guest, used: used + queued })
         ? null
         : {
               turn: sent + queued + 1,

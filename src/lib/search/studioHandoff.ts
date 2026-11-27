@@ -6,7 +6,7 @@
  * all describe the data the user sees.
  */
 
-import { HANDOFF_VIA_PARAM } from '../studio/examples.ts';
+import { HANDOFF_TRACE_PARAM, HANDOFF_VIA_PARAM } from '../studio/examples.ts';
 import type { Seed, SeedOperation } from '../studio/wire.ts';
 
 import { unflattenSpec } from './searchClient.ts';
@@ -122,18 +122,48 @@ export function handoffFromExample({
     return fromExample && !edited;
 }
 
+/** What started a Studio handoff: the search API's automatic move (`auto`),
+ *  a click on its Studio offer (`offer`), or a click on any other Studio
+ *  action (`button`). */
+export type HandoffTrigger = 'auto' | 'offer' | 'button';
+
+/** How a handed-over question came from search, as Studio's `via` param. */
+export type HandoffVia = 'example' | 'route_auto' | 'route_offer';
+
+/** The `via` a handoff carries: the route's own value for a routed one, and
+ *  `example` for a button click on a search example's question. */
+export function handoffVia({
+    trigger,
+    fromExample,
+}: {
+    trigger: HandoffTrigger;
+    fromExample: boolean;
+}): HandoffVia | null {
+    if (trigger === 'auto') return 'route_auto';
+    if (trigger === 'offer') return 'route_offer';
+    return fromExample ? 'example' : null;
+}
+
 /** Studio's URL for a handoff: the question, the token the seeds are
- *  stored under when there are any, and `via=example` for a search
- *  example's question. */
-export function studioHref(question: string, token: string | null, fromExample = false): string {
+ *  stored under when there are any, how the question came (`via`), and the
+ *  search's trace id for a routed one. */
+export function studioHref(
+    question: string,
+    token: string | null,
+    { via = null, traceId = null }: { via?: HandoffVia | null; traceId?: string | null } = {},
+): string {
     const params = new URLSearchParams({ q: question });
 
     if (token) {
         params.set('seed', token);
     }
 
-    if (fromExample) {
-        params.set(HANDOFF_VIA_PARAM, 'example');
+    if (via) {
+        params.set(HANDOFF_VIA_PARAM, via);
+    }
+
+    if (traceId && (via === 'route_auto' || via === 'route_offer')) {
+        params.set(HANDOFF_TRACE_PARAM, traceId);
     }
 
     return `/studio?${params}`;

@@ -40,6 +40,7 @@ import {
     type SpecIdentity,
 } from './types.ts';
 import { statVarsUnreadable } from './view.ts';
+import type { HandoffTrigger } from './studioHandoff.ts';
 
 /** How many entity terms a refused part keeps. */
 export const EVENT_SAMPLE = 3;
@@ -117,6 +118,11 @@ export type SearchEventProps = Partial<SearchSettleProps> & {
     operations: OperationVerb[];
     /** Studio seeds stored by a handoff click. */
     seeds?: number;
+    /** What started a Studio handoff. */
+    trigger?: HandoffTrigger;
+    /** The search API router's studio probability behind a routed handoff;
+     *  null when the route came from the question read. */
+    probability?: number | null;
     /** Set when the event had to drop to its minimal form or the floor. */
     truncated?: true;
     /** The spec id of each resolved part, in order; flat so the export can keep it. */
@@ -272,6 +278,8 @@ export function searchEventProps({
     reason,
     parts,
     seeds,
+    trigger,
+    probability,
     run,
 }: {
     query: string;
@@ -281,6 +289,9 @@ export function searchEventProps({
     parts: HydratedPart[];
     /** A caller's own fields ride inside the fit, so none is added after it. */
     seeds?: number;
+    /** A Studio hand-off's trigger, and its route's probability when routed. */
+    trigger?: HandoffTrigger;
+    probability?: number | null;
     /** A settled post's fields, or the ids a Studio hand-off carries. */
     run?: Partial<SearchSettleProps>;
 }): SearchEventProps {
@@ -367,6 +378,8 @@ export function searchEventProps({
         reason,
         operations,
         ...(seeds !== undefined && { seeds }),
+        ...(trigger && { trigger }),
+        ...(probability !== undefined && { probability }),
         ...(rung === 'minimal' || rung === 'floor' ? { truncated: true as const } : {}),
         specIds,
         measures,

@@ -695,3 +695,23 @@ test('a homepage handoff carries typed or example; any other value is a permalin
         assert.equal(arrival(href), 'permalink');
     }
 });
+
+test("a routed Studio hand-off carries its trigger and the route's probability", () => {
+    const props = (trigger: 'auto' | 'button', probability?: number | null) =>
+        searchEventProps({
+            query: 'Why is aid to Kenya falling?',
+            edited: false,
+            kind: 'declined',
+            reason: 'requires_analysis',
+            parts: [],
+            seeds: 0,
+            trigger,
+            ...(probability !== undefined && { probability }),
+        });
+
+    assert.equal(props('auto', 0.94).trigger, 'auto');
+    assert.equal(props('auto', 0.94).probability, 0.94);
+    assert.equal(props('auto', null).probability, null);
+    assert.equal(props('button').trigger, 'button');
+    assert.equal('probability' in props('button'), false);
+});

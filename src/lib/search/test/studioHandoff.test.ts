@@ -16,6 +16,7 @@ import {
     handoffFromExample,
     handoffQuestion,
     handoffSeeds,
+    handoffVia,
     searchFromExample,
     studioHref,
 } from '../studioHandoff.ts';
@@ -158,9 +159,28 @@ test('studioHref carries the question, and the token when there is one', () => {
     assert.equal(studioHref('Aid to Kenya?', null), '/studio?q=Aid+to+Kenya%3F');
     assert.equal(studioHref('Aid to Kenya?', 'abc-123'), '/studio?q=Aid+to+Kenya%3F&seed=abc-123');
     assert.equal(
-        studioHref('Aid to Kenya?', 'abc-123', true),
+        studioHref('Aid to Kenya?', 'abc-123', { via: 'example', traceId: 't-1' }),
         '/studio?q=Aid+to+Kenya%3F&seed=abc-123&via=example',
     );
+    assert.equal(
+        studioHref('Why is aid falling?', null, { via: 'route_auto', traceId: 't-1' }),
+        '/studio?q=Why+is+aid+falling%3F&via=route_auto&trace=t-1',
+    );
+});
+
+test('handoffVia names a routed handoff by its route, and a click by its example', async (t) => {
+    const cases: [Parameters<typeof handoffVia>[0], ReturnType<typeof handoffVia>][] = [
+        [{ trigger: 'auto', fromExample: true }, 'route_auto'],
+        [{ trigger: 'offer', fromExample: false }, 'route_offer'],
+        [{ trigger: 'button', fromExample: true }, 'example'],
+        [{ trigger: 'button', fromExample: false }, null],
+    ];
+
+    for (const [input, expected] of cases) {
+        await t.test(`${input.trigger}, fromExample ${input.fromExample}`, () =>
+            assert.equal(handoffVia(input), expected),
+        );
+    }
 });
 
 test('a Studio click after a place and year edit hands over the edited question and seed', () => {

@@ -510,8 +510,9 @@ type SearchSentenceHeadingProps = Pick<
     // What the <h1> shows before the response lands: the query, or the
     // early heading's tokens.
     fallback: ReactNode;
-    // A departure's Studio action (operation_not_applied).
-    onStudio: () => void;
+    // A departure's Studio action (operation_not_applied); without it the
+    // departure shows its text alone.
+    onStudio?: () => void;
     // What Refine offers (answerRefineItems), and a departure's way to open
     // it at one of those entries.
     refine: RefineItem[];
@@ -2083,6 +2084,8 @@ export const SearchSentenceHeading = ({
     // binding.
     const runAction = (action: DepartureAction, asked: string | null | undefined) => {
         if (action.kind === 'studio') {
+            if (!onStudio) return null;
+
             const operations = parts[action.partIndex]?.part?.operations ?? [];
             const operation =
                 operations.find((candidate) => candidate.phrase.trim() === asked?.trim()) ??

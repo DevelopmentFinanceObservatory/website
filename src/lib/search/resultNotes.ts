@@ -233,15 +233,18 @@ export function offersStudioCallout(part: unknown, question?: string | null): bo
 }
 
 /** Collapses every no_data part whose callout is the generic 'studio'
- *  hand-off down to the first. A flagged/alternate callout, the
- *  nearest_real fallback, or a part offersAmbiguousPicker accepts (its own
- *  "Choose a Match" picker, not the generic panel) keeps rendering once per
- *  part since each carries that part's own text or its own picker. */
+ *  hand-off down to the first, or to none when the page already offers
+ *  Studio (`studioOffered`, the search API's route offer). A flagged/alternate
+ *  callout, the nearest_real fallback, or a part offersAmbiguousPicker
+ *  accepts (its own "Choose a Match" picker, not the generic panel) keeps
+ *  rendering once per part since each carries that part's own text or its
+ *  own picker. */
 export function studioHandoffParts<T extends { part: unknown }>(
     noDataParts: T[],
     question?: string | null,
+    studioOffered = false,
 ): T[] {
-    let seenStudio = false;
+    let seenStudio = studioOffered;
 
     return noDataParts.filter((entry) => {
         if (!offersStudioCallout(entry.part, question)) return true;

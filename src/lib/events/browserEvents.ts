@@ -21,6 +21,7 @@ export const BROWSER_EVENT_NAMES = [
     'studio.prompt',
     'studio.card',
     'studio.session_end',
+    'studio.route_back',
     'studio.download',
     'share.copy',
     'guest.wall_hit',

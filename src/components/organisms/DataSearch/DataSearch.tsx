@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import styles from './DataSearch.module.scss';
 import ReadingCards from './ReadingCards';
@@ -22,6 +22,7 @@ import {
     type RefineOpen,
 } from './SearchSentence';
 import SearchTable from './SearchTable';
+import StudioOffer from './StudioOffer';
 import type { DatasetDownloaded } from './useDatasetDownload';
 import { useSearchRun } from './useSearchRun';
 import type { ChangeAction } from './WhyPanel';
@@ -72,11 +73,15 @@ import {
     handoffFromExample,
     handoffQuestion,
     handoffSeeds,
+    handoffVia,
     studioHref,
+    type HandoffTrigger,
 } from '@/lib/search/studioHandoff';
+import { routeMove } from '@/lib/search/studioRoute';
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
+import { guestOutOfPrompts, guestPromptsUsed } from '@/lib/studio/promptAllowance';
 import { writeSeeds } from '@/lib/studio/seedStore';
 
 /** The early, pre-response heading's own tokens, read-only (see
@@ -129,7 +134,22 @@ type SearchAction =
     | ({ action: 'download'; partIndex: number } & DatasetDownloaded)
     | { action: 'share'; mode: SearchShareMode; shareId: string };
 
-const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
+// Studio's guest prompt count lives in localStorage; another tab's Studio
+// changes it through the `storage` event.
+const subscribeStorage = (listener: () => void) => {
+    window.addEventListener('storage', listener);
+
+    return () => window.removeEventListener('storage', listener);
+};
+
+const DataSearch = ({
+    catalogue,
+    guest,
+}: {
+    catalogue: SearchCatalogue | null;
+    // Signed out: Studio answers only while the guest has a free prompt.
+    guest: boolean;
+}) => {
     const router = useRouter();
     const searchParams = useSearchParams();
     // The URL is the state: `q` is the query text, `s` the permalink's
@@ -150,6 +170,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         partSentencePlans,
         response,
         answer,
+        route,
         parts,
         expectedParts,
         edits,
@@ -228,13 +249,14 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
     // A query as text: the starting point's own question shows the catalogue
     // the page holds, with no search call, and records `search.start_point`.
-    // Other text is a search, whose events useSearchRun sends.
+    // Other text is a search, whose events useSearchRun sends, opted in to
+    // the search API's Studio router.
     const runQuery = useCallback(
         (text: string, source: SearchSource) => {
             if (text === STARTING_POINT_QUERY) {
                 showStartingPoint(text, source);
             } else {
-                run({ kind: 'raw_text', query: text }, text, source);
+                run({ kind: 'raw_text', query: text }, text, source, { studioRouting: true });
             }
         },
         [run, showStartingPoint],
@@ -327,53 +349,112 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const answerKind = answer?.kind ?? 'resolution';
     const answerReason = answer?.kind === 'declined' ? answer.reason : null;
 
-    // Every Studio action (a declined answer's, an operation_not_applied
-    // departure's, the side panel's, a no_data part's callout) opens Studio
-    // on the question, with a seed for each definite part, stored in this
-    // tab's sessionStorage. When the seeds cannot be stored, Studio opens on
-    // the question alone.
-    const openStudio = useCallback(() => {
-        const edited = handoffEdited({ editCount: edits.length, fromShare: openedShare !== null });
-        const question = handoffQuestion({
-            query,
-            edited,
-            sentence: sentenceHeadingText(response),
-        });
-        const seeds = handoffSeeds(parts);
-        const token = writeSeeds(() => window.sessionStorage, seeds);
-        const { searchId, traceId } = searchIds();
+    // The search API's Studio route for this run: `auto` moves the reader
+    // to Studio once the run is done, and `offer` shows the Studio card. A
+    // guest with no free prompt left is offered Studio instead of moved.
+    const guestUsed = useSyncExternalStore(
+        subscribeStorage,
+        () => guestPromptsUsed(localStorage),
+        () => 0,
+    );
+    const move = routeMove({
+        route,
+        kind: answer?.kind ?? (response ? 'resolution' : null),
+        guestOutOfPrompts: guestOutOfPrompts({ guest, used: guestUsed }),
+    });
+    // The Studio card stands in for every other Studio action on a
+    // resolution. A declined answer's own "Ask in Studio" is its offer.
+    const studioOffered = move === 'offer' && !answer;
 
-        track(
-            'search.studio_handoff',
-            searchEventProps({
+    // Every Studio action (a declined answer's, an operation_not_applied
+    // departure's, the side panel's, a no_data part's callout, the route's
+    // offer card, the route's automatic move) opens Studio on the question,
+    // with a seed for each definite part, stored in this tab's
+    // sessionStorage. When the seeds cannot be stored, Studio opens on the
+    // question alone. The automatic move replaces /data in the history, so
+    // Back does not run the search again and move the reader once more.
+    const openStudio = useCallback(
+        (trigger: HandoffTrigger) => {
+            const edited = handoffEdited({
+                editCount: edits.length,
+                fromShare: openedShare !== null,
+            });
+            const question = handoffQuestion({
                 query,
                 edited,
-                kind: answerKind,
-                reason: answerReason,
-                parts,
-                seeds: token ? seeds.length : 0,
-                run: { ...(searchId && { searchId }), traceId },
-            }),
-        );
-        router.push(
-            studioHref(
-                question,
-                token,
-                handoffFromExample({ fromExample: searchIsExample(), edited }),
-            ),
-        );
-    }, [
-        router,
-        query,
-        edits.length,
-        openedShare,
-        response,
-        parts,
-        answerKind,
-        answerReason,
-        searchIds,
-        searchIsExample,
-    ]);
+                sentence: sentenceHeadingText(response),
+            });
+            const seeds = handoffSeeds(parts);
+            const token = writeSeeds(() => window.sessionStorage, seeds);
+            const { searchId, traceId } = searchIds();
+
+            track(
+                'search.studio_handoff',
+                searchEventProps({
+                    query,
+                    edited,
+                    kind: answerKind,
+                    reason: answerReason,
+                    parts,
+                    seeds: token ? seeds.length : 0,
+                    trigger,
+                    ...(trigger !== 'button' && route && { probability: route.probability }),
+                    run: { ...(searchId && { searchId }), traceId },
+                }),
+            );
+
+            const href = studioHref(question, token, {
+                via: handoffVia({
+                    trigger,
+                    fromExample: handoffFromExample({ fromExample: searchIsExample(), edited }),
+                }),
+                traceId,
+            });
+
+            if (trigger === 'auto') {
+                router.replace(href);
+            } else {
+                router.push(href);
+            }
+        },
+        [
+            router,
+            route,
+            query,
+            edits.length,
+            openedShare,
+            response,
+            parts,
+            answerKind,
+            answerReason,
+            searchIds,
+            searchIsExample,
+        ],
+    );
+    // A click on a Studio action. While the route's offer is on screen, the
+    // click is the offer's.
+    const studioClick = useCallback(
+        () => openStudio(move === 'offer' ? 'offer' : 'button'),
+        [openStudio, move],
+    );
+
+    // The automatic move, once per search, after the run's `done` so the
+    // search settles (its usage event, the API's cached answer) first.
+    const movedSearchRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (move !== 'auto' || phase !== 'done') {
+            return;
+        }
+
+        const { searchId } = searchIds();
+
+        if (!searchId || movedSearchRef.current === searchId) {
+            return;
+        }
+
+        movedSearchRef.current = searchId;
+        openStudio('auto');
+    }, [move, phase, searchIds, openStudio]);
 
     // A visitor's action on the answer on screen (docs/analytics.md): the
     // ids are read as the visitor acts, and the returned sender records it.
@@ -810,7 +891,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // Collapses to the first no_data part whose callout is the generic
     // 'studio' hand-off panel (identical text per part). Flagged/alternate
     // callouts and an ambiguous part's own picker still render once each.
-    const noDataPartsToRender = studioHandoffParts(noDataCardParts(parts, isSlotted), query);
+    const noDataPartsToRender = studioHandoffParts(
+        noDataCardParts(parts, isSlotted),
+        query,
+        studioOffered,
+    );
 
     const unsupportedPartsToRender = parts.filter(
         (part) => part.part?.status === 'unsupported' && !isSlotted(part.index),
@@ -995,7 +1080,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     onShowCatalogue={() =>
                                         submitQuery(STARTING_POINT_QUERY, 'catalogue')
                                     }
-                                    onStudio={openStudio}
+                                    onStudio={studioClick}
                                 />
                             </div>
                         </div>
@@ -1042,7 +1127,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     onEditParsed={editParsed}
                                     onEditShared={editShared}
                                     onRefine={(text) => submitQuery(text, 'refine')}
-                                    onStudio={openStudio}
+                                    onStudio={studioOffered ? undefined : studioClick}
                                     refine={refine}
                                     onRefineOpen={setRefineOpen}
                                     openMenu={openMenu}
@@ -1089,13 +1174,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                         changeAction={changeAction}
                                     />
                                 )}
+
+                                {studioOffered && <StudioOffer onStudio={studioClick} />}
                             </div>
                             {response && definiteParts.length === 1 && (
                                 <SearchPanel
                                     spec={definiteParts[0].hydratedSpec}
                                     note={downloadNote(definiteParts[0].part?.warnings)}
                                     createShare={createShare}
-                                    onStudio={studioDeparture ? undefined : openStudio}
+                                    onStudio={
+                                        studioDeparture || studioOffered ? undefined : studioClick
+                                    }
                                     onDownloadStart={() => {
                                         const sendAction = startAction();
                                         const partIndex = definiteParts[0].index;
@@ -1121,7 +1210,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     partIndex={part.index}
                                     onPick={applySuggestion}
                                     onEditParsed={editParsed}
-                                    onStudio={openStudio}
+                                    onStudio={studioClick}
                                     question={query}
                                 />
                             ))}

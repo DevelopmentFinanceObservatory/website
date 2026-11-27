@@ -47,9 +47,16 @@ export const pickExamples = (
     return deck.slice(0, drawn);
 };
 
-/** The `/studio` query param that marks a handed-over question as a Data
- *  search example (studioHref in src/lib/search/studioHandoff.ts). */
+/** The `/studio` query param that says how a question came from Data
+ *  search (studioHref in src/lib/search/studioHandoff.ts): `example` for a
+ *  Data search example, `route_auto` for the search API's automatic move to
+ *  Studio, and `route_offer` for a click on its Studio offer. */
 export const HANDOFF_VIA_PARAM = 'via';
+
+/** The `/studio` query param that carries the trace id of the search a
+ *  routed question (`route_auto` or `route_offer`) came from, so the
+ *  way-back event joins the search API's log. */
+export const HANDOFF_TRACE_PARAM = 'trace';
 
 /** The prompt source of a `/studio?q=` arrival: `search_example` for
  *  `via=example`, and none for anything else. */

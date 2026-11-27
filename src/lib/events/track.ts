@@ -33,6 +33,7 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - studio.prompt     a prompt sent in the Studio (turn and intent, without the text)
  * - studio.card       a card the harness put on the canvas (kind, source, years, unit)
  * - studio.session_end  a Studio session left (turns, cards, pins)
+ * - studio.route_back  the way back to the data search after a routed move to Studio
  * - auth.signin       a sign-in (provider)
  * - guest.wall_hit    a guest ran out of free prompts
  * - feedback.submit   a feedback sent (kind)
@@ -72,6 +73,7 @@ export const EVENT_NAMES = [
     'studio.prompt',
     'studio.card',
     'studio.session_end',
+    'studio.route_back',
     'auth.signin',
     'guest.wall_hit',
     'feedback.submit',
