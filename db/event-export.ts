@@ -1,7 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import fs from 'node:fs/promises';
 
-import type { GalleryKind } from '../src/components/organisms/Gallery/galleryData.ts';
 import type { PromptIntent } from '../src/lib/studio/promptAllowance.ts';
 import type { StudioVariant } from '../src/lib/studio/variant.ts';
 import type { PromptSource } from '../src/lib/studio/wire.ts';
@@ -149,7 +148,9 @@ const PROMPT_INTENTS = every<PromptIntent>()([
 // A typed prompt has no `source`.
 const PROMPT_SOURCES = every<PromptSource>()(['example', 'availability', 'search_example']);
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
-const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
+// The kinds the recorded gallery.open rows carry. Nothing emits the event,
+// and its rows stay in the event table.
+const GALLERY_KINDS = ['conversation', 'canvas', 'card', 'dataset'] as const;
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
 const DATA_VIEW_VIA = every<DataViewVia>()(['share']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);

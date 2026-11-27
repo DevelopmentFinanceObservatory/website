@@ -6,6 +6,10 @@ import type { Metadata } from 'next';
  */
 export const SITE_ORIGIN = 'https://developmentfinance.org';
 
+/** The metadata of the site's not-found page, which a hidden page reuses so its
+ *  404 carries nothing of the page. */
+export const NOT_FOUND_METADATA: Metadata = { title: 'Page not found — DFO' };
+
 export const SITE_NAME = 'Development Finance Observatory';
 
 // The website leaves NEXT_PUBLIC_SITE_LINK_ORIGIN unset. The prototypes app
@@ -40,21 +44,6 @@ export const SITE_CARD: Card = {
     type: CARD_TYPE,
     alt: 'Development Finance Observatory: Development Finance Data. Simplified.',
 };
-
-/**
- * Next suffixes a metadata image under a route group with a hash of its
- * parent path, so the gallery item card's address carries one.
- * src/lib/test/crawl.test.ts checks it against Next's own.
- */
-const GALLERY_CARD_SUFFIX = '1pc5v7';
-
-/** A gallery item's own card, drawn by
- *  app/(studio)/insights/gallery/[slug]/opengraph-image.tsx. */
-export const galleryCard = (slug: string): Card => ({
-    url: `/insights/gallery/${slug}/opengraph-image-${GALLERY_CARD_SUFFIX}`,
-    ...CARD_SIZE,
-    type: CARD_TYPE,
-});
 
 /**
  * The Open Graph tags of a page that names itself. Next replaces a

@@ -11,8 +11,8 @@ import type { StudioVariant } from '@/lib/studio/variant';
 export type { StudioProps } from './hooks/useStudio';
 
 /**
- * The layout that draws a Studio for `variant`. A share or a gallery item
- * (`shared`) always shows the classic layout. Until the prompt layout
+ * The layout that draws a Studio for `variant`. A share (`shared`) always
+ * shows the classic layout. Until the prompt layout
  * exists, every variant draws the classic one.
  */
 const shellFor = (variant: StudioVariant, shared: boolean): ReactNode =>

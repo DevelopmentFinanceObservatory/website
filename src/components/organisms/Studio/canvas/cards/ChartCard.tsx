@@ -151,8 +151,8 @@ const ChartCard = ({
     // One value per set of measuring inputs. The view is not among them,
     // because a switch remounts the card (see CardBody).
     const token = useMemo(
-        () => ({ widget, widthCells, title: extras.title, fontsReady }),
-        [widget, widthCells, extras.title, fontsReady],
+        () => ({ widget, widthCells, title: extras.title, note: extras.note, fontsReady }),
+        [widget, widthCells, extras.title, extras.note, fontsReady],
     );
     // The rows the card last asked for, so a height it did not ask for can
     // be told from its own fit's answer (clamped or not).
@@ -308,7 +308,12 @@ const ChartCard = ({
                     <Bar data={barData} options={options} role="img" aria-label={alt} />
                 )}
             </div>
-            <CardChrome source={widget.source} info={widget.info} onInfo={extras.onInfo} />
+            <CardChrome
+                source={widget.source}
+                info={widget.info}
+                onInfo={extras.onInfo}
+                note={extras.note}
+            />
         </article>
     );
 };

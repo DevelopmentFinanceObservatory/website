@@ -115,8 +115,15 @@ const TableCard = ({
     // pitch, and a view switch remounts the card (see CardBody), so neither
     // is an input.
     const token = useMemo(
-        () => ({ widget, widthCells, expanded, title: extras.title, fontsReady }),
-        [widget, widthCells, expanded, extras.title, fontsReady],
+        () => ({
+            widget,
+            widthCells,
+            expanded,
+            title: extras.title,
+            note: extras.note,
+            fontsReady,
+        }),
+        [widget, widthCells, expanded, extras.title, extras.note, fontsReady],
     );
 
     useFittedRows({ cardRef, widthCells, token, measure, onFit });
@@ -297,7 +304,12 @@ const TableCard = ({
                     />
                 </button>
             )}
-            <CardChrome source={widget.source} info={widget.info} onInfo={extras.onInfo} />
+            <CardChrome
+                source={widget.source}
+                info={widget.info}
+                onInfo={extras.onInfo}
+                note={extras.note}
+            />
         </article>
     );
 };

@@ -33,7 +33,7 @@ export type VariantCookie = {
 export type VariantRedirect = { location: string; cookie: VariantCookie | null };
 
 // /studio and /studio/<id>, the pages that render the Studio and read the
-// cookie. Shares and the gallery always show the classic layout.
+// cookie. A share always shows the classic layout.
 const STUDIO_PAGE = /^\/studio(?:\/[^/]+)?$/;
 
 /**

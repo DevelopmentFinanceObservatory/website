@@ -30,7 +30,6 @@ import { themeVars } from '@/lib/studio/theme';
 const ClassicShell = () => {
     const {
         shared,
-        continuable,
         examples,
         readOnly,
         account,
@@ -43,16 +42,7 @@ const ClassicShell = () => {
         save,
         modals,
         landingHistory,
-        mode: {
-            current: mode,
-            leaving,
-            inWorkspace,
-            begin,
-            sendDraft,
-            startNew,
-            continueSession,
-            forking,
-        },
+        mode: { current: mode, leaving, inWorkspace, begin, sendDraft, startNew },
         stage: {
             sectionRef,
             gridCell,
@@ -215,7 +205,6 @@ const ClassicShell = () => {
                 onOpenChange={(next) => !next && setInfoCardId(null)}
                 shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
                 // A share row's `live` is set either way (sharedViewOfRecord).
-                // A gallery canvas leaves it unset and has no share link.
                 snapshot={
                     shared?.live === false
                         ? {
@@ -252,7 +241,9 @@ const ClassicShell = () => {
                     title={title}
                     firstPrompt={firstPrompt}
                     shareData={shareData}
+                    cardTitleOf={cardTitleOf}
                     createShare={save.createShare}
+                    buildSnapshot={save.buildSnapshot}
                     guest={guest}
                 />
             )}
@@ -320,14 +311,6 @@ const ClassicShell = () => {
                 />
             )}
 
-            {continuable && solo && (
-                <div className={styles.continueBar}>
-                    <Button onClick={continueSession} disabled={forking}>
-                        {forking ? 'Opening…' : 'Continue this session'}
-                    </Button>
-                </div>
-            )}
-
             {!readOnly && <FeedbackWidget />}
 
             {inWorkspace && (
@@ -367,8 +350,6 @@ const ClassicShell = () => {
                         // a share, which opens straight on the workspace.
                         autoFocus={!shared && !phone}
                         wall={walled ? <GuestWall /> : null}
-                        onContinue={continuable ? continueSession : null}
-                        continuing={forking}
                         shareMarks={doc.shareMarks}
                         titles={doc.titles}
                         views={doc.views}

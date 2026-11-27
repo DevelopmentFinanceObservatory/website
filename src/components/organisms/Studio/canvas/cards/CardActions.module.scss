@@ -23,22 +23,6 @@
     height: auto;
 }
 
-.noteMark .noteMarkIcon {
-    width: rem(13);
-    height: auto;
-}
-
-// Not a button: it reports a note, it does not open one. It reads as a
-// label beside the controls rather than a third one, so it is smaller than
-// the pin and keeps its distance — the 1px the pin and kebab share is the
-// gap of a pair, and this is not part of that pair.
-.noteMark {
-    @include flex(row, center, center);
-
-    margin-right: rem(5);
-    pointer-events: none;
-}
-
 .pinBtn {
     @include flex(row, center, center);
 
