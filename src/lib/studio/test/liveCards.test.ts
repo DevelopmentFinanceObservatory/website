@@ -683,7 +683,7 @@ test('the live note dates the text by the UTC day the share was made', () => {
     assert.match(liveNote('2026-10-08T00:00:30.000Z'), /written 8 Oct 2026$/);
     // September stays "Sep", whatever the ICU version prints for en-GB.
     assert.match(liveNote('2026-09-28T12:00:00.000Z'), /written 28 Sep 2026$/);
-    // The gallery passes a canvas with no creation time.
+    // A canvas with no creation time.
     assert.doesNotMatch(liveNote(undefined), /written/);
     assert.doesNotMatch(liveNote('not a date'), /written|Invalid/);
 });
@@ -730,9 +730,8 @@ test('the browser fills every data card of a live share, and only the undrawn ca
         snapshot: true,
         cardIds: ['t1'],
     });
-    // A snapshot whose page drew every card, a gallery snapshot, and no share.
+    // A snapshot whose page drew every card, and no share.
     assert.equal(cardsToFill({ id: 'Ab3dEf7h', live: false, undrawn: [] }, widgets), null);
-    assert.equal(cardsToFill({ id: 'gallery-slug' }, widgets), null);
     assert.equal(cardsToFill(undefined, widgets), null);
 
     // A snapshot's filled cards carry no live note.

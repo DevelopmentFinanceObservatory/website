@@ -201,7 +201,7 @@ test('fetchCardData: a card a slot draws asks that slot for the rows, any other 
 
     assert.deepEqual(sharedCardAddress(canvas, 'cmp_9f8e'), SHARED);
     assert.equal(sharedCardAddress(conversation, 'cmp_9f8e'), null);
-    // A gallery canvas, which is no share.
+    // A conversation of the viewer's own, which is no share.
     assert.equal(sharedCardAddress(undefined, 'cmp_9f8e'), null);
 
     for (const share of [canvas, conversation, undefined]) {

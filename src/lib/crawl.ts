@@ -6,9 +6,7 @@
  */
 import type { Metadata } from 'next';
 
-import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
-
-import { galleryCard, pageOpenGraph } from './site.ts';
+import { pageOpenGraph } from './site.ts';
 
 /**
  * The routes kept out of search results, each with everything under it:
@@ -44,74 +42,22 @@ const NOINDEX: Metadata['robots'] = { index: false, follow: false };
 
 type DataPageQuery = Record<string, string | string[] | undefined>;
 
-export type GallerySearch = Extract<GalleryItem, { kind: 'dataset' }>;
-
-/**
- * The gallery item a /data URL opens: a search share (?share=, where
- * `/s/<id>` sends one) that a dataset item names. A version link (?spec=)
- * opens a dataset version, never a gallery item.
- */
-export const gallerySearch = (
-    query: DataPageQuery,
-    gallery: readonly GalleryItem[],
-): GallerySearch | undefined => {
-    const { spec, share } = query;
-
-    if (spec !== undefined || share === undefined) {
-        return undefined;
-    }
-
-    return gallery.find(
-        (item): item is GallerySearch => item.kind === 'dataset' && item.sharedFrom === share,
-    );
-};
-
 /**
  * The robots metadata for /data. A version link is unlisted: one page per
- * dataset version is nothing to list. A search share is unlisted unless a
- * gallery item opens it (gallerySearch), so a curated search is found the
- * way the rest of the gallery is.
+ * dataset version is nothing to list. A search share is unlisted, as every
+ * share is.
  */
-export const dataPageRobots = (
-    query: DataPageQuery,
-    gallery: readonly GalleryItem[],
-): Metadata['robots'] => {
-    if (query.spec === undefined && query.share === undefined) {
-        return undefined;
-    }
-
-    return gallerySearch(query, gallery) ? undefined : NOINDEX;
-};
+export const dataPageRobots = (query: DataPageQuery): Metadata['robots'] =>
+    query.spec === undefined && query.share === undefined ? undefined : NOINDEX;
 
 const DATA_TITLE = 'Data — DFO';
 
 const DATA_DESCRIPTION =
     'Search aid, debt, climate and health finance data in plain language, and trace every number to its source.';
 
-/**
- * The metadata for /data: a gallery search carries its item's title and
- * description, as its gallery page would, and every other render is the
- * Data page, with the robots rule for its URL.
- */
-export const dataPageMetadata = (
-    query: DataPageQuery,
-    gallery: readonly GalleryItem[],
-): Metadata => {
-    const item = gallerySearch(query, gallery);
-
-    if (item) {
-        return {
-            title: `${item.title} — DFO Gallery`,
-            description: item.description,
-            openGraph: pageOpenGraph({
-                title: item.title,
-                description: item.description,
-                image: galleryCard(item.slug),
-            }),
-        };
-    }
-
-    const robots = dataPageRobots(query, gallery);
+/** The metadata for /data, with the robots rule for its URL. */
+export const dataPageMetadata = (query: DataPageQuery): Metadata => {
+    const robots = dataPageRobots(query);
 
     return {
         title: DATA_TITLE,
@@ -142,7 +88,5 @@ export const dataPageQuery = (params: URLSearchParams): DataPageQuery => {
  * reads the URL through dataPageRobots, as the page's metadata does, so the
  * header and the metadata cannot disagree.
  */
-export const dataPageNoindex = (
-    params: URLSearchParams,
-    gallery: readonly GalleryItem[],
-): boolean => dataPageRobots(dataPageQuery(params), gallery) !== undefined;
+export const dataPageNoindex = (params: URLSearchParams): boolean =>
+    dataPageRobots(dataPageQuery(params)) !== undefined;
