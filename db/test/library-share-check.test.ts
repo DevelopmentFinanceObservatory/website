@@ -4,15 +4,16 @@ import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
 import type { SharesBackend } from '../../src/lib/chat/apisShares.ts';
+import { componentRead, DATASET_FRAME } from '../../src/lib/studio/test/fixtures/component-read.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import {
     checkArtifact,
     checkLibraryShares,
     FAILURE_EVENT,
     guardCheck,
+    OK_EVENT,
     readLiveArtifacts,
     SUMMARY_EVENT,
-    type ArtifactCheck,
     type Failure,
     type LiveArtifact,
 } from '../library-share-check.ts';
@@ -22,51 +23,58 @@ const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 const APIS = 'https://apis.example';
 const SHARE = 'Ab3dEf7h';
 const ARTIFACT: LiveArtifact = { id: 'art_1', slug: 'health-oda', shareId: SHARE };
-const FRAME = { spec_id: 'spec_aid', content_version: 'cv_1' };
 
 type Slot = {
     slot: number;
     card: { component_id: string; revision: number; frame: unknown } | null;
 };
 
-// A canvas whose payload draws a chart from slot 1 and a text widget. Slot
-// 2 holds a card the payload does not draw, and slot 3 is empty.
+const FILLED: Slot[] = [
+    { slot: 1, card: { component_id: 'cmp_a', revision: 2, frame: DATASET_FRAME } },
+    { slot: 2, card: { component_id: 'cmp_b', revision: 1, frame: DATASET_FRAME } },
+    { slot: 3, card: null },
+];
+
+// A canvas whose payload draws a chart from slot 1 and a text card. Slot 2
+// holds a card the payload does not draw, and slot 3 is empty.
 const record = ({
+    id = SHARE,
     mode = 'live',
-    slots = [
-        { slot: 1, card: { component_id: 'cmp_a', revision: 2, frame: FRAME } },
-        { slot: 2, card: { component_id: 'cmp_b', revision: 1, frame: FRAME } },
-        { slot: 3, card: null },
-    ],
+    slots = FILLED,
     payload = {
         widgets: [
-            { id: 'w1', kind: 'chart', turn: 1, slot: 0 },
-            { id: 'w2', kind: 'text', turn: 1 },
+            { id: 'c1', kind: 'chart', chartType: 'line', turn: 1, slot: 0 },
+            { id: 'n1', kind: 'text', turn: 1, title: 'Note', body: 'Words' },
         ],
     },
-}: { mode?: 'live' | 'snapshot'; slots?: Slot[]; payload?: unknown } = {}) => ({
-    id: SHARE,
+}: { id?: string; mode?: 'live' | 'snapshot'; slots?: Slot[]; payload?: unknown } = {}) => ({
+    id,
     kind: 'canvas',
     mode,
     title: 'Health ODA',
+    revision: 1,
     slots,
     payload,
     created_at: '2026-11-01T10:00:00Z',
 });
 
-// A slot card in dfo-apis' component read shape, of card type `type`.
-const card = (type = 'line_chart') =>
-    Response.json({
-        component_id: 'cmp_a',
-        revision: 2,
-        stored_intent: { type, frame_ref: FRAME },
-        resolved_payload: { component: {} },
-        fact_summary: { changed: [], series: [] },
-        freshness: 'current',
-    });
+// dfo-apis' slot card: the recorded component read of a dataset chart.
+// `undrawable` keeps the envelope and empties the component it resolves.
+const card = ({ undrawable = false } = {}) => {
+    const body = componentRead('cmp_a', 2, DATASET_FRAME);
+
+    if (undrawable) {
+        body['resolved_payload'].component = {};
+    }
+
+    return Response.json({ ...body, freshness: 'current', retention: null });
+};
 
 type Answer = Response | 'no answer';
 type Route = 'share' | 'card' | 'data';
+type Answers = {
+    [route in Route]?: (slot: number | null, read: number, shareId: string) => Answer;
+};
 
 const routeOf = (url: URL): { route: Route; slot: number | null } => {
     const match = /\/slots\/(\d+)(\/data)?$/.exec(url.pathname);
@@ -76,7 +84,20 @@ const routeOf = (url: URL): { route: Route; slot: number | null } => {
         : { route: 'share', slot: null };
 };
 
-const backendOf = (answers: { [route in Route]?: (slot: number | null) => Answer }) => {
+const problem = (status: number, code: string, retryable = false) =>
+    Response.json({ code, retryable }, { status });
+const rows = (count: number) =>
+    Response.json({ rows: Array.from({ length: count }, (_, i) => ({ year: 2020 + i })) });
+
+const DEFAULTS: { [route in Route]: (shareId: string) => Answer } = {
+    share: (id) => Response.json(record({ id })),
+    card: () => card(),
+    data: () => rows(3),
+};
+
+// A dfo-apis answering each route by `answers`, or by DEFAULTS. Each answer
+// is told the slot, how many times this URL was read before, and the share.
+const backendOf = (answers: Answers = {}) => {
     const reads: string[] = [];
     const backend: SharesBackend = {
         base: APIS,
@@ -84,10 +105,13 @@ const backendOf = (answers: { [route in Route]?: (slot: number | null) => Answer
         fetch: async (input) => {
             const url = new URL(String(input));
             const { route, slot } = routeOf(url);
+            const path = `${url.pathname}${url.search}`;
+            const before = reads.filter((read) => read === path).length;
+            const shareId = url.pathname.split('/')[4] ?? '';
 
-            reads.push(`${url.pathname}${url.search}`);
+            reads.push(path);
 
-            const answer = (answers[route] ?? (() => DEFAULTS[route]()))(slot);
+            const answer = answers[route]?.(slot, before, shareId) ?? DEFAULTS[route](shareId);
 
             if (answer === 'no answer') {
                 throw new TypeError('fetch failed');
@@ -97,12 +121,8 @@ const backendOf = (answers: { [route in Route]?: (slot: number | null) => Answer
         },
     };
 
-    return { backend, reads };
+    return { backend, reads: () => [...reads] };
 };
-
-const problem = (status: number, code: string) => Response.json({ code }, { status });
-const rows = (count: number) =>
-    Response.json({ rows: Array.from({ length: count }, (_, i) => ({ year: 2020 + i })) });
 
 // A body that starts and then fails: `name` is the error the read meets.
 const brokenBody = (name: 'TimeoutError' | 'TypeError') =>
@@ -120,18 +140,12 @@ const brokenBody = (name: 'TimeoutError' | 'TypeError') =>
         { headers: { 'content-type': 'application/json' } },
     );
 
-const DEFAULTS: { [route in Route]: () => Answer } = {
-    share: () => Response.json(record()),
-    card: () => card(),
-    data: () => rows(3),
-};
+const shareRead = { read: 'share', slot: null, widget: null } as const;
+const cardRead = { read: 'card', slot: 1, widget: 'c1' } as const;
+const dataRead = { read: 'data', slot: 1, widget: null } as const;
 
 test('each read is classified by what dfo-apis answers', async (t) => {
-    const cases: {
-        name: string;
-        answers: { [route in Route]?: (slot: number | null) => Answer };
-        failures: Failure[];
-    }[] = [
+    const cases: { name: string; answers: Answers; failures: Failure[] }[] = [
         { name: 'a live slot with rows reads', answers: {}, failures: [] },
         {
             name: 'a snapshot slot with no rows reads',
@@ -144,56 +158,162 @@ test('each read is classified by what dfo-apis answers', async (t) => {
         {
             name: 'a share dfo-apis does not hold is gone, with its code',
             answers: { share: () => problem(404, 'not_found') },
-            failures: [{ class: 'share_gone', slot: null, status: 404, code: 'not_found' }],
+            failures: [
+                {
+                    ...shareRead,
+                    class: 'share_gone',
+                    status: 404,
+                    code: 'not_found',
+                    retryable: false,
+                },
+            ],
         },
         {
             name: 'a 404 without a problem body keeps the code it reads as',
             answers: { share: () => new Response('gone', { status: 404 }) },
-            failures: [{ class: 'share_gone', slot: null, status: 404, code: 'backend_refused' }],
-        },
-        {
-            name: 'a slot card whose frame cannot be drawn',
-            answers: { card: () => problem(404, 'frame_unavailable') },
             failures: [
-                { class: 'frame_unavailable', slot: 1, status: 404, code: 'frame_unavailable' },
+                {
+                    ...shareRead,
+                    class: 'share_gone',
+                    status: 404,
+                    code: 'backend_refused',
+                    retryable: false,
+                },
             ],
         },
         {
-            name: 'slot rows whose frame cannot be drawn',
-            answers: { data: () => problem(404, 'frame_unavailable') },
+            name: 'a card the page draws from an empty slot',
+            answers: {
+                share: () =>
+                    Response.json(record({ slots: [{ slot: 1, card: null }, ...FILLED.slice(1)] })),
+            },
             failures: [
-                { class: 'frame_unavailable', slot: 1, status: 404, code: 'frame_unavailable' },
+                {
+                    ...cardRead,
+                    class: 'empty_slot',
+                    status: null,
+                    code: 'slot_empty',
+                    retryable: false,
+                },
+            ],
+        },
+        {
+            name: 'a live data card that names no slot',
+            answers: {
+                share: () =>
+                    Response.json(
+                        record({ payload: { widgets: [{ id: 't1', kind: 'table', turn: 1 }] } }),
+                    ),
+            },
+            failures: [
+                {
+                    read: 'card',
+                    slot: null,
+                    widget: 't1',
+                    class: 'empty_slot',
+                    status: null,
+                    code: 'no_slot',
+                    retryable: false,
+                },
+            ],
+        },
+        {
+            name: 'a slot card the page cannot draw, beside rows that export',
+            answers: { card: () => card({ undrawable: true }) },
+            failures: [
+                {
+                    ...cardRead,
+                    class: 'undrawable',
+                    status: 200,
+                    code: 'card_undrawable',
+                    retryable: false,
+                },
+            ],
+        },
+        {
+            name: 'a slot card outside the component read shape',
+            answers: { card: () => Response.json({ component_id: 'cmp_a' }) },
+            failures: [
+                {
+                    ...cardRead,
+                    class: 'refused',
+                    status: null,
+                    code: 'backend_invalid',
+                    retryable: false,
+                },
+            ],
+        },
+        {
+            name: 'a slot card whose frame cannot be drawn, for now',
+            answers: { card: () => problem(404, 'frame_unavailable', true) },
+            failures: [
+                {
+                    ...cardRead,
+                    class: 'frame_unavailable',
+                    status: 404,
+                    code: 'frame_unavailable',
+                    retryable: true,
+                },
+            ],
+        },
+        {
+            name: 'slot rows whose frame is revoked',
+            answers: { data: () => problem(404, 'frame_unavailable', false) },
+            failures: [
+                {
+                    ...dataRead,
+                    class: 'frame_unavailable',
+                    status: 404,
+                    code: 'frame_unavailable',
+                    retryable: false,
+                },
             ],
         },
         {
             name: 'a live slot with no rows',
             answers: { data: () => rows(0) },
-            failures: [{ class: 'no_rows', slot: 1, status: 200, code: 'no_rows' }],
+            failures: [
+                { ...dataRead, class: 'no_rows', status: 200, code: 'no_rows', retryable: false },
+            ],
         },
         {
             name: 'slot rows that arrive but are not JSON',
             answers: { data: () => new Response('<html>', { status: 200 }) },
-            failures: [{ class: 'refused', slot: 1, status: 200, code: 'backend_invalid' }],
+            failures: [
+                {
+                    ...dataRead,
+                    class: 'refused',
+                    status: 200,
+                    code: 'backend_invalid',
+                    retryable: false,
+                },
+            ],
         },
         {
             name: 'slot rows that stop at the deadline',
             answers: { data: () => brokenBody('TimeoutError') },
-            failures: [{ class: 'transient', slot: 1, status: null, code: 'backend_timeout' }],
-        },
-        {
-            name: 'slot rows cut off mid-body',
-            answers: { data: () => brokenBody('TypeError') },
-            failures: [{ class: 'transient', slot: 1, status: null, code: 'backend_unreachable' }],
+            failures: [
+                {
+                    ...dataRead,
+                    class: 'transient',
+                    status: null,
+                    code: 'backend_timeout',
+                    retryable: true,
+                },
+            ],
         },
         {
             name: 'a slot card cut off mid-body',
             answers: { card: () => brokenBody('TypeError') },
-            failures: [{ class: 'transient', slot: 1, status: null, code: 'backend_unreachable' }],
-        },
-        {
-            name: 'a slot card the page cannot draw',
-            answers: { card: () => Response.json({ component_id: 'cmp_a' }) },
-            failures: [{ class: 'refused', slot: 1, status: null, code: 'backend_invalid' }],
+            failures: [
+                {
+                    ...cardRead,
+                    class: 'transient',
+                    status: null,
+                    code: 'backend_unreachable',
+                    retryable: true,
+                },
+            ],
         },
         {
             name: 'a data card whose slot records no frame',
@@ -210,29 +330,81 @@ test('each read is classified by what dfo-apis answers', async (t) => {
                         }),
                     ),
             },
-            failures: [{ class: 'refused', slot: 1, status: null, code: 'no_frame' }],
+            failures: [
+                { ...dataRead, class: 'refused', status: null, code: 'no_frame', retryable: false },
+            ],
         },
         {
             name: 'any other refusal of a slot',
             answers: { data: () => problem(404, 'not_found') },
-            failures: [{ class: 'refused', slot: 1, status: 404, code: 'not_found' }],
+            failures: [
+                { ...dataRead, class: 'refused', status: 404, code: 'not_found', retryable: false },
+            ],
         },
         {
-            name: 'a server fault reading the share',
-            answers: { share: () => problem(503, 'transient_unavailable') },
+            name: 'a passing server fault reading the share',
+            answers: { share: () => problem(503, 'service_unavailable', true) },
             failures: [
-                { class: 'transient', slot: null, status: 503, code: 'transient_unavailable' },
+                {
+                    ...shareRead,
+                    class: 'transient',
+                    status: 503,
+                    code: 'service_unavailable',
+                    retryable: true,
+                },
+            ],
+        },
+        {
+            name: 'a server fault dfo-apis marks lasting',
+            answers: { data: () => problem(500, 'internal_error', false) },
+            failures: [
+                {
+                    ...dataRead,
+                    class: 'transient',
+                    status: 500,
+                    code: 'internal_error',
+                    retryable: false,
+                },
+            ],
+        },
+        {
+            name: "a gateway's 502 with no problem document",
+            answers: { data: () => new Response('Bad Gateway', { status: 502 }) },
+            failures: [
+                {
+                    ...dataRead,
+                    class: 'transient',
+                    status: 502,
+                    code: 'backend_refused',
+                    retryable: true,
+                },
             ],
         },
         {
             name: 'a rate limit on a slot',
             answers: { data: () => problem(429, 'rate_limited') },
-            failures: [{ class: 'transient', slot: 1, status: 429, code: 'rate_limited' }],
+            failures: [
+                {
+                    ...dataRead,
+                    class: 'transient',
+                    status: 429,
+                    code: 'rate_limited',
+                    retryable: true,
+                },
+            ],
         },
         {
             name: 'no answer from a slot',
             answers: { card: () => 'no answer' },
-            failures: [{ class: 'transient', slot: 1, status: null, code: 'backend_unreachable' }],
+            failures: [
+                {
+                    ...cardRead,
+                    class: 'transient',
+                    status: null,
+                    code: 'backend_unreachable',
+                    retryable: true,
+                },
+            ],
         },
     ];
 
@@ -240,19 +412,16 @@ test('each read is classified by what dfo-apis answers', async (t) => {
         await t.test(name, async () => {
             const { backend } = backendOf(answers);
 
-            assert.deepEqual(await checkArtifact(backend, ARTIFACT), {
-                artifact: ARTIFACT,
-                failures,
-            });
+            assert.deepEqual((await checkArtifact(backend, ARTIFACT)).failures, failures);
         });
     }
 });
 
-test('the slots the page draws are read, each card and then its rows as JSON', async (t) => {
+test("the reads are the page's: each card it draws from a slot, then each slot's rows", async (t) => {
     const share = `/api/presentation/shares/${SHARE}`;
-    const cases: { name: string; answers: Parameters<typeof backendOf>[0]; reads: string[] }[] = [
+    const cases: { name: string; answers: Answers; reads: string[] }[] = [
         {
-            name: "the payload's slotted widgets",
+            name: "the payload's slotted cards",
             answers: {},
             reads: [share, `${share}/slots/1`, `${share}/slots/1/data?format=json&bundle=false`],
         },
@@ -262,32 +431,180 @@ test('the slots the page draws are read, each card and then its rows as JSON', a
             reads: [
                 share,
                 `${share}/slots/1`,
-                `${share}/slots/1/data?format=json&bundle=false`,
                 `${share}/slots/2`,
+                `${share}/slots/1/data?format=json&bundle=false`,
                 `${share}/slots/2/data?format=json&bundle=false`,
             ],
-        },
-        {
-            name: 'a note card by its type, with no rows read',
-            answers: { card: () => card('note_narration') },
-            reads: [share, `${share}/slots/1`],
-        },
-        {
-            name: 'a source card by its type, with no rows read',
-            answers: { card: () => card('source_card') },
-            reads: [share, `${share}/slots/1`],
         },
     ];
 
     for (const { name, answers, reads: expected } of cases) {
         await t.test(name, async () => {
             const { backend, reads } = backendOf(answers);
-            const result = await checkArtifact(backend, ARTIFACT);
 
-            assert.deepEqual(result.failures, []);
-            assert.deepEqual(reads, expected);
+            assert.deepEqual((await checkArtifact(backend, ARTIFACT)).failures, []);
+            assert.deepEqual(reads(), expected);
         });
     }
+});
+
+const artifact = (n: number): LiveArtifact => ({
+    id: `art_${n}`,
+    slug: `artifact-${n}`,
+    shareId: `Share00${n}`,
+});
+
+// Runs the check over `artifacts` against `answers`, with a clock that
+// moves 5 ms each time it is read.
+const run = async (artifacts: LiveArtifact[], answers: Answers) => {
+    const { backend, reads } = backendOf(answers);
+    const lines: Record<string, unknown>[] = [];
+    const waits: number[] = [];
+    let clock = 0;
+    const code = await checkLibraryShares({
+        artifacts,
+        backend,
+        log: (line) => lines.push(JSON.parse(line)),
+        retryDelayMs: 7,
+        wait: async (ms) => waits.push(ms),
+        now: () => (clock += 5),
+    });
+
+    return { code, reads: reads(), lines, waits };
+};
+
+const summaryOf = (lines: Record<string, unknown>[]) => {
+    const summary = lines.at(-1);
+
+    assert.equal(summary?.['event'], SUMMARY_EVENT);
+
+    return summary ?? {};
+};
+
+test('a retryable failure is read again, alone, and the second read stands', async () => {
+    // Slot 1's card is drawable on its second read only.
+    const { code, reads, lines, waits } = await run([artifact(1)], {
+        card: (_slot, before) => (before === 0 ? problem(404, 'frame_unavailable', true) : card()),
+    });
+    const share = '/api/presentation/shares/Share001';
+
+    assert.equal(code, 0);
+    assert.deepEqual(waits, [7]);
+    assert.deepEqual(reads, [
+        share,
+        `${share}/slots/1`,
+        `${share}/slots/1/data?format=json&bundle=false`,
+        `${share}/slots/1`,
+    ]);
+    assert.deepEqual(
+        lines.map((line) => line['event']),
+        [OK_EVENT, SUMMARY_EVENT],
+    );
+
+    const summary = summaryOf(lines);
+
+    assert.deepEqual(
+        { ok: summary['ok'], failed: summary['failed'], retried: summary['retried'] },
+        { ok: 1, failed: 0, retried: 1 },
+    );
+});
+
+test('a failure no second read would change is logged at once and not read again', async () => {
+    const { code, reads, lines, waits } = await run([artifact(1)], {
+        data: () => problem(404, 'frame_unavailable', false),
+    });
+
+    assert.equal(code, 1);
+    assert.deepEqual(waits, []);
+    assert.equal(reads.length, 3);
+    assert.deepEqual(
+        lines.map((line) => [line['event'], line['class']]),
+        [
+            [FAILURE_EVENT, 'frame_unavailable'],
+            [SUMMARY_EVENT, undefined],
+        ],
+    );
+});
+
+test('each artifact is logged as it finishes, and the summary counts the run', async () => {
+    const { code, lines } = await run([artifact(1), artifact(2), artifact(3)], {});
+
+    assert.equal(code, 0);
+
+    const finished = lines.filter((line) => line['event'] === OK_EVENT);
+
+    assert.deepEqual(finished.map((line) => line['slug']).toSorted(), [
+        'artifact-1',
+        'artifact-2',
+        'artifact-3',
+    ]);
+
+    const summary = summaryOf(lines);
+
+    assert.equal(summary['requests'], 9);
+    assert.ok(typeof summary['bytes'] === 'number' && summary['bytes'] > 0);
+    assert.equal(summary['durationMs'], 5);
+});
+
+test('a failure that remains is logged per failure and fails the run', async () => {
+    const { code, lines } = await run([artifact(1), artifact(2)], {
+        share: (_slot, before, id) =>
+            before === 0
+                ? 'no answer'
+                : Response.json(record({ id, slots: [{ slot: 1, card: null }] })),
+    });
+
+    assert.equal(code, 1);
+
+    // Two workers finish in either order.
+    const failures = lines
+        .filter((line) => line['event'] === FAILURE_EVENT)
+        .toSorted((a, b) => String(a['artifact']).localeCompare(String(b['artifact'])));
+
+    assert.deepEqual(
+        failures.map(
+            ({ severity, artifact: id, slug, share, read, slot, widget, class: kind, code }) => ({
+                severity,
+                id,
+                slug,
+                share,
+                read,
+                slot,
+                widget,
+                kind,
+                code,
+            }),
+        ),
+        ['art_1', 'art_2'].map((id, i) => ({
+            severity: 'ERROR',
+            id,
+            slug: `artifact-${i + 1}`,
+            share: `Share00${i + 1}`,
+            read: 'card',
+            slot: 1,
+            widget: 'c1',
+            kind: 'empty_slot',
+            code: 'slot_empty',
+        })),
+    );
+
+    const summary = summaryOf(lines);
+
+    assert.equal(summary['severity'], 'ERROR');
+    assert.deepEqual(
+        { ok: summary['ok'], failed: summary['failed'], retried: summary['retried'] },
+        { ok: 0, failed: 2, retried: 2 },
+    );
+});
+
+test('a Library with no published artifact reads nothing and passes', async () => {
+    const { code, reads, waits, lines } = await run([], {});
+
+    assert.equal(code, 0);
+    assert.deepEqual(reads, []);
+    assert.deepEqual(waits, []);
+    assert.equal(lines.length, 1);
+    assert.equal(summaryOf(lines)['artifacts'], 0);
 });
 
 test('a run that cannot run logs one failure line and fails', async (t) => {
@@ -340,139 +657,6 @@ test('a run that cannot run logs one failure line and fails', async (t) => {
         );
         assert.deepEqual(lines, []);
     });
-});
-
-const artifact = (n: number): LiveArtifact => ({
-    id: `art_${n}`,
-    slug: `artifact-${n}`,
-    shareId: `Share00${n}`,
-});
-
-const transient: Failure = {
-    class: 'transient',
-    slot: 1,
-    status: 503,
-    code: 'transient_unavailable',
-};
-const gone: Failure = { class: 'share_gone', slot: null, status: 404, code: 'not_found' };
-
-// Runs the check over `artifacts` with each read answering the next of
-// `answers[id]`, the last answer repeating.
-const run = async (artifacts: LiveArtifact[], answers: Record<string, Failure[][]>) => {
-    const reads: string[] = [];
-    const lines: Record<string, unknown>[] = [];
-    const waits: number[] = [];
-    const code = await checkLibraryShares({
-        artifacts,
-        check: async (a): Promise<ArtifactCheck> => {
-            const seen = reads.filter((id) => id === a.id).length;
-            const list = answers[a.id] ?? [[]];
-
-            reads.push(a.id);
-
-            return { artifact: a, failures: list[Math.min(seen, list.length - 1)] };
-        },
-        log: (line) => lines.push(JSON.parse(line)),
-        retryDelayMs: 7,
-        wait: async (ms) => waits.push(ms),
-    });
-
-    return { code, reads, lines, waits };
-};
-
-test('a transient failure is read again once, and the second read stands', async () => {
-    const { code, reads, lines, waits } = await run([artifact(1), artifact(2)], {
-        art_1: [[transient], []],
-    });
-
-    assert.equal(code, 0);
-    assert.deepEqual(reads.toSorted(), ['art_1', 'art_1', 'art_2']);
-    assert.deepEqual(waits, [7]);
-    assert.deepEqual(lines, [
-        {
-            severity: 'INFO',
-            event: SUMMARY_EVENT,
-            message: lines[0]?.['message'],
-            artifacts: 2,
-            ok: 2,
-            failed: 0,
-            retried: 1,
-            failures: { share_gone: 0, frame_unavailable: 0, no_rows: 0, refused: 0, transient: 0 },
-        },
-    ]);
-});
-
-test('a failure that remains is logged per failure and fails the run', async () => {
-    const { code, reads, lines } = await run([artifact(1), artifact(2), artifact(3)], {
-        art_1: [[transient]],
-        art_2: [[gone]],
-    });
-
-    assert.equal(code, 1);
-    // The share that is gone is not read again.
-    assert.deepEqual(reads.toSorted(), ['art_1', 'art_1', 'art_2', 'art_3']);
-
-    const failures = lines.filter((line) => line['event'] === FAILURE_EVENT);
-
-    assert.deepEqual(
-        failures.map(
-            ({ severity, artifact: id, slug, share, slot, class: kind, status, code }) => ({
-                severity,
-                id,
-                slug,
-                share,
-                slot,
-                kind,
-                status,
-                code,
-            }),
-        ),
-        [
-            {
-                severity: 'ERROR',
-                id: 'art_1',
-                slug: 'artifact-1',
-                share: 'Share001',
-                slot: 1,
-                kind: 'transient',
-                status: 503,
-                code: 'transient_unavailable',
-            },
-            {
-                severity: 'ERROR',
-                id: 'art_2',
-                slug: 'artifact-2',
-                share: 'Share002',
-                slot: null,
-                kind: 'share_gone',
-                status: 404,
-                code: 'not_found',
-            },
-        ],
-    );
-
-    const summary = lines.at(-1);
-
-    assert.equal(summary?.['event'], SUMMARY_EVENT);
-    assert.equal(summary?.['severity'], 'ERROR');
-    assert.deepEqual(
-        { ok: summary?.['ok'], failed: summary?.['failed'], failures: summary?.['failures'] },
-        {
-            ok: 1,
-            failed: 2,
-            failures: { share_gone: 1, frame_unavailable: 0, no_rows: 0, refused: 0, transient: 1 },
-        },
-    );
-});
-
-test('a Library with no published artifact reads nothing and passes', async () => {
-    const { code, reads, waits, lines } = await run([], {});
-
-    assert.equal(code, 0);
-    assert.deepEqual(reads, []);
-    assert.deepEqual(waits, []);
-    assert.equal(lines.length, 1);
-    assert.equal(lines[0]?.['artifacts'], 0);
 });
 
 test('the runtime role lists every published artifact and no withdrawn one', async (t) => {

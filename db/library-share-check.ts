@@ -9,77 +9,118 @@ import {
     readSlotCard,
     readSlotFile,
     SharesError,
+    type ShareRecord,
     type SharesBackend,
 } from '../src/lib/chat/apisShares.ts';
-import { BackendError, componentReadOf } from '../src/lib/studio/liveBackend.ts';
-import { pageSlots } from '../src/lib/studio/slotCards.ts';
+import { BackendError } from '../src/lib/studio/liveBackend.ts';
+import { drawSlotCard, pageCards, type PageCard } from '../src/lib/studio/slotCards.ts';
 import { libraryArtifact } from './schema.ts';
 
 /**
  * The Library share check (db/check-library-shares.ts): every published
  * Library artifact's share read from dfo-apis' public share routes, as a
- * reader's page reads it. The share (`GET .../shares/{id}`), then, for each
- * slot the page draws (`pageSlots`), the slot's card (`GET
- * .../shares/{id}/slots/{n}`), and for a data card the slot's rows (`GET
- * .../shares/{id}/slots/{n}/data`, JSON). A note or source card has no rows
- * to read. A refusal of any read fails the artifact. docs/development.md
- * ("Library share check") describes the run.
+ * reader's page reads and draws it. The share (`GET .../shares/{id}`), then
+ * each card the page draws from a slot (`pageCards`): the slot's card (`GET
+ * .../shares/{id}/slots/{n}`), drawn as the page draws it (`drawSlotCard`),
+ * and each such slot's rows (`GET .../shares/{id}/slots/{n}/data`, JSON). A
+ * card whose slot is empty, a card that draws nothing, and any refused read
+ * fail the artifact. docs/development.md ("Library share check") describes
+ * the run.
  */
 
 /** The event name of each failure line, which a log-based metric matches. */
 export const FAILURE_EVENT = 'library_share_check_failed';
+/** The event name of the line for an artifact that reads. */
+export const OK_EVENT = 'library_share_check_ok';
 /** The event name of the run's last line, its counts. */
 export const SUMMARY_EVENT = 'library_share_check_summary';
 
 /**
  * Why a read failed. `share_gone`: dfo-apis holds no share under the id
- * (404). `frame_unavailable`: dfo-apis cannot draw a slot's frame (404
+ * (404). `empty_slot`: the page draws a card from a slot that holds none,
+ * or names no slot. `undrawable`: a slot's card resolves nothing the page
+ * can draw. `frame_unavailable`: dfo-apis cannot draw a slot's frame (404
  * `frame_unavailable`). `no_rows`: a live slot answered 200 with no rows.
  * `refused`: any other refusal, a data card with no frame, or an answer the
- * check cannot read. `transient`: a server fault (5xx), a 429, a timeout, or
- * an answer that stopped before its end or never came.
+ * check cannot read. `transient`: a server fault (5xx), a 429, a timeout,
+ * or an answer that stopped before its end or never came. The class names
+ * the fault; `retryable` decides whether the read is made again.
  */
-export type FailureClass = 'share_gone' | 'frame_unavailable' | 'no_rows' | 'refused' | 'transient';
+export type FailureClass =
+    | 'share_gone'
+    | 'empty_slot'
+    | 'undrawable'
+    | 'frame_unavailable'
+    | 'no_rows'
+    | 'refused'
+    | 'transient';
 
-/** One failed read: the slot it read (null for the share), dfo-apis'
- *  status (null when there was no answer) and the refusal's code. */
+const CLASSES: readonly FailureClass[] = [
+    'share_gone',
+    'empty_slot',
+    'undrawable',
+    'frame_unavailable',
+    'no_rows',
+    'refused',
+    'transient',
+];
+
+/** Which read failed: the share, a page card's slot card (`widget` names
+ *  the card), or a slot's rows. */
+export type ReadKind = 'share' | 'card' | 'data';
+
+/** One failed read: what it read, dfo-apis' status (null when there was no
+ *  answer), the refusal's code, and whether reading again may succeed. */
 export type Failure = {
-    class: FailureClass;
+    read: ReadKind;
     slot: number | null;
+    widget: string | null;
+    class: FailureClass;
     status: number | null;
     code: string;
+    retryable: boolean;
 };
 
 export type LiveArtifact = { id: string; slug: string; shareId: string };
 
-export type ArtifactCheck = { artifact: LiveArtifact; failures: Failure[] };
+/** An artifact's reads: the share once read (null while it is not), and
+ *  the reads that failed. */
+export type ArtifactCheck = {
+    artifact: LiveArtifact;
+    share: ShareRecord | null;
+    failures: Failure[];
+};
+
+type ReadAt = Pick<Failure, 'read' | 'slot' | 'widget'>;
 
 const NO_ANSWER = new Set(['backend_unreachable', 'backend_timeout']);
 
-// The card types that draw no frame, so their slot serves no rows.
-const NOTE_TYPES = new Set(['note_narration', 'source_card']);
-
-/** The failure a share route's error stands for, read at `slot` (null for
- *  the share itself). Anything other than a SharesError or BackendError is
- *  a fault of the check, and is thrown. */
-export const failureOf = (error: unknown, slot: number | null): Failure => {
+/** The failure a share route's error stands for, at the read `at`. A read
+ *  is made again when it met no answer, a 429, a refusal dfo-apis marks
+ *  `retryable`, or a 5xx with no problem document of dfo-apis' own, such as
+ *  a gateway's. Anything other than a SharesError or BackendError is a
+ *  fault of the check, and is thrown. */
+export const failureOf = (error: unknown, at: ReadAt): Failure => {
     if (!(error instanceof SharesError || error instanceof BackendError)) {
         throw error;
     }
 
     const status = error.status ?? null;
+    const noAnswer = status === null && NO_ANSWER.has(error.code);
+    const retryable =
+        noAnswer ||
+        status === 429 ||
+        error.retryable ||
+        (status !== null && status >= 500 && error.code === 'backend_refused');
     const failure = (kind: FailureClass): Failure => ({
+        ...at,
         class: kind,
-        slot,
         status,
         code: error.code,
+        retryable,
     });
 
-    if (status === null) {
-        return failure(NO_ANSWER.has(error.code) ? 'transient' : 'refused');
-    }
-
-    if (status >= 500 || status === 429) {
+    if (noAnswer || (status !== null && (status >= 500 || status === 429))) {
         return failure('transient');
     }
 
@@ -87,7 +128,7 @@ export const failureOf = (error: unknown, slot: number | null): Failure => {
         return failure('frame_unavailable');
     }
 
-    if (status === 404 && slot === null) {
+    if (status === 404 && at.read === 'share') {
         return failure('share_gone');
     }
 
@@ -102,14 +143,13 @@ export const rowsFailure = (
     { slot, live }: { slot: number; live: boolean },
 ): Failure | null => {
     const rows = asRecord(document)?.['rows'];
+    const at = { read: 'data' as const, slot, widget: null, status: 200, retryable: false };
 
     if (!Array.isArray(rows)) {
-        return { class: 'refused', slot, status: 200, code: 'backend_invalid' };
+        return { ...at, class: 'refused', code: 'backend_invalid' };
     }
 
-    return live && rows.length === 0
-        ? { class: 'no_rows', slot, status: 200, code: 'no_rows' }
-        : null;
+    return live && rows.length === 0 ? { ...at, class: 'no_rows', code: 'no_rows' } : null;
 };
 
 const parsed = (text: string): unknown => {
@@ -120,75 +160,153 @@ const parsed = (text: string): unknown => {
     }
 };
 
-// Slot `slot`'s card as the page reads it, then its rows for a data card:
-// the failure of the first read that fails, or null.
-const checkSlot = async (
+// A page card read and drawn as the page draws it.
+const readCard = async (
     backend: SharesBackend,
-    {
-        shareId,
-        slot,
-        live,
-        framed,
-    }: { shareId: string; slot: number; live: boolean; framed: boolean },
+    share: ShareRecord,
+    page: PageCard,
 ): Promise<Failure | null> => {
+    const at: ReadAt = { read: 'card', slot: page.slot, widget: page.id };
+
+    if (page.slot === null || page.ref === null) {
+        return {
+            ...at,
+            class: 'empty_slot',
+            status: null,
+            code: page.slot === null ? 'no_slot' : 'slot_empty',
+            retryable: false,
+        };
+    }
+
     try {
-        const { body } = await readSlotCard(backend, shareId, slot);
+        const { body } = await readSlotCard(backend, share.id, page.slot);
 
         if (body === null) {
-            return { class: 'refused', slot, status: 304, code: 'backend_invalid' };
+            return {
+                ...at,
+                class: 'refused',
+                status: 304,
+                code: 'backend_invalid',
+                retryable: false,
+            };
         }
 
-        componentReadOf(body);
-
-        const type = asRecord(body['stored_intent'])?.['type'];
-
-        if (typeof type === 'string' && NOTE_TYPES.has(type)) {
-            return null;
-        }
-
-        if (!framed) {
-            return { class: 'refused', slot, status: null, code: 'no_frame' };
-        }
-
-        const res = await readSlotFile(backend, shareId, slot, { format: 'json', bundle: 'false' });
-
-        return rowsFailure(parsed(await bodyText(res)), { slot, live });
+        return drawSlotCard(page.held, body)
+            ? null
+            : {
+                  ...at,
+                  class: 'undrawable',
+                  status: 200,
+                  code: 'card_undrawable',
+                  retryable: false,
+              };
     } catch (error) {
-        return failureOf(error, slot);
+        return failureOf(error, at);
     }
 };
 
-/** Read `artifact`'s share and each slot its page draws, in turn. A share
- *  that cannot be read ends the check there. */
-export const checkArtifact = async (
+// A slot's rows, which its card's data file and table are drawn from.
+const readRows = async (
     backend: SharesBackend,
-    artifact: LiveArtifact,
-): Promise<ArtifactCheck> => {
-    let share;
+    share: ShareRecord,
+    slot: number,
+): Promise<Failure | null> => {
+    const at: ReadAt = { read: 'data', slot, widget: null };
 
-    try {
-        share = await readShareRecord(backend, artifact.shareId);
-    } catch (error) {
-        return { artifact, failures: [failureOf(error, null)] };
+    if (share.slots.find((entry) => entry.slot === slot)?.card?.frame == null) {
+        return { ...at, class: 'refused', status: null, code: 'no_frame', retryable: false };
     }
 
+    try {
+        const res = await readSlotFile(backend, share.id, slot, {
+            format: 'json',
+            bundle: 'false',
+        });
+
+        return rowsFailure(parsed(await bodyText(res)), { slot, live: share.mode === 'live' });
+    } catch (error) {
+        return failureOf(error, at);
+    }
+};
+
+// The reads of a share's page: each page card's slot card, then the rows of
+// each filled slot those cards name, once each.
+const pageReads = (share: ShareRecord): ReadAt[] => {
+    const cards = pageCards(share);
+    const slots = new Set(
+        cards.flatMap((page) => (page.ref && page.slot !== null ? [page.slot] : [])),
+    );
+
+    return [
+        ...cards.map((page): ReadAt => ({ read: 'card', slot: page.slot, widget: page.id })),
+        ...[...slots].map((slot): ReadAt => ({ read: 'data', slot, widget: null })),
+    ];
+};
+
+const runRead = (
+    backend: SharesBackend,
+    share: ShareRecord,
+    at: ReadAt,
+): Promise<Failure | null> => {
+    if (at.read === 'data' && at.slot !== null) {
+        return readRows(backend, share, at.slot);
+    }
+
+    const page = pageCards(share).find((card) => card.id === at.widget);
+
+    return page ? readCard(backend, share, page) : Promise.resolve(null);
+};
+
+const runReads = async (
+    backend: SharesBackend,
+    share: ShareRecord,
+    reads: ReadAt[],
+): Promise<Failure[]> => {
     const failures: Failure[] = [];
 
-    for (const slot of pageSlots(share)) {
-        const card = share.slots.find((entry) => entry.slot === slot)?.card;
-        const failure = await checkSlot(backend, {
-            shareId: artifact.shareId,
-            slot,
-            live: share.mode === 'live',
-            framed: card?.frame != null,
-        });
+    for (const at of reads) {
+        const failure = await runRead(backend, share, at);
 
         if (failure) {
             failures.push(failure);
         }
     }
 
-    return { artifact, failures };
+    return failures;
+};
+
+/**
+ * Read `artifact`'s share and every read its page makes, in turn. Given
+ * `previous`, a check of the same artifact, only its retryable reads are
+ * made again and its other failures stand. A share that cannot be read ends
+ * the check there.
+ */
+export const checkArtifact = async (
+    backend: SharesBackend,
+    artifact: LiveArtifact,
+    previous?: ArtifactCheck,
+): Promise<ArtifactCheck> => {
+    if (previous?.share) {
+        const { share } = previous;
+        const again = previous.failures.filter((failure) => failure.retryable);
+        const kept = previous.failures.filter((failure) => !failure.retryable);
+
+        return { artifact, share, failures: [...kept, ...(await runReads(backend, share, again))] };
+    }
+
+    let share: ShareRecord;
+
+    try {
+        share = await readShareRecord(backend, artifact.shareId);
+    } catch (error) {
+        return {
+            artifact,
+            share: null,
+            failures: [failureOf(error, { read: 'share', slot: null, widget: null })],
+        };
+    }
+
+    return { artifact, share, failures: await runReads(backend, share, pageReads(share)) };
 };
 
 /** Every published artifact, oldest first. */
@@ -203,108 +321,163 @@ export const readLiveArtifacts = (db: Pick<NodePgDatabase, 'select'>): Promise<L
         .where(isNull(libraryArtifact.withdrawnAt))
         .orderBy(asc(libraryArtifact.publishedAt), asc(libraryArtifact.id));
 
-// Artifacts read at once. Each reads its slots in turn, so at most this
+// Artifacts read at once. Each makes its reads in turn, so at most this
 // many reads are in flight.
 const CONCURRENCY = 4;
 
-// How long the run waits before reading again each artifact a transient
-// failure stopped.
+// How long the run waits before making again the reads that failed in a
+// way that may pass.
 export const RETRY_DELAY_MS = 30_000;
 
-const checkAll = async (
-    artifacts: LiveArtifact[],
-    check: (artifact: LiveArtifact) => Promise<ArtifactCheck>,
-): Promise<ArtifactCheck[]> => {
-    const results: ArtifactCheck[] = new Array(artifacts.length);
+// HTTP statuses whose response has no body.
+const NULL_BODY = new Set([101, 103, 204, 205, 304]);
+
+/** `backend` with its calls counted: requests made, and bytes of the
+ *  bodies read. */
+export const meteredBackend = (
+    backend: SharesBackend,
+): { backend: SharesBackend; stats: { requests: number; bytes: number } } => {
+    const stats = { requests: 0, bytes: 0 };
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+        stats.requests += 1;
+
+        const res = await backend.fetch(input, init);
+
+        if (!res.body || NULL_BODY.has(res.status)) {
+            return res;
+        }
+
+        const counted = res.body.pipeThrough(
+            new TransformStream<Uint8Array, Uint8Array>({
+                transform(chunk, controller) {
+                    stats.bytes += chunk.byteLength;
+                    controller.enqueue(chunk);
+                },
+            }),
+        );
+
+        return new Response(counted, {
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+        });
+    };
+
+    return { backend: { ...backend, fetch }, stats };
+};
+
+const eachOf = async <T>(items: T[], work: (item: T) => Promise<void>): Promise<void> => {
     let next = 0;
     const worker = async () => {
-        while (next < artifacts.length) {
-            const index = next++;
-
-            results[index] = await check(artifacts[index]);
+        while (next < items.length) {
+            await work(items[next++]);
         }
     };
 
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, artifacts.length) }, worker));
-
-    return results;
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
 };
 
 /**
- * Check every artifact in `artifacts`, then read again, once and after
- * `retryDelayMs`, each one a transient failure stopped, and keep the second
- * result. Logs one `FAILURE_EVENT` line per failure that remains, then one
- * `SUMMARY_EVENT` line with the counts. 0 when every artifact reads, else 1.
+ * Check every artifact in `artifacts`, four at a time. An artifact whose
+ * reads all pass, or fail in a way a second read would not change, is
+ * logged as it finishes: one `OK_EVENT` line, or one `FAILURE_EVENT` line
+ * per failure. Then, once and after `retryDelayMs`, each retryable read is
+ * made again, alone, and its artifact logged. The last line, `SUMMARY_EVENT`,
+ * counts the artifacts, the failures by class, the reads made again, and
+ * the requests, response bytes and milliseconds the run took. 0 when every
+ * artifact reads, else 1.
  */
 export const checkLibraryShares = async ({
     artifacts,
-    check,
+    backend,
     log,
     retryDelayMs = RETRY_DELAY_MS,
     wait = (ms) => sleep(ms),
+    now = Date.now,
 }: {
     artifacts: LiveArtifact[];
-    check: (artifact: LiveArtifact) => Promise<ArtifactCheck>;
+    backend: SharesBackend;
     log: (line: string) => void;
     retryDelayMs?: number;
     wait?: (ms: number) => Promise<unknown>;
+    now?: () => number;
 }): Promise<0 | 1> => {
-    const first = await checkAll(artifacts, check);
-    const transient = (result: ArtifactCheck) =>
-        result.failures.some((failure) => failure.class === 'transient');
-    const retry = first.filter(transient).map((result) => result.artifact);
-    let results = first;
+    const started = now();
+    const metered = meteredBackend(backend);
+    const byClass = Object.fromEntries(CLASSES.map((kind) => [kind, 0])) as Record<
+        FailureClass,
+        number
+    >;
+    let failed = 0;
+    const finish = ({ artifact, failures }: ArtifactCheck) => {
+        const named = { artifact: artifact.id, slug: artifact.slug, share: artifact.shareId };
 
-    if (retry.length > 0) {
-        await wait(retryDelayMs);
+        if (failures.length === 0) {
+            log(
+                JSON.stringify({
+                    severity: 'INFO',
+                    event: OK_EVENT,
+                    message: `${OK_EVENT}: ${artifact.slug}`,
+                    ...named,
+                }),
+            );
 
-        const second = new Map(
-            (await checkAll(retry, check)).map((result) => [result.artifact.id, result]),
-        );
+            return;
+        }
 
-        results = first.map((result) => second.get(result.artifact.id) ?? result);
-    }
+        failed += 1;
 
-    const byClass: Record<FailureClass, number> = {
-        share_gone: 0,
-        frame_unavailable: 0,
-        no_rows: 0,
-        refused: 0,
-        transient: 0,
-    };
-
-    for (const { artifact, failures } of results) {
-        for (const failure of failures) {
-            byClass[failure.class] += 1;
+        for (const { class: kind, ...failure } of failures) {
+            byClass[kind] += 1;
             log(
                 JSON.stringify({
                     severity: 'ERROR',
                     event: FAILURE_EVENT,
-                    message: `${FAILURE_EVENT}: ${artifact.slug} ${failure.class}`,
-                    artifact: artifact.id,
-                    slug: artifact.slug,
-                    share: artifact.shareId,
-                    slot: failure.slot,
-                    class: failure.class,
-                    status: failure.status,
-                    code: failure.code,
+                    message: `${FAILURE_EVENT}: ${artifact.slug} ${kind}`,
+                    ...named,
+                    class: kind,
+                    ...failure,
                 }),
             );
         }
-    }
+    };
+    const again: ArtifactCheck[] = [];
 
-    const failed = results.filter((result) => result.failures.length > 0).length;
+    await eachOf(artifacts, async (artifact) => {
+        const result = await checkArtifact(metered.backend, artifact);
+
+        if (result.failures.some((failure) => failure.retryable)) {
+            again.push(result);
+        } else {
+            finish(result);
+        }
+    });
+
+    const retried = again.reduce(
+        (count, result) => count + result.failures.filter((failure) => failure.retryable).length,
+        0,
+    );
+
+    if (again.length > 0) {
+        await wait(retryDelayMs);
+        await eachOf(again, async (previous) => {
+            finish(await checkArtifact(metered.backend, previous.artifact, previous));
+        });
+    }
 
     log(
         JSON.stringify({
             severity: failed > 0 ? 'ERROR' : 'INFO',
             event: SUMMARY_EVENT,
-            message: `${SUMMARY_EVENT}: ${results.length - failed} of ${results.length} artifacts read`,
-            artifacts: results.length,
-            ok: results.length - failed,
+            message: `${SUMMARY_EVENT}: ${artifacts.length - failed} of ${artifacts.length} artifacts read`,
+            artifacts: artifacts.length,
+            ok: artifacts.length - failed,
             failed,
-            retried: retry.length,
+            retried,
             failures: byClass,
+            requests: metered.stats.requests,
+            bytes: metered.stats.bytes,
+            durationMs: now() - started,
         }),
     );
 

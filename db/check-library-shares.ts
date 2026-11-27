@@ -3,12 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { apisFetch } from '../src/lib/apisAuth.ts';
 import { searchApiBase } from '../src/lib/searchApi.ts';
 import { openPool } from '../scripts/open-pool.ts';
-import {
-    checkArtifact,
-    checkLibraryShares,
-    guardCheck,
-    readLiveArtifacts,
-} from './library-share-check.ts';
+import { checkLibraryShares, guardCheck, readLiveArtifacts } from './library-share-check.ts';
 
 // The Library share check Job's command (`node dist/check-library-shares.cjs`,
 // see deploy/Dockerfile). It lists the published rows of `library_artifact`
@@ -27,7 +22,7 @@ const main = async (): Promise<0 | 1> => {
     try {
         return await checkLibraryShares({
             artifacts: await readLiveArtifacts(drizzle(pool)),
-            check: (artifact) => checkArtifact(backend, artifact),
+            backend,
             log: (line) => console.log(line),
         });
     } finally {
