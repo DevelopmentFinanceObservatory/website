@@ -7,6 +7,7 @@ import type { ShareScope } from './ShareModal';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
+import { useLibraryEnabled } from '@/hooks/useLibraryEnabled';
 import ArtifactFields, {
     blankText,
     isComplete,
@@ -15,8 +16,13 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode } from '@/lib/chat/shareMode';
 import type { Widget } from '@/lib/chat/widgets';
 import { artifactPath, kindLabel } from '@/lib/library/artifact';
-import { publishArtifact, publishRefusalText } from '@/lib/library/client';
-import { LIMITS, readArtifactText } from '@/lib/library/publish';
+import {
+    isSlugTakenRefusal,
+    isWithdrawnRefusal,
+    publishArtifact,
+    publishRefusalText,
+} from '@/lib/library/client';
+import { LIMITS, publishKeySlot, readArtifactText, readSlug, slugOf } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 
 /**
@@ -25,6 +31,22 @@ import { isLiveDataCard } from '@/lib/studio/liveCards';
  * sends the saved conversation and the text written here, and the server
  * makes the share (live, or a snapshot) and files it with the sources its
  * cards credit and, for one card, the steps it was made by.
+ *
+ * The URL field shows the slug made from the title while the publisher
+ * leaves it alone, and the panel sends no slug then, so the server makes it
+ * from the title and numbers it (`-2`) when another artifact holds it. The
+ * publisher's own entry is kept as typed while the field has focus, is
+ * normalised with `slugOf` on blur and at submit, and is sent when it is not
+ * blank; a blank field follows the title again. A slug another artifact holds
+ * is refused at the field. The slug stays fixed once published, since
+ * citations name the URL, so the Edit dialog leaves it out. The done view
+ * links to the URL the server made, and says who can open it: anyone while
+ * the Library is on, and its admins alone while it is off. Until
+ * GET /api/library/enabled answers, or when it fails, it says neither.
+ *
+ * A publish makes an unlisted share, which anyone with its /s/ link can
+ * open whether the Library is on or off. Publish only material cleared for
+ * public access, preview included.
  */
 
 const CANVAS = 'canvas';
@@ -36,6 +58,7 @@ const COPY = {
     noLive: 'This output draws no data, so it is published as a snapshot.',
     failed: 'It was not published. Try again.',
     none: 'A text card cannot be published. Publish a chart, a table or a key number.',
+    numbered: 'A number is added if another artifact uses this address.',
 };
 
 // The cards the Library takes on their own: a chart, a table or a key number.
@@ -80,20 +103,25 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     );
     const [live, setLive] = useState(true);
     const [busy, setBusy] = useState(false);
+    // The slug as typed, or null while it follows the title. A blank entry
+    // also follows the title.
+    const [slug, setSlug] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [slugError, setSlugError] = useState<string | null>(null);
     const [published, setPublished] = useState<{ slug: string; title: string } | null>(null);
-    // One key per artifact and mode, made on its first try and sent again
-    // on every retry, so a publish whose answer was lost makes no second
-    // artifact.
+    // One key per slot (`publishKeySlot`: artifact, mode and chosen slug),
+    // made on its first try and sent again on every retry.
     const keysRef = useRef(new Map<string, string>());
     const ids = useId();
+    const libraryEnabled = useLibraryEnabled();
 
     const subjects = picked === CANVAS ? cards : cards.filter((card) => card.id === picked);
     const canLive = subjects.some(isLiveDataCard);
+    const typedSlug = slug !== null && slug.trim() !== '' ? slug : null;
+    const shownSlug = slug ?? (text.title.trim() ? slugOf(text.title) : '');
     const mode: ShareMode = canLive && live ? 'live' : 'snapshot';
 
-    const publishKey = (): string => {
-        const at = `${picked}:${mode}`;
+    const publishKey = (at: string): string => {
         const known = keysRef.current.get(at);
 
         if (known) {
@@ -122,6 +150,14 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             return;
         }
 
+        const chosen = readSlug(typedSlug === null ? undefined : slugOf(typedSlug));
+
+        if (!chosen.ok) {
+            setSlugError(chosen.detail);
+
+            return;
+        }
+
         const conversation = snapshot();
 
         if (!conversation) {
@@ -132,11 +168,14 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
 
         setBusy(true);
         setError(null);
+        setSlugError(null);
 
         const single = picked !== CANVAS;
+        const slot = publishKeySlot(picked, mode, chosen.value);
         const answer = await publishArtifact({
             ...checked.value,
-            publishKey: publishKey(),
+            publishKey: publishKey(slot),
+            ...(chosen.value ? { slug: chosen.value } : {}),
             share: {
                 kind: single ? 'card' : 'canvas',
                 conversation,
@@ -150,14 +189,27 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
         if (answer.ok) {
             setPublished(answer.value);
         } else {
-            setError(
-                publishRefusalText(
-                    answer.problem,
-                    answer.detail,
-                    subjects.map((card) => ({ id: card.id, title: titleOf(card.id) })),
-                    single,
-                ),
+            if (isWithdrawnRefusal(answer.problem)) {
+                // The withdrawn artifact owns this key, so the next try
+                // starts a new one.
+                keysRef.current.delete(slot);
+                // A new try follows the title, so the server numbers the
+                // slug the withdrawn artifact keeps.
+                setSlug(null);
+            }
+
+            const refusal = publishRefusalText(
+                answer.problem,
+                answer.detail,
+                subjects.map((card) => ({ id: card.id, title: titleOf(card.id) })),
+                single,
             );
+
+            if (isSlugTakenRefusal(answer.problem)) {
+                setSlugError(refusal);
+            } else {
+                setError(refusal);
+            }
         }
     };
 
@@ -166,7 +218,11 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             <div className={styles.done} role="status">
                 <p className={styles.doneTitle}>Published to the Library</p>
                 <p className={styles.copyText}>
-                    “{published.title}” has its own page, which anyone can open and cite.
+                    {libraryEnabled === null
+                        ? `“${published.title}” has its own page in the Library.`
+                        : libraryEnabled
+                          ? `“${published.title}” has its own page, which anyone can open and cite.`
+                          : `“${published.title}” has its own page in the Library’s preview, which only Library admins can open until the Library is switched on.`}
                 </p>
                 <Button
                     href={artifactPath(published.slug)}
@@ -189,7 +245,61 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     return (
         <form className={styles.form} onSubmit={publish}>
             <p className={styles.copyText}>{COPY.lead}</p>
-            <ArtifactFields value={text} onChange={setText}>
+            <ArtifactFields
+                value={text}
+                onChange={setText}
+                address={
+                    <div className={styles.field}>
+                        <label className={styles.label} htmlFor={`${ids}-slug`}>
+                            URL
+                        </label>
+                        <span className={styles.addressBox}>
+                            <span className={styles.addressPrefix} aria-hidden="true">
+                                {artifactPath('')}
+                            </span>
+                            <input
+                                id={`${ids}-slug`}
+                                className={styles.addressInput}
+                                value={shownSlug}
+                                maxLength={LIMITS.slug}
+                                spellCheck={false}
+                                autoCapitalize="off"
+                                aria-invalid={slugError !== null}
+                                aria-describedby={
+                                    slugError
+                                        ? `${ids}-slug-error`
+                                        : typedSlug === null
+                                          ? `${ids}-slug-note`
+                                          : undefined
+                                }
+                                onChange={(event) => {
+                                    setSlug(event.target.value);
+                                    setSlugError(null);
+                                }}
+                                // Blank follows the title again.
+                                onBlur={() =>
+                                    setSlug((typed) =>
+                                        typed !== null && typed.trim() !== ''
+                                            ? slugOf(typed)
+                                            : null,
+                                    )
+                                }
+                            />
+                        </span>
+                        {slugError ? (
+                            <p className={styles.error} id={`${ids}-slug-error`} role="alert">
+                                {slugError}
+                            </p>
+                        ) : (
+                            typedSlug === null && (
+                                <p className={styles.addressNote} id={`${ids}-slug-note`}>
+                                    {COPY.numbered}
+                                </p>
+                            )
+                        )}
+                    </div>
+                }
+            >
                 <label className={styles.field}>
                     <span className={styles.label}>Select Artifact</span>
                     <span className={styles.selectBox}>
@@ -201,6 +311,9 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 const next = event.target.value;
 
                                 setPicked(next);
+                                // The URL follows the new artifact's title.
+                                setSlug(null);
+                                setSlugError(null);
                                 // The title follows the artifact until it is edited.
                                 setText((current) => {
                                     const was = prefill(

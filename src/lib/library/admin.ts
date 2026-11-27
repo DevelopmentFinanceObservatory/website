@@ -15,7 +15,7 @@ import { keepShareForCleanup, makeTokenShare, takeDownTokenShare } from '@/lib/c
 import { buildStudioShare, readShareJson } from '@/lib/chat/studioShare';
 import { anonymousWho } from '@/lib/events/internalEng';
 import { track } from '@/lib/events/track';
-import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
+import { problem, requestInvalidProblem, unreachableProblem } from '@/lib/proxy/problem';
 import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
@@ -30,13 +30,15 @@ import {
 } from './publish';
 import {
     addTopic,
-    artifactByPublishKey,
-    forgetShareWriteToken,
+    artifactShare,
+    isArtifactWithdrawn,
     insertArtifact,
     listTopics,
+    publishTarget,
     updateArtifact,
     withdrawArtifact,
 } from './store';
+import { type ShareSettling, settleShare, withdraw } from './withdraw';
 
 /*
  * The handlers behind /api/library, which the Studio's share dialog and the
@@ -62,6 +64,16 @@ const notFound = (): Response =>
 
 const unknownTopic = (): Response =>
     requestInvalidProblem('A topic is not one of the Library’s.', '/topics', NO_STORE);
+
+const slugTaken = (): Response =>
+    problem({
+        status: 409,
+        code: 'slug_taken',
+        detail: 'Another artifact uses this URL. Choose a different one.',
+        retryable: false,
+        headers: NO_STORE,
+        extra: { pointer: '/slug' },
+    });
 
 // A refusal from the steps the publish shares with `POST /api/share`, sent
 // with NO_STORE as every answer here is. `at` names the member of the
@@ -169,45 +181,59 @@ export const createTopic = async (request: Request): Promise<Response> => {
     return Response.json({ topics: await listTopics() }, { headers: NO_STORE });
 };
 
-// Take down a share no artifact on show holds: one the Library made and
-// stored no row for, or a withdrawn artifact's. When dfo-apis
-// cannot, the share goes to `share_cleanup` for an operator, under the
-// admin who asked, with the alerted `share_cleanup_recorded` line. A failed
-// cleanup write is logged, so the caller's answer stands.
+const artifactWithdrawn = (): Response =>
+    problem({
+        status: 409,
+        code: 'artifact_withdrawn',
+        detail: 'This was published and then withdrawn.',
+        retryable: false,
+        headers: NO_STORE,
+    });
+
+// Takes down a share no artifact on show holds, in dfo-apis, or else
+// records it in `share_cleanup` for an operator, with the alerted
+// `share_cleanup_recorded` line (./withdraw.ts, `settleShare`).
+const settling = (headers: Headers): ShareSettling => ({
+    takeDown: (share) => takeDownTokenShare(headers, share),
+    keepForCleanup: keepShareForCleanup,
+});
+
+// Takes down the share of a publish that stored no row. The row-less share
+// has no token anywhere else, so a share neither taken down nor recorded is
+// known only by its `share_cleanup_not_recorded` line, and the publish's
+// own answer stands.
 const dropShare = async (
     headers: Headers,
     share: { shareId: string; writeToken: string },
     adminId: string,
 ): Promise<void> => {
-    const removed = await takeDownTokenShare(headers, share);
+    await settleShare(settling(headers), share, adminId);
+};
 
-    if (removed === 'done') {
-        return;
-    }
-
-    await keepShareForCleanup({ ...share, userId: adminId, reason: removed }).catch(
-        (error: unknown) => {
-            console.error('share_cleanup_not_recorded', {
-                share: share.shareId,
-                reason: removed,
-                error: String(error),
-            });
-        },
-    );
+const WITHDRAWAL_RETRY = {
+    unsettled:
+        'Its chart could not be taken down or queued for removal, so it is still published. Try again.',
+    unwritten: 'Its chart is taken down, but the withdrawal was not saved. Try again.',
 };
 
 /**
  * POST /api/library/artifacts (PublishInput, src/lib/library/publish.ts)
  * → 201 { slug, title } for a new artifact, 200 { slug, title } for the one
- * an earlier try with the same `publishKey` made, with the title it stored.
+ * an earlier try with the same `publishKey` made, with the title it stored,
+ * and 409 `artifact_withdrawn` when that artifact has since been withdrawn.
+ * A body with a `slug` publishes under that slug, and answers 409
+ * `slug_taken` at `/slug` when any artifact holds it, withdrawn ones
+ * included. Without one, the slug is made from the title, with a number
+ * after it when that is taken.
  *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
  * the Library keeps in the artifact's row. The artifact's kind, mode,
  * sources and steps come from the cards that share shows. A text card is
  * refused, since the Library has no kind for it. When the row is not
- * stored, because a try with the same key stored first, a topic has gone
- * or the insert failed, the new share is taken down.
+ * stored, because a try with the same key stored first, a topic has gone,
+ * another publish took the chosen slug or the insert failed, the new share
+ * is taken down.
  */
 export const publish = async (request: Request): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -228,11 +254,21 @@ export const publish = async (request: Request): Promise<Response> => {
         return requestInvalidProblem(read.detail, read.pointer || undefined, NO_STORE);
     }
 
-    const { text, publishKey } = read.value;
-    const earlier = await artifactByPublishKey(publishKey);
+    const { text, publishKey, slug } = read.value;
+    // One read answers both, so an earlier try that commits meanwhile is
+    // seen as that try, and its slug never reads as another artifact's.
+    const { earlier, slugHeld } = await publishTarget(publishKey, slug);
+
+    if (earlier?.withdrawn) {
+        return artifactWithdrawn();
+    }
 
     if (earlier) {
-        return Response.json(earlier, { headers: NO_STORE });
+        return Response.json({ slug: earlier.slug, title: earlier.title }, { headers: NO_STORE });
+    }
+
+    if (slugHeld) {
+        return slugTaken();
     }
 
     const known = new Set(await listTopics());
@@ -291,6 +327,7 @@ export const publish = async (request: Request): Promise<Response> => {
             {
                 ...text,
                 publishKey,
+                ...(slug ? { slug } : {}),
                 shareId: created.id,
                 shareWriteToken: created.writeToken,
                 kind,
@@ -305,11 +342,19 @@ export const publish = async (request: Request): Promise<Response> => {
         throw error;
     }
 
-    if (made === 'unknown_topic' || !made.created) {
+    if (made === 'unknown_topic' || made === 'slug_taken' || !made.created) {
         await dropShare(request.headers, backing, admin.id);
 
-        return made === 'unknown_topic'
-            ? unknownTopic()
+        if (made === 'unknown_topic') {
+            return unknownTopic();
+        }
+
+        if (made !== 'slug_taken' && made.withdrawn) {
+            return artifactWithdrawn();
+        }
+
+        return made === 'slug_taken'
+            ? slugTaken()
             : Response.json({ slug: made.slug, title: made.title }, { headers: NO_STORE });
     }
 
@@ -364,13 +409,18 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 };
 
 /**
- * DELETE /api/library/artifacts/<id> → 204
+ * DELETE /api/library/artifacts/<id> → 204, or 502 `transient_unavailable`
  *
- * Withdraws the artifact. Its page keeps its address and shows that it was
- * withdrawn, and its share is taken down in dfo-apis. A take-down that
- * fails for any reason puts the share in `share_cleanup` for an operator
- * (`dropShare`). Either way the row then forgets the share's token, and a
- * second DELETE answers 404.
+ * Takes the artifact's share down in dfo-apis, or, when dfo-apis cannot,
+ * records it in `share_cleanup` for an operator. Once one of those holds, it
+ * withdraws the artifact, erases its title and text and forgets the share's
+ * token, and answers 204, as does a DELETE that meets the row withdrawn by
+ * another one meanwhile. Its address stays and shows that it was withdrawn,
+ * and a later DELETE answers 404. When neither holds, nothing changes: the
+ * artifact stays published and the answer is a retryable 502, so the Edit
+ * dialog's Delete tries again. When the share is settled and the row write
+ * fails, the answer is the same retryable 502, and the retry withdraws the
+ * row (./withdraw.ts).
  */
 export const remove = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -379,21 +429,29 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
         return refusal;
     }
 
-    const withdrawn = await withdrawArtifact(id);
+    const withdrawn = await withdraw(
+        {
+            ...settling(request.headers),
+            share: artifactShare,
+            withdraw: withdrawArtifact,
+            isWithdrawn: isArtifactWithdrawn,
+        },
+        id,
+        admin.id,
+    );
 
     if (withdrawn === 'not_found') {
         return notFound();
     }
 
+    if (withdrawn.outcome !== 'withdrawn') {
+        log(`delete.${withdrawn.outcome}`, admin.email, withdrawn.slug);
+
+        return unreachableProblem(WITHDRAWAL_RETRY[withdrawn.outcome], NO_STORE);
+    }
+
     log('delete', admin.email, withdrawn.slug);
     refresh(withdrawn.slug);
-
-    await dropShare(
-        request.headers,
-        { shareId: withdrawn.shareId, writeToken: withdrawn.shareWriteToken },
-        admin.id,
-    );
-    await forgetShareWriteToken(id);
 
     return new Response(null, { status: 204, headers: NO_STORE });
 };

@@ -6,16 +6,12 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import PageFade from '@/components/molecules/PageFade/PageFade';
 import PageHero from '@/components/molecules/PageHero/PageHero';
-import {
-    kindLabel,
-    publishedDate,
-    type WithdrawnArtifact as Withdrawn,
-} from '@/lib/library/artifact';
+import { publishedDate, type WithdrawnArtifact as Withdrawn } from '@/lib/library/artifact';
 
 /**
- * What a withdrawn artifact's address shows: its title, the day it was
- * withdrawn, and a way back to the Library. The artifact itself, its actions,
- * and its text are gone. The address stays, so a citation to it leads
+ * What a withdrawn artifact's address shows: the day it was withdrawn and a
+ * way back to the Library. The artifact itself, its title, its actions, and
+ * its text are erased. The address stays, so a citation to it leads
  * somewhere that says what happened.
  */
 const WithdrawnArtifact = ({ artifact }: { artifact: Withdrawn }) => (
@@ -27,9 +23,9 @@ const WithdrawnArtifact = ({ artifact }: { artifact: Withdrawn }) => (
                 </span>
                 Library
             </Link>
-            <h1 className={styles.title}>{artifact.title}</h1>
+            <h1 className={styles.title}>Withdrawn from the Library</h1>
             <p className={styles.lead}>
-                This {kindLabel(artifact.kind).toLowerCase()} was withdrawn from the Library on{' '}
+                This artifact was withdrawn from the Library on{' '}
                 {publishedDate(artifact.withdrawnAt)}.
             </p>
         </PageHero>

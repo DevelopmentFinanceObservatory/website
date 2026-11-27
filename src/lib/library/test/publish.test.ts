@@ -4,6 +4,7 @@ import test from 'node:test';
 import type { PanelView } from '../../studio/descriptionBlocks.ts';
 import {
     freeSlug,
+    publishKeySlot,
     publishedFacts,
     publishedKind,
     readArtifactText,
@@ -40,6 +41,7 @@ test('a publish body is narrowed to its text, its key and its share', () => {
     assert.equal(read.value.publishKey, KEY);
     assert.equal(read.value.share.kind, 'card');
     assert.equal(read.value.share.cardId, 'w1');
+    assert.equal(read.value.slug, null);
 });
 
 test('a content title with no content is dropped', () => {
@@ -63,6 +65,12 @@ test('a publish body is refused at the first field at fault', () => {
         [{ topics: ['Aid | Debt'] }, '/topics'],
         [{ publishKey: undefined }, '/publishKey'],
         [{ publishKey: 'not-a-key' }, '/publishKey'],
+        [{ slug: '' }, '/slug'],
+        [{ slug: 7 }, '/slug'],
+        [{ slug: 'Health-ODA' }, '/slug'],
+        [{ slug: 'health--oda' }, '/slug'],
+        [{ slug: 'health-' }, '/slug'],
+        [{ slug: 'x'.repeat(81) }, '/slug'],
         [{ share: undefined }, '/share/kind'],
         [
             { share: { kind: 'conversation', conversation: { id: 'c', widgets: [] } } },
@@ -109,6 +117,19 @@ test('a slug is the title in ASCII words, and a taken one gets a number', () => 
     assert.equal(slugOf('x'.repeat(200)).length, 80);
     assert.equal(freeSlug('a', new Set()), 'a');
     assert.equal(freeSlug('a', new Set(['a', 'a-2', 'ab'])), 'a-3');
+});
+
+test('a chosen slug is sent as it is, and typing keeps to the slug rules', () => {
+    const read = readPublish(body({ slug: 'x'.repeat(80) }));
+
+    assert.ok(read.ok);
+    assert.equal(read.value.slug, 'x'.repeat(80));
+
+    // A null slug is no choice, as an absent one is.
+    const none = readPublish(body({ slug: null }));
+
+    assert.ok(none.ok);
+    assert.equal(none.value.slug, null);
 });
 
 const view = (sources: { name: string; url: string | null; page: string | null }[], steps = 0) =>
@@ -176,4 +197,14 @@ test("a card's facts are cut to the Library's limits", () => {
         { name: 'Script', url: null },
         { name: 'Off site', url: null },
     ]);
+});
+
+test('a retry keeps its publish key until the artifact, mode or chosen slug changes', () => {
+    const slot = publishKeySlot('w1', 'live', 'aid-chart');
+
+    assert.equal(publishKeySlot('w1', 'live', 'aid-chart'), slot);
+    assert.notEqual(publishKeySlot('w1', 'live', 'aid-chart-2'), slot);
+    assert.notEqual(publishKeySlot('w1', 'live', null), slot);
+    assert.notEqual(publishKeySlot('w1', 'snapshot', 'aid-chart'), slot);
+    assert.notEqual(publishKeySlot('canvas', 'live', 'aid-chart'), slot);
 });
