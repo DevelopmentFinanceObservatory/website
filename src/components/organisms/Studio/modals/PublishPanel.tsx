@@ -15,8 +15,13 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode } from '@/lib/chat/shareMode';
 import type { Widget } from '@/lib/chat/widgets';
 import { artifactPath, kindLabel } from '@/lib/library/artifact';
-import { isWithdrawnRefusal, publishArtifact, publishRefusalText } from '@/lib/library/client';
-import { LIMITS, readArtifactText } from '@/lib/library/publish';
+import {
+    isSlugTakenRefusal,
+    isWithdrawnRefusal,
+    publishArtifact,
+    publishRefusalText,
+} from '@/lib/library/client';
+import { LIMITS, readArtifactText, readSlug, slugDraft, slugOf } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 
 /**
@@ -25,6 +30,12 @@ import { isLiveDataCard } from '@/lib/studio/liveCards';
  * sends the saved conversation and the text written here, and the server
  * makes the share (live, or a snapshot) and files it with the sources its
  * cards credit and, for one card, the steps it was made by.
+ *
+ * The URL field shows the slug made from the title until the publisher
+ * edits it, and the panel always sends the slug it shows, so the artifact's
+ * URL is the one the publisher saw. A slug another artifact holds is
+ * refused at the field. The slug stays fixed once published, since
+ * citations name the URL, so the Edit dialog leaves it out.
  */
 
 const CANVAS = 'canvas';
@@ -80,7 +91,10 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     );
     const [live, setLive] = useState(true);
     const [busy, setBusy] = useState(false);
+    // The slug as typed, or null while it follows the title.
+    const [slug, setSlug] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [slugError, setSlugError] = useState<string | null>(null);
     const [published, setPublished] = useState<{ slug: string; title: string } | null>(null);
     // One key per artifact and mode, made on its first try and sent again
     // on every retry, so a publish whose answer was lost makes no second
@@ -90,6 +104,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
 
     const subjects = picked === CANVAS ? cards : cards.filter((card) => card.id === picked);
     const canLive = subjects.some(isLiveDataCard);
+    const shownSlug = slug ?? (text.title.trim() ? slugOf(text.title) : '');
     const mode: ShareMode = canLive && live ? 'live' : 'snapshot';
 
     const publishKey = (): string => {
@@ -122,6 +137,14 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             return;
         }
 
+        const chosen = readSlug(slugOf(shownSlug));
+
+        if (!chosen.ok) {
+            setSlugError(chosen.detail);
+
+            return;
+        }
+
         const conversation = snapshot();
 
         if (!conversation) {
@@ -132,11 +155,13 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
 
         setBusy(true);
         setError(null);
+        setSlugError(null);
 
         const single = picked !== CANVAS;
         const answer = await publishArtifact({
             ...checked.value,
             publishKey: publishKey(),
+            ...(chosen.value ? { slug: chosen.value } : {}),
             share: {
                 kind: single ? 'card' : 'canvas',
                 conversation,
@@ -156,14 +181,18 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                 keysRef.current.delete(`${picked}:${mode}`);
             }
 
-            setError(
-                publishRefusalText(
-                    answer.problem,
-                    answer.detail,
-                    subjects.map((card) => ({ id: card.id, title: titleOf(card.id) })),
-                    single,
-                ),
+            const refusal = publishRefusalText(
+                answer.problem,
+                answer.detail,
+                subjects.map((card) => ({ id: card.id, title: titleOf(card.id) })),
+                single,
             );
+
+            if (isSlugTakenRefusal(answer.problem)) {
+                setSlugError(refusal);
+            } else {
+                setError(refusal);
+            }
         }
     };
 
@@ -195,7 +224,43 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     return (
         <form className={styles.form} onSubmit={publish}>
             <p className={styles.copyText}>{COPY.lead}</p>
-            <ArtifactFields value={text} onChange={setText}>
+            <ArtifactFields
+                value={text}
+                onChange={setText}
+                address={
+                    <div className={styles.field}>
+                        <label className={styles.label} htmlFor={`${ids}-slug`}>
+                            URL
+                        </label>
+                        <span className={styles.addressBox}>
+                            <span className={styles.addressPrefix} aria-hidden="true">
+                                {artifactPath('')}
+                            </span>
+                            <input
+                                id={`${ids}-slug`}
+                                className={styles.addressInput}
+                                value={shownSlug}
+                                maxLength={LIMITS.slug}
+                                spellCheck={false}
+                                autoCapitalize="off"
+                                aria-invalid={slugError !== null}
+                                aria-describedby={slugError ? `${ids}-slug-error` : undefined}
+                                onChange={(event) => {
+                                    setSlug(slugDraft(event.target.value));
+                                    setSlugError(null);
+                                }}
+                                // Blank follows the title again.
+                                onBlur={() => setSlug((typed) => (typed ? slugOf(typed) : null))}
+                            />
+                        </span>
+                        {slugError && (
+                            <p className={styles.error} id={`${ids}-slug-error`} role="alert">
+                                {slugError}
+                            </p>
+                        )}
+                    </div>
+                }
+            >
                 <label className={styles.field}>
                     <span className={styles.label}>Select Artifact</span>
                     <span className={styles.selectBox}>

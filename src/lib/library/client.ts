@@ -67,13 +67,18 @@ export const publishArtifact = (input: PublishInput) =>
 export const isWithdrawnRefusal = (problem: unknown): boolean =>
     asRecord(problem)?.['code'] === 'artifact_withdrawn';
 
+/** Whether a publish answered that another artifact holds the chosen slug. */
+export const isSlugTakenRefusal = (problem: unknown): boolean =>
+    asRecord(problem)?.['code'] === 'slug_taken';
+
 const AS_SNAPSHOT = 'Publish it as a snapshot.';
 
 /**
  * The sentence a publish refusal shows. The share refusals read as the
  * Share dialog words them (`withdrawalText`), with the way out a publisher
  * has. A publish whose key made an artifact since withdrawn reads as a
- * withdrawn one. A live share over the card cap or with cards that cannot show live
+ * withdrawn one, and one whose chosen slug another artifact holds asks for
+ * another. A live share over the card cap or with cards that cannot show live
  * data can go as a snapshot. `cards` is the data cards the publish shows,
  * which name the blocked ones, and `single` is a publish of one card. Any
  * other refusal shows `detail`.
@@ -86,6 +91,10 @@ export const publishRefusalText = (
 ): string => {
     if (isWithdrawnRefusal(problem)) {
         return 'This was published and then withdrawn. Publish it again to make a new page.';
+    }
+
+    if (isSlugTakenRefusal(problem)) {
+        return 'Another artifact uses this URL. Choose a different one.';
     }
 
     const answer = readShareAnswer(false, problem);

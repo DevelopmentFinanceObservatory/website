@@ -33,6 +33,7 @@ import {
     artifactByPublishKey,
     forgetShareWriteToken,
     insertArtifact,
+    isSlugHeld,
     listTopics,
     updateArtifact,
     withdrawArtifact,
@@ -62,6 +63,16 @@ const notFound = (): Response =>
 
 const unknownTopic = (): Response =>
     requestInvalidProblem('A topic is not one of the Library’s.', '/topics', NO_STORE);
+
+const slugTaken = (): Response =>
+    problem({
+        status: 409,
+        code: 'slug_taken',
+        detail: 'Another artifact uses this URL. Choose a different one.',
+        retryable: false,
+        headers: NO_STORE,
+        extra: { pointer: '/slug' },
+    });
 
 // A refusal from the steps the publish shares with `POST /api/share`, sent
 // with NO_STORE as every answer here is. `at` names the member of the
@@ -201,14 +212,19 @@ const dropShare = async (
  * → 201 { slug, title } for a new artifact, 200 { slug, title } for the one
  * an earlier try with the same `publishKey` made, with the title it stored,
  * and 409 `artifact_withdrawn` when that artifact has since been withdrawn.
+ * A body with a `slug` publishes under that slug, and answers 409
+ * `slug_taken` at `/slug` when any artifact holds it, withdrawn ones
+ * included. Without one, the slug is made from the title, with a number
+ * after it when that is taken.
  *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
  * the Library keeps in the artifact's row. The artifact's kind, mode,
  * sources and steps come from the cards that share shows. A text card is
  * refused, since the Library has no kind for it. When the row is not
- * stored, because a try with the same key stored first, a topic has gone
- * or the insert failed, the new share is taken down.
+ * stored, because a try with the same key stored first, a topic has gone,
+ * another publish took the chosen slug or the insert failed, the new share
+ * is taken down.
  */
 export const publish = async (request: Request): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -229,7 +245,7 @@ export const publish = async (request: Request): Promise<Response> => {
         return requestInvalidProblem(read.detail, read.pointer || undefined, NO_STORE);
     }
 
-    const { text, publishKey } = read.value;
+    const { text, publishKey, slug } = read.value;
     const earlier = await artifactByPublishKey(publishKey);
 
     if (earlier?.withdrawn) {
@@ -244,6 +260,10 @@ export const publish = async (request: Request): Promise<Response> => {
 
     if (earlier) {
         return Response.json({ slug: earlier.slug, title: earlier.title }, { headers: NO_STORE });
+    }
+
+    if (slug && (await isSlugHeld(slug))) {
+        return slugTaken();
     }
 
     const known = new Set(await listTopics());
@@ -302,6 +322,7 @@ export const publish = async (request: Request): Promise<Response> => {
             {
                 ...text,
                 publishKey,
+                ...(slug ? { slug } : {}),
                 shareId: created.id,
                 shareWriteToken: created.writeToken,
                 kind,
@@ -316,11 +337,15 @@ export const publish = async (request: Request): Promise<Response> => {
         throw error;
     }
 
-    if (made === 'unknown_topic' || !made.created) {
+    if (made === 'unknown_topic' || made === 'slug_taken' || !made.created) {
         await dropShare(request.headers, backing, admin.id);
 
-        return made === 'unknown_topic'
-            ? unknownTopic()
+        if (made === 'unknown_topic') {
+            return unknownTopic();
+        }
+
+        return made === 'slug_taken'
+            ? slugTaken()
             : Response.json({ slug: made.slug, title: made.title }, { headers: NO_STORE });
     }
 

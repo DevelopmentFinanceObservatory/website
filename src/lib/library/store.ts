@@ -212,7 +212,7 @@ const orUnknownTopic = async <T>(work: Promise<T>): Promise<T | 'unknown_topic'>
 };
 
 // Whether the error is Postgres' unique_violation on the slug index, which
-// two publishes of one title raise when they read the taken slugs at the
+// two publishes of one slug raise when they read the taken slugs at the
 // same moment. Drizzle wraps the driver's error in `cause`.
 const isSlugTaken = (error: unknown): boolean =>
     typeof error === 'object' &&
@@ -232,6 +232,9 @@ const isSlugTaken = (error: unknown): boolean =>
 export type ArtifactInsert = ArtifactText & {
     /** The id every try of one publish sends. */
     publishKey: string;
+    /** The slug the publisher chose, in `slugOf` form. Without it the slug
+     *  is made from the title. */
+    slug?: string;
     shareId: string;
     shareWriteToken: string;
     kind: ArtifactKind;
@@ -240,45 +243,85 @@ export type ArtifactInsert = ArtifactText & {
     steps: LibraryStep[];
 };
 
+/** Whether any artifact, withdrawn ones included, holds `slug`. */
+export const isSlugHeld = async (slug: string): Promise<boolean> =>
+    (
+        await db
+            .select({ id: libraryArtifact.id })
+            .from(libraryArtifact)
+            .where(eq(libraryArtifact.slug, slug))
+            .limit(1)
+    ).length > 0;
+
+type Inserted = { slug: string; title: string; created: boolean } | 'unknown_topic' | 'slug_taken';
+
 /**
- * Publishes an artifact under a slug made from its title, with a number
- * after it when the slug is taken by any artifact, withdrawn ones included.
- * Answers the slug and title with `created: true`, or `unknown_topic`.
+ * Publishes an artifact under the slug its publisher chose, or else under a
+ * slug made from its title, with a number after it when that slug is taken.
+ * A slug counts as taken while any artifact holds it, withdrawn ones
+ * included. Answers the slug and title with `created: true`,
+ * `unknown_topic`, or `slug_taken` when another artifact holds the chosen
+ * slug, which gets no number.
  *
  * When an artifact with the same `publishKey` exists, it answers that one's
  * slug and stored title with `created: false` and stores nothing, so the
- * share in `input` is the caller's to take down. A slug another publish took
- * first is chosen again, up to three times.
+ * share in `input` is the caller's to take down. When another publish takes
+ * the slug first, the insert runs again, up to three times, and a chosen
+ * slug then answers `slug_taken`.
  */
 export const insertArtifact = async (
     input: ArtifactInsert,
     publishedBy: string,
-): Promise<{ slug: string; title: string; created: boolean } | 'unknown_topic'> => {
+): Promise<Inserted> => {
     for (let attempt = 1; ; attempt += 1) {
         try {
             return await insertOnce(input, publishedBy);
         } catch (error) {
-            if (attempt === 3 || !isSlugTaken(error)) {
+            if (!isSlugTaken(error)) {
+                throw error;
+            }
+
+            if (attempt === 3) {
+                if (input.slug) {
+                    return 'slug_taken';
+                }
+
                 throw error;
             }
         }
     }
 };
 
-const insertOnce = (
-    input: ArtifactInsert,
-    publishedBy: string,
-): Promise<{ slug: string; title: string; created: boolean } | 'unknown_topic'> =>
+const insertOnce = (input: ArtifactInsert, publishedBy: string): Promise<Inserted> =>
     orUnknownTopic(
-        db.transaction(async (tx) => {
-            const base = slugOf(input.title);
-            const taken = await tx
-                .select({ slug: libraryArtifact.slug })
-                .from(libraryArtifact)
-                .where(like(libraryArtifact.slug, `${base}%`));
-            const slug = freeSlug(base, new Set(taken.map((row) => row.slug)));
+        db.transaction(async (tx): Promise<Inserted> => {
+            const { topics, slug: chosen, ...fields } = input;
+            let slug: string;
+
+            if (chosen) {
+                // The holder may be an earlier try of this publish, which
+                // the insert below answers.
+                const [holder] = await tx
+                    .select({ publishKey: libraryArtifact.publishKey })
+                    .from(libraryArtifact)
+                    .where(eq(libraryArtifact.slug, chosen));
+
+                if (holder && holder.publishKey !== input.publishKey) {
+                    return 'slug_taken';
+                }
+
+                slug = chosen;
+            } else {
+                const base = slugOf(input.title);
+                const taken = await tx
+                    .select({ slug: libraryArtifact.slug })
+                    .from(libraryArtifact)
+                    .where(like(libraryArtifact.slug, `${base}%`));
+
+                slug = freeSlug(base, new Set(taken.map((row) => row.slug)));
+            }
+
             const id = uuid();
-            const { topics, ...fields } = input;
 
             // A publish with this key that commits first wins, and this
             // insert then waits for it and does nothing.

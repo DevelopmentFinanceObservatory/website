@@ -97,12 +97,12 @@ test('library store', async (t) => {
             store.insertArtifact(input('key-b', 'Debt service'), 'admin'),
         ]);
 
-        assert.deepEqual(made.map((one) => (one === 'unknown_topic' ? one : one.created)).sort(), [
+        assert.deepEqual(made.map((one) => (typeof one === 'object' ? one.created : one)).sort(), [
             false,
             true,
         ]);
         assert.deepEqual(
-            made.map((one) => (one === 'unknown_topic' ? one : one.slug)),
+            made.map((one) => (typeof one === 'object' ? one.slug : one)),
             ['debt-service', 'debt-service'],
         );
         assert.equal(await rowCount(), 2);
@@ -115,7 +115,7 @@ test('library store', async (t) => {
             ),
         );
 
-        assert.deepEqual(made.map((one) => (one === 'unknown_topic' ? one : one.slug)).sort(), [
+        assert.deepEqual(made.map((one) => (typeof one === 'object' ? one.slug : one)).sort(), [
             'climate-finance',
             'climate-finance-2',
             'climate-finance-3',
@@ -260,8 +260,51 @@ test('library store', async (t) => {
         // The withdrawn slug stays taken.
         const again = await store.insertArtifact(input('key-i', 'Health ODA'), 'admin');
 
-        assert.notEqual(again, 'unknown_topic');
-        assert.notEqual(again !== 'unknown_topic' && again.slug, 'health-oda');
+        assert.ok(typeof again === 'object');
+        assert.notEqual(again.slug, 'health-oda');
+        assert.equal(await store.isSlugHeld('health-oda'), true);
+        assert.equal(
+            await store.insertArtifact({ ...input('key-j'), slug: 'health-oda' }, 'admin'),
+            'slug_taken',
+        );
+    });
+
+    await t.test('a chosen slug is stored as it is, or refused when held', async () => {
+        const before = await rowCount();
+
+        assert.equal(await store.isSlugHeld('aid-chart'), false);
+        assert.deepEqual(
+            await store.insertArtifact(
+                { ...input('key-k', 'Debt service'), slug: 'aid-chart' },
+                'admin',
+            ),
+            { slug: 'aid-chart', title: 'Debt service', created: true },
+        );
+        // A retry of that publish answers it, and another publish of the
+        // slug gets no number.
+        assert.deepEqual(
+            await store.insertArtifact(
+                { ...input('key-k', 'Debt service'), slug: 'aid-chart' },
+                'admin',
+            ),
+            { slug: 'aid-chart', title: 'Debt service', created: false },
+        );
+        assert.equal(
+            await store.insertArtifact({ ...input('key-l'), slug: 'aid-chart' }, 'admin'),
+            'slug_taken',
+        );
+
+        const raced = await Promise.all(
+            ['key-m', 'key-n'].map((key) =>
+                store.insertArtifact({ ...input(key), slug: 'raced-chart' }, 'admin'),
+            ),
+        );
+
+        assert.deepEqual(raced.map((one) => (typeof one === 'object' ? one.slug : one)).sort(), [
+            'raced-chart',
+            'slug_taken',
+        ]);
+        assert.equal(await rowCount(), before + 2);
     });
 
     await t.test('forgetting a token leaves an artifact on show alone', async () => {
