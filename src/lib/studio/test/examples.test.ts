@@ -3,11 +3,13 @@ import test from 'node:test';
 
 import { studioHref } from '../../search/studioHandoff.ts';
 import {
-    arrivalStrippedHref,
+    arrivalDraftHref,
     EXAMPLE_PROMPTS,
     handoffPromptSource,
     pickExamples,
+    questionParam,
     routedArrival,
+    STUDIO_DRAFT_PARAM,
 } from '../examples.ts';
 
 test('pickExamples draws three distinct prompts from the pool', () => {
@@ -51,25 +53,40 @@ test('handoffPromptSource reads a search example from a click and from a routed 
     }
 });
 
-test('arrivalStrippedHref keeps the question and seed and drops how it arrived', () => {
-    const stripped = (href: string) => {
-        const url = new URL(href, 'https://example.org');
+test('arrivalDraftHref turns an arrival into its question as a draft, and nothing else', () => {
+    const drafted = (href: string) =>
+        arrivalDraftHref(new URL(href, 'https://example.org').searchParams);
+    const draftOf = (href: string | null) =>
+        href && new URL(href, 'https://example.org').searchParams.get(STUDIO_DRAFT_PARAM);
 
-        return arrivalStrippedHref(url.pathname, url.searchParams);
-    };
+    for (const href of [
+        studioHref('aid & debt', 'tok', {
+            via: 'route_auto',
+            traceId: 'trace-1',
+            fromExample: true,
+        }),
+        studioHref('aid & debt', 'tok', { via: 'route_offer', traceId: 'trace-1' }),
+        studioHref('aid & debt', null, { via: 'example' }),
+        studioHref('  aid & debt ', 'tok'),
+    ]) {
+        const draft = drafted(href);
 
-    assert.equal(
-        stripped(
-            studioHref('aid & debt', 'tok', {
-                via: 'route_auto',
-                traceId: 'trace-1',
-                fromExample: true,
-            }),
-        ),
-        '/studio?q=aid+%26+debt&seed=tok',
-    );
-    assert.equal(stripped('/studio?via=route_auto'), '/studio');
-    assert.equal(stripped(studioHref('aid', 'tok')), null);
+        assert.equal(draft, '/studio?draft=aid+%26+debt', href);
+        assert.equal(draftOf(draft), 'aid & debt', href);
+    }
+
+    for (const href of ['/studio', '/studio?q=%20%20', '/studio?via=route_auto&trace=t']) {
+        assert.equal(drafted(href), null, href);
+    }
+});
+
+test('questionParam trims a question and reads a blank one as none', () => {
+    const read = (search: string) => questionParam(new URLSearchParams(search), 'q');
+
+    assert.equal(read('q=%20aid%20'), 'aid');
+    assert.equal(read('q=%20%20'), null);
+    assert.equal(read('q='), null);
+    assert.equal(read(''), null);
 });
 
 test("only the router's automatic move arrives as routed, with the search's trace id", () => {
@@ -86,6 +103,7 @@ test("only the router's automatic move arrives as routed, with the search's trac
         studioHref('aid & debt', null, { via: 'example' }),
         studioHref('aid & debt', null),
         '/studio?via=route_auto&trace=trace-1',
+        '/studio?q=%20&via=route_auto&trace=trace-1',
     ]) {
         assert.equal(arrival(href), null, href);
     }

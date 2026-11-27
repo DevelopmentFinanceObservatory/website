@@ -465,11 +465,13 @@ test('searchEventName counts a resolution with nothing resolved as search.empty'
     assert.equal(props.refused[0].reason, 'entity_ambiguous');
 });
 
-test('a search asks an example when it was picked as one or retries one that was', () => {
+test('a search asks an example when it was picked as one or reruns one that was', () => {
     const cases: [Parameters<typeof searchFromExample>, boolean][] = [
         [['example', false], true],
         [['retry', true], true],
         [['retry', false], false],
+        [['route_back', true], true],
+        [['route_back', false], false],
         [['typed', true], false],
         [['permalink', true], false],
     ];

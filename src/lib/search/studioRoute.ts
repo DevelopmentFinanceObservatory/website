@@ -63,15 +63,40 @@ export function routeMove({
 }
 
 /**
- * Whether the run on screen takes the Studio card a route's offer shows:
- * from the route's early frame, before any answer (null), and then on
- * every kind of answer except a `requires_analysis` decline, whose own
- * "Ask in Studio" stands in for it.
+ * Whether a click leaves the page in this tab: a plain primary click (no
+ * modifier key) on a link that opens in this tab and points at another
+ * page, by origin or path. The automatic move reads one during its pause as
+ * the reader leaving, and stops the move without staying. `link` is the
+ * clicked `a[href]` (its resolved `href` and its `target`), or null.
  */
-export function answerTakesOffer(
-    answer: (Pick<ResolveResponse, 'kind'> & { reason?: string | null }) | null,
+export function clickLeavesPage(
+    click: Pick<MouseEvent, 'button' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+    link: { href: string; target: string } | null,
+    here: string,
 ): boolean {
-    return !(answer?.kind === 'declined' && answer.reason === 'requires_analysis');
+    if (
+        !link ||
+        click.button !== 0 ||
+        click.altKey ||
+        click.ctrlKey ||
+        click.metaKey ||
+        click.shiftKey ||
+        (link.target !== '' && link.target !== '_self')
+    ) {
+        return false;
+    }
+
+    let to: URL;
+
+    try {
+        to = new URL(link.href, here);
+    } catch {
+        return false;
+    }
+
+    const from = new URL(here);
+
+    return to.origin !== from.origin || to.pathname !== from.pathname;
 }
 
 /** The guest prompt count the move reads: 0 for a signed-in reader, whose

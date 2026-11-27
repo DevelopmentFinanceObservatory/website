@@ -64,7 +64,7 @@ export const HANDOFF_TRACE_PARAM = 'trace';
 export const routedArrival = (
     params: URLSearchParams,
 ): { question: string; traceId: string | null } | null => {
-    const question = params.get('q');
+    const question = questionParam(params, 'q');
 
     return question && params.get(HANDOFF_VIA_PARAM) === 'route_auto'
         ? { question, traceId: params.get(HANDOFF_TRACE_PARAM) }
@@ -84,20 +84,22 @@ export const handoffPromptSource = (params: URLSearchParams): PromptSource | und
         ? 'search_example'
         : undefined;
 
-/** The `/studio` URL with the params that describe how a question arrived
- *  (`via`, `trace`, `example`) taken out, or null when it has none. Studio
- *  reads them once, so a copied or reloaded link does not replay the
- *  arrival or carry the routed search's trace id. */
-export const arrivalStrippedHref = (pathname: string, params: URLSearchParams): string | null => {
-    const kept = new URLSearchParams(params);
+/** The `/studio` query param that holds a question typed into the
+ *  landing's opener and left unsent. */
+export const STUDIO_DRAFT_PARAM = 'draft';
 
-    for (const param of [HANDOFF_VIA_PARAM, HANDOFF_TRACE_PARAM, HANDOFF_EXAMPLE_PARAM]) {
-        kept.delete(param);
-    }
+/** The question in `param` with its outer spaces trimmed, or null when it
+ *  is missing or blank. */
+export const questionParam = (params: URLSearchParams, param: string): string | null =>
+    params.get(param)?.trim() || null;
 
-    if (kept.size === params.size) {
-        return null;
-    }
+/** The `/studio?draft=` URL that replaces a guest's arrival URL once its
+ *  turn starts, or null when the URL holds no question. Back, Forward, a
+ *  reload or a copied link then open the landing with the question in the
+ *  opener, unsent, and do not spend a second prompt or replay how it
+ *  arrived. */
+export const arrivalDraftHref = (params: URLSearchParams): string | null => {
+    const question = questionParam(params, 'q');
 
-    return kept.size > 0 ? `${pathname}?${kept}` : pathname;
+    return question && `/studio?${new URLSearchParams({ [STUDIO_DRAFT_PARAM]: question })}`;
 };

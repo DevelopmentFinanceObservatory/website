@@ -167,13 +167,15 @@ const OutOfScope = ({
     );
 };
 
-/** requires_analysis: search holds no data to show, so Studio takes it. */
+/** requires_analysis: search holds no data to show, so Studio takes it.
+ *  With no `onStudio`, the route's Studio card beside it is the answer's
+ *  one way to Studio. */
 const RequiresAnalysis = ({
     onStudio,
     onStartNew,
     onShowCatalogue,
 }: {
-    onStudio: () => void;
+    onStudio?: () => void;
     onStartNew: () => void;
     onShowCatalogue: () => void;
 }) => (
@@ -185,9 +187,11 @@ const RequiresAnalysis = ({
         </p>
         <AnswerActions
             lead={
-                <Button icon="arrow" onClick={onStudio}>
-                    Ask in Studio
-                </Button>
+                onStudio && (
+                    <Button icon="arrow" onClick={onStudio}>
+                        Ask in Studio
+                    </Button>
+                )
             }
             onStartNew={onStartNew}
             away={{ label: 'See what data DFO holds', run: onShowCatalogue }}
@@ -218,8 +222,9 @@ const SearchAnswer = ({
     onStartNew: () => void;
     // Shows the whole catalogue's starting point, with no search call.
     onShowCatalogue: () => void;
-    // Hands the question to Studio.
-    onStudio: () => void;
+    // Hands the question to Studio; absent while the route's Studio card
+    // stands in for it.
+    onStudio?: () => void;
 }) => {
     const place = answer.scope.place ?? null;
 

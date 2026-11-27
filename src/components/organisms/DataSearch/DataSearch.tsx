@@ -93,7 +93,7 @@ import {
     studioHref,
     type HandoffTrigger,
 } from '@/lib/search/studioHandoff';
-import { answerTakesOffer, guestPromptsSeen, routeMove } from '@/lib/search/studioRoute';
+import { clickLeavesPage, guestPromptsSeen, routeMove } from '@/lib/search/studioRoute';
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
@@ -159,16 +159,9 @@ const subscribeStorage = (listener: () => void) => {
 };
 
 // How long the automatic move holds its callout before Studio opens: the
-// time to read it, and the window in which the reader can stay.
+// time to read it, and the window in which the reader can stay. It starts
+// again in full when the pointer or focus leaves the callout.
 const MOVE_PAUSE_MS = 600;
-
-// What a press can land on to stay on the data search during the move's
-// pause: a field, a link or a control.
-const CONTROL = 'a, button, input, textarea, select, label, [role="button"], [contenteditable]';
-const isControl = (target: EventTarget | null): boolean =>
-    target instanceof Element && target.closest(CONTROL) !== null;
-const isField = (target: EventTarget | null): boolean =>
-    target instanceof Element && target.closest('input, textarea, [contenteditable]') !== null;
 
 // Whether the address bar keeps the Studio router off for `query`.
 const routingOffHere = (query: string): boolean =>
@@ -349,6 +342,11 @@ const DataSearch = ({
         link: VersionLink;
         result: Exclude<VersionLinkResult, { kind: 'opened' }>;
     } | null>(null);
+    // A move the reader stayed out of during its pause: its route, kept as
+    // an offer while the page searches the same question as data. Only that
+    // search shows it: every other search, Start New and an opened share or
+    // link drop it.
+    const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
     const leaveShare = useCallback(() => {
         openedShareRef.current = null;
         setOpenedShare(null);
@@ -357,6 +355,7 @@ const DataSearch = ({
     // Opens a share, or a link read as one, and keeps it as the view's
     // origin until the user moves on from it.
     const enterShare = useCallback((shared: OpenedSearchShare, source: SearchSource) => {
+        setStayed(null);
         openedShareRef.current = shared;
         setOpenedShare(shared);
         openShareRef.current(shared, source);
@@ -373,6 +372,7 @@ const DataSearch = ({
     const submitQuery = useCallback(
         (text: string, source: SearchSource) => {
             leaveShare();
+            setStayed(null);
             setArrivedRouteOff(false);
             runQuery(text, source);
         },
@@ -407,17 +407,14 @@ const DataSearch = ({
         kind: answer?.kind ?? (response ? 'resolution' : null),
         guestOutOfPrompts: guestOutOfPrompts({ guest, used: guestUsed }),
     });
-    // A move the reader stayed out of during its pause: its route, kept as
-    // an offer while the page searches the same question as data.
-    const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
     const stayedRoute = stayed?.query === query ? stayed.route : null;
     // The route a click on the Studio card hands over: the run's own offer,
     // or the move the reader stayed out of.
     const offerRoute = move === 'offer' ? route : stayedRoute;
     // The Studio card stands in for every other Studio action on the
-    // answer, from the route's early frame on. A requires_analysis
-    // decline's own "Ask in Studio" is its offer.
-    const studioOffered = offerRoute !== null && answerTakesOffer(answer ?? response);
+    // answer, from the route's early frame on, a requires_analysis
+    // decline's "Ask in Studio" included.
+    const studioOffered = offerRoute !== null;
 
     // Every Studio action (a declined answer's, an operation_not_applied
     // departure's, the side panel's, a no_data part's callout, the route's
@@ -524,11 +521,24 @@ const DataSearch = ({
     // twice, the router state and then the page, and the first commit takes
     // the transition type, so the page would swap with no slide.
     //
-    // During the pause, a key in a field, Escape, or a press on a link or
-    // control keeps the reader here: the callout turns into the Studio
-    // card, and the question is searched as data, with the router off. A
-    // new search ends the pause too, before any navigation.
+    // During the pause, Escape or the callout's "Search the data instead"
+    // keeps the reader here: the callout turns into the Studio card, and the
+    // question is searched as data, with the router off (`route_back`). Only
+    // those two count, since the way-back rate is what the router's auto
+    // threshold is tuned on. The pause holds while the pointer is over the
+    // callout or focus is inside it, and starts again in full on leaving. A
+    // plain click on a link to another page (clickLeavesPage) stops the move
+    // with no search and no event, so the link's navigation wins. A new
+    // search ends the pause too, before any navigation.
     const movedSearchRef = useRef<string | null>(null);
+    // Whether the pointer or focus is on the callout, and the pause's own
+    // handlers for the callout while the pause runs.
+    const moveHeldRef = useRef(false);
+    const movePauseRef = useRef<{ restart: () => void; stay: () => void } | null>(null);
+    const holdMove = (held: boolean) => {
+        moveHeldRef.current = held;
+        movePauseRef.current?.restart();
+    };
     const readyMove = useEffectEvent(() => studioHandoff('auto', route));
     const stay = useEffectEvent((searchId: string) => {
         movedSearchRef.current = searchId;
@@ -565,28 +575,53 @@ const DataSearch = ({
 
         router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
 
-        const timer = window.setTimeout(() => {
-            movedSearchRef.current = searchId;
-            handoff.go();
-        }, MOVE_PAUSE_MS);
+        let timer = 0;
+        // Clears the timer, and starts it again in full unless the callout
+        // holds the pause or the move has stopped.
+        const restart = () => {
+            window.clearTimeout(timer);
+
+            if (moveHeldRef.current || movedSearchRef.current === searchId) {
+                return;
+            }
+
+            timer = window.setTimeout(() => {
+                movedSearchRef.current = searchId;
+                handoff.go();
+            }, MOVE_PAUSE_MS);
+        };
         const onKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' || isField(event.target)) {
+            if (event.key === 'Escape') {
                 stay(searchId);
             }
         };
-        const onPress = (event: PointerEvent) => {
-            if (isControl(event.target)) {
-                stay(searchId);
+        const onClick = (event: MouseEvent) => {
+            const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+
+            if (
+                clickLeavesPage(
+                    event,
+                    link instanceof HTMLAnchorElement
+                        ? { href: link.href, target: link.target }
+                        : null,
+                    window.location.href,
+                )
+            ) {
+                window.clearTimeout(timer);
+                movedSearchRef.current = searchId;
             }
         };
 
+        restart();
+        movePauseRef.current = { restart, stay: () => stay(searchId) };
         document.addEventListener('keydown', onKey, true);
-        document.addEventListener('pointerdown', onPress, true);
+        document.addEventListener('click', onClick, true);
 
         return () => {
             window.clearTimeout(timer);
+            movePauseRef.current = null;
             document.removeEventListener('keydown', onKey, true);
-            document.removeEventListener('pointerdown', onPress, true);
+            document.removeEventListener('click', onClick, true);
         };
     }, [move, phase, pageSettled, searchIds, searchParams, query, router]);
 
@@ -658,6 +693,7 @@ const DataSearch = ({
         // submitted question included, so a refusal shows on the idle view
         // with nothing stale beside it.
         leaveShare();
+        setStayed(null);
         resetRef.current();
         clearPrompt();
 
@@ -709,6 +745,7 @@ const DataSearch = ({
         }
 
         startedRef.current = key;
+        setStayed(null);
 
         const { source, href } = handoffArrival(searchParams);
 
@@ -848,6 +885,7 @@ const DataSearch = ({
 
     const startNew = useCallback(() => {
         leaveShare();
+        setStayed(null);
         reset();
         // The typing-mode trio must clear too, or idle comes back raised, with
         // the Try row hidden.
@@ -1225,7 +1263,7 @@ const DataSearch = ({
                                     onShowCatalogue={() =>
                                         submitQuery(STARTING_POINT_QUERY, 'catalogue')
                                     }
-                                    onStudio={studioClick}
+                                    onStudio={studioOffered ? undefined : studioClick}
                                 />
                                 {studioOffered && !stayedRoute && (
                                     <StudioOffer onStudio={studioClick} />
@@ -1299,7 +1337,11 @@ const DataSearch = ({
                                     move the reader stayed out of leaves the
                                     Studio card there. */}
                                 {move === 'auto' ? (
-                                    <StudioMove />
+                                    <StudioMove
+                                        onStay={() => movePauseRef.current?.stay()}
+                                        onHold={() => holdMove(true)}
+                                        onRelease={() => holdMove(false)}
+                                    />
                                 ) : (
                                     stayedRoute &&
                                     studioOffered && <StudioOffer onStudio={studioClick} inPlace />

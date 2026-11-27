@@ -1,6 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
+import { useEffect, useRef } from 'react';
 
 import styles from './DataSearch.module.scss';
 
@@ -20,21 +21,35 @@ const StudioOffer = ({
 }: {
     onStudio: () => void;
     inPlace?: boolean;
-}) => (
-    <div className={classNames(styles.callout, inPlace && styles.calloutInPlace)}>
-        <p className={styles.calloutTitle}>This looks like a question for Studio.</p>
-        <p className={styles.calloutText}>
-            Search finds and downloads data. Studio can plan the analysis, run it and show its
-            working.
-        </p>
-        <Button
-            icon="arrow"
-            onClick={onStudio}
-            className={inPlace ? styles.offerButtonIn : undefined}
-        >
-            Ask in Studio
-        </Button>
-    </div>
-);
+}) => {
+    const button = useRef<HTMLElement>(null);
+
+    // The in-place card replaces the callout whose "Search the data instead"
+    // button had focus, so focus would fall to the body; it lands on this
+    // card's button instead.
+    useEffect(() => {
+        if (inPlace && (!document.activeElement || document.activeElement === document.body)) {
+            button.current?.focus();
+        }
+    }, [inPlace]);
+
+    return (
+        <div className={classNames(styles.callout, inPlace && styles.calloutInPlace)}>
+            <p className={styles.calloutTitle}>This looks like a question for Studio.</p>
+            <p className={styles.calloutText}>
+                Search finds and downloads data. Studio can plan the analysis, run it and show its
+                working.
+            </p>
+            <Button
+                ref={button}
+                icon="arrow"
+                onClick={onStudio}
+                className={inPlace ? styles.offerButtonIn : undefined}
+            >
+                Ask in Studio
+            </Button>
+        </div>
+    );
+};
 
 export default StudioOffer;

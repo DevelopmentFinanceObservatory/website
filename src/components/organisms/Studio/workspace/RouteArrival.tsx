@@ -19,16 +19,16 @@ const BackLabel = () => {
 /**
  * The line above a routed question's transcript: why the search API's router
  * moved it from Get Data, and the way back to a data search of the same
- * question with the router off. The way back replaces Studio in the history,
- * so Back from the data search returns to the data search the move left
- * (routing=off), and does not ask the question in Studio again.
+ * question with the router off. The way back is a new history entry, so
+ * Back from the data search returns to Studio: an account's saved
+ * conversation, or a guest's question as an unsent draft (arrivalDraftHref
+ * in src/lib/studio/examples.ts). Neither asks the question again.
  */
 const RouteArrival = ({ question, traceId }: { question: string; traceId: string | null }) => (
     <p className={styles.arrival}>
         Moved here from Get Data because it needs analysis.{' '}
         <Link
             href={routeBackHref(question)}
-            replace
             prefetch={false}
             transitionTypes={[ROUTE_TO_DATA]}
             className={styles.back}

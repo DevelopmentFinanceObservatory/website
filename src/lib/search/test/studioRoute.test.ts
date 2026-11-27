@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-    answerTakesOffer,
+    clickLeavesPage,
     guestPromptsSeen,
     routeMove,
     studioRoute,
@@ -76,17 +76,30 @@ test('routeMove moves on an auto decline, and offers Studio otherwise', async (t
     }
 });
 
-test('answerTakesOffer shows the card before the answer and leaves an analysis decline its own button', async (t) => {
-    const cases: [string, Parameters<typeof answerTakesOffer>[0], boolean][] = [
-        ['no answer yet', null, true],
-        ['a resolution', { kind: 'resolution' }, true],
-        ['a catalogue answer', { kind: 'catalogue' }, true],
-        ['an out_of_scope decline', { kind: 'declined', reason: 'out_of_scope' }, true],
-        ['a requires_analysis decline', { kind: 'declined', reason: 'requires_analysis' }, false],
+test('clickLeavesPage reads a plain click on a link to another page in this tab', async (t) => {
+    const here = 'https://example.org/data?q=aid&routing=off';
+    const plain = { button: 0, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false };
+    const link = (href: string, target = '') => ({ href, target });
+    const cases: [string, Parameters<typeof clickLeavesPage>, boolean][] = [
+        ['a header link to another path', [plain, link('https://example.org/about'), here], true],
+        ['a relative link to Studio', [plain, link('/studio'), here], true],
+        ['a link to another origin', [plain, link('https://other.org/data'), here], true],
+        ['a link with target _self', [plain, link('/about', '_self'), here], true],
+        ['a link to the same page with other params', [plain, link('/data?q=debt'), here], false],
+        ['an in-page anchor', [plain, link('#results'), here], false],
+        ['no link', [plain, null, here], false],
+        ['a link that opens a new tab', [plain, link('/about', '_blank'), here], false],
+        ['a link into a named window', [plain, link('/about', 'docs'), here], false],
+        ['a middle click', [{ ...plain, button: 1 }, link('/about'), here], false],
+        ['a right click', [{ ...plain, button: 2 }, link('/about'), here], false],
+        ['a click with Meta', [{ ...plain, metaKey: true }, link('/about'), here], false],
+        ['a click with Ctrl', [{ ...plain, ctrlKey: true }, link('/about'), here], false],
+        ['a click with Shift', [{ ...plain, shiftKey: true }, link('/about'), here], false],
+        ['a click with Alt', [{ ...plain, altKey: true }, link('/about'), here], false],
     ];
 
-    for (const [name, answer, expected] of cases) {
-        await t.test(name, () => assert.equal(answerTakesOffer(answer), expected));
+    for (const [name, args, expected] of cases) {
+        await t.test(name, () => assert.equal(clickLeavesPage(...args), expected));
     }
 });
 
