@@ -454,16 +454,32 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 };
 
 // The replacement a withdrawal or a later change names, or the refusal to
-// send: a body that is not one, an artifact naming itself, or a replacement
-// not on show.
+// send: a body that cannot be read or is not one (with `required`, one
+// without `replacedBy`), an artifact naming itself, or a replacement not on
+// show. Only a body with no bytes at all names no replacement, so a body
+// lost in transit withdraws nothing.
 const namedReplacement = async (
     request: Request,
     id: string,
+    required = false,
 ): Promise<{ replacedBy: string | null } | { refusal: Response }> => {
-    const text = await request.text().catch(() => '');
-    let body: unknown = null;
+    let text: string;
 
-    if (text.trim()) {
+    try {
+        text = await request.text();
+    } catch {
+        return {
+            refusal: requestInvalidProblem(
+                'The request body could not be read.',
+                undefined,
+                NO_STORE,
+            ),
+        };
+    }
+
+    let body: unknown;
+
+    if (text !== '') {
         try {
             body = JSON.parse(text);
         } catch {
@@ -471,7 +487,7 @@ const namedReplacement = async (
         }
     }
 
-    const read = readReplacement(body);
+    const read = readReplacement(body, { required });
 
     if (!read.ok) {
         return {
@@ -498,8 +514,10 @@ const namedReplacement = async (
 /**
  * DELETE /api/library/artifacts/<id> → 204, or 502 `transient_unavailable`
  *
- * The body is optional: `{ replacedBy }` names the artifact on show whose
- * page the withdrawn address then links to, and a replacement that is the
+ * The body is optional: an empty one names no replacement, and
+ * `{ replacedBy }` names the artifact on show whose page the withdrawn
+ * address then links to. A body that cannot be read or parsed answers 400
+ * and withdraws nothing, and a replacement that is the
  * artifact itself or not on show answers 400 `replacement_unavailable` at
  * `/replacedBy` before anything changes.
  *
@@ -558,7 +576,8 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
  * PUT /api/library/artifacts/<id>/replacement { replacedBy } → { slug }
  *
  * Points a withdrawn artifact's address at another artifact on show, or at
- * nothing with null. Answers 404 for an id no withdrawn artifact has, and
+ * nothing with null. A body without `replacedBy` answers 400 at
+ * `/replacedBy`. Answers 404 for an id no withdrawn artifact has, and
  * the withdrawal's 400 `replacement_unavailable` for a replacement that is
  * the artifact itself or not on show.
  */
@@ -569,7 +588,7 @@ export const replace = async (request: Request, id: string): Promise<Response> =
         return refusal;
     }
 
-    const named = await namedReplacement(request, id);
+    const named = await namedReplacement(request, id, true);
 
     if ('refusal' in named) {
         return named.refusal;

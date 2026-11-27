@@ -61,9 +61,11 @@ const Prose = ({ text }: { text: string }) => (
  * artifact's type, status, publication and topics; on the left, the page's
  * sections. A phone stacks the artifact, the details, then the sections.
  *
- * A live artifact's data follows its source, and the embed says how recent
- * it is. A snapshot's details say how recent its data was when published,
- * one period for a card and the earliest and latest for a canvas.
+ * A live artifact's data follows its source. The embed of a live chart,
+ * table, key number or canvas says how recent it is, and a data artifact's
+ * page names no period. A snapshot's details say how recent its data was
+ * when published, one period for a card and the earliest and latest for a
+ * canvas.
  *
  * `origin` is the site's own, for the citation. `accessed` is the day the
  * page was rendered, which the citation names. `replacements` gives an admin

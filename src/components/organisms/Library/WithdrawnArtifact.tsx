@@ -58,6 +58,7 @@ const WithdrawnArtifact = ({
                 <SetReplacement
                     id={artifact.id}
                     replacedBy={artifact.replacedBy}
+                    replacement={artifact.replacement}
                     choices={replacements}
                 />
             )}

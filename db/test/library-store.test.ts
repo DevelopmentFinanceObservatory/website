@@ -436,87 +436,129 @@ test('library store', async (t) => {
         assert.deepEqual(row.card_dates, cardDates);
     });
 
-    await t.test('only a withdrawn artifact names a replacement, never itself', async () => {
-        await store.insertArtifact(input('key-r', 'Replacement'), 'admin');
-        await store.insertArtifact(input('key-s', 'Replaced'), 'admin');
+    await t.test('an edit dates the text only when the text changes', async () => {
+        await store.insertArtifact(input('key-t', 'Edited chart'), 'admin');
 
-        const replacement = await idOf('replacement');
-        const replaced = await idOf('replaced');
-        const runtime = database.runtimePool();
-        const violates = (constraint: string) => (error: { constraint?: string }) =>
-            error.constraint === constraint;
+        const id = await idOf('edited-chart');
+        const dates = async () => {
+            const read = await store.artifactBySlug('edited-chart');
 
-        await assert.rejects(
-            runtime.query('update library_artifact set replaced_by = $1 where id = $2', [
-                replacement,
-                replaced,
-            ]),
-            violates('library_artifact_replaced_by_withdrawn'),
-        );
-        await assert.rejects(
-            runtime.query(
-                'update library_artifact set withdrawn_at = now(), replaced_by = id where id = $1',
-                [replaced],
-            ),
-            violates('library_artifact_replaced_by_other'),
-        );
-        await assert.rejects(
-            runtime.query(
-                `update library_artifact set withdrawn_at = now(), replaced_by = 'no-such-id' where id = $1`,
-                [replaced],
-            ),
-            violates('library_artifact_replaced_by_library_artifact_id_fk'),
-        );
+            assert.ok(read?.status === 'published');
 
-        // The erasing trigger leaves the pointer as the withdrawal wrote it.
-        assert.deepEqual(await store.withdrawArtifact(replaced, replacement), {
-            slug: 'replaced',
+            return read.artifact;
+        };
+        const text = {
+            title: 'Edited chart',
+            description: 'Aid to health.',
+            contentTitle: null,
+            content: null,
+        };
+
+        // The same text with a new topic.
+        assert.deepEqual(await store.updateArtifact(id, { ...text, topics: ['Health'] }), {
+            slug: 'edited-chart',
         });
 
-        const [row] = (
-            await admin.query<{ replaced_by: string; title: string }>(
-                'select replaced_by, title from library_artifact where id = $1',
-                [replaced],
-            )
-        ).rows;
+        const retopiced = await dates();
 
-        assert.deepEqual(row, { replaced_by: replacement, title: '' });
+        assert.deepEqual(retopiced.topics, ['Health']);
+        assert.equal(retopiced.updatedAt, retopiced.publishedAt);
 
-        const atSlug = await store.artifactBySlug('replaced');
+        await store.updateArtifact(id, { ...text, content: 'New findings.', topics: ['Health'] });
 
-        assert.ok(atSlug?.status === 'withdrawn');
-        assert.equal(atSlug.artifact.replacedBy, replacement);
-        assert.deepEqual(atSlug.artifact.replacement, {
-            slug: 'replacement',
-            title: 'Replacement',
-        });
+        const rewritten = await dates();
 
-        // A published artifact cannot be given one later, and a withdrawn one
-        // can be pointed elsewhere or nowhere.
-        assert.equal(await store.setReplacement(replacement, replaced), 'not_found');
-        assert.deepEqual(await store.setReplacement(replaced, null), { slug: 'replaced' });
-        assert.equal(await store.replacementOf(replaced), null);
-        assert.deepEqual(await store.setReplacement(replaced, replacement), { slug: 'replaced' });
-        assert.equal(await store.isArtifactPublished(replacement), true);
-        assert.equal(await store.isArtifactPublished(replaced), false);
-        assert.ok((await store.replacementChoices()).some((choice) => choice.id === replacement));
-        assert.equal(
-            (await store.replacementChoices()).some((choice) => choice.id === replaced),
-            false,
-        );
+        assert.ok(rewritten.updatedAt > rewritten.publishedAt);
+    });
 
-        // A deleted replacement leaves the pointer null.
-        await admin.query('delete from library_artifact where id = $1', [replacement]);
-        assert.equal(
-            (
-                await admin.query<{ replaced_by: string | null }>(
-                    'select replaced_by from library_artifact where id = $1',
+    await t.test(
+        'only a withdrawn artifact names a replacement, and it names another',
+        async () => {
+            await store.insertArtifact(input('key-r', 'Replacement'), 'admin');
+            await store.insertArtifact(input('key-s', 'Replaced'), 'admin');
+
+            const replacement = await idOf('replacement');
+            const replaced = await idOf('replaced');
+            const runtime = database.runtimePool();
+            const violates = (constraint: string) => (error: { constraint?: string }) =>
+                error.constraint === constraint;
+
+            await assert.rejects(
+                runtime.query('update library_artifact set replaced_by = $1 where id = $2', [
+                    replacement,
+                    replaced,
+                ]),
+                violates('library_artifact_replaced_by_withdrawn'),
+            );
+            await assert.rejects(
+                runtime.query(
+                    'update library_artifact set withdrawn_at = now(), replaced_by = id where id = $1',
+                    [replaced],
+                ),
+                violates('library_artifact_replaced_by_other'),
+            );
+            await assert.rejects(
+                runtime.query(
+                    `update library_artifact set withdrawn_at = now(), replaced_by = 'no-such-id' where id = $1`,
+                    [replaced],
+                ),
+                violates('library_artifact_replaced_by_library_artifact_id_fk'),
+            );
+
+            // The erasing trigger leaves the pointer as the withdrawal wrote it.
+            assert.deepEqual(await store.withdrawArtifact(replaced, replacement), {
+                slug: 'replaced',
+            });
+
+            const [row] = (
+                await admin.query<{ replaced_by: string; title: string }>(
+                    'select replaced_by, title from library_artifact where id = $1',
                     [replaced],
                 )
-            ).rows[0].replaced_by,
-            null,
-        );
-    });
+            ).rows;
+
+            assert.deepEqual(row, { replaced_by: replacement, title: '' });
+
+            const atSlug = await store.artifactBySlug('replaced');
+
+            assert.ok(atSlug?.status === 'withdrawn');
+            assert.equal(atSlug.artifact.replacedBy, replacement);
+            assert.deepEqual(atSlug.artifact.replacement, {
+                slug: 'replacement',
+                title: 'Replacement',
+            });
+
+            // A published artifact cannot be given one later, and a withdrawn one
+            // can be pointed elsewhere or nowhere.
+            assert.equal(await store.setReplacement(replacement, replaced), 'not_found');
+            assert.deepEqual(await store.setReplacement(replaced, null), { slug: 'replaced' });
+            assert.equal(await store.replacementOf(replaced), null);
+            assert.deepEqual(await store.setReplacement(replaced, replacement), {
+                slug: 'replaced',
+            });
+            assert.equal(await store.isArtifactPublished(replacement), true);
+            assert.equal(await store.isArtifactPublished(replaced), false);
+            assert.ok(
+                (await store.replacementChoices()).some((choice) => choice.id === replacement),
+            );
+            assert.equal(
+                (await store.replacementChoices()).some((choice) => choice.id === replaced),
+                false,
+            );
+
+            // A deleted replacement leaves the pointer null.
+            await admin.query('delete from library_artifact where id = $1', [replacement]);
+            assert.equal(
+                (
+                    await admin.query<{ replaced_by: string | null }>(
+                        'select replaced_by from library_artifact where id = $1',
+                        [replaced],
+                    )
+                ).rows[0].replaced_by,
+                null,
+            );
+        },
+    );
 
     await t.test('a withdrawn address follows its replacements to a published one', async () => {
         // chain-0 to chain-6, each withdrawn one replaced by the next, and

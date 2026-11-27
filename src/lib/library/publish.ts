@@ -246,11 +246,17 @@ export const readSlug = (raw: unknown): Read<string | null> => {
 
 /**
  * The `replacedBy` of a withdrawal or of a later change to it: the id of the
- * artifact the withdrawn one's address links to, or null for none. A
- * missing body, a missing member and null all read as none.
+ * artifact the withdrawn one's address links to, or null for none.
+ * `undefined` is an empty body, which a withdrawal reads as none. A body
+ * must be a JSON object, and with `required`, as a later change sends, it
+ * must hold `replacedBy`, null to clear it. A withdrawal's body may leave
+ * the member out.
  */
-export const readReplacement = (body: unknown): Read<string | null> => {
-    if (body === null || body === undefined) {
+export const readReplacement = (
+    body: unknown,
+    { required = false }: { required?: boolean } = {},
+): Read<string | null> => {
+    if (body === undefined && !required) {
         return { ok: true, value: null };
     }
 
@@ -258,7 +264,13 @@ export const readReplacement = (body: unknown): Read<string | null> => {
         return refuse('', 'Send a JSON object.');
     }
 
-    const raw = body.replacedBy ?? null;
+    if (!('replacedBy' in body)) {
+        return required
+            ? refuse('/replacedBy', 'Name the replacement by its id, or send null to clear it.')
+            : { ok: true, value: null };
+    }
+
+    const raw = body.replacedBy;
 
     if (raw === null) {
         return { ok: true, value: null };

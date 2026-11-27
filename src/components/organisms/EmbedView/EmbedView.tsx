@@ -18,7 +18,7 @@ import { savedCanvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
-import { cardDataDates, dataThroughText } from '@/lib/studio/dataThrough';
+import { liveDataThrough } from '@/lib/studio/dataThrough';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
@@ -110,15 +110,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const infoWidget = widgets.find((widget) => widget.id === infoCardId) ?? null;
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);
-    const dataThrough = noted
-        ? dataThroughText(
-              widgets.map((widget) =>
-                  widget.kind !== 'text' && live.states[widget.id]?.status === 'ready'
-                      ? cardDataDates(widget.info).dataThrough
-                      : null,
-              ),
-          )
-        : null;
+    const dataThrough = noted ? liveDataThrough(widgets, live) : null;
 
     return (
         <div

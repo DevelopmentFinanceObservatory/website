@@ -455,7 +455,10 @@ const insertOnce = (input: ArtifactInsert, publishedBy: string): Promise<Inserte
 
 /**
  * Changes an artifact's text and topics. Its slug stays, since the URL is
- * what readers cite. Answers `not_found` for an id no artifact on show has.
+ * what readers cite. `updated_at` moves to the database's clock only when a
+ * text field changes, so the page's "Text updated" means the text changed;
+ * a change of topics alone leaves it. Answers `not_found` for an id no
+ * artifact on show has.
  */
 export const updateArtifact = (
     id: string,
@@ -465,7 +468,19 @@ export const updateArtifact = (
         db.transaction(async (tx) => {
             const [row] = await tx
                 .update(libraryArtifact)
-                .set({ ...fields, updatedAt: new Date() })
+                .set({
+                    ...fields,
+                    // The right side reads the row as it was before this update.
+                    updatedAt: sql`case
+                        when (${libraryArtifact.title}, ${libraryArtifact.description},
+                              ${libraryArtifact.contentTitle}, ${libraryArtifact.content})
+                             is distinct from
+                             (${fields.title}::text, ${fields.description}::text,
+                              ${fields.contentTitle}::text, ${fields.content}::text)
+                        then now()
+                        else ${libraryArtifact.updatedAt}
+                    end`,
+                })
                 .where(and(eq(libraryArtifact.id, id), live))
                 .returning({ slug: libraryArtifact.slug });
 

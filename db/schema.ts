@@ -354,8 +354,8 @@ export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: stri
  * `share_write_token`.
  *
  * `replaced_by` names the artifact a withdrawn one's address points readers
- * to. Only a withdrawn row holds one, never itself, and it is null once the
- * replacement's row is deleted. The replacement was published when the
+ * to. Only a withdrawn row holds one, it names another row, and it is null
+ * once the replacement's row is deleted. The replacement was published when the
  * pointer was written, and the page follows the chain of replacements to
  * the first one still published.
  */

@@ -60,8 +60,13 @@ const ReplacementPicker = ({
                         {choice.title}
                     </Button>
                 ))}
-                {!picked && matches.length === 0 && (
-                    <p className={styles.empty}>No published artifact has that title.</p>
+                {choices.length === 0 ? (
+                    <p className={styles.empty}>No other artifact is published.</p>
+                ) : (
+                    !picked &&
+                    matches.length === 0 && (
+                        <p className={styles.empty}>No published artifact has that title.</p>
+                    )
                 )}
             </div>
         </fieldset>

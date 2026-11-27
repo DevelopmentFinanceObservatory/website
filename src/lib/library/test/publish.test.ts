@@ -211,24 +211,30 @@ test('a retry keeps its publish key until the artifact, mode or chosen slug chan
 });
 
 test('a withdrawal names its replacement by id, or none', () => {
-    const cases: [unknown, unknown][] = [
-        [null, { ok: true, value: null }],
-        [{}, { ok: true, value: null }],
-        [{ replacedBy: null }, { ok: true, value: null }],
-        [{ replacedBy: 'a1' }, { ok: true, value: 'a1' }],
-        [{ replacedBy: '' }, { ok: false, pointer: '/replacedBy' }],
-        [{ replacedBy: 7 }, { ok: false, pointer: '/replacedBy' }],
-        [{ replacedBy: 'x'.repeat(65) }, { ok: false, pointer: '/replacedBy' }],
-        ['a1', { ok: false, pointer: '' }],
+    const cases: [unknown, boolean, unknown][] = [
+        [undefined, false, { ok: true, value: null }],
+        [{}, false, { ok: true, value: null }],
+        [{ replacedBy: null }, false, { ok: true, value: null }],
+        [{ replacedBy: 'a1' }, false, { ok: true, value: 'a1' }],
+        [{ replacedBy: '' }, false, { ok: false, pointer: '/replacedBy' }],
+        [{ replacedBy: 7 }, false, { ok: false, pointer: '/replacedBy' }],
+        [{ replacedBy: 'x'.repeat(65) }, false, { ok: false, pointer: '/replacedBy' }],
+        [null, false, { ok: false, pointer: '' }],
+        ['a1', false, { ok: false, pointer: '' }],
+        // A later change must say what the replacement becomes.
+        [undefined, true, { ok: false, pointer: '' }],
+        [{}, true, { ok: false, pointer: '/replacedBy' }],
+        [{ replacedBy: null }, true, { ok: true, value: null }],
+        [{ replacedBy: 'a1' }, true, { ok: true, value: 'a1' }],
     ];
 
-    for (const [input, expected] of cases) {
-        const read = readReplacement(input);
+    for (const [input, required, expected] of cases) {
+        const read = readReplacement(input, { required });
 
         assert.deepEqual(
             read.ok ? read : { ok: false, pointer: read.pointer },
             expected,
-            JSON.stringify(input),
+            JSON.stringify({ input, required }),
         );
     }
 });

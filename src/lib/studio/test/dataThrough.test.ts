@@ -43,13 +43,16 @@ test("a card's data runs through its provenance's period, else its description's
     assert.deepEqual(cardDataDates(undefined), { dataThrough: null, lastRefreshed: null });
 });
 
-test('the cards read as one period, or as their earliest and latest', () => {
+test('the cards read as one period, or as the earliest and latest by the day each ends', () => {
     const cases: [(string | null)[], string | null][] = [
         [[], null],
         [[null, null], null],
         [['2024', null, '2024'], '2024'],
         [['2024', '2022', '2023'], '2022–2024'],
         [['2018/2022', '2024-Q3'], '2022–2024-Q3'],
+        // A year runs to December, after its months, quarters and halves.
+        [['2024', '2024-06', '2024-Q1'], '2024-Q1–2024'],
+        [['2024-H1', '2024-05-31', '2023-12'], '2023-12–2024-H1'],
     ];
 
     for (const [periods, expected] of cases) {

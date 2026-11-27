@@ -1,11 +1,12 @@
 /**
  * How recent a card's data is, as the platform wrote it, and the one line a
  * reader sees for a card or a canvas of them. A period ("2024", "2025-Q2")
- * is printed as it is, since it is a period and not a day.
+ * prints in the platform's own form.
  */
 
 import { cardDescription } from './infoPanel.ts';
-import type { CardInfo } from '../chat/widgets.ts';
+import type { LiveCanvas } from './liveCards.ts';
+import type { CardInfo, Widget } from '../chat/widgets.ts';
 
 /** One card's data dates. Either is null when the card does not say. */
 export type CardDataDates = { dataThrough: string | null; lastRefreshed: string | null };
@@ -24,20 +25,61 @@ export const cardDataDates = (info: CardInfo | undefined): CardDataDates => ({
 // The period's last point: a span ("2018/2022") runs through its end.
 const lastPoint = (period: string): string => period.split('/').at(-1) ?? period;
 
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+// The last day of month `month` (1 to 12) of `year`, as YYYY-MM-DD.
+const monthEnd = (year: number, month: number): string =>
+    `${year}-${pad(month)}-${pad(new Date(Date.UTC(year, month, 0)).getUTCDate())}`;
+
+// The day a period ends on, as YYYY-MM-DD: a year on 31 December, a half,
+// quarter or month on its last day, and a day on itself. A period in another
+// form keeps its own text, which sorts after the years it starts with.
+const endDay = (period: string): string => {
+    const [, yearText, part, index] = /^(\d{4})(?:-(H|Q|)(\d{1,2}))?$/.exec(period) ?? [];
+    const year = Number(yearText);
+
+    // A day ("2024-06-30") is its own end.
+    if (!yearText) {
+        return period;
+    }
+
+    if (index === undefined) {
+        return `${year}-12-31`;
+    }
+
+    const months = { H: 6, Q: 3, '': 1 }[part ?? ''] ?? 1;
+
+    return monthEnd(year, Number(index) * months);
+};
+
 /**
  * What "Data through" reads for these cards: the one period they all reach,
  * or the earliest and latest with an en dash ("2022–2024"). Null when no
- * card names one. Periods of one form sort as text ("2024" before
- * "2024-Q3").
+ * card names one. Periods order by the day they end, so "2024-06" comes
+ * before "2024", which runs to December.
  */
 export const dataThroughText = (periods: readonly (string | null)[]): string | null => {
-    const points = [
-        ...new Set(periods.filter((period) => period !== null).map(lastPoint)),
-    ].toSorted();
+    const points = [...new Set(periods.filter((period) => period !== null).map(lastPoint))]
+        .map((point) => ({ point, end: endDay(point) }))
+        .toSorted((a, b) => a.end.localeCompare(b.end) || a.point.localeCompare(b.point));
 
     if (points.length === 0) {
         return null;
     }
 
-    return points.length === 1 ? points[0] : `${points[0]}–${points.at(-1)}`;
+    const first = points[0].point;
+    const last = points.at(-1)?.point ?? first;
+
+    return first === last ? first : `${first}–${last}`;
 };
+
+/** What "Data through" reads for a live canvas: the periods of the cards
+ *  filled so far (`dataThroughText`). Held and failed cards name none. */
+export const liveDataThrough = (widgets: readonly Widget[], live: LiveCanvas): string | null =>
+    dataThroughText(
+        widgets.map((widget) =>
+            widget.kind !== 'text' && live.states[widget.id]?.status === 'ready'
+                ? cardDataDates(widget.info).dataThrough
+                : null,
+        ),
+    );
