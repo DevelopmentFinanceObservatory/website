@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
  * by a URL relative to this module, so the build copies it beside the
  * server bundle: the standalone server (deploy/Dockerfile) has no
  * node_modules/@fontsource, and a card drawn per request reads the files
- * there. They are read once per server.
+ * there.
  */
 const files = {
     400: new URL(
@@ -25,12 +25,20 @@ type CardFont = { name: 'Outfit'; data: Buffer; weight: 400 | 500; style: 'norma
 
 let loaded: Promise<CardFont[]> | null = null;
 
-export const cardFonts = (): Promise<CardFont[]> =>
-    (loaded ??= Promise.all(
+/** The fonts, read on the first call. A failed read is forgotten, so the
+ *  next card tries again. */
+export const cardFonts = (): Promise<CardFont[]> => {
+    loaded ??= Promise.all(
         ([400, 500] as const).map(async (weight) => ({
             name: 'Outfit' as const,
             data: await readFile(files[weight]),
             weight,
             style: 'normal' as const,
         })),
-    ));
+    ).catch((error: unknown) => {
+        loaded = null;
+        throw error;
+    });
+
+    return loaded;
+};

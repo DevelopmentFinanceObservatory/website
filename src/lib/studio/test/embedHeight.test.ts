@@ -5,23 +5,53 @@ import {
     clampEmbedHeight,
     EMBED_HEIGHT_RANGE,
     embedHeightMessage,
-    neededEmbedHeight,
+    embedHeightRequest,
+    embedHeightToSend,
+    isEmbedHeightRequest,
+    naturalEmbedHeight,
     readEmbedHeight,
 } from '../embedHeight.ts';
 
-test('an embed asks for a height only while its content overflows', () => {
+test("an embed's natural height adds what sits outside its scroll container", () => {
     const cases = [
-        // A card that fills its frame.
-        { scrollHeight: 440, clientHeight: 440, viewportHeight: 440, needed: null },
-        // A canvas taller than the frame, with a 28px live strip outside the scroller.
-        { scrollHeight: 900, clientHeight: 592, viewportHeight: 620, needed: 928 },
-        // Fractional layout rounds up, so the grown frame no longer overflows.
-        { scrollHeight: 700.4, clientHeight: 620, viewportHeight: 620, needed: 701 },
+        // A canvas whose board ends at 900px, with a 28px live strip under the scroller.
+        { contentBottom: 900, clientHeight: 592, viewportHeight: 620, natural: 928 },
+        // Fractional layout rounds up, so the frame at that height fits the content.
+        { contentBottom: 700.4, clientHeight: 620, viewportHeight: 620, natural: 701 },
     ];
 
-    for (const { needed, ...sizes } of cases) {
-        assert.equal(neededEmbedHeight(sizes), needed, JSON.stringify(sizes));
+    for (const { natural, ...sizes } of cases) {
+        assert.equal(naturalEmbedHeight(sizes), natural, JSON.stringify(sizes));
     }
+});
+
+test('an embed posts when its content overflows or is below the height it last posted', () => {
+    const cases = [
+        // Fits and has posted nothing: the host's own height holds.
+        { natural: 440, viewportHeight: 440, sent: null, posts: null },
+        { natural: 300, viewportHeight: 440, sent: null, posts: null },
+        // Overflows.
+        { natural: 900, viewportHeight: 620, sent: null, posts: 900 },
+        { natural: 1000, viewportHeight: 900, sent: 900, posts: 1000 },
+        // Fits the frame it asked for.
+        { natural: 900, viewportHeight: 900, sent: 900, posts: null },
+        // Shrank: posts the smaller height, below the host's floor too.
+        { natural: 700, viewportHeight: 900, sent: 900, posts: 700 },
+        { natural: 400, viewportHeight: 620, sent: 700, posts: 400 },
+        // Grew again but fits the floor the host keeps.
+        { natural: 500, viewportHeight: 620, sent: 400, posts: null },
+    ];
+
+    for (const { posts, ...state } of cases) {
+        assert.equal(embedHeightToSend(state), posts, JSON.stringify(state));
+    }
+});
+
+test('an embed answers only a height request', () => {
+    assert.equal(isEmbedHeightRequest(embedHeightRequest()), true);
+    assert.equal(isEmbedHeightRequest(embedHeightMessage(900)), false);
+    assert.equal(isEmbedHeightRequest(null), false);
+    assert.equal(isEmbedHeightRequest(embedHeightRequest().type), false);
 });
 
 test('a host reads only an embed height message with a positive finite height', () => {

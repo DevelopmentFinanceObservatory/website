@@ -28,17 +28,29 @@ const shorten = (text: string, max: number) => {
     return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 };
 
+// The artifact at `slug`, or null when the lookup fails, so the preview is
+// the site's card.
+const lookUp = async (slug: string) => {
+    try {
+        return await artifactBySlug(slug);
+    } catch (error) {
+        console.error('library_preview_lookup_failed', { slug, error: String(error) });
+
+        return null;
+    }
+};
+
 /**
  * A published artifact's link-preview card: its type, title and sources over
  * the DFO mark, on the site's ground, centred inside the 630px square Slack
- * crops a thumbnail to. A withdrawn or unknown slug, and every slug while
- * LIBRARY_ENABLED is off, gets the site's card, so the image says nothing
- * the page would not. The check reads the switch alone: the image is fetched
- * by link unfurlers, never by the admin who may preview the Library, and a
- * shared cache must not keep an admin's copy.
+ * crops a thumbnail to. A withdrawn or unknown slug, a failed lookup, and
+ * every slug while LIBRARY_ENABLED is off get the site's card, so the image
+ * says nothing the page would not. The check reads the switch alone: the
+ * image is fetched by link unfurlers, never by the admin who may preview the
+ * Library, and a shared cache must not keep an admin's copy.
  */
 const LibraryOpenGraphImage = async ({ params }: { params: Promise<{ slug: string }> }) => {
-    const found = libraryEnabled() ? await artifactBySlug((await params).slug) : null;
+    const found = libraryEnabled() ? await lookUp((await params).slug) : null;
 
     if (found?.status !== 'published') {
         return SiteOpenGraphImage();
