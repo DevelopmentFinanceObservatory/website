@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { arrivalToShow } from '../../../components/organisms/Studio/canvas/blocks.ts';
 import type { Coming } from '../../../components/organisms/Studio/canvas/comingGhosts.ts';
 import {
     EMPTY_BOARD,
@@ -86,5 +87,19 @@ describe('the cards seated in a standing placeholder', () => {
         const restored = place(pruneBoard(removed), [stat('c1', 'p1')], [], 3000);
 
         assert.equal(restored.claimed.size, 0);
+    });
+});
+
+describe('the card of a batch the view moves to', () => {
+    const seated = new Set(['b']);
+    const quiet = (id: string) => seated.has(id);
+
+    it('is the newest card not seated in a placeholder, though the newest is seated', () => {
+        assert.equal(arrivalToShow(['a', 'b'], quiet), 'a');
+    });
+
+    it('is the newest card when none is seated, and none when all are', () => {
+        assert.equal(arrivalToShow(['a', 'c']), 'c');
+        assert.equal(arrivalToShow(['b'], quiet), null);
     });
 });

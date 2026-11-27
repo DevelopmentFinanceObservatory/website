@@ -1999,3 +1999,100 @@ test('a card change refused while a plan waits leaves the card on the canvas onc
         t.mock.restoreAll();
     }
 });
+
+test('a change queued on a card whose removal the harness still owes is dropped unsent', async (t) => {
+    const changes: unknown[] = [];
+    let finish: () => void = () => {};
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        // The owed removal stays unanswered.
+        if (url === '/api/studio/composition') return new Promise<Response>(() => {});
+
+        if (url !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        const body = JSON.parse(String(init?.body));
+
+        if (body.apply_change) {
+            changes.push(body.apply_change.component_id);
+
+            return chunk(3, [done()]);
+        }
+
+        // The harness's canvas still holds the card.
+        return new Response(
+            new ReadableStream({
+                start(controller) {
+                    finish = () => {
+                        controller.enqueue(
+                            new TextEncoder().encode(
+                                `data: ${JSON.stringify(done(manifestOf(['cmp_1'])))}\n\n`,
+                            ),
+                        );
+                        controller.close();
+                    };
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': '2' } },
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat(), { rendersLater: true });
+
+    page.result().hydrate({ ...drawn(), owedRemovals: [{ id: 'cmp_1', revision: 1 }] });
+    await page.settle();
+    page.result().send('Show only the totals');
+    await page.settle(20);
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(20);
+    finish();
+    await page.settle(60);
+
+    assert.deepEqual(changes, []);
+    assert.deepEqual(
+        page.result().dropped.map((drop) => drop.card),
+        ['cmp_1'],
+    );
+    page.unmount();
+});
+
+test('Stop clears the cards on their way at once', async (t) => {
+    const line = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-24-activity-step-coming-cards.json', import.meta.url),
+            'utf8',
+        ),
+    );
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        if (String(input) !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        // The line arrives and the stream stays open.
+        return new Response(
+            new ReadableStream({
+                start(controller) {
+                    controller.enqueue(
+                        new TextEncoder().encode(`data: ${JSON.stringify(line)}\n\n`),
+                    );
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': '2' } },
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat());
+
+    page.result().hydrate(drawn());
+    await page.settle();
+    page.result().send('Aid to Ethiopia');
+    await page.settle(20);
+    assert.equal(page.result().coming.length, 2);
+    page.result().stop();
+    await page.settle(20);
+
+    assert.deepEqual(page.result().coming, []);
+    page.unmount();
+});

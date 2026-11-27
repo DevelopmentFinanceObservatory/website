@@ -54,8 +54,8 @@ export const takenOver = (id: string, { replaces = null, editing = null }: Takeo
  * card the reply drew). A card a question drew in another's place starts
  * the rows afresh, since its reply describes it. A re-used id updates that
  * card in place, keeping what it recorded, and pulls it into this turn; one
- * pulled into another turn's reply starts the rows afresh too. Any other
- * card goes at the end.
+ * pulled into another turn's reply starts its changes and rows afresh too.
+ * Any other card goes at the end.
  */
 export const placeCard = <TCard extends PlacedCard>(
     cards: readonly TCard[],
@@ -99,12 +99,13 @@ export const placeCard = <TCard extends PlacedCard>(
         ? cards.map((other) => {
               if (other.id !== card.id) return other;
 
-              const { before, after, ...kept } = recordOf(other);
+              const { changedIn, before, after, ...kept } = recordOf(other);
               const sameReply = other.turn === card.turn;
 
               return {
                   ...card,
                   ...kept,
+                  ...(changedIn && sameReply && { changedIn }),
                   ...(before && sameReply && { before }),
                   ...(after && sameReply && { after }),
                   ...recordOf(card),

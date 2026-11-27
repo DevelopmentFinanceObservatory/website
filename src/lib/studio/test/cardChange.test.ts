@@ -25,6 +25,7 @@ import {
     placesChanged,
     roleLabel,
     yearsChange,
+    sentRefusal,
 } from '../cardChange.ts';
 import type { StreamRefusal } from '../studioClient.ts';
 import { widgetFromComponent } from '../widgets.ts';
@@ -776,5 +777,33 @@ test('a change refusal’s code is its constraint id, else its error, when the c
         [refusal('constraint_violation'), null],
     ] as const) {
         assert.equal(changeRefusalCode(given), code);
+    }
+});
+
+test('a change a card page sent reads as refused from its row while its card stands, and from the queue’s drop once the card left', () => {
+    const sent = { card: 'c1', key: 'years' as const };
+    const drop = { card: 'c1', row: 'years' as const, detail: 'Gone.' };
+
+    for (const [standing, status, dropped, expected] of [
+        // The card stands: its row says how.
+        [
+            ['c2', 'c1'],
+            { state: 'refused', detail: 'No.', code: 'change_no_data' },
+            [],
+            { detail: 'No.', why: 'change_no_data' },
+        ],
+        [['c1'], { state: 'refused', detail: 'No.' }, [], { detail: 'No.', why: 'assistant' }],
+        [
+            ['c1'],
+            { state: 'refused', detail: 'Gone.', dropped: true },
+            [drop],
+            { detail: 'Gone.', why: 'queue' },
+        ],
+        // The chain left the canvas: only the queue's drop is left to read.
+        [[], undefined, [drop], { detail: 'Gone.', why: 'queue' }],
+        [[], undefined, [{ ...drop, row: 'unit' as const }], null],
+        [['c1'], { state: 'pending' }, [], null],
+    ] as const) {
+        assert.deepEqual(sentRefusal(sent, standing, status, dropped), expected);
     }
 });

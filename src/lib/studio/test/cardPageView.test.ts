@@ -402,3 +402,55 @@ test('a property the service leaves as its key shows its value alone, and a sing
     assert.equal(view?.measures.find((row) => row.key === 'within')?.value, 'Nigeria');
     assert.equal(view?.measures.find((row) => row.key === 'years')?.label, 'Year');
 });
+
+test('Within leaves out the places a places row shows, and keeps the rest', () => {
+    // The live debt card's description and places offer: fixed to Kenya as
+    // its debtor, which its places row names.
+    const debtor = {
+        property: { ref: 'financingRecipient', label: 'debtor' },
+        value: { ref: 'country/KEN', label: 'Kenya' },
+    };
+    const sector = {
+        property: { ref: 'crsPurpose', label: 'sector' },
+        value: { ref: 'CRSPurposeCode12220', label: 'basic health care' },
+    };
+    const described = (fixed: unknown[]) => {
+        const description = structuredClone(DESCRIBED) as unknown as {
+            about: { fixed: unknown[] };
+        };
+
+        description.about.fixed = fixed;
+
+        return description;
+    };
+    const kenya: ChangeOffer = {
+        key: 'shows',
+        id: 'shows:destination',
+        specId: 'spec_1',
+        role: 'destination',
+        label: 'Debtors',
+        multiple: true,
+        max: 8,
+        chosen: [{ id: 'country/KEN', label: 'Kenya' }],
+    };
+    const uganda = { ...kenya, chosen: [{ id: 'country/UGA', label: 'Uganda' }] };
+    const origin = { ...kenya, id: 'shows:origin', role: 'origin' };
+
+    for (const [fixed, offers, within] of [
+        [[debtor], [kenya], null],
+        [[debtor, sector], [kenya], 'sector: basic health care'],
+        // Another place, or another role, than the row shows.
+        [[debtor], [uganda], 'debtor: Kenya'],
+        [[debtor], [origin], 'debtor: Kenya'],
+        // No places row: Within as it is.
+        [[debtor], [], 'debtor: Kenya'],
+    ] as const) {
+        const view = page({ widget: card(info(described([...fixed]))), offers: [...offers] });
+
+        assert.equal(
+            view?.measures.find((row) => row.key === 'within')?.value ?? null,
+            within,
+            JSON.stringify([fixed, offers.map((offer) => offer.id)]),
+        );
+    }
+});

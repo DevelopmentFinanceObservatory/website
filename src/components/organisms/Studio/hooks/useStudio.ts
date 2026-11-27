@@ -535,9 +535,14 @@ export const useStudio = ({
     useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
 
     // The landing's stage-out, then the workspace. Under reduced motion the
-    // stylesheets run no stage-out, so the workspace shows at once.
+    // Prompt layout's stylesheets run no stage-out, so its workspace shows at
+    // once; the classic layout keeps its stage-out.
     const enterWorkspace = () => {
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        if (
+            variant === 'prompt' &&
+            !shared &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
             setMode('workspace');
 
             return;

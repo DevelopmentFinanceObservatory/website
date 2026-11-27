@@ -36,6 +36,7 @@ import {
     placesChange,
     placesChanged,
     placesText,
+    sentRefusal,
     windowChanged,
     yearsChange,
     yearsText,
@@ -360,26 +361,26 @@ const CardPage = ({ id }: { id: string }) => {
         }
     }, [current, replacedIds, announce, picker, chat.queued]);
 
-    // A refusal of a change this page sent, by the harness or by the queue.
+    // A refusal of a change this page sent, by the harness or by the queue
+    // (sentRefusal), also once the queue dropped it because its card left
+    // the canvas, while the page stays mounted and draws nothing.
     useEffect(() => {
-        if (!current) return;
+        const standing = current ? [current, ...replaced] : [];
 
         for (const sent of [...applied.current.values()]) {
-            const status = statuses.get(sent.offer);
+            const refused = sentRefusal(sent, standing, statuses.get(sent.offer), chat.dropped);
 
-            if (status?.state === 'refused' && [current, ...replaced].includes(sent.card)) {
+            if (refused) {
                 applied.current.delete(sent.offer);
-                announce(status.detail);
+                announce(refused.detail);
                 report('studio.change', {
                     step: 'refused',
                     kind: changeKind(sent.key),
-                    // The queue's drop, else the harness's code when its
-                    // refusal has one.
-                    why: status.dropped ? 'queue' : (status.code ?? 'assistant'),
+                    why: refused.why,
                 });
             }
         }
-    }, [statuses, current, replaced, announce, report]);
+    }, [statuses, current, replaced, announce, report, chat.dropped]);
 
     // The picker belongs to the card it opened on, so it closes when a
     // replacement takes the card's place.

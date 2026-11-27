@@ -577,12 +577,16 @@ button.didTitle {
         --hit-room-y: #{rem(4)};
     }
 
-    // A card row's actions touch, and stand rem(2) from More info.
-    .scroller :is([data-sp-key^="data:"], [data-sp-key^="image:"]) {
+    // Card rows touch (.items has no gap), and a row's actions touch each
+    // other, so nothing in a row reaches past its own box unless it opts in
+    // below. A new control in a row inherits the zero.
+    .card {
         --hit-room-x: 0px;
+        --hit-room-y: 0px;
     }
 
-    .scroller [data-sp-key^="more:"] {
+    // More info stands rem(2) from the actions (.card column-gap).
+    .card [data-sp-key^="more:"] {
         --hit-room-x: #{rem(1)};
     }
 

@@ -188,3 +188,11 @@ export const replyBlockTop = (slots: Slots, before: ReadonlySet<string>): number
 
     return Math.min(...landed.map(([, slot]) => arrivalBlock(slot, slots, new Set()).top));
 };
+
+/**
+ * The card of a batch of arrivals the view moves to: the newest one that is
+ * not `quiet` (seated in a placeholder the view already went to), or null
+ * when every card of the batch is.
+ */
+export const arrivalToShow = <T>(fresh: readonly T[], quiet?: (card: T) => boolean): T | null =>
+    fresh.findLast((card) => !quiet?.(card)) ?? null;

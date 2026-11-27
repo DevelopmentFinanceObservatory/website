@@ -429,6 +429,34 @@ const queuedFor = (item: QueuedChange, cardId: string, key: ChangeRowKey, role?:
  *  place when its turn came (`card`), its row and role, and why. */
 export type DroppedChange = { card: string; row: ChangeRowKey; role?: string; detail: string };
 
+/**
+ * How a change a card page sent (`sent`) was refused, or null while it
+ * stands. While a card of its chain stands on the canvas (`standing`, the
+ * standing card and those it replaced; empty once the chain left), the
+ * row's status says (`status`, changeStatus). Once the chain left, the
+ * queue's drop of it (`dropped`) still does. `why` is `queue` for a drop,
+ * else the harness's code, else `assistant`.
+ */
+export const sentRefusal = (
+    sent: { card: string; key: ChangeRowKey; role?: string },
+    standing: readonly string[],
+    status: ChangeStatus | undefined,
+    dropped: readonly DroppedChange[],
+): { detail: string; why: ChangeRefusalCode | 'assistant' | 'queue' } | null => {
+    if (standing.includes(sent.card) && status?.state === 'refused') {
+        return {
+            detail: status.detail,
+            why: status.dropped ? 'queue' : (status.code ?? 'assistant'),
+        };
+    }
+
+    const drop = dropped.find(
+        (one) => one.card === sent.card && one.row === sent.key && one.role === sent.role,
+    );
+
+    return drop ? { detail: drop.detail, why: 'queue' } : null;
+};
+
 /** What the assistant can wait on the user for: a plan's approval or the
  *  answer to a question. */
 export type ChangePause = 'plan' | 'question';

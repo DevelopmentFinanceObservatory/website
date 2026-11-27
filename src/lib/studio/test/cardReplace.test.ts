@@ -205,16 +205,18 @@ test('placeCard records the question that made a chain’s first card, its ids a
     const first = placeCard([{ id: 'a', turn: 1 }], { id: 'b', turn: 3 }, { replaces: 'a' });
     const second = placeCard(first, { id: 'c', turn: 5 }, { replaces: 'b', keepTurn: true });
     const third = placeCard(second, { id: 'd', turn: 7 }, { replaces: 'c', keepTurn: true });
-    // A card redrawn under its own id keeps what it records.
+    // A card a later question redraws under its own id keeps its chain; its
+    // changes belong to the reply it left.
     const updated = placeCard(third, { id: 'd', turn: 8 }, {});
 
     assert.deepEqual(first, [{ id: 'b', turn: 3, madeIn: 1, replaced: ['a'] }]);
     assert.deepEqual(second, [
         { id: 'c', turn: 3, madeIn: 1, replaced: ['b', 'a'], changedIn: [5] },
     ]);
-    assert.deepEqual(updated, [
-        { id: 'd', turn: 8, madeIn: 1, replaced: ['c', 'b', 'a'], changedIn: [5, 7] },
+    assert.deepEqual(third, [
+        { id: 'd', turn: 3, madeIn: 1, replaced: ['c', 'b', 'a'], changedIn: [5, 7] },
     ]);
+    assert.deepEqual(updated, [{ id: 'd', turn: 8, madeIn: 1, replaced: ['c', 'b', 'a'] }]);
     assert.deepEqual(replacementsOf(updated), { d: 'c', c: 'b', b: 'a' });
 });
 

@@ -1078,9 +1078,15 @@ $dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), 
 .planLedger {
     --ledger-inset: 0;
 
+    // Nothing in the ledger reaches past its own box unless it opts in
+    // below, so a control the ledger adds inherits the zero.
+
+    --hit-room-x: 0px;
+    --hit-room-y: 0px;
+
     margin-top: rem(10);
 
-    // The ledger's `Change` and `Done` buttons, drawn as links.
+    // The ledger's `Change` and `Done` links and an open choice's options.
     button {
         @include touch-target;
 
@@ -1088,6 +1094,18 @@ $dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), 
             outline: 1px solid var(--color-charcoal);
             outline-offset: 2px;
         }
+    }
+
+    // A row's link stands rem(10) from the row's value (.row column-gap),
+    // and the rows below it at least the dock's gap away.
+    button[aria-expanded] {
+        --hit-room-x: #{rem(5)};
+        --hit-room-y: calc(var(--dock-gap, #{rem(10)}) / 2);
+    }
+
+    // An open choice's options stand rem(2) apart (PlanLedger .options).
+    [role="group"] > button {
+        --hit-room-y: #{rem(1)};
     }
 }
 

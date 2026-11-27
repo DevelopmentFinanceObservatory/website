@@ -1811,6 +1811,9 @@ export const useChat = (
                 stopped = true;
                 grace.cancel();
                 carryOut(action);
+                // A stopped turn draws no more cards: their places go at the
+                // Stop, before the stream itself ends.
+                takeComing(comingEnded(comingRef.current));
 
                 if (onEnd) {
                     if (action.abort === 'now') {
@@ -3079,12 +3082,14 @@ export const useChat = (
                 canvasRef.current && !legacyRef.current
                     ? shownCanvas(canvasRef.current, pendingCardsRef.current)
                     : null;
+            // A card whose removal the harness still owes is off the canvas.
+            const owed = owedIds(owedRef.current);
 
             return currentCard(
                 id,
                 widgetsRef.current,
                 replacedRef.current,
-                shown ? new Set(shown.ids) : null,
+                shown ? new Set(shown.ids.filter((shownId) => !owed.has(shownId))) : null,
             );
         };
 

@@ -2,6 +2,7 @@
 
 import { type RefObject, useEffect, useRef } from 'react';
 
+import { arrivalToShow } from './blocks';
 import { scrollerOf, scrollView } from './board';
 import type { Rect, Slot, Slots } from './layout';
 
@@ -63,12 +64,18 @@ export const useArrivals = ({
 
         const scroller = scrollerOf(boardRef);
 
-        if (!scroller || busy() || quiet?.(newest)) {
+        // The view moves to the newest card not seated in a placeholder.
+        const shown = arrivalToShow(
+            fresh.map(([, slot]) => slot),
+            quiet,
+        );
+
+        if (!scroller || busy() || !shown) {
             return;
         }
 
         if (placeView) {
-            const target = placeView(newest, new Set(fresh.map(([id]) => id)), scroller);
+            const target = placeView(shown, new Set(fresh.map(([id]) => id)), scroller);
 
             if (target) {
                 scrollView(scroller, target);

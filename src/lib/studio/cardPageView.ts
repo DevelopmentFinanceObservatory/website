@@ -132,7 +132,11 @@ const row = (key: string, label: string, value: string): MeasureRow => ({
 // `Years` or `Period`) when the description has one, then the unit when it
 // has one. The description says which of the last two are there, so the rows
 // are keyed by place.
-const describedMeasures = (view: DescribedView, widget: Widget): MeasureRow[] => {
+const describedMeasures = (
+    view: DescribedView,
+    widget: Widget,
+    offers: readonly ChangeOffer[],
+): MeasureRow[] => {
     const about = widget.info ? cardDescription(widget.info)?.about : undefined;
     const hasUnit = !!about?.unit;
     const hasPeriod = !!(about?.drawn?.period ?? about?.period);
@@ -161,7 +165,7 @@ const describedMeasures = (view: DescribedView, widget: Widget): MeasureRow[] =>
         ...byKey('unit'),
         ...lists.filter((entry) => entry.key !== 'within'),
         ...keyed.filter((entry) => entry.key.startsWith('count:')),
-        ...withinRow(about),
+        ...withinRow(about, offers),
     ];
 };
 
@@ -169,10 +173,41 @@ const describedMeasures = (view: DescribedView, widget: Widget): MeasureRow[] =>
 // words to show, so only the value is shown for it.
 const isRawKey = (label: string): boolean => /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(label);
 
+// The frame column a places role is served in: `financingRecipient` for
+// `destination`, `financingProvider` for `origin`, else the role's own name.
+const ROLE_COLUMNS: Record<string, string> = {
+    destination: 'financingRecipient',
+    origin: 'financingProvider',
+};
+
+type Fixed = NonNullable<About['fixed']>[number];
+
+// Whether the fixed entries of one property (`entries`) name exactly the
+// places a places offer of that property's role shows, so its row says it.
+const shownByOffer = (entries: readonly Fixed[], offers: readonly ChangeOffer[]): boolean => {
+    const refs = new Set(entries.map(({ value }) => value.ref.replace(/^dcid:/, '')));
+
+    return offers.some(
+        (offer) =>
+            offer.key === 'shows' &&
+            (ROLE_COLUMNS[offer.role] ?? offer.role) === entries[0]?.property.ref &&
+            refs.size === offer.chosen.length &&
+            offer.chosen.every((place) => refs.has(place.id)),
+    );
+};
+
 // Every value the card is fixed to, such as its recipient, as
-// `property: value` joined with semicolons.
-const withinRow = (about: About | undefined): MeasureRow[] => {
-    const fixed = about?.fixed ?? [];
+// `property: value` joined with semicolons, less those of a property whose
+// places a places row shows (shownByOffer).
+const withinRow = (about: About | undefined, offers: readonly ChangeOffer[]): MeasureRow[] => {
+    const all = about?.fixed ?? [];
+    const fixed = all.filter(
+        ({ property }) =>
+            !shownByOffer(
+                all.filter((other) => other.property.ref === property.ref),
+                offers,
+            ),
+    );
 
     return fixed.length > 0
         ? [
@@ -384,7 +419,9 @@ const sourceRowsOf = (widget: CardPageInput['widget']): CardSourceRow[] => {
 const fromView = (view: PanelView, input: CardPageInput): CardPageView => {
     const { origin, changedFor } = originOf(input);
     const measures = rowsWithOffers(
-        view.kind === 'described' ? describedMeasures(view, input.widget) : legacyMeasures(view),
+        view.kind === 'described'
+            ? describedMeasures(view, input.widget, input.offers ?? [])
+            : legacyMeasures(view),
         input.offers ?? [],
     );
     const measure = view.kind === 'described' ? measureOf(view, input.widget) : null;
