@@ -1,5 +1,7 @@
 import type { ChartWidget } from '../chat/widgets';
 
+import { formatPeriod } from './period.ts';
+
 /**
  * Bars over a single period compare named things, not moments: the series ARE
  * the categories. Transposed, the names run down the side and the value axis
@@ -45,5 +47,44 @@ export const comparison = (
     };
 };
 
-const titled = (title: string, period: string): string =>
-    title.includes(period) ? title : `${title}, ${period}`;
+// A period of whole years: one year, or a span as the platform writes it
+// (`2015/2024`) or as the card shows it (`2015–2024`).
+const YEARS = /^(\d{4})(?:[/–](\d{4}))?$/;
+
+// A span of years as a title writes it: "2015 to 2024", "2015–2024", "2015-2024".
+const TITLE_SPAN = /\b(\d{4})\s*(?:to|[–—-])\s*(\d{4})\b/g;
+
+/** Whether `title` names the span from `start` to `end`, or, when they are equal, names that year anywhere. */
+const namesYears = (title: string, start: string, end: string): boolean => {
+    const spans = [...title.matchAll(TITLE_SPAN)].map(([, from, to]) => [from, to]);
+
+    if (start !== end) {
+        return spans.some(([from, to]) => from === start && to === end);
+    }
+
+    const years: string[] = title.match(/\b\d{4}\b/g) ?? [];
+
+    return years.includes(start);
+};
+
+// The title with the period said once. Years are compared as years, so a
+// title that already reads "2015 to 2024" takes no "2015/2024", and a span
+// is written the way titles write one. Any other period (a month, a day)
+// is compared as text and written as the card shows it.
+const titled = (title: string, period: string): string => {
+    const years = YEARS.exec(period);
+
+    if (!years) {
+        return title.includes(period) || title.includes(formatPeriod(period))
+            ? title
+            : `${title}, ${formatPeriod(period)}`;
+    }
+
+    const [, start = '', end = start] = years;
+
+    if (namesYears(title, start, end)) {
+        return title;
+    }
+
+    return `${title}, ${start === end ? start : `${start} to ${end}`}`;
+};
