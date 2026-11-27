@@ -38,6 +38,9 @@ test('an embed posts when its content overflows or is below the height it last p
         // Shrank: posts the smaller height, below the host's floor too.
         { natural: 700, viewportHeight: 900, sent: 900, posts: 700 },
         { natural: 400, viewportHeight: 620, sent: 700, posts: 400 },
+        // Within the slack of the height last posted.
+        { natural: 898, viewportHeight: 900, sent: 900, posts: null },
+        { natural: 897, viewportHeight: 900, sent: 900, posts: 897 },
         // Grew again but fits the floor the host keeps.
         { natural: 500, viewportHeight: 620, sent: 400, posts: null },
     ];

@@ -31,13 +31,15 @@ import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/
 
 const noop = () => undefined;
 
-// The bottom edge of the root's content, from the top of its scrolled
-// content, with each child's min-height lifted for the read so nothing
-// stretches to the frame (the whiteboard and a text card fill it otherwise).
-// The styles are put back before the browser paints. A fixed child (the live
+// The bottom edge of the root's content, read with nothing stretching it to
+// the frame. Each child's min-height is lifted (the whiteboard and a text
+// card fill the frame otherwise), and with `liftHeight` its height too, for
+// a table card, which fills its frame and scrolls the rows it cannot show. A
+// chart or key number card draws to the frame it gets and has no height of
+// its own, so its height stays. The styles are put back before the browser
+// paints. The root is each child's offset parent. A fixed child (the live
 // strip) sits outside the scroll and is left out.
-const contentBottom = (root: HTMLElement): number => {
-    const top = root.getBoundingClientRect().top + root.clientTop - root.scrollTop;
+const contentBottom = (root: HTMLElement, liftHeight: boolean): number => {
     let bottom = 0;
 
     for (const child of root.children) {
@@ -45,11 +47,22 @@ const contentBottom = (root: HTMLElement): number => {
             continue;
         }
 
-        const minHeight = child.style.minHeight;
+        const { minHeight, height } = child.style;
 
         child.style.minHeight = '0px';
-        bottom = Math.max(bottom, child.getBoundingClientRect().bottom - top);
+
+        if (liftHeight) {
+            child.style.height = 'auto';
+        }
+
+        // Layout sizes, since a card's entry animation moves and scales its
+        // box: its used height, fractional where offsetHeight rounds.
+        bottom = Math.max(
+            bottom,
+            child.offsetTop + (parseFloat(getComputedStyle(child).height) || 0),
+        );
         child.style.minHeight = minHeight;
+        child.style.height = height;
     }
 
     return bottom;
@@ -59,7 +72,7 @@ const contentBottom = (root: HTMLElement): number => {
 // (lib/studio/embedHeight): when the frame or what it holds changes size, and
 // when the host asks. The message carries one number and goes to any origin,
 // since any site may frame a share and the height says nothing private.
-const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>) => {
+const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHeight: boolean) => {
     useEffect(() => {
         const root = rootRef.current;
 
@@ -75,7 +88,7 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>) => {
         const report = () => {
             const height = embedHeightToSend({
                 natural: naturalEmbedHeight({
-                    contentBottom: contentBottom(root),
+                    contentBottom: contentBottom(root, liftHeight),
                     clientHeight: root.clientHeight,
                     viewportHeight: window.innerHeight,
                 }),
@@ -146,7 +159,7 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>) => {
             cancelAnimationFrame(frame);
             window.removeEventListener('message', onRequest);
         };
-    }, [rootRef]);
+    }, [rootRef, liftHeight]);
 };
 
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
@@ -237,7 +250,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const dataThrough = noted ? liveDataThrough(widgets, live) : null;
     const rootRef = useRef<HTMLDivElement>(null);
 
-    useReportHeight(rootRef);
+    useReportHeight(rootRef, single?.kind === 'table');
 
     return (
         <div
