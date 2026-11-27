@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 import { DOCS_PAGES } from '@/lib/docs/corpus';
+import { libraryEnabled } from '@/lib/library/enabled';
 import { librarySlugs } from '@/lib/library/store';
 import { SITE_ORIGIN } from '@/lib/site';
 import { sitemapPaths } from '@/lib/sitemap';
@@ -37,7 +38,7 @@ const sitemap = async (): Promise<MetadataRoute.Sitemap> =>
     sitemapPaths({
         docs: DOCS_PAGES,
         sourceIds: await sourceIds(),
-        librarySlugs: await artifactSlugs(),
+        librarySlugs: libraryEnabled() ? await artifactSlugs() : null,
     }).map((path) => ({
         url: `${SITE_ORIGIN}${path}`,
     }));

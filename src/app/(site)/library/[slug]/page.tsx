@@ -3,24 +3,31 @@ import { notFound } from 'next/navigation';
 
 import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
 import WithdrawnArtifact from '@/components/organisms/Library/WithdrawnArtifact';
-import { libraryAdmin } from '@/lib/library/admin';
+import { libraryAdmin, libraryView } from '@/lib/library/admin';
 import { artifactBySlug } from '@/lib/library/store';
-import { pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
+import { NOT_FOUND_METADATA, pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
 type LibraryArtifactPageProps = { params: Promise<{ slug: string }> };
 
 export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Promise<Metadata> => {
+    const view = await libraryView();
+
+    if (view === null) {
+        return NOT_FOUND_METADATA;
+    }
+
     const found = await artifactBySlug((await params).slug);
 
     if (found === null) {
-        return { title: 'Library — DFO' };
+        return NOT_FOUND_METADATA;
     }
 
     // A withdrawn artifact's address answers 200, since Next has no
-    // page-level 410, so it asks search engines to drop it.
-    if (found.status === 'withdrawn') {
+    // page-level 410, so it asks search engines to drop it. While
+    // LIBRARY_ENABLED is off, admins see every artifact page unindexed.
+    if (found.status === 'withdrawn' || view === 'preview') {
         return {
             title: `${found.artifact.title} — DFO Library`,
             robots: { index: false, follow: false },
@@ -37,6 +44,10 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
 };
 
 const LibraryArtifactPage = async ({ params }: LibraryArtifactPageProps) => {
+    if ((await libraryView()) === null) {
+        notFound();
+    }
+
     const found = await artifactBySlug((await params).slug);
 
     if (found === null) {

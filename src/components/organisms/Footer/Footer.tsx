@@ -3,7 +3,7 @@
 import classNames from 'classnames';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import styles from './Footer.module.scss';
 
@@ -19,11 +19,12 @@ import { IS_SITE, siteHref } from '@/lib/site';
 import Logo from '@/assets/svg/logo.svg';
 import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
-// The Data column mirrors the header's Data dropdown exactly — same
-// entries, same order (Coverage is left out of both until it's built).
+// The Data column holds the header's Data dropdown in the same order, then
+// Library (while LIBRARY_ENABLED is on) and Studio, which the header leaves
+// out. Coverage is left out of
+// both until it is built.
 const columns = [
-    { title: 'Library', links: ['Browse Library', 'Chat'] },
-    { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data'] },
+    { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data', 'Library', 'Studio'] },
     // Status is hidden for launch — see src/app/(site)/docs/status/page.tsx.
     { title: 'Docs', links: DOCS_MENU.map((entry) => entry.label) },
     { title: 'About', links: ['About DFO', 'Publications', 'Contact us'] },
@@ -33,12 +34,48 @@ const columns = [
 // current developmentfinance.org site uses behind its Contact us.
 const CONTACT_MAILTO = 'mailto:data@one.org';
 
+// Whether LIBRARY_ENABLED is on, asked of the running server. A page
+// prerendered at build time carries the build's environment, so the link
+// is added in the browser on every page alike, and the server HTML never
+// carries it. A failed request leaves the link out.
+const useLibraryEnabled = (): boolean => {
+    const [enabled, setEnabled] = useState(false);
+
+    useEffect(() => {
+        const controller = new AbortController();
+
+        const ask = async () => {
+            try {
+                const response = await fetch(siteHref('/api/library/enabled'), {
+                    signal: controller.signal,
+                });
+                const body: unknown = response.ok ? await response.json() : null;
+
+                setEnabled(
+                    typeof body === 'object' &&
+                        body !== null &&
+                        'enabled' in body &&
+                        body.enabled === true,
+                );
+            } catch {
+                // Aborted on unmount, or unreachable: the link stays out.
+            }
+        };
+
+        void ask();
+
+        return () => controller.abort();
+    }, []);
+
+    return enabled;
+};
+
 // The footer links that already lead somewhere (the rest are stubs).
 const FOOTER_ROUTES: Record<string, string> = {
     'About DFO': '/about',
     'Contact us': CONTACT_MAILTO,
-    'Browse Library': '/library',
-    Chat: '/studio',
+    Library: '/library',
+    Studio: '/studio',
     Publications: '/about/publications',
     Sources: '/data/sources',
     Roadmap: '/data/roadmap',
@@ -51,6 +88,7 @@ const Footer = () => {
     const footerRef = useReveal<HTMLElement>(0);
     const dfoRef = useRef<HTMLDivElement>(null);
     const reducedMotion = usePrefersReducedMotion();
+    const libraryEnabled = useLibraryEnabled();
 
     // The giant DFO rises from below the fold over the map — the whole
     // wordmark as one piece (17/22 of the logo's viewBox height ≈ the old
@@ -138,19 +176,30 @@ const Footer = () => {
                         >
                             <p className={styles.columnTitle}>{title}</p>
                             <ul className={styles.columnLinks}>
-                                {links.map((link) => (
-                                    <li key={link}>
-                                        {!FOOTER_ROUTES[link] ? (
-                                            <a href="#">{link}</a>
-                                        ) : FOOTER_ROUTES[link].startsWith('mailto:') ? (
-                                            // A plain anchor — router prefetch
-                                            // has no business on a mailto.
-                                            <a href={FOOTER_ROUTES[link]}>{link}</a>
-                                        ) : (
-                                            <Link href={siteHref(FOOTER_ROUTES[link])}>{link}</Link>
-                                        )}
-                                    </li>
-                                ))}
+                                {links
+                                    .filter((link) => link !== 'Library' || libraryEnabled)
+                                    .map((link) => (
+                                        <li key={link}>
+                                            {!FOOTER_ROUTES[link] ? (
+                                                <a href="#">{link}</a>
+                                            ) : FOOTER_ROUTES[link].startsWith('mailto:') ? (
+                                                // A plain anchor — router prefetch
+                                                // has no business on a mailto.
+                                                <a href={FOOTER_ROUTES[link]}>{link}</a>
+                                            ) : (
+                                                // /library is force-dynamic and reads
+                                                // the database, so it is not prefetched.
+                                                <Link
+                                                    href={siteHref(FOOTER_ROUTES[link])}
+                                                    prefetch={
+                                                        link === 'Library' ? false : undefined
+                                                    }
+                                                >
+                                                    {link}
+                                                </Link>
+                                            )}
+                                        </li>
+                                    ))}
                             </ul>
                         </div>
                     ))}
