@@ -105,7 +105,7 @@ export type Spot = { col: number; row: number };
 // A placed card. The slot carries its widget's data, so a card taken off the
 // canvas (`leaving`) can keep rendering while it fades out. `need` is the
 // rows a stat card's content last measured at (useSlots' fitRows), the floor
-// of its grip. It is live state: the saved layout holds col, row, w and h.
+// of its grip. It is live state, and the saved layout holds only col, row, w and h.
 export type Slot = Rect & { z: number; widget: Widget; leaving?: boolean; need?: number };
 export type Slots = Record<string, Slot>;
 
@@ -406,16 +406,17 @@ export const gripRange = (
         : range;
 };
 
-// A grip range floored at the rows the card's content needs, so a grip step
-// never takes a stat card below its content, even when a narrower width has
-// raised the need past the range taken at grab.
+// A stat card's grip range floored at the rows its content needs, so a grip
+// step never takes it below its content, even when a narrower width has
+// raised the need past the range taken at grab. Any other card's range stays
+// as it is.
 export const floorRange = (
     range: { min: number; max: number },
-    need = 0,
-): { min: number; max: number } => ({
-    min: Math.max(range.min, need),
-    max: Math.max(range.max, need),
-});
+    { widget, need = 0 }: Pick<Slot, 'widget' | 'need'>,
+): { min: number; max: number } =>
+    widget.kind === 'key_number'
+        ? { min: Math.max(range.min, need), max: Math.max(range.max, need) }
+        : range;
 
 // The footprint a fresh card spawns at, estimated from its content so the
 // measured fit that follows moves it by a cell or two at most. A chart view

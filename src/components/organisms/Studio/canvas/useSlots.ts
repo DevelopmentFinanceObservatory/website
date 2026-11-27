@@ -99,7 +99,8 @@ export const useSlots = ({
                         // card): the slot re-points at the fresh widget. Its
                         // height stays inside what its view allows, so a chart
                         // switched to the table view comes back into the
-                        // grip's range.
+                        // grip's range. A new widget drops the old one's
+                        // need, and a stat card measures its own again.
                         const fresh = byId.get(id)!;
                         const { min, max } = heightRange(
                             fresh,
@@ -108,7 +109,12 @@ export const useSlots = ({
                         const h = clamp(slot.h, min, max);
 
                         if (fresh !== slot.widget || h !== slot.h) {
-                            next[id] = { ...slot, widget: fresh, h };
+                            next[id] = {
+                                ...slot,
+                                widget: fresh,
+                                h,
+                                need: fresh === slot.widget ? slot.need : undefined,
+                            };
                             changed = true;
                         } else {
                             next[id] = slot;
@@ -246,9 +252,14 @@ export const useSlots = ({
                 if (slot.widget.kind !== 'key_number') {
                     const h = clamp(rows, min, max);
 
-                    return h === slot.h
+                    return h === slot.h && slot.need === undefined
                         ? prev
-                        : settleAround({ ...prev, [id]: { ...slot, h } }, [id], pinnedIds, true);
+                        : settleAround(
+                              { ...prev, [id]: { ...slot, h, need: undefined } },
+                              [id],
+                              pinnedIds,
+                              true,
+                          );
                 }
 
                 const need = clamp(rows, min, max);

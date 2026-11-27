@@ -84,14 +84,19 @@ test('the height range follows the kind the card reads as', () => {
     assert.equal(gripRange(stat, null, 9).max, SPAN_MAX.key_number.h);
     assert.equal(gripRange(stat, null, 20).max, 20);
     assert.deepEqual(gripRange(kenya, null, 12), tableRange);
-    // Each grip step floors the range at the rows the content needs, even
-    // past the max taken at grab.
-    assert.deepEqual(floorRange(gripRange(stat, null, 9), 12), {
+    // Each grip step floors a stat card's range at the rows its content
+    // needs, even past the max taken at grab. Another kind's slot is never
+    // floored, even with a need left from a stat card that held it.
+    assert.deepEqual(floorRange(gripRange(stat, null, 9), { widget: stat, need: 12 }), {
         min: 12,
         max: SPAN_MAX.key_number.h,
     });
-    assert.deepEqual(floorRange(gripRange(stat, null, 9), 15), { min: 15, max: 15 });
-    assert.deepEqual(floorRange(tableRange), tableRange);
+    assert.deepEqual(floorRange(gripRange(stat, null, 9), { widget: stat, need: 15 }), {
+        min: 15,
+        max: 15,
+    });
+    assert.deepEqual(floorRange(tableRange, { widget: kenya }), tableRange);
+    assert.deepEqual(floorRange(tableRange, { widget: kenya, need: 15 }), tableRange);
 });
 
 test('a fresh table spawns at its estimated width and rows', () => {

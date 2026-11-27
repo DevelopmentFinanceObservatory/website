@@ -11,13 +11,15 @@
 
 export type NotePart = { text: string; href?: string };
 
-// The longest target a note keeps, counted as written, with parentheses
-// encoded. `linkTarget` checks the same bound, and the lookahead in LINK
-// applies it to the whole target, scheme included.
+// The longest target `linkTarget` lets a new link have, counted with its
+// parentheses encoded and its scheme included.
 const MAX_TARGET = 2048;
 
+// Reading allows up to MAX_TARGET characters after the scheme, a few more
+// than `linkTarget` allows, so a link saved under that wider bound still
+// reads as a link.
 const LINK = new RegExp(
-    `\\[([^[\\]\\n]{1,500})\\]\\((?=[^\\s)]{1,${MAX_TARGET}}\\))(https?:\\/\\/[^\\s)]+)\\)`,
+    `\\[([^[\\]\\n]{1,500})\\]\\((https?:\\/\\/[^\\s)]{1,${MAX_TARGET}})\\)`,
     'g',
 );
 

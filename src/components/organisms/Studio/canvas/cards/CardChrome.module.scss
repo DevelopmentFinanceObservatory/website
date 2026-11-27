@@ -98,7 +98,7 @@ button.leftOut {
 
 // The attribution line: the info mark, then the first source's full name
 // dotted underlined as a link and "+N more", wrapping under itself clear of
-// the mark. Under a left-out line it keeps to one line: the name gives way to
+// the mark. Under a left-out line it keeps to one line. The name gives way to
 // an ellipsis and "+N more" stays whole, so the foot takes two lines at most
 // before the note.
 .sourceLine {
@@ -154,7 +154,10 @@ button.leftOut {
 
 .creditMore {
     flex-shrink: 0;
-    white-space: pre;
+
+    .footLeftOut & {
+        white-space: pre;
+    }
 }
 
 // Centred on the first line of the 11 px type beside it.
@@ -198,7 +201,7 @@ button.leftOut {
 
 // About five and a half lines of the 11 px type, in rem so every card's fit
 // reads the same height. The half line shows there is more. A note that runs
-// past it scrolls: overflow-y auto makes it a scroller, which takes a vertical
+// past it scrolls. Its overflow-y auto makes it a scroller, which takes a vertical
 // finger drag under the board's touch-action none. A short note stays clipped
 // and unscrollable, so a finger on it pans the board.
 .noteText {

@@ -116,7 +116,7 @@ export const useCardResize = ({
 
             start.moved ||= steps !== 0;
 
-            const range = floorRange(start.range, slot.need);
+            const range = floorRange(start.range, slot);
             const h =
                 start.widthOnly || !start.moved
                     ? slot.h

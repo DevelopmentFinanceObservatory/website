@@ -63,7 +63,7 @@ const pickOf = (field: HTMLElement | null): Range | null => {
 // an empty line open, so the block's own newline stands for it. Any other
 // element, such as a <span> the browser inserts, reads as its contents. A
 // link keeps its target only while that is an http(s) URL and its words can
-// be one link (linkable); one that cannot keeps its words and line breaks.
+// be one link (linkable). One that cannot keeps its words and line breaks.
 const read = (node: Node): NotePart[] =>
     [...node.childNodes].flatMap((child, index): NotePart[] => {
         if (child.nodeType === Node.TEXT_NODE) {
@@ -95,14 +95,19 @@ const read = (node: Node): NotePart[] =>
         ];
     });
 
-// The shortcut that opens the URL panel: ⌘K or Ctrl+K, matched on the
-// letter typed. A layout whose K key types no Latin letter, such as
-// Cyrillic, matches on the physical K key instead.
+// The shortcut that opens the URL panel: ⌘K on Apple systems and Ctrl+K
+// elsewhere, matched on the letter typed. Ctrl+K on a Mac deletes to the end
+// of the line, and a combination with Alt types a character, so both pass
+// through. A layout whose K key types no Latin letter, such as Cyrillic,
+// matches on the physical K key instead.
 const isLinkShortcut = (event: React.KeyboardEvent) => {
     const key = event.key.toLowerCase();
+    const apple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+    const modifier = apple ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 
     return (
-        (event.metaKey || event.ctrlKey) &&
+        modifier &&
+        !event.altKey &&
         (key === 'k' || (!/^[a-z]$/.test(key) && event.code === 'KeyK'))
     );
 };
@@ -306,8 +311,9 @@ const NoteModal = ({
                             }
 
                             // Taken even with no words selected, since the
-                            // browser's own Ctrl+K moves focus to its search
-                            // bar, out of the dialog.
+                            // browser's own Ctrl+K, and ⌘K in Firefox on a
+                            // Mac, moves focus to its search bar, out of the
+                            // dialog.
                             event.preventDefault();
 
                             // Read here, since a selection made a moment ago

@@ -74,7 +74,7 @@ test('one bound applies to the encoded target, in linkTarget and when read back'
         `https://imf.org/${'a'.repeat(total - 'https://imf.org/'.length - parens)}${'()'.repeat(parens / 2)}`;
     const roundTrip = (href: string) => noteParts(noteText([{ text: 'x', href }]));
 
-    // 2040 characters plus three parentheses encoded is 2046: kept, and read back whole.
+    // 2040 characters plus four parentheses encoded is 2048, so it is kept and read back whole.
     const kept = linkTarget(pad(2040, 4))!;
 
     assert.equal(kept.length, 2040);
@@ -82,11 +82,12 @@ test('one bound applies to the encoded target, in linkTarget and when read back'
         { text: 'x', href: kept.replace(/\(/g, '%28').replace(/\)/g, '%29') },
     ]);
 
-    // 2046 characters with four parentheses encodes to 2054: refused up front.
+    // 2046 characters with four parentheses encodes to 2054, so it is refused up front.
     assert.equal(linkTarget(pad(2046, 4)), null);
 
-    // The bound is on the whole target: 2048 reads as a link, 2049 stays text.
-    const edge = `https://imf.org/${'a'.repeat(2048 - 'https://imf.org/'.length)}`;
+    // Reading bounds the part after the scheme. 2048 characters there read as
+    // a link, as a note saved under that bound has them, and 2049 stay text.
+    const edge = `https://${'a'.repeat(2048)}`;
 
     assert.equal(noteParts(`[x](${edge})`)[0]?.href, edge);
     assert.equal(noteParts(`[x](${edge}a)`)[0]?.href, undefined);

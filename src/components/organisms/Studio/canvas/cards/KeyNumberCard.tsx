@@ -16,7 +16,7 @@ import { keyNumberFace } from '@/lib/studio/statFace';
 // The stat card: one big number (a per cent sign lighter after it), one
 // muted caption close under it (unit, price basis, period, change), then
 // the source and the user's note. The card reports the rows its content
-// needs; its slot grows to them and the grip stops there (useSlots' fitRows).
+// needs. Its slot grows to them and the grip stops there (useSlots' fitRows).
 const KeyNumberCard = ({
     widget,
     widthCells,

@@ -66,7 +66,7 @@ const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) =>
 };
 
 // Whether a note runs past its capped height. The observer reports on
-// observe() and whenever the note's box changes size; a new note
+// observe() and whenever the note's box changes size. A new note
 // re-observes, since a note that stays at the cap keeps the same box.
 const useNoteScrolls = (note: string) => {
     const [node, setNode] = useState<HTMLElement | null>(null);
@@ -101,17 +101,12 @@ const NoteLine = ({ note }: { note: string }) => {
         <p className={styles.note}>
             <Icon name="note" className={styles.noteIcon} />
             {/* Read out, so a listener hears where the source ends and the
-                note begins. A scrolling note says it in its region's name. */}
-            {!scrolls && <span className={styles.srOnly}>Note: </span>}
+                note begins. */}
+            <span className={styles.srOnly}>Note: </span>
             <span
                 ref={noteRef}
                 className={styles.noteText}
-                {...(scrolls && {
-                    role: 'region',
-                    'aria-label': 'Note',
-                    tabIndex: 0,
-                    'data-no-drag': '',
-                })}
+                {...(scrolls && { tabIndex: 0, 'data-no-drag': '' })}
             >
                 {noteParts(note).map((part, index) =>
                     part.href ? (
