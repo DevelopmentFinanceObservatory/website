@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isSlugTakenRefusal, isWithdrawnRefusal, publishRefusalText } from '../client.ts';
+import {
+    evergreenFailureText,
+    isSlugTakenRefusal,
+    isWithdrawnRefusal,
+    publishRefusalText,
+    readEvergreenAnswer,
+} from '../client.ts';
 
 const CARDS = [
     { id: 'w1', title: 'Health ODA' },
@@ -62,4 +68,50 @@ test('publishRefusalText shows the route detail for any other refusal', () => {
     ]) {
         assert.equal(publishRefusalText(problem, DETAIL, CARDS, false), DETAIL);
     }
+});
+
+test('readEvergreenAnswer narrows a not_evergreen refusal and drops unreadable entries', () => {
+    const entry = {
+        pointer: '/content',
+        start: 3,
+        end: 20,
+        quote: 'Aid fell 4%.',
+        kind: 'trend',
+        reason: 'A refresh could change it.',
+    };
+    const answer = readEvergreenAnswer(
+        refusal('not_evergreen', {
+            pointer: '/content',
+            errors: [entry, { ...entry, pointer: '/slug' }, { ...entry, start: '3' }, null],
+        }),
+    );
+
+    assert.deepEqual(answer, {
+        code: 'not_evergreen',
+        fix: DETAIL,
+        errors: [
+            {
+                field: 'content',
+                start: 3,
+                end: 20,
+                quote: entry.quote,
+                kind: 'trend',
+                reason: entry.reason,
+            },
+        ],
+    });
+    assert.equal(readEvergreenAnswer(refusal('not_evergreen', { errors: [] })), null);
+    assert.equal(readEvergreenAnswer(refusal('slug_taken')), null);
+    assert.equal(readEvergreenAnswer(null), null);
+});
+
+test('evergreen check failures read apart from each other and from a refusal', () => {
+    const unavailable = readEvergreenAnswer(refusal('evergreen_check_unavailable'));
+    const refused = readEvergreenAnswer(refusal('evergreen_check_refused'));
+
+    assert.equal(unavailable?.code, 'evergreen_check_unavailable');
+    assert.equal(refused?.code, 'evergreen_check_refused');
+    assert.ok(unavailable && refused);
+    assert.notEqual(evergreenFailureText(unavailable), evergreenFailureText(refused));
+    assert.ok(evergreenFailureText(unavailable));
 });

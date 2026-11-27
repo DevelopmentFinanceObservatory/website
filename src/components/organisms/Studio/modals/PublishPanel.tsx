@@ -10,7 +10,10 @@ import Icon from '@/components/atoms/Icon/Icon';
 import { useLibraryEnabled } from '@/hooks/useLibraryEnabled';
 import ArtifactFields, {
     blankText,
+    evergreenOutcome,
     isComplete,
+    type Refusals,
+    withoutField,
 } from '@/components/organisms/Library/ArtifactFields';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode } from '@/lib/chat/shareMode';
@@ -108,6 +111,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     const [slug, setSlug] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [slugError, setSlugError] = useState<string | null>(null);
+    const [refusals, setRefusals] = useState<Refusals | null>(null);
     const [published, setPublished] = useState<{ slug: string; title: string } | null>(null);
     // One key per slot (`publishKeySlot`: artifact, mode and chosen slug),
     // made on its first try and sent again on every retry.
@@ -168,6 +172,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
 
         setBusy(true);
         setError(null);
+        setRefusals(null);
         setSlugError(null);
 
         const single = picked !== CANVAS;
@@ -208,7 +213,10 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             if (isSlugTakenRefusal(answer.problem)) {
                 setSlugError(refusal);
             } else {
-                setError(refusal);
+                const outcome = evergreenOutcome(answer.problem, refusal);
+
+                setRefusals(outcome.refusals);
+                setError(outcome.error);
             }
         }
     };
@@ -248,6 +256,8 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             <ArtifactFields
                 value={text}
                 onChange={setText}
+                refusals={refusals}
+                onEdit={(field) => setRefusals((current) => withoutField(current, field))}
                 address={
                     <div className={styles.field}>
                         <label className={styles.label} htmlFor={`${ids}-slug`}>

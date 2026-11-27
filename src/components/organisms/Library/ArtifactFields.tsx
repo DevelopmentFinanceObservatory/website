@@ -1,12 +1,26 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
+import {
+    type Dispatch,
+    type ReactNode,
+    type SetStateAction,
+    useEffect,
+    useId,
+    useState,
+} from 'react';
 
 import styles from './ArtifactFields.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
-import { addTopic, loadTopics } from '@/lib/library/client';
+import {
+    addTopic,
+    type EvergreenError,
+    type EvergreenField,
+    evergreenFailureText,
+    loadTopics,
+    readEvergreenAnswer,
+} from '@/lib/library/client';
 import { type ArtifactText, LIMITS } from '@/lib/library/publish';
 
 /**
@@ -126,6 +140,62 @@ const AddTopic = ({
     );
 };
 
+/** The sentences the evergreen check refused, by field, with the line that
+ *  says how to mend them. */
+export type Refusals = { fix: string; errors: readonly EvergreenError[] };
+
+/** `refusals` without the sentences of `field`, which was edited. */
+export const withoutField = (refusals: Refusals | null, field: EvergreenField): Refusals | null => {
+    const errors = refusals?.errors.filter((error) => error.field !== field) ?? [];
+
+    return refusals && errors.length > 0 ? { fix: refusals.fix, errors } : null;
+};
+
+/** What a refused publish or edit shows: the sentences under their fields, or
+ *  one line for a failure of the check or any other refusal. */
+export const evergreenOutcome = (
+    problem: unknown,
+    fallback: string,
+): { refusals: Refusals | null; error: string | null } => {
+    const answer = readEvergreenAnswer(problem);
+
+    if (answer?.code === 'not_evergreen') {
+        return { refusals: { fix: answer.fix, errors: answer.errors }, error: null };
+    }
+
+    return {
+        refusals: null,
+        error: answer ? evergreenFailureText(answer) : fallback,
+    };
+};
+
+const RULE =
+    'Say what the data measures and how to read it. Leave the numbers to the chart, which refreshes after publication.';
+const FIELD_ORDER: readonly EvergreenField[] = ['title', 'description', 'contentTitle', 'content'];
+
+/** The refused sentences of one field, under it. `fix` is given to the first
+ *  refused field only, so the line shows once. */
+const FieldRefusals = ({
+    id,
+    errors,
+    fix,
+}: {
+    id: string;
+    errors: readonly EvergreenError[];
+    fix: string | null;
+}) => (
+    <div className={styles.refused} id={id} role="alert">
+        <ul className={styles.refusedList}>
+            {errors.map((error) => (
+                <li key={`${error.start}-${error.end}`}>
+                    <q>{error.quote}</q> {error.reason}
+                </li>
+            ))}
+        </ul>
+        {fix && <p className={styles.refusedFix}>{fix}</p>}
+    </div>
+);
+
 type ArtifactFieldsProps = {
     value: ArtifactText;
     // A state setter, called with updaters so a change made while a request
@@ -134,9 +204,21 @@ type ArtifactFieldsProps = {
     // Shown under the title.
     address?: ReactNode;
     children?: ReactNode;
+    // The evergreen refusal of the last try, shown under the fields it names.
+    refusals?: Refusals | null;
+    // A field was edited, so its refusals no longer stand.
+    onEdit?: (field: EvergreenField) => void;
 };
 
-const ArtifactFields = ({ value, onChange, address, children }: ArtifactFieldsProps) => {
+const ArtifactFields = ({
+    value,
+    onChange,
+    address,
+    children,
+    refusals = null,
+    onEdit,
+}: ArtifactFieldsProps) => {
+    const ids = useId();
     // Null until the list arrives.
     const [topics, setTopics] = useState<string[] | null>(null);
     const [topicsError, setTopicsError] = useState<string | null>(null);
@@ -165,6 +247,37 @@ const ArtifactFields = ({ value, onChange, address, children }: ArtifactFieldsPr
     const reload = () =>
         void loadTopics().then((answer) => answer.ok && setTopics(answer.value.topics));
     const set = (patch: Partial<ArtifactText>) => onChange((current) => ({ ...current, ...patch }));
+    const edit = (field: EvergreenField, patch: Partial<ArtifactText>) => {
+        set(patch);
+        onEdit?.(field);
+    };
+    const fixField = FIELD_ORDER.find((field) =>
+        refusals?.errors.some((error) => error.field === field),
+    );
+    // What a field shows and sets for its refusals.
+    const refused = (field: EvergreenField) => {
+        const errors = refusals?.errors.filter((error) => error.field === field) ?? [];
+        const id = `${ids}-${field}-refused`;
+
+        return {
+            input:
+                errors.length > 0
+                    ? ({ 'aria-invalid': true, 'aria-describedby': id } as const)
+                    : {},
+            list:
+                refusals && errors.length > 0 ? (
+                    <FieldRefusals
+                        id={id}
+                        errors={errors}
+                        fix={fixField === field ? refusals.fix : null}
+                    />
+                ) : null,
+        };
+    };
+    const title = refused('title');
+    const description = refused('description');
+    const contentTitle = refused('contentTitle');
+    const content = refused('content');
     const pick = (topic: string, on: boolean) =>
         onChange((current) => ({
             ...current,
@@ -179,30 +292,41 @@ const ArtifactFields = ({ value, onChange, address, children }: ArtifactFieldsPr
 
     return (
         <>
-            <label className={styles.field}>
-                <span className={styles.label}>Title</span>
-                <input
-                    className={styles.input}
-                    value={value.title}
-                    maxLength={LIMITS.title}
-                    placeholder="Enter title…"
-                    required
-                    onChange={(event) => set({ title: event.target.value })}
-                />
-            </label>
+            <p className={styles.rule}>{RULE}</p>
+            <div className={styles.group}>
+                <label className={styles.field}>
+                    <span className={styles.label}>Title</span>
+                    <input
+                        className={styles.input}
+                        value={value.title}
+                        maxLength={LIMITS.title}
+                        placeholder="Enter title…"
+                        required
+                        {...title.input}
+                        onChange={(event) => edit('title', { title: event.target.value })}
+                    />
+                </label>
+                {title.list}
+            </div>
             {address}
-            <label className={styles.field}>
-                <span className={styles.label}>Description</span>
-                <textarea
-                    className={styles.textarea}
-                    value={value.description}
-                    maxLength={LIMITS.description}
-                    placeholder="Enter description…"
-                    rows={3}
-                    required
-                    onChange={(event) => set({ description: event.target.value })}
-                />
-            </label>
+            <div className={styles.group}>
+                <label className={styles.field}>
+                    <span className={styles.label}>Description</span>
+                    <textarea
+                        className={styles.textarea}
+                        value={value.description}
+                        maxLength={LIMITS.description}
+                        placeholder="Enter description…"
+                        rows={3}
+                        required
+                        {...description.input}
+                        onChange={(event) =>
+                            edit('description', { description: event.target.value })
+                        }
+                    />
+                </label>
+                {description.list}
+            </div>
             <fieldset className={styles.field}>
                 <legend className={styles.label}>Topics</legend>
                 <div className={styles.topics}>
@@ -240,27 +364,39 @@ const ArtifactFields = ({ value, onChange, address, children }: ArtifactFieldsPr
                 )}
             </fieldset>
             {children}
-            <label className={styles.field}>
-                <span className={styles.label}>Content Title (Optional)</span>
-                <input
-                    className={styles.input}
-                    value={value.contentTitle ?? ''}
-                    maxLength={LIMITS.contentTitle}
-                    placeholder="Enter content title…"
-                    onChange={(event) => set({ contentTitle: event.target.value || null })}
-                />
-            </label>
-            <label className={styles.field}>
-                <span className={styles.label}>Content (Optional)</span>
-                <textarea
-                    className={styles.textarea}
-                    value={value.content ?? ''}
-                    maxLength={LIMITS.content}
-                    placeholder="Enter text content…"
-                    rows={3}
-                    onChange={(event) => set({ content: event.target.value || null })}
-                />
-            </label>
+            <div className={styles.group}>
+                <label className={styles.field}>
+                    <span className={styles.label}>Content Title (Optional)</span>
+                    <input
+                        className={styles.input}
+                        value={value.contentTitle ?? ''}
+                        maxLength={LIMITS.contentTitle}
+                        placeholder="Enter content title…"
+                        {...contentTitle.input}
+                        onChange={(event) =>
+                            edit('contentTitle', { contentTitle: event.target.value || null })
+                        }
+                    />
+                </label>
+                {contentTitle.list}
+            </div>
+            <div className={styles.group}>
+                <label className={styles.field}>
+                    <span className={styles.label}>Content (Optional)</span>
+                    <textarea
+                        className={styles.textarea}
+                        value={value.content ?? ''}
+                        maxLength={LIMITS.content}
+                        placeholder="Enter text content…"
+                        rows={3}
+                        {...content.input}
+                        onChange={(event) =>
+                            edit('content', { content: event.target.value || null })
+                        }
+                    />
+                </label>
+                {content.list}
+            </div>
         </>
     );
 };

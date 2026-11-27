@@ -3,7 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import ArtifactFields, { isComplete } from './ArtifactFields';
+import ArtifactFields, {
+    evergreenOutcome,
+    isComplete,
+    type Refusals,
+    withoutField,
+} from './ArtifactFields';
 import styles from './EditArtifact.module.scss';
 import ReplacementPicker from './ReplacementPicker';
 
@@ -45,6 +50,7 @@ const EditArtifact = ({
     const [confirming, setConfirming] = useState(false);
     const [replacedBy, setReplacedBy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [refusals, setRefusals] = useState<Refusals | null>(null);
 
     const show = (next: boolean) => {
         if (next) {
@@ -52,6 +58,7 @@ const EditArtifact = ({
             setConfirming(false);
             setReplacedBy(null);
             setError(null);
+            setRefusals(null);
         }
 
         setOpen(next);
@@ -66,6 +73,7 @@ const EditArtifact = ({
 
         setBusy('save');
         setError(null);
+        setRefusals(null);
 
         const answer = await editArtifact(artifact.id, text, artifact.revision);
 
@@ -75,7 +83,10 @@ const EditArtifact = ({
             setOpen(false);
             router.refresh();
         } else {
-            setError(answer.detail);
+            const outcome = evergreenOutcome(answer.problem, answer.detail);
+
+            setRefusals(outcome.refusals);
+            setError(outcome.error);
         }
     };
 
@@ -106,7 +117,12 @@ const EditArtifact = ({
             </Button>
             <Modal open={open} onOpenChange={show} title="Edit" fit>
                 <form className={styles.form} onSubmit={save}>
-                    <ArtifactFields value={text} onChange={setText} />
+                    <ArtifactFields
+                        value={text}
+                        onChange={setText}
+                        refusals={refusals}
+                        onEdit={(field) => setRefusals((current) => withoutField(current, field))}
+                    />
                     {error && (
                         <p className={styles.error} role="alert">
                             {error}

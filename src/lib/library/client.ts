@@ -71,6 +71,93 @@ export const isWithdrawnRefusal = (problem: unknown): boolean =>
 export const isSlugTakenRefusal = (problem: unknown): boolean =>
     asRecord(problem)?.['code'] === 'slug_taken';
 
+export type EvergreenField = 'title' | 'description' | 'contentTitle' | 'content';
+
+/** One sentence the evergreen check refused. `start` and `end` index the
+ *  field as the server stores it, after `readArtifactText`. */
+export type EvergreenError = {
+    field: EvergreenField;
+    start: number;
+    end: number;
+    quote: string;
+    kind: string;
+    reason: string;
+};
+
+/** What an evergreen refusal or failure of the check answered: the refused
+ *  sentences with the fix line, a retryable failure of the check, or a
+ *  refusal of the text by the check that a retry would not mend. */
+export type EvergreenAnswer =
+    | { code: 'not_evergreen'; fix: string; errors: EvergreenError[] }
+    | { code: 'evergreen_check_unavailable' }
+    | { code: 'evergreen_check_refused' };
+
+const EVERGREEN_FIELDS: readonly string[] = ['title', 'description', 'contentTitle', 'content'];
+
+const readEvergreenError = (entry: unknown): EvergreenError | null => {
+    const record = asRecord(entry);
+    const pointer = record?.['pointer'];
+    const field = typeof pointer === 'string' ? pointer.replace(/^\//, '') : null;
+    const { start, end, quote, kind, reason } = record ?? {};
+
+    if (
+        field === null ||
+        !EVERGREEN_FIELDS.includes(field) ||
+        typeof start !== 'number' ||
+        typeof end !== 'number' ||
+        typeof quote !== 'string' ||
+        typeof kind !== 'string' ||
+        typeof reason !== 'string'
+    ) {
+        return null;
+    }
+
+    return { field: field as EvergreenField, start, end, quote, kind, reason };
+};
+
+/**
+ * The evergreen answer in a refused publish or edit, or null for any other
+ * refusal. Entries of `errors` that do not read as a sentence of a known
+ * field are dropped, and a `not_evergreen` left with none reads as null so
+ * the caller shows `detail`.
+ */
+export const readEvergreenAnswer = (problem: unknown): EvergreenAnswer | null => {
+    const body = asRecord(problem);
+
+    switch (body?.['code']) {
+        case 'evergreen_check_unavailable':
+            return { code: 'evergreen_check_unavailable' };
+        case 'evergreen_check_refused':
+            return { code: 'evergreen_check_refused' };
+        case 'not_evergreen': {
+            const entries: unknown = body['errors'];
+            const errors = Array.isArray(entries)
+                ? entries.flatMap((entry: unknown) => readEvergreenError(entry) ?? [])
+                : [];
+            const fix = body['detail'];
+
+            return errors.length > 0 && typeof fix === 'string'
+                ? { code: 'not_evergreen', fix, errors }
+                : null;
+        }
+        default:
+            return null;
+    }
+};
+
+/** The sentence a failure of the check shows, or null for a refusal of
+ *  sentences, which show under their fields. */
+export const evergreenFailureText = (answer: EvergreenAnswer): string | null => {
+    switch (answer.code) {
+        case 'evergreen_check_unavailable':
+            return 'The text check is not available right now. Try again in a few seconds.';
+        case 'evergreen_check_refused':
+            return 'The check refused this text. Shorten or simplify it, then try again.';
+        default:
+            return null;
+    }
+};
+
 const AS_SNAPSHOT = 'Publish it as a snapshot.';
 
 /**
