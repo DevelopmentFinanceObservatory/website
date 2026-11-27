@@ -263,8 +263,8 @@ const streamStudio = async (
 /** The question forms the Studio renders, sent on every turn and answer. */
 export const CLIENT_FEATURES: ClientFeature[] = ['unit_question', 'multi_select'];
 
-/** What a page asks of every stream it starts: `holdRemovals`, that the
- *  harness hold a removal's `composition.updated` until after the turn's
+/** What a page asks of every stream it starts. `holdRemovals` asks the
+ *  harness to hold a removal's `composition.updated` until after the turn's
  *  next drawing line. A page that leaves it out sends the body without the
  *  member. */
 export type StreamAsk = { holdRemovals?: boolean };

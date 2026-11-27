@@ -101,7 +101,7 @@ export class Player extends EventEmitter {
     private open: ServerResponse | null = null;
 
     // Whether the page asks every stream to hold removals (`hold_removals`):
-    // the Prompt layout sends it true, and today's layout leaves it out.
+    // the Prompt layout sends it true, and the classic layout leaves it out.
     readonly holdsRemovals: boolean;
 
     constructor(scenario: Scenario, { holdsRemovals = false } = {}) {

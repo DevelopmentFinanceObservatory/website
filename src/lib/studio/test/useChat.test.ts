@@ -2203,8 +2203,8 @@ test('a plan answered while a card change waits for admission sends nothing, and
         assert.ok(page.result().plan, `${admitted}: the plan stays`);
         answerChange();
         await page.settle(60);
-        // An admitted change closed the plan; a refused one left it waiting,
-        // to be approved now.
+        // An admitted change closed the plan. A refused one left it waiting
+        // for approval.
         assert.equal(page.result().plan === null, admitted, `${admitted}: the plan after`);
         page.result().respondPlan('approve');
         await page.settle(40);

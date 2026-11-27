@@ -1123,8 +1123,8 @@ test('a stream-starting request carries hold_removals only when asked, else the 
         await runInterrupt('conv', 'i1', { decision: 'approve' }, handlers, undefined, hold);
         await runResume('conv', 3, handlers, undefined, hold);
     };
-    // The bodies as production builds them (studioClient.ts at 392c0d59), and
-    // the years change's as the contract names it.
+    // The bodies a page sends without hold_removals, with the years change as
+    // the contract names it.
     const features = ['unit_question', 'multi_select'];
     const production = [
         {
