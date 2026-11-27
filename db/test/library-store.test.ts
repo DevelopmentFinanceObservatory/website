@@ -83,12 +83,14 @@ test('library store', async (t) => {
             created: false,
             withdrawn: false,
         });
-        assert.deepEqual(await store.artifactByPublishKey('key-a'), {
-            slug: 'health-oda',
-            title: 'Health ODA',
-            withdrawn: false,
+        assert.deepEqual(await store.publishTarget('key-a'), {
+            earlier: { slug: 'health-oda', title: 'Health ODA', withdrawn: false },
+            slugHeld: false,
         });
-        assert.equal(await store.artifactByPublishKey('key-none'), null);
+        assert.deepEqual(await store.publishTarget('key-none'), {
+            earlier: null,
+            slugHeld: false,
+        });
         assert.equal(await rowCount(), 1);
     });
 
@@ -160,7 +162,7 @@ test('library store', async (t) => {
         );
     });
 
-    await t.test('a withdrawn artifact keeps its slug and its owed take-down', async () => {
+    await t.test('a withdrawn artifact keeps its slug and drops its token', async () => {
         const { id } = (
             await admin.query<{ id: string }>(
                 `select id from library_artifact where slug = 'health-oda'`,
@@ -185,14 +187,13 @@ test('library store', async (t) => {
         assert.equal(await topicLinks(), 1);
         assert.equal('shareWriteToken' in listed, false);
 
-        const withdrawn = await store.withdrawArtifact(id);
-
-        assert.notEqual(withdrawn, 'not_found');
-        assert.deepEqual(withdrawn, {
+        assert.deepEqual(await store.artifactShare(id), {
             slug: 'health-oda',
             shareId: listed.shareId,
             shareWriteToken: 'shw_1',
         });
+        assert.deepEqual(await store.withdrawArtifact(id), { slug: 'health-oda' });
+        assert.equal(await store.artifactShare(id), null);
 
         assert.equal(
             (await store.listArtifacts()).some((a) => a.slug === 'health-oda'),
@@ -225,7 +226,7 @@ test('library store', async (t) => {
         assert.equal(await topicLinks(), 0);
         assert.equal(erased.withdrawn, true);
         assert.equal(erased.share_id, listed.shareId);
-        assert.equal(erased.share_write_token, 'shw_1');
+        assert.equal(erased.share_write_token, null);
         assert.equal(erased.kind, listed.kind);
         assert.equal(erased.mode, listed.mode);
 
@@ -236,10 +237,9 @@ test('library store', async (t) => {
             )
         ).rows;
 
-        assert.deepEqual(await store.artifactByPublishKey(key), {
-            slug: 'health-oda',
-            title: '',
-            withdrawn: true,
+        assert.deepEqual(await store.publishTarget(key), {
+            earlier: { slug: 'health-oda', title: '', withdrawn: true },
+            slugHeld: false,
         });
         assert.equal('shareWriteToken' in (atSlug?.artifact ?? {}), false);
         assert.equal(await store.artifactBySlug('never-published'), null);
@@ -254,21 +254,6 @@ test('library store', async (t) => {
 
         assert.equal(await store.updateArtifact(id, edit), 'not_found');
 
-        // A repeat while the take-down is owed answers the same share and
-        // keeps the first date.
-        const date = async () =>
-            (
-                await admin.query<{ at: string }>(
-                    'select withdrawn_at::text as at from library_artifact where id = $1',
-                    [id],
-                )
-            ).rows[0].at;
-        const firstDate = await date();
-
-        assert.deepEqual(await store.withdrawArtifact(id), withdrawn);
-        assert.equal(await date(), firstDate);
-
-        await store.forgetShareWriteToken(id);
         assert.equal(await store.withdrawArtifact(id), 'not_found');
         assert.equal(await store.withdrawArtifact('no-such-id'), 'not_found');
 
@@ -285,7 +270,7 @@ test('library store', async (t) => {
 
         assert.ok(typeof again === 'object');
         assert.notEqual(again.slug, 'health-oda');
-        assert.equal(await store.isSlugHeld('health-oda'), true);
+        assert.equal((await store.publishTarget('key-j', 'health-oda')).slugHeld, true);
         assert.equal(
             await store.insertArtifact({ ...input('key-j'), slug: 'health-oda' }, 'admin'),
             'slug_taken',
@@ -295,7 +280,7 @@ test('library store', async (t) => {
     await t.test('a chosen slug is stored as it is, or refused when held', async () => {
         const before = await rowCount();
 
-        assert.equal(await store.isSlugHeld('aid-chart'), false);
+        assert.equal((await store.publishTarget('key-k', 'aid-chart')).slugHeld, false);
         assert.deepEqual(
             await store.insertArtifact(
                 { ...input('key-k', 'Debt service'), slug: 'aid-chart' },
@@ -303,6 +288,16 @@ test('library store', async (t) => {
             ),
             { slug: 'aid-chart', title: 'Debt service', created: true },
         );
+        // A retry of that publish, whose first try committed before its
+        // read, is that try, and its slug is not another artifact's.
+        assert.deepEqual(await store.publishTarget('key-k', 'aid-chart'), {
+            earlier: { slug: 'aid-chart', title: 'Debt service', withdrawn: false },
+            slugHeld: false,
+        });
+        assert.deepEqual(await store.publishTarget('key-l', 'aid-chart'), {
+            earlier: null,
+            slugHeld: true,
+        });
         // A retry of that publish answers it, and another publish of the
         // slug gets no number.
         assert.deepEqual(
@@ -330,14 +325,74 @@ test('library store', async (t) => {
         assert.equal(await rowCount(), before + 2);
     });
 
-    await t.test('forgetting a token leaves an artifact on show alone', async () => {
+    await t.test('any write that sets withdrawn_at erases the text', async () => {
+        const published = {
+            ...input('key-o', 'Old writer'),
+            contentTitle: 'Findings',
+            content: 'Text.',
+            sources: [{ name: 'OECD', url: null }],
+            steps: [{ title: 'Step', detail: null }],
+        };
+
+        await store.insertArtifact(published, 'admin');
+
         const { id } = (
             await admin.query<{ id: string }>(
-                `select id from library_artifact where slug = 'debt-service'`,
+                `select id from library_artifact where slug = 'old-writer'`,
             )
         ).rows[0];
 
-        await store.forgetShareWriteToken(id);
-        assert.notEqual(await store.withdrawArtifact(id), 'not_found');
+        await admin.query(
+            `insert into library_artifact_topic (artifact_id, topic_id)
+             select $1, id from library_topic where label = 'Health'`,
+            [id],
+        );
+
+        // As a release that sets withdrawn_at alone writes it, as the
+        // runtime role.
+        await database
+            .runtimePool()
+            .query('update library_artifact set withdrawn_at = now() where id = $1', [id]);
+
+        // A row inserted withdrawn is erased too.
+        await database.runtimePool().query(
+            `insert into library_artifact
+                 (id, slug, publish_key, share_id, kind, mode, title, description,
+                  content_title, content, sources, steps, withdrawn_at)
+             values ('born-withdrawn', 'born-withdrawn', 'key-p', 'SharePPP', 'chart', 'live',
+                     'T', 'D', 'CT', 'C', '[{"name":"x","url":null}]', '[{"title":"s","detail":null}]', now())`,
+        );
+
+        const { rows } = await admin.query<Record<string, unknown>>(
+            `select id, title, description, content_title, content, sources, steps, slug,
+                    share_id, publish_key, share_write_token, published_by,
+                    (select count(*)::int from library_artifact_topic where artifact_id = a.id) as topics
+               from library_artifact a where id in ($1, 'born-withdrawn') order by id`,
+            [id],
+        );
+
+        assert.equal(rows.length, 2);
+
+        for (const row of rows) {
+            assert.deepEqual(
+                [
+                    row.title,
+                    row.description,
+                    row.content_title,
+                    row.content,
+                    row.sources,
+                    row.steps,
+                    row.topics,
+                ],
+                ['', '', null, null, [], [], 0],
+            );
+        }
+
+        const old = rows.find((row) => row.id === id);
+
+        assert.deepEqual(
+            [old?.slug, old?.publish_key, old?.share_write_token, old?.published_by],
+            ['old-writer', 'key-o', published.shareWriteToken, 'admin'],
+        );
     });
 });

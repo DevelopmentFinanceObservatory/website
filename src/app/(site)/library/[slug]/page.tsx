@@ -25,9 +25,8 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
     }
 
     // A withdrawn artifact's address answers 200, since Next has no
-    // page-level 410, so it asks search engines to drop it. While
-    // LIBRARY_ENABLED is off, admins see every artifact page unindexed.
-    if (found.status === 'withdrawn' || view === 'preview') {
+    // page-level 410, so it asks search engines to drop it.
+    if (found.status === 'withdrawn') {
         return {
             title: 'Withdrawn artifact — DFO',
             robots: { index: false, follow: false },
@@ -36,10 +35,13 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
 
     const { artifact } = found;
 
+    // While LIBRARY_ENABLED is off, admins see each artifact under its own
+    // title, unindexed.
     return {
         title: `${artifact.title} — DFO Library`,
         description: artifact.description,
         openGraph: pageOpenGraph({ title: artifact.title, description: artifact.description }),
+        ...(view === 'preview' ? { robots: { index: false, follow: false } } : {}),
     };
 };
 

@@ -15,7 +15,7 @@ import { keepShareForCleanup, makeTokenShare, takeDownTokenShare } from '@/lib/c
 import { buildStudioShare, readShareJson } from '@/lib/chat/studioShare';
 import { anonymousWho } from '@/lib/events/internalEng';
 import { track } from '@/lib/events/track';
-import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
+import { problem, requestInvalidProblem, unreachableProblem } from '@/lib/proxy/problem';
 import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
@@ -30,14 +30,14 @@ import {
 } from './publish';
 import {
     addTopic,
-    artifactByPublishKey,
-    forgetShareWriteToken,
+    artifactShare,
     insertArtifact,
-    isSlugHeld,
     listTopics,
+    publishTarget,
     updateArtifact,
     withdrawArtifact,
 } from './store';
+import { type ShareSettling, settleShare, withdraw } from './withdraw';
 
 /*
  * The handlers behind /api/library, which the Studio's share dialog and the
@@ -189,32 +189,31 @@ const artifactWithdrawn = (): Response =>
         headers: NO_STORE,
     });
 
-// Take down a share no artifact on show holds: one the Library made and
-// stored no row for, or a withdrawn artifact's. When dfo-apis
-// cannot, the share goes to `share_cleanup` for an operator, under the
-// admin who asked, with the alerted `share_cleanup_recorded` line. A failed
-// cleanup write is logged, so the caller's answer stands.
+// Takes down a share no artifact on show holds, in dfo-apis, or else
+// records it in `share_cleanup` for an operator, with the alerted
+// `share_cleanup_recorded` line (./withdraw.ts, `settleShare`).
+const settling = (headers: Headers): ShareSettling => ({
+    takeDown: (share) => takeDownTokenShare(headers, share),
+    keepForCleanup: keepShareForCleanup,
+});
+
+// Takes down the share of a publish that stored no row. The row-less share
+// has no token anywhere else, so a share neither taken down nor recorded is
+// known only by its `share_cleanup_not_recorded` line, and the publish's
+// own answer stands.
 const dropShare = async (
     headers: Headers,
     share: { shareId: string; writeToken: string },
     adminId: string,
 ): Promise<void> => {
-    const removed = await takeDownTokenShare(headers, share);
-
-    if (removed === 'done') {
-        return;
-    }
-
-    await keepShareForCleanup({ ...share, userId: adminId, reason: removed }).catch(
-        (error: unknown) => {
-            console.error('share_cleanup_not_recorded', {
-                share: share.shareId,
-                reason: removed,
-                error: String(error),
-            });
-        },
-    );
+    await settleShare(settling(headers), share, adminId);
 };
+
+const withdrawalUnsettled = (): Response =>
+    unreachableProblem(
+        'Its chart could not be taken down or queued for removal, so it is still published. Try again.',
+        NO_STORE,
+    );
 
 /**
  * POST /api/library/artifacts (PublishInput, src/lib/library/publish.ts)
@@ -255,7 +254,9 @@ export const publish = async (request: Request): Promise<Response> => {
     }
 
     const { text, publishKey, slug } = read.value;
-    const earlier = await artifactByPublishKey(publishKey);
+    // One read answers both, so an earlier try that commits meanwhile is
+    // seen as that try, and its slug never reads as another artifact's.
+    const { earlier, slugHeld } = await publishTarget(publishKey, slug);
 
     if (earlier?.withdrawn) {
         return artifactWithdrawn();
@@ -265,7 +266,7 @@ export const publish = async (request: Request): Promise<Response> => {
         return Response.json({ slug: earlier.slug, title: earlier.title }, { headers: NO_STORE });
     }
 
-    if (slug && (await isSlugHeld(slug))) {
+    if (slugHeld) {
         return slugTaken();
     }
 
@@ -407,13 +408,15 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 };
 
 /**
- * DELETE /api/library/artifacts/<id> → 204
+ * DELETE /api/library/artifacts/<id> → 204, or 502 `transient_unavailable`
  *
- * Withdraws the artifact and erases its title and text. Its address stays and
- * shows that it was withdrawn, and its share is taken down in dfo-apis. A take-down that
- * fails for any reason puts the share in `share_cleanup` for an operator
- * (`dropShare`). Either way the row then forgets the share's token, and a
- * second DELETE answers 404.
+ * Takes the artifact's share down in dfo-apis, or, when dfo-apis cannot,
+ * records it in `share_cleanup` for an operator. Once one of those holds, it
+ * withdraws the artifact, erases its title and text and forgets the share's
+ * token, and answers 204. Its address stays and shows that it was withdrawn,
+ * and a second DELETE answers 404. When neither holds, nothing changes: the
+ * artifact stays published and the answer is a retryable 502, so the Edit
+ * dialog's Delete tries again (./withdraw.ts).
  */
 export const remove = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -422,21 +425,24 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
         return refusal;
     }
 
-    const withdrawn = await withdrawArtifact(id);
+    const withdrawn = await withdraw(
+        { ...settling(request.headers), share: artifactShare, withdraw: withdrawArtifact },
+        id,
+        admin.id,
+    );
 
     if (withdrawn === 'not_found') {
         return notFound();
     }
 
+    if (!withdrawn.settled) {
+        log('delete.unsettled', admin.email, withdrawn.slug);
+
+        return withdrawalUnsettled();
+    }
+
     log('delete', admin.email, withdrawn.slug);
     refresh(withdrawn.slug);
-
-    await dropShare(
-        request.headers,
-        { shareId: withdrawn.shareId, writeToken: withdrawn.shareWriteToken },
-        admin.id,
-    );
-    await forgetShareWriteToken(id);
 
     return new Response(null, { status: 204, headers: NO_STORE });
 };

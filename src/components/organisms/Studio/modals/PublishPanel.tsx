@@ -7,6 +7,7 @@ import type { ShareScope } from './ShareModal';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
+import { useLibraryEnabled } from '@/hooks/useLibraryEnabled';
 import ArtifactFields, {
     blankText,
     isComplete,
@@ -39,7 +40,13 @@ import { isLiveDataCard } from '@/lib/studio/liveCards';
  * blank; a blank field follows the title again. A slug another artifact holds
  * is refused at the field. The slug stays fixed once published, since
  * citations name the URL, so the Edit dialog leaves it out. The done view
- * links to the URL the server made.
+ * links to the URL the server made, and says who can open it: anyone while
+ * the Library is on, and its admins alone while it is off. Until
+ * GET /api/library/enabled answers, or when it fails, it says neither.
+ *
+ * A publish makes an unlisted share, which anyone with its /s/ link can
+ * open whether the Library is on or off. Publish only material cleared for
+ * public access, preview included.
  */
 
 const CANVAS = 'canvas';
@@ -106,6 +113,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     // artifact.
     const keysRef = useRef(new Map<string, string>());
     const ids = useId();
+    const libraryEnabled = useLibraryEnabled();
 
     const subjects = picked === CANVAS ? cards : cards.filter((card) => card.id === picked);
     const canLive = subjects.some(isLiveDataCard);
@@ -207,7 +215,11 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             <div className={styles.done} role="status">
                 <p className={styles.doneTitle}>Published to the Library</p>
                 <p className={styles.copyText}>
-                    “{published.title}” has its own page, which anyone can open and cite.
+                    {libraryEnabled === null
+                        ? `“${published.title}” has its own page in the Library.`
+                        : libraryEnabled
+                          ? `“${published.title}” has its own page, which anyone can open and cite.`
+                          : `“${published.title}” has its own page in the Library’s preview, which only Library admins can open until the Library is switched on.`}
                 </p>
                 <Button
                     href={artifactPath(published.slug)}

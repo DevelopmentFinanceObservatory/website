@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
 import { cache } from 'react';
 
 import { libraryArtifact, libraryArtifactTopic, libraryTopic } from '../../../db/schema.ts';
@@ -25,7 +25,7 @@ import { uuid } from '@/lib/uuid';
  * their caller: ./admin.ts checks who asks and narrows what they send.
  *
  * Every read names its columns, so the share's write token reaches only
- * `withdrawArtifact` and stays out of pages and the props they hand the
+ * `artifactShare` and stays out of pages and the props they hand the
  * browser.
  */
 
@@ -136,22 +136,47 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
     };
 });
 
-/** The artifact a publish with `publishKey` made, withdrawn or not, or null
- *  when none did. A withdrawn artifact has no title left, so `title` is empty
- *  and `withdrawn` is true. */
-export const artifactByPublishKey = async (
+/** What a publish with `publishKey`, and with `slug` when the publisher
+ *  chose one, meets before it makes a share. */
+export type PublishTarget = {
+    /** The artifact an earlier try with the key made, withdrawn or not, or
+     *  null when none did. A withdrawn artifact has no title left, so `title`
+     *  is empty and `withdrawn` is true. */
+    earlier: { slug: string; title: string; withdrawn: boolean } | null;
+    /** Whether another artifact, withdrawn ones included, holds `slug`.
+     *  False when `earlier` holds it. */
+    slugHeld: boolean;
+};
+
+/**
+ * Reads the artifact a publish key made and the holder of a chosen slug in
+ * one statement, so both come from one snapshot. An earlier try that holds
+ * the slug is `earlier` and leaves `slugHeld` false, however its commit
+ * interleaves with this publish.
+ */
+export const publishTarget = async (
     publishKey: string,
-): Promise<{ slug: string; title: string; withdrawn: boolean } | null> => {
-    const [row] = await db
+    slug?: string | null,
+): Promise<PublishTarget> => {
+    const rows = await db
         .select({
+            publishKey: libraryArtifact.publishKey,
             slug: libraryArtifact.slug,
             title: libraryArtifact.title,
             withdrawn: sql<boolean>`${libraryArtifact.withdrawnAt} is not null`,
         })
         .from(libraryArtifact)
-        .where(eq(libraryArtifact.publishKey, publishKey));
+        .where(
+            slug
+                ? or(eq(libraryArtifact.publishKey, publishKey), eq(libraryArtifact.slug, slug))
+                : eq(libraryArtifact.publishKey, publishKey),
+        );
+    const mine = rows.find((row) => row.publishKey === publishKey);
 
-    return row ?? null;
+    return {
+        earlier: mine ? { slug: mine.slug, title: mine.title, withdrawn: mine.withdrawn } : null,
+        slugHeld: !mine && rows.length > 0,
+    };
 };
 
 /** Every topic's label, by name. */
@@ -242,16 +267,6 @@ export type ArtifactInsert = ArtifactText & {
     sources: LibrarySource[];
     steps: LibraryStep[];
 };
-
-/** Whether any artifact, withdrawn ones included, holds `slug`. */
-export const isSlugHeld = async (slug: string): Promise<boolean> =>
-    (
-        await db
-            .select({ id: libraryArtifact.id })
-            .from(libraryArtifact)
-            .where(eq(libraryArtifact.slug, slug))
-            .limit(1)
-    ).length > 0;
 
 type Inserted =
     | { slug: string; title: string; created: boolean; withdrawn?: boolean }
@@ -388,55 +403,59 @@ export const updateArtifact = (
         }),
     );
 
-/** A withdrawn artifact, with the share to take down in dfo-apis. */
-export type Withdrawal = { slug: string; shareId: string; shareWriteToken: string };
+/** An artifact's slug and the share the Library made for it, with that
+ *  share's owner token. */
+export type ArtifactShare = { slug: string; shareId: string; shareWriteToken: string };
+
+/** The share of artifact `id`, while its row holds the share's token, else
+ *  null. Only the withdrawal reads the token. */
+export const artifactShare = async (id: string): Promise<ArtifactShare | null> => {
+    const [row] = await db
+        .select({
+            slug: libraryArtifact.slug,
+            shareId: libraryArtifact.shareId,
+            shareWriteToken: libraryArtifact.shareWriteToken,
+        })
+        .from(libraryArtifact)
+        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)));
+
+    return row?.shareWriteToken ? { ...row, shareWriteToken: row.shareWriteToken } : null;
+};
 
 /**
- * Withdraws an artifact and erases what it published: the title becomes the
- * empty string, the description the empty string, and the content title,
- * content, sources, steps and topic links are cleared. The row keeps its id,
- * slug, kind, mode, dates, share id and share token, so the slug stays taken
- * and the address can say the artifact was withdrawn. Lists, the sitemap and
- * edits leave it out. Answers the share to take down with its token. A
- * second call before the token is forgotten (`forgetShareWriteToken`)
- * answers the same share, and keeps the first withdrawal's date. Answers
- * `not_found` for an id no artifact has, and for a withdrawn one whose token
- * is forgotten.
+ * Withdraws an artifact and drops its share token, in one statement. Call it
+ * only once the share is gone from dfo-apis or its `share_cleanup` record
+ * has committed (./withdraw.ts), since the token is the only way to take the
+ * share down again.
+ *
+ * The database erases what it published: the
+ * `library_artifact_erase_withdrawn` trigger (db/migrations/0033) blanks the
+ * title and description, clears the content title, content, sources and
+ * steps, and deletes the topic links of any row written with `withdrawn_at`
+ * set, so every writer erases, an older release's included. This sets
+ * `withdrawn_at` and leaves the erasure to that trigger, which keeps one
+ * definition of what withdrawal erases.
+ *
+ * The row keeps its id, slug, kind, mode, dates, publisher, share id and
+ * publish key. The slug stays taken, so a cited URL keeps naming this
+ * artifact, and the address says it was withdrawn and when. The publish key
+ * makes a retried publish answer `artifact_withdrawn`. The share id names
+ * the share an operator looks up. Lists, the sitemap and edits leave the row
+ * out.
+ *
+ * Answers the slug, or `not_found` for an id no artifact has and for one
+ * whose token is gone, a withdrawn one included. A withdrawn row that still
+ * holds a token keeps its first withdrawal date.
  */
-export const withdrawArtifact = async (id: string): Promise<Withdrawal | 'not_found'> =>
-    db.transaction(async (tx) => {
-        const [row] = await tx
-            .update(libraryArtifact)
-            .set({
-                withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())`,
-                title: '',
-                description: '',
-                contentTitle: null,
-                content: null,
-                sources: [],
-                steps: [],
-            })
-            .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
-            .returning({
-                slug: libraryArtifact.slug,
-                shareId: libraryArtifact.shareId,
-                shareWriteToken: libraryArtifact.shareWriteToken,
-            });
-
-        if (!row?.shareWriteToken) {
-            return 'not_found';
-        }
-
-        await tx.delete(libraryArtifactTopic).where(eq(libraryArtifactTopic.artifactId, id));
-
-        return { ...row, shareWriteToken: row.shareWriteToken };
-    });
-
-/** Forgets a withdrawn artifact's share token, once its share is gone from
- *  dfo-apis or recorded in `share_cleanup`. */
-export const forgetShareWriteToken = async (id: string): Promise<void> => {
-    await db
+export const withdrawArtifact = async (id: string): Promise<{ slug: string } | 'not_found'> => {
+    const [row] = await db
         .update(libraryArtifact)
-        .set({ shareWriteToken: null })
-        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.withdrawnAt)));
+        .set({
+            withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())`,
+            shareWriteToken: null,
+        })
+        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
+        .returning({ slug: libraryArtifact.slug });
+
+    return row ?? 'not_found';
 };

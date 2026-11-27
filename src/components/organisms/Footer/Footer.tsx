@@ -3,12 +3,13 @@
 import classNames from 'classnames';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
 import styles from './Footer.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import TextFill from '@/components/atoms/TextFill/TextFill';
+import { useLibraryEnabled } from '@/hooks/useLibraryEnabled';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { useScrollFrame } from '@/hooks/useScrollFrame';
@@ -34,42 +35,6 @@ const columns = [
 // current developmentfinance.org site uses behind its Contact us.
 const CONTACT_MAILTO = 'mailto:data@one.org';
 
-// Whether LIBRARY_ENABLED is on, asked of the running server. A page
-// prerendered at build time carries the build's environment, so the link
-// is added in the browser on every page alike, and the server HTML never
-// carries it. A failed request leaves the link out.
-const useLibraryEnabled = (): boolean => {
-    const [enabled, setEnabled] = useState(false);
-
-    useEffect(() => {
-        const controller = new AbortController();
-
-        const ask = async () => {
-            try {
-                const response = await fetch(siteHref('/api/library/enabled'), {
-                    signal: controller.signal,
-                });
-                const body: unknown = response.ok ? await response.json() : null;
-
-                setEnabled(
-                    typeof body === 'object' &&
-                        body !== null &&
-                        'enabled' in body &&
-                        body.enabled === true,
-                );
-            } catch {
-                // Aborted on unmount, or unreachable: the link stays out.
-            }
-        };
-
-        void ask();
-
-        return () => controller.abort();
-    }, []);
-
-    return enabled;
-};
-
 // The footer links that already lead somewhere (the rest are stubs).
 const FOOTER_ROUTES: Record<string, string> = {
     'About DFO': '/about',
@@ -88,7 +53,7 @@ const Footer = () => {
     const footerRef = useReveal<HTMLElement>(0);
     const dfoRef = useRef<HTMLDivElement>(null);
     const reducedMotion = usePrefersReducedMotion();
-    const libraryEnabled = useLibraryEnabled();
+    const libraryEnabled = useLibraryEnabled() === true;
 
     // The giant DFO rises from below the fold over the map — the whole
     // wordmark as one piece (17/22 of the logo's viewBox height ≈ the old
