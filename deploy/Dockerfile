@@ -45,6 +45,10 @@ RUN pnpm run build:export-events
 # same way and for the same reason.
 RUN pnpm run build:migrate-shares
 
+# The Library share check Job's command (db/check-library-shares.ts),
+# bundled the same way and for the same reason.
+RUN pnpm run build:check-library-shares
+
 FROM node:24-slim AS runtime
 
 # node:24-slim already ships a `node` user at UID 1000, so let useradd pick
@@ -75,6 +79,10 @@ COPY --from=builder --chown=app:app /app/dist/export-events.cjs ./dist/export-ev
 # The share migration Job's `command` override runs this bundle, which also
 # reads no file at runtime.
 COPY --from=builder --chown=app:app /app/dist/migrate-shares.cjs ./dist/migrate-shares.cjs
+
+# The Library share check Job's `command` override runs this bundle, which
+# reads no file at runtime either.
+COPY --from=builder --chown=app:app /app/dist/check-library-shares.cjs ./dist/check-library-shares.cjs
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
