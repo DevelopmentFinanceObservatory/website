@@ -728,7 +728,15 @@ export type ActivityStepFrame = {
     // absent off a plan.
     plan_version_id?: string | null;
     plan_step_id?: string | null;
+    // On the running line of a drawing call: the cards it is about to draw,
+    // in its order (comingEntriesOf narrows it).
+    coming?: ComingEntry[] | null;
 };
+
+/** A card a drawing call announces: its placeholder's id
+ *  (`<step_id>.<index>`), the type that lands, and its title as asked (the
+ *  card's own can add its period). */
+export type ComingEntry = { placeholder_id: string; type: string; title: string };
 
 /** The plan and the step of it whose result a card draws. Step ids repeat
  *  across a conversation's plans, so the pair names the step. */
@@ -741,6 +749,8 @@ export type CreatedFrom = {
     message_seq?: number | null;
     plan_version_id?: string | null;
     plan_step_id?: string | null;
+    // The announced card this one fills (ComingEntry's `placeholder_id`).
+    placeholder_id?: string | null;
 };
 
 export type ComponentCreated = {

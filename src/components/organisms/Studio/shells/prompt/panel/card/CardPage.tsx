@@ -371,6 +371,7 @@ const CardPage = ({ id }: { id: string }) => {
                 report('studio.change', {
                     step: 'refused',
                     kind: changeKind(sent.key),
+                    // The harness's code when its refusal has one.
                     why: chat.dropped.some(
                         (drop) =>
                             drop.card === sent.card &&
@@ -378,7 +379,7 @@ const CardPage = ({ id }: { id: string }) => {
                             drop.role === sent.role,
                     )
                         ? 'queue'
-                        : 'assistant',
+                        : (status.code ?? 'assistant'),
                 });
             }
         }

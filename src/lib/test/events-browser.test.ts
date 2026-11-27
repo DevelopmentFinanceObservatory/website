@@ -39,6 +39,12 @@ test('a Prompt layout event takes its listed members and nothing else', async (t
         ['studio.focus', { on: true, how: 'button', ...prompt }, null],
         ['studio.change', { step: 'open', kind: 'years', ...prompt }, null],
         ['studio.change', { step: 'refused', kind: 'places', why: 'queue', ...prompt }, null],
+        [
+            'studio.change',
+            { step: 'refused', kind: 'places', why: 'change_not_offered', ...prompt },
+            null,
+        ],
+        ['studio.change', { step: 'refused', kind: 'years', why: 'assistant', ...prompt }, null],
         ['studio.sheet', { sheet: 'conversation', action: 'fold', how: 'canvas', ...prompt }, null],
         ['studio.plan', { decision: 'cancel', from: 'full_plan', ...prompt }, null],
         ['studio.new_session', { how: 'back', variant: 'classic' }, null],

@@ -14,6 +14,16 @@ import { withTurnStamps } from '@/lib/studio/activityView';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
 import { changeTurns, currentCard, replacementsOf } from '@/lib/studio/cardIdentity';
 import { rowValues } from '@/lib/studio/changeNote';
+import type { ChangeRefusalCode } from '@/lib/studio/changeRefusalCodes';
+import {
+    comingAfter,
+    comingCards,
+    comingEnded,
+    type ComingState,
+    NO_COMING,
+    placeholderOf,
+    plannedCards,
+} from '@/lib/studio/comingCards';
 import {
     type CardHistory,
     placeCard,
@@ -22,6 +32,7 @@ import {
     withReplacedCard,
 } from '@/lib/studio/cardReplace';
 import {
+    changeRefusalCode,
     changeRefusalDetail,
     changeRefusalStale,
     changesHeld,
@@ -245,7 +256,8 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
-// a reopened conversation can show it.
+// a reopened conversation can show it. `refusal` is the code of the
+// harness's refusal a card change's reply holds (changeRefusalCode).
 export type ChatMessage =
     | {
           role: 'user';
@@ -270,6 +282,7 @@ export type ChatMessage =
           newQuestion?: string;
           chips?: ApplyChoiceSuggestion[];
           plan?: ApprovedPlan;
+          refusal?: ChangeRefusalCode;
       };
 
 // A widget stamped with the send() turn it arrived in. A save from before
@@ -280,7 +293,13 @@ export type ChatMessage =
 // the card change turns that drew it (CardHistory), set when the card takes
 // another's place (placeCard) and saved with it; a card that replaced none
 // has none. Saves from before `replaced` and `changedIn` lack them.
-export type TurnWidget = Widget & { turn: number; madeIn?: number } & CardHistory;
+// `placeholderId` is the announced placeholder a card filled when it landed
+// (comingCards.ts), where the canvas puts it.
+export type TurnWidget = Widget & {
+    turn: number;
+    madeIn?: number;
+    placeholderId?: string;
+} & CardHistory;
 
 // A places read callers share: the read, how many callers wait on it, and
 // the control that stops it once none does.
@@ -706,6 +725,20 @@ export const useChat = (
     // The page turn of the stream that offered the pending pause, which the
     // answer's stream carries on, so it writes into that turn's reply.
     const pauseTurnRef = useRef(0);
+    // The cards on their way (comingCards.ts), from the stream's frames
+    // only: never saved, never read back, cleared by reset and hydrate.
+    const comingRef = useRef<ComingState>(NO_COMING);
+    const [coming, setComing] = useState<ComingState>(NO_COMING);
+    const takeComing = useCallback((next: ComingState) => {
+        if (next === comingRef.current) return;
+
+        comingRef.current = next;
+        setComing(next);
+    }, []);
+    // The state read that reconciles the canvas after a stream that ended
+    // on an error or dropped (rereadCanvas, set once it exists, on a page
+    // that reads state).
+    const rereadRef = useRef<((session: string) => Promise<boolean>) | null>(null);
     // The latest plan this turn offered, or is waiting on a switch of. A
     // fresh plan.proposed carries its baseline (what the turn's first plan
     // held) and learns which choice its switch moved. A new turn clears it.
@@ -1393,6 +1426,7 @@ export const useChat = (
                 }
 
                 stall.beat();
+                takeComing(comingAfter(comingRef.current, frame, turn));
 
                 switch (frame.event) {
                     case 'message.delta':
@@ -1497,9 +1531,11 @@ export const useChat = (
                                     ? { ...widget, planStep: widget.planStep ?? old.planStep }
                                     : widget;
 
+                            const placeholderId = placeholderOf(frame.created_from);
+
                             return placeCard(
                                 widgets,
-                                { ...kept, turn },
+                                { ...kept, turn, ...(placeholderId && { placeholderId }) },
                                 { ...takeover, keepTurn, values: rowValues },
                             );
                         });
@@ -1827,12 +1863,26 @@ export const useChat = (
 
             // The turn's end on screen, once: at the `done` or `error` frame,
             // or else when the stream closes.
+            // A stream that ended on an error or dropped may not have sent a
+            // removal the harness held (delta 36), so the page reads the
+            // canvas from the harness's state.
             const finish = () => {
                 release();
 
                 if (!finished) {
                     finished = true;
                     flushReply(turn);
+
+                    if (generationRef.current === generation) {
+                        takeComing(comingEnded(comingRef.current));
+
+                        const session = sessionRef.current;
+
+                        if (!done && sent && !stopped && session) {
+                            void rereadRef.current?.(session);
+                        }
+                    }
+
                     (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed, sent });
                     onSettled?.();
                 }
@@ -2061,6 +2111,7 @@ export const useChat = (
             replyStore,
             requestCancel,
             setWidgets,
+            takeComing,
         ],
     );
 
@@ -2783,10 +2834,13 @@ export const useChat = (
                             const messages = prev.messages.slice();
                             const last = messages.at(-1);
 
+                            const code = changeRefusalCode(refusal);
+
                             if (last?.role === 'bot' && !last.text) {
                                 messages[messages.length - 1] = {
                                     ...last,
                                     text: `_${refused.detail}_`,
+                                    ...(code && { refusal: code }),
                                 };
                             }
 
@@ -3395,6 +3449,11 @@ export const useChat = (
         },
         [applyManifest, drawCards, takeRead],
     );
+
+    // Only a page that reads state reads it after a broken stream.
+    useEffect(() => {
+        rereadRef.current = readsState ? rereadCanvas : null;
+    }, [readsState, rereadCanvas]);
     // Each canvas the page takes settles the owed removals it confirms
     // (settle), and the ones the harness still holds go again, one card at a
     // time and each against the canvas's revision when the edit queue
@@ -3826,6 +3885,7 @@ export const useChat = (
         messagesRef.current = [];
         widgetsRef.current = [];
         replacedRef.current = {};
+        takeComing(NO_COMING);
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         recapRef.current = null;
@@ -3841,7 +3901,7 @@ export const useChat = (
             clarify: null,
             plan: null,
         });
-    }, [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards]);
+    }, [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards, takeComing]);
 
     const hydrate = useCallback(
         (saved: ChatSnapshot) => {
@@ -3858,6 +3918,7 @@ export const useChat = (
             inFlightRef.current = 0;
             queueRef.current = [];
             replacedRef.current = replacementsOf(saved.widgets);
+            takeComing(NO_COMING);
             pendingInterruptRef.current = null;
             turnPlanRef.current = null;
             sessionRef.current = saved.sessionId;
@@ -3902,7 +3963,7 @@ export const useChat = (
             // removals wait for reattach's read before any goes again.
             setOwedHeld(saved.sessionId !== null);
         },
-        [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards, startLegacy],
+        [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards, startLegacy, takeComing],
     );
 
     // The transcript as last drawn, `messages`, with the answer text that
@@ -3935,10 +3996,31 @@ export const useChat = (
         [],
     );
 
+    // The cards on their way: the announced ones, then a waiting or running
+    // plan's planned ones (comingCards.ts).
+    const waitingPlan = state.plan?.live ? state.plan : null;
+    const comingList = useMemo(
+        () =>
+            comingCards(
+                coming.announced,
+                plannedCards({
+                    state: coming,
+                    waiting: waitingPlan && {
+                        steps: waitingPlan.steps,
+                        answerStepId: waitingPlan.answerStepId,
+                    },
+                    cards: state.widgets,
+                }),
+            ),
+        [coming, waitingPlan, state.widgets],
+    );
+
     return {
         ...state,
         // Why the card pages' Change rows wait, or null (changesHeld).
         changesHeld: changesHeld(state.plan, state.clarify),
+        // The cards on their way, for the Prompt layout's canvas.
+        coming: comingList,
         droppedRefunds,
         localCards,
         syncCanvas: editCanvas,

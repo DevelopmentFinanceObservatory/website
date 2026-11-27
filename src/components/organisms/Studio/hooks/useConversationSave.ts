@@ -9,6 +9,7 @@ import { widgetTitle } from '../canvas/layout';
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
+import { savedCards } from '@/lib/studio/comingCards';
 import { createSaveStamp, createSaveWaiters } from '@/lib/studio/saveWaiters';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
 import { isPrompt } from '@/lib/studio/transcript';
@@ -91,7 +92,7 @@ export const useConversationSave = ({
             updatedAt: Date.now(),
             ...saveStamp(),
             messages: withStreamedReply(snap.messages),
-            widgets: snap.widgets,
+            widgets: savedCards(snap.widgets),
             activity: snap.activity,
             pinnedIds: snap.doc.pinnedIds,
             removedIds: snap.doc.removedIds,

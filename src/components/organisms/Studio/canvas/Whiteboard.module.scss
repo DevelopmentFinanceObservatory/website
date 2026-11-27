@@ -1,5 +1,6 @@
 @use "variables" as *;
 @use "mixins" as *;
+@use "../shells/prompt/textFloor" as *;
 
 // The whiteboard sheet: carries its own grid pattern (so lines scroll with
 // the cards) and hosts absolutely-placed cards pinned to exact cells. It
@@ -249,6 +250,75 @@
 @media (hover: none) {
     .resizeGrip {
         opacity: 1;
+    }
+}
+
+// A card the running turn has announced: a dashed outline, no fill, at the
+// place and size its card will take, so the card lands with nothing moving.
+// Its radius is the card's own. The border is the scrollbar grey, 3.6:1
+// against the canvas.
+.coming {
+    position: absolute;
+    z-index: 0;
+    box-sizing: border-box;
+    pointer-events: none;
+    border: 1px dashed var(--color-scrollbar);
+    border-radius: rem(6);
+    transition: opacity 0.3s ease;
+    animation: coming-in 0.3s ease both;
+}
+
+.comingLeaving {
+    opacity: 0;
+    animation: none;
+}
+
+@keyframes coming-in {
+    from {
+        opacity: 0;
+    }
+}
+
+.comingLabel {
+    position: absolute;
+    top: rem(14);
+    right: rem(16);
+    left: rem(16);
+    margin: 0;
+    font-family: var(--font-dm-mono);
+    font-size: rem-floor(11);
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+}
+
+.comingKind,
+.comingTitle {
+    display: block;
+}
+
+.comingTitle {
+    margin-top: rem(4);
+    font-family: var(--font-outfit);
+    font-size: rem-floor(13);
+    line-height: rem(18);
+    letter-spacing: 0;
+}
+
+// Heard once per batch of placeholders, out of sight.
+.comingStatus {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .coming {
+        transition: none;
+        animation: none;
     }
 }
 
