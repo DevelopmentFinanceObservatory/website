@@ -106,6 +106,8 @@ const NoteLine = ({ note }: { note: string }) => {
             <span
                 ref={noteRef}
                 className={styles.noteText}
+                // Download Image measures the note by it (lib/studio/cardImage).
+                data-note=""
                 {...(scrolls && { tabIndex: 0, 'data-no-drag': '' })}
             >
                 {noteParts(note).map((part, index) =>
