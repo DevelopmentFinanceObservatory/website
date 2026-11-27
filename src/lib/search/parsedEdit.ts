@@ -159,9 +159,9 @@ export const entityChoicePart = (option: NoDataOption): ParsedPart | null =>
 
 /** Whether a no_data part renders a "Choose a Match" picker rather than a
  *  generic Studio hand-off panel: an entity_ambiguous refusal with at least
- *  one option (entityChoiceGroups). The one gate SearchCards, SearchSentence
- *  and studioHandoffParts agree on, so a picker-eligible part always keeps
- *  its own picker instead of collapsing into the generic studio callout. */
+ *  one option (entityChoiceGroups). SearchSentence and studioHandoffParts
+ *  gate on it, and SearchCards runs the same entityChoiceGroups test, so a
+ *  picker-eligible part keeps its own picker over the generic studio callout. */
 export function offersAmbiguousPicker(part: unknown): part is { no_data: NoData } {
     if (typeof part !== 'object' || part === null) return false;
 

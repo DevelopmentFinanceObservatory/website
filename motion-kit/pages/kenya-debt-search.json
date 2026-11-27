@@ -14,7 +14,7 @@
             "selector": "textarea[class*=\"DataPrompt\"]",
             "text": "External debt of Kenya"
         },
-        { "type": "wait", "selector": "text=Looks like a match" },
+        { "type": "wait", "ms": 300 },
         { "type": "capture", "state": "typed" },
         { "type": "press", "key": "Enter" },
         { "type": "wait", "selector": "text=Rows in your data", "ms": 3000 },

@@ -30,7 +30,6 @@
             "cps": 16,
             "in": "empty"
         },
-        { "v": "match", "kind": "show", "at": 3.8, "dur": 0.4, "in": "typed" },
         { "v": "measure", "kind": "press", "at": 11.6, "in": "menu" },
         { "v": "menu", "kind": "show", "at": 11.8, "dur": 0.3, "dy": 6, "in": "menu" }
     ]

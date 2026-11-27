@@ -4,7 +4,6 @@
     "viewport": { "width": 1280, "height": 800 },
     "hooks": [
         { "v": "prompt", "selector": "textarea[class*=\"DataPrompt\"]" },
-        { "v": "match", "selector": "[class*=\"__cardsTitle\"]" },
         { "v": "answer", "selector": "h1[class*=\"__sentence\"]" },
         {
             "v": "measure",
@@ -23,7 +22,7 @@
             "selector": "textarea[class*=\"DataPrompt\"]",
             "text": "ODA to Uganda since 2015"
         },
-        { "type": "wait", "selector": "text=Looks like a match", "ms": 1500 },
+        { "type": "wait", "ms": 300 },
         { "type": "capture", "state": "typed" },
         { "type": "press", "key": "Enter" },
         { "type": "wait", "selector": "text=Rows in your data", "ms": 3000 },

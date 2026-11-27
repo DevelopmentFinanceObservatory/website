@@ -8,7 +8,6 @@ import {
     provenanceOrigin,
     shapeOrigin,
     sourceOrigin,
-    specOrigin,
 } from '../view.ts';
 import { partialSpec } from './fixtures/partial.ts';
 
@@ -99,81 +98,6 @@ test('shapeOrigin lists the upstream Data Commons, and stays silent when DFO hol
     assert.equal(shapeOrigin(shape({ data_commons: [DFO] })), null);
     assert.equal(shapeOrigin(shape({ data_commons: [] })), null);
     assert.equal(shapeOrigin(shape({})), null);
-});
-
-const unicef: ProvenanceRef = {
-    ref: 'undata/p/UNICEF',
-    label: "United Nations Children's Fund (UNICEF)",
-    documentation: '/api/graph/documentation/undata/p/UNICEF',
-    source: { ref: 'undata/p/UNICEF', label: "United Nations Children's Fund (UNICEF)" },
-    data_commons: UN,
-};
-
-// A spec whose sentence ends ", according to <source>", the source slot
-// carrying `binding` and the trace listing `resolved`.
-const sentenced = (
-    upstream: ProvenanceRef,
-    {
-        binding = { kind: 'unbound' } as object,
-        resolved = [] as ProvenanceRef[],
-        sourceText = 'X',
-    } = {},
-) =>
-    partialSpec({
-        shape: shape({
-            data_commons: [upstream.data_commons!],
-            upstream: { source: upstream.source!, data_commons: upstream.data_commons! },
-        }),
-        slots: [{ key: { axis: 'source', property: null, label: 'source' }, binding }],
-        resolution: { resolved_sources: resolved },
-        sentence_plan: [
-            { kind: 'slot', text: 'Literacy rate', axis: 'what' },
-            { kind: 'text', text: ', according to ' },
-            { kind: 'slot', text: sourceText, axis: 'source' },
-            { kind: 'text', text: '.' },
-        ],
-    });
-
-test('specOrigin drops the publisher that the sentence already names as its resolved source', () => {
-    assert.equal(
-        specOrigin(sentenced(unicef, { resolved: [unicef] })),
-        'via UN System Data Commons',
-    );
-});
-
-test('specOrigin drops the publisher that the bound source slot names', () => {
-    const value = { value_kind: 'source', ref: { ref: unicef.ref, label: unicef.label } };
-
-    assert.equal(
-        specOrigin(sentenced(unicef, { binding: { kind: 'value', value } })),
-        'via UN System Data Commons',
-    );
-    assert.equal(
-        specOrigin(
-            sentenced(unicef, {
-                binding: { kind: 'set', values: [value, { ref: { ref: 'undata/p/FAO' } }] },
-            }),
-        ),
-        'via UN System Data Commons',
-    );
-});
-
-test('specOrigin keeps the publisher when the sentence names a Dataset under it, or no source', () => {
-    // "according to World Development Indicators" does not name the World Bank.
-    assert.equal(
-        specOrigin(sentenced(wdi, { resolved: [wdi] })),
-        'World Bank via Data Commons by Google',
-    );
-    // An empty source slot names nothing, whatever the trace lists.
-    assert.equal(
-        specOrigin(sentenced(unicef, { resolved: [unicef], sourceText: '' })),
-        "United Nations Children's Fund (UNICEF) via UN System Data Commons",
-    );
-    // No sentence at all, so the title is the variable text.
-    assert.equal(
-        specOrigin({ shape: sentenced(unicef).shape }),
-        "United Nations Children's Fund (UNICEF) via UN System Data Commons",
-    );
 });
 
 test('sourceOrigin finds a picker option by dcid in the trace, the resolved facet or a series', () => {

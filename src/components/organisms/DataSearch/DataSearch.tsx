@@ -382,10 +382,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         [searchIds],
     );
 
-    const handleDraft = useCallback((value: string) => {
-        setDraft(value);
-    }, []);
-
     // Empties the prompt. A draft left over from a submitted question would
     // otherwise bring idle back in typing mode, which hides a link refusal.
     const clearPrompt = useCallback(() => {
@@ -855,7 +851,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                             suggestions={catalogueChips(catalogue)}
                             suggestionsHidden={typing}
                             onSubmit={submitQuery}
-                            onChange={handleDraft}
+                            onChange={setDraft}
                             autoFocus={focusPrompt}
                         />
                         {linkRefusal && !typing && (

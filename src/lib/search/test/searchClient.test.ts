@@ -3,7 +3,6 @@ import test from 'node:test';
 import {
     applyDoneEvent,
     artifactHref,
-    buildRequest,
     createSearchShare,
     entityOptions,
     fetchDatasetOptions,
