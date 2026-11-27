@@ -69,22 +69,22 @@ test('only the names column is shortened, and places and donors stay whole', () 
     const donors = tableView(
         ['Donor', 'Variable', 'Value'],
         [
-            ['United States', 'Gross ODA disbursements', '1.0'],
-            ['United Kingdom', 'Net ODA disbursements', '2.0'],
+            ['United States', 'Gross ODA disbursements (current US$)', '1.0'],
+            ['United Kingdom', 'Net ODA disbursements (current US$)', '2.0'],
         ],
         1,
     );
 
-    assert.equal(donors.caption?.lead, '… ODA disbursements');
+    assert.equal(donors.caption?.lead, '… current US$');
     assert.deepEqual(donors.rows, [
         [
             { text: 'United States' },
-            { text: 'Gross', full: 'Gross ODA disbursements' },
+            { text: 'Gross ODA disbursements', full: 'Gross ODA disbursements (current US$)' },
             { text: '1.0' },
         ],
         [
             { text: 'United Kingdom' },
-            { text: 'Net', full: 'Net ODA disbursements' },
+            { text: 'Net ODA disbursements', full: 'Net ODA disbursements (current US$)' },
             { text: '2.0' },
         ],
     ]);
