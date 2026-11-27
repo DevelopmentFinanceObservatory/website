@@ -278,6 +278,10 @@ The services run in the `dev-fin-observatory` GCP project, region `northamerica-
 
 The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `ai` return 404 at the root and serve Swagger UI at `/docs`. `deploy/README.md` lists the GitHub variables, secrets and GCP prerequisites.
 
+### Library switch
+
+`LIBRARY_ENABLED` on the Cloud Run service decides who sees the Library. Exactly `true` opens it to everyone. Unset or any other value keeps `/library` and its artifact pages to the admins on `ADMIN_EMAILS`, who publish from the Studio and edit artifacts as usual while their Library pages say noindex, and answers everyone else with the site's 404. While it is off the footer leaves out its Library link and the sitemap leaves out every Library URL. `infra` sets the variable, and a new revision applies it with no rebuild: the Library pages and the sitemap render per request, and the footer asks `GET /api/library/enabled` in the browser, since a page prerendered at build time holds the build's environment.
+
 ### Prototypes
 
 `prototypes/` lives on the `prototypes` branch and builds and deploys apart from the website. `deploy-prototypes.yml` publishes that branch to `developmentfinance.org/prototypes*` on each push to it and previews pull requests into it. `prototypes-sync.yml` merges every push to `dev` into `prototypes`, opening a pull request when the merge conflicts or touches `.github/workflows/`, and `prototypes-daily.yml` rebuilds it every morning so its figures follow DFO. `deploy.yml` and `deploy-prod.yml` ignore `prototypes/`. Branch from `prototypes` to work on a prototype; its `prototypes/README.md` covers adding one, building and previewing locally, and the deploy secrets.
