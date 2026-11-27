@@ -12,7 +12,9 @@ import { after, before, test } from 'node:test';
 
 import { type Browser, chromium } from 'playwright-core';
 
+import { makeReader, postgresAt, type Reader } from './account.ts';
 import { type Layout, openStudio, play, type Session } from './page.ts';
+import { REGRESSIONS } from './regressions.ts';
 import { endState, loadScenario, pauseWords, type Scenario, SCENARIOS } from './scenario.ts';
 import { startSite } from './site.ts';
 
@@ -21,15 +23,31 @@ const SHOW_MS = 10_000;
 
 let site: Awaited<ReturnType<typeof startSite>>;
 let browser: Browser;
+// The signed-in reader, or why there is none.
+let reader: Reader | Error;
 
 before(async () => {
-    site = await startSite();
+    // A refused connection to every address of the host is an
+    // AggregateError with no message of its own.
+    reader = await makeReader().catch(
+        (error: unknown) =>
+            new Error(
+                error instanceof AggregateError
+                    ? error.errors.map((one: Error) => one.message).join('; ')
+                    : String(error),
+            ),
+    );
+    site = await startSite(reader instanceof Error ? undefined : reader);
     browser = await chromium.launch({ headless: true });
 });
 
 after(async () => {
     await browser?.close();
     await site?.stop();
+
+    if (reader && !(reader instanceof Error)) {
+        await reader.close();
+    }
 });
 
 for (const layout of LAYOUTS) {
@@ -47,24 +65,60 @@ for (const layout of LAYOUTS) {
     }
 }
 
-// Plays `scenario` and checks what the page shows. A step that fails names
-// the page's errors and unanswered requests, which say why far more often
-// than the step does.
-const playScenario = async (session: Session, scenario: Scenario) => {
-    const step = async (what: () => Promise<void>) => {
-        try {
-            await what();
-        } catch (error) {
-            const why = [
-                ...session.errors,
-                ...session.unanswered.map((one) => `unanswered: ${one}`),
-            ];
-
+for (const regression of REGRESSIONS) {
+    test(`${regression.name} on ${regression.layout}`, { timeout: 60_000 }, async () => {
+        if (regression.signedIn && reader instanceof Error) {
             throw new Error(
-                `${error instanceof Error ? error.message.split('\n')[0] : String(error)}${why.length ? `\n${why.join('\n')}` : ''}`,
+                `This regression signs a reader in, which needs Postgres at ${postgresAt()} (PGHOST, PGPORT, PGUSER, PGPASSWORD): ${reader.message}`,
             );
         }
-    };
+
+        const session = await openStudio(
+            browser,
+            site.url,
+            regression.scenario(),
+            regression.layout,
+            regression.signedIn && !(reader instanceof Error) ? reader.cookie : undefined,
+        );
+
+        try {
+            await explained(session, () => regression.run(session));
+        } finally {
+            await session.close();
+        }
+    });
+}
+
+// Runs `what`, and when it fails names the page's errors, unanswered
+// requests and harness faults, which say why far more often than the step
+// does.
+const explained = async (session: Session, what: () => Promise<void>) => {
+    try {
+        await what();
+    } catch (error) {
+        const why = [
+            ...session.errors,
+            ...session.unanswered.map((one) => `unanswered: ${one}`),
+            ...session.player.faults.map((one) => `fault: ${one}`),
+        ];
+        const message = error instanceof Error ? error.message : String(error);
+
+        throw new Error(`${message}${why.length ? `\n${why.join('\n')}` : ''}`);
+    }
+};
+
+// Plays `scenario` and checks what the page shows.
+const playScenario = async (session: Session, scenario: Scenario) => {
+    const step = (what: () => Promise<void>) =>
+        explained(session, async () => {
+            try {
+                await what();
+            } catch (error) {
+                throw new Error(
+                    error instanceof Error ? error.message.split('\n')[0] : String(error),
+                );
+            }
+        });
 
     await step(() =>
         play(session, async (turn, segment) => {

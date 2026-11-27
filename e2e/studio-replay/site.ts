@@ -2,9 +2,10 @@
  * Starts the production build's standalone server (`pnpm build` first) on a
  * free localhost port, with a made-up environment that satisfies
  * src/instrumentation.ts's production checks and reaches nothing: the
- * search API and database addresses point at a closed localhost port, keys
- * and visitor limits are off, and no other variable (Sentry, analytics, the
- * Studio harness) is set. The standalone directory holds no env file, so
+ * search API address points at a closed localhost port, the database is the
+ * reader's throwaway one (account.ts) or a closed port, keys and visitor
+ * limits are off, and no other variable (Sentry, analytics, the Studio
+ * harness) is set. The standalone directory holds no env file, so
  * the server reads none.
  */
 import { spawn } from 'node:child_process';
@@ -48,8 +49,13 @@ const linkAssets = () => {
     }
 };
 
-/** Resolves with the site's origin and a `stop` once /studio answers 200. */
-export const startSite = async (): Promise<{ url: string; stop: () => Promise<void> }> => {
+/** Resolves with the site's origin and a `stop` once /studio answers 200.
+ *  With `database`, the site signs readers in against that database's
+ *  sessions, signed with its `secret` (account.ts). */
+export const startSite = async (database?: {
+    databaseUrl: string;
+    secret: string;
+}): Promise<{ url: string; stop: () => Promise<void> }> => {
     if (!existsSync(path.join(STANDALONE, 'server.js'))) {
         throw new Error('No production build: run `pnpm build` first.');
     }
@@ -67,8 +73,8 @@ export const startSite = async (): Promise<{ url: string; stop: () => Promise<vo
             HOSTNAME: '127.0.0.1',
             PORT: String(port),
             SEARCH_API_BASE: NOWHERE,
-            DATABASE_URL: 'postgresql://replay:replay@127.0.0.1:9/replay',
-            BETTER_AUTH_SECRET: randomBytes(32).toString('base64'),
+            DATABASE_URL: database?.databaseUrl ?? 'postgresql://replay:replay@127.0.0.1:9/replay',
+            BETTER_AUTH_SECRET: database?.secret ?? randomBytes(32).toString('base64'),
             BETTER_AUTH_URL: url,
             API_KEYS_ENABLED: 'false',
             VISITOR_LIMITS_ENABLED: 'false',

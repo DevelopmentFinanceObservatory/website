@@ -70,6 +70,9 @@ export const openStudio = async (
     siteUrl: string,
     scenario: Scenario,
     layout: Layout,
+    // The session cookie of a signed-in reader (account.ts), whose session
+    // and saved conversations the site itself answers; none for a guest.
+    cookie?: { name: string; value: string },
 ): Promise<Session> => {
     const player = new Player(scenario);
     const harness = await serveHarness(player);
@@ -78,6 +81,10 @@ export const openStudio = async (
         colorScheme: 'light',
     });
     const page = await context.newPage();
+
+    if (cookie) {
+        await context.addCookies([{ ...cookie, url: siteUrl }]);
+    }
 
     // A control the layout does not draw fails the run in 10 s.
     page.setDefaultTimeout(10_000);
@@ -129,6 +136,13 @@ export const openStudio = async (
             return route.fulfill({ status: 204, body: '' });
         }
 
+        if (
+            cookie &&
+            (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/conversations'))
+        ) {
+            return route.continue();
+        }
+
         if (pathname === '/api/auth/get-session') {
             // A guest: no session.
             return route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
@@ -171,7 +185,7 @@ export const openStudio = async (
     };
 };
 
-const segmentEnd = (player: Player, turn: number, segment: number) =>
+export const segmentEnd = (player: Player, turn: number, segment: number) =>
     new Promise<void>((resolve) => {
         const check = (ended: { turn: number; segment: number }) => {
             if (ended.turn === turn && ended.segment === segment) {
@@ -183,8 +197,9 @@ const segmentEnd = (player: Player, turn: number, segment: number) =>
         player.on('segment-end', check);
     });
 
-// Waits for the page's running animations to finish (endless ones aside).
-const settle = async (page: Page) => {
+// Waits for the page's running animations to finish: endless ones and
+// those a scroll position drives aside, which never finish.
+export const settle = async (page: Page) => {
     await page.waitForTimeout(300);
     await page
         .waitForFunction(
@@ -194,6 +209,7 @@ const settle = async (page: Page) => {
                     .every(
                         (one) =>
                             one.playState !== 'running' ||
+                            !(one.timeline instanceof DocumentTimeline) ||
                             one.effect?.getComputedTiming().iterations === Infinity,
                     ),
             null,
@@ -202,7 +218,7 @@ const settle = async (page: Page) => {
         .catch(() => {});
 };
 
-const ask = async (page: Page, question: string) => {
+export const ask = async (page: Page, question: string) => {
     const named = page
         .getByRole('textbox', { name: /ask|question|follow|message/i })
         .filter({ visible: true });
@@ -217,7 +233,7 @@ const ask = async (page: Page, question: string) => {
 
 // Answers a pause as a reader would: approves a plan, or picks each
 // clarifying answer and sends the form when the last pick did not send it.
-const answer = async (page: Page, player: Player, act: Act) => {
+export const answer = async (page: Page, player: Player, act: Act) => {
     const sent = player.interrupts;
 
     if (act.kind === 'approve') {
@@ -254,6 +270,60 @@ const answer = async (page: Page, player: Player, act: Act) => {
 };
 
 /**
+ * Plays turn `at` (from 1) of the session's scenario, from its question to
+ * the end of its last segment or of segment `until`. `atPause(turn,
+ * segment)` runs when a segment ends on a pause, before the reader answers
+ * it.
+ */
+export const playTurn = async (
+    session: Session,
+    at: number,
+    {
+        atPause = async () => {},
+        segmentMs = 30_000,
+        until,
+    }: {
+        atPause?: (turn: number, segment: number) => Promise<void>;
+        segmentMs?: number;
+        until?: number;
+    } = {},
+) => {
+    const { page, player } = session;
+    const turn = player.scenario.turns[at - 1]!;
+
+    for (const [index, segment] of turn.segments.entries()) {
+        if (until !== undefined && index > until) {
+            return;
+        }
+
+        const ended = segmentEnd(player, at, index);
+
+        if (index === 0) {
+            await ask(page, turn.question);
+        } else {
+            await atPause(at, index - 1);
+            await answer(page, player, segment.act!);
+        }
+
+        await Promise.race([
+            ended,
+            new Promise((_, reject) =>
+                setTimeout(
+                    () =>
+                        reject(
+                            new Error(
+                                `turn ${at} segment ${index}: no stream ended in ${segmentMs / 1000} s`,
+                            ),
+                        ),
+                    segmentMs,
+                ),
+            ),
+        ]);
+        await settle(page);
+    }
+};
+
+/**
  * Plays every turn of the session's scenario. `atPause(turn, segment)` runs
  * when a segment ends on a pause, before the reader answers it.
  */
@@ -262,34 +332,7 @@ export const play = async (
     atPause: (turn: number, segment: number) => Promise<void>,
     { segmentMs = 30_000 } = {},
 ) => {
-    const { page, player } = session;
-
-    for (const [at, turn] of player.scenario.turns.entries()) {
-        for (const [index, segment] of turn.segments.entries()) {
-            const ended = segmentEnd(player, at + 1, index);
-
-            if (index === 0) {
-                await ask(page, turn.question);
-            } else {
-                await atPause(at + 1, index - 1);
-                await answer(page, player, segment.act!);
-            }
-
-            await Promise.race([
-                ended,
-                new Promise((_, reject) =>
-                    setTimeout(
-                        () =>
-                            reject(
-                                new Error(
-                                    `turn ${at + 1} segment ${index}: no stream ended in ${segmentMs / 1000} s`,
-                                ),
-                            ),
-                        segmentMs,
-                    ),
-                ),
-            ]);
-            await settle(page);
-        }
+    for (const at of session.player.scenario.turns.keys()) {
+        await playTurn(session, at + 1, { atPause, segmentMs });
     }
 };
