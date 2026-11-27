@@ -124,5 +124,17 @@ test('a flagged Studio page answers 307 without the flag and sets the variant co
     assert.equal(response.headers.get('location'), 'https://developmentfinance.org/studio/abc?q=x');
     assert.match(cookie, /studio_variant=prompt; Path=\/studio/);
     assert.doesNotMatch(cookie, /studio_variant=[^;]*;[^,]*(Max-Age|Expires)/i);
+    assert.match(cookie, /studio_variant=[^,]*; Secure/i);
     assert.match(cookie, /dfo_v=/);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+
+    // Plain http to localhost (`next start` on a laptop) keeps the cookie.
+    const local = proxy(
+        new NextRequest('http://localhost:3000/studio?studio=classic', {
+            headers: { 'sec-fetch-dest': 'document' },
+        }),
+    );
+
+    assert.match(setCookie(local), /studio_variant=classic/);
+    assert.doesNotMatch(setCookie(local), /studio_variant=[^,]*; Secure/i);
 });

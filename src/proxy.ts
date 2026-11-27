@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { PUBLISHED_GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
 import { isGraphExplorerPath, withRequestPath } from '@/lib/graphExplorer/signIn';
-import { issueVisitorCookie } from '@/lib/proxy/visitor';
+import { issueVisitorCookie, secureCookieFor } from '@/lib/proxy/visitor';
 import { variantRedirect } from '@/lib/studio/variant';
 
 /** A Graph Explorer request carries its path and query (withRequestPath). */
@@ -36,7 +36,7 @@ const DATA_PATH = '/data';
 const studioVariant = (request: NextRequest) => {
     const { pathname, search } = request.nextUrl;
     const redirect = variantRedirect(pathname, search, {
-        secure: process.env.NODE_ENV !== 'development',
+        secure: secureCookieFor(request.nextUrl),
     });
 
     if (!redirect) {
@@ -44,6 +44,10 @@ const studioVariant = (request: NextRequest) => {
     }
 
     const response = NextResponse.redirect(new URL(redirect.location, request.nextUrl), 307);
+
+    // The answer carries one visitor's cookie choice, so no shared cache
+    // may keep it.
+    response.headers.set('Cache-Control', 'private, no-store');
 
     if (redirect.cookie) {
         response.cookies.set(redirect.cookie);

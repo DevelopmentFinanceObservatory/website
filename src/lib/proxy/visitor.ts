@@ -32,6 +32,11 @@ const TAG_BYTES = 32;
 const TOKEN = /^([A-Za-z0-9_-]{22})\.(\d{1,12})\.([A-Za-z0-9_-]{43})$/;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
+/** A cookie is Secure except over plain http to localhost, so `next start`
+ *  on a laptop keeps it. */
+export const secureCookieFor = (url: URL): boolean =>
+    url.protocol === 'https:' || !LOCAL_HOSTS.has(url.hostname);
+
 export type VisitorToken = { id: string; expires: number };
 
 /** The key that signs visitor tokens, derived from CALLER_HMAC_KEY. */
@@ -226,7 +231,7 @@ export const issueVisitorCookie = (
         name: VISITOR_COOKIE,
         value: mintVisitorToken(key, now, held?.id),
         httpOnly: true,
-        secure: url.protocol === 'https:' || !LOCAL_HOSTS.has(url.hostname),
+        secure: secureCookieFor(url),
         sameSite: 'lax',
         path: '/',
         maxAge: VISITOR_TOKEN_TTL,
