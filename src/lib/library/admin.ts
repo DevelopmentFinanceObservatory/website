@@ -180,6 +180,15 @@ export const createTopic = async (request: Request): Promise<Response> => {
     return Response.json({ topics: await listTopics() }, { headers: NO_STORE });
 };
 
+const artifactWithdrawn = (): Response =>
+    problem({
+        status: 409,
+        code: 'artifact_withdrawn',
+        detail: 'This was published and then withdrawn.',
+        retryable: false,
+        headers: NO_STORE,
+    });
+
 // Take down a share no artifact on show holds: one the Library made and
 // stored no row for, or a withdrawn artifact's. When dfo-apis
 // cannot, the share goes to `share_cleanup` for an operator, under the
@@ -249,13 +258,7 @@ export const publish = async (request: Request): Promise<Response> => {
     const earlier = await artifactByPublishKey(publishKey);
 
     if (earlier?.withdrawn) {
-        return problem({
-            status: 409,
-            code: 'artifact_withdrawn',
-            detail: 'This was published and then withdrawn.',
-            retryable: false,
-            headers: NO_STORE,
-        });
+        return artifactWithdrawn();
     }
 
     if (earlier) {
@@ -342,6 +345,10 @@ export const publish = async (request: Request): Promise<Response> => {
 
         if (made === 'unknown_topic') {
             return unknownTopic();
+        }
+
+        if (made !== 'slug_taken' && made.withdrawn) {
+            return artifactWithdrawn();
         }
 
         return made === 'slug_taken'

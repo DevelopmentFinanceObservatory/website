@@ -21,7 +21,7 @@ import {
     publishArtifact,
     publishRefusalText,
 } from '@/lib/library/client';
-import { LIMITS, readArtifactText, readSlug, slugDraft, slugOf } from '@/lib/library/publish';
+import { LIMITS, readArtifactText, readSlug, slugOf } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 
 /**
@@ -31,11 +31,15 @@ import { isLiveDataCard } from '@/lib/studio/liveCards';
  * makes the share (live, or a snapshot) and files it with the sources its
  * cards credit and, for one card, the steps it was made by.
  *
- * The URL field shows the slug made from the title until the publisher
- * edits it, and the panel always sends the slug it shows, so the artifact's
- * URL is the one the publisher saw. A slug another artifact holds is
- * refused at the field. The slug stays fixed once published, since
- * citations name the URL, so the Edit dialog leaves it out.
+ * The URL field shows the slug made from the title while the publisher
+ * leaves it alone, and the panel sends no slug then, so the server makes it
+ * from the title and numbers it (`-2`) when another artifact holds it. The
+ * publisher's own entry is kept as typed while the field has focus, is
+ * normalised with `slugOf` on blur and at submit, and is sent when it is not
+ * blank; a blank field follows the title again. A slug another artifact holds
+ * is refused at the field. The slug stays fixed once published, since
+ * citations name the URL, so the Edit dialog leaves it out. The done view
+ * links to the URL the server made.
  */
 
 const CANVAS = 'canvas';
@@ -91,7 +95,8 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     );
     const [live, setLive] = useState(true);
     const [busy, setBusy] = useState(false);
-    // The slug as typed, or null while it follows the title.
+    // The slug as typed, or null while it follows the title. A blank entry
+    // also follows the title.
     const [slug, setSlug] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [slugError, setSlugError] = useState<string | null>(null);
@@ -104,6 +109,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
 
     const subjects = picked === CANVAS ? cards : cards.filter((card) => card.id === picked);
     const canLive = subjects.some(isLiveDataCard);
+    const typedSlug = slug !== null && slug.trim() !== '' ? slug : null;
     const shownSlug = slug ?? (text.title.trim() ? slugOf(text.title) : '');
     const mode: ShareMode = canLive && live ? 'live' : 'snapshot';
 
@@ -137,7 +143,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             return;
         }
 
-        const chosen = readSlug(slugOf(shownSlug));
+        const chosen = readSlug(typedSlug === null ? undefined : slugOf(typedSlug));
 
         if (!chosen.ok) {
             setSlugError(chosen.detail);
@@ -176,8 +182,8 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             setPublished(answer.value);
         } else {
             if (isWithdrawnRefusal(answer.problem)) {
-                // The withdrawn artifact still owns this key, so the next
-                // try starts a new one.
+                // The withdrawn artifact owns this key, so the next try
+                // starts a new one.
                 keysRef.current.delete(`${picked}:${mode}`);
             }
 
@@ -246,11 +252,17 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 aria-invalid={slugError !== null}
                                 aria-describedby={slugError ? `${ids}-slug-error` : undefined}
                                 onChange={(event) => {
-                                    setSlug(slugDraft(event.target.value));
+                                    setSlug(event.target.value);
                                     setSlugError(null);
                                 }}
                                 // Blank follows the title again.
-                                onBlur={() => setSlug((typed) => (typed ? slugOf(typed) : null))}
+                                onBlur={() =>
+                                    setSlug((typed) =>
+                                        typed !== null && typed.trim() !== ''
+                                            ? slugOf(typed)
+                                            : null,
+                                    )
+                                }
                             />
                         </span>
                         {slugError && (

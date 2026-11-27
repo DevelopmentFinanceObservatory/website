@@ -8,7 +8,6 @@ import {
     publishedKind,
     readArtifactText,
     readPublish,
-    slugDraft,
     slugOf,
 } from '../publish.ts';
 
@@ -125,10 +124,6 @@ test('a chosen slug is sent as it is, and typing keeps to the slug rules', () =>
 
     assert.ok(read.ok);
     assert.equal(read.value.slug, 'x'.repeat(80));
-    assert.equal(slugDraft('-Aid to Éthiopie, '), 'aid-to-ethiopie-');
-    assert.equal(slugDraft('  '), '');
-    assert.equal(slugDraft('x'.repeat(90)).length, 80);
-    assert.equal(slugOf(slugDraft('-Aid to Éthiopie, ')), 'aid-to-ethiopie');
 });
 
 const view = (sources: { name: string; url: string | null; page: string | null }[], steps = 0) =>

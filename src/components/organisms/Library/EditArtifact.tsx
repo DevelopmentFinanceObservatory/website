@@ -144,7 +144,7 @@ const EditArtifact = ({ artifact }: { artifact: LibraryArtifact }) => {
                         {/* In the page from the start, so its line is announced. */}
                         <p className={styles.warning} role="status">
                             {confirming &&
-                                'Its title and text will be erased, and its URL will show that it was withdrawn. This cannot be undone.'}
+                                'The Library will erase its title and text, its URL will show that it was withdrawn, and its chart will be taken down or queued for removal. This cannot be undone.'}
                         </p>
                     </div>
                 </form>

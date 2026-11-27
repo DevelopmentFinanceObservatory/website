@@ -81,6 +81,7 @@ test('library store', async (t) => {
             slug: 'health-oda',
             title: 'Health ODA',
             created: false,
+            withdrawn: false,
         });
         assert.deepEqual(await store.artifactByPublishKey('key-a'), {
             slug: 'health-oda',
@@ -166,8 +167,22 @@ test('library store', async (t) => {
             )
         ).rows[0];
         const [listed] = (await store.listArtifacts()).filter((a) => a.slug === 'health-oda');
+        const topicLinks = async () =>
+            (
+                await admin.query<{ n: number }>(
+                    'select count(*)::int as n from library_artifact_topic where artifact_id = $1',
+                    [id],
+                )
+            ).rows[0].n;
 
         assert.ok(listed);
+        await store.addTopic('Health');
+        await admin.query(
+            `insert into library_artifact_topic (artifact_id, topic_id)
+             select $1, id from library_topic where label = 'Health'`,
+            [id],
+        );
+        assert.equal(await topicLinks(), 1);
         assert.equal('shareWriteToken' in listed, false);
 
         const withdrawn = await store.withdrawArtifact(id);
@@ -207,7 +222,7 @@ test('library store', async (t) => {
         assert.equal(erased.content, null);
         assert.deepEqual(erased.sources, []);
         assert.deepEqual(erased.steps, []);
-        assert.equal(erased.topics, 0);
+        assert.equal(await topicLinks(), 0);
         assert.equal(erased.withdrawn, true);
         assert.equal(erased.share_id, listed.shareId);
         assert.equal(erased.share_write_token, 'shw_1');
@@ -257,6 +272,14 @@ test('library store', async (t) => {
         assert.equal(await store.withdrawArtifact(id), 'not_found');
         assert.equal(await store.withdrawArtifact('no-such-id'), 'not_found');
 
+        // A retry of the withdrawn artifact's publish says so.
+        assert.deepEqual(await store.insertArtifact(input(key), 'admin'), {
+            slug: 'health-oda',
+            title: '',
+            created: false,
+            withdrawn: true,
+        });
+
         // The withdrawn slug stays taken.
         const again = await store.insertArtifact(input('key-i', 'Health ODA'), 'admin');
 
@@ -287,7 +310,7 @@ test('library store', async (t) => {
                 { ...input('key-k', 'Debt service'), slug: 'aid-chart' },
                 'admin',
             ),
-            { slug: 'aid-chart', title: 'Debt service', created: false },
+            { slug: 'aid-chart', title: 'Debt service', created: false, withdrawn: false },
         );
         assert.equal(
             await store.insertArtifact({ ...input('key-l'), slug: 'aid-chart' }, 'admin'),

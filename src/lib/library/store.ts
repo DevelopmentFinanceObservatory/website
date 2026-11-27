@@ -253,7 +253,10 @@ export const isSlugHeld = async (slug: string): Promise<boolean> =>
             .limit(1)
     ).length > 0;
 
-type Inserted = { slug: string; title: string; created: boolean } | 'unknown_topic' | 'slug_taken';
+type Inserted =
+    | { slug: string; title: string; created: boolean; withdrawn?: boolean }
+    | 'unknown_topic'
+    | 'slug_taken';
 
 /**
  * Publishes an artifact under the slug its publisher chose, or else under a
@@ -333,11 +336,20 @@ const insertOnce = (input: ArtifactInsert, publishedBy: string): Promise<Inserte
 
             if (!made) {
                 const [first] = await tx
-                    .select({ slug: libraryArtifact.slug, title: libraryArtifact.title })
+                    .select({
+                        slug: libraryArtifact.slug,
+                        title: libraryArtifact.title,
+                        withdrawnAt: libraryArtifact.withdrawnAt,
+                    })
                     .from(libraryArtifact)
                     .where(eq(libraryArtifact.publishKey, input.publishKey));
 
-                return { ...first, created: false };
+                return {
+                    slug: first.slug,
+                    title: first.title,
+                    created: false,
+                    withdrawn: first.withdrawnAt !== null,
+                };
             }
 
             if (!(await setTopics(tx, id, topics))) {

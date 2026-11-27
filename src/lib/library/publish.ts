@@ -316,14 +316,6 @@ export const slugOf = (title: string): string =>
         .slice(0, LIMITS.slug)
         .replace(/^-+|-+$/g, '') || 'artifact';
 
-/**
- * A slug as the publisher types it: `slugOf`'s rules, except that a
- * trailing hyphen stays, so the next word can follow it, and blank stays
- * blank. `slugOf` of the result is the slug to send.
- */
-export const slugDraft = (typed: string): string =>
-    slugWords(typed).replace(/^-+/, '').slice(0, LIMITS.slug);
-
 /** `base`, or `base-2`, `base-3`… the first that `taken` does not hold. */
 export const freeSlug = (base: string, taken: ReadonlySet<string>): string => {
     if (!taken.has(base)) {
