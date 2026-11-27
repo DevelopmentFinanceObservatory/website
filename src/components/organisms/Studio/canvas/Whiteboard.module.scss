@@ -316,6 +316,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    // A card on the Prompt canvas appears at once.
+    .boardPrompt article {
+        animation: none;
+    }
+
     .coming {
         transition: none;
         animation: none;

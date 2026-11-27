@@ -34,7 +34,7 @@ test('a Prompt layout event takes its listed members and nothing else', async (t
     const prompt = { variant: 'prompt' };
     const cases: [LayoutEventName, Record<string, unknown>, string | null][] = [
         ['studio.panel', { action: 'open', how: 'card', ...prompt }, null],
-        ['studio.panel_page', { page: 'overview', from: 'panel', ...prompt }, null],
+        ['studio.panel_page', { view: 'overview', from: 'panel', ...prompt }, null],
         ['studio.card_select', { selected: false, ...prompt }, null],
         ['studio.focus', { on: true, how: 'button', ...prompt }, null],
         ['studio.change', { step: 'open', kind: 'years', ...prompt }, null],
@@ -53,7 +53,7 @@ test('a Prompt layout event takes its listed members and nothing else', async (t
         ['studio.card_select', { selected: true, cardId: 'w-1', ...prompt }, '/cardId'],
         // Free text in a listed member.
         ['studio.change', { step: 'refused', kind: 'unit', why: 'No data', ...prompt }, '/why'],
-        ['studio.panel_page', { page: '/studio/abc', from: 'panel', ...prompt }, '/page'],
+        ['studio.panel_page', { view: '/studio/abc', from: 'panel', ...prompt }, '/view'],
         ['studio.focus', { on: 'yes', how: 'button', ...prompt }, '/on'],
         // A member missing, the variant included.
         ['studio.sheet', { sheet: 'reply', action: 'open', ...prompt }, '/how'],

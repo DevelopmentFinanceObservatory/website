@@ -177,3 +177,27 @@ test('data.view leaves the caller digest out of the forward', async () => {
     assert.equal('caller' in view, false);
     assert.equal(other.caller, props.caller);
 });
+
+test('no layout event member is a key the sinks set themselves, so each reaches PostHog as sent', async () => {
+    const { STUDIO_LAYOUT_EVENTS } = await import('../events/studioLayoutEvents.ts');
+    const { withInternalEng } = await import('../events/internalEng.ts');
+
+    for (const [name, members] of Object.entries(STUDIO_LAYOUT_EVENTS)) {
+        // Each member set to a value no sink writes.
+        const sent = Object.fromEntries(Object.keys(members).map((key) => [key, `sent:${key}`]));
+        const captured: Captured[] = [];
+
+        stubFetch(200, captured);
+        await sendEventToPosthog(
+            name as Parameters<typeof sendEventToPosthog>[0],
+            withInternalEng(sent, null, []),
+            { visitorId: 'v', userId: null, page: '/studio/x', headers: new Headers() },
+        );
+
+        const props = captured[0]?.body.properties as Record<string, unknown>;
+
+        for (const key of Object.keys(sent)) {
+            assert.equal(props[key], `sent:${key}`, `${name}.${key}`);
+        }
+    }
+});

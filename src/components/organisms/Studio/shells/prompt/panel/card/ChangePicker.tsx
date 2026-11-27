@@ -43,8 +43,9 @@ const ChangePicker = ({
 
         target?.focus({ preventScroll: true });
 
-        // Brings the frame, with its `Apply`, into the panel's view, and
-        // again when it changes size (a places list that loads). Only the
+        // Brings the frame, with its `Apply`, into the panel's view, and once
+        // more when it first changes size (a places list that loads); a
+        // reader who scrolls on is not pulled back after that. Only the
         // panel's own scroller moves. The back row pinned over its top hides
         // the first rows of its content, and the foot fade the last 40 px.
         const scroller = box?.closest<HTMLElement>('[data-sp-scroll]');
@@ -63,11 +64,35 @@ const ChangePicker = ({
                 scroller.scrollTop += Math.min(at.bottom - foot, at.top - top);
             }
         };
-        const watch = new ResizeObserver(reveal);
+        let sizes = 0;
+        const watch = new ResizeObserver(() => {
+            // The first report is the frame as it opened, which the reveal
+            // below has just shown.
+            sizes += 1;
 
+            if (sizes < 2) {
+                return;
+            }
+
+            reveal();
+            watch.disconnect();
+        });
+
+        // The reader's own scroll, press or typing ends the watch: from then
+        // on the panel stays where they put it.
+        const events = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'input'] as const;
+        const stop = () => watch.disconnect();
+
+        reveal();
         watch.observe(box);
 
-        return () => watch.disconnect();
+        for (const name of events) scroller.addEventListener(name, stop, { passive: true });
+
+        return () => {
+            watch.disconnect();
+
+            for (const name of events) scroller.removeEventListener(name, stop);
+        };
     }, []);
 
     return (

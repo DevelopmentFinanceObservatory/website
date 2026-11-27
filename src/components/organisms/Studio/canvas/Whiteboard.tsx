@@ -28,14 +28,7 @@ import { DRAG_THRESHOLD, selectionAfter, type SelectTarget, selectTarget } from 
 import CardBody from './cards/CardBody';
 import CardNote from './cards/CardNote';
 import type { CardExtras } from './cards/types';
-import {
-    type Coming,
-    comingNotice,
-    ghostLabel,
-    placeholderOf,
-    RESEAT_MS,
-    titledGhosts,
-} from './comingGhosts';
+import { type Coming, comingNotice, ghostLabel, RESEAT_MS, titledGhosts } from './comingGhosts';
 import {
     type CardView,
     effectiveKind,
@@ -263,7 +256,7 @@ const Whiteboard = ({
     // on a phone the cells are just smaller (useGridCell fits them to the
     // width) and the sheet pans.
     const blocks = placement === 'blocks';
-    const { slots, setSlots, ghosts, fitRows, raise } = useSlots({
+    const { slots, setSlots, ghosts, claimed, fitRows, raise } = useSlots({
         widgets,
         pinnedIds,
         views,
@@ -440,7 +433,9 @@ const Whiteboard = ({
         CELL,
         spawnWave,
         busy: () => dragging.isDragging() || pan.isPanning(),
-        quiet: (newest) => placeholderOf(newest.widget) !== null,
+        // The Prompt canvas: a card seated in a placeholder's rect moves the
+        // view no further, since it went to the placeholder.
+        quiet: prompt ? (newest) => claimed.has(newest.widget.id) : undefined,
         // A new block comes up to one cell under the top; a card joining a
         // block is revealed just enough to show above the prompt.
         placeView: blocks
@@ -527,10 +522,11 @@ const Whiteboard = ({
 
     // The sheet's foot never shortens: the prompt's height falls as its reply
     // sheet folds, and a shorter sheet would clamp a scroll that has already
-    // come to rest back by the difference.
+    // come to rest back by the difference. A new question and a resized window
+    // start the hold again.
     const heldSheet = useRef(0);
     const footHold = useRef(0);
-    const holdFoot = useEffectEvent(() => {
+    const holdFoot = useEffectEvent((restart = false) => {
         const board = boardRef.current;
         const probe = board?.querySelector<HTMLElement>('[data-board-foot]');
 
@@ -540,7 +536,7 @@ const Whiteboard = ({
 
         const height = probe.getBoundingClientRect().height;
 
-        footHold.current = Math.max(footHold.current, height);
+        footHold.current = restart ? height : Math.max(footHold.current, height);
         board.style.setProperty('--board-foot-held', `${footHold.current}px`);
     });
 
@@ -554,16 +550,23 @@ const Whiteboard = ({
         holdFoot();
 
         const watch = new ResizeObserver(() => holdFoot());
+        // A window of another size starts the hold again.
+        const resized = () => holdFoot(true);
 
         watch.observe(probe);
+        window.addEventListener('resize', resized);
 
-        return () => watch.disconnect();
+        return () => {
+            watch.disconnect();
+            window.removeEventListener('resize', resized);
+        };
     }, [dockAware]);
 
     // The live cards when the running turn began, to tell which landed in it.
     const turnStart = useRef<ReadonlySet<string> | null>(null);
     const markTurn = useEffectEvent(() => {
         heldSheet.current = 0;
+        holdFoot(true);
         turnStart.current = new Set(
             Object.entries(slots)
                 .filter(([, slot]) => !slot.leaving)
@@ -882,9 +885,11 @@ const Whiteboard = ({
                     </p>
                 </div>
             ))}
-            <span role="status" className={styles.comingStatus}>
-                {notice}
-            </span>
+            {prompt && (
+                <span role="status" className={styles.comingStatus}>
+                    {Object.values(ghosts).some((ghost) => !ghost.leaving) ? notice : ''}
+                </span>
+            )}
 
             {/* Slot-driven (not props-driven) so a replaced card keeps its DOM
                 node through the leaving fade — each slot carries its widget. */}

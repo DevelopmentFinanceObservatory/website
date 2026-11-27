@@ -15,6 +15,12 @@
     --dock-cap-normal: #{rem(280)};
     --dock-cap-words: #{rem(440)};
     --dock-plan-cap: #{rem(440)};
+
+    // A press area (../_touchTarget.scss) reaches at most half the gap the
+    // shell leaves between the dock and the panel above it, the least room
+    // between two of the dock's rows.
+
+    --hit-room-y: calc(var(--dock-gap, #{rem(10)}) / 2);
     --dock-ease: var(--ws-ease, cubic-bezier(0.22, 1, 0.36, 1));
     --dock-shadow-rest: 0 8px 28px rgb(47 47 43 / 16%), 0 1px 3px rgb(47 47 43 / 10%);
     --dock-shadow-open: 0 -2px 12px rgb(72 72 66 / 10%), 0 1px 2px rgb(72 72 66 / 6%);
@@ -92,7 +98,8 @@
     box-shadow: 0 2px 8px rgb(47 47 43 / 12%);
     transition: background-color 0.2s ease;
 
-    @include touch-target;
+    // Pills stand rem(6) apart (.pills).
+    @include touch-target($room-x: rem(3), $room-y: rem(3));
 
     @media (hover: hover) {
         &:hover {
@@ -262,6 +269,12 @@
         border: 0;
         border-radius: 0;
     }
+
+    // The wall's buttons (the Button atom's label, rem(11)) keep the text
+    // floor.
+    :is(button, a[href]) > span {
+        font-size: rem-floor(11);
+    }
 }
 
 .count {
@@ -349,7 +362,8 @@
     border-radius: rem(6);
     transition: background-color 0.25s ease;
 
-    @include touch-target;
+    // The field stands rem(10) from Send (.input).
+    @include touch-target($room-x: rem(5));
 
     @media (hover: hover) {
         &:hover {
@@ -439,7 +453,9 @@
     border-radius: rem(6);
     transition: background-color 0.2s ease;
 
-    @include touch-target;
+    // Row actions stand rem(6) apart (.rowActions), and above the field's
+    // own press area.
+    @include touch-target($room-x: rem(3), $room-y: rem(3));
 
     @media (hover: hover) {
         &:hover {
@@ -484,7 +500,8 @@
     border: 0;
     border-radius: rem(4);
 
-    @include touch-target;
+    // A head row's controls stand rem(4) apart (.headRow).
+    @include touch-target($room-x: rem(2));
 
     @media (hover: hover) {
         &:hover {
@@ -521,7 +538,8 @@
         height: rem(16);
     }
 
-    @include touch-target;
+    // A head row's controls stand rem(4) apart (.headRow).
+    @include touch-target($room-x: rem(2));
 
     @media (hover: hover) {
         &:hover {
@@ -574,7 +592,8 @@
     background: none;
     border: 0;
 
-    @include touch-target;
+    // The clear button's margin leaves rem(2) between it and the title.
+    @include touch-target($room-x: rem(1));
 
     &:focus-visible {
         outline: 1px solid var(--color-charcoal);
@@ -603,7 +622,8 @@
         height: rem(12);
     }
 
-    @include touch-target;
+    // The clear button's margin leaves rem(2) between it and the title.
+    @include touch-target($room-x: rem(1));
 
     @media (hover: hover) {
         &:hover {
@@ -739,7 +759,8 @@
     border: 0;
     border-radius: rem(6);
 
-    @include touch-target;
+    // A head row's controls stand rem(4) apart (.headRow).
+    @include touch-target($room-x: rem(2));
 
     @media (hover: hover) {
         &:hover {
@@ -777,6 +798,8 @@
 // timeline and no fade. On a short window the whole plan sheet scrolls
 // (.planSheet below).
 
+$dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), transparent);
+
 @property --dock-fade {
     syntax: "<length>";
     inherits: false;
@@ -795,15 +818,24 @@
 
 @supports (animation-timeline: scroll()) {
     .sheet .scroll:not(.planBody, .clarify) {
-        mask-image: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), transparent);
+        mask-image: $dock-fade-mask;
         animation: dock-fade-foot linear both;
         animation-timeline: scroll(self);
         animation-range: calc(100% - #{rem(24)}) 100%;
+
+        // The focus ring (.scroll, 2 px inside the edge) stays whole: two more
+        // layers keep the sides and the foot opaque under the fade.
+        &:focus-visible {
+            mask-image:
+                $dock-fade-mask,
+                linear-gradient(to right, #000 2px, transparent 2px calc(100% - 2px), #000 0),
+                linear-gradient(to top, #000 2px, transparent 0);
+        }
     }
 
     @media (max-height: 520px) {
         .planSheet {
-            mask-image: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), transparent);
+            mask-image: $dock-fade-mask;
             animation: dock-fade-foot linear both;
             animation-timeline: scroll(self);
             animation-range: calc(100% - #{rem(24)}) 100%;

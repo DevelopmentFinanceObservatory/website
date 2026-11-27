@@ -102,3 +102,15 @@ test('a card a question drew in another’s place starts afresh, so its reply ha
 
     assert.equal(changeNote(asked, titleOf), null);
 });
+
+test('the note stands on the rows the change recorded, once the card’s offers are gone', () => {
+    const [b] = changed(drawn('a', 1, 2016, 2024), drawn('b', 2, 2010, 2020, 'Uganda'));
+
+    assert.ok(b && b.kind !== 'text');
+
+    // A reload without a session, a left session or a stale refusal drops
+    // the offers; the card still shows the change.
+    const bare = { ...b, cardChanges: undefined };
+
+    assert.equal(changeNote([bare], titleOf), 'This card now shows Uganda, 2010 to 2020.');
+});

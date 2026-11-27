@@ -28,9 +28,10 @@ export const STUDIO_LAYOUT_EVENTS = {
     },
     // A panel page opened: from the panel's own rows, links and back
     // control (`overview` is the way back to it), or from a card's
-    // `More info` (`card`) or `View plan` (`plan`).
+    // `More info` (`card`) or `View plan` (`plan`). The member is `view`,
+    // since every sink sets `page` itself, to the request's path.
     'studio.panel_page': {
-        page: ['overview', 'turn', 'stage', 'plan', 'card', 'source'],
+        view: ['overview', 'turn', 'stage', 'plan', 'card', 'source'],
         from: ['panel', 'card'],
     },
     // A card selected on the canvas, or its selection cleared.

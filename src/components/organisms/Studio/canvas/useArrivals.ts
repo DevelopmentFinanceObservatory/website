@@ -97,7 +97,7 @@ export const useArrivals = ({
         }
 
         if (left !== scroller.scrollLeft || top !== scroller.scrollTop) {
-            scrollView(scroller, { left, top, behavior: 'smooth' });
+            scroller.scrollTo({ left, top, behavior: 'smooth' });
         }
         // spawnWave/busy/placeView only read refs and the DOM; slots (and the
         // origin) are the real trigger.

@@ -189,7 +189,7 @@ test('a refused change shows the refusal on the row that asked', () => {
                 dropped: [{ card: 'c1b', row: 'years', detail: 'Gone.' }],
             }),
         ],
-        [{ state: 'idle' }, { state: 'refused', detail: 'Gone.' }],
+        [{ state: 'idle' }, { state: 'refused', detail: 'Gone.', dropped: true }],
     );
 });
 
@@ -392,13 +392,14 @@ test('a card offers its years and one places row per role, labelled from the rol
     assert.equal(label, roleLabel('anotherRole', false));
     assert.notEqual(label, roleLabel('origin', false));
 
-    // The data's own word names the role: plural for several places,
-    // singular for one, either form standing in for a missing one.
+    // The data's own word names the role in the form the row needs: plural
+    // for several places, singular for one. Without that form, the page's
+    // own word.
     for (const [multiple, given, expected] of [
         [true, { singular: 'debtor', plural: 'debtors' }, 'Debtors'],
         [false, { singular: 'debtor', plural: 'debtors' }, 'Debtor'],
-        [true, { singular: 'debtor' }, 'Debtor'],
-        [false, { plural: 'debtors' }, 'Debtors'],
+        [true, { singular: 'debtor' }, roleLabel('origin', true)],
+        [false, { plural: 'debtors' }, roleLabel('origin', false)],
         [true, undefined, roleLabel('origin', true)],
     ] as const) {
         assert.equal(roleLabel('origin', multiple, given), expected);

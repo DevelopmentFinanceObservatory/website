@@ -89,14 +89,14 @@ const PlacesPick = ({
         return () => stop.abort();
     }, [read, componentId, role, attempt, announce]);
 
-    // The places the card shows and those the reader has ticked since open
-    // lead the list, chosen ones first, whatever the filter; the rest follow
-    // in the service's order.
+    // The places the card shows lead the list, then those the reader has
+    // ticked since the picker opened, in the order they were ticked; the rest
+    // follow in the service's order. A tick or an untick moves nothing once a
+    // place has joined the lead, so the row under the pointer stays.
     const [ticked, setTicked] = useState<PlaceOption[]>([]);
     const isPicked = (place: PlaceOption) => picked.some((other) => other.id === place.id);
-    const lead = pickablePlaces(shown, ticked);
     const places = pickablePlaces(
-        [...lead.filter(isPicked), ...lead.filter((place) => !isPicked(place))],
+        pickablePlaces(shown, ticked),
         list.state === 'ready' ? list.options : [],
     );
     const matching = places.filter((place) => placeMatches(place, filter));

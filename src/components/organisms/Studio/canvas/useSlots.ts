@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Placement } from './blocks';
 import {
@@ -12,8 +12,8 @@ import {
     settleAround,
     type Slots,
 } from './layout';
-import { type Coming, type Ghosts, placeGhosts, placeholderOf } from './comingGhosts';
-import { placeSlots } from './placeSlots';
+import type { Coming } from './comingGhosts';
+import { type Board, EMPTY_BOARD, placeBoard, pruneBoard, updateSlots } from './slotsBoard';
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
@@ -64,16 +64,15 @@ export const useSlots = ({
     replacedIds,
     coming = NONE,
 }: UseSlotsArgs) => {
-    const [slots, setSlots] = useState<Slots>({});
-    const [ghosts, setGhosts] = useState<Ghosts>({});
-    // The placeholders as of the last placement, which the next one reads.
-    const ghostsRef = useRef<Ghosts>({});
-    // The slots as of the last render, which a placement starts from.
-    const slotsRef = useRef<Slots>(slots);
-
-    useEffect(() => {
-        slotsRef.current = slots;
-    });
+    // One state for the cards and the placeholders (slotsBoard.ts): every
+    // change is a functional update of it, so a fit that commits between two
+    // placements is never overwritten.
+    const [board, setBoard] = useState<Board>(EMPTY_BOARD);
+    const { slots, ghosts, claimed } = board;
+    const setSlots = useCallback(
+        (update: SetStateAction<Slots>) => setBoard((prev) => updateSlots(prev, update)),
+        [],
+    );
     const zRef = useRef(1);
     const leaveTimersRef = useRef<number[]>([]);
 
@@ -89,56 +88,25 @@ export const useSlots = ({
         }
 
         const frame = requestAnimationFrame(() => {
-            // The cards and the placeholders are placed in one update, so a
-            // card that lands takes its placeholder's place in the frame the
-            // placeholder goes.
-            const placed = placeSlots(slotsRef.current, {
-                widgets,
-                pinnedIds,
-                views,
-                initialLayout,
-                cols: viewCols,
-                placement,
-                replacedIds,
-                nextZ: () => zRef.current++,
-                ghosts: ghostsRef.current,
-            });
-            const claimed = new Set(widgets.flatMap((widget) => placeholderOf(widget) ?? []));
-            const standing = placeGhosts({
-                current: ghostsRef.current,
-                coming,
-                claimed,
-                slots: placed,
-                cols: viewCols,
-                placement,
-                now: Date.now(),
-            });
+            const now = Date.now();
 
-            slotsRef.current = placed;
-            ghostsRef.current = standing;
-            setSlots(placed);
-            setGhosts(standing);
+            setBoard((prev) =>
+                placeBoard(prev, {
+                    widgets,
+                    pinnedIds,
+                    views,
+                    initialLayout,
+                    cols: viewCols,
+                    placement,
+                    replacedIds,
+                    nextZ: () => zRef.current++,
+                    coming,
+                    now,
+                }),
+            );
 
             // Prune whatever finished fading — a no-op when nothing left.
-            const timer = window.setTimeout(() => {
-                setSlots((prev) => {
-                    const entries = Object.entries(prev);
-                    const kept = entries.filter(([, slot]) => !slot.leaving);
-
-                    return kept.length === entries.length ? prev : Object.fromEntries(kept);
-                });
-                setGhosts((prev) => {
-                    const entries = Object.entries(prev);
-                    const kept = entries.filter(([, ghost]) => !ghost.leaving);
-
-                    ghostsRef.current =
-                        kept.length === entries.length ? prev : Object.fromEntries(kept);
-
-                    return ghostsRef.current;
-                });
-            }, LEAVE_MS);
-
-            leaveTimersRef.current.push(timer);
+            leaveTimersRef.current.push(window.setTimeout(() => setBoard(pruneBoard), LEAVE_MS));
         });
 
         return () => cancelAnimationFrame(frame);
@@ -187,15 +155,18 @@ export const useSlots = ({
                 return settleAround({ ...prev, [id]: { ...slot, h } }, [id], pinnedIds, true);
             });
         },
-        [pinnedIds, views],
+        [pinnedIds, views, setSlots],
     );
 
     // Lift a card above everything else (a grab): it stays there.
-    const raise = useCallback((id: string) => {
-        setSlots((prev) =>
-            prev[id] ? { ...prev, [id]: { ...prev[id], z: zRef.current++ } } : prev,
-        );
-    }, []);
+    const raise = useCallback(
+        (id: string) => {
+            setSlots((prev) =>
+                prev[id] ? { ...prev, [id]: { ...prev[id], z: zRef.current++ } } : prev,
+            );
+        },
+        [setSlots],
+    );
 
-    return { slots, setSlots, ghosts, fitRows, raise };
+    return { slots, setSlots, ghosts, claimed, fitRows, raise };
 };

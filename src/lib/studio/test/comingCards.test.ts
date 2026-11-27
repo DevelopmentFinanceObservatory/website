@@ -14,7 +14,7 @@ import {
     plannedCards,
     savedCards,
 } from '../comingCards.ts';
-import type { ActivityStepFrame, ComponentCreated, PlanApproved, StudioFrame } from '../wire.ts';
+import type { ActivityStepFrame, ComponentCreated, StudioFrame } from '../wire.ts';
 
 const read = <T>(name: string): T =>
     JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')) as T;
@@ -84,55 +84,84 @@ test('an announced entry of another type, or without an id or a title, is droppe
     assert.deepEqual(comingEntriesOf(null), []);
 });
 
-test('a plan shows one planned place per answering step until the step draws or its line opens', () => {
+// The recorded plan run's approval stream (e2e/studio-replay/fixtures/
+// plan.json), with `coming` added to its drawing line as the harness sends
+// it there and nowhere else.
+const planRun = (): StudioFrame[] => {
+    const recorded = JSON.parse(
+        readFileSync(
+            new URL('../../../../e2e/studio-replay/fixtures/plan.json', import.meta.url),
+            'utf8',
+        ),
+    ) as { turns: { segments: { frames: StudioFrame[] }[] }[] };
+    const frames = recorded.turns[0]?.segments[3]?.frames ?? [];
+
+    return frames.map((frame) =>
+        frame.event === 'activity.step' &&
+        frame.tool === 'make_charts' &&
+        frame.status === 'running'
+            ? {
+                  ...frame,
+                  coming: [
+                      { placeholder_id: `${frame.step_id}.0`, type: 'line_chart', title: 'Gates' },
+                      { placeholder_id: `${frame.step_id}.1`, type: 'line_chart', title: 'G7' },
+                  ],
+              }
+            : frame,
+    );
+};
+
+test('a running plan shows its answering step as planned until the turn’s first drawing line, which takes its place', () => {
+    const frames = planRun();
+    const drawingAt = frames.findIndex(
+        (frame) => frame.event === 'activity.step' && Array.isArray(frame.coming),
+    );
+    const at = (count: number) => after(frames.slice(0, count));
+    const shown = (state: ComingState) =>
+        comingCards(state.announced, plannedCards({ state, waiting: null, cards: [] })).map(
+            ({ id, type }) => [id, type],
+        );
+
+    assert.ok(drawingAt > 1);
+    // From the approval until the drawing line: one planned place for s4.
+    assert.deepEqual(shown(at(1)), [['planned:plan_replay_gates_g7/s4', null]]);
+    assert.deepEqual(shown(at(drawingAt)), [['planned:plan_replay_gates_g7/s4', null]]);
+    // The drawing line's cards replace it, with no plan-id match.
+    assert.deepEqual(shown(at(drawingAt + 1)), [
+        ['s8.0', 'line_chart'],
+        ['s8.1', 'line_chart'],
+    ]);
+    // Its line closes, and the stream's `done` ends the run.
+    assert.deepEqual(shown(at(drawingAt + 2)), []);
+    assert.deepEqual(shown(at(frames.length)), []);
+});
+
+test('a waiting plan shows its answering step as planned, and a card drawn for a running plan’s step ends it', () => {
     const steps = [
         { id: 's1', label: 'Find aid' },
         { id: 's2', label: 'Chart aid', gives_answer: true },
     ];
-    const waiting = { steps, answerStepId: 's2' };
     const offered = after([read<StudioFrame>('event-03-plan-proposed.json')]);
 
     assert.deepEqual(
-        plannedCards({ state: offered, waiting, cards: [] }).map(({ id, type, turn }) => [
-            id,
-            type,
-            turn,
-        ]),
+        plannedCards({ state: offered, waiting: { steps, answerStepId: 's2' }, cards: [] }).map(
+            ({ id, type, turn }) => [id, type, turn],
+        ),
         [['planned:s2', null, 2]],
     );
     assert.deepEqual(plannedCards({ state: NO_COMING, waiting: null, cards: [] }), []);
 
-    const approved: PlanApproved = {
-        event: 'plan.approved',
-        seq: 1,
-        plan_version_id: 'pv1',
-        version: 1,
-        title: 'Aid',
-        steps,
-        choices: [],
-    };
-    const running = after([approved]);
-    const planned = (state: ComingState, cards: Widget[] = []) =>
-        plannedCards({ state, waiting: null, cards }).map((card) => card.id);
-
-    assert.deepEqual(planned(running), ['planned:pv1/s2']);
-
-    // Its drawing line opens: its announced places replace the planned one.
-    const opened = comingAfter(running, { ...line, plan_version_id: 'pv1', plan_step_id: 's2' }, 2);
-
-    assert.deepEqual(planned(opened), []);
-    assert.deepEqual(
-        comingCards(opened.announced, []).map((card) => card.id),
-        ['s1.0', 's1.1'],
-    );
-
-    // A card drawn for the step ends it too.
-    const card = {
-        kind: 'text',
-        id: 't',
-        title: 't',
-        body: '',
-    } satisfies Widget;
+    const running = after([
+        {
+            event: 'plan.approved',
+            seq: 1,
+            plan_version_id: 'pv1',
+            version: 1,
+            title: 'Aid',
+            steps,
+            choices: [],
+        },
+    ]);
     const drawn = {
         kind: 'key_number',
         id: 'c1',
@@ -140,11 +169,11 @@ test('a plan shows one planned place per answering step until the step draws or 
         value: '1',
         planStep: { plan_version_id: 'pv1', plan_step_id: 's2' },
     } satisfies Widget;
+    const planned = (cards: Widget[]) =>
+        plannedCards({ state: running, waiting: null, cards }).map((card) => card.id);
 
-    assert.deepEqual(planned(running, [card]), ['planned:pv1/s2']);
-    assert.deepEqual(planned(running, [drawn]), []);
-    // The stream's end leaves no running plan.
-    assert.deepEqual(planned(comingEnded(running)), []);
+    assert.deepEqual(planned([]), ['planned:pv1/s2']);
+    assert.deepEqual(planned([drawn]), []);
 });
 
 test('no placeholders read as the one empty list', () => {

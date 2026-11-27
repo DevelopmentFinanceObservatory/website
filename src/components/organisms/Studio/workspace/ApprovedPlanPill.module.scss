@@ -55,6 +55,7 @@
 .title {
     @include font-size(12px, 1.1);
 
+    font-size: max(var(--text-floor, 0px), #{rem(12)});
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -70,6 +71,7 @@
     @include flex(row, center, center);
     @include font-size(11px, 1.09);
 
+    font-size: max(var(--text-floor, 0px), #{rem(11)});
     flex-shrink: 0;
     height: rem(20);
     padding: 0 rem(5);

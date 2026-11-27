@@ -46,18 +46,22 @@ export type ComingCard = {
     stepId: string;
 };
 
-/** What the stream has told the page: the announced placeholders, the plan
- *  steps whose drawing line has opened (`<plan_version_id>/<step id>`), the
- *  approved plan the running turn carries out, and the page turn of the
- *  last plan offered (`planTurn`), whose placeholders a waiting plan shows. */
+/** What the stream has told the page: the announced placeholders, the
+ *  approved plan the running turn carries out (`drawing` once a drawing
+ *  line of that turn announced cards), and the page turn of the last plan
+ *  offered (`planTurn`), whose placeholders a waiting plan shows. */
 export type ComingState = {
     announced: readonly ComingCard[];
-    opened: readonly string[];
-    running: { turn: number; planVersionId: string; steps: readonly PlanApprovedStep[] } | null;
+    running: {
+        turn: number;
+        planVersionId: string;
+        steps: readonly PlanApprovedStep[];
+        drawing: boolean;
+    } | null;
     planTurn: number;
 };
 
-export const NO_COMING: ComingState = { announced: [], opened: [], running: null, planTurn: 0 };
+export const NO_COMING: ComingState = { announced: [], running: null, planTurn: 0 };
 
 /** The one empty list of placeholders. */
 export const NONE_COMING: readonly ComingCard[] = [];
@@ -115,19 +119,17 @@ export const comingAfter = (state: ComingState, frame: StudioFrame, turn: number
             const fresh = entries
                 .filter((entry) => !held.has(entry.id))
                 .map((entry) => ({ ...entry, turn, stepId: frame.step_id }));
-            const version = frame.plan_version_id;
-            const step = frame.plan_step_id;
-            const key =
-                typeof version === 'string' && version && typeof step === 'string' && step
-                    ? stepKey(version, step)
-                    : null;
+            // The first drawing line of a running plan's turn retires its
+            // planned placeholders: the harness names no plan on a drawing
+            // line, so the announced cards stand for the plan's from then on.
+            const drawing =
+                state.running && state.running.turn === turn && !state.running.drawing
+                    ? { ...state.running, drawing: true }
+                    : state.running;
 
-            const opened =
-                key && !state.opened.includes(key) ? [...state.opened, key] : state.opened;
-
-            return fresh.length === 0 && opened === state.opened
+            return fresh.length === 0 && drawing === state.running
                 ? state
-                : { ...state, announced: [...state.announced, ...fresh], opened };
+                : { ...state, announced: [...state.announced, ...fresh], running: drawing };
         }
         case 'component.created': {
             const id = placeholderOf(frame.created_from);
@@ -137,7 +139,12 @@ export const comingAfter = (state: ComingState, frame: StudioFrame, turn: number
         case 'plan.approved':
             return {
                 ...state,
-                running: { turn, planVersionId: frame.plan_version_id, steps: frame.steps },
+                running: {
+                    turn,
+                    planVersionId: frame.plan_version_id,
+                    steps: frame.steps,
+                    drawing: false,
+                },
             };
         case 'plan.proposed': {
             const ended = comingEnded(state);
@@ -156,9 +163,9 @@ export const comingAfter = (state: ComingState, frame: StudioFrame, turn: number
 /** The state once the stream ended or dropped: no announced placeholder
  *  and no running plan stays. */
 export const comingEnded = (state: ComingState): ComingState =>
-    state.announced.length === 0 && state.running === null && state.opened.length === 0
+    state.announced.length === 0 && state.running === null
         ? state
-        : { ...state, announced: [], opened: [], running: null };
+        : { ...state, announced: [], running: null };
 
 // The step that answers a plan: the one flagged `gives_answer`, else the
 // last step.
@@ -171,9 +178,10 @@ const answering = <TStep extends { gives_answer?: boolean | null }>(
 };
 
 /** The planned placeholders: one per answering step of the running plan
- *  that has drawn no card (`cards`' `planStep`) and whose drawing line has
- *  not opened, else, while no plan runs, one per answering step of the plan
- *  waiting on approval (`waiting`, offered on the state's `planTurn`). */
+ *  that has drawn no card (`cards`' `planStep`), until the turn's first
+ *  drawing line announces cards, else, while no plan runs, one per
+ *  answering step of the plan waiting on approval (`waiting`, offered on
+ *  the state's `planTurn`). */
 export const plannedCards = ({
     state,
     waiting,
@@ -184,6 +192,8 @@ export const plannedCards = ({
     cards: readonly Widget[];
 }): ComingCard[] => {
     const { running } = state;
+
+    if (running?.drawing) return [];
 
     if (running) {
         const drawn = new Set(
@@ -197,7 +207,7 @@ export const plannedCards = ({
         return answering(running.steps).flatMap((step) => {
             const key = step.id ? stepKey(running.planVersionId, step.id) : null;
 
-            return key && !drawn.has(key) && !state.opened.includes(key)
+            return key && !drawn.has(key)
                 ? [
                       {
                           id: `planned:${key}`,
