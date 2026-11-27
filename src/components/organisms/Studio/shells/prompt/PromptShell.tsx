@@ -9,7 +9,7 @@ import {
     useSyncExternalStore,
 } from 'react';
 
-import Whiteboard from '../../canvas/Whiteboard';
+import Whiteboard, { type PromptCanvas } from '../../canvas/Whiteboard';
 import GuestWall from '../../GuestWall';
 import { useStudioModel } from '../../hooks/studioContext';
 import StudioLanding from '../../landing/StudioLanding';
@@ -184,6 +184,59 @@ const PromptStage = () => {
             ? (PANEL_WIDTH + SHELL_GUTTER) * unit
             : 0;
 
+    const planOf = links.planOf;
+    // `titleOf` is a new function on every render; the ref keeps `selectCard`
+    // stable while it reads the current titles.
+    const titleOfRef = useRef(canvas.titleOf);
+
+    useLayoutEffect(() => {
+        titleOfRef.current = canvas.titleOf;
+    });
+
+    const selectCard = useCallback(
+        (id: string | null) => setEditTarget(id ? { id, title: titleOfRef.current(id) } : null),
+        [setEditTarget],
+    );
+    const pointCard = useCallback(
+        (id: string | null) => dispatch({ type: 'point', card: id }),
+        [dispatch],
+    );
+    const showPlan = useCallback(
+        (id: string) => {
+            const plan = planOf(id);
+
+            if (plan) {
+                dispatch({ type: 'panel.show', page: { kind: 'plan', turn: plan.turn } });
+            }
+        },
+        [planOf, dispatch],
+    );
+    const editId = editTarget?.id ?? null;
+    const promptCanvas = useMemo<PromptCanvas>(
+        () => ({
+            reserveRight,
+            selectedId: editId,
+            onSelect: selectCard,
+            heldId: heldCard,
+            litIds,
+            onPoint: pointCard,
+            viewPlanIds,
+            onViewPlan: showPlan,
+            replying,
+        }),
+        [
+            reserveRight,
+            editId,
+            selectCard,
+            heldCard,
+            litIds,
+            pointCard,
+            viewPlanIds,
+            showPlan,
+            replying,
+        ],
+    );
+
     // The landing's prompt travels into the dock from the moment the
     // landing starts to leave.
     const [travelling, setTravelling] = useState(false);
@@ -295,28 +348,7 @@ const PromptStage = () => {
                                 onCardInfo={(id) =>
                                     dispatch({ type: 'panel.show', page: { kind: 'card', id } })
                                 }
-                                replying={replying}
-                                placement="blocks"
-                                dockAware
-                                reserveRight={reserveRight}
-                                selectedId={editTarget?.id ?? null}
-                                onSelect={(id) =>
-                                    setEditTarget(id ? { id, title: canvas.titleOf(id) } : null)
-                                }
-                                heldId={heldCard}
-                                litIds={litIds}
-                                onPoint={(id) => dispatch({ type: 'point', card: id })}
-                                viewPlanIds={viewPlanIds}
-                                onViewPlan={(id) => {
-                                    const plan = links.planOf(id);
-
-                                    if (plan) {
-                                        dispatch({
-                                            type: 'panel.show',
-                                            page: { kind: 'plan', turn: plan.turn },
-                                        });
-                                    }
-                                }}
+                                prompt={promptCanvas}
                             />
                         </div>
                         <div className={styles.dockFrame}>

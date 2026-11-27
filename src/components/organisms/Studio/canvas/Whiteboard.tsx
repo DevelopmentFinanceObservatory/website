@@ -69,6 +69,38 @@ const HELD_SETTLE_MS = 320;
 const scrollBehavior = (): ScrollBehavior =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
+/**
+ * What the Prompt layout adds to the canvas. Its presence puts each
+ * question's cards in a block of their own below the earlier ones
+ * (`placement: 'blocks'`, blocks.ts) and makes the canvas dock-aware: a
+ * prompt floats over the canvas's foot, so the sheet runs on below its last
+ * row by the prompt's height (--dock-rest, --dock-current on an ancestor),
+ * and the bottom beacons and the arrival scroll keep clear of it.
+ */
+export type PromptCanvas = {
+    // Px the session panel is about to take at the right: fresh cards are
+    // placed against the narrower width. 0 while the panel is open already.
+    reserveRight: number;
+    // The selected card, whose value the parent owns. With `onSelect` each
+    // card is a toggle: a press on it away from its controls, or Enter or
+    // Space, selects or clears it, and a press on the empty sheet clears.
+    selectedId: string | null;
+    onSelect: (id: string | null) => void;
+    // The card the session panel shows: outlined, and brought into view.
+    heldId: string | null;
+    // Cards outlined faintly as the same plan's cards.
+    litIds: readonly string[];
+    // The card the pointer or keyboard focus rests on, after POINT_REST_MS;
+    // null at once when it leaves. Silent while a card menu is open.
+    onPoint: (id: string | null) => void;
+    // Cards a research plan made, whose menu opens with View Research Plan.
+    viewPlanIds: ReadonlySet<string>;
+    onViewPlan: (id: string) => void;
+    // A question's turn is running. When it ends, the view brings the block
+    // its cards landed in to one cell under the top.
+    replying: boolean;
+};
+
 export type WhiteboardProps = {
     widgets: Widget[];
     filter?: string;
@@ -135,38 +167,9 @@ export type WhiteboardProps = {
     // card with the share's id and creation time. Absent for a snapshot and
     // in the owner's Studio.
     live?: LiveCanvas;
-    // The Prompt layout's canvas. Every prop below is absent in the classic
-    // layout, which then behaves as it always has.
-    //
-    // Where a fresh card lands: `blocks` puts each question's cards in a
-    // block of their own below the earlier ones (blocks.ts).
-    placement?: Placement;
-    // A prompt floats over the canvas's foot: the sheet runs on below its
-    // last row by the prompt's height (--dock-rest, --dock-current on an
-    // ancestor), and the bottom beacons and the arrival scroll keep clear of
-    // it.
-    dockAware?: boolean;
-    // Px the session panel is about to take at the right: fresh cards are
-    // placed against the narrower width. 0 while the panel is open already.
-    reserveRight?: number;
-    // The selected card, whose value the parent owns. With `onSelect` each
-    // card is a toggle: a press on it away from its controls, or Enter or
-    // Space, selects or clears it, and a press on the empty sheet clears.
-    selectedId?: string | null;
-    onSelect?: (id: string | null) => void;
-    // The card the session panel shows: outlined, and brought into view.
-    heldId?: string | null;
-    // Cards outlined faintly as the same plan's cards.
-    litIds?: readonly string[];
-    // The card the pointer or keyboard focus rests on, after POINT_REST_MS;
-    // null at once when it leaves. Silent while a card menu is open.
-    onPoint?: (id: string | null) => void;
-    // Cards a research plan made, whose menu opens with View Research Plan.
-    viewPlanIds?: ReadonlySet<string>;
-    onViewPlan?: (id: string) => void;
-    // A question's turn is running. When it ends, the view brings the block
-    // its cards landed in to one cell under the top.
-    replying?: boolean;
+    // The Prompt layout's canvas. Absent in the classic layout, which then
+    // behaves as it always has.
+    prompt?: PromptCanvas;
 };
 
 /**
@@ -207,21 +210,22 @@ const Whiteboard = ({
     resizable = false,
     centerSingle = false,
     live,
-    placement = 'pack',
-    dockAware = false,
-    reserveRight = 0,
-    selectedId = null,
-    onSelect,
-    heldId = null,
-    litIds,
-    onPoint,
-    viewPlanIds,
-    onViewPlan,
-    replying,
+    prompt,
 }: WhiteboardProps) => {
     // Fluid cell: GRID_CELL scaled by the live root font-size. All cell↔px
     // math uses it; `f` scales the raw-px interaction constants (scroll
     // zones, beacon spacing, chart fonts) by the same factor.
+    const dockAware = !!prompt;
+    const placement: Placement = prompt ? 'blocks' : 'pack';
+    const reserveRight = prompt?.reserveRight ?? 0;
+    const selectedId = prompt?.selectedId ?? null;
+    const onSelect = prompt?.onSelect;
+    const heldId = prompt?.heldId ?? null;
+    const litIds = prompt?.litIds;
+    const onPoint = prompt?.onPoint;
+    const viewPlanIds = prompt?.viewPlanIds;
+    const onViewPlan = prompt?.onViewPlan;
+    const replying = prompt?.replying;
     const CELL = useGridCell();
     const f = CELL / GRID_CELL;
     const boardRef = useRef<HTMLDivElement>(null);
