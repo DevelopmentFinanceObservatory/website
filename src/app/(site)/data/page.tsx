@@ -5,6 +5,7 @@ import DataSearch from '@/components/organisms/DataSearch/DataSearch';
 import { getSession } from '@/lib/auth/session';
 import { dataPageMetadata } from '@/lib/crawl';
 import { loadSearchCatalogue } from '@/lib/search/catalogueLoader';
+import { visitorIsGuest } from '@/lib/search/studioRoute';
 
 // Rendered per request, so `next build` does not depend on the API
 // answering. The catalogue read revalidates every five minutes, so the API
@@ -21,14 +22,18 @@ export const generateMetadata = async ({ searchParams }: DataPageProps): Promise
 // the starting point render with no search call. DataSearch has no Suspense
 // boundary: the route is dynamic, so useSearchParams reads the URL during
 // the server render and the first HTML holds the whole view. The session
-// read tells DataSearch whether a move to Studio spends a guest prompt.
+// read tells DataSearch whether a move to Studio spends a guest prompt, and
+// a read that fails renders the page for a guest.
 const DataPage = async () => {
-    const [catalogue, session] = await Promise.all([loadSearchCatalogue(), getSession()]);
+    const [catalogue, guest] = await Promise.all([
+        loadSearchCatalogue(),
+        visitorIsGuest(getSession),
+    ]);
 
     return (
         <RouteMove page="data">
             <main>
-                <DataSearch catalogue={catalogue} guest={!session} />
+                <DataSearch catalogue={catalogue} guest={guest} />
             </main>
         </RouteMove>
     );

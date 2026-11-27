@@ -5,7 +5,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { routeMove, studioRoute } from '../studioRoute.ts';
+import {
+    answerTakesOffer,
+    guestPromptsSeen,
+    routeMove,
+    studioRoute,
+    visitorIsGuest,
+} from '../studioRoute.ts';
 import type { StudioRoute } from '../types.ts';
 
 test('studioRoute reads a Studio route and refuses anything else', async (t) => {
@@ -67,5 +73,58 @@ test('routeMove moves on an auto decline, and offers Studio otherwise', async (t
 
     for (const [name, input, expected] of cases) {
         await t.test(name, () => assert.equal(routeMove(input), expected));
+    }
+});
+
+test('answerTakesOffer waits for the answer and leaves an analysis decline its own button', async (t) => {
+    const cases: [string, Parameters<typeof answerTakesOffer>[0], boolean][] = [
+        ['no answer yet', null, false],
+        ['a resolution', { kind: 'resolution' }, true],
+        ['a catalogue answer', { kind: 'catalogue' }, true],
+        ['an out_of_scope decline', { kind: 'declined', reason: 'out_of_scope' }, true],
+        ['a requires_analysis decline', { kind: 'declined', reason: 'requires_analysis' }, false],
+    ];
+
+    for (const [name, answer, expected] of cases) {
+        await t.test(name, () => assert.equal(answerTakesOffer(answer), expected));
+    }
+});
+
+test('guestPromptsSeen reads a guest count, leaves storage alone for an account, and survives blocked storage', () => {
+    const reads: string[] = [];
+    const storage = () => ({
+        getItem: (key: string) => {
+            reads.push(key);
+
+            return '3';
+        },
+    });
+    const blocked = () => {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+
+    assert.deepEqual(
+        [
+            guestPromptsSeen({ guest: true, storage }),
+            guestPromptsSeen({ guest: false, storage }),
+            guestPromptsSeen({ guest: true, storage: blocked }),
+        ],
+        [3, 0, 0],
+    );
+    assert.equal(reads.length, 1);
+});
+
+test('visitorIsGuest counts a failed session read as a guest', async (t) => {
+    const cases: [string, () => Promise<unknown>, boolean][] = [
+        ['no session', async () => null, true],
+        ['a session', async () => ({ user: { id: 'u1' } }), false],
+        ['a failed read', async () => Promise.reject(new Error('auth database down')), true],
+    ];
+
+    for (const [name, read, expected] of cases) {
+        await t.test(name, async () => {
+            t.mock.method(console, 'error', () => {});
+            assert.equal(await visitorIsGuest(read), expected);
+        });
     }
 });

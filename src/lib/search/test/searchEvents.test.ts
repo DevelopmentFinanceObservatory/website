@@ -5,11 +5,13 @@ import test from 'node:test';
 import { fitsProps, MAX_PROPS_BYTES } from '../../events/limits.ts';
 import { buildRequest } from '../searchClient.ts';
 import {
+    dataSearchHref,
     HANDOFF_SOURCE_PARAM,
     handoffArrival,
     handoffHref,
     handoffSource,
     routeBackHref,
+    routingOffFor,
     searchEventProps,
     searchOutcome,
     searchPostTracker,
@@ -699,29 +701,48 @@ test('a homepage handoff carries typed or example; any other value is a permalin
     }
 });
 
-test("Studio's way back runs its one search without the Studio router and strips the param", () => {
+test('a routing=off URL searches its question without the Studio router as route_back', () => {
     const arrive = (href: string) => {
-        const arrival = handoffArrival(new URL(href, 'https://example.org').searchParams);
+        const params = new URL(href, 'https://example.org').searchParams;
         const body = buildRequest({ kind: 'raw_text', query: 'aid & debt' }, true, {
-            studioRouting: arrival.studioRouting,
+            studioRouting: !routingOffFor(params, 'aid & debt'),
         });
 
-        return { ...arrival, routed: 'studio_routing' in body.input };
+        return { ...handoffArrival(params), routed: 'studio_routing' in body.input };
     };
 
     assert.deepEqual(
-        [routeBackHref('aid & debt'), handoffHref('aid & debt', 'typed'), '/data?q=aid'].map(
-            arrive,
-        ),
         [
-            {
-                source: 'permalink',
-                studioRouting: false,
-                href: '/data?q=aid+%26+debt',
-                routed: false,
-            },
-            { source: 'typed', studioRouting: true, href: '/data?q=aid+%26+debt', routed: true },
-            { source: 'permalink', studioRouting: true, href: null, routed: true },
+            routeBackHref('aid & debt'),
+            `${handoffHref('aid & debt', 'typed')}&routing=off`,
+            handoffHref('aid & debt', 'typed'),
+            '/data?q=aid',
+        ].map(arrive),
+        [
+            { source: 'route_back', href: null, routed: false },
+            { source: 'route_back', href: '/data?q=aid+%26+debt&routing=off', routed: false },
+            { source: 'typed', href: '/data?q=aid+%26+debt', routed: true },
+            { source: 'permalink', href: null, routed: true },
+        ],
+    );
+});
+
+test('the page URL keeps routing=off for its own question and drops it for a new one', () => {
+    const params = new URL(routeBackHref('aid & debt'), 'https://example.org').searchParams;
+    const href = (query: string, state?: string) =>
+        dataSearchHref({ query, state, routingOff: routingOffFor(params, query) });
+    const reread = (url: string) => {
+        const next = new URL(url, 'https://example.org').searchParams;
+
+        return [next.get('q'), next.get('s'), routingOffFor(next, next.get('q') ?? '')];
+    };
+
+    assert.deepEqual(
+        [href('aid & debt'), href('aid & debt', 'eJy'), href('aid to Kenya')].map(reread),
+        [
+            ['aid & debt', null, true],
+            ['aid & debt', 'eJy', true],
+            ['aid to Kenya', null, false],
         ],
     );
 });

@@ -2,7 +2,14 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+    useCallback,
+    useDeferredValue,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 
 import styles from './DataSearch.module.scss';
 import ReadingCards from './ReadingCards';
@@ -62,7 +69,10 @@ import {
     studioHandoffParts,
 } from '@/lib/search/resultNotes';
 import {
+    dataSearchHref,
     handoffArrival,
+    routeBackHref,
+    routingOffFor,
     searchEventProps,
     startSearchAction,
     type SearchSource,
@@ -78,11 +88,11 @@ import {
     studioHref,
     type HandoffTrigger,
 } from '@/lib/search/studioHandoff';
-import { routeMove } from '@/lib/search/studioRoute';
+import { answerTakesOffer, guestPromptsSeen, routeMove } from '@/lib/search/studioRoute';
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
-import { guestOutOfPrompts, guestPromptsUsed } from '@/lib/studio/promptAllowance';
+import { guestOutOfPrompts } from '@/lib/studio/promptAllowance';
 import { writeSeeds } from '@/lib/studio/seedStore';
 
 /** The early, pre-response heading's own tokens, read-only (see
@@ -142,6 +152,10 @@ const subscribeStorage = (listener: () => void) => {
 
     return () => window.removeEventListener('storage', listener);
 };
+
+// Whether the address bar keeps the Studio router off for `query`.
+const routingOffHere = (query: string): boolean =>
+    routingOffFor(new URLSearchParams(window.location.search), query);
 
 const DataSearch = ({
     catalogue,
@@ -248,26 +262,19 @@ const DataSearch = ({
         return null;
     };
 
-    // The question Studio's way back sent here (`routing=off`). The reader
-    // chose a data search for it, so a later search of the same text (a
-    // retry, the same text typed again) stays out of the router too.
-    const routedBackRef = useRef<string | null>(null);
-
     // A query as text: the starting point's own question shows the catalogue
     // the page holds, with no search call, and records `search.start_point`.
     // Other text is a search, whose events useSearchRun sends, opted in to
-    // the search API's Studio router unless `studioRouting` is false.
+    // the search API's Studio router unless the URL holds `routing=off` for
+    // the same text (routingOffFor): Studio's way back, the entry an
+    // automatic move leaves, and a retry or edit of either.
     const runQuery = useCallback(
-        (text: string, source: SearchSource, { studioRouting = true } = {}) => {
-            if (!studioRouting) {
-                routedBackRef.current = text;
-            }
-
+        (text: string, source: SearchSource) => {
             if (text === STARTING_POINT_QUERY) {
                 showStartingPoint(text, source);
             } else {
                 run({ kind: 'raw_text', query: text }, text, source, {
-                    studioRouting: studioRouting && text !== routedBackRef.current,
+                    studioRouting: !routingOffHere(text),
                 });
             }
         },
@@ -366,7 +373,7 @@ const DataSearch = ({
     // guest with no free prompt left is offered Studio instead of moved.
     const guestUsed = useSyncExternalStore(
         subscribeStorage,
-        () => guestPromptsUsed(localStorage),
+        () => guestPromptsSeen({ guest, storage: () => window.localStorage }),
         () => 0,
     );
     const move = routeMove({
@@ -374,17 +381,18 @@ const DataSearch = ({
         kind: answer?.kind ?? (response ? 'resolution' : null),
         guestOutOfPrompts: guestOutOfPrompts({ guest, used: guestUsed }),
     });
-    // The Studio card stands in for every other Studio action on a
-    // resolution. A declined answer's own "Ask in Studio" is its offer.
-    const studioOffered = move === 'offer' && !answer;
+    // The Studio card stands in for every other Studio action on the
+    // answer. A requires_analysis decline's own "Ask in Studio" is its offer.
+    const studioOffered = move === 'offer' && answerTakesOffer(answer ?? response);
 
     // Every Studio action (a declined answer's, an operation_not_applied
     // departure's, the side panel's, a no_data part's callout, the route's
     // offer card, the route's automatic move) opens Studio on the question,
     // with a seed for each definite part, stored in this tab's
     // sessionStorage. When the seeds cannot be stored, Studio opens on the
-    // question alone. The automatic move replaces /data in the history, so
-    // Back does not run the search again and move the reader once more.
+    // question alone. The automatic move opens Studio as a new history
+    // entry, carrying the route-to-studio transition type, once the entry it
+    // leaves holds the question's `routing=off` URL (the move's effect below).
     const openStudio = useCallback(
         (trigger: HandoffTrigger) => {
             const edited = handoffEdited({
@@ -423,11 +431,7 @@ const DataSearch = ({
                 traceId,
             });
 
-            if (trigger === 'auto') {
-                router.replace(href, { transitionTypes: [ROUTE_TO_STUDIO] });
-            } else {
-                router.push(href);
-            }
+            router.push(href, trigger === 'auto' ? { transitionTypes: [ROUTE_TO_STUDIO] } : {});
         },
         [
             router,
@@ -450,11 +454,28 @@ const DataSearch = ({
         [openStudio, move],
     );
 
+    // False until the page's first deferred render commits. React gives
+    // every useDeferredValue in one render the same deferred lane, so this
+    // flips in the commit that also finishes the App Router's own deferred
+    // render of the page (its layout router and head), which a hard load
+    // leaves pending after hydration. React holds view transition types on
+    // the root and hands them to the next commit made only of transition
+    // lanes, so a move started before that commit would lose
+    // `route-to-studio` to it and run with no slide.
+    const pageSettled = useDeferredValue(true, false);
+
     // The automatic move, once per search, after the run's `done` so the
-    // search settles (its usage event, the API's cached answer) first.
+    // search settles (its usage event, the API's cached answer) first. It
+    // runs in two commits. The first rewrites this history entry to the
+    // question's `routing=off` URL, so Back lands on the data search of the
+    // question, run once without the router. The second opens Studio, once
+    // `searchParams` shows the rewrite: by then the App Router has stored
+    // its own state for the rewritten entry, which Back needs to restore it
+    // in place, and the rewrite's commit cannot take the move's transition
+    // type.
     const movedSearchRef = useRef<string | null>(null);
     useEffect(() => {
-        if (move !== 'auto' || phase !== 'done') {
+        if (move !== 'auto' || phase !== 'done' || !pageSettled) {
             return;
         }
 
@@ -464,9 +485,15 @@ const DataSearch = ({
             return;
         }
 
+        if (!routingOffFor(searchParams, query)) {
+            window.history.replaceState(null, '', routeBackHref(query));
+
+            return;
+        }
+
         movedSearchRef.current = searchId;
         openStudio('auto');
-    }, [move, phase, searchIds, openStudio]);
+    }, [move, phase, pageSettled, searchIds, searchParams, query, openStudio]);
 
     // A visitor's action on the answer on screen (docs/analytics.md): the
     // ids are read as the visitor acts, and the returned sender records it.
@@ -574,10 +601,9 @@ const DataSearch = ({
     );
 
     // Permalink / homepage handoff: ?q= (and ?s=) auto-runs once per value.
-    // The homepage prompt adds `via` (typed or example), and Studio's way
-    // back adds `routing=off`. Both are read here and stripped at once, so
-    // the address bar never offers them for copying and a pasted link
-    // records `permalink` and opts in to the Studio router.
+    // The homepage prompt adds `via` (typed or example), read here and
+    // stripped at once, so the address bar never offers it for copying and
+    // a pasted link records `permalink`. `routing=off` stays (runQuery).
     useEffect(() => {
         const q = searchParams.get('q');
         const s = searchParams.get('s') ?? '';
@@ -589,14 +615,14 @@ const DataSearch = ({
 
         startedRef.current = key;
 
-        const { source, studioRouting, href } = handoffArrival(searchParams);
+        const { source, href } = handoffArrival(searchParams);
 
         if (href) {
             window.history.replaceState(null, '', href);
         }
 
         if (!s) {
-            runRef.current(q, source, { studioRouting });
+            runRef.current(q, source);
 
             return;
         }
@@ -619,7 +645,7 @@ const DataSearch = ({
                 suppressEmptyEditWriteRef.current = true;
                 replayRef.current(state, source);
             } else {
-                runRef.current(q, source, { studioRouting });
+                runRef.current(q, source);
             }
         });
         // `run` and `replay` are deliberately absent. Watching either would
@@ -684,7 +710,11 @@ const DataSearch = ({
             }
 
             startedRef.current = key;
-            window.history.replaceState(null, '', `/data?q=${encodeURIComponent(query)}`);
+            window.history.replaceState(
+                null,
+                '',
+                dataSearchHref({ query, routingOff: routingOffHere(query) }),
+            );
 
             return;
         }
@@ -708,7 +738,7 @@ const DataSearch = ({
             window.history.replaceState(
                 null,
                 '',
-                `/data?q=${encodeURIComponent(query)}&s=${encoded}`,
+                dataSearchHref({ query, state: encoded, routingOff: routingOffHere(query) }),
             );
         });
 
@@ -794,10 +824,12 @@ const DataSearch = ({
     );
 
     const shareView = useCallback(async () => {
-        const url =
-            edits.length > 0
-                ? `${location.origin}/data?q=${encodeURIComponent(query)}&s=${await encodePermalinkState({ query, edits })}`
-                : `${location.origin}/data?q=${encodeURIComponent(query)}`;
+        const href = dataSearchHref({
+            query,
+            state: edits.length > 0 ? await encodePermalinkState({ query, edits }) : undefined,
+            routingOff: routingOffHere(query),
+        });
+        const url = `${location.origin}${href}`;
 
         await navigator.clipboard.writeText(url);
         track('share.copy', shareCopyProps({ kind: 'search', copied: 'query_link', share: null }));
@@ -1096,6 +1128,7 @@ const DataSearch = ({
                                         onStudio={studioClick}
                                     />
                                 )}
+                                {studioOffered && <StudioOffer onStudio={studioClick} />}
                             </div>
                         </div>
                     ) : (

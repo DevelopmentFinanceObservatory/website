@@ -6,6 +6,8 @@
  * Studio on `auto` and shows an inline Studio card on `offer`.
  */
 
+import { guestPromptsUsed } from '../studio/promptAllowance.ts';
+
 import type { ResolveResponse, StudioRoute } from './types.ts';
 
 /** `value` as a Studio route, or null when it is not one this release reads:
@@ -39,9 +41,10 @@ export type RouteMove = 'auto' | 'offer';
 /**
  * The page's move for a run's route, or null for none. `auto` moves the
  * reader only on the `declined` answer the API ends an auto run with, and
- * only when Studio can answer on arrival: a guest with no free prompt left
+ * only while a guest has a free prompt left: a guest with none
  * (guestOutOfPrompts, src/lib/studio/promptAllowance.ts) would arrive at a
- * refusal, so is offered Studio instead. Every other route is an offer.
+ * refusal, so is offered Studio instead. A signed-in reader is moved
+ * whatever their daily allowance. Every other route is an offer.
  */
 export function routeMove({
     route,
@@ -57,4 +60,51 @@ export function routeMove({
     }
 
     return route.mode === 'auto' && kind === 'declined' && !guestOutOfPrompts ? 'auto' : 'offer';
+}
+
+/**
+ * Whether an answer takes the Studio card a route's offer shows. The card
+ * waits for the answer to land, so a click on it carries the answer's
+ * trace id, and shows on every kind of answer except a `requires_analysis`
+ * decline, whose own "Ask in Studio" stands in for it.
+ */
+export function answerTakesOffer(
+    answer: (Pick<ResolveResponse, 'kind'> & { reason?: string | null }) | null,
+): boolean {
+    return (
+        answer !== null && !(answer.kind === 'declined' && answer.reason === 'requires_analysis')
+    );
+}
+
+/** The guest prompt count the move reads: 0 for a signed-in reader, whose
+ *  storage is left unread, and 0 when the browser blocks storage, since
+ *  the proxy still meters the guest's allowance. */
+export function guestPromptsSeen({
+    guest,
+    storage,
+}: {
+    guest: boolean;
+    storage: () => Pick<Storage, 'getItem'>;
+}): number {
+    if (!guest) {
+        return 0;
+    }
+
+    try {
+        return guestPromptsUsed(storage());
+    } catch {
+        return 0;
+    }
+}
+
+/** Whether /data treats the visitor as a guest: no session, or a session
+ *  read that failed, so the page still renders when auth is down. */
+export async function visitorIsGuest(readSession: () => Promise<unknown>): Promise<boolean> {
+    try {
+        return !(await readSession());
+    } catch (error) {
+        console.error('data: the session read failed, so the page renders for a guest', error);
+
+        return true;
+    }
 }
