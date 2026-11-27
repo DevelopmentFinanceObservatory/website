@@ -230,9 +230,10 @@ const WITHDRAWAL_RETRY = {
  * after it when that is taken.
  *
  * Before the share is made, the text is held to the evergreen rule
- * (./evergreen.ts): 400 `not_evergreen` names each sentence that states
- * what the data shows now, and 503 `evergreen_check_unavailable` says the
- * check could not run.
+ * (./evergreen.ts). A 400 `not_evergreen` names each sentence that states
+ * what the data shows now, a 503 `evergreen_check_unavailable` says the
+ * check could not run, and a 502 `evergreen_check_refused` says TypeSafe
+ * refused the request.
  *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
@@ -304,7 +305,7 @@ export const publish = async (request: Request): Promise<Response> => {
         );
     }
 
-    const notEvergreen = await evergreenRefusal(text);
+    const notEvergreen = await evergreenRefusal(text, { publishKey });
 
     if (notEvergreen) {
         return notEvergreen;
@@ -395,7 +396,7 @@ export const publish = async (request: Request): Promise<Response> => {
 /**
  * PATCH /api/library/artifacts/<id> (ArtifactText) → { slug }. The text
  * fields the edit changes are held to the evergreen rule first, with the
- * publish's 400 `not_evergreen` and 503 `evergreen_check_unavailable`.
+ * publish's 400, 502 and 503 answers.
  */
 export const edit = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
@@ -416,7 +417,9 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
         return notFound();
     }
 
-    const notEvergreen = await evergreenRefusal(changedText(stored, read.value));
+    const notEvergreen = await evergreenRefusal(changedText(stored, read.value), {
+        artifact: id,
+    });
 
     if (notEvergreen) {
         return notEvergreen;

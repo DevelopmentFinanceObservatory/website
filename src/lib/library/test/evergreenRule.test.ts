@@ -37,6 +37,17 @@ test('text splits into sentences at their ends and at line breaks', () => {
         ['It rose (in 2024). Then it fell.', ['It rose (in 2024).', 'Then it fell.']],
         ['It says "ODA fell." Then it stops.', ['It says "ODA fell."', 'Then it stops.']],
         ['the end. lower case follows', ['the end. lower case follows']],
+        ['Read the bars. *Germany* gave most.', ['Read the bars.', '*Germany* gave most.']],
+        ['It is **new.** _Norway_ gave most.', ['It is **new.**', '_Norway_ gave most.']],
+        ['Debt in the U.S. The bars show it.', ['Debt in the U.S.', 'The bars show it.']],
+        ['Read plan B. This line is next.', ['Read plan B.', 'This line is next.']],
+        [
+            'Data from J. Smith and the U.S. Treasury.',
+            ['Data from J. Smith and the U.S. Treasury.'],
+        ],
+        ['2024. ODA fell to a low.', ['2024. ODA fell to a low.']],
+        ['In 2024. 2025. Next one.', ['In 2024.', '2025. Next one.']],
+        ['12. Pick a donor\n123. Not a marker', ['Pick a donor', '123. Not a marker']],
         [
             '  - Select a country.\n- Hover over a segment.\n',
             ['Select a country.', 'Hover over a segment.'],

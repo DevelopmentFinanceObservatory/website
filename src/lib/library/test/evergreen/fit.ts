@@ -10,6 +10,7 @@ import {
     type Candidate,
     type EvergreenRefusal,
     T_HIGH,
+    batchesOf,
     candidatesOf,
     decide,
     evergreenRequest,
@@ -38,9 +39,6 @@ export type RecordedGroup = {
 };
 
 export type Recorded = { model: string; groups: RecordedGroup[] };
-
-/** Sentences per request: about as many as a long section text holds. */
-export const GROUP_SIZE = 10;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -100,11 +98,8 @@ export const readRecorded = (raw: unknown): Recorded => {
 };
 
 /** `items` in runs of `GROUP_SIZE`, in order, each sentence on its own line. */
-export const groupsOf = (items: readonly Labelled[]): Group[] => {
-    const groups: Group[] = [];
-
-    for (let at = 0; at < items.length; at += GROUP_SIZE) {
-        const run = items.slice(at, at + GROUP_SIZE);
+export const groupsOf = (items: readonly Labelled[]): Group[] =>
+    batchesOf(items).map((run) => {
         const spans: Group['spans'] = [];
         let offset = 0;
 
@@ -113,15 +108,12 @@ export const groupsOf = (items: readonly Labelled[]): Group[] => {
             offset += item.text.length + 1;
         }
 
-        groups.push({
+        return {
             ids: run.map((item) => item.id),
             content: run.map((item) => item.text).join('\n'),
             spans,
-        });
-    }
-
-    return groups;
-};
+        };
+    });
 
 /** The candidates and the request digest the routes would send for
  *  `content` as an artifact's section text. */

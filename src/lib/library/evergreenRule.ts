@@ -1,15 +1,16 @@
 /**
- * The Library's evergreen rule: an artifact's text says what its data
+ * The Library's evergreen rule. An artifact's text says what its data
  * measures and how to read it, and leaves the figures to the data, since the
  * data refreshes after publication and the text does not. Pure, so the
  * publish and edit routes (./evergreen.ts), the fit script
  * (scripts/fit-evergreen.mjs) and the replay test send and read the same
  * questions.
  *
- * Each text field is split into candidate sentences. One TypeSafe request
- * asks, per candidate, a Noul ("could a data refresh make this false?") and
- * a Choice naming the kind of claim. `decide` turns the answers into
- * refusals, each naming its sentence by field pointer and offsets.
+ * Each text field is split into candidate sentences, and the candidates go
+ * to TypeSafe in batches of `GROUP_SIZE`. Each request asks, per candidate,
+ * a Noul ("could a data refresh make this false?") and a Choice naming the
+ * kind of claim. `decide` turns a batch's answers into refusals, each naming
+ * its sentence by field pointer and offsets.
  */
 
 import { createHash } from 'node:crypto';
@@ -28,6 +29,22 @@ export const T_LOW = 0.3;
  *  refusal names that kind. Below it the refusal gives the generic reason. */
 export const KIND_MIN = 0.6;
 
+/** Candidates per request. The thresholds were fitted on requests of this
+ *  many sentences (scripts/fit-evergreen.mjs), so the routes send the same,
+ *  which also keeps a request of the longest text well within Jev's context. */
+export const GROUP_SIZE = 10;
+
+/** `items` in runs of `GROUP_SIZE`, in order. */
+export const batchesOf = <TItem>(items: readonly TItem[]): TItem[][] => {
+    const batches: TItem[][] = [];
+
+    for (let at = 0; at < items.length; at += GROUP_SIZE) {
+        batches.push(items.slice(at, at + GROUP_SIZE));
+    }
+
+    return batches;
+};
+
 export const EVERGREEN_FIELDS = ['title', 'description', 'contentTitle', 'content'] as const;
 
 export type EvergreenField = (typeof EVERGREEN_FIELDS)[number];
@@ -36,7 +53,7 @@ export type EvergreenField = (typeof EVERGREEN_FIELDS)[number];
  *  A field left out or null is not checked. */
 export type EvergreenText = Partial<Record<EvergreenField, string | null>>;
 
-/** One candidate sentence: `text` is `field`'s value from `start` to `end`. */
+/** One candidate sentence. `text` is `field`'s value from `start` to `end`. */
 export type Candidate = {
     field: EvergreenField;
     start: number;
@@ -98,33 +115,84 @@ const ABBREVIATIONS = new Set([
     'vs',
 ]);
 
+// Words that open a sentence. A full stop after an initial or a one-letter
+// word ends the sentence when one of them follows ("in the U.S. The bars"),
+// and otherwise does not ("J. Smith", "U.S. Treasury").
+const OPENERS = new Set([
+    'a',
+    'all',
+    'an',
+    'and',
+    'as',
+    'at',
+    'but',
+    'by',
+    'each',
+    'every',
+    'for',
+    'from',
+    'here',
+    'if',
+    'in',
+    'it',
+    'its',
+    'most',
+    'on',
+    'one',
+    'some',
+    'that',
+    'the',
+    'there',
+    'these',
+    'they',
+    'this',
+    'those',
+    'we',
+    'when',
+    'where',
+    'while',
+]);
+
 // A list marker, heading mark or quote mark at the start of a line, which
-// the candidate leaves out.
-const LINE_MARKER = /^(?:[-*+•]\s+|\d+[.)]\s+|#{1,6}\s+|>\s*)+/;
+// the candidate leaves out. A numbered item has at most two digits, so a
+// line that opens with a year such as "2024. " keeps it.
+const LINE_MARKER = /^(?:[-*+•]\s+|\d{1,2}[.)]\s+|#{1,6}\s+|>\s*)+/;
 
-// Sentence-ending punctuation, any closing quotes or brackets after it, and
-// the space before the next sentence.
-const SENTENCE_END = /[.!?]+["'”’)\]]*\s+/g;
+// Sentence-ending punctuation, any closing quotes, brackets or emphasis
+// marks after it, and the space before the next sentence.
+const SENTENCE_END = /[.!?]+["'”’)\]*_]*\s+/g;
 
-// What the next sentence starts with: a capital, a digit, or an opening
-// quote or bracket.
-const SENTENCE_START = /^["'“‘([]?[\p{Lu}\p{Nd}]/u;
+// What the next sentence starts with. That is a capital or a digit, after
+// at most an emphasis mark and an opening quote or bracket.
+const SENTENCE_START = /^(?:\*{1,2}|_{1,2})?["'“‘([]?[\p{Lu}\p{Nd}]/u;
 
 const HAS_LETTER = /\p{L}/u;
 
-const isAbbreviation = (before: string): boolean => {
-    const word = (before.split(/\s/).at(-1) ?? '').replace(/^[("'“‘[]+/, '').toLowerCase();
+// U.S., U.K., an initial such as "J." or a one-letter word.
+const INITIALS = /^(?:\p{L}\.)*\p{L}$/u;
 
-    // U.S., U.K. and an initial such as "J."
-    return ABBREVIATIONS.has(word) || /^(?:\p{L}\.)*\p{L}$/u.test(word);
+// Whether a full stop after `before` leaves the sentence going on into
+// `next`.
+const continuesAfter = (before: string, next: string): boolean => {
+    const word = (before.split(/\s/).at(-1) ?? '').replace(/^[("'“‘[*_]+/, '').toLowerCase();
+
+    if (ABBREVIATIONS.has(word)) {
+        return true;
+    }
+
+    const following = /^[*_"'“‘([]*(\p{L}+)/u.exec(next)?.[1].toLowerCase() ?? '';
+
+    return INITIALS.test(word) && !OPENERS.has(following);
 };
 
 /**
  * The sentences of `text` as offsets into it, in order. Each line is split
  * apart, with its list or heading marker left out, then split after a full
- * stop, `!` or `?` that a space and a capital or digit follow. A full stop
- * after an abbreviation or an initial does not end a sentence, nor does a
- * decimal point. A piece with no letter in it is no sentence.
+ * stop, `!` or `?` that a space and a capital, a digit or an emphasis mark
+ * follow. A full stop after an abbreviation does not end a sentence, nor
+ * does a decimal point. One after an initial ends it only before a word that
+ * opens a sentence (`OPENERS`). A piece with no letter in it, such as a
+ * year, joins the sentence after it, and a line with no letter is none.
  */
 export const sentenceSpans = (text: string): { start: number; end: number }[] => {
     const spans: { start: number; end: number }[] = [];
@@ -154,7 +222,12 @@ export const sentenceSpans = (text: string): { start: number; end: number }[] =>
                 continue;
             }
 
-            if (fullStop && isAbbreviation(body.slice(start, end.index))) {
+            if (fullStop && continuesAfter(body.slice(start, end.index), next)) {
+                continue;
+            }
+
+            // A piece with no letter, such as a year, runs on into the next.
+            if (!HAS_LETTER.test(body.slice(start, stop))) {
                 continue;
             }
 
@@ -270,9 +343,9 @@ export const noulOf = (answer: unknown): number | null =>
 
 const KINDS: ReadonlySet<string> = new Set(['figure', 'ranking', 'trend', 'recency']);
 
-// The kind a refusal names: the Choice's option when it is one of the named
-// kinds and holds at least `KIND_MIN`, else `volatile`. Null when the
-// answer is not a Choice.
+// The kind a refusal names. That is the Choice's option when it is one of
+// the named kinds and holds at least `KIND_MIN`, and `volatile` otherwise.
+// Null when the answer is not a Choice.
 const kindOf = (answer: unknown): ClaimKind | null => {
     if (!isRecord(answer) || answer.type !== 'choice' || typeof answer.choice !== 'string') {
         return null;
@@ -292,8 +365,9 @@ export type EvergreenDecision =
     | { answered: false };
 
 /**
- * The refusals the answers to `evergreenRequest(candidates)` call for: every
- * candidate whose Noul is at least `T_HIGH`, with the kind its Choice names.
+ * The refusals the answers to `evergreenRequest(candidates)` call for. Each
+ * candidate whose Noul is at least `T_HIGH` is refused, with the kind its
+ * Choice names.
  * Candidates between `T_LOW` and `T_HIGH` pass and are listed in `doubts`.
  * When any question has no answer of its type, the decision is unanswered,
  * and the caller treats the check as unavailable.
