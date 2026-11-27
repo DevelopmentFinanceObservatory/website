@@ -2304,10 +2304,43 @@ span.slotMarked {
     letter-spacing: -0.02em;
 }
 
+// StudioMove takes the loading view's status line, so it enters as a
+// short rise in that slot, and stays until Studio's sheet covers it.
+.studioMove {
+    animation: move-in 0.2s $ease-out both;
+}
+
+@keyframes move-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(8);
+    }
+}
+
+// The Studio card that takes over StudioMove's slot when the reader stays:
+// the text swaps in place, and only the button fades in.
+.calloutInPlace {
+    animation: none;
+}
+
+.offerButtonIn {
+    animation: token-fade-in 0.15s $ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    // StudioMove fades in without the callout's rise.
+    // StudioMove fades in without the rise.
     .studioMove {
         animation-name: token-fade-in;
+    }
+}
+
+// The page arrives on a data search with the Studio router off (DataSearch's
+// `arrivedRouteOff`): its heading is already in place.
+.section[data-arrival="route"] {
+    .eyebrow,
+    .query,
+    .sentence {
+        animation: none;
     }
 }
 

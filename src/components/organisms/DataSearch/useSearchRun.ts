@@ -76,9 +76,10 @@
  * - `run(input, label, source, { studioRouting })`: a fresh raw_text query;
  *   full replace, aborts any edit post in flight too. `studioRouting` opts
  *   the run in to the search API's Studio router (buildRequest).
- * - `route: StudioRoute | null`: the router's verdict on the current run,
- *   from the early `route` frame or the response's `route`. Null before
- *   one arrives, and on every run that did not opt in.
+ * - `route: RunRoute | null`: the router's verdict on the current run,
+ *   from the early `route` frame or the response's `route`, with the trace
+ *   id the frame carried. Null before one arrives, and on every run that
+ *   did not opt in.
  * - `showStartingPoint(label, source)`: settles on a catalogue answer with
  *   no place and no search call, for the page to fill from the catalogue it
  *   holds, and records `search.start_point`.
@@ -229,6 +230,11 @@ import { type SharedEdit, sharedEditTouched, withSharedEdit } from '@/lib/search
 
 export type SearchPhase = 'idle' | 'loading' | 'done' | 'error';
 
+/** The router's verdict on a run (StudioRoute), with the run's trace id
+ *  from the early `route` frame, so a click on the offer it shows before
+ *  the answer joins the search API's log. Null when no frame carried one. */
+export type RunRoute = StudioRoute & { traceId: string | null };
+
 /** What the page renders of a catalogue or declined answer. The starting
  *  point the page shows from its own catalogue carries only these. */
 export type PartlessAnswer =
@@ -332,7 +338,7 @@ export const useSearchRun = () => {
     const [partSentencePlans, setPartSentencePlans] = useState<(SentenceToken[] | null)[]>([]);
     const [response, setResponse] = useState<Resolution | null>(null);
     const [answer, setAnswer] = useState<PartlessAnswer | null>(null);
-    const [route, setRoute] = useState<StudioRoute | null>(null);
+    const [route, setRoute] = useState<RunRoute | null>(null);
     const [expectedParts, setExpectedParts] = useState<ExpectedPart[]>([]);
     const [runtimes, setRuntimes] = useState<PartRuntime[]>([]);
     const [editsByPart, setEditsByPart] = useState<Record<number, PermalinkEdit>>({});
@@ -646,7 +652,7 @@ export const useSearchRun = () => {
                     if (applyTrailingEvent(event)) return;
                     switch (event.kind) {
                         case 'route':
-                            setRoute(event.route);
+                            setRoute({ ...event.route, traceId: event.traceId });
                             break;
                         case 'interpretation':
                             setExpectedParts(
@@ -694,7 +700,12 @@ export const useSearchRun = () => {
                             // The response repeats the early frame's route; a
                             // response without one keeps the frame's.
                             if (normalized.route) {
-                                setRoute(normalized.route);
+                                const { route: answered } = normalized;
+
+                                setRoute((early) => ({
+                                    ...answered,
+                                    traceId: early?.traceId ?? null,
+                                }));
                             }
                             // A catalogue or declined answer has no parts:
                             // the run settles on its own `done` with no

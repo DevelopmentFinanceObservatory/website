@@ -5,7 +5,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { GUEST_PROMPTS, guestPromptsUsed, promptEvent } from '../promptAllowance.ts';
+import {
+    GUEST_PROMPTS,
+    GUEST_PROMPTS_KEY,
+    guestPromptsUsed,
+    promptEvent,
+} from '../promptAllowance.ts';
 
 test('promptEvent: a guest with no free prompt left sends nothing, queued prompts included', () => {
     assert.equal(promptEvent({ guest: true, used: GUEST_PROMPTS, queued: 0, sent: 3 }), null);
@@ -63,7 +68,7 @@ test('promptEvent: a picked example carries its source, and a typed prompt none'
 // reads it to decide whether a move to Studio would reach the guest wall.
 test('guestPromptsUsed reads the count Studio stores, and 0 when there is none', () => {
     const storage = (value: string | null) => ({
-        getItem: (key: string) => (key === 'dfo-guest-prompts' ? value : null),
+        getItem: (key: string) => (key === GUEST_PROMPTS_KEY ? value : null),
     });
 
     assert.equal(guestPromptsUsed(storage('3')), 3);

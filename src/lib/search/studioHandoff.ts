@@ -6,7 +6,11 @@
  * all describe the data the user sees.
  */
 
-import { HANDOFF_TRACE_PARAM, HANDOFF_VIA_PARAM } from '../studio/examples.ts';
+import {
+    HANDOFF_EXAMPLE_PARAM,
+    HANDOFF_TRACE_PARAM,
+    HANDOFF_VIA_PARAM,
+} from '../studio/examples.ts';
 import type { Seed, SeedOperation } from '../studio/wire.ts';
 
 import { unflattenSpec } from './searchClient.ts';
@@ -144,19 +148,26 @@ export function handoffVia({
     return fromExample ? 'example' : null;
 }
 
-/** The navigation transition types of the router's automatic move to
- *  Studio and of Studio's way back to the data search. RouteMove in the
- *  /data and /studio pages animates only these (src/styles/_route-move.scss). */
+/** The navigation transition types of every Get Data handoff to Studio
+ *  (the router's automatic move, its offer, and the other Studio actions)
+ *  and of Studio's way back to the data search. RouteMove, around the site
+ *  layout and the /studio page, animates only these
+ *  (src/styles/_route-move.scss). */
 export const ROUTE_TO_STUDIO = 'route-to-studio';
 export const ROUTE_TO_DATA = 'route-to-data';
 
 /** Studio's URL for a handoff: the question, the token the seeds are
- *  stored under when there are any, how the question came (`via`), and the
- *  search's trace id for a routed one. */
+ *  stored under when there are any, how the question came (`via`), the
+ *  search's trace id for a routed one, and `example=1` for a routed
+ *  question that is a Data search example's text (handoffFromExample). */
 export function studioHref(
     question: string,
     token: string | null,
-    { via = null, traceId = null }: { via?: HandoffVia | null; traceId?: string | null } = {},
+    {
+        via = null,
+        traceId = null,
+        fromExample = false,
+    }: { via?: HandoffVia | null; traceId?: string | null; fromExample?: boolean } = {},
 ): string {
     const params = new URLSearchParams({ q: question });
 
@@ -168,8 +179,14 @@ export function studioHref(
         params.set(HANDOFF_VIA_PARAM, via);
     }
 
-    if (traceId && (via === 'route_auto' || via === 'route_offer')) {
-        params.set(HANDOFF_TRACE_PARAM, traceId);
+    if (via === 'route_auto' || via === 'route_offer') {
+        if (traceId) {
+            params.set(HANDOFF_TRACE_PARAM, traceId);
+        }
+
+        if (fromExample) {
+            params.set(HANDOFF_EXAMPLE_PARAM, '1');
+        }
     }
 
     return `/studio?${params}`;

@@ -1,11 +1,15 @@
 'use client';
 
 import classNames from 'classnames';
+// router.prefetch takes its kind only as this enum, which next/navigation
+// does not export.
+import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-reducer-types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     useCallback,
     useDeferredValue,
     useEffect,
+    useEffectEvent,
     useRef,
     useState,
     useSyncExternalStore,
@@ -32,7 +36,7 @@ import SearchTable from './SearchTable';
 import StudioMove from './StudioMove';
 import StudioOffer from './StudioOffer';
 import type { DatasetDownloaded } from './useDatasetDownload';
-import { useSearchRun } from './useSearchRun';
+import { type RunRoute, useSearchRun } from './useSearchRun';
 import type { ChangeAction } from './WhyPanel';
 
 import Button from '@/components/atoms/Button/Button';
@@ -70,6 +74,7 @@ import {
 } from '@/lib/search/resultNotes';
 import {
     dataSearchHref,
+    HANDOFF_ROUTING_PARAM,
     handoffArrival,
     routeBackHref,
     routingOffFor,
@@ -152,6 +157,18 @@ const subscribeStorage = (listener: () => void) => {
 
     return () => window.removeEventListener('storage', listener);
 };
+
+// How long the automatic move holds its callout before Studio opens: the
+// time to read it, and the window in which the reader can stay.
+const MOVE_PAUSE_MS = 600;
+
+// What a press can land on to stay on the data search during the move's
+// pause: a field, a link or a control.
+const CONTROL = 'a, button, input, textarea, select, label, [role="button"], [contenteditable]';
+const isControl = (target: EventTarget | null): boolean =>
+    target instanceof Element && target.closest(CONTROL) !== null;
+const isField = (target: EventTarget | null): boolean =>
+    target instanceof Element && target.closest('input, textarea, [contenteditable]') !== null;
 
 // Whether the address bar keeps the Studio router off for `query`.
 const routingOffHere = (query: string): boolean =>
@@ -345,9 +362,18 @@ const DataSearch = ({
         openShareRef.current(shared, source);
     }, []);
 
+    // The page opened on a data search with the Studio router off
+    // (`routing=off`: Studio's way back, or Back after a move), whose
+    // heading is in place as the page arrives, with no rise. The reader's
+    // next search rises as any other.
+    const [arrivedRouteOff, setArrivedRouteOff] = useState(
+        () => searchParams.get(HANDOFF_ROUTING_PARAM) === 'off',
+    );
+
     const submitQuery = useCallback(
         (text: string, source: SearchSource) => {
             leaveShare();
+            setArrivedRouteOff(false);
             runQuery(text, source);
         },
         [runQuery, leaveShare],
@@ -381,20 +407,32 @@ const DataSearch = ({
         kind: answer?.kind ?? (response ? 'resolution' : null),
         guestOutOfPrompts: guestOutOfPrompts({ guest, used: guestUsed }),
     });
+    // A move the reader stayed out of during its pause: its route, kept as
+    // an offer while the page searches the same question as data.
+    const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
+    const stayedRoute = stayed?.query === query ? stayed.route : null;
+    // The route a click on the Studio card hands over: the run's own offer,
+    // or the move the reader stayed out of.
+    const offerRoute = move === 'offer' ? route : stayedRoute;
     // The Studio card stands in for every other Studio action on the
-    // answer. A requires_analysis decline's own "Ask in Studio" is its offer.
-    const studioOffered = move === 'offer' && answerTakesOffer(answer ?? response);
+    // answer, from the route's early frame on. A requires_analysis
+    // decline's own "Ask in Studio" is its offer.
+    const studioOffered = offerRoute !== null && answerTakesOffer(answer ?? response);
 
     // Every Studio action (a declined answer's, an operation_not_applied
     // departure's, the side panel's, a no_data part's callout, the route's
     // offer card, the route's automatic move) opens Studio on the question,
     // with a seed for each definite part, stored in this tab's
     // sessionStorage. When the seeds cannot be stored, Studio opens on the
-    // question alone. The automatic move opens Studio as a new history
-    // entry, carrying the route-to-studio transition type, once the entry it
-    // leaves holds the question's `routing=off` URL (the move's effect below).
-    const openStudio = useCallback(
-        (trigger: HandoffTrigger) => {
+    // question alone. `studioHandoff` stores the seeds and makes Studio's
+    // URL, and its `go` records the handoff and opens Studio as a new
+    // history entry with the route-to-studio transition type, so Studio
+    // slides in over the page. The automatic move opens it once the entry
+    // it leaves holds the question's `routing=off` URL (the move's effect
+    // below). A routed handoff carries the trace id of the route's early
+    // frame, or of the answer when the frame carried none.
+    const studioHandoff = useCallback(
+        (trigger: HandoffTrigger, routed: RunRoute | null = null) => {
             const edited = handoffEdited({
                 editCount: edits.length,
                 fromShare: openedShare !== null,
@@ -406,36 +444,39 @@ const DataSearch = ({
             });
             const seeds = handoffSeeds(parts);
             const token = writeSeeds(() => window.sessionStorage, seeds);
-            const { searchId, traceId } = searchIds();
-
-            track(
-                'search.studio_handoff',
-                searchEventProps({
-                    query,
-                    edited,
-                    kind: answerKind,
-                    reason: answerReason,
-                    parts,
-                    seeds: token ? seeds.length : 0,
-                    trigger,
-                    ...(trigger !== 'button' && route && { probability: route.probability }),
-                    run: { ...(searchId && { searchId }), traceId },
-                }),
-            );
-
+            const ids = searchIds();
+            const { searchId } = ids;
+            const traceId = routed?.traceId ?? ids.traceId;
+            const fromExample = handoffFromExample({ fromExample: searchIsExample(), edited });
             const href = studioHref(question, token, {
-                via: handoffVia({
-                    trigger,
-                    fromExample: handoffFromExample({ fromExample: searchIsExample(), edited }),
-                }),
+                via: handoffVia({ trigger, fromExample }),
                 traceId,
+                fromExample,
             });
 
-            router.push(href, trigger === 'auto' ? { transitionTypes: [ROUTE_TO_STUDIO] } : {});
+            return {
+                href,
+                go: () => {
+                    track(
+                        'search.studio_handoff',
+                        searchEventProps({
+                            query,
+                            edited,
+                            kind: answerKind,
+                            reason: answerReason,
+                            parts,
+                            seeds: token ? seeds.length : 0,
+                            trigger,
+                            ...(routed && { probability: routed.probability }),
+                            run: { ...(searchId && { searchId }), traceId },
+                        }),
+                    );
+                    router.push(href, { transitionTypes: [ROUTE_TO_STUDIO] });
+                },
+            };
         },
         [
             router,
-            route,
             query,
             edits.length,
             openedShare,
@@ -447,11 +488,16 @@ const DataSearch = ({
             searchIsExample,
         ],
     );
+    const openStudio = useCallback(
+        (trigger: HandoffTrigger, routed: RunRoute | null = null) =>
+            studioHandoff(trigger, routed).go(),
+        [studioHandoff],
+    );
     // A click on a Studio action. While the route's offer is on screen, the
     // click is the offer's.
     const studioClick = useCallback(
-        () => openStudio(move === 'offer' ? 'offer' : 'button'),
-        [openStudio, move],
+        () => (offerRoute ? openStudio('offer', offerRoute) : openStudio('button')),
+        [openStudio, offerRoute],
     );
 
     // False until the page's first deferred render commits. React gives
@@ -468,12 +514,36 @@ const DataSearch = ({
     // search settles (its usage event, the API's cached answer) first. It
     // runs in two commits. The first rewrites this history entry to the
     // question's `routing=off` URL, so Back lands on the data search of the
-    // question, run once without the router. The second opens Studio, once
-    // `searchParams` shows the rewrite: by then the App Router has stored
-    // its own state for the rewritten entry, which Back needs to restore it
-    // in place, and the rewrite's commit cannot take the move's transition
-    // type.
+    // question, run once without the router. The second, once
+    // `searchParams` shows the rewrite, holds the callout for MOVE_PAUSE_MS
+    // and then opens Studio: by then the App Router has stored its own
+    // state for the rewritten entry, which Back needs to restore it in
+    // place, and the rewrite's commit cannot take the move's transition
+    // type. The pause also fetches Studio's page in full, which loads its
+    // client code. A navigation whose page code is still loading commits
+    // twice, the router state and then the page, and the first commit takes
+    // the transition type, so the page would swap with no slide.
+    //
+    // During the pause, a key in a field, Escape, or a press on a link or
+    // control keeps the reader here: the callout turns into the Studio
+    // card, and the question is searched as data, with the router off. A
+    // new search ends the pause too, before any navigation.
     const movedSearchRef = useRef<string | null>(null);
+    const readyMove = useEffectEvent(() => studioHandoff('auto', route));
+    const stay = useEffectEvent((searchId: string) => {
+        movedSearchRef.current = searchId;
+
+        // The card hands over the moved search's trace id, which the search
+        // about to run replaces.
+        if (route) {
+            setStayed({
+                query,
+                route: { ...route, traceId: route.traceId ?? searchIds().traceId },
+            });
+        }
+
+        runQuery(query, 'route_back');
+    });
     useEffect(() => {
         if (move !== 'auto' || phase !== 'done' || !pageSettled) {
             return;
@@ -491,9 +561,34 @@ const DataSearch = ({
             return;
         }
 
-        movedSearchRef.current = searchId;
-        openStudio('auto');
-    }, [move, phase, pageSettled, searchIds, searchParams, query, openStudio]);
+        const handoff = readyMove();
+
+        router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
+
+        const timer = window.setTimeout(() => {
+            movedSearchRef.current = searchId;
+            handoff.go();
+        }, MOVE_PAUSE_MS);
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' || isField(event.target)) {
+                stay(searchId);
+            }
+        };
+        const onPress = (event: PointerEvent) => {
+            if (isControl(event.target)) {
+                stay(searchId);
+            }
+        };
+
+        document.addEventListener('keydown', onKey, true);
+        document.addEventListener('pointerdown', onPress, true);
+
+        return () => {
+            window.clearTimeout(timer);
+            document.removeEventListener('keydown', onKey, true);
+            document.removeEventListener('pointerdown', onPress, true);
+        };
+    }, [move, phase, pageSettled, searchIds, searchParams, query, router]);
 
     // A visitor's action on the answer on screen (docs/analytics.md): the
     // ids are read as the visitor acts, and the returned sender records it.
@@ -965,7 +1060,12 @@ const DataSearch = ({
     const loadingProgress = progressSuffix(sharedSteps, partSteps, expectedParts.length);
 
     return (
-        <section ref={sectionRef} className={styles.section} data-nav-dark="true">
+        <section
+            ref={sectionRef}
+            className={styles.section}
+            data-nav-dark="true"
+            data-arrival={arrivedRouteOff ? 'route' : undefined}
+        >
             {phase === 'idle' && (
                 <div className={styles.idle} data-typing={typing || undefined}>
                     <div className={styles.idlePrompt}>
@@ -1051,7 +1151,7 @@ const DataSearch = ({
 
             {(phase === 'loading' || phase === 'done') && (
                 <div className={styles.result}>
-                    {phase === 'done' && (
+                    {phase === 'done' && move !== 'auto' && (
                         <div className={styles.resultToolbar}>
                             {/* Only while the view is still the link's own: an
                                 edit turns it into live data. */}
@@ -1107,28 +1207,29 @@ const DataSearch = ({
                         </div>
                     )}
 
-                    {answer ? (
+                    {answer && move !== 'auto' ? (
                         // A catalogue or declined answer: no parts, no
                         // dataset, the query as the heading.
                         <div className={classNames(styles.hero, styles.heroBare)}>
                             <div className={styles.heroMain}>
                                 <p className={styles.eyebrow}>Your Query</p>
                                 <h1 className={styles.query}>{query}</h1>
-                                {move === 'auto' ? (
-                                    <StudioMove />
-                                ) : (
-                                    <SearchAnswer
-                                        answer={answer}
-                                        catalogue={catalogue}
-                                        onRun={(text) => submitQuery(text, 'example')}
-                                        onStartNew={startNew}
-                                        onShowCatalogue={() =>
-                                            submitQuery(STARTING_POINT_QUERY, 'catalogue')
-                                        }
-                                        onStudio={studioClick}
-                                    />
+                                {stayedRoute && studioOffered && (
+                                    <StudioOffer onStudio={studioClick} inPlace />
                                 )}
-                                {studioOffered && <StudioOffer onStudio={studioClick} />}
+                                <SearchAnswer
+                                    answer={answer}
+                                    catalogue={catalogue}
+                                    onRun={(text) => submitQuery(text, 'example')}
+                                    onStartNew={startNew}
+                                    onShowCatalogue={() =>
+                                        submitQuery(STARTING_POINT_QUERY, 'catalogue')
+                                    }
+                                    onStudio={studioClick}
+                                />
+                                {studioOffered && !stayedRoute && (
+                                    <StudioOffer onStudio={studioClick} />
+                                )}
                             </div>
                         </div>
                     ) : (
@@ -1193,7 +1294,18 @@ const DataSearch = ({
                                     newTokenTexts={earlyHeadingTexts}
                                 />
 
-                                {!response ? (
+                                {/* The automatic move holds the loading view, its
+                                    callout in the status line's place, and a
+                                    move the reader stayed out of leaves the
+                                    Studio card there. */}
+                                {move === 'auto' ? (
+                                    <StudioMove />
+                                ) : (
+                                    stayedRoute &&
+                                    studioOffered && <StudioOffer onStudio={studioClick} inPlace />
+                                )}
+
+                                {move === 'auto' ? null : !response ? (
                                     <>
                                         <p className={styles.stepsLine} aria-live="polite">
                                             Resolving
@@ -1222,7 +1334,9 @@ const DataSearch = ({
                                     />
                                 )}
 
-                                {studioOffered && <StudioOffer onStudio={studioClick} />}
+                                {studioOffered && !stayedRoute && (
+                                    <StudioOffer onStudio={studioClick} />
+                                )}
                             </div>
                             {response && definiteParts.length === 1 && (
                                 <SearchPanel

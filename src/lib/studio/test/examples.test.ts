@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { studioHref } from '../../search/studioHandoff.ts';
-import { EXAMPLE_PROMPTS, handoffPromptSource, pickExamples, routedArrival } from '../examples.ts';
+import {
+    arrivalStrippedHref,
+    EXAMPLE_PROMPTS,
+    handoffPromptSource,
+    pickExamples,
+    routedArrival,
+} from '../examples.ts';
 
 test('pickExamples draws three distinct prompts from the pool', () => {
     for (let run = 0; run < 200; run++) {
@@ -23,12 +29,47 @@ test('pickExamples returns the whole pool when it is smaller than the count', ()
     assert.deepEqual(pickExamples(['a', 'b'], 3, () => 0).sort(), ['a', 'b']);
 });
 
-test('handoffPromptSource reads only via=example as a search example', () => {
-    assert.equal(handoffPromptSource('example'), 'search_example');
+test('handoffPromptSource reads a search example from a click and from a routed handoff', () => {
+    const source = (href: string) =>
+        handoffPromptSource(new URL(href, 'https://example.org').searchParams);
 
-    for (const via of [null, '', 'typed', 'Example']) {
-        assert.equal(handoffPromptSource(via), undefined);
+    for (const href of [
+        studioHref('Aid?', null, { via: 'example' }),
+        studioHref('Aid?', null, { via: 'route_auto', fromExample: true }),
+        studioHref('Aid?', 'tok', { via: 'route_offer', traceId: 't', fromExample: true }),
+    ]) {
+        assert.equal(source(href), 'search_example', href);
     }
+
+    for (const href of [
+        studioHref('Aid?', null),
+        studioHref('Aid?', null, { via: 'route_auto' }),
+        '/studio?q=Aid&via=Example',
+        '/studio?q=Aid&example=yes',
+    ]) {
+        assert.equal(source(href), undefined, href);
+    }
+});
+
+test('arrivalStrippedHref keeps the question and seed and drops how it arrived', () => {
+    const stripped = (href: string) => {
+        const url = new URL(href, 'https://example.org');
+
+        return arrivalStrippedHref(url.pathname, url.searchParams);
+    };
+
+    assert.equal(
+        stripped(
+            studioHref('aid & debt', 'tok', {
+                via: 'route_auto',
+                traceId: 'trace-1',
+                fromExample: true,
+            }),
+        ),
+        '/studio?q=aid+%26+debt&seed=tok',
+    );
+    assert.equal(stripped('/studio?via=route_auto'), '/studio');
+    assert.equal(stripped(studioHref('aid', 'tok')), null);
 });
 
 test("only the router's automatic move arrives as routed, with the search's trace id", () => {

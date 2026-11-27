@@ -3,22 +3,31 @@ import { ViewTransition } from 'react';
 import { ROUTE_TO_DATA, ROUTE_TO_STUDIO } from '@/lib/search/studioHandoff';
 
 /**
- * The page side of the move between Get Data and Studio: the router's
- * automatic move to Studio (ROUTE_TO_STUDIO) carries the page forward, and
- * Studio's way back (ROUTE_TO_DATA) carries it back. Every other navigation,
- * and a browser without view transitions, swaps the page with no animation.
- * The keyframes live in src/styles/_route-move.scss.
+ * One side of the move between Get Data and Studio, keyed by the
+ * navigation's transition type (ROUTE_TO_STUDIO, ROUTE_TO_DATA in
+ * src/lib/search/studioHandoff.ts). Studio is the `sheet`, which slides in
+ * over the site and back off it; the site layout, header included, is the
+ * `under` layer it covers. The keyframes live in src/styles/_route-move.scss.
+ *
+ * React starts a document view transition when a navigation mounts a
+ * `<ViewTransition>`, or unmounts one that animates, and it drops the root
+ * snapshot when no boundary changes size, so the move runs on these named
+ * layers. A navigation with neither type names nothing and swaps the page
+ * at once.
  */
-const RouteMove = ({ page, children }: { page: 'data' | 'studio'; children: React.ReactNode }) => {
-    // Data leaves forward and comes back; Studio arrives forward and leaves back.
-    const leave = page === 'data' ? ROUTE_TO_STUDIO : ROUTE_TO_DATA;
-    const arrive = page === 'data' ? ROUTE_TO_DATA : ROUTE_TO_STUDIO;
-    const direction = (type: string) => (type === ROUTE_TO_STUDIO ? 'route-forward' : 'route-back');
+const RouteMove = ({
+    layer,
+    children,
+}: {
+    layer: 'sheet' | 'under';
+    children: React.ReactNode;
+}) => {
+    const moves = { [ROUTE_TO_STUDIO]: `route-${layer}`, [ROUTE_TO_DATA]: `route-${layer}` };
 
     return (
         <ViewTransition
-            enter={{ [arrive]: direction(arrive), default: 'none' }}
-            exit={{ [leave]: direction(leave), default: 'none' }}
+            enter={{ ...moves, default: 'none' }}
+            exit={{ ...moves, default: 'none' }}
             default="none"
         >
             {children}

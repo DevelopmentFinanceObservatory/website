@@ -168,6 +168,27 @@ test('studioHref carries the question, and the token when there is one', () => {
     );
 });
 
+// A routed question keeps its example source beside the route's `via`; a
+// click on an example says so in `via` itself.
+test('studioHref marks a routed example question, and only a routed one', async (t) => {
+    const cases: [Parameters<typeof studioHref>[2], string | null][] = [
+        [{ via: 'route_auto', fromExample: true }, '1'],
+        [{ via: 'route_offer', fromExample: true }, '1'],
+        [{ via: 'route_offer', fromExample: false }, null],
+        [{ via: 'example', fromExample: true }, null],
+        [{ fromExample: true }, null],
+    ];
+
+    for (const [options, expected] of cases) {
+        await t.test(JSON.stringify(options), () => {
+            const params = new URL(studioHref('Aid?', null, options), 'https://example.org')
+                .searchParams;
+
+            assert.equal(params.get('example'), expected);
+        });
+    }
+});
+
 test('handoffVia names a routed handoff by its route, and a click by its example', async (t) => {
     const cases: [Parameters<typeof handoffVia>[0], ReturnType<typeof handoffVia>][] = [
         [{ trigger: 'auto', fromExample: true }, 'route_auto'],

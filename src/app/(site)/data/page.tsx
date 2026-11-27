@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 
-import RouteMove from '@/components/atoms/RouteMove/RouteMove';
 import DataSearch from '@/components/organisms/DataSearch/DataSearch';
 import { getSession } from '@/lib/auth/session';
 import { dataPageMetadata } from '@/lib/crawl';
@@ -31,11 +30,9 @@ const DataPage = async () => {
     ]);
 
     return (
-        <RouteMove page="data">
-            <main>
-                <DataSearch catalogue={catalogue} guest={guest} />
-            </main>
-        </RouteMove>
+        <main>
+            <DataSearch catalogue={catalogue} guest={guest} />
+        </main>
     );
 };
 

@@ -1255,17 +1255,22 @@ async function rawStreamEvents(frames: string): Promise<SearchEvent[]> {
     }
 }
 
-// The early frame's data is the route object itself, with no `kind`.
+// The early frame's data is the route object itself, with no `kind`, and
+// the run's trace id beside it.
 test('resolveStream reads an early route frame by its event name and skips an unreadable one', async () => {
     const offer = { target: 'studio', mode: 'offer', probability: 0.71 };
     const events = await rawStreamEvents(
-        `event: route\ndata: ${JSON.stringify(offer)}\n\n` +
+        `event: route\ndata: ${JSON.stringify({ ...offer, trace_id: 'trace-9' })}\n\n` +
+            `event: route\ndata: ${JSON.stringify(offer)}\n\n` +
+            `event: route\ndata: ${JSON.stringify({ ...offer, trace_id: 42 })}\n\n` +
             `event: route\ndata: ${JSON.stringify({ target: 'elsewhere', mode: 'offer' })}\n\n` +
             `event: done\ndata: ${JSON.stringify({ kind: 'done', warnings: [] })}\n\n`,
     );
 
     assert.deepEqual(events, [
-        { kind: 'route', route: offer },
+        { kind: 'route', route: offer, traceId: 'trace-9' },
+        { kind: 'route', route: offer, traceId: null },
+        { kind: 'route', route: offer, traceId: null },
         { kind: 'done', warnings: [] },
     ]);
 });

@@ -1,45 +1,41 @@
 @use "variables" as *;
-@use "mixins" as *;
 
-// The move between Get Data and Studio (RouteMove, ROUTE_TO_STUDIO and
-// ROUTE_TO_DATA in src/lib/search/studioHandoff.ts). Forward, the data page
-// slides left as it fades and Studio rides in from the right; back reverses
-// the direction. The leaving page fades fast so it does not compete with the
-// arriving one, which fades in once the old one has gone.
-::view-transition-old(.route-forward),
-::view-transition-old(.route-back) {
-    animation:
-        route-fade 0.15s $ease-out both reverse,
-        route-slide 0.4s $ease-custom both reverse;
+// The move between Get Data and Studio (RouteMove; ROUTE_TO_STUDIO and
+// ROUTE_TO_DATA in src/lib/search/studioHandoff.ts). Forward, Studio (the
+// sheet) slides over the site from the right while the site (the under
+// layer, header included) drifts left beneath it. Back, the sheet slides off
+// to the right and the site drifts back. Both layers stay opaque, so each
+// pixel changes once, at the sheet's moving edge. Each direction has its own
+// keyframes, since `reverse` would also turn the ease-out into an ease-in.
+// The offsets are in vw because each named element of a layer is its own
+// snapshot, and a percentage would move each by its own width.
+
+// A navigation the move does not type swaps at once, where the UA would
+// crossfade the root snapshot through grey.
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
 }
 
-::view-transition-new(.route-forward),
-::view-transition-new(.route-back) {
-    animation:
-        route-fade 0.21s $ease-out 0.15s both,
-        route-slide 0.4s $ease-custom both;
+::view-transition-new(.route-sheet) {
+    animation: route-sheet-in 0.4s $ease-out both;
 }
 
-::view-transition-old(.route-forward),
-::view-transition-new(.route-back) {
-    --route-offset: #{rem(-60)};
+::view-transition-old(.route-under) {
+    animation: route-under-out 0.4s $ease-out both;
 }
 
-::view-transition-new(.route-forward),
-::view-transition-old(.route-back) {
-    --route-offset: #{rem(60)};
+// The leaving sheet stays above the site it uncovers.
+::view-transition-group(.route-sheet) {
+    z-index: 1;
 }
 
-@keyframes route-fade {
-    from {
-        opacity: 0;
-    }
+::view-transition-old(.route-sheet) {
+    animation: route-sheet-out 0.34s $ease-out both;
 }
 
-@keyframes route-slide {
-    from {
-        translate: var(--route-offset) 0;
-    }
+::view-transition-new(.route-under) {
+    animation: route-under-in 0.34s $ease-out both;
 }
 
 // Clicks during the move reach the arriving page.
@@ -47,15 +43,56 @@
     pointer-events: none;
 }
 
+@keyframes route-sheet-in {
+    from {
+        translate: 100vw 0;
+    }
+}
+
+@keyframes route-sheet-out {
+    to {
+        translate: 100vw 0;
+    }
+}
+
+@keyframes route-under-out {
+    to {
+        translate: -20vw 0;
+    }
+}
+
+@keyframes route-under-in {
+    from {
+        translate: -20vw 0;
+    }
+}
+
+@keyframes route-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes route-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+// No movement: Studio fades in over the still site, and fades off it on the
+// way back, a steady brightness ramp with no grey dip.
+
 @media (prefers-reduced-motion: reduce) {
-    // No movement: the pages swap at once.
-    ::view-transition-group(root),
-    ::view-transition-old(root),
-    ::view-transition-new(root),
-    ::view-transition-old(.route-forward),
-    ::view-transition-new(.route-forward),
-    ::view-transition-old(.route-back),
-    ::view-transition-new(.route-back) {
+    ::view-transition-new(.route-sheet) {
+        animation: route-fade-in 0.2s ease both;
+    }
+
+    ::view-transition-old(.route-sheet) {
+        animation: route-fade-out 0.16s ease both;
+    }
+
+    ::view-transition-old(.route-under),
+    ::view-transition-new(.route-under) {
         animation: none;
     }
 }

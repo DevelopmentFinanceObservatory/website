@@ -17,7 +17,7 @@ const StudioPage = async () => {
     const session = await getSession();
 
     return (
-        <RouteMove page="studio">
+        <RouteMove layer="sheet">
             <Studio guest={!session} examples={pickExamples()} />
         </RouteMove>
     );

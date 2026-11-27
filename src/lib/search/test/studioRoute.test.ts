@@ -76,9 +76,9 @@ test('routeMove moves on an auto decline, and offers Studio otherwise', async (t
     }
 });
 
-test('answerTakesOffer waits for the answer and leaves an analysis decline its own button', async (t) => {
+test('answerTakesOffer shows the card before the answer and leaves an analysis decline its own button', async (t) => {
     const cases: [string, Parameters<typeof answerTakesOffer>[0], boolean][] = [
-        ['no answer yet', null, false],
+        ['no answer yet', null, true],
         ['a resolution', { kind: 'resolution' }, true],
         ['a catalogue answer', { kind: 'catalogue' }, true],
         ['an out_of_scope decline', { kind: 'declined', reason: 'out_of_scope' }, true],

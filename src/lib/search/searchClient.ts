@@ -143,9 +143,12 @@ export type SearchEvent =
           /** The router's early verdict on a run that opted in to Studio
            *  routing (`studio_routing`), sent before `interpretation`. Only an
            *  `offer` route sends one; the run goes on, and its response
-           *  carries the same route. */
+           *  carries the same route. `traceId` is the run's trace id, which
+           *  the response's diagnostics repeat, and null when the frame
+           *  carries none. */
           kind: 'route';
           route: StudioRoute;
+          traceId: string | null;
       }
     | {
           kind: 'slot_options';
@@ -1139,7 +1142,8 @@ export async function resolveStream(
             const ev = JSON.parse(data);
             if (event === 'route' || ev?.kind === 'route') {
                 const route = studioRoute(ev);
-                if (route) onEvent({ kind: 'route', route });
+                const traceId = typeof ev?.trace_id === 'string' ? ev.trace_id : null;
+                if (route) onEvent({ kind: 'route', route, traceId });
             } else if (ev?.kind === 'response') {
                 unreadable = !emitResponse(onEvent, ev.response, ev);
             } else if (ev?.kind === 'place_options') {

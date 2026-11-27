@@ -42,7 +42,7 @@ import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
-import { HANDOFF_VIA_PARAM, handoffPromptSource, routedArrival } from '@/lib/studio/examples';
+import { arrivalStrippedHref, handoffPromptSource, routedArrival } from '@/lib/studio/examples';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -52,8 +52,9 @@ import {
     logRefusedDescriptions,
 } from '@/lib/studio/infoPanel';
 import {
-    GUEST_PROMPTS,
     GUEST_PROMPTS_KEY,
+    guestOutOfPrompts,
+    guestPromptsUsed,
     promptEvent,
     type PromptIntent,
 } from '@/lib/studio/promptAllowance';
@@ -69,6 +70,9 @@ const FILL_SHADES = ['#ffffff', '#eceada', '#dedcc6', '#cfceb6'];
 // Landing → workspace choreography: the landing staggers out first, then the
 // workspace mounts (pattern morphs, chat slides in, bar actions cascade).
 const STAGE_OUT_MS = 560;
+// The chat line a turn opens with (useChat's send), shown on a handed-over
+// question until its turn starts.
+const ARRIVAL_STATUS = 'Resolving the question';
 
 type Mode = 'start' | 'leaving' | 'workspace';
 
@@ -106,7 +110,7 @@ export type StudioProps = {
 // up. The proxy holds the real allowance (src/lib/studio/spendPrompt): a
 // guest past it, from a cleared browser too, gets its refusal as the reply.
 const guestListeners = new Set<() => void>();
-const readGuestUsed = () => Number(localStorage.getItem(GUEST_PROMPTS_KEY)) || 0;
+const readGuestUsed = () => guestPromptsUsed(localStorage);
 const writeGuestUsed = (used: number) => {
     localStorage.setItem(GUEST_PROMPTS_KEY, String(used));
     guestListeners.forEach((listener) => listener());
@@ -145,7 +149,15 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // whiteboard) rides the root font-size like the rest of the page.
     const gridCell = useGridCell();
     const gridScale = gridCell / GRID_CELL;
-    const [mode, setMode] = useState<Mode>(shared ? 'workspace' : 'start');
+    const searchParams = useSearchParams();
+    // A question handed over from Get Data (`/studio?q=…`, studioHref in
+    // src/lib/search/studioHandoff.ts) opens straight on the workspace, the
+    // question and a pending line already in its transcript (`shownChat`),
+    // so the page Get Data's move carries in is the page that stays. The
+    // section's `data-arrival` holds the workspace's entrance animations
+    // until New Chat leaves it. Read once, at mount.
+    const [arrival, setArrival] = useState(() => (shared || openId ? null : searchParams.get('q')));
+    const [mode, setMode] = useState<Mode>(shared || arrival ? 'workspace' : 'start');
     // Cols/rows span a full desktop viewport — off-viewport cells on smaller
     // screens just clip.
     const fills = useGridFills({
@@ -156,7 +168,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     });
     // The landing's opener is a growing textarea; the type covers both.
     const inputRef = useRef<PromptField>(null);
-    const [query, setQuery] = useState(sharedSaved?.title ?? '');
+    const [query, setQuery] = useState(sharedSaved?.title ?? arrival ?? '');
     // The chat's follow-up field, kept here so text typed into the landing's
     // field while it leaves carries into it (see `leaving` below).
     const [followDraft, setFollowDraft] = useState('');
@@ -227,7 +239,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     }, [guest, sentCount, refundedCount]);
 
     // Queued prompts hold their place in the limit until sent or removed.
-    const walled = guest && guestUsed + conversation.queued.length >= GUEST_PROMPTS;
+    const walled = guestOutOfPrompts({ guest, used: guestUsed + conversation.queued.length });
     // Every prompt (landing, follow-up, card menu, a clicked chip) goes
     // through here: past the limit a guest's is dropped, the rest are counted
     // as usage (turn, intent and a typed prompt's length, never the text). A
@@ -392,10 +404,9 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // A question handed over from the search page (`/studio?q=…&seed=…`),
     // with the token its seeds are stored under and, for a search example,
     // its source. Consumed once, below, after `begin` exists.
-    const searchParams = useSearchParams();
     const handover = searchParams.get('q');
     const seedToken = searchParams.get('seed');
-    const handoverSource = handoffPromptSource(searchParams.get(HANDOFF_VIA_PARAM));
+    const handoverSource = handoffPromptSource(searchParams);
     const handedOver = useRef(false);
     // A question the search API's router moved here: its conversation says
     // why and offers the way back, until New Chat or a saved conversation
@@ -425,7 +436,11 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         doc.reset();
         setQuery(trimmed);
         chat.send(trimmed, undefined, seeds, undefined, source);
-        enterWorkspace();
+
+        // A handed-over question is already on the workspace.
+        if (mode === 'start') {
+            enterWorkspace();
+        }
     };
 
     // Reopen a saved conversation exactly as it was left — same transcript,
@@ -484,7 +499,10 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // The other half of QA-58: signed in, with a guest canvas waiting in
     // this tab, Studio reopens it instead of the empty landing. Saving is on
     // now, so hydrating it is also what writes it to history. Deferred by a
-    // tick for the same reason the `?q=` handover below is — see its note.
+    // tick on purpose. `openSaved` starts the landing's stage-out on a timer
+    // that the mount effect's cleanup clears, and in development React
+    // mounts, cleans up and mounts again; starting it inside that window
+    // would cancel the transition and leave the page on a blank stage.
     const restored = useRef(false);
 
     useEffect(() => {
@@ -532,6 +550,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         window.history.replaceState(null, '', '/studio');
         window.clearTimeout(leaveTimer.current);
         setRouted(null);
+        setArrival(null);
         setQuery('');
         setFollowDraft('');
         setChatCollapsed(false);
@@ -639,26 +658,30 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
 
     // Studio opens on the handed-over question instead of a blank canvas.
     // The id-bearing URL replaces this one as soon as the turn starts, so a
-    // refresh continues the conversation rather than re-asking.
+    // refresh continues the conversation rather than re-asking. A guest's
+    // URL keeps the question and drops how it arrived (arrivalStrippedHref),
+    // so a copied link neither shows the arrival line nor carries the
+    // routed search's trace id. The question is already on the workspace,
+    // so the turn starts here, after the commit that showed it.
     useEffect(() => {
-        // Deferred by a tick on purpose. `begin` starts the landing's
-        // stage-out on a timer that the mount effect's cleanup clears, and in
-        // development React mounts, cleans up and mounts again — starting the
-        // turn inside that window would cancel the transition and leave the
-        // page on a blank stage. A tick puts it safely after.
-        const handle = window.setTimeout(() => {
-            if (handover && !handedOver.current) {
-                handedOver.current = true;
-                // Seeds that cannot be read leave the question alone.
-                begin(
-                    handover,
-                    handoverSource,
-                    (seedToken && takeSeeds(() => window.sessionStorage, seedToken)) || undefined,
-                );
-            }
-        }, 0);
+        if (!handover || handedOver.current) {
+            return;
+        }
 
-        return () => window.clearTimeout(handle);
+        handedOver.current = true;
+        // Seeds that cannot be read leave the question alone.
+        begin(
+            handover,
+            handoverSource,
+            (seedToken && takeSeeds(() => window.sessionStorage, seedToken)) || undefined,
+        );
+
+        const stripped =
+            !account && arrivalStrippedHref('/studio', new URLSearchParams(window.location.search));
+
+        if (stripped) {
+            window.history.replaceState(null, '', stripped);
+        }
         // `begin` is rebuilt every render; the ref is what makes this run once.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [handover, handoverSource, seedToken]);
@@ -721,6 +744,20 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     };
 
     const title = doc.conversationTitle ?? query;
+    // A handed-over question before its turn starts: shown as the turn will
+    // show it, the question with its pending line. React runs the effects
+    // of a commit that a view transition carries only once the transition
+    // ends, so the turn the handover effect starts lands after Get Data's
+    // move, and the move carries this transcript in.
+    const shownChat =
+        arrival && chat.messages.length === 0 && !walled
+            ? {
+                  ...chat,
+                  messages: [{ role: 'user' as const, text: arrival, turn: 1 }],
+                  thinking: true,
+                  status: ARRIVAL_STATUS,
+              }
+            : chat;
     const firstPrompt = chat.messages.find((message) => message.role === 'user')?.text ?? query;
     const inWorkspace = mode === 'workspace';
 
@@ -738,6 +775,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                 filtersRow && styles.filtersRow,
                 chatShown && styles.chatShown,
             )}
+            data-arrival={arrival ? 'route' : undefined}
         >
             {/* Docking starts with the stage-out (not after it) — one continuous
                 move instead of two beats. */}
@@ -989,7 +1027,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                         onDraftChange={setFollowDraft}
                         editTarget={editTarget}
                         onClearEditTarget={() => setEditTarget(null)}
-                        chat={chat}
+                        chat={shownChat}
                         tab={chatTab}
                         collapsed={chatCollapsed}
                         gone={solo}

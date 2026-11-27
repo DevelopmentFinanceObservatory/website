@@ -63,17 +63,15 @@ export function routeMove({
 }
 
 /**
- * Whether an answer takes the Studio card a route's offer shows. The card
- * waits for the answer to land, so a click on it carries the answer's
- * trace id, and shows on every kind of answer except a `requires_analysis`
- * decline, whose own "Ask in Studio" stands in for it.
+ * Whether the run on screen takes the Studio card a route's offer shows:
+ * from the route's early frame, before any answer (null), and then on
+ * every kind of answer except a `requires_analysis` decline, whose own
+ * "Ask in Studio" stands in for it.
  */
 export function answerTakesOffer(
     answer: (Pick<ResolveResponse, 'kind'> & { reason?: string | null }) | null,
 ): boolean {
-    return (
-        answer !== null && !(answer.kind === 'declined' && answer.reason === 'requires_analysis')
-    );
+    return !(answer?.kind === 'declined' && answer.reason === 'requires_analysis');
 }
 
 /** The guest prompt count the move reads: 0 for a signed-in reader, whose

@@ -188,6 +188,17 @@
     }
 }
 
+// Already in place on a question handed over from Get Data (Studio's
+// `arrival`), which the move carries in. The card filters mount with the
+// first card, later, and keep their rise.
+[data-arrival="route"] {
+    .wsToolsLeft,
+    .title,
+    .wsToolsPhone {
+        animation: none;
+    }
+}
+
 @keyframes ws-rise {
     from {
         opacity: 0;

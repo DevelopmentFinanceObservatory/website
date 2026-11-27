@@ -71,7 +71,33 @@ export const routedArrival = (
         : null;
 };
 
-/** The prompt source of a `/studio?q=` arrival: `search_example` for
- *  `via=example`, and none for anything else. */
-export const handoffPromptSource = (via: string | null): PromptSource | undefined =>
-    via === 'example' ? 'search_example' : undefined;
+/** The `/studio` query param (`example=1`) that marks a question moved or
+ *  offered by the search API's router (`route_auto`, `route_offer`) as a
+ *  Data search example's text, which `via=example` marks on a click. */
+export const HANDOFF_EXAMPLE_PARAM = 'example';
+
+/** The prompt source of a `/studio?q=` arrival: `search_example` for a Data
+ *  search example's text (`via=example`, or `example=1` beside a routed
+ *  `via`), and none for anything else. */
+export const handoffPromptSource = (params: URLSearchParams): PromptSource | undefined =>
+    params.get(HANDOFF_VIA_PARAM) === 'example' || params.get(HANDOFF_EXAMPLE_PARAM) === '1'
+        ? 'search_example'
+        : undefined;
+
+/** The `/studio` URL with the params that describe how a question arrived
+ *  (`via`, `trace`, `example`) taken out, or null when it has none. Studio
+ *  reads them once, so a copied or reloaded link does not replay the
+ *  arrival or carry the routed search's trace id. */
+export const arrivalStrippedHref = (pathname: string, params: URLSearchParams): string | null => {
+    const kept = new URLSearchParams(params);
+
+    for (const param of [HANDOFF_VIA_PARAM, HANDOFF_TRACE_PARAM, HANDOFF_EXAMPLE_PARAM]) {
+        kept.delete(param);
+    }
+
+    if (kept.size === params.size) {
+        return null;
+    }
+
+    return kept.size > 0 ? `${pathname}?${kept}` : pathname;
+};

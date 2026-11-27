@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 
 import styles from './RouteArrival.module.scss';
 
@@ -8,11 +8,20 @@ import { track } from '@/lib/events/client';
 import { routeBackHref } from '@/lib/search/searchEvents';
 import { ROUTE_TO_DATA } from '@/lib/search/studioHandoff';
 
+// The link's text, dimmed while the data page loads: the link does not
+// prefetch, so the page can take a moment to answer the press.
+const BackLabel = () => {
+    const { pending } = useLinkStatus();
+
+    return <span className={pending ? styles.pending : undefined}>Search the data instead</span>;
+};
+
 /**
  * The line above a routed question's transcript: why the search API's router
  * moved it from Get Data, and the way back to a data search of the same
  * question with the router off. The way back replaces Studio in the history,
- * as the move replaced the data page, so Back does not ask the question again.
+ * so Back from the data search returns to the data search the move left
+ * (routing=off), and does not ask the question in Studio again.
  */
 const RouteArrival = ({ question, traceId }: { question: string; traceId: string | null }) => (
     <p className={styles.arrival}>
@@ -25,7 +34,7 @@ const RouteArrival = ({ question, traceId }: { question: string; traceId: string
             className={styles.back}
             onClick={() => track('studio.route_back', { traceId })}
         >
-            Search the data instead
+            <BackLabel />
         </Link>
     </p>
 );
