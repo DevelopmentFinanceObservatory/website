@@ -3,10 +3,12 @@ import test from 'node:test';
 
 import {
     evergreenFailureText,
+    isArtifactChangedRefusal,
     isSlugTakenRefusal,
     isWithdrawnRefusal,
     publishRefusalText,
     readEvergreenAnswer,
+    sameField,
 } from '../client.ts';
 
 const CARDS = [
@@ -114,4 +116,35 @@ test('evergreen check failures read apart from each other and from a refusal', (
     assert.ok(unavailable && refused);
     assert.notEqual(evergreenFailureText(unavailable), evergreenFailureText(refused));
     assert.ok(evergreenFailureText(unavailable));
+});
+
+test('evergreen_too_long reads from the pointer and detail alone', () => {
+    assert.deepEqual(readEvergreenAnswer(refusal('evergreen_too_long', { pointer: '/content' })), {
+        code: 'evergreen_too_long',
+        field: 'content',
+        detail: DETAIL,
+    });
+    assert.equal(readEvergreenAnswer(refusal('evergreen_too_long', { pointer: '/slug' })), null);
+    assert.equal(readEvergreenAnswer(refusal('evergreen_too_long')), null);
+});
+
+test('a refusal applies to a field only while it holds the submitted value', () => {
+    const sent = {
+        title: 'Aid doubled.',
+        description: 'd',
+        contentTitle: null,
+        content: null,
+        topics: [],
+    };
+
+    assert.equal(sameField(sent, { ...sent }, 'title'), true);
+    assert.equal(sameField(sent, { ...sent, title: 'Aid, by year' }, 'title'), false);
+    assert.equal(sameField(sent, { ...sent, title: 'Aid, by year' }, 'description'), true);
+    assert.equal(sameField(sent, { ...sent, content: '' }, 'content'), true);
+});
+
+test('isArtifactChangedRefusal reads the 409 code', () => {
+    assert.equal(isArtifactChangedRefusal(refusal('artifact_changed')), true);
+    assert.equal(isArtifactChangedRefusal(refusal('slug_taken')), false);
+    assert.equal(isArtifactChangedRefusal(null), false);
 });

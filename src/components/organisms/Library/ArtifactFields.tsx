@@ -20,6 +20,7 @@ import {
     evergreenFailureText,
     loadTopics,
     readEvergreenAnswer,
+    sameField,
 } from '@/lib/library/client';
 import { type ArtifactText, LIMITS } from '@/lib/library/publish';
 
@@ -140,27 +141,44 @@ const AddTopic = ({
     );
 };
 
-/** The sentences the evergreen check refused, by field, with the line that
- *  says how to mend them. */
-export type Refusals = { fix: string; errors: readonly EvergreenError[] };
-
-/** `refusals` without the sentences of `field`, which was edited. */
-export const withoutField = (refusals: Refusals | null, field: EvergreenField): Refusals | null => {
-    const errors = refusals?.errors.filter((error) => error.field !== field) ?? [];
-
-    return refusals && errors.length > 0 ? { fix: refusals.fix, errors } : null;
+/** What the evergreen check refused in the text `submitted`, by field: the
+ *  sentences with the line that says how to mend them, and the fields that
+ *  were too long. A field shows its part only while it holds what was
+ *  submitted. */
+export type Refusals = {
+    submitted: ArtifactText;
+    fix: string | null;
+    errors: readonly EvergreenError[];
+    limits: readonly { field: EvergreenField; detail: string }[];
 };
 
 /** What a refused publish or edit shows: the sentences under their fields, or
- *  one line for a failure of the check or any other refusal. */
+ *  one line for a failure of the check or any other refusal. `submitted` is
+ *  the text the request carried. */
 export const evergreenOutcome = (
     problem: unknown,
     fallback: string,
+    submitted: ArtifactText,
 ): { refusals: Refusals | null; error: string | null } => {
     const answer = readEvergreenAnswer(problem);
 
     if (answer?.code === 'not_evergreen') {
-        return { refusals: { fix: answer.fix, errors: answer.errors }, error: null };
+        return {
+            refusals: { submitted, fix: answer.fix, errors: answer.errors, limits: [] },
+            error: null,
+        };
+    }
+
+    if (answer?.code === 'evergreen_too_long') {
+        return {
+            refusals: {
+                submitted,
+                fix: null,
+                errors: [],
+                limits: [{ field: answer.field, detail: answer.detail }],
+            },
+            error: null,
+        };
     }
 
     return {
@@ -178,13 +196,18 @@ const FIELD_ORDER: readonly EvergreenField[] = ['title', 'description', 'content
 const FieldRefusals = ({
     id,
     errors,
+    limits,
     fix,
 }: {
     id: string;
     errors: readonly EvergreenError[];
+    limits: readonly string[];
     fix: string | null;
 }) => (
     <div className={styles.refused} id={id} role="alert">
+        {limits.map((detail) => (
+            <p key={detail}>{detail}</p>
+        ))}
         <ul className={styles.refusedList}>
             {errors.map((error) => (
                 <li key={`${error.start}-${error.end}`}>
@@ -204,10 +227,9 @@ type ArtifactFieldsProps = {
     // Shown under the title.
     address?: ReactNode;
     children?: ReactNode;
-    // The evergreen refusal of the last try, shown under the fields it names.
+    // The evergreen refusal of the last try, shown under the fields it names
+    // while they hold what was sent.
     refusals?: Refusals | null;
-    // An edited field drops its refusals.
-    onEdit?: (field: EvergreenField) => void;
 };
 
 const ArtifactFields = ({
@@ -216,7 +238,6 @@ const ArtifactFields = ({
     address,
     children,
     refusals = null,
-    onEdit,
 }: ArtifactFieldsProps) => {
     const ids = useId();
     // Null until the list arrives.
@@ -247,28 +268,31 @@ const ArtifactFields = ({
     const reload = () =>
         void loadTopics().then((answer) => answer.ok && setTopics(answer.value.topics));
     const set = (patch: Partial<ArtifactText>) => onChange((current) => ({ ...current, ...patch }));
-    const edit = (field: EvergreenField, patch: Partial<ArtifactText>) => {
-        set(patch);
-        onEdit?.(field);
-    };
-    const fixField = FIELD_ORDER.find((field) =>
-        refusals?.errors.some((error) => error.field === field),
-    );
+    // The refusals that still hold, as the field holds what was sent.
+    const standing = (field: EvergreenField) =>
+        refusals && sameField(refusals.submitted, value, field)
+            ? {
+                  errors: refusals.errors.filter((error) => error.field === field),
+                  limits: refusals.limits
+                      .filter((limit) => limit.field === field)
+                      .map((limit) => limit.detail),
+              }
+            : { errors: [], limits: [] };
+    const fixField = FIELD_ORDER.find((field) => standing(field).errors.length > 0);
     // What a field shows and sets for its refusals.
     const refused = (field: EvergreenField) => {
-        const errors = refusals?.errors.filter((error) => error.field === field) ?? [];
+        const { errors, limits } = standing(field);
+        const shown = errors.length > 0 || limits.length > 0;
         const id = `${ids}-${field}-refused`;
 
         return {
-            input:
-                errors.length > 0
-                    ? ({ 'aria-invalid': true, 'aria-describedby': id } as const)
-                    : {},
+            input: shown ? ({ 'aria-invalid': true, 'aria-describedby': id } as const) : {},
             list:
-                refusals && errors.length > 0 ? (
+                refusals && shown ? (
                     <FieldRefusals
                         id={id}
                         errors={errors}
+                        limits={limits}
                         fix={fixField === field ? refusals.fix : null}
                     />
                 ) : null,
@@ -303,7 +327,7 @@ const ArtifactFields = ({
                         placeholder="Enter title…"
                         required
                         {...title.input}
-                        onChange={(event) => edit('title', { title: event.target.value })}
+                        onChange={(event) => set({ title: event.target.value })}
                     />
                 </label>
                 {title.list}
@@ -320,9 +344,7 @@ const ArtifactFields = ({
                         rows={3}
                         required
                         {...description.input}
-                        onChange={(event) =>
-                            edit('description', { description: event.target.value })
-                        }
+                        onChange={(event) => set({ description: event.target.value })}
                     />
                 </label>
                 {description.list}
@@ -373,9 +395,7 @@ const ArtifactFields = ({
                         maxLength={LIMITS.contentTitle}
                         placeholder="Enter content title…"
                         {...contentTitle.input}
-                        onChange={(event) =>
-                            edit('contentTitle', { contentTitle: event.target.value || null })
-                        }
+                        onChange={(event) => set({ contentTitle: event.target.value || null })}
                     />
                 </label>
                 {contentTitle.list}
@@ -390,9 +410,7 @@ const ArtifactFields = ({
                         placeholder="Enter text content…"
                         rows={3}
                         {...content.input}
-                        onChange={(event) =>
-                            edit('content', { content: event.target.value || null })
-                        }
+                        onChange={(event) => set({ content: event.target.value || null })}
                     />
                 </label>
                 {content.list}

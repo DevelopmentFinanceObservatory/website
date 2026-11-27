@@ -156,6 +156,14 @@ legend.label {
     border-color: var(--color-red);
 }
 
+// A focus ring apart from the red border, so a focused invalid field differs
+// from an unfocused one.
+.input[aria-invalid="true"]:focus-visible,
+.textarea[aria-invalid="true"]:focus-visible {
+    outline: 2px solid var(--color-charcoal);
+    outline-offset: 2px;
+}
+
 .refused {
     @include font-size(12px, 1.35);
 

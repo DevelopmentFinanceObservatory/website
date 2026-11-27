@@ -3,19 +3,19 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import ArtifactFields, {
-    evergreenOutcome,
-    isComplete,
-    type Refusals,
-    withoutField,
-} from './ArtifactFields';
+import ArtifactFields, { evergreenOutcome, isComplete, type Refusals } from './ArtifactFields';
 import styles from './EditArtifact.module.scss';
 import ReplacementPicker from './ReplacementPicker';
 
 import Button from '@/components/atoms/Button/Button';
 import Modal from '@/components/molecules/Modal/Modal';
 import { artifactPath, type LibraryArtifact, type ReplacementChoice } from '@/lib/library/artifact';
-import { deleteArtifact, editArtifact, withdrawnWithoutReplacement } from '@/lib/library/client';
+import {
+    deleteArtifact,
+    editArtifact,
+    isArtifactChangedRefusal,
+    withdrawnWithoutReplacement,
+} from '@/lib/library/client';
 import type { ArtifactText } from '@/lib/library/publish';
 
 /**
@@ -51,6 +51,8 @@ const EditArtifact = ({
     const [replacedBy, setReplacedBy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refusals, setRefusals] = useState<Refusals | null>(null);
+    // The edit answered that someone else saved the artifact first.
+    const [changed, setChanged] = useState(false);
 
     const show = (next: boolean) => {
         if (next) {
@@ -59,6 +61,7 @@ const EditArtifact = ({
             setReplacedBy(null);
             setError(null);
             setRefusals(null);
+            setChanged(false);
         }
 
         setOpen(next);
@@ -74,6 +77,7 @@ const EditArtifact = ({
         setBusy('save');
         setError(null);
         setRefusals(null);
+        setChanged(false);
 
         const answer = await editArtifact(artifact.id, text, artifact.revision);
 
@@ -83,7 +87,13 @@ const EditArtifact = ({
             setOpen(false);
             router.refresh();
         } else {
-            const outcome = evergreenOutcome(answer.problem, answer.detail);
+            if (isArtifactChangedRefusal(answer.problem)) {
+                setChanged(true);
+
+                return;
+            }
+
+            const outcome = evergreenOutcome(answer.problem, answer.detail, text);
 
             setRefusals(outcome.refusals);
             setError(outcome.error);
@@ -117,12 +127,23 @@ const EditArtifact = ({
             </Button>
             <Modal open={open} onOpenChange={show} title="Edit" fit>
                 <form className={styles.form} onSubmit={save}>
-                    <ArtifactFields
-                        value={text}
-                        onChange={setText}
-                        refusals={refusals}
-                        onEdit={(field) => setRefusals((current) => withoutField(current, field))}
-                    />
+                    <ArtifactFields value={text} onChange={setText} refusals={refusals} />
+                    {changed && (
+                        <div className={styles.error} role="alert">
+                            <p>Someone else changed this artifact. Reload to see their changes.</p>
+                            <Button
+                                variant="bordered"
+                                small
+                                onClick={() => {
+                                    // Reopening shows the fresh text.
+                                    setOpen(false);
+                                    router.refresh();
+                                }}
+                            >
+                                Reload
+                            </Button>
+                        </div>
+                    )}
                     {error && (
                         <p className={styles.error} role="alert">
                             {error}

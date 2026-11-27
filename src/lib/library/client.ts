@@ -89,20 +89,31 @@ export type EvergreenError = {
  *  refusal of the text by the check that a retry would not mend. */
 export type EvergreenAnswer =
     | { code: 'not_evergreen'; fix: string; errors: EvergreenError[] }
+    | { code: 'evergreen_too_long'; field: EvergreenField; detail: string }
     | { code: 'evergreen_check_unavailable' }
     | { code: 'evergreen_check_refused' };
 
-const EVERGREEN_FIELDS: readonly string[] = ['title', 'description', 'contentTitle', 'content'];
+const EVERGREEN_FIELDS: readonly EvergreenField[] = [
+    'title',
+    'description',
+    'contentTitle',
+    'content',
+];
+
+// The field a pointer such as `/content` names, when it is one of the four.
+const fieldOf = (pointer: unknown): EvergreenField | null => {
+    const name = typeof pointer === 'string' ? pointer.replace(/^\//, '') : null;
+
+    return EVERGREEN_FIELDS.find((field) => field === name) ?? null;
+};
 
 const readEvergreenError = (entry: unknown): EvergreenError | null => {
     const record = asRecord(entry);
-    const pointer = record?.['pointer'];
-    const field = typeof pointer === 'string' ? pointer.replace(/^\//, '') : null;
+    const field = fieldOf(record?.['pointer']);
     const { start, end, quote, kind, reason } = record ?? {};
 
     if (
         field === null ||
-        !EVERGREEN_FIELDS.includes(field) ||
         typeof start !== 'number' ||
         typeof end !== 'number' ||
         typeof quote !== 'string' ||
@@ -112,7 +123,7 @@ const readEvergreenError = (entry: unknown): EvergreenError | null => {
         return null;
     }
 
-    return { field: field as EvergreenField, start, end, quote, kind, reason };
+    return { field, start, end, quote, kind, reason };
 };
 
 /**
@@ -125,6 +136,16 @@ export const readEvergreenAnswer = (problem: unknown): EvergreenAnswer | null =>
     const body = asRecord(problem);
 
     switch (body?.['code']) {
+        case 'evergreen_too_long': {
+            // Read from the pointer and `detail` alone, so the limit's own
+            // fields are not needed.
+            const field = fieldOf(body['pointer']);
+            const detail = body['detail'];
+
+            return field && typeof detail === 'string'
+                ? { code: 'evergreen_too_long', field, detail }
+                : null;
+        }
         case 'evergreen_check_unavailable':
             return { code: 'evergreen_check_unavailable' };
         case 'evergreen_check_refused':
@@ -144,6 +165,19 @@ export const readEvergreenAnswer = (problem: unknown): EvergreenAnswer | null =>
             return null;
     }
 };
+
+/** Whether `field` holds in `current` what it held in `submitted`. A
+ *  refusal belongs to the value that was sent, so it applies to this field
+ *  only while the two match. */
+export const sameField = (
+    submitted: ArtifactText,
+    current: ArtifactText,
+    field: EvergreenField,
+): boolean => (submitted[field] ?? '') === (current[field] ?? '');
+
+/** Whether an edit answered that the artifact changed since it was read. */
+export const isArtifactChangedRefusal = (problem: unknown): boolean =>
+    asRecord(problem)?.['code'] === 'artifact_changed';
 
 /** The sentence a failure of the check shows, or null for a refusal of
  *  sentences, which show under their fields. */

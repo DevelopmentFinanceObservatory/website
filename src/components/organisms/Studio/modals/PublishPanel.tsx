@@ -13,7 +13,6 @@ import ArtifactFields, {
     evergreenOutcome,
     isComplete,
     type Refusals,
-    withoutField,
 } from '@/components/organisms/Library/ArtifactFields';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode } from '@/lib/chat/shareMode';
@@ -213,7 +212,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
             if (isSlugTakenRefusal(answer.problem)) {
                 setSlugError(refusal);
             } else {
-                const outcome = evergreenOutcome(answer.problem, refusal);
+                const outcome = evergreenOutcome(answer.problem, refusal, text);
 
                 setRefusals(outcome.refusals);
                 setError(outcome.error);
@@ -257,7 +256,6 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                 value={text}
                 onChange={setText}
                 refusals={refusals}
-                onEdit={(field) => setRefusals((current) => withoutField(current, field))}
                 address={
                     <div className={styles.field}>
                         <label className={styles.label} htmlFor={`${ids}-slug`}>
@@ -324,8 +322,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 // The URL follows the new artifact's title.
                                 setSlug(null);
                                 setSlugError(null);
-                                // The title follows the artifact until it is edited,
-                                // and a replaced title drops its refusals.
+                                // The title follows the artifact until it is edited.
                                 const was = prefill(picked === CANVAS ? title : titleOf(picked));
 
                                 if (text.title === was) {
@@ -333,7 +330,6 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                         ...current,
                                         title: prefill(next === CANVAS ? title : titleOf(next)),
                                     }));
-                                    setRefusals((current) => withoutField(current, 'title'));
                                 }
                             }}
                         >
