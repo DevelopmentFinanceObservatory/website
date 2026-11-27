@@ -136,7 +136,7 @@ const EditArtifact = ({
             <Button variant="bordered" full icon="edit" onClick={() => show(true)}>
                 Edit
             </Button>
-            <Modal open={open} onOpenChange={show} title="Edit" fit>
+            <Modal open={open} onOpenChange={show} title="Edit" fit autoFocus>
                 {warnings ? (
                     <div className={styles.form}>
                         <p role="status">The changes were saved.</p>
@@ -188,6 +188,7 @@ const EditArtifact = ({
                                     <Button
                                         variant="bordered"
                                         full
+                                        autoFocus
                                         onClick={() => setConfirming(false)}
                                         disabled={busy !== null}
                                     >

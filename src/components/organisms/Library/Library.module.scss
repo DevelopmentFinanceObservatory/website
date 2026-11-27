@@ -184,6 +184,12 @@
     z-index: 0;
 }
 
+// A keyboard user sees which row holds the focus.
+.rowLink:focus-visible {
+    outline: 2px solid var(--color-charcoal);
+    outline-offset: -2px;
+}
+
 .row > :not(.rowLink) {
     position: relative;
     z-index: 1;
@@ -295,6 +301,10 @@
 
     .head {
         display: none;
+    }
+
+    .field {
+        height: rem(44);
     }
 
     .row {

@@ -5,6 +5,12 @@
     @include flex(column, flex-start, stretch);
 
     gap: rem(16);
+
+    // The Button atom draws no focus ring of its own.
+    button:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
 }
 
 .replacementForm {

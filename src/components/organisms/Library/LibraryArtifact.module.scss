@@ -21,6 +21,11 @@
     color: var(--color-bg);
     text-decoration: none;
     letter-spacing: -0.02em;
+
+    &:focus-visible {
+        outline: 2px solid var(--color-bg);
+        outline-offset: 4px;
+    }
 }
 
 .backIcon {
@@ -169,6 +174,14 @@
     flex-direction: column;
     gap: rem(6);
     margin-bottom: rem(24);
+}
+
+// The Button atom draws no focus ring of its own.
+.actions > :focus-visible,
+.dataBox > a:focus-visible,
+.withdrawn > a:focus-visible {
+    outline: 2px solid var(--color-charcoal);
+    outline-offset: 2px;
 }
 
 .facts {
@@ -337,6 +350,11 @@
     &:hover {
         color: var(--color-stone);
     }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 3px;
+    }
 }
 
 .exploreIcon {
@@ -371,6 +389,28 @@
 
 // A phone stacks the artifact, the details and the sections.
 @include breakpoint(phone) {
+    // Tap targets of 44 px: the padding grows each button's box, the
+    // negative margin keeps the layout.
+    .actions {
+        gap: rem(8);
+    }
+
+    .actions > *,
+    .dataBox > a,
+    .withdrawn > a {
+        padding-block: rem(4);
+        margin-block: rem(-4);
+    }
+
+    .back {
+        min-height: rem(44);
+        margin-bottom: rem(12);
+    }
+
+    .explore {
+        min-height: rem(44);
+    }
+
     .title {
         @include font-size(36px, 1);
     }
@@ -432,5 +472,10 @@
     a {
         text-decoration: underline;
         text-underline-offset: 0.2em;
+
+        &:focus-visible {
+            outline: 2px solid var(--color-charcoal);
+            outline-offset: 2px;
+        }
     }
 }

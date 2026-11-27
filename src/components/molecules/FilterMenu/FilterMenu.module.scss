@@ -1,5 +1,6 @@
 @use "variables" as *;
 @use "mixins" as *;
+@use "breakpoints" as *;
 
 // The chip: FilterChips' face (mono label on the light ground), with a
 // chevron, and the count of picks as the tiny dark square on its corner.
@@ -20,12 +21,17 @@
     background-color: var(--color-media-bg);
     border: 0;
     border-radius: rem(4);
-    opacity: 0.8;
-    transition: opacity 0.25s ease;
+    transition: background-color 0.25s ease;
 
     &:hover,
     &[data-state="open"] {
-        opacity: 1;
+        background-color: var(--color-bg);
+    }
+
+    // The chip sits on the dark hero, so the ring is the light ground's.
+    &:focus-visible {
+        outline: 2px solid var(--color-bg);
+        outline-offset: 2px;
     }
 
     &:disabled {
@@ -34,8 +40,9 @@
     }
 }
 
+// A chip with picks takes the lighter fill the hover gives.
 .triggerOn {
-    opacity: 1;
+    background-color: var(--color-bg);
 }
 
 .chevron {
@@ -99,6 +106,8 @@
 
     &[data-highlighted] {
         background-color: var(--color-gray-2700);
+        outline: 1px solid var(--color-stone-light);
+        outline-offset: -1px;
     }
 }
 
@@ -130,4 +139,17 @@
 .optionCount {
     flex-shrink: 0;
     color: var(--color-text-faded);
+}
+
+// A phone's tap target is 44 px tall.
+@include breakpoint(phone) {
+    .trigger {
+        min-height: rem(44);
+    }
+
+    .option,
+    .clear {
+        min-height: rem(44);
+        align-items: center;
+    }
 }
