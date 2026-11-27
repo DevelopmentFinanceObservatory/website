@@ -88,7 +88,12 @@ export type EvergreenError = {
  *  sentences with the fix line, a retryable failure of the check, or a
  *  refusal of the text by the check that a retry would not mend. */
 export type EvergreenAnswer =
-    | { code: 'not_evergreen'; fix: string; errors: EvergreenError[] }
+    | {
+          code: 'not_evergreen';
+          fix: string;
+          errors: EvergreenError[];
+          warnings: EvergreenWarning[];
+      }
     | { code: 'evergreen_too_long'; field: EvergreenField; detail: string }
     | { code: 'evergreen_check_unavailable' }
     | { code: 'evergreen_check_refused' };
@@ -105,6 +110,38 @@ const fieldOf = (pointer: unknown): EvergreenField | null => {
     const name = typeof pointer === 'string' ? pointer.replace(/^\//, '') : null;
 
     return EVERGREEN_FIELDS.find((field) => field === name) ?? null;
+};
+
+/** A sentence in the check's middle band: the text was accepted, and the
+ *  sentence may state something a data update can change. */
+export type EvergreenWarning = {
+    field: EvergreenField;
+    start: number;
+    end: number;
+    quote: string;
+    kind: string;
+};
+
+/** The sentences a successful publish or edit flagged, from its response
+ *  body. Entries that do not read as a sentence of a known field are dropped. */
+export const readEvergreenWarnings = (body: unknown): EvergreenWarning[] => {
+    const entries: unknown = asRecord(body)?.['warnings'];
+
+    return Array.isArray(entries)
+        ? entries.flatMap((entry: unknown): EvergreenWarning[] => {
+              const record = asRecord(entry);
+              const field = fieldOf(record?.['pointer']);
+              const { start, end, quote, kind } = record ?? {};
+
+              return field !== null &&
+                  typeof start === 'number' &&
+                  typeof end === 'number' &&
+                  typeof quote === 'string' &&
+                  typeof kind === 'string'
+                  ? [{ field, start, end, quote, kind }]
+                  : [];
+          })
+        : [];
 };
 
 const readEvergreenError = (entry: unknown): EvergreenError | null => {
@@ -130,7 +167,8 @@ const readEvergreenError = (entry: unknown): EvergreenError | null => {
  * The evergreen answer in a refused publish or edit, or null for any other
  * refusal. Entries of `errors` that do not read as a sentence of a known
  * field are dropped, and a `not_evergreen` left with none reads as null so
- * the caller shows `detail`.
+ * the caller shows `detail`. A `not_evergreen` also carries the sentences it
+ * flagged without refusing.
  */
 export const readEvergreenAnswer = (problem: unknown): EvergreenAnswer | null => {
     const body = asRecord(problem);
@@ -158,7 +196,7 @@ export const readEvergreenAnswer = (problem: unknown): EvergreenAnswer | null =>
             const fix = body['detail'];
 
             return errors.length > 0 && typeof fix === 'string'
-                ? { code: 'not_evergreen', fix, errors }
+                ? { code: 'not_evergreen', fix, errors, warnings: readEvergreenWarnings(body) }
                 : null;
         }
         default:

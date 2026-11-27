@@ -8,6 +8,7 @@ import type { ShareScope } from './ShareModal';
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import { useLibraryEnabled } from '@/hooks/useLibraryEnabled';
+import EvergreenWarnings from '@/components/organisms/Library/EvergreenWarnings';
 import ArtifactFields, {
     blankText,
     evergreenOutcome,
@@ -19,10 +20,12 @@ import type { ShareMode } from '@/lib/chat/shareMode';
 import type { Widget } from '@/lib/chat/widgets';
 import { artifactPath, kindLabel } from '@/lib/library/artifact';
 import {
+    type EvergreenWarning,
     isSlugTakenRefusal,
     isWithdrawnRefusal,
     publishArtifact,
     publishRefusalText,
+    readEvergreenWarnings,
 } from '@/lib/library/client';
 import { LIMITS, publishKeySlot, readArtifactText, readSlug, slugOf } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
@@ -111,7 +114,11 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
     const [error, setError] = useState<string | null>(null);
     const [slugError, setSlugError] = useState<string | null>(null);
     const [refusals, setRefusals] = useState<Refusals | null>(null);
-    const [published, setPublished] = useState<{ slug: string; title: string } | null>(null);
+    const [published, setPublished] = useState<{
+        slug: string;
+        title: string;
+        warnings: EvergreenWarning[];
+    } | null>(null);
     // One key per slot (`publishKeySlot`: artifact, mode and chosen slug),
     // made on its first try and sent again on every retry.
     const keysRef = useRef(new Map<string, string>());
@@ -191,7 +198,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
         setBusy(false);
 
         if (answer.ok) {
-            setPublished(answer.value);
+            setPublished({ ...answer.value, warnings: readEvergreenWarnings(answer.value) });
         } else {
             if (isWithdrawnRefusal(answer.problem)) {
                 // The withdrawn artifact owns this key, so the next try
@@ -231,6 +238,9 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                           ? `“${published.title}” has its own page, which anyone can open and cite.`
                           : `“${published.title}” has its own page in the Library’s preview, which only Library admins can open until the Library is switched on.`}
                 </p>
+                {published.warnings.length > 0 && (
+                    <EvergreenWarnings warnings={published.warnings} />
+                )}
                 <Button
                     href={artifactPath(published.slug)}
                     prefetch={false}

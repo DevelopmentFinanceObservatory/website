@@ -181,6 +181,14 @@ legend.label {
     }
 }
 
+// Flagged sentences, in the stone of the labels beside the red refusals.
+.warned {
+    padding: 0;
+    margin: rem(4) 0 0;
+    color: var(--color-stone);
+    list-style: none;
+}
+
 .refusedFix {
     margin-top: rem(4);
 }

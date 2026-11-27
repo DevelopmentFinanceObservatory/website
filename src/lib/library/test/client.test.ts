@@ -8,6 +8,7 @@ import {
     isWithdrawnRefusal,
     publishRefusalText,
     readEvergreenAnswer,
+    readEvergreenWarnings,
     sameField,
 } from '../client.ts';
 
@@ -91,6 +92,7 @@ test('readEvergreenAnswer narrows a not_evergreen refusal and drops unreadable e
     assert.deepEqual(answer, {
         code: 'not_evergreen',
         fix: DETAIL,
+        warnings: [],
         errors: [
             {
                 field: 'content',
@@ -103,6 +105,29 @@ test('readEvergreenAnswer narrows a not_evergreen refusal and drops unreadable e
         ],
     });
     assert.equal(readEvergreenAnswer(refusal('not_evergreen', { errors: [] })), null);
+    assert.deepEqual(
+        readEvergreenAnswer(
+            refusal('not_evergreen', {
+                errors: [entry],
+                warnings: [{ ...entry, pointer: '/title', kind: 'change' }, 7],
+            }),
+        ),
+        {
+            code: 'not_evergreen',
+            fix: DETAIL,
+            errors: [
+                {
+                    field: 'content',
+                    start: 3,
+                    end: 20,
+                    quote: entry.quote,
+                    kind: 'trend',
+                    reason: entry.reason,
+                },
+            ],
+            warnings: [{ field: 'title', start: 3, end: 20, quote: entry.quote, kind: 'change' }],
+        },
+    );
     assert.equal(readEvergreenAnswer(refusal('slug_taken')), null);
     assert.equal(readEvergreenAnswer(null), null);
 });
@@ -147,4 +172,18 @@ test('isArtifactChangedRefusal reads the 409 code', () => {
     assert.equal(isArtifactChangedRefusal(refusal('artifact_changed')), true);
     assert.equal(isArtifactChangedRefusal(refusal('slug_taken')), false);
     assert.equal(isArtifactChangedRefusal(null), false);
+});
+
+test('readEvergreenWarnings narrows the flagged sentences and drops unreadable ones', () => {
+    const entry = { pointer: '/description', start: 0, end: 9, quote: 'Aid rose.', kind: 'change' };
+
+    assert.deepEqual(
+        readEvergreenWarnings({
+            slug: 'a',
+            warnings: [entry, { ...entry, pointer: '/slug' }, { ...entry, quote: 4 }, 'x'],
+        }),
+        [{ field: 'description', start: 0, end: 9, quote: 'Aid rose.', kind: 'change' }],
+    );
+    assert.deepEqual(readEvergreenWarnings({ slug: 'a' }), []);
+    assert.deepEqual(readEvergreenWarnings(null), []);
 });

@@ -16,6 +16,7 @@ import Button from '@/components/atoms/Button/Button';
 import {
     addTopic,
     type EvergreenError,
+    type EvergreenWarning,
     type EvergreenField,
     evergreenFailureText,
     loadTopics,
@@ -149,6 +150,8 @@ export type Refusals = {
     submitted: ArtifactText;
     fix: string | null;
     errors: readonly EvergreenError[];
+    // Sentences flagged without a refusal.
+    warnings: readonly EvergreenWarning[];
     limits: readonly { field: EvergreenField; detail: string }[];
 };
 
@@ -164,7 +167,13 @@ export const evergreenOutcome = (
 
     if (answer?.code === 'not_evergreen') {
         return {
-            refusals: { submitted, fix: answer.fix, errors: answer.errors, limits: [] },
+            refusals: {
+                submitted,
+                fix: answer.fix,
+                errors: answer.errors,
+                warnings: answer.warnings,
+                limits: [],
+            },
             error: null,
         };
     }
@@ -175,6 +184,7 @@ export const evergreenOutcome = (
                 submitted,
                 fix: null,
                 errors: [],
+                warnings: [],
                 limits: [{ field: answer.field, detail: answer.detail }],
             },
             error: null,
@@ -196,11 +206,13 @@ const FIELD_ORDER: readonly EvergreenField[] = ['title', 'description', 'content
 const FieldRefusals = ({
     id,
     errors,
+    warnings,
     limits,
     fix,
 }: {
     id: string;
     errors: readonly EvergreenError[];
+    warnings: readonly EvergreenWarning[];
     limits: readonly string[];
     fix: string | null;
 }) => (
@@ -216,6 +228,15 @@ const FieldRefusals = ({
             ))}
         </ul>
         {fix && <p className={styles.refusedFix}>{fix}</p>}
+        {warnings.length > 0 && (
+            <ul className={styles.warned}>
+                {warnings.map((warning) => (
+                    <li key={`${warning.start}-${warning.end}`}>
+                        May change with the data: <q>{warning.quote}</q>
+                    </li>
+                ))}
+            </ul>
+        )}
     </div>
 );
 
@@ -273,25 +294,31 @@ const ArtifactFields = ({
         refusals && sameField(refusals.submitted, value, field)
             ? {
                   errors: refusals.errors.filter((error) => error.field === field),
+                  warnings: refusals.warnings.filter((warning) => warning.field === field),
                   limits: refusals.limits
                       .filter((limit) => limit.field === field)
                       .map((limit) => limit.detail),
               }
-            : { errors: [], limits: [] };
+            : { errors: [], warnings: [], limits: [] };
     const fixField = FIELD_ORDER.find((field) => standing(field).errors.length > 0);
     // What a field shows and sets for its refusals.
     const refused = (field: EvergreenField) => {
-        const { errors, limits } = standing(field);
-        const shown = errors.length > 0 || limits.length > 0;
+        const { errors, warnings, limits } = standing(field);
+        const invalid = errors.length > 0 || limits.length > 0;
+        const shown = invalid || warnings.length > 0;
         const id = `${ids}-${field}-refused`;
 
         return {
-            input: shown ? ({ 'aria-invalid': true, 'aria-describedby': id } as const) : {},
+            input: {
+                ...(invalid ? { 'aria-invalid': true } : {}),
+                ...(shown ? { 'aria-describedby': id } : {}),
+            },
             list:
                 refusals && shown ? (
                     <FieldRefusals
                         id={id}
                         errors={errors}
+                        warnings={warnings}
                         limits={limits}
                         fix={fixField === field ? refusals.fix : null}
                     />
