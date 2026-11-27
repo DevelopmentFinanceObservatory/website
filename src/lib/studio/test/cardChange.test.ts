@@ -15,6 +15,7 @@ import {
     changeRefusalStale,
     changesHeld,
     changeStatus,
+    changeStatuses,
     type ChangeMessage,
     dropChangesForPause,
     MAX_PLACES,
@@ -806,4 +807,42 @@ test('a change a card page sent reads as refused from its row while its card sta
     ] as const) {
         assert.deepEqual(sentRefusal(sent, standing, status, dropped), expected);
     }
+});
+
+test('a change refused as stale keeps its reason and its usage outcome after the refusal withdrew the offer, until the card is changed again or replaced', () => {
+    const years: ChangeMessage[] = [
+        ...asked,
+        { role: 'user', text: '2010 to 2020', edit: { card: 'c1', row: 'years' } },
+        { role: 'bot', text: '_The card changed._', refusal: 'scope_choice_stale' },
+    ];
+    const stale = { state: 'refused', detail: 'The card changed.', code: 'scope_choice_stale' };
+
+    for (const [name, messages, cardId, replaced, expected] of [
+        ['withdrawn', years, 'c1', [], [['years', stale]]],
+        [
+            'changed again',
+            [...years, edit('c1'), { role: 'bot' as const, text: '_No._' }],
+            'c1',
+            [],
+            [['unit', { state: 'refused', detail: 'No.' }]],
+        ],
+        ['replaced', years, 'c1b', ['c1'], []],
+    ] as const) {
+        const statuses = changeStatuses({
+            messages,
+            thinking: false,
+            cardId,
+            replaced,
+            offers: [],
+        });
+
+        assert.deepEqual([...statuses], expected, name);
+    }
+
+    const statuses = changeStatuses({ messages: years, thinking: false, cardId: 'c1', offers: [] });
+
+    assert.deepEqual(sentRefusal({ card: 'c1', key: 'years' }, ['c1'], statuses.get('years'), []), {
+        detail: 'The card changed.',
+        why: 'scope_choice_stale',
+    });
 });

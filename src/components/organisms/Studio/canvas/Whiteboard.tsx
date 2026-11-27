@@ -120,6 +120,9 @@ export type WhiteboardProps = {
     // Card menu → Change unit → Send, on a card whose frame offers other
     // units. Absent on a sheet where no turn can run.
     onChangeUnit?: (id: string, unit: UnitChoice) => void;
+    // Why card changes wait (changesHeld), which the Change unit row shows
+    // in place of opening its panel. Null or absent when they can go.
+    changesHeld?: string | null;
     // Opens one card's More Info panel.
     onCardInfo: (id: string) => void;
     // The card whose panel is open: it floats centred over the dimmed page.
@@ -195,6 +198,7 @@ const Whiteboard = ({
     onRemove,
     onAskFollowUp,
     onChangeUnit,
+    changesHeld = null,
     onCardInfo,
     focusedId,
     onEditText,
@@ -896,6 +900,7 @@ const Whiteboard = ({
                     unitOffer,
                     onChangeUnit:
                         unitOffer && onChangeUnit ? (unit) => onChangeUnit(widget.id, unit) : null,
+                    unitHeld: unitOffer ? changesHeld : null,
                     onInfo: isText ? null : () => onCardInfo(widget.id),
                     onDownload:
                         onDownload && cardRefOf(widget) ? () => onDownload(widget.id) : null,

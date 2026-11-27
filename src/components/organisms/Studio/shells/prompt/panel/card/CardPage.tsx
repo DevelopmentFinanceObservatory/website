@@ -31,7 +31,7 @@ import {
     changeOffers,
     changeQueued,
     type ChangeRowKey,
-    changeStatus,
+    changeStatuses,
     type ChangeStatus,
     placesChange,
     placesChanged,
@@ -266,28 +266,30 @@ const CardPage = ({ id }: { id: string }) => {
         [widget, title, citedId, chat.messages, chat.activity, planOf, approved, offers],
     );
 
-    // Each offer's status, matched through the cards the standing card
+    // Each offer's status, and that of a change whose refusal withdrew its
+    // offer (changeStatuses), matched through the cards the standing card
     // replaced, so a change asked of one of them shows here.
     const statuses = useMemo(
         () =>
-            new Map(
-                offers.map((offer): [string, ChangeStatus] => [
-                    offer.id,
-                    current
-                        ? changeStatus({
-                              messages: chat.messages,
-                              thinking: chat.thinking,
-                              cardId: current,
-                              key: offer.key,
-                              ...(offer.key === 'shows' && { role: offer.role }),
-                              replaced,
-                              queued: chat.queued,
-                              dropped: chat.dropped,
-                          })
-                        : { state: 'idle' },
-                ]),
-            ),
+            current
+                ? changeStatuses({
+                      messages: chat.messages,
+                      thinking: chat.thinking,
+                      cardId: current,
+                      replaced,
+                      queued: chat.queued,
+                      dropped: chat.dropped,
+                      offers,
+                  })
+                : new Map<string, ChangeStatus>(),
         [offers, current, replaced, chat.messages, chat.thinking, chat.queued, chat.dropped],
+    );
+    // The refusal of a change whose offer the refusal withdrew, which no
+    // row's Change shows.
+    const withdrawn = [...statuses].flatMap(([rowId, status]) =>
+        status.state === 'refused' && !offers.some((offer) => offer.id === rowId)
+            ? [status.detail]
+            : [],
     );
     const statusOf = (offer: ChangeOffer): ChangeStatus =>
         statuses.get(offer.id) ?? { state: 'idle' };
@@ -665,6 +667,11 @@ const CardPage = ({ id }: { id: string }) => {
                     )}
                     {view.live && <PageText>{view.live}</PageText>}
                     <Pairs rows={measures.map(changeRow)} className={styles.measures} />
+                    {withdrawn.map((detail) => (
+                        <p key={detail} className={styles.refused} data-sp-change-note>
+                            {detail}
+                        </p>
+                    ))}
                     {held && measures.some((row) => row.offer) && (
                         <PageText id={heldId}>{held}</PageText>
                     )}

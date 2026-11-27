@@ -1408,7 +1408,7 @@ test('a card change carried on after a reload, or read back closed, keeps the ca
     }
 });
 
-test('a card change the harness refuses leaves a waiting plan waiting, and one it admits ends the pause', async (t) => {
+test('a card change the harness refuses leaves a waiting plan waiting, one it admits ends the pause, and one asked where pauses hold changes sends nothing', async (t) => {
     const proposed = JSON.parse(
         readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
     );
@@ -1440,8 +1440,10 @@ test('a card change the harness refuses leaves a waiting plan waiting, and one i
     };
 
     for (const kind of ['unit', 'years', 'places'] as const) {
-        for (const admitted of [false, true]) {
-            const name = `${kind}, ${admitted ? 'admitted' : 'refused'}`;
+        for (const outcome of ['refused', 'admitted', 'held'] as const) {
+            const name = `${kind}, ${outcome}`;
+            const admitted = outcome === 'admitted';
+            const changes: unknown[] = [];
 
             t.mock.method(
                 globalThis,
@@ -1453,6 +1455,8 @@ test('a card change the harness refuses leaves a waiting plan waiting, and one i
                     const body = JSON.parse(String(init?.body));
 
                     if (body.message) return chunk(2, [proposed]);
+
+                    changes.push(body);
 
                     if (!admitted) {
                         return Response.json(
@@ -1473,7 +1477,10 @@ test('a card change the harness refuses leaves a waiting plan waiting, and one i
             t.mock.method(console, 'warn', () => {});
             t.mock.method(console, 'error', () => {});
 
-            const page = renderHook(() => useChat(), { rendersLater: true });
+            const page = renderHook(
+                () => useChat(undefined, { pausesHoldChanges: outcome === 'held' }),
+                { rendersLater: true },
+            );
 
             page.result().hydrate(drawn());
             await page.settle();
@@ -1481,18 +1488,23 @@ test('a card change the harness refuses leaves a waiting plan waiting, and one i
             await page.settle(60);
             assert.ok(page.result().plan, name);
 
-            if (kind === 'unit') page.result().applyUnit(unitCard());
-            else if (kind === 'years') page.result().applyChange(yearsChange('cmp_1'));
-            else page.result().applyChange(placesChange);
+            const went =
+                kind === 'unit'
+                    ? page.result().applyUnit(unitCard())
+                    : page
+                          .result()
+                          .applyChange(kind === 'years' ? yearsChange('cmp_1') : placesChange);
 
             await page.settle(60);
 
+            assert.equal(went, outcome !== 'held', name);
+            assert.equal(changes.length, outcome === 'held' ? 0 : 1, name);
             assert.equal(page.result().plan === null, admitted, name);
 
             // A refusal's reply keeps the harness's code.
             const reply = page.result().messages.at(-1);
 
-            if (!admitted) {
+            if (outcome === 'refused') {
                 assert.equal(reply?.role === 'bot' && reply.refusal, 'change_no_data', name);
             }
             page.unmount();
@@ -1501,7 +1513,7 @@ test('a card change the harness refuses leaves a waiting plan waiting, and one i
     }
 });
 
-test('a card change queued behind a question that pauses on a plan or a question is dropped where pauses drop changes, and waits elsewhere', async (t) => {
+test('a card change queued behind a question that pauses on a plan or a question is dropped where pauses hold changes, and waits elsewhere', async (t) => {
     const fixture = (name: string) =>
         JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
     const pauses = {
@@ -1510,8 +1522,8 @@ test('a card change queued behind a question that pauses on a plan or a question
     };
 
     for (const [pause, frame] of Object.entries(pauses)) {
-        for (const pausesDropChanges of [true, false]) {
-            const name = `${pause}, ${pausesDropChanges ? 'drops' : 'waits'}`;
+        for (const pausesHoldChanges of [true, false]) {
+            const name = `${pause}, ${pausesHoldChanges ? 'drops' : 'waits'}`;
             const turns: unknown[] = [];
 
             t.mock.method(
@@ -1528,7 +1540,7 @@ test('a card change queued behind a question that pauses on a plan or a question
                 },
             );
 
-            const page = renderHook(() => useChat(undefined, { pausesDropChanges }), {
+            const page = renderHook(() => useChat(undefined, { pausesHoldChanges }), {
                 rendersLater: true,
             });
 
@@ -1541,11 +1553,11 @@ test('a card change queued behind a question that pauses on a plan or a question
 
             assert.equal(turns.length, 1, name);
             assert.ok(pause === 'plan' ? page.result().plan : page.result().clarify, name);
-            assert.notEqual(page.result().changesHeld, null, name);
-            assert.equal(page.result().queued.length, pausesDropChanges ? 0 : 1, name);
+            assert.equal(page.result().changesHeld !== null, pausesHoldChanges, name);
+            assert.equal(page.result().queued.length, pausesHoldChanges ? 0 : 1, name);
             assert.deepEqual(
                 page.result().dropped.map(({ card, row }) => [card, row]),
-                pausesDropChanges ? [['cmp_1', 'years']] : [],
+                pausesHoldChanges ? [['cmp_1', 'years']] : [],
                 name,
             );
             page.unmount();

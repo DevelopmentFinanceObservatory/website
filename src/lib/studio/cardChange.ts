@@ -507,6 +507,55 @@ export const dropChangesForPause = <TItem extends QueuedChange>(
     return { kept, dropped };
 };
 
+/** The id of row `key`'s change among a card's offers (`ChangeOffer`'s
+ *  `id`): `unit`, `years`, or `shows:<role>`. */
+export const changeRowId = (key: ChangeRowKey, role?: string): string =>
+    key === 'shows' ? `shows:${role ?? ''}` : key;
+
+/**
+ * The status of each change row of card `cardId` (changeStatus), by row id
+ * (changeRowId): one per offer, and the row of the last change asked of the
+ * card's chain when the card offers that row no more, while that change
+ * stands pending or refused. A refusal as stale withdraws the offer it
+ * refused, so its reason stays on the page until the reader asks another
+ * change of the card or a replacement takes its place.
+ */
+export const changeStatuses = ({
+    offers,
+    ...read
+}: Omit<Parameters<typeof changeStatus>[0], 'key' | 'role'> & {
+    offers: readonly ChangeOffer[];
+}): Map<string, ChangeStatus> => {
+    const statuses = new Map(
+        offers.map((offer): [string, ChangeStatus] => [
+            offer.id,
+            changeStatus({
+                ...read,
+                key: offer.key,
+                ...(offer.key === 'shows' && { role: offer.role }),
+            }),
+        ]),
+    );
+    const cardIds = [read.cardId, ...(read.replaced ?? [])];
+    const last = read.messages.findLast((message) => {
+        const card = editedCard(message);
+
+        return card !== undefined && cardIds.includes(card);
+    })?.edit;
+
+    if (!last || statuses.has(changeRowId(last.row, last.role))) return statuses;
+
+    const status = changeStatus({
+        ...read,
+        key: last.row,
+        ...(last.role !== undefined && { role: last.role }),
+    });
+
+    if (status.state !== 'idle') statuses.set(changeRowId(last.row, last.role), status);
+
+    return statuses;
+};
+
 /** Whether a change to row `key` (role `role`) of any of `cardIds` waits in
  *  the queue. */
 export const changeQueued = (

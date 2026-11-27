@@ -129,8 +129,10 @@ import {
     owedNewQuestion,
     producedCards,
     readConversation,
+    placeReplacing,
     reconcileStoredCards,
-    replacedCard,
+    replacementLinks,
+    storedReplacements,
     drawManifestCards,
     sendNewQuestion,
     storedCards,
@@ -539,7 +541,7 @@ export const useChat = (
         readsState = false,
         admitHandedBack,
         shownCards,
-        pausesDropChanges = false,
+        pausesHoldChanges = false,
         holdRemovals = false,
     }: {
         onCardReplaced?: (from: string, to: string) => void;
@@ -554,11 +556,12 @@ export const useChat = (
         // which a page with no manifest baseline keeps when it leaves its
         // session (leaveSession).
         shownCards?: () => readonly string[];
-        // A plan or a question drops the card changes queued behind its
-        // turn (dropChangesForPause), as the Prompt layout's card pages hold
-        // their changes while either waits (changesHeld). Without it a
-        // queued change waits for the answer.
-        pausesDropChanges?: boolean;
+        // A plan or a question holds card changes while it waits
+        // (changesHeld): `applyUnit` and `applyChange` send nothing and
+        // return false, and the changes queued behind its turn are dropped
+        // (dropChangesForPause). Without it a change sent while a plan
+        // waits goes, and a queued one waits for the answer.
+        pausesHoldChanges?: boolean;
         // Every stream the page starts asks the harness to hold a removal's
         // canvas frame until after the turn's next drawing line
         // (`hold_removals`), as the Prompt layout's canvas moves cards in
@@ -588,6 +591,14 @@ export const useChat = (
         clarify: null,
         plan: null,
     }));
+    // Why card changes wait, or null when they can go (changesHeld), as the
+    // edit commands read it when called.
+    const changeHold = pausesHoldChanges ? changesHeld(state.plan, state.clarify) : null;
+    const changeHoldRef = useRef(changeHold);
+
+    useEffect(() => {
+        changeHoldRef.current = changeHold;
+    }, [changeHold]);
     // The answer text a stream has received since the transcript last took
     // it (replyStream.ts), and the number of the transcript's latest commit
     // of that text, which the ref holds ahead of the render. Only the
@@ -1260,12 +1271,12 @@ export const useChat = (
     const pins = useMemo(() => shownPins(canvas, pendingPins), [canvas, pendingPins]);
     // Put a plan card up as the pending pause, whether from the stream or
     // from a refusal that answered a stale card with the current one.
-    // With `pausesDropChanges`, a pause drops the card changes queued
+    // With `pausesHoldChanges`, a pause drops the card changes queued
     // behind its turn (dropChangesForPause): the queue loses them now, and
     // the returned update moves them from `queued` to `dropped`.
     const dropQueuedChanges = useCallback(
         (pause: ChangePause) => {
-            const { kept, dropped } = pausesDropChanges
+            const { kept, dropped } = pausesHoldChanges
                 ? dropChangesForPause(queueRef.current, pause)
                 : { kept: queueRef.current, dropped: [] };
 
@@ -1282,7 +1293,7 @@ export const useChat = (
                           dropped: [...prev.dropped, ...dropped],
                       };
         },
-        [pausesDropChanges],
+        [pausesHoldChanges],
     );
     const offerPlan = useCallback(
         (plan: PlanState) => {
@@ -2794,7 +2805,9 @@ export const useChat = (
     // old card's slot, turn and settings, so the answer's other cards stay
     // on the canvas. A change asked while a request is in flight waits in
     // the queue. A change the harness refuses leaves the reply saying why,
-    // and a refusal as stale clears the card's offer (`clearStale`).
+    // and a refusal as stale clears the card's offer (`clearStale`). A
+    // change asked while a pause holds changes (`pausesHoldChanges`) sends
+    // nothing. Returns whether the change went or was queued.
     const applyEdit = useCallback(
         ({
             text,
@@ -2820,7 +2833,9 @@ export const useChat = (
             ) => Promise<void>;
             refusalDetail: (refusal: StreamRefusal) => { detail: string; stale: boolean } | null;
             clearStale: (widget: TurnWidget) => TurnWidget;
-        }) => {
+        }): boolean => {
+            if (changeHoldRef.current !== null) return false;
+
             const card = { title };
 
             // A new change to the row replaces the note of one the queue
@@ -2846,7 +2861,7 @@ export const useChat = (
                     ...queued,
                 })
             ) {
-                return;
+                return true;
             }
 
             const { turn, conversation } = startTurn({ role: 'user', text, card, edit }, line, {
@@ -2957,6 +2972,8 @@ export const useChat = (
                     },
                 },
             );
+
+            return true;
         },
         [dropPause, holdTurn, patchWidget, startTurn, stream],
     );
@@ -3280,20 +3297,27 @@ export const useChat = (
                     const id = block.component_id;
                     const card = stored.get(id);
                     const isNew = !widgetsRef.current.some((widget) => widget.id === id);
-                    // The card a new card took the slot of, as its frame's
-                    // `replaces` would have said (replacedCard): one the page
-                    // holds and the manifest lacks.
-                    const from = isNew
-                        ? replacedCard(
+                    // The cards a new card took the slots of in turn, as
+                    // their frames' `replaces` would have said
+                    // (storedReplacements): first one the page holds and the
+                    // manifest lacks, then each the page never drew.
+                    const chain = isNew
+                        ? storedReplacements(
                               id,
                               stored,
                               (other) =>
                                   !onCanvas.has(other) &&
                                   widgetsRef.current.some((widget) => widget.id === other),
                           )
-                        : null;
+                        : [];
+                    const from = chain[0];
 
-                    if (from) replacedRef.current = { ...replacedRef.current, [id]: from };
+                    if (from) {
+                        replacedRef.current = {
+                            ...replacedRef.current,
+                            ...replacementLinks([...chain, id]),
+                        };
+                    }
 
                     // A card of a turn still open has no stored card yet.
                     // The read that closes the turn brings it
@@ -3324,15 +3348,17 @@ export const useChat = (
 
                         const turn = turnOf.get(id) ?? turnCount.current;
 
-                        return placeCard(
-                            widgets,
-                            { ...widget, turn },
-                            { replaces: from, keepTurn: changes.has(turn), values: rowValues },
-                        );
+                        return from
+                            ? placeReplacing(widgets, { ...widget, turn }, chain, {
+                                  stored,
+                                  turnOf,
+                                  changes,
+                              })
+                            : placeCard(widgets, { ...widget, turn }, {});
                     });
 
-                    // The canvas moves the old card's settings to it, as on
-                    // the stream.
+                    // The canvas moves the old card's settings to it once,
+                    // as on the stream.
                     if (from && widgetFromRead(block, read, undefined, card)) {
                         legacyRef.current?.drop(from);
                         onCardReplacedRef.current?.(from, id);
@@ -3353,6 +3379,7 @@ export const useChat = (
             read: ConversationRead,
             stored: ReadonlyMap<string, StoredCard>,
             changes: ReadonlySet<number>,
+            turnOf: ReadonlyMap<string, number>,
         ) => {
             // A card whose drawn widget the page does not hold yet waits on
             // while a turn is open. A read with no open turn closed every
@@ -3382,13 +3409,19 @@ export const useChat = (
                 ids,
                 onCanvas,
                 changes,
+                turnOf,
             );
 
             ids.forEach((id) => awaitingStoredRef.current.delete(id));
             setWidgets(() => widgets);
 
-            for (const [from, to] of replaced) {
-                replacedRef.current = { ...replacedRef.current, [to]: from };
+            for (const chain of replaced) {
+                const [from] = chain;
+                const to = chain.at(-1);
+
+                if (from === undefined || to === undefined) continue;
+
+                replacedRef.current = { ...replacedRef.current, ...replacementLinks(chain) };
                 legacyRef.current?.drop(from);
                 onCardReplacedRef.current?.(from, to);
             }
@@ -3426,7 +3459,7 @@ export const useChat = (
             const stored = storedCards(read.closed_since);
             const changes = changeTurns(merged);
 
-            reconcileCards(read, stored, changes);
+            reconcileCards(read, stored, changes, turnOf);
 
             // The approvals of the turns the read names, the open one's
             // included when the page holds it (reattach adds one it lacks).
@@ -4129,8 +4162,8 @@ export const useChat = (
 
     return {
         ...state,
-        // Why the card pages' Change rows wait, or null (changesHeld).
-        changesHeld: changesHeld(state.plan, state.clarify),
+        // Why every control's card change waits, or null (changesHeld).
+        changesHeld: changeHold,
         // The cards on their way, for the Prompt layout's canvas.
         coming: comingList,
         droppedRefunds,

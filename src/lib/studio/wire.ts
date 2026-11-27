@@ -800,6 +800,10 @@ export type ComponentRevised = {
     // Same payload shape as ComponentCreated's. Absent when only
     // presentation fields moved.
     payload?: Record<string, unknown> | null;
+    // The card's years and places offer after the revision, in
+    // ComponentCreated's shape. Present sets the offer and `null` removes
+    // it; absent leaves the offer to reviseWidget's rule.
+    card_changes?: CardChanges | null;
 };
 
 export type ElicitationOption = {

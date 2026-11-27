@@ -528,11 +528,39 @@ export const sourceMeta = ({
     return parts.length > 0 ? parts.join(' · ') : null;
 };
 
+/** The one value `values` hold, or null when they hold none or differ. */
+const shared = (values: readonly string[]): string | null => {
+    const [first] = values;
+
+    return first !== undefined && values.every((value) => value === first) ? first : null;
+};
+
+/** The date `dates` hold, else the span from the earliest to the latest
+ *  (`<earliest> to <latest>`), or null when they hold none. The dates are
+ *  ISO dates, so they sort as text. */
+const dateSpan = (dates: readonly string[]): string | null => {
+    const sorted = dates.toSorted();
+    const [earliest] = sorted;
+    const latest = sorted.at(-1);
+
+    if (earliest === undefined || latest === undefined) return null;
+
+    return earliest === latest ? earliest : `${earliest} to ${latest}`;
+};
+
 /** The sources of the cards on the canvas, each once, in the order the
- *  canvas first uses them. */
+ *  canvas first uses them. A row's coverage (`through`) shows when every
+ *  card of the source that gives one gives the same, and its refresh date
+ *  is the one they share or the span from the earliest to the latest, so
+ *  neither depends on the order of the cards. */
 const sourcesOf = (input: SessionInput): SourceRow[] => {
     const byId = new Map(input.widgets.map((widget) => [widget.id, widget]));
     const rows = new Map<string, SourceRow>();
+    const throughs = new Map<string, string[]>();
+    const refreshes = new Map<string, string[]>();
+    const add = (values: Map<string, string[]>, key: string, value: string | null) => {
+        if (value) values.set(key, [...(values.get(key) ?? []), value]);
+    };
 
     for (const id of input.canvasIds) {
         const widget = byId.get(id);
@@ -558,8 +586,8 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
             };
             const citation = citationOf(info);
 
-            row.through ??= throughOf(info, widget);
-            row.lastRefreshed ??= info.lastRefreshed;
+            add(throughs, key, throughOf(info, widget));
+            add(refreshes, key, info.lastRefreshed);
 
             if (citation && !row.citations.includes(citation)) row.citations.push(citation);
             if (!row.cards.some((card) => card.id === id)) {
@@ -570,7 +598,16 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
         }
     }
 
-    return [...rows.values()].map((row) => ({ ...row, meta: sourceMeta(row) }));
+    return [...rows.values()].map((row) => {
+        const through = shared(throughs.get(row.key) ?? []);
+
+        return {
+            ...row,
+            through,
+            lastRefreshed: dateSpan(refreshes.get(row.key) ?? []),
+            meta: sourceMeta({ through, licence: row.licence }),
+        };
+    });
 };
 
 /** The distinct caveats of the cards on the canvas, then of each approved

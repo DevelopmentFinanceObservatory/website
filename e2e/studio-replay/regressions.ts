@@ -373,10 +373,11 @@ export const REGRESSIONS: Regression[] = [
         },
     },
     {
-        // A change the harness refuses while a plan waits leaves the plan
-        // waiting and approvable, and the approved plan leaves the card on
-        // the canvas. The card page holds its Change rows.
-        name: 'a refused change leaves a waiting plan approvable and its card on the canvas',
+        // While a plan waits, the canvas card menu's Change unit and the card
+        // page's Change rows are held with the reason, send no change, and
+        // leave the plan approvable; the approved plan leaves the card on
+        // the canvas.
+        name: 'a waiting plan holds the card menu change unit with its reason, sends no change, and stays approvable',
         layout: 'prompt',
         scenario: chartThenPlan,
         run: async (session) => {
@@ -384,15 +385,30 @@ export const REGRESSIONS: Regression[] = [
             const plan = player.scenario.turns[1]!;
             const title = String(plan.segments[2]!.frames.at(-1)!.title);
 
-            player.answerChange = () => refused('scope_choice_stale', UNIT_STALE, '/apply_unit');
             await playTurn(session, 1);
             await playTurn(session, 2, { until: 2 });
             await visible(page, title).waitFor({ timeout: SHOW_MS });
 
-            await changeCurrency(page, 'Euros');
-            await until('the unit change sent', () => cardChanges(player).length === 1);
+            const card = page.locator('[data-card-id]').filter({ visible: true }).first();
+
+            await card.getByRole('button', { name: 'Card menu' }).click();
+
+            const unitRow = page.getByRole('menuitem', { name: /^Change unit/ });
+
+            await unitRow.waitFor({ timeout: SHOW_MS });
+            assert.equal(await unitRow.getAttribute('aria-disabled'), 'true');
+            assert.match((await unitRow.textContent()) ?? '', new RegExp(PLAN_HOLDS));
+            // The row is aria-disabled, so the click goes past Playwright's
+            // check for an enabled control.
+            await unitRow.click({ force: true });
             await settle(page);
-            await visible(page, title).waitFor({ timeout: SHOW_MS });
+            assert.equal(
+                await page.getByRole('dialog', { name: 'Change unit' }).count(),
+                0,
+                'Change unit opens no panel while the plan waits',
+            );
+            await page.keyboard.press('Escape');
+            assert.equal(cardChanges(player).length, 0, 'no change request while the plan waits');
 
             await openCardPage(page);
             await visible(page, PLAN_HOLDS).waitFor({ timeout: SHOW_MS });
@@ -417,7 +433,7 @@ export const REGRESSIONS: Regression[] = [
                 .filter({ visible: true })
                 .first()
                 .click();
-            await within('the change turns', ended);
+            await within('the plan', ended);
             await settle(page);
             assert.equal(player.interrupts, interrupts + 1);
             assert.deepEqual((await shownCards(page)).toSorted(), [
@@ -425,7 +441,8 @@ export const REGRESSIONS: Regression[] = [
                 'cmp_replay_plan_c1',
                 'cmp_replay_plan_c2',
             ]);
-            clean(session, 422);
+            assert.equal(cardChanges(player).length, 0);
+            clean(session);
         },
     },
     {

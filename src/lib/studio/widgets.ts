@@ -715,8 +715,18 @@ export const reviseWidget = (
         delete redrawn.unitChange;
     }
 
-    // The years and places offer holds by the same rule.
-    if (redrawn.cardChanges && drawnFrom?.spec_id !== redrawn.cardChanges.spec_id) {
+    // A frame's `card_changes`, narrowed as the created frame's is, sets
+    // the years and places offer, and `null` removes it. Without the member
+    // the offer holds by the unit offer's rule.
+    const cardChanges =
+        frame.card_changes === undefined ? undefined : cardChangesOf(frame.card_changes);
+
+    if (cardChanges) {
+        redrawn.cardChanges = cardChanges;
+    } else if (
+        cardChanges === null ||
+        (redrawn.cardChanges && drawnFrom?.spec_id !== redrawn.cardChanges.spec_id)
+    ) {
         delete redrawn.cardChanges;
     }
 

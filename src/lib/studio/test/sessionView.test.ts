@@ -535,6 +535,36 @@ test('a described card gives the caveats, sources and dataset; a card without a 
     });
 
     assert.equal(sourcePageOf(single, 'dcid:IMF')?.licence, 'Open');
+
+    // Cards of one source in either canvas order give the same row: a shared
+    // coverage shows, differing ones leave it off, and refresh dates span.
+    const imf = (id: string, dataThrough: string, lastRefreshed: string | null) =>
+        chart(id, 1, { sourceId: 'dcid:IMF', sourceName: 'IMF', dataThrough, lastRefreshed });
+    const cases: [string, ReturnType<typeof imf>[], [string | null, string | null]][] = [
+        [
+            'agree',
+            [imf('x', '2024', '2026-08-29'), imf('y', '2024', null)],
+            ['data through 2024', '2026-08-29'],
+        ],
+        [
+            'differ',
+            [imf('x', '2021', '2026-11-20'), imf('y', '2024', '2026-08-29')],
+            [null, '2026-08-29 to 2026-11-20'],
+        ],
+    ];
+
+    for (const [name, widgets, expected] of cases) {
+        const rows = [
+            ['x', 'y'],
+            ['y', 'x'],
+        ].map((canvasIds) => {
+            const [row] = overviewOf(input({ widgets, canvasIds })).sources;
+
+            return [row?.through, row?.lastRefreshed];
+        });
+
+        assert.deepEqual(rows, [expected, expected], name);
+    }
 });
 
 test('datasetsOf falls back to the completed fetch steps of a question without cards', () => {
