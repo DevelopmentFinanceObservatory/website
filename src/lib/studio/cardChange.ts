@@ -434,7 +434,7 @@ export type DroppedChange = { card: string; row: ChangeRowKey; role?: string; de
  * stands. While a card of its chain stands on the canvas (`standing`, the
  * standing card and those it replaced; empty once the chain left), the
  * row's status says (`status`, changeStatus). Once the chain left, the
- * queue's drop of it (`dropped`) still does. `why` is `queue` for a drop,
+ * queue's drop of it (`dropped`) says. `why` is `queue` for a drop,
  * else the harness's code, else `assistant`.
  */
 export const sentRefusal = (

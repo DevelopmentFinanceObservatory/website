@@ -222,8 +222,8 @@ export const segmentEnd = (player: Player, turn: number, segment: number) =>
         player.on('segment-end', check);
     });
 
-// Waits for the page's running animations to finish: endless ones and
-// those a scroll position drives aside, which never finish.
+// Waits for the page's running animations to finish. Endless ones and
+// those a scroll position drives never finish, so it skips them.
 export const settle = async (page: Page) => {
     await page.waitForTimeout(300);
     await page

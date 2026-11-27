@@ -6,7 +6,7 @@
  * not show what the recording says: the plan or question at each pause, and
  * at the end as many cards as the last canvas holds and the start of the
  * last reply. The card-change regressions (regressions.ts) play after
- * them; the signed-in ones need Postgres (account.ts). Run with
+ * them. The signed-in ones need Postgres (account.ts). Run with
  * `pnpm test:studio-replay` after `pnpm build`.
  */
 import assert from 'node:assert/strict';
@@ -62,7 +62,7 @@ for (const layout of LAYOUTS) {
             try {
                 await playScenario(session, scenario);
 
-                // The placeholder scenario on today's layout compares its
+                // The placeholder scenario on the classic layout compares its
                 // canvas with this one's.
                 if (name === 'eight' && layout === 'classic') {
                     todayView.eight = await canvasView(session.page, EIGHT_LAST);
@@ -171,7 +171,7 @@ const playScenario = async (session: Session, scenario: Scenario) => {
 
     const end = endState(scenario);
 
-    // The last reply shows once: a reply drawn twice is a fault. A live
+    // The last reply shows once, and a reply drawn twice is a fault. A live
     // region's announcement of it is not a reply.
     let replies = 0;
 
@@ -188,7 +188,7 @@ const playScenario = async (session: Session, scenario: Scenario) => {
         );
     }
 
-    // Each card on the canvas carries its id once; a placeholder carries
+    // Each card on the canvas carries its id once. A placeholder carries
     // `data-coming`, and none outlives the turn once its fade is over.
     await session.page
         .waitForFunction(() => !document.querySelector('[data-coming]'), null, { timeout: 3000 })

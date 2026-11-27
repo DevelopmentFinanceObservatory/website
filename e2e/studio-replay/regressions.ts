@@ -1,6 +1,6 @@
 /**
- * Card changes played through the page's own controls, each against a
- * fault the page once had. Each regression builds its conversation from the
+ * Card changes played through the page's own controls, each guarding
+ * against one fault. Each regression builds its conversation from the
  * recorded fixtures, answers the card changes from the recorded cards
  * (changes.ts), and asserts on what the reader sees and on the requests the
  * page sends.
@@ -323,7 +323,7 @@ export const REGRESSIONS: Regression[] = [
         name: 'a change queued on a card a question removes is dropped unsent',
         layout: 'prompt',
         scenario: () => {
-            // The words turn's own canvas was empty: here it is the chart's
+            // The words turn's own canvas was empty. Here it is the chart's
             // canvas with the card taken off, a revision on, as a question
             // that removes the card leaves it.
             const words = turnOf('words');
@@ -375,7 +375,7 @@ export const REGRESSIONS: Regression[] = [
     {
         // A change the harness refuses while a plan waits leaves the plan
         // waiting and approvable, and the approved plan leaves the card on
-        // the canvas; the card page holds its Change rows.
+        // the canvas. The card page holds its Change rows.
         name: 'a refused change leaves a waiting plan approvable and its card on the canvas',
         layout: 'prompt',
         scenario: chartThenPlan,
@@ -478,7 +478,7 @@ export const REGRESSIONS: Regression[] = [
         },
     },
     {
-        // A change runs on in the harness when its stream breaks: the page
+        // A change runs on in the harness when its stream breaks. The page
         // that leaves mid-change and comes back resumes it, and a page whose
         // stream dropped and that reopens after the harness finished the
         // turn reads it back. Either way the redrawn card stands under the
@@ -575,7 +575,7 @@ export const REGRESSIONS: Regression[] = [
         },
     },
     {
-        // On today's layout a unit change redraws the card in place, and a
+        // On the classic layout a unit change redraws the card in place, and a
         // change queued behind a question that pauses waits for the answer.
         name: 'a unit change redraws in place and a queued change waits for the plan',
         layout: 'classic',
@@ -654,7 +654,7 @@ export const REGRESSIONS: Regression[] = [
         },
     },
     {
-        // A places list the deployment cannot give is final: no Try again.
+        // A places list the deployment cannot give is final, so the card page offers no Try again.
         name: 'a disabled places capability offers no Try again',
         layout: 'prompt',
         scenario: () => loadScenario('plan'),

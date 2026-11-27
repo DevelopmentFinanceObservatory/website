@@ -536,7 +536,7 @@ export const useStudio = ({
 
     // The landing's stage-out, then the workspace. Under reduced motion the
     // Prompt layout's stylesheets run no stage-out, so its workspace shows at
-    // once; the classic layout keeps its stage-out.
+    // once. The classic layout keeps its stage-out.
     const enterWorkspace = () => {
         if (
             variant === 'prompt' &&

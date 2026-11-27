@@ -341,7 +341,7 @@ export class Player extends EventEmitter {
 
         const route = `${req.method} ${url.pathname}`;
 
-        // A page sends one request at a time for a conversation: a second
+        // A page sends one request at a time for a conversation. A second
         // turn or answer while a stream is open would be streamed twice.
         if (
             this.open &&

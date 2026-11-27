@@ -799,7 +799,7 @@ test('a change a card page sent reads as refused from its row while its card sta
             [drop],
             { detail: 'Gone.', why: 'queue' },
         ],
-        // The chain left the canvas: only the queue's drop is left to read.
+        // The chain left the canvas, so only the queue's drop is left to read.
         [[], undefined, [drop], { detail: 'Gone.', why: 'queue' }],
         [[], undefined, [{ ...drop, row: 'unit' as const }], null],
         [['c1'], { state: 'pending' }, [], null],

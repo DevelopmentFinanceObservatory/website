@@ -1811,8 +1811,8 @@ export const useChat = (
                 stopped = true;
                 grace.cancel();
                 carryOut(action);
-                // A stopped turn draws no more cards: their places go at the
-                // Stop, before the stream itself ends.
+                // A stopped turn draws no more cards, so their places go at
+                // the Stop, before the stream itself ends.
                 takeComing(comingEnded(comingRef.current));
 
                 if (onEnd) {

@@ -2,8 +2,8 @@
  * Placeholders for coming cards, played from recorded streams with the
  * contract's placeholder members added (coming.ts). The Prompt layout draws
  * each placeholder (`data-coming`) from its drawing line's running frame
- * until its card lands in its place, the line closes or the stream ends;
- * today's layout draws none and behaves as it does without the members.
+ * until its card lands in its place, the line closes or the stream ends.
+ * The classic layout draws none and behaves as it does without the members.
  */
 import assert from 'node:assert/strict';
 
@@ -81,7 +81,7 @@ const heldAtFirstCard = async (session: Session, atHold: () => Promise<void>) =>
 
 const FIVE = ['cmp_replay_five_c1', 'cmp_replay_five_c2', 'cmp_replay_five_c3'];
 
-// The scroll position of today's canvas, and whether card `id` is in view.
+// The scroll position of the classic canvas, and whether card `id` is in view.
 export const canvasView = (page: Page, id: string) =>
     page.evaluate((card) => {
         const canvas = document.querySelector<HTMLElement>('[class*="canvasContent"]');
@@ -97,14 +97,14 @@ export const canvasView = (page: Page, id: string) =>
 /** The card `eight`'s last turn draws below the view. */
 export const EIGHT_LAST = 'cmp_replay_eight_c7';
 
-/** Today's canvas once `eight` has played without placeholder members, as
+/** The classic canvas once `eight` has played without placeholder members, as
  *  "eight plays on classic" leaves it; read anew when that test did not
  *  run first. */
 export const todayView: { eight?: Awaited<ReturnType<typeof canvasView>> } = {};
 
 export const PLACEHOLDERS: Regression[] = [
     {
-        // Today's layout draws no placeholder, and scrolls to a card that
+        // The classic layout draws no placeholder, and scrolls to a card that
         // lands off view as it does without the members.
         name: 'placeholders leave today’s canvas as it was',
         layout: 'classic',

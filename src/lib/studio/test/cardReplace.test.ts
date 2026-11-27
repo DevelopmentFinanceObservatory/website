@@ -205,7 +205,7 @@ test('placeCard records the question that made a chain’s first card, its ids a
     const first = placeCard([{ id: 'a', turn: 1 }], { id: 'b', turn: 3 }, { replaces: 'a' });
     const second = placeCard(first, { id: 'c', turn: 5 }, { replaces: 'b', keepTurn: true });
     const third = placeCard(second, { id: 'd', turn: 7 }, { replaces: 'c', keepTurn: true });
-    // A card a later question redraws under its own id keeps its chain; its
+    // A card a later question redraws under its own id keeps its chain. Its
     // changes belong to the reply it left.
     const updated = placeCard(third, { id: 'd', turn: 8 }, {});
 

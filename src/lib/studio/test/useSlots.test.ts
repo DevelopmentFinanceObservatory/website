@@ -90,7 +90,7 @@ test('a card fit and a placement that start in one task both survive', async () 
 
     const spawned = hook.result().slots.slots['a']!.h;
 
-    // A new card is announced, and its placement frame is queued; before it
+    // A new card is announced and its placement frame is queued. Before it
     // runs, the first card reports its fitted height.
     props.widgets = [stat('a'), stat('b')];
     hook.result().bump(1);

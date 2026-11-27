@@ -1,6 +1,6 @@
 /**
  * A signed-in reader, for the regressions whose behaviour belongs to an
- * account: the page saves its conversation and reads the harness's state
+ * account. The page saves its conversation and reads the harness's state
  * only for one. The site reads its sessions from Postgres, so this makes a
  * throwaway database on the server the PG* variables name, as `pnpm test`
  * does (db/test/harness.ts), migrates it, and adds one user with one
@@ -38,7 +38,7 @@ export const makeReader = async (): Promise<Reader> => {
             migratorDbUser: database.migratorUser,
         });
 
-        // Made for this run alone and kept out of every log: the site gets
+        // Made for this run alone and kept out of every log. The site gets
         // the secret in its own environment only.
         const secret = randomBytes(32).toString('base64');
         const token = randomBytes(24).toString('base64url');
@@ -63,8 +63,8 @@ export const makeReader = async (): Promise<Reader> => {
             databaseUrl: `postgresql://${runtime}@${host}:${port}/${database.databaseName}`,
             secret,
             // Signed as better-call's signCookieValue signs it (Better Auth's
-            // setSignedCookie): the token, a dot and the base64 HMAC-SHA256
-            // of the token under the secret, URI-encoded.
+            // setSignedCookie). The value is the token, a dot and the base64
+            // HMAC-SHA256 of the token under the secret, URI-encoded.
             cookie: {
                 name: 'better-auth.session_token',
                 value: encodeURIComponent(`${token}.${await makeSignature(token, secret)}`),

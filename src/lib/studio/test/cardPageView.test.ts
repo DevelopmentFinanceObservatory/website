@@ -442,7 +442,7 @@ test('Within leaves out the places a places row shows, and keeps the rest', () =
         // Another place, or another role, than the row shows.
         [[debtor], [uganda], 'debtor: Kenya'],
         [[debtor], [origin], 'debtor: Kenya'],
-        // No places row: Within as it is.
+        // With no places row, Within stands as it is.
         [[debtor], [], 'debtor: Kenya'],
     ] as const) {
         const view = page({ widget: card(info(described([...fixed]))), offers: [...offers] });
