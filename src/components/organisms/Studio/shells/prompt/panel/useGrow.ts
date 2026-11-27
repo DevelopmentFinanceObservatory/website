@@ -202,8 +202,8 @@ export const useGrow = (onPage: boolean) => {
 
     // Whether the strip the wide panel adds is empty canvas. Both edges come
     // from the stylesheet, read off a hidden copy of the aside at its rest and
-    // grown states, so the panel itself, which may be mid-shrink, is not
-    // touched.
+    // grown states, so the panel itself, which may be mid-shrink, stays
+    // untouched.
     const roomToGrow = () => {
         const region = aside();
         const parent = region?.parentElement;

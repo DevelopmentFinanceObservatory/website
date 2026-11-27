@@ -104,7 +104,7 @@ const PromptDock = () => {
         : null;
 
     // The newest question's reply begins with the first words to stream in,
-    // which re-render the dock once; its later words re-render the reply
+    // which re-render the dock once. Its later words re-render the reply
     // alone (ReplyText).
     const newestTurn = useMemo(
         () => questionsOf(chat.messages, chat.activity).at(-1)?.turn ?? null,
@@ -426,7 +426,7 @@ const PromptDock = () => {
     // The turn ended in an error, its reply the error's own words.
     const failed =
         !!question && !!chat.activity.find((entry) => entry.turn === question.turn)?.failed;
-    // `ready` records what was said when the turn ended: a failure that
+    // `ready` records what was said when the turn ended, so a failure that
     // lands after `Answer ready` is said too.
     const said = useRef<{ turn: number; started: boolean; ready: false | 'ok' | 'failed' }>({
         turn: -1,
@@ -448,7 +448,7 @@ const PromptDock = () => {
             announce('Answer started');
         }
 
-        // A turn paused on a plan or a question has not answered yet; the
+        // A turn paused on a plan or a question has not answered yet. The
         // pause says itself below.
         if (chat.thinking || !replyStarted || pending || said.current.ready === 'failed') {
             return;

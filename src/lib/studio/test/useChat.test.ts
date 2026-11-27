@@ -1614,7 +1614,7 @@ test('cards on their way show from the running line, a card takes its placeholde
         page.result().widgets.find((widget) => widget.id === 'cmp_new')?.placeholderId,
         's1.0',
     );
-    // The stream drops: no placeholder stays, and a reopened page shows none.
+    // The stream drops. No placeholder stays, and a reopened page shows none.
     end();
     await page.settle(60);
     assert.equal(page.result().coming, none);

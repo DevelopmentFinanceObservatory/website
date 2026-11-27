@@ -253,10 +253,10 @@
     }
 }
 
-// A card the running turn has announced: a dashed outline, no fill, at the
-// place and size its card will take, so the card lands with nothing moving.
-// Its radius is the card's own. The border is the scrollbar grey, 3.6:1
-// against the canvas.
+// A card the running turn has announced stands as a dashed outline with no
+// fill, at the place and size its card will take, so the card lands with
+// nothing moving. Its radius is the card's own. The border is the scrollbar
+// grey, 3.6:1 against the canvas.
 .coming {
     position: absolute;
     z-index: 0;

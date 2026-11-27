@@ -123,8 +123,9 @@ const ChatPanel = ({
         }
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
-    // And as the streaming reply's words arrive, which re-render only the
-    // reply's own message (useStreamedText): a frame later, once it has.
+    // The view follows the streaming reply's words as they arrive. They
+    // re-render only the reply's own message (useStreamedText), so the scroll
+    // runs a frame later, after it has.
     const { store: replyStore } = chat.replyStream;
 
     useEffect(() => {

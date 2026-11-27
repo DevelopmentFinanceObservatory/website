@@ -6,7 +6,7 @@
  * What the canvas reads:
  *
  * - `chat.coming: readonly ComingCard[]`, the placeholders the conversation
- *   shows now, in order: the announced ones in the order their lines
+ *   shows, in order: the announced ones in the order their lines
  *   announced them, then the planned ones in plan order. A planned one has
  *   `type` null and shows no kind. The same array object while nothing
  *   changes, and one shared empty array when there are none.
@@ -15,9 +15,9 @@
  *   canvas puts the card where the placeholder stood, in the update that
  *   drops the placeholder.
  *
- * A placeholder is live state: it comes from the stream's frames by the
- * contract's rule and nothing else, and is never saved or read back from
- * the harness's state. An announced one starts at its drawing line's
+ * A placeholder is live state. It comes from the stream's frames alone; a
+ * save does not hold it and a read of the harness's state does not restore
+ * it. An announced one starts at its drawing line's
  * running frame (`coming`) and ends when a card names it
  * (`created_from.placeholder_id`), when that line closes (`complete` or
  * `failed`), or when the stream ends (`done`, a pause, `error`) or drops
@@ -120,7 +120,7 @@ export const comingAfter = (state: ComingState, frame: StudioFrame, turn: number
                 .filter((entry) => !held.has(entry.id))
                 .map((entry) => ({ ...entry, turn, stepId: frame.step_id }));
             // The first drawing line of a running plan's turn retires its
-            // planned placeholders: the harness names no plan on a drawing
+            // planned placeholders. The harness names no plan on a drawing
             // line, so the announced cards stand for the plan's from then on.
             const drawing =
                 state.running && state.running.turn === turn && !state.running.drawing
@@ -167,7 +167,7 @@ export const comingEnded = (state: ComingState): ComingState =>
         ? state
         : { ...state, announced: [], running: null };
 
-// The step that answers a plan: the one flagged `gives_answer`, else the
+// The step that answers a plan is the one flagged `gives_answer`, else the
 // last step.
 const answering = <TStep extends { gives_answer?: boolean | null }>(
     steps: readonly TStep[],
@@ -177,7 +177,7 @@ const answering = <TStep extends { gives_answer?: boolean | null }>(
     return flagged.length > 0 ? flagged : steps.slice(-1);
 };
 
-/** The planned placeholders: one per answering step of the running plan
+/** The planned placeholders, one per answering step of the running plan
  *  that has drawn no card (`cards`' `planStep`), until the turn's first
  *  drawing line announces cards, else, while no plan runs, one per
  *  answering step of the plan waiting on approval (`waiting`, offered on
@@ -236,8 +236,8 @@ export const plannedCards = ({
     }));
 };
 
-/** The placeholders to show: the announced ones, then the planned ones, or
- *  NONE_COMING when there are none. */
+/** The announced placeholders followed by the planned ones, or NONE_COMING
+ *  when there are none. */
 export const comingCards = (
     announced: readonly ComingCard[],
     planned: readonly ComingCard[],

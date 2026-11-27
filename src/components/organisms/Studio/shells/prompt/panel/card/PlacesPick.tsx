@@ -90,7 +90,7 @@ const PlacesPick = ({
     }, [read, componentId, role, attempt, announce]);
 
     // The places the card shows lead the list, then those the reader has
-    // ticked since the picker opened, in the order they were ticked; the rest
+    // ticked since the picker opened, in the order they were ticked. The rest
     // follow in the service's order. A tick or an untick moves nothing once a
     // place has joined the lead, so the row under the pointer stays.
     const [ticked, setTicked] = useState<PlaceOption[]>([]);

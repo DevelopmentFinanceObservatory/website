@@ -31,7 +31,7 @@ export type PlaceSlotsArgs = {
     replacedIds?: Record<string, string>;
     // The next stacking order, one per newcomer.
     nextZ: () => number;
-    // The placeholders standing: a newcomer that names one takes its place,
+    // The placeholders standing. A newcomer that names one takes its place,
     // and the rest keep clear of them.
     ghosts?: Ghosts;
 };
@@ -126,7 +126,7 @@ export const placeSlots = (
         const resolved = resolveCardView(widget, views[widget.id]);
         const rows = heightRange(widget, resolved.view);
         // A card that takes a placeholder's place keeps its rect when it is
-        // the kind the placeholder held; another kind takes its own size from
+        // the kind the placeholder held. Another kind takes its own size from
         // the same corner.
         const sameKind = claimed && claimed.type !== null && kindOf(claimed.type) === widget.kind;
         const { w, h } =

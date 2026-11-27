@@ -71,7 +71,7 @@ export const placeCard = <TCard extends PlacedCard>(
 
     if (replaced) {
         // A card a question drew in another's place belongs to that
-        // question's reply, which describes it: its history starts afresh.
+        // question's reply, which describes it, so its history starts afresh.
         const changedIn = keepTurn ? [...(replaced.changedIn ?? []), card.turn] : undefined;
         const before = keepTurn ? (replaced.before ?? values?.(replaced)) : undefined;
         // A row the new card offers none of keeps what the last change

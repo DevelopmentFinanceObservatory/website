@@ -10,12 +10,12 @@ import { createReplyStore, type ReplyStream, streamedText } from '../replyStream
 test('a transcript drawn at a commit gets the pieces appended at it or later', () => {
     const store = createReplyStore();
 
-    // Commit 1 wrote the first delta; two more arrive.
+    // Commit 1 wrote the first delta. Two more arrive.
     store.append(3, 1, 'is ');
     store.append(3, 1, 'growing');
     assert.equal(store.since(3, 1), 'is growing');
 
-    // Commit 2 takes them; a delta arrives before commit 2 is drawn.
+    // Commit 2 takes them. A delta arrives before commit 2 is drawn.
     store.append(3, 2, '.');
     // The transcript still drawn at commit 1 lacks all three.
     assert.equal(store.since(3, 1), 'is growing.');

@@ -20,7 +20,7 @@ type UseArrivalsArgs = {
         fresh: ReadonlySet<string>,
         scroller: HTMLElement,
     ) => ScrollToOptions | null;
-    // A card that took its placeholder's place: the view already moved to the
+    // A card that took its placeholder's place. The view already moved to the
     // placeholder, so only the wave plays.
     quiet?: (newest: Slot) => boolean;
 };

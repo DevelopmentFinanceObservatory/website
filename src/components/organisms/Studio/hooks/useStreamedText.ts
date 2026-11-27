@@ -35,7 +35,7 @@ export const useStreamedText = (
 /**
  * Whether words have streamed into page turn `turn`'s reply since the
  * transcript's last commit. The component that calls it re-renders when the
- * first arrive, and on no delta after that.
+ * first words arrive, and on no later delta.
  */
 export const useStreamedWords = (stream: ReplyStream, turn: number | null): boolean =>
     useSyncExternalStore(

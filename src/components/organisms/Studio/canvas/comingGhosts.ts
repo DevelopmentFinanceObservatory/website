@@ -8,12 +8,12 @@ import { clamp, type Rect, SPAN_DEFAULT, SPAN_MAX, SPAN_MIN, type Slots } from '
 /**
  * The placeholders of the cards a running turn has announced, and where each
  * stands. A placeholder holds the place and size its card will take, so the
- * card lands with nothing moving: the card that names it (`placeholderId`)
+ * card lands with nothing moving. The card that names it (`placeholderId`)
  * takes over its rect in the same update that drops it.
  */
 
-/** What the answer announced (comingCards.ts): a card of this type is on its
- *  way, or (type null) a plan that waits names a card without its kind. */
+/** A card the answer announced (comingCards.ts). A `type` names the kind on
+ *  its way, and null means a waiting plan names the card without its kind. */
 export type Coming = ComingCard;
 export type ComingType = ComingCard['type'];
 
@@ -68,8 +68,8 @@ const KIND_WORDS: Record<Exclude<ComingType, null>, string> = {
     table: 'Table',
 };
 
-/** A placeholder's label: `Line chart · drawing`, or `Planned` for a card
- *  whose kind a waiting plan has not named. */
+/** A placeholder's label, such as `Line chart · drawing`, or `Planned` for a
+ *  card whose kind a waiting plan has not named. */
 export const ghostLabel = (type: ComingType): string =>
     type === null ? 'Planned' : `${KIND_WORDS[type]} · drawing`;
 
@@ -106,8 +106,8 @@ const floorOfGhost = (ghost: Ghost): FloorItem => ({
 
 /**
  * The placeholders after the announced list or the cards change. A placeholder
- * whose card has landed (`claimed`) is dropped at once; one that left the list
- * with no card starts leaving, and its rect stays free for nothing until it is
+ * whose card has landed (`claimed`) is dropped at once. One that left the list
+ * with no card starts leaving and stops holding its rect until it is
  * pruned. A new entry takes the first spot of its question's block clear of the
  * cards and the placeholders already standing. Returns `current` itself when
  * nothing changed.
@@ -206,7 +206,7 @@ const NOUNS: Record<Exclude<ComingType, null>, [string, string]> = {
 };
 
 /** What assistive technology hears once for a batch of placeholders, such as
- *  `2 charts on the way`; a batch of unnamed kinds from a waiting plan reads
+ *  `2 charts on the way`. A batch of unnamed kinds from a waiting plan reads
  *  `2 cards planned`. */
 export const comingNotice = (batch: readonly Pick<Ghost, 'type'>[]): string => {
     const count = batch.length;

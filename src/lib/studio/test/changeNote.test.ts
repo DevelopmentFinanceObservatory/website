@@ -109,7 +109,7 @@ test('the note stands on the rows the change recorded, once the card’s offers 
     assert.ok(b && b.kind !== 'text');
 
     // A reload without a session, a left session or a stale refusal drops
-    // the offers; the card still shows the change.
+    // the offers. The card still shows the change.
     const bare = { ...b, cardChanges: undefined };
 
     assert.equal(changeNote([bare], titleOf), 'This card now shows Uganda, 2010 to 2020.');

@@ -17,8 +17,8 @@ import type { ApplyChoiceSuggestion } from '@/lib/studio/wire';
 
 type ChatMessageProps = {
     message: ChatMessageData;
-    // On the reply a stream writes into: the words streamed in since the
-    // transcript's last commit.
+    // Set on the reply a stream writes into. Carries the words streamed in
+    // since the transcript's last commit.
     stream?: ReplyStream;
     // Is this the transcript's last entry (follow-ups show there only).
     isLast: boolean;
