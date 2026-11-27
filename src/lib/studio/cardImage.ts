@@ -31,54 +31,73 @@ export const cardImageName = (title: string, today = new Date()): string => {
     return `${slug}-${today.toISOString().slice(0, 10)}.png`;
 };
 
+/** An element's laid-out size in fractional px, before any transform. */
+const boxSize = (el: Element, side: 'width' | 'height'): number =>
+    parseFloat(getComputedStyle(el)[side]) || 0;
+
 /**
- * A copy of `node` to photograph, beside it in the same slot so it takes
- * the same styles. The live note stops at a capped height and scrolls; the
- * copy's `data-export` lifts the cap (CardChrome.module.scss), and the copy
- * grows by the lines that uncovers so the body above keeps its size. It is
- * clipped out of sight and out of the slot's layout. html-to-image inlines
- * each element's computed style and has no hook on its clone, so the card
- * on the sheet stays untouched only by photographing a separate element.
+ * A copy of `node` to photograph, in `holder` beside it in the same slot so
+ * it takes the same styles. The live note stops at a capped height and
+ * scrolls; the copy's `data-export` lifts the cap (CardChrome.module.scss),
+ * and the copy grows by the lines that uncovers so the body above keeps its
+ * size. The holder is a zero-size box that clips the copy, so the copy
+ * stays out of sight and cannot widen the board's scroll area.
+ * html-to-image inlines each element's computed style and has no hook on its
+ * clone, so the card on the sheet stays untouched only by photographing a
+ * separate element.
  */
-const exportCopy = (node: HTMLElement): HTMLElement => {
+const exportCopy = (node: HTMLElement, holder: HTMLElement): HTMLElement => {
     const copy = node.cloneNode(true) as HTMLElement;
+    const width = boxSize(node, 'width');
+    const height = boxSize(node, 'height');
 
     // The live card keeps the ids; a duplicate would answer its lookups.
     copy.removeAttribute('id');
     copy.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
     copy.setAttribute('data-export', '');
-    copy.setAttribute('aria-hidden', 'true');
-    copy.inert = true;
     Object.assign(copy.style, {
         position: 'absolute',
         top: '0',
         left: '0',
-        width: `${node.offsetWidth}px`,
-        height: `${node.offsetHeight}px`,
+        width: `${width}px`,
+        height: `${height}px`,
         // The card's entrance animation would replay from transparent.
         animation: 'none',
         transition: 'none',
-        clipPath: 'inset(50%)',
+    });
+    holder.setAttribute('aria-hidden', 'true');
+    holder.inert = true;
+    Object.assign(holder.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '0',
+        height: '0',
+        overflow: 'hidden',
         pointerEvents: 'none',
     });
-    node.after(copy);
+    holder.append(copy);
+    node.after(holder);
 
-    // cloneNode copies a canvas's size, not what is drawn on it.
+    // cloneNode copies a canvas's size and leaves it blank; the drawing is
+    // copied here. drawImage throws on a canvas with no width or height.
     const canvases = node.querySelectorAll('canvas');
 
     copy.querySelectorAll('canvas').forEach((canvas, index) => {
-        canvas.getContext('2d')?.drawImage(canvases[index], 0, 0);
+        if (canvas.width > 0 && canvas.height > 0) {
+            canvas.getContext('2d')?.drawImage(canvases[index], 0, 0);
+        }
     });
 
-    // The notes that scroll on the sheet (CardChrome's NoteLine), measured
-    // in full in the copy.
-    const liveNotes = node.querySelectorAll<HTMLElement>('[data-no-drag]');
+    // Each note (CardChrome's NoteLine), measured in full in the copy against
+    // its capped height on the sheet.
+    const liveNotes = node.querySelectorAll('[data-note]');
     let hidden = 0;
 
-    copy.querySelectorAll<HTMLElement>('[data-no-drag]').forEach((note, index) => {
-        hidden += Math.max(0, note.offsetHeight - liveNotes[index].offsetHeight);
+    copy.querySelectorAll('[data-note]').forEach((note, index) => {
+        hidden += Math.max(0, boxSize(note, 'height') - boxSize(liveNotes[index], 'height'));
     });
-    copy.style.height = `${node.offsetHeight + hidden}px`;
+    copy.style.height = `${height + hidden}px`;
 
     return copy;
 };
@@ -94,21 +113,22 @@ const exportCopy = (node: HTMLElement): HTMLElement => {
  */
 export const downloadCardImage = async (node: HTMLElement, name: string): Promise<void> => {
     const { toBlob } = await import('html-to-image');
-    const copy = exportCopy(node);
+    // Created before the try, so the finally can remove it however far
+    // exportCopy got.
+    const holder = document.createElement('div');
     let blob: Blob | null;
 
     try {
-        blob = await toBlob(copy, {
+        blob = await toBlob(exportCopy(node, holder), {
             pixelRatio: 2,
             // The card paints its own face; without this the PNG would carry
             // the sheet's grid showing through wherever the card is not opaque.
             backgroundColor: getComputedStyle(node).backgroundColor,
-            style: { clipPath: 'none' },
             filter: (child) =>
                 !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
         });
     } finally {
-        copy.remove();
+        holder.remove();
     }
 
     if (!blob) {
