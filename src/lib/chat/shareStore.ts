@@ -3,8 +3,12 @@ import { cache } from 'react';
 
 import {
     createOwnedShare,
+    createShare,
+    keepForCleanup,
     ownerShareWrite,
     readShare,
+    SharesError,
+    takeDown,
     takeDownUserShares,
     type CreateShareBody,
     type ShareRecord,
@@ -65,6 +69,44 @@ export const makeShare = (
     body: CreateShareBody,
 ): Promise<{ id: string }> =>
     createOwnedShare({ db, backend: sharesBackendFor(incoming) }, userId, body);
+
+/** Make a share whose write token the caller keeps, as the Library does
+ *  in `library_artifact`. No `share_token` row is written, so the share
+ *  belongs to no account. */
+export const makeTokenShare = (
+    incoming: Headers,
+    body: CreateShareBody,
+): Promise<{ id: string; writeToken: string }> => createShare(sharesBackendFor(incoming), body);
+
+/** Take down a share with its write token. Answers `done` once dfo-apis
+ *  holds no such share, one it had already lost included, and otherwise
+ *  the code of the failure (`SharesError`), so the caller can keep the
+ *  token for another try or for an operator. */
+export const takeDownTokenShare = async (
+    incoming: Headers,
+    { shareId, writeToken }: { shareId: string; writeToken: string },
+): Promise<string> => {
+    try {
+        await takeDown(sharesBackendFor(incoming), shareId, writeToken);
+
+        return 'done';
+    } catch (error) {
+        if (error instanceof SharesError) {
+            return error.code === 'not_found' ? 'done' : error.code;
+        }
+
+        return String(error);
+    }
+};
+
+/** Keep a share no take-down removed in `share_cleanup`, for an operator,
+ *  with the alerted `share_cleanup_recorded` line. */
+export const keepShareForCleanup = (row: {
+    shareId: string;
+    userId: string;
+    writeToken: string;
+    reason: string;
+}): Promise<void> => keepForCleanup(db, row);
 
 /** Switch the caller's live share to snapshot, or take it down. */
 export const writeOwnShare = (

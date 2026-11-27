@@ -12,6 +12,7 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
+import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
 import type { CardRef, Widget } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
@@ -77,9 +78,14 @@ type ShareModalProps = {
     // Signed out: the site keeps no write token for the links, so the dialog
     // says they are permanent and offers no switch to a snapshot.
     guest: boolean;
-    // What an admin can publish to the Library: the cards on the sheet and
-    // each one's title. Undefined for everyone else, who see no Publish tab.
-    publish?: { widgets: readonly Widget[]; titleOf: (id: string) => string };
+    // What an admin can publish to the Library: the cards on the sheet, each
+    // one's title, and the saved conversation a publish sends. Undefined for
+    // everyone else, who see no Publish tab.
+    publish?: {
+        widgets: readonly Widget[];
+        titleOf: (id: string) => string;
+        snapshot: () => SavedConversation | null;
+    };
 };
 
 const WHOLE_TABS = [
@@ -364,7 +370,7 @@ const ShareModal = ({
                             title={title}
                             widgets={publish.widgets}
                             titleOf={publish.titleOf}
-                            createShare={createShare}
+                            snapshot={publish.snapshot}
                         />
                     </div>
                 )}

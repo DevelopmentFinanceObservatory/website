@@ -8,7 +8,9 @@
  * the first one that fails is named by its JSON pointer.
  */
 
-import type { ArtifactKind, ArtifactMode, LibrarySource, LibraryStep } from './artifact.ts';
+import type { ArtifactKind, LibrarySource, LibraryStep } from './artifact.ts';
+import type { SavedConversation } from '../chat/history.ts';
+import type { ShareMode } from '../chat/shareMode.ts';
 import type { PanelView } from '../studio/descriptionBlocks.ts';
 
 export const LIMITS = {
@@ -33,18 +35,38 @@ export type ArtifactText = {
     topics: string[];
 };
 
+/** What the Library shows: the canvas, or one card of it. */
+export type PublishedShare = {
+    kind: 'canvas' | 'card';
+    conversation: SavedConversation;
+    /** The card's id, for a card. */
+    cardId?: string;
+    mode: ShareMode;
+};
+
+/**
+ * The body of `POST /api/library/artifacts`. `publishKey` is a random UUID
+ * the publisher makes once per artifact and mode and sends again on every
+ * try, so a publish whose answer was lost makes no second artifact. The
+ * server makes the share from `share`, and reads the artifact's kind, mode,
+ * sources and steps from the cards that share shows.
+ */
 export type PublishInput = ArtifactText & {
-    shareId: string;
-    kind: Exclude<ArtifactKind, 'data'>;
-    mode: ArtifactMode;
-    sources: LibrarySource[];
-    steps: LibraryStep[];
+    publishKey: string;
+    share: PublishedShare;
+};
+
+/** A publish as the route reads it. `share` is checked for its kind alone;
+ *  the share route's reader (`readStudioShareRequest`) reads the rest. */
+export type PublishRequest = {
+    text: ArtifactText;
+    publishKey: string;
+    share: Record<string, unknown> & { kind: 'canvas' | 'card' };
 };
 
 export type Read<T> = { ok: true; value: T } | { ok: false; pointer: string; detail: string };
 
-// A share's id as dfo-apis issues it (src/lib/chat/apisShares.ts).
-const SHARE_ID = /^[A-Za-z0-9]{8}$/;
+const PUBLISH_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The bar the Library's list params join their values with (./artifact.ts),
 // which a topic's label and a source's name therefore leave out.
@@ -75,6 +97,17 @@ const line = (raw: unknown, max: number): string | null => {
     }
 
     const text = squeeze(raw.replace(/\s+/g, ' '));
+
+    return text.length > 0 && text.length <= max ? text : null;
+};
+
+// Required text within `max` whose line breaks are kept.
+const paragraphs = (raw: unknown, max: number): string | null => {
+    if (typeof raw !== 'string') {
+        return null;
+    }
+
+    const text = raw.trim();
 
     return text.length > 0 && text.length <= max ? text : null;
 };
@@ -120,14 +153,24 @@ const sourceUrl = (raw: unknown): string | null | false => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const readText = (body: Record<string, unknown>): Read<ArtifactText> => {
+/**
+ * The fields a publisher writes, narrowed, or the first one at fault by its
+ * JSON pointer with the sentence to show. The edit route reads its body
+ * with it, the publish route the text of its body, and the dialogs check
+ * their fields with it before they send them.
+ */
+export const readArtifactText = (body: unknown): Read<ArtifactText> => {
+    if (!isRecord(body)) {
+        return refuse('', 'Send a JSON object.');
+    }
+
     const title = line(body.title, LIMITS.title);
 
     if (!title) {
         return refuse('/title', `Give it a title of 1 to ${LIMITS.title} characters.`);
     }
 
-    const description = line(body.description, LIMITS.description);
+    const description = paragraphs(body.description, LIMITS.description);
 
     if (!description) {
         return refuse(
@@ -175,82 +218,52 @@ const readText = (body: Record<string, unknown>): Read<ArtifactText> => {
     };
 };
 
-/** The body of an edit as the fields it changes. */
-export const readEdit = (body: unknown): Read<ArtifactText> =>
-    isRecord(body) ? readText(body) : refuse('', 'Send a JSON object.');
+/** The body of a publish, or the first field at fault. A conversation
+ *  share is not an artifact, so `share.kind` is `canvas` or `card`. */
+export const readPublish = (body: unknown): Read<PublishRequest> => {
+    const text = readArtifactText(body);
 
-/** The body of a publish as the artifact it makes. */
-export const readPublish = (body: unknown): Read<PublishInput> => {
-    if (!isRecord(body)) {
-        return refuse('', 'Send a JSON object.');
+    if (!text.ok || !isRecord(body)) {
+        return text.ok ? refuse('', 'Send a JSON object.') : text;
     }
 
-    const text = readText(body);
-
-    if (!text.ok) {
-        return text;
+    if (typeof body.publishKey !== 'string' || !PUBLISH_KEY.test(body.publishKey)) {
+        return refuse('/publishKey', 'The publish has no key.');
     }
 
-    if (typeof body.shareId !== 'string' || !SHARE_ID.test(body.shareId)) {
-        return refuse('/shareId', 'That is not a share.');
-    }
+    const share = body.share;
 
-    if (body.kind !== 'chart' && body.kind !== 'canvas') {
-        return refuse('/kind', 'Publish a chart or a canvas.');
-    }
-
-    if (body.mode !== 'live' && body.mode !== 'snapshot') {
-        return refuse('/mode', 'Publish live data or a snapshot.');
-    }
-
-    const rawSources = body.sources ?? [];
-    const rawSteps = body.steps ?? [];
-
-    if (!Array.isArray(rawSources) || rawSources.length > LIMITS.sources) {
-        return refuse('/sources', 'The sources are not a list.');
-    }
-
-    if (!Array.isArray(rawSteps) || rawSteps.length > LIMITS.steps) {
-        return refuse('/steps', 'The steps are not a list.');
-    }
-
-    const sources: LibrarySource[] = [];
-
-    for (const raw of rawSources) {
-        const name = isRecord(raw) ? line(raw.name, LIMITS.line) : null;
-        const url = isRecord(raw) ? sourceUrl(raw.url) : false;
-
-        if (!name || name.includes(SEPARATOR) || url === false) {
-            return refuse('/sources', 'A source has no name or a page that is not a link.');
-        }
-
-        sources.push({ name, url });
-    }
-
-    const steps: LibraryStep[] = [];
-
-    for (const raw of rawSteps) {
-        const title = isRecord(raw) ? line(raw.title, LIMITS.line) : null;
-        const detail = isRecord(raw) ? optional(raw.detail, LIMITS.line * 4, false) : false;
-
-        if (!title || detail === false) {
-            return refuse('/steps', 'A step has no title.');
-        }
-
-        steps.push({ title, detail });
+    if (!isRecord(share) || (share.kind !== 'canvas' && share.kind !== 'card')) {
+        return refuse('/share/kind', 'Publish a canvas or one card of it.');
     }
 
     return {
         ok: true,
         value: {
-            ...text.value,
-            shareId: body.shareId,
-            kind: body.kind,
-            mode: body.mode,
-            sources,
-            steps,
+            text: text.value,
+            publishKey: body.publishKey,
+            share: { ...share, kind: share.kind },
         },
     };
+};
+
+/**
+ * The artifact's kind: `canvas` for a canvas, and for one card the card's
+ * own kind. `shown` is the cards the share shows. Null for a card that is
+ * not a chart, a table or a key number, which leaves a text card out.
+ */
+export const publishedKind = (
+    shareKind: 'canvas' | 'card',
+    shown: readonly { kind: string }[],
+): Exclude<ArtifactKind, 'data'> | null => {
+    if (shareKind === 'canvas') {
+        return 'canvas';
+    }
+
+    const [card] = shown;
+    const kind = shown.length === 1 ? card.kind : null;
+
+    return kind === 'chart' || kind === 'table' || kind === 'key_number' ? kind : null;
 };
 
 /**
@@ -286,13 +299,14 @@ const clip = (text: string, max: number): string =>
     squeeze(text.replace(/\s+/g, ' ')).slice(0, max);
 
 /**
- * What the Library copies from the cards it publishes, which is every source
- * they credit, each once by name, and, for one card alone, the steps it was
- * made by. A canvas has no steps of its own. Each value is cut to what
- * `readPublish` takes, and a source page it would refuse is left out, so a
- * card's own facts never stop a publish.
+ * What the Library copies from the cards an artifact of `kind` shows, which
+ * is every source they credit, each once by name, and, for an artifact of
+ * one card, the steps it was made by. A canvas has no steps of its own.
+ * Each value is cut to the Library's limits, and a source page that is
+ * neither https nor a source page of this site is left out.
  */
 export const publishedFacts = (
+    kind: ArtifactKind,
     views: readonly PanelView[],
 ): { sources: LibrarySource[]; steps: LibraryStep[] } => {
     const sources = new Map<string, LibrarySource>();
@@ -312,7 +326,8 @@ export const publishedFacts = (
     }
 
     const [only] = views;
-    const made = views.length === 1 && only.kind === 'described' ? only.made : null;
+    const made =
+        kind !== 'canvas' && views.length === 1 && only.kind === 'described' ? only.made : null;
 
     return {
         sources: [...sources.values()].slice(0, LIMITS.sources),

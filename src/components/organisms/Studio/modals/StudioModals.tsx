@@ -10,6 +10,7 @@ import { widgetTitle } from '../canvas/layout';
 import type { CanvasDocument } from '../hooks/useCanvasDocument';
 
 import { useAdmin } from '@/hooks/useAdmin';
+import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
 import type { ShareLinkDeps } from '@/lib/studio/shareDialog';
@@ -24,6 +25,8 @@ type StudioModalsProps = {
     firstPrompt: string;
     shareData: ShareDatum[];
     createShare: ShareLinkDeps['createShare'];
+    // The conversation as it is saved, which a Library publish sends.
+    buildSnapshot: () => SavedConversation | null;
     // Signed out: the share dialog makes unowned snapshots only.
     guest?: boolean;
     // A card's title as its face shows it (the Publish tab's list).
@@ -44,6 +47,7 @@ const StudioModals = ({
     firstPrompt,
     shareData,
     createShare,
+    buildSnapshot,
     guest = false,
     cardTitleOf,
 }: StudioModalsProps) => {
@@ -142,7 +146,11 @@ const StudioModals = ({
                 offerLive={sharesData}
                 createShare={createShare}
                 guest={guest}
-                publish={admin ? { widgets: visibleWidgets, titleOf: cardTitleOf } : undefined}
+                publish={
+                    admin
+                        ? { widgets: visibleWidgets, titleOf: cardTitleOf, snapshot: buildSnapshot }
+                        : undefined
+                }
             />
         </>
     );

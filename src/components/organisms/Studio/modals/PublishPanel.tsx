@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import styles from './PublishPanel.module.scss';
 import type { ShareScope } from './ShareModal';
@@ -11,48 +11,41 @@ import ArtifactFields, {
     blankText,
     isComplete,
 } from '@/components/organisms/Library/ArtifactFields';
+import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode } from '@/lib/chat/shareMode';
 import type { Widget } from '@/lib/chat/widgets';
-import { artifactPath } from '@/lib/library/artifact';
-import { publishArtifact } from '@/lib/library/client';
-import { publishedFacts } from '@/lib/library/publish';
-import { panelViewOf } from '@/lib/studio/infoPanel';
+import { artifactPath, kindLabel } from '@/lib/library/artifact';
+import { publishArtifact, publishRefusalText } from '@/lib/library/client';
+import { LIMITS, readArtifactText } from '@/lib/library/publish';
 import { isLiveDataCard } from '@/lib/studio/liveCards';
-import { openShareLink, type ShareLink, type ShareLinkDeps } from '@/lib/studio/shareDialog';
 
 /**
  * The Share dialog's Publish tab, which admins alone are shown: it puts the
  * canvas, or one card of it, in the Library under a citable URL. Publishing
- * makes a share of the chosen artifact (live, or a snapshot) and files it
- * with the text written here, the sources its cards credit and, for one
- * card, the steps it was made by.
+ * sends the saved conversation and the text written here, and the server
+ * makes the share (live, or a snapshot) and files it with the sources its
+ * cards credit and, for one card, the steps it was made by.
  */
 
 const CANVAS = 'canvas';
 
 const COPY = {
     lead: 'Make this output permanently available in the Library with a citable URL.',
-    live: 'Resolves against the latest source data so viewers always see current values.',
-    snapshot: 'Keeps the values it shows at the moment it is published.',
+    live: 'Live data. Resolves against the latest source data so viewers always see current values.',
+    snapshot: 'Snapshot. Keeps the values it shows at the moment it is published.',
     noLive: 'This output draws no data, so it is published as a snapshot.',
-    failed: 'The link for it was not made. Try again.',
-    limited: "This network has made today's links. Try again tomorrow.",
-    refused: 'This cannot be published as it stands.',
-    withdrawn: 'Its cards cannot show live data. Publish it as a snapshot.',
+    failed: 'It was not published. Try again.',
+    none: 'A text card cannot be published. Publish a chart, a table or a key number.',
 };
 
-const linkError = (link: ShareLink | null): string => {
-    switch (link?.status) {
-        case 'limited':
-            return COPY.limited;
-        case 'refused':
-            return COPY.refused;
-        case 'withdrawn':
-            return COPY.withdrawn;
-        default:
-            return COPY.failed;
-    }
-};
+// The cards the Library takes on their own: a chart, a table or a key number.
+type PublishableCard = Widget & { kind: 'chart' | 'table' | 'key_number' };
+
+const isPublishable = (widget: Widget): widget is PublishableCard =>
+    widget.kind === 'chart' || widget.kind === 'table' || widget.kind === 'key_number';
+
+// A title as the Library takes it, so a prefilled one is never refused.
+const prefill = (title: string): string => title.slice(0, LIMITS.title);
 
 type PublishPanelProps = {
     scope: ShareScope;
@@ -61,81 +54,95 @@ type PublishPanelProps = {
     // The cards on the sheet, and each one's title as its face shows it.
     widgets: readonly Widget[];
     titleOf: (id: string) => string;
-    createShare: ShareLinkDeps['createShare'];
+    // The conversation as it is saved, which the publish sends; null when
+    // there is none to send.
+    snapshot: () => SavedConversation | null;
 };
 
-const PublishPanel = ({ scope, title, widgets, titleOf, createShare }: PublishPanelProps) => {
+const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanelProps) => {
     const cards = widgets.filter((widget) => widget.kind !== 'text');
+    const publishable = widgets.filter(isPublishable);
     const options =
         scope.kind === 'card'
-            ? [{ id: scope.id, label: 'Chart' }]
+            ? publishable
+                  .filter((card) => card.id === scope.id)
+                  .map((card) => ({ id: card.id, label: kindLabel(card.kind) }))
             : [
-                  { id: CANVAS, label: 'Canvas' },
-                  ...cards.map((card) => ({ id: card.id, label: `Chart: ${titleOf(card.id)}` })),
+                  { id: CANVAS, label: kindLabel('canvas') },
+                  ...publishable.map((card) => ({
+                      id: card.id,
+                      label: `${kindLabel(card.kind)}: ${titleOf(card.id)}`,
+                  })),
               ];
-    const [picked, setPicked] = useState(options[0].id);
-    const [text, setText] = useState(() => blankText(scope.kind === 'card' ? scope.title : title));
+    const [picked, setPicked] = useState(options[0]?.id ?? CANVAS);
+    const [text, setText] = useState(() =>
+        blankText(prefill(scope.kind === 'card' ? scope.title : title)),
+    );
     const [live, setLive] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [slug, setSlug] = useState<string | null>(null);
-    // The share made for each artifact and mode, so a publish sent again
-    // after a refusal files the share it has.
-    const sharesRef = useRef(new Map<string, { id: string; mode: ShareMode }>());
+    // One key per artifact and mode, made on its first try and sent again
+    // on every retry, so a publish whose answer was lost makes no second
+    // artifact.
+    const keysRef = useRef(new Map<string, string>());
+    const ids = useId();
 
     const subjects = picked === CANVAS ? cards : cards.filter((card) => card.id === picked);
     const canLive = subjects.some(isLiveDataCard);
     const mode: ShareMode = canLive && live ? 'live' : 'snapshot';
 
+    const publishKey = (): string => {
+        const at = `${picked}:${mode}`;
+        const known = keysRef.current.get(at);
+
+        if (known) {
+            return known;
+        }
+
+        const made = crypto.randomUUID();
+
+        keysRef.current.set(at, made);
+
+        return made;
+    };
+
     const publish = async (event: React.FormEvent) => {
         event.preventDefault();
 
-        if (busy || !isComplete(text)) {
+        if (busy || !isComplete(text) || options.length === 0) {
+            return;
+        }
+
+        const checked = readArtifactText(text);
+
+        if (!checked.ok) {
+            setError(checked.detail);
+
+            return;
+        }
+
+        const conversation = snapshot();
+
+        if (!conversation) {
+            setError(COPY.failed);
+
             return;
         }
 
         setBusy(true);
         setError(null);
 
-        const kind = picked === CANVAS ? 'canvas' : 'chart';
-        const shareKey = `${picked}:${mode}`;
-        let share = sharesRef.current.get(shareKey);
-
-        if (!share) {
-            const made = await new Promise<ShareLink | null>((resolve) => {
-                void openShareLink(
-                    { createShare },
-                    {
-                        kind: kind === 'canvas' ? 'canvas' : 'card',
-                        cardId: kind === 'canvas' ? undefined : picked,
-                        mode,
-                    },
-                    resolve,
-                ).catch(() => resolve(null));
-            });
-
-            if (made?.status !== 'ready') {
-                setError(linkError(made));
-                setBusy(false);
-
-                return;
-            }
-
-            share = { id: made.id, mode: made.mode };
-            sharesRef.current.set(shareKey, share);
-        }
-
-        const today = new Date().toLocaleDateString('en-CA');
+        const single = picked !== CANVAS;
         const answer = await publishArtifact({
-            ...text,
-            shareId: share.id,
-            kind,
-            mode: share.mode,
-            ...publishedFacts(
-                subjects.flatMap((card) =>
-                    card.info ? [panelViewOf(card.info, { retrievedOn: today })] : [],
-                ),
-            ),
+            ...checked.value,
+            publishKey: publishKey(),
+            share: {
+                kind: single ? 'card' : 'canvas',
+                conversation,
+                cardId: single ? picked : undefined,
+                mode,
+            },
         });
 
         setBusy(false);
@@ -143,7 +150,14 @@ const PublishPanel = ({ scope, title, widgets, titleOf, createShare }: PublishPa
         if (answer.ok) {
             setSlug(answer.value.slug);
         } else {
-            setError(answer.detail);
+            setError(
+                publishRefusalText(
+                    answer.problem,
+                    answer.detail,
+                    subjects.map((card) => ({ id: card.id, title: titleOf(card.id) })),
+                    single,
+                ),
+            );
         }
     };
 
@@ -154,11 +168,22 @@ const PublishPanel = ({ scope, title, widgets, titleOf, createShare }: PublishPa
                 <p className={styles.copyText}>
                     “{text.title}” has its own page, which anyone can open and cite.
                 </p>
-                <Button href={artifactPath(slug)} variant="dark" full icon="arrow" target="_blank">
+                <Button
+                    href={artifactPath(slug)}
+                    prefetch={false}
+                    variant="dark"
+                    full
+                    icon="arrow"
+                    target="_blank"
+                >
                     View in Library
                 </Button>
             </div>
         );
+    }
+
+    if (options.length === 0) {
+        return <p className={styles.copyText}>{COPY.none}</p>;
     }
 
     return (
@@ -178,12 +203,16 @@ const PublishPanel = ({ scope, title, widgets, titleOf, createShare }: PublishPa
                                 setPicked(next);
                                 // The title follows the artifact until it is edited.
                                 setText((current) => {
-                                    const was = picked === CANVAS ? title : titleOf(picked);
+                                    const was = prefill(
+                                        picked === CANVAS ? title : titleOf(picked),
+                                    );
 
                                     return current.title === was
                                         ? {
                                               ...current,
-                                              title: next === CANVAS ? title : titleOf(next),
+                                              title: prefill(
+                                                  next === CANVAS ? title : titleOf(next),
+                                              ),
                                           }
                                         : current;
                                 });
@@ -198,25 +227,26 @@ const PublishPanel = ({ scope, title, widgets, titleOf, createShare }: PublishPa
                         <Icon name="chevron-down" className={styles.selectIcon} />
                     </span>
                 </label>
-                <div className={styles.field} role="group" aria-labelledby="publish-type">
-                    <span className={styles.label} id="publish-type">
+                <div className={styles.field} role="group" aria-labelledby={`${ids}-type`}>
+                    <span className={styles.label} id={`${ids}-type`}>
                         Publication Type
                     </span>
-                    <label className={styles.toggle}>
+                    <div className={styles.toggle}>
                         <input
+                            id={`${ids}-live`}
                             type="checkbox"
                             role="switch"
                             className={styles.switch}
                             checked={mode === 'live'}
                             disabled={!canLive}
-                            aria-describedby="publish-type-note"
+                            aria-describedby={`${ids}-note`}
                             onChange={(event) => setLive(event.target.checked)}
                         />
                         <span>
-                            <span className={styles.toggleLabel}>
-                                {mode === 'live' ? 'Live Data' : 'Snapshot'}
-                            </span>
-                            <span className={styles.toggleNote} id="publish-type-note">
+                            <label className={styles.toggleLabel} htmlFor={`${ids}-live`}>
+                                Live data
+                            </label>
+                            <span className={styles.toggleNote} id={`${ids}-note`}>
                                 {!canLive
                                     ? COPY.noLive
                                     : mode === 'live'
@@ -224,7 +254,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, createShare }: PublishPa
                                       : COPY.snapshot}
                             </span>
                         </span>
-                    </label>
+                    </div>
                 </div>
             </ArtifactFields>
             {error && (

@@ -1,5 +1,6 @@
 import classNames from 'classnames';
 import Link from 'next/link';
+import { Fragment } from 'react';
 
 import ArtifactToc from './ArtifactToc';
 import EditArtifact from './EditArtifact';
@@ -19,32 +20,32 @@ import {
     type LibraryArtifact as Artifact,
     publishedDate,
 } from '@/lib/library/artifact';
+import { parseProse } from '@/lib/library/prose';
 
 const pad = (index: number) => String(index + 1).padStart(2, '0');
 
-// The publisher's text: paragraphs split at blank lines, and a run of lines
-// starting "- " or "• " as a list.
+// The publisher's text (parseProse): paragraphs with their line breaks, and
+// lists.
 const Prose = ({ text }: { text: string }) => (
     <>
-        {text
-            .split(/\n\s*\n/)
-            .map((block) => block.trim())
-            .filter(Boolean)
-            .map((block, index) => {
-                const lines = block.split('\n');
-
-                return lines.every((line) => /^\s*[-•]\s+/.test(line)) ? (
-                    <ul key={index} className={styles.bullets}>
-                        {lines.map((line, item) => (
-                            <li key={item}>{line.replace(/^\s*[-•]\s+/, '')}</li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p key={index} className={styles.paragraph}>
-                        {block}
-                    </p>
-                );
-            })}
+        {parseProse(text).map((block, index) =>
+            block.type === 'list' ? (
+                <ul key={index} className={styles.bullets}>
+                    {block.items.map((item, position) => (
+                        <li key={position}>{item}</li>
+                    ))}
+                </ul>
+            ) : (
+                <p key={index} className={styles.paragraph}>
+                    {block.lines.map((line, position) => (
+                        <Fragment key={position}>
+                            {position > 0 && <br />}
+                            {line}
+                        </Fragment>
+                    ))}
+                </p>
+            ),
+        )}
     </>
 );
 
@@ -85,7 +86,7 @@ const LibraryArtifact = ({
     return (
         <section className={styles.section}>
             <PageHero tone="dark" boxMinHeight={220}>
-                <Link href="/library" className={styles.back}>
+                <Link href="/library" prefetch={false} className={styles.back}>
                     <span className={styles.backIcon} aria-hidden="true">
                         <Icon name="arrow" />
                     </span>
@@ -105,7 +106,7 @@ const LibraryArtifact = ({
                             <p>
                                 A dataset from the DFO search, with its parts and their downloads.
                             </p>
-                            <Button href={studioHref} variant="dark" icon="arrow">
+                            <Button href={studioHref} prefetch={false} variant="dark" icon="arrow">
                                 Open the data
                             </Button>
                         </div>
@@ -125,7 +126,13 @@ const LibraryArtifact = ({
                 <aside className={styles.aside}>
                     <div className={styles.actions}>
                         <ShareButton url={`${origin}${artifactPath(artifact.slug)}`} />
-                        <Button href={studioHref} variant="light" full icon="arrow">
+                        <Button
+                            href={studioHref}
+                            prefetch={false}
+                            variant="light"
+                            full
+                            icon="arrow"
+                        >
                             Open in Studio
                         </Button>
                         {canEdit && <EditArtifact artifact={artifact} />}

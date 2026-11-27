@@ -190,6 +190,12 @@
     pointer-events: none;
 }
 
+// The type icon takes the pointer so its title shows. The tags that carry a
+// title do the same (parts.module.scss).
+.row > .kind {
+    pointer-events: auto;
+}
+
 .kind {
     @include flex(row, center, flex-start);
 

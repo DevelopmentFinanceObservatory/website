@@ -66,35 +66,10 @@ legend.label {
     gap: rem(4);
 }
 
-.topic {
-    @include font-size(11px, 1);
+.topics .topicAdd {
+    --seg-bg: var(--color-sage-light);
 
-    padding: rem(7) rem(8);
-    font-family: var(--font-dm-mono);
-    color: var(--color-charcoal);
-    letter-spacing: -0.02em;
-    cursor: pointer;
-    background-color: var(--color-grid-bg-light);
-    border: 0;
-    border-radius: rem(3);
-    transition:
-        color 0.2s ease,
-        background-color 0.2s ease;
-
-    &[aria-pressed="true"] {
-        color: var(--color-white);
-        background-color: var(--color-charcoal);
-    }
-
-    &:focus-visible {
-        outline: 2px solid var(--color-charcoal);
-        outline-offset: 2px;
-    }
-}
-
-.topicAdd {
     min-width: rem(25);
-    background-color: var(--color-sage-light);
 }
 
 // The Add Tag popup, dark, over the dialog.

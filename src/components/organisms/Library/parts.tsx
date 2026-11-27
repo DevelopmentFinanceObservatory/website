@@ -8,8 +8,10 @@ import { type ArtifactKind, type ArtifactMode, MODE_LABELS } from '@/lib/library
 /** The icon of each artifact type, in the list and on its page. */
 export const KIND_ICONS: Record<ArtifactKind, IconProps['name']> = {
     chart: 'chart-bar',
+    table: 'chart-table',
+    key_number: 'bulb',
     canvas: 'canvas',
-    data: 'chart-table',
+    data: 'download',
 };
 
 /** Live (mint) or Snapshot (grey), with the small square the design marks

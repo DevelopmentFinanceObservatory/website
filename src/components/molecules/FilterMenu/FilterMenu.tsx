@@ -21,7 +21,9 @@ type FilterMenuProps = {
  * A filter of any number of values: a chip that names it, with the count of
  * values picked riding its corner, and a menu of the values with a tick each
  * and how many items carry it. Picking a value keeps the menu open for the
- * next one, and "Clear" unpicks them all.
+ * next one, and "Clear" unpicks them all. A picked value the options lack
+ * (a stale link) is listed with a count of 0 so it can be unticked, and the
+ * trigger stays open while anything is picked.
  */
 const FilterMenu = ({ label, options, selected, onChange }: FilterMenuProps) => {
     const toggle = (value: string) =>
@@ -31,11 +33,18 @@ const FilterMenu = ({ label, options, selected, onChange }: FilterMenuProps) => 
                 : [...selected, value],
         );
 
+    const listed: readonly FilterMenuOption[] = [
+        ...options,
+        ...selected
+            .filter((value) => !options.some((option) => option.value === value))
+            .map((value) => ({ value, label: value, count: 0 })),
+    ];
+
     return (
         <DropdownMenu.Root modal={false}>
             <DropdownMenu.Trigger
                 className={classNames(styles.trigger, selected.length > 0 && styles.triggerOn)}
-                disabled={options.length === 0}
+                disabled={listed.length === 0}
                 aria-label={
                     selected.length > 0 ? `${label}, ${selected.length} selected` : undefined
                 }
@@ -55,7 +64,7 @@ const FilterMenu = ({ label, options, selected, onChange }: FilterMenuProps) => 
                     sideOffset={6}
                     collisionPadding={16}
                 >
-                    {options.map((option) => (
+                    {listed.map((option) => (
                         <DropdownMenu.CheckboxItem
                             key={option.value}
                             className={styles.option}

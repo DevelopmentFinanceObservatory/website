@@ -14,7 +14,15 @@ import type { LibrarySource, LibraryStep } from '../../../db/schema.ts';
 
 export type { LibrarySource, LibraryStep };
 
-export type ArtifactKind = 'chart' | 'canvas' | 'data';
+/** What an artifact shows: one card, by the card's kind, or a canvas of
+ *  cards. The check constraint on `library_artifact.kind` holds the same
+ *  values. */
+export const ARTIFACT_KINDS = ['chart', 'table', 'key_number', 'canvas', 'data'] as const;
+
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+
+export const isArtifactKind = (value: unknown): value is ArtifactKind =>
+    (ARTIFACT_KINDS as readonly unknown[]).includes(value);
 
 export type ArtifactMode = 'live' | 'snapshot';
 
@@ -35,11 +43,28 @@ export type LibraryArtifact = {
     publishedAt: string;
 };
 
+/** What the address of a withdrawn artifact still shows. */
+export type WithdrawnArtifact = {
+    slug: string;
+    title: string;
+    kind: ArtifactKind;
+    /** ISO 8601. */
+    publishedAt: string;
+    /** ISO 8601. */
+    withdrawnAt: string;
+};
+
+/** Each kind's name, in the order the type filter lists them. */
 export const KIND_LABELS: Record<ArtifactKind, string> = {
     chart: 'Chart',
+    table: 'Table',
+    key_number: 'Key number',
     canvas: 'Canvas',
     data: 'Data',
 };
+
+/** The kind's name, as labels, filters and citations print it. */
+export const kindLabel = (kind: ArtifactKind): string => KIND_LABELS[kind];
 
 export const MODE_LABELS: Record<ArtifactMode, string> = {
     live: 'Live',
@@ -175,7 +200,7 @@ export const citation = (artifact: LibraryArtifact, origin: string, accessed: Da
     const data = artifact.sources.map((source) => source.name).join(', ');
 
     return [
-        `Development Finance Observatory (${year}). ${artifact.title} [${KIND_LABELS[artifact.kind]}]. DFO Library.`,
+        `Development Finance Observatory (${year}). ${artifact.title} [${kindLabel(artifact.kind)}]. DFO Library.`,
         `${origin}${artifactPath(artifact.slug)}`,
         `(Accessed: ${DATE.format(accessed)}).${data ? ` Data: ${data}.` : ''}`,
     ].join(' ');

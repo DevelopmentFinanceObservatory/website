@@ -1,5 +1,5 @@
 {
-  "id": "26e36b59-31be-41a7-b52a-a5dcc1db6966",
+  "id": "84a2de92-d99c-4896-87ac-c92f330ca559",
   "prevId": "6f27ba03-f594-4c11-aa18-57e9840411ba",
   "version": "7",
   "dialect": "postgresql",
@@ -353,11 +353,23 @@
           "primaryKey": false,
           "notNull": true
         },
+        "publish_key": {
+          "name": "publish_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "share_id": {
           "name": "share_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "share_write_token": {
+          "name": "share_write_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "kind": {
           "name": "kind",
@@ -428,6 +440,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "withdrawn_at": {
+          "name": "withdrawn_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -436,6 +454,36 @@
           "columns": [
             {
               "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "library_artifact_publish_key_idx": {
+          "name": "library_artifact_publish_key_idx",
+          "columns": [
+            {
+              "expression": "publish_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "library_artifact_share_id_idx": {
+          "name": "library_artifact_share_id_idx",
+          "columns": [
+            {
+              "expression": "share_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -483,7 +531,7 @@
       "checkConstraints": {
         "library_artifact_kind": {
           "name": "library_artifact_kind",
-          "value": "\"library_artifact\".\"kind\" IN ('chart', 'canvas', 'data')"
+          "value": "\"library_artifact\".\"kind\" IN ('chart', 'table', 'key_number', 'canvas', 'data')"
         },
         "library_artifact_mode": {
           "name": "library_artifact_mode",
@@ -590,9 +638,9 @@
           "name": "library_topic_label_idx",
           "columns": [
             {
-              "expression": "label",
-              "isExpression": false,
+              "expression": "lower(\"label\")",
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],

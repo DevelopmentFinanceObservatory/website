@@ -2,36 +2,52 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { PanelView } from '../../studio/descriptionBlocks.ts';
-import { freeSlug, publishedFacts, readEdit, readPublish, slugOf } from '../publish.ts';
+import {
+    freeSlug,
+    publishedFacts,
+    publishedKind,
+    readArtifactText,
+    readPublish,
+    slugOf,
+} from '../publish.ts';
+
+const KEY = '3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e';
 
 const body = (patch: Record<string, unknown> = {}) => ({
-    shareId: 'Ab3dEf7h',
-    kind: 'chart',
-    mode: 'live',
+    publishKey: KEY,
+    share: { kind: 'card', cardId: 'w1', mode: 'live', conversation: { id: 'c', widgets: [] } },
     title: '  Health ODA   to Ethiopia ',
     description: 'Annual disbursements.',
     topics: ['Health', 'Health', ' ODA '],
-    sources: [{ name: 'OECD CRS', url: 'https://example.org/crs' }],
-    steps: [{ title: 'Get ODA', detail: null }],
     ...patch,
 });
 
-test('a publish body is narrowed to the artifact it makes', () => {
-    const read = readPublish(body({ contentTitle: 'Findings', content: ' One.\n\nTwo. ' }));
+test('a publish body is narrowed to its text, its key and its share', () => {
+    const read = readPublish(
+        body({
+            description: '  First line.\n\nSecond   line. ',
+            contentTitle: 'Findings',
+            content: ' One.\n\nTwo. ',
+        }),
+    );
 
     assert.ok(read.ok);
-    assert.equal(read.value.title, 'Health ODA to Ethiopia');
-    assert.deepEqual(read.value.topics, ['Health', 'ODA']);
-    assert.equal(read.value.content, 'One.\n\nTwo.');
-    assert.equal(read.value.contentTitle, 'Findings');
+    assert.equal(read.value.text.title, 'Health ODA to Ethiopia');
+    assert.equal(read.value.text.description, 'First line.\n\nSecond   line.');
+    assert.deepEqual(read.value.text.topics, ['Health', 'ODA']);
+    assert.equal(read.value.text.content, 'One.\n\nTwo.');
+    assert.equal(read.value.text.contentTitle, 'Findings');
+    assert.equal(read.value.publishKey, KEY);
+    assert.equal(read.value.share.kind, 'card');
+    assert.equal(read.value.share.cardId, 'w1');
 });
 
 test('a content title with no content is dropped', () => {
     const read = readPublish(body({ contentTitle: 'Findings', content: '  ' }));
 
     assert.ok(read.ok);
-    assert.equal(read.value.contentTitle, null);
-    assert.equal(read.value.content, null);
+    assert.equal(read.value.text.contentTitle, null);
+    assert.equal(read.value.text.content, null);
 });
 
 test('a publish body is refused at the first field at fault', () => {
@@ -39,18 +55,19 @@ test('a publish body is refused at the first field at fault', () => {
         [{ title: '   ' }, '/title'],
         [{ title: 'x'.repeat(141) }, '/title'],
         [{ description: 7 }, '/description'],
+        [{ description: ' \n ' }, '/description'],
+        [{ description: 'x'.repeat(601) }, '/description'],
         [{ content: 'x'.repeat(8001) }, '/content'],
         [{ topics: 'Health' }, '/topics'],
         [{ topics: [''] }, '/topics'],
         [{ topics: ['Aid | Debt'] }, '/topics'],
-        [{ sources: [{ name: 'IMF | WEO', url: null }] }, '/sources'],
-        [{ shareId: '../../etc' }, '/shareId'],
-        [{ kind: 'data' }, '/kind'],
-        [{ mode: 'frozen' }, '/mode'],
-        [{ sources: [{ name: 'A', url: 'javascript:alert(1)' }] }, '/sources'],
-        [{ sources: [{ name: 'A', url: 'http://example.org' }] }, '/sources'],
-        [{ sources: [{ name: 'A', url: '/data/sources//evil.example' }] }, '/sources'],
-        [{ steps: [{ detail: 'no title' }] }, '/steps'],
+        [{ publishKey: undefined }, '/publishKey'],
+        [{ publishKey: 'not-a-key' }, '/publishKey'],
+        [{ share: undefined }, '/share/kind'],
+        [
+            { share: { kind: 'conversation', conversation: { id: 'c', widgets: [] } } },
+            '/share/kind',
+        ],
     ];
 
     for (const [patch, pointer] of cases) {
@@ -64,15 +81,8 @@ test('a publish body is refused at the first field at fault', () => {
     assert.equal(readPublish([]).ok, false);
 });
 
-test('a source may name its page on this site', () => {
-    const read = readPublish(body({ sources: [{ name: 'A', url: '/data/sources/oecd/crs' }] }));
-
-    assert.ok(read.ok);
-    assert.equal(read.value.sources[0].url, '/data/sources/oecd/crs');
-});
-
-test('an edit reads the text alone', () => {
-    const read = readEdit(body({ shareId: 'nope', kind: 'data' }));
+test('the text alone is what an edit reads', () => {
+    const read = readArtifactText(body());
 
     assert.ok(read.ok);
     assert.deepEqual(Object.keys(read.value).sort(), [
@@ -82,6 +92,15 @@ test('an edit reads the text alone', () => {
         'title',
         'topics',
     ]);
+});
+
+test("a card artifact takes its card's kind, and a text card none", () => {
+    assert.equal(publishedKind('canvas', [{ kind: 'text' }, { kind: 'chart' }]), 'canvas');
+    assert.equal(publishedKind('card', [{ kind: 'chart' }]), 'chart');
+    assert.equal(publishedKind('card', [{ kind: 'table' }]), 'table');
+    assert.equal(publishedKind('card', [{ kind: 'key_number' }]), 'key_number');
+    assert.equal(publishedKind('card', [{ kind: 'text' }]), null);
+    assert.equal(publishedKind('card', []), null);
 });
 
 test('a slug is the title in ASCII words, and a taken one gets a number', () => {
@@ -121,14 +140,15 @@ test('a card gives its sources and steps, and a canvas each source once and no s
         { name: 'B', url: 'https://b.example', page: null },
     ]);
 
-    assert.deepEqual(publishedFacts([one]), {
+    assert.deepEqual(publishedFacts('chart', [one]), {
         sources: [{ name: 'A', url: '/data/sources/oecd/crs' }],
         steps: [
             { title: 'Get thing 0', detail: null },
             { title: 'thing 1', detail: null },
         ],
     });
-    assert.deepEqual(publishedFacts([one, two]), {
+    assert.deepEqual(publishedFacts('canvas', [one]).steps, []);
+    assert.deepEqual(publishedFacts('canvas', [one, two]), {
         sources: [
             { name: 'A', url: '/data/sources/oecd/crs' },
             { name: 'B', url: 'https://b.example' },
@@ -137,8 +157,8 @@ test('a card gives its sources and steps, and a canvas each source once and no s
     });
 });
 
-test('what a card gives is what a publish takes', () => {
-    const facts = publishedFacts([
+test("a card's facts are cut to the Library's limits", () => {
+    const facts = publishedFacts('chart', [
         view(
             [
                 { name: 'Plain | bar', url: 'http://plain.example', page: null },
@@ -148,6 +168,6 @@ test('what a card gives is what a publish takes', () => {
         ),
     ]);
 
-    assert.equal(facts.sources[0].url, null);
-    assert.equal(readPublish(body(facts)).ok, true);
+    assert.deepEqual(facts.sources[0], { name: 'Plain / bar', url: null });
+    assert.equal(facts.sources[1].name.length, 300);
 });

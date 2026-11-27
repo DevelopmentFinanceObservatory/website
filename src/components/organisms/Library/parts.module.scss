@@ -52,3 +52,9 @@
     background-color: var(--color-grid-bg-light);
     border-radius: rem(3);
 }
+
+// A tag with a title ("+N") takes the pointer so the title shows, inside a
+// row whose content otherwise passes clicks to the row's link.
+.tag[title] {
+    pointer-events: auto;
+}

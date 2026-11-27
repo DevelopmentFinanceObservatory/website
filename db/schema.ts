@@ -322,19 +322,30 @@ export type LibraryStep = { title: string; detail: string | null };
 /**
  * The Library: Studio and search outputs that DFO staff publish under a
  * citable URL, `/library/<slug>`. `share_id` names the share in dfo-apis that
- * draws the artifact, and `kind` (`chart`, `canvas` or `data`) and `mode`
- * (`live` or `snapshot`) follow it. `content_title` and `content` are the
- * optional text section the publisher writes. `sources` and `steps` are
- * copied from the published card's description, so the Library's list,
- * filters and pages read this table alone. `published_by` is null once the
- * publisher's account is deleted, and the artifact stays.
+ * draws the artifact, which the Library creates and owns: `share_write_token`
+ * is its owner token, kept here and never in `share_token`. `kind` (`chart`,
+ * `table`, `key_number`, `canvas` or `data`) and `mode` (`live` or
+ * `snapshot`) follow the share. `publish_key` is the id the publish dialog
+ * sends with every try of one publish, so a retry finds the artifact the
+ * first try made. `content_title` and `content` are the optional text
+ * section the publisher writes. `sources` and `steps` are copied from the
+ * published cards' descriptions, so the Library's list, filters and pages
+ * read this table alone. `published_by` is null once the publisher's account
+ * is deleted, and the artifact stays.
+ *
+ * A withdrawn artifact keeps its row, so its slug stays taken and its URL
+ * shows a withdrawn notice. `withdrawn_at` marks it, and the share is taken
+ * down in dfo-apis. `share_write_token` is cleared once dfo-apis confirms the
+ * share is gone, so a withdrawn row that still holds one owes a take-down.
  */
 export const libraryArtifact = pgTable(
     'library_artifact',
     {
         id: text('id').primaryKey(),
         slug: text('slug').notNull(),
+        publishKey: text('publish_key').notNull(),
         shareId: text('share_id').notNull(),
+        shareWriteToken: text('share_write_token'),
         kind: text('kind').notNull(),
         mode: text('mode').notNull(),
         title: text('title').notNull(),
@@ -352,10 +363,16 @@ export const libraryArtifact = pgTable(
         publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
         publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+        withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
     },
     (table) => [
         uniqueIndex('library_artifact_slug_idx').on(table.slug),
-        check('library_artifact_kind', sql`${table.kind} IN ('chart', 'canvas', 'data')`),
+        uniqueIndex('library_artifact_publish_key_idx').on(table.publishKey),
+        uniqueIndex('library_artifact_share_id_idx').on(table.shareId),
+        check(
+            'library_artifact_kind',
+            sql`${table.kind} IN ('chart', 'table', 'key_number', 'canvas', 'data')`,
+        ),
         check('library_artifact_mode', sql`${table.mode} IN ('live', 'snapshot')`),
         index('library_artifact_published_at_idx').on(table.publishedAt.desc()),
     ],
@@ -364,14 +381,14 @@ export const libraryArtifact = pgTable(
 export type LibraryArtifactRow = typeof libraryArtifact.$inferSelect;
 
 /** A topic tag the Library's artifacts are filed under. Admins add topics,
- *  and publishers pick from them. */
+ *  and publishers pick from them. A label is unique in any case. */
 export const libraryTopic = pgTable(
     'library_topic',
     {
         id: text('id').primaryKey(),
         label: text('label').notNull(),
     },
-    (table) => [uniqueIndex('library_topic_label_idx').on(table.label)],
+    (table) => [uniqueIndex('library_topic_label_idx').on(sql`lower(${table.label})`)],
 );
 
 /** Which topics each artifact is filed under. */

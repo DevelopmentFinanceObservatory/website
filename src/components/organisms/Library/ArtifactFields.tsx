@@ -1,7 +1,6 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import classNames from 'classnames';
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 
 import styles from './ArtifactFields.module.scss';
@@ -75,13 +74,9 @@ const AddTopic = ({
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
             <Popover.Trigger asChild>
-                <button
-                    type="button"
-                    className={classNames(styles.topic, styles.topicAdd)}
-                    aria-label="Add a topic"
-                >
+                <Button variant="chip" className={styles.topicAdd} aria-label="Add a topic">
                     +
-                </button>
+                </Button>
             </Popover.Trigger>
             <Popover.Portal>
                 <Popover.Content
@@ -208,15 +203,14 @@ const ArtifactFields = ({ value, onChange, children }: ArtifactFieldsProps) => {
                 <legend className={styles.label}>Topics</legend>
                 <div className={styles.topics}>
                     {listed.map((topic) => (
-                        <button
+                        <Button
                             key={topic}
-                            type="button"
-                            className={styles.topic}
+                            variant="chip"
                             aria-pressed={value.topics.includes(topic)}
                             onClick={() => pick(topic, !value.topics.includes(topic))}
                         >
                             {topic}
-                        </button>
+                        </Button>
                     ))}
                     {topics !== null && (
                         <AddTopic

@@ -81,7 +81,6 @@
     @include flex(row, flex-start, flex-start);
 
     gap: rem(8);
-    cursor: pointer;
 }
 
 // A native checkbox drawn as a switch: the knob sits right when it is on.
@@ -134,6 +133,7 @@
     font-family: var(--font-dm-mono);
     color: var(--color-charcoal);
     letter-spacing: -0.02em;
+    cursor: pointer;
 }
 
 .toggleNote {

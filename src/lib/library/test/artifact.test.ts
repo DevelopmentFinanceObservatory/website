@@ -117,4 +117,8 @@ test('the citation names the year, type, URL, access date and sources', () => {
             '(Accessed: 27 January 2027). Data: OECD CRS, World Bank IDS, 2024.',
     );
     assert.match(citation(climate, '', new Date()), /\)\.$/);
+    assert.match(
+        citation({ ...ethiopia, kind: 'key_number' }, '', new Date()),
+        / \[Key number\]\. /,
+    );
 });

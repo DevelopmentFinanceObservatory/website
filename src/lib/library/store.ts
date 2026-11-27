@@ -1,17 +1,19 @@
 import 'server-only';
 
-import { asc, desc, eq, inArray, like } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, sql } from 'drizzle-orm';
 import { cache } from 'react';
 
-import {
-    libraryArtifact,
-    libraryArtifactTopic,
-    libraryTopic,
-    type LibraryArtifactRow,
-} from '../../../db/schema.ts';
+import { libraryArtifact, libraryArtifactTopic, libraryTopic } from '../../../db/schema.ts';
 
-import type { ArtifactKind, ArtifactMode, LibraryArtifact } from './artifact.ts';
-import { type ArtifactText, freeSlug, type PublishInput, slugOf } from './publish.ts';
+import type {
+    ArtifactKind,
+    ArtifactMode,
+    LibraryArtifact,
+    LibrarySource,
+    LibraryStep,
+    WithdrawnArtifact,
+} from './artifact.ts';
+import { type ArtifactText, freeSlug, slugOf } from './publish.ts';
 
 import { db } from '@/lib/db';
 import { uuid } from '@/lib/uuid';
@@ -19,8 +21,11 @@ import { uuid } from '@/lib/uuid';
 /**
  * The Library's artifacts, read from the website's own tables (db/schema.ts,
  * `library_artifact`), newest first, each with its topics by name, and the
- * writes behind publishing, editing and deleting one. The writes trust their
- * caller: ./admin.ts checks who asks and narrows what they send.
+ * writes behind publishing, editing and withdrawing one. The writes trust
+ * their caller: ./admin.ts checks who asks and narrows what they send.
+ *
+ * Every read names its columns, so the share's write token reaches only
+ * `withdrawArtifact`, and never a page or the props it hands the browser.
  */
 
 const topicsOf = async (ids: string[]): Promise<Map<string, string[]>> => {
@@ -44,8 +49,28 @@ const topicsOf = async (ids: string[]): Promise<Map<string, string[]>> => {
     return byArtifact;
 };
 
+const ARTIFACT_COLUMNS = {
+    id: libraryArtifact.id,
+    slug: libraryArtifact.slug,
+    shareId: libraryArtifact.shareId,
+    kind: libraryArtifact.kind,
+    mode: libraryArtifact.mode,
+    title: libraryArtifact.title,
+    description: libraryArtifact.description,
+    contentTitle: libraryArtifact.contentTitle,
+    content: libraryArtifact.content,
+    sources: libraryArtifact.sources,
+    steps: libraryArtifact.steps,
+    publishedAt: libraryArtifact.publishedAt,
+    withdrawnAt: libraryArtifact.withdrawnAt,
+};
+
+const selectArtifacts = () => db.select(ARTIFACT_COLUMNS).from(libraryArtifact);
+
+type ArtifactRow = Awaited<ReturnType<typeof selectArtifacts>>[number];
+
 // The check constraints on `kind` and `mode` hold the values to these.
-const toArtifact = (row: LibraryArtifactRow, topics: string[]): LibraryArtifact => ({
+const toArtifact = (row: ArtifactRow, topics: string[]): LibraryArtifact => ({
     id: row.id,
     slug: row.slug,
     shareId: row.shareId,
@@ -61,25 +86,68 @@ const toArtifact = (row: LibraryArtifactRow, topics: string[]): LibraryArtifact 
     publishedAt: row.publishedAt.toISOString(),
 });
 
-/** Every artifact, newest first. */
+const live = isNull(libraryArtifact.withdrawnAt);
+
+/** Every artifact on show, newest first. Withdrawn ones are left out. */
 export const listArtifacts = async (): Promise<LibraryArtifact[]> => {
-    const rows = await db.select().from(libraryArtifact).orderBy(desc(libraryArtifact.publishedAt));
+    const rows = await selectArtifacts().where(live).orderBy(desc(libraryArtifact.publishedAt));
     const topics = await topicsOf(rows.map((row) => row.id));
 
     return rows.map((row) => toArtifact(row, topics.get(row.id) ?? []));
 };
 
-/** The artifact published under `slug`, or null. One read per request,
- *  however many readers (the page and its metadata). */
-export const artifactBySlug = cache(async (slug: string): Promise<LibraryArtifact | null> => {
-    const [row] = await db.select().from(libraryArtifact).where(eq(libraryArtifact.slug, slug));
+/** The slugs of the artifacts on show, for the sitemap. */
+export const librarySlugs = async (): Promise<string[]> =>
+    (await db.select({ slug: libraryArtifact.slug }).from(libraryArtifact).where(live)).map(
+        (row) => row.slug,
+    );
+
+/** What the address `/library/<slug>` shows. */
+export type ArtifactAtSlug =
+    | { status: 'published'; artifact: LibraryArtifact }
+    | { status: 'withdrawn'; artifact: WithdrawnArtifact };
+
+/** The artifact published under `slug`, withdrawn or not, or null when no
+ *  artifact ever had it. One read per request, however many readers (the
+ *  page and its metadata). */
+export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug | null> => {
+    const [row] = await selectArtifacts().where(eq(libraryArtifact.slug, slug));
 
     if (!row) {
         return null;
     }
 
-    return toArtifact(row, (await topicsOf([row.id])).get(row.id) ?? []);
+    if (row.withdrawnAt) {
+        return {
+            status: 'withdrawn',
+            artifact: {
+                slug: row.slug,
+                title: row.title,
+                kind: row.kind as ArtifactKind,
+                publishedAt: row.publishedAt.toISOString(),
+                withdrawnAt: row.withdrawnAt.toISOString(),
+            },
+        };
+    }
+
+    return {
+        status: 'published',
+        artifact: toArtifact(row, (await topicsOf([row.id])).get(row.id) ?? []),
+    };
 });
+
+/** The slug of the artifact a publish with `publishKey` made, withdrawn or
+ *  not, or null when none did. */
+export const artifactByPublishKey = async (
+    publishKey: string,
+): Promise<{ slug: string } | null> => {
+    const [row] = await db
+        .select({ slug: libraryArtifact.slug })
+        .from(libraryArtifact)
+        .where(eq(libraryArtifact.publishKey, publishKey));
+
+    return row ?? null;
+};
 
 /** Every topic's label, by name. */
 export const listTopics = async (): Promise<string[]> =>
@@ -87,18 +155,17 @@ export const listTopics = async (): Promise<string[]> =>
         .map((row) => row.label)
         .sort((a, b) => a.localeCompare(b, 'en'));
 
-/** Adds a topic, and answers false when one has that label in any case. */
-export const addTopic = async (label: string): Promise<boolean> => {
-    const taken = (await listTopics()).some((other) => other.toLowerCase() === label.toLowerCase());
-
-    if (taken) {
-        return false;
-    }
-
-    await db.insert(libraryTopic).values({ id: uuid(), label }).onConflictDoNothing();
-
-    return true;
-};
+/** Adds a topic, and answers false when one has that label in any case.
+ *  The unique index on `lower(label)` decides, so two adds of one label at
+ *  once make one topic. */
+export const addTopic = async (label: string): Promise<boolean> =>
+    (
+        await db
+            .insert(libraryTopic)
+            .values({ id: uuid(), label })
+            .onConflictDoNothing()
+            .returning({ id: libraryTopic.id })
+    ).length > 0;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -139,9 +206,10 @@ const orUnknownTopic = async <T>(work: Promise<T>): Promise<T | 'unknown_topic'>
     }
 };
 
-// Postgres' unique_violation, which the slug index raises when two publishes
-// of one title read the taken slugs at the same moment.
-const isUniqueViolation = (error: unknown): boolean =>
+// Whether the error is Postgres' unique_violation on the slug index, which
+// two publishes of one title raise when they read the taken slugs at the
+// same moment. Drizzle wraps the driver's error in `cause`.
+const isSlugTaken = (error: unknown): boolean =>
     typeof error === 'object' &&
     error !== null &&
     [error, 'cause' in error ? error.cause : null].some(
@@ -149,23 +217,43 @@ const isUniqueViolation = (error: unknown): boolean =>
             typeof value === 'object' &&
             value !== null &&
             'code' in value &&
-            value.code === '23505',
+            value.code === '23505' &&
+            'constraint' in value &&
+            value.constraint === 'library_artifact_slug_idx',
     );
+
+/** An artifact to publish: the publisher's text, and the share the Library
+ *  made for it with that share's owner token. */
+export type ArtifactInsert = ArtifactText & {
+    /** The id every try of one publish sends. */
+    publishKey: string;
+    shareId: string;
+    shareWriteToken: string;
+    kind: ArtifactKind;
+    mode: ArtifactMode;
+    sources: LibrarySource[];
+    steps: LibraryStep[];
+};
 
 /**
  * Publishes an artifact under a slug made from its title, with a number
- * after it when the slug is taken. Answers the slug, or `unknown_topic`. A
- * slug another publish took first is chosen again, up to three times.
+ * after it when the slug is taken by any artifact, withdrawn ones included.
+ * Answers the slug with `created: true`, or `unknown_topic`.
+ *
+ * When an artifact with the same `publishKey` exists, it answers that one's
+ * slug with `created: false` and stores nothing, so the share in `input` is
+ * the caller's to take down. A slug another publish took first is chosen
+ * again, up to three times.
  */
 export const insertArtifact = async (
-    input: PublishInput,
+    input: ArtifactInsert,
     publishedBy: string,
-): Promise<{ slug: string } | 'unknown_topic'> => {
+): Promise<{ slug: string; created: boolean } | 'unknown_topic'> => {
     for (let attempt = 1; ; attempt += 1) {
         try {
             return await insertOnce(input, publishedBy);
         } catch (error) {
-            if (attempt === 3 || !isUniqueViolation(error)) {
+            if (attempt === 3 || !isSlugTaken(error)) {
                 throw error;
             }
         }
@@ -173,9 +261,9 @@ export const insertArtifact = async (
 };
 
 const insertOnce = (
-    input: PublishInput,
+    input: ArtifactInsert,
     publishedBy: string,
-): Promise<{ slug: string } | 'unknown_topic'> =>
+): Promise<{ slug: string; created: boolean } | 'unknown_topic'> =>
     orUnknownTopic(
         db.transaction(async (tx) => {
             const base = slugOf(input.title);
@@ -187,19 +275,34 @@ const insertOnce = (
             const id = uuid();
             const { topics, ...fields } = input;
 
-            await tx.insert(libraryArtifact).values({ id, slug, publishedBy, ...fields });
+            // A publish with this key that commits first wins, and this
+            // insert then waits for it and does nothing.
+            const [made] = await tx
+                .insert(libraryArtifact)
+                .values({ id, slug, publishedBy, ...fields })
+                .onConflictDoNothing({ target: libraryArtifact.publishKey })
+                .returning({ slug: libraryArtifact.slug });
+
+            if (!made) {
+                const [first] = await tx
+                    .select({ slug: libraryArtifact.slug })
+                    .from(libraryArtifact)
+                    .where(eq(libraryArtifact.publishKey, input.publishKey));
+
+                return { slug: first.slug, created: false };
+            }
 
             if (!(await setTopics(tx, id, topics))) {
                 throw new UnknownTopic();
             }
 
-            return { slug };
+            return { slug, created: true };
         }),
     );
 
 /**
  * Changes an artifact's text and topics. Its slug stays, since the URL is
- * what readers cite. Answers `not_found` for an id no artifact has.
+ * what readers cite. Answers `not_found` for an id no artifact on show has.
  */
 export const updateArtifact = (
     id: string,
@@ -210,7 +313,7 @@ export const updateArtifact = (
             const [row] = await tx
                 .update(libraryArtifact)
                 .set({ ...fields, updatedAt: new Date() })
-                .where(eq(libraryArtifact.id, id))
+                .where(and(eq(libraryArtifact.id, id), live))
                 .returning({ slug: libraryArtifact.slug });
 
             if (!row) {
@@ -225,11 +328,36 @@ export const updateArtifact = (
         }),
     );
 
-/** Deletes an artifact and its topic rows. False for an id no artifact has. */
-export const removeArtifact = async (id: string): Promise<boolean> =>
-    (
-        await db
-            .delete(libraryArtifact)
-            .where(eq(libraryArtifact.id, id))
-            .returning({ id: libraryArtifact.id })
-    ).length > 0;
+/** A withdrawn artifact whose share is still to take down in dfo-apis. */
+export type Withdrawal = { slug: string; shareId: string; shareWriteToken: string };
+
+/**
+ * Withdraws an artifact: its row stays, with its slug, and lists, the
+ * sitemap and edits leave it out. Answers the share to take down with its
+ * token. A second call on an artifact whose take-down is still owed (its
+ * token is kept) answers the same share, and keeps the first withdrawal's
+ * date. Answers `not_found` for an id no artifact has, and for one already
+ * withdrawn with its share gone.
+ */
+export const withdrawArtifact = async (id: string): Promise<Withdrawal | 'not_found'> => {
+    const [row] = await db
+        .update(libraryArtifact)
+        .set({ withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())` })
+        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
+        .returning({
+            slug: libraryArtifact.slug,
+            shareId: libraryArtifact.shareId,
+            shareWriteToken: libraryArtifact.shareWriteToken,
+        });
+
+    return row?.shareWriteToken ? { ...row, shareWriteToken: row.shareWriteToken } : 'not_found';
+};
+
+/** Forgets a withdrawn artifact's share token, once dfo-apis has confirmed
+ *  the share is gone. */
+export const forgetShareWriteToken = async (id: string): Promise<void> => {
+    await db
+        .update(libraryArtifact)
+        .set({ shareWriteToken: null })
+        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.withdrawnAt)));
+};

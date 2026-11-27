@@ -15,8 +15,9 @@ import type { ArtifactText } from '@/lib/library/publish';
 /**
  * The artifact page's Edit button and its dialog, which admins alone are
  * given: the artifact's text and topics, Save Changes, and Delete from
- * Library, which asks once more before it deletes. The artifact's share, type
- * and status stay as published; a different one is published from the Studio.
+ * Library. Delete swaps itself for a question with "Keep it" in its place and
+ * "Delete" below, so a double-click lands on "Keep it". The artifact's share,
+ * type and status stay as published, and the Studio publishes a different one.
  */
 
 const textOf = (artifact: LibraryArtifact): ArtifactText => ({
@@ -68,12 +69,6 @@ const EditArtifact = ({ artifact }: { artifact: LibraryArtifact }) => {
     };
 
     const remove = async () => {
-        if (!confirming) {
-            setConfirming(true);
-
-            return;
-        }
-
         setBusy('delete');
         setError(null);
 
@@ -111,24 +106,45 @@ const EditArtifact = ({ artifact }: { artifact: LibraryArtifact }) => {
                         >
                             {busy === 'save' ? 'Saving…' : 'Save Changes'}
                         </Button>
-                        <Button
-                            variant="bordered"
-                            full
-                            icon="remove"
-                            className={styles.delete}
-                            onClick={remove}
-                            disabled={busy !== null}
-                        >
-                            {busy === 'delete'
-                                ? 'Deleting…'
-                                : confirming
-                                  ? 'Delete it for good'
-                                  : 'Delete from Library'}
-                        </Button>
+                        {confirming ? (
+                            <>
+                                {/* In the place of "Delete from Library", so a
+                                    second click of a double-click keeps it. */}
+                                <Button
+                                    variant="bordered"
+                                    full
+                                    onClick={() => setConfirming(false)}
+                                    disabled={busy !== null}
+                                >
+                                    Keep it
+                                </Button>
+                                <Button
+                                    variant="bordered"
+                                    full
+                                    icon="remove"
+                                    className={styles.delete}
+                                    onClick={remove}
+                                    disabled={busy !== null}
+                                >
+                                    {busy === 'delete' ? 'Deleting…' : 'Delete'}
+                                </Button>
+                            </>
+                        ) : (
+                            <Button
+                                variant="bordered"
+                                full
+                                icon="remove"
+                                className={styles.delete}
+                                onClick={() => setConfirming(true)}
+                                disabled={busy !== null}
+                            >
+                                Delete from Library
+                            </Button>
+                        )}
                         {/* In the page from the start, so its line is announced. */}
                         <p className={styles.warning} role="status">
                             {confirming &&
-                                'Its page and citable URL stop working. This cannot be undone.'}
+                                'Its page and citable URL will show a withdrawn notice. This cannot be undone.'}
                         </p>
                     </div>
                 </form>
