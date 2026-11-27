@@ -112,21 +112,21 @@ export const useEscape = (order: number, handler: EscapeHandler, active = true) 
 const TEXT_FIELD =
     'input:not([type="button"], [type="checkbox"], [type="radio"]), textarea, select, [contenteditable="true"]';
 // Things that close themselves on Escape: an open menu, a modal dialog, the
-// feedback form.
-const OWN_ESCAPE = '[role="menu"], [role="dialog"][aria-modal="true"], dialog[open]';
+// feedback widget.
+const OWN_ESCAPE =
+    '[role="menu"], [role="dialog"][aria-modal="true"], dialog[open], [data-feedback-widget]';
 
 /**
  * Whether an Escape aimed at `target` belongs to something outside the
- * shell's order: a menu, a modal dialog, the feedback form (`feedback`), or
- * a text field outside the shell's regions (`regions`).
+ * shell's order: a menu, a modal dialog, the feedback widget, or a text
+ * field outside the shell's regions (`regions`).
  */
 const escapeElsewhere = (
     target: EventTarget | null,
     regions: readonly (Element | null)[],
-    feedback: string,
 ): boolean => {
     if (!(target instanceof Element)) return false;
-    if (target.closest(OWN_ESCAPE) || target.closest(`.${feedback}`)) return true;
+    if (target.closest(OWN_ESCAPE)) return true;
 
     return (
         target.matches(TEXT_FIELD) && !regions.some((region) => region?.contains(target) ?? false)
@@ -199,7 +199,7 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
             panelRef.current,
         ];
 
-        if (escapeElsewhere(event.target, regions, styles.feedback!)) return;
+        if (escapeElsewhere(event.target, regions)) return;
 
         const ordered = [...escapes.current].toSorted((a, b) => b.order - a.order);
 

@@ -8,7 +8,7 @@
 
 import type { Widget } from '../chat/widgets.ts';
 import type { StreamRefusal } from './studioClient.ts';
-import { unitText } from './unitChoice.ts';
+import { servesUnit, unitText } from './unitChoice.ts';
 import type { ApplyUnit, UnitChoice, UnitOffer } from './wire.ts';
 
 /** A pick in a card's Change unit panel, ready to send: the card's title as
@@ -46,6 +46,19 @@ export const cardUnitChange = (
                     : { currency: unit.currency, prices: unit.prices },
         },
     };
+};
+
+/** `change`, built when another card stood in its place, rebuilt for
+ *  `widget`, the card standing there now. Null when its offer does not take
+ *  the unit. */
+export const retargetUnitChange = (
+    change: CardUnitChange,
+    widget: Widget & { turn: number },
+): CardUnitChange | null => {
+    const offer = cardUnitOffer(widget);
+    const { unit } = change.request;
+
+    return offer && servesUnit(offer, unit) ? cardUnitChange(widget, change.title, unit) : null;
 };
 
 /** The change in words: "Constant 2023 US dollars". */

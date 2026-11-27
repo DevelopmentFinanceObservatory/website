@@ -214,9 +214,21 @@ test('placeCard records the turn of the question that made a chain’s first car
 test('a follow-up target follows its card to the replacement, and goes when none stands', () => {
     const target = { id: 'c1', title: 'Aid' };
     const replaced = { c2: 'c1' };
+    const titles: Record<string, string> = { c1: 'Aid', c2: 'Aid, 2015 to 2020' };
+    const titleOf = (id: string) => titles[id] ?? 'Card';
 
-    assert.equal(standingTarget(target, new Set(['c1']), replaced), target);
-    assert.deepEqual(standingTarget(target, new Set(['c2']), replaced), { id: 'c2', title: 'Aid' });
-    assert.equal(standingTarget(target, new Set(['x']), replaced), null);
-    assert.equal(standingTarget(null, new Set(['c1']), replaced), null);
+    assert.equal(standingTarget(target, new Set(['c1']), replaced, titleOf), target);
+    assert.deepEqual(standingTarget(target, new Set(['c2']), replaced, titleOf), {
+        id: 'c2',
+        title: 'Aid, 2015 to 2020',
+    });
+    assert.deepEqual(
+        standingTarget(target, new Set(['c1']), replaced, () => 'Renamed'),
+        {
+            id: 'c1',
+            title: 'Renamed',
+        },
+    );
+    assert.equal(standingTarget(target, new Set(['x']), replaced, titleOf), null);
+    assert.equal(standingTarget(null, new Set(['c1']), replaced, titleOf), null);
 });

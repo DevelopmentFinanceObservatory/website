@@ -159,12 +159,16 @@ export const ReplySheet = ({
 export const ThreadSheet = ({
     questions,
     runningTurn,
+    focusTurn,
     chips,
     onClose,
 }: {
     questions: Question[];
     /** The turn still streaming, null when none is. */
     runningTurn: number | null;
+    /** The question to open on, at the top with focus; null opens at the
+     *  foot. */
+    focusTurn: number | null;
     chips: ChipActions;
     onClose: () => void;
 }) => {
@@ -172,11 +176,29 @@ export const ThreadSheet = ({
 
     useLayoutEffect(() => {
         const el = body.current;
+        const item =
+            focusTurn === null
+                ? null
+                : el?.querySelector<HTMLElement>(`[data-turn="${focusTurn}"]`);
 
-        if (el) {
-            el.scrollTop = el.scrollHeight;
+        if (!el) {
+            return;
         }
-    }, []);
+
+        if (!item) {
+            el.scrollTop = el.scrollHeight;
+
+            return;
+        }
+
+        el.scrollTop += item.getBoundingClientRect().top - el.getBoundingClientRect().top;
+
+        // A frame later, so the focus lands after any the press that asked
+        // for this question queued for the field.
+        const frame = requestAnimationFrame(() => item.focus({ preventScroll: true }));
+
+        return () => cancelAnimationFrame(frame);
+    }, [focusTurn]);
 
     return (
         <section className={styles.sheet} aria-label="Conversation">
@@ -203,7 +225,14 @@ export const ThreadSheet = ({
                 tabIndex={0}
             >
                 {questions.map((question) => (
-                    <div key={question.turn} className={styles.threadItem}>
+                    <div
+                        key={question.turn}
+                        className={styles.threadItem}
+                        data-turn={question.turn}
+                        // Focus lands here when the reader asks to read
+                        // this question at the prompt.
+                        tabIndex={-1}
+                    >
                         {question.about && (
                             <p className={styles.aboutLine}>
                                 About <span className={styles.aboutTitle}>{question.about}</span>

@@ -137,6 +137,18 @@ test('each source row opens the source page the session lists it under', () => {
     );
 });
 
+test('a source row reads how far the data runs and the licence, each only when known', () => {
+    const metaOf = (cardInfo: CardInfo) =>
+        page({ widget: card(cardInfo) })?.sourceRows.map((row) => row.meta);
+    const source = { id: 'dcid:CRS', name: 'OECD CRS', licence: null, url: null, retrieved: null };
+
+    assert.deepEqual(metaOf(info(DESCRIBED, { dataThrough: '2024' })), [
+        'data through 2024 · OECD Terms and Conditions',
+    ]);
+    assert.deepEqual(metaOf(info(DESCRIBED)), ['OECD Terms and Conditions']);
+    assert.deepEqual(metaOf(info(undefined, { sources: [source] })), [null]);
+});
+
 test('a plan card linked by its turn names its plan, lists every choice and its siblings', () => {
     const approved: ApprovedPlan = {
         plan_version_id: 'pv1',
@@ -233,6 +245,17 @@ test('Set by the plan lists the choices of the card’s step, less those a card 
         ...approvedFixture,
         choices: [{ question: 'Recipients', chosen: 'Kenya', kind: 'places', step_ids: ['s1'] }],
     };
+    const counted: ApprovedPlan = {
+        ...approvedFixture,
+        choices: [
+            {
+                question: 'Count by',
+                chosen: 'gross disbursements, current USD',
+                kind: 'count',
+                step_ids: ['s1'],
+            },
+        ],
+    };
     const window: ApprovedPlan = {
         ...approvedFixture,
         choices: [{ question: 'Years', chosen: '2010 to 2024', kind: 'window', step_ids: ['s1'] }],
@@ -256,6 +279,8 @@ test('Set by the plan lists the choices of the card’s step, less those a card 
         ['unit kind', withKinds, 's3', [], ['Basis']],
         // The card's Years row shows the window choice already.
         ['window kind', window, 's1', [], []],
+        // How the flows are counted is the measure line the page shows.
+        ['count kind', counted, 's1', [], []],
         // A places choice drops beside a places row, and only beside one.
         ['places kind with a places row', places, 's1', [shows], []],
         ['places kind without one', places, 's1', [], ['Recipients']],

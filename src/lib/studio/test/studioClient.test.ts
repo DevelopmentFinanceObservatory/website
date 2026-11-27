@@ -1010,7 +1010,14 @@ test('runPlaceOptions reads a card role’s places, and says which failures a re
             () => Promise.reject(new TypeError('fetch failed')),
             { kind: 'failed', status: null, code: null, detail: null, retry: true },
         ],
+        [
+            'no answer before the timeout',
+            () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+            { kind: 'failed', status: null, code: null, detail: null, retry: true },
+        ],
     ];
+
+    t.mock.method(console, 'warn', () => {});
 
     for (const [name, answer, expected] of answers) {
         const fetch = t.mock.method(globalThis, 'fetch', async () => answer());
@@ -1023,6 +1030,22 @@ test('runPlaceOptions reads a card role’s places, and says which failures a re
         );
         fetch.mock.restore();
     }
+});
+
+test('runPlaceOptions rejects a read its caller aborted, also while the body is read', async (t) => {
+    const stop = new AbortController();
+
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ component_id: 'cmp_1', role: 'destination', options: [] }),
+    );
+    t.mock.method(Response.prototype, 'json', async () => {
+        throw new DOMException('The read was aborted.', 'AbortError');
+    });
+    stop.abort();
+
+    await assert.rejects(runPlaceOptions('conv', 'cmp_1', 'destination', stop.signal), {
+        name: 'AbortError',
+    });
 });
 
 test('runPlaceOptions reads the harness fixture answer as it stands', async (t) => {

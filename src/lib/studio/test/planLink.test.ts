@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
-import type { ApprovedPlan } from '../plan.ts';
+import { planFromFrame, type ApprovedPlan } from '../plan.ts';
 import { planLinks } from '../planLink.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { ComponentCreated } from '../wire.ts';
+import type { ComponentCreated, PlanProposed } from '../wire.ts';
 
 const plan = (title: string): ApprovedPlan => ({
     plan_version_id: `v-${title}`,
@@ -147,4 +147,27 @@ test('a card frame names its plan and step, which planLinks reads before the tur
     // back to its turn, with no step.
     assert.deepEqual([links.planOf('t1')?.turn, links.planOf('t1')?.stepId], [2, null]);
     assert.deepEqual([links.planOf('x1')?.turn, links.planOf('x1')?.stepId], [1, null]);
+});
+
+test('the harness plan proposal ties each decision to steps of its own plan, and names the kinds a card row shows', () => {
+    const frame = JSON.parse(
+        readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
+    ) as PlanProposed;
+    const proposed = planFromFrame(frame);
+    const steps = new Set(proposed.steps.map((step) => step.id));
+
+    for (const decision of proposed.decisions) {
+        assert.ok(decision.step_ids && decision.step_ids.length > 0, decision.id);
+        assert.ok(
+            decision.step_ids.every((id) => steps.has(id)),
+            decision.id,
+        );
+    }
+
+    // `unit` matches a card's Unit row and `window` its Years row; a decision
+    // with no kind matches no row, so Set by the plan lists it.
+    assert.deepEqual(
+        proposed.decisions.map((decision) => decision.kind ?? null),
+        [null, 'unit', 'window'],
+    );
 });

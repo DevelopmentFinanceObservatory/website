@@ -56,8 +56,8 @@ export const producedTurns = (activity: readonly ActivityEntry[]): Map<string, n
  * the question that first made it. A unit change keeps the card's own turn
  * (placeCard's `keepTurn`). A card that took another's place records that
  * question's turn (`madeIn`, set by placeCard and saved with it); one saved
- * before that is read through the chain known for replacements made since
- * the page loaded, and a card without either keeps its own turn.
+ * without `madeIn` is read through the chain known for replacements made
+ * since the page loaded, and a card without either keeps its own turn.
  */
 export const rootTurnOf = (
     widget: TurnWidget,

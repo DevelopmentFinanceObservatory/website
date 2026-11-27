@@ -162,16 +162,22 @@ export const standingFor = (
 };
 
 /** A follow-up's target card followed to the card standing in its place on
- *  the canvas (standingFor), or null once none of its chain is there. The
- *  same target while its own card stands. */
-export const standingTarget = <TTarget extends { id: string }>(
+ *  the canvas (standingFor), named as that card is named now (`titleOf`), or
+ *  null once none of its chain is there. The same target while its own card
+ *  stands under the same title. */
+export const standingTarget = <TTarget extends { id: string; title: string }>(
     target: TTarget | null,
     onCanvas: { has: (id: string) => boolean },
     replaced: Readonly<Record<string, string>>,
+    titleOf: (id: string) => string,
 ): TTarget | null => {
     const standing = target && standingFor(target.id, onCanvas, replaced);
 
     if (!target || !standing) return null;
 
-    return standing === target.id ? target : { ...target, id: standing };
+    const title = titleOf(standing);
+
+    return standing === target.id && title === target.title
+        ? target
+        : { ...target, id: standing, title };
 };

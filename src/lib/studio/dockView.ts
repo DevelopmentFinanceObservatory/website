@@ -80,6 +80,10 @@ export type DockView = {
     quietSend: boolean;
     /** The questions the conversation sheet lists. */
     questions: Question[];
+    /** The question the conversation sheet opens on, scrolled to the top
+     *  with focus on it: an older question the reader asked to read. Null
+     *  opens it at its foot. */
+    threadTurn: number | null;
     /** While a clarifying question waits, the ones the turn already asked,
      *  each with the reader's answer, oldest first. */
     clarified: Clarified[];
@@ -126,7 +130,7 @@ const namedStep = (steps: ApprovedPlan['steps'], lines: ActivityEntry['tools']) 
  * place among the approved steps of the step the newest running line runs,
  * when the lines name their plan steps (namedStep). Otherwise it counts the
  * steps the turn started after the approval: the step running, else the
- * next one, never past m. Null for a question without such a plan.
+ * next one, capped at m. Null for a question without such a plan.
  */
 export const planStep = (
     plan: ApprovedPlan | null,
@@ -210,7 +214,13 @@ const questionView = (
     // the wall takes the question's place.
     const mode = composerMode({ walled: input.walled, plan, clarify });
     const quietSend = !!plan?.live && !input.draft.trim();
-    const choice: Sheet = question && input.sheetTurn === question.turn ? input.sheet : 'auto';
+    // The conversation sheet belongs to no one question, so its choice holds
+    // whatever turn it was made on; every other choice holds only on the
+    // newest question.
+    const choice: Sheet =
+        input.sheet === 'thread' || (question && input.sheetTurn === question.turn)
+            ? input.sheet
+            : 'auto';
     const placed = !!question && input.widgets.some((widget) => widget.turn === question.turn);
     const hasText = !!question?.reply.trim();
     const running = !!question && thinking && !plan && !clarify;
@@ -283,6 +293,12 @@ const questionView = (
         held: held && sheet === 'reply',
         quietSend,
         questions,
+        threadTurn:
+            sheet === 'thread' &&
+            input.sheetTurn !== question?.turn &&
+            questions.some((candidate) => candidate.turn === input.sheetTurn)
+                ? input.sheetTurn
+                : null,
         clarified: sheet === 'clarify' ? clarifiedOf(input.messages) : [],
     };
 };

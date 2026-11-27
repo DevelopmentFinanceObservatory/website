@@ -20,13 +20,16 @@ import type {
     ConversationRead,
     InterruptResponse,
     MutationOperation,
+    CardChanges,
     PlaceOption,
+    PlacesOffer,
     PlacesOptions,
     PlanRevisionStaleError,
     ResumeRequest,
     StudioFrame,
     ToolError,
     TurnRequest,
+    WindowOffer,
 } from './wire';
 
 import { asRecord } from '../asRecord.ts';
@@ -762,6 +765,99 @@ export const placesOptionsOf = (
     };
 };
 
+// The span a years offer may cover. A year outside it is a fault in the
+// frame, and a wider span would make the years picker list thousands of years.
+const FIRST_OFFER_YEAR = 1900;
+const LAST_OFFER_YEAR = 2200;
+
+const isWhole = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value);
+
+const isYear = (value: unknown): value is number =>
+    isWhole(value) && value >= FIRST_OFFER_YEAR && value <= LAST_OFFER_YEAR;
+
+const windowOfferOf = (value: unknown): WindowOffer | null => {
+    const record = asRecord(value);
+    const start = record?.['start_year'];
+    const end = record?.['end_year'];
+    const first = record?.['first_year'];
+    const last = record?.['last_year'];
+    const missing: unknown = record?.['missing_years'] ?? [];
+    const missingYears = Array.isArray(missing) ? missing.filter(isWhole) : [];
+
+    if (
+        !isYear(start) ||
+        !isYear(end) ||
+        !isYear(first) ||
+        !isYear(last) ||
+        first > last ||
+        start < first ||
+        end > last ||
+        start > end ||
+        (record?.['single'] === true && start !== end) ||
+        !Array.isArray(missing) ||
+        missingYears.length !== missing.length
+    ) {
+        return null;
+    }
+
+    return {
+        start_year: start,
+        end_year: end,
+        first_year: first,
+        last_year: last,
+        ...(missingYears.length > 0 && { missing_years: missingYears }),
+        ...(record?.['single'] === true && { single: true }),
+    };
+};
+
+const placesOfferOf = (value: unknown): PlacesOffer[] => {
+    const record = asRecord(value);
+    const role = record?.['role'];
+    const multiple = record?.['multiple'];
+    const chosen = record?.['chosen'];
+
+    if (typeof role !== 'string' || typeof multiple !== 'boolean' || !Array.isArray(chosen)) {
+        return [];
+    }
+
+    const places = chosen.flatMap((entry: unknown): PlaceOption[] => {
+        const place = asRecord(entry);
+        const id = place?.['id'];
+        const label = place?.['label'];
+
+        return typeof id === 'string' && typeof label === 'string' ? [{ id, label }] : [];
+    });
+
+    return places.length === chosen.length ? [{ role, multiple, chosen: places }] : [];
+};
+
+/** A frame's or stored card's `card_changes`, narrowed: a `window` with whole
+ *  years inside 1900 to 2200, the drawn range inside the data's, one year
+ *  when `single`, and `missing_years` whole years; each `places` entry with a
+ *  string `role`, a boolean `multiple` and `chosen` places of string `id` and
+ *  `label`. A part that fails is dropped and the others stand. Null without a
+ *  `spec_id`. */
+export const cardChangesOf = (value: unknown): CardChanges | null => {
+    const record = asRecord(value);
+    const specId = record?.['spec_id'];
+
+    if (!record || typeof specId !== 'string' || specId === '') return null;
+
+    const window = record['window'] == null ? null : windowOfferOf(record['window']);
+    const places = Array.isArray(record['places']) ? record['places'].flatMap(placesOfferOf) : [];
+
+    return {
+        spec_id: specId,
+        ...(window && { window }),
+        ...(places.length > 0 && { places }),
+    };
+};
+
+// A read the caller aborted, which ends in silence. A timeout aborts with a
+// TimeoutError, which reads as no answer.
+const isAbort = (error: unknown): boolean => error instanceof Error && error.name === 'AbortError';
+
 /**
  * Read the places role `role` of card `componentId` can change to. The read
  * spends no prompt. A 5xx, a 429 or no answer may succeed later; the
@@ -785,9 +881,10 @@ export const runPlaceOptions = async (
     try {
         res = await fetch(`/api/studio/places?${query}`, { signal });
     } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-            throw error;
-        }
+        if (isAbort(error)) throw error;
+
+        // No answer, or none before the signal's timeout.
+        console.warn('places read failed', { componentId, role, error });
 
         return { kind: 'failed', status: null, code: null, detail: null, retry: true };
     }
@@ -797,11 +894,21 @@ export const runPlaceOptions = async (
 
         try {
             body = await res.json();
-        } catch {
+        } catch (error) {
+            if (isAbort(error)) throw error;
+
             body = null;
         }
 
         const read = placesOptionsOf(body, componentId, role);
+
+        if (!read) {
+            console.warn('places read answered outside the contract', {
+                componentId,
+                role,
+                members: Object.keys(asRecord(body) ?? {}),
+            });
+        }
 
         return read
             ? { kind: 'options', options: read.options, truncated: read.truncated }

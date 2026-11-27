@@ -412,7 +412,7 @@ test('Step n of m names the plan step the newest running line runs, when the lin
         ]),
         2,
     );
-    // An approved plan without step ids counts lines, as before.
+    // An approved plan without step ids counts lines.
     assert.equal(
         planStep(
             approved(4),
@@ -602,4 +602,23 @@ test('a second clarifying question lists the turn earlier clarifications with th
     ]);
     // Only while a clarifying question waits.
     assert.deepEqual(dockView(input({ messages })).clarified, []);
+});
+
+test('the conversation sheet opens on an older question at that question, and at its foot on the newest', () => {
+    const two = input({
+        messages: [ask('Q1', 1), reply('One.'), ask('Q2', 2), reply('Two.')],
+        widgets: [{ turn: 1 }, { turn: 2 }],
+        canvasCards: 2,
+    });
+    const cases: [string, Partial<DockInput>, string, number | null][] = [
+        ['newest', { sheet: 'thread', sheetTurn: 2 }, 'thread', null],
+        ['older', { sheet: 'thread', sheetTurn: 1 }, 'thread', 1],
+        ['older, a reply choice', { sheet: 'open', sheetTurn: 1 }, 'none', null],
+    ];
+
+    for (const [name, over, sheet, threadTurn] of cases) {
+        const view = dockView({ ...two, ...over });
+
+        assert.deepEqual([view.sheet, view.threadTurn], [sheet, threadTurn], name);
+    }
 });

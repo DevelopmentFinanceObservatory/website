@@ -72,8 +72,8 @@ const unitOffer = (widget: Widget & { turn: number }): ChangeOffer[] => {
     const offer = cardUnitOffer(widget);
 
     // A card with no turn to name cannot send the change (cardUnitChange). An
-    // offer that does not serve its own starting unit is one the card no
-    // longer reads, so the harness would refuse any pick from it.
+    // offer that does not serve its own starting unit is one the card does
+    // not read, so the harness would refuse any pick from it.
     if (!offer || widget.turn < 1 || !servesUnit(offer, offer.start) || !unitChoices(offer)) {
         return [];
     }
@@ -271,14 +271,31 @@ export const placesChange = (
     title: string,
     role: string,
     places: readonly PlaceOption[],
+): CardChangeRequest | null =>
+    placesRequest(
+        widget,
+        title,
+        role,
+        places.map((place) => place.id),
+        placesText(places),
+    );
+
+// The places change of `entities` in role `role` of `widget`, in `words`, or
+// null when the card's offer does not take it.
+const placesRequest = (
+    widget: Widget,
+    title: string,
+    role: string,
+    entities: readonly string[],
+    words: string,
 ): CardChangeRequest | null => {
     const offer = showsOffers(widget).find((other) => other.key === 'shows' && other.role === role);
 
     if (
         offer?.key !== 'shows' ||
-        places.length === 0 ||
-        places.length > MAX_PLACES ||
-        (!offer.multiple && places.length > 1)
+        entities.length === 0 ||
+        entities.length > MAX_PLACES ||
+        (!offer.multiple && entities.length > 1)
     ) {
         return null;
     }
@@ -288,13 +305,27 @@ export const placesChange = (
         row: 'shows',
         role,
         label: offer.label,
-        words: placesText(places),
+        words,
         request: {
             component_id: componentIdOf(widget),
             spec_id: offer.specId,
-            change: { kind: 'places', role, entities: places.map((place) => place.id) },
+            change: { kind: 'places', role, entities: [...entities] },
         },
     };
+};
+
+/** `change`, built when another card stood in its place, rebuilt for
+ *  `widget`, the card standing there now: its id, its spec and its offer.
+ *  Null when that offer does not take the change. */
+export const retargetChange = (
+    change: CardChangeRequest,
+    widget: Widget,
+): CardChangeRequest | null => {
+    const asked = change.request.change;
+
+    return asked.kind === 'window'
+        ? yearsChange(widget, change.title, asked.start_year, asked.end_year)
+        : placesRequest(widget, change.title, asked.role, asked.entities, change.words);
 };
 
 /** The machine-readable codes of the harness's 422 refusals of a change. */
@@ -308,9 +339,13 @@ export const CHANGE_REFUSALS = [
  *  card can change to. It answers a places change and the places read. */
 export const PLACE_OPTIONS_UNAVAILABLE = 'place_options_unavailable';
 
+/** The error of the harness's 503 when the deployment cannot list places at
+ *  all. It answers a places change and the places read. */
+export const CAPABILITY_UNAVAILABLE = 'capability_unavailable';
+
 /** The `detail` of the harness's refusal of a change of years or places (422
- *  with a pointer under `/apply_change`, or the 503 of a places read that
- *  failed), or null for any other refusal. */
+ *  with a pointer under `/apply_change`, or a 503 because the places could
+ *  not be read or cannot be listed), or null for any other refusal. */
 export const changeRefusalDetail = (refusal: StreamRefusal): string | null => {
     const { error } = refusal;
 
@@ -318,7 +353,9 @@ export const changeRefusalDetail = (refusal: StreamRefusal): string | null => {
         return error.detail;
     }
 
-    return refusal.status === 503 && error?.constraint_id === PLACE_OPTIONS_UNAVAILABLE
+    return refusal.status === 503 &&
+        (error?.constraint_id === PLACE_OPTIONS_UNAVAILABLE ||
+            error?.error === CAPABILITY_UNAVAILABLE)
         ? error.detail
         : null;
 };
@@ -358,13 +395,28 @@ const queuedFor = (item: QueuedChange, cardId: string, key: ChangeRowKey, role?:
           item.change.row === key &&
           item.change.role === role;
 
+/** A queued change that could not be sent: the card standing in its card's
+ *  place when its turn came (`card`), its row and role, and why. */
+export type DroppedChange = { card: string; row: ChangeRowKey; role?: string; detail: string };
+
+/** Whether a change to row `key` (role `role`) of any of `cardIds` waits in
+ *  the queue. */
+export const changeQueued = (
+    queued: readonly QueuedChange[],
+    cardIds: readonly string[],
+    key: ChangeRowKey,
+    role?: string,
+): boolean => queued.some((item) => cardIds.some((id) => queuedFor(item, id, key, role)));
+
 /**
  * Where the last change to row `key` of card `cardId` (role `role` of a
- * `shows` row) stands. Pending while it waits in the queue, or while its
- * turn is the last one asked and the conversation is busy. Refused when its
- * reply holds text, the harness's reason. Idle otherwise, which includes a
- * change that succeeded: the card then has a new id that no edit turn names
- * yet.
+ * `shows` row) stands. `replaced` lists the cards `cardId` took the place of
+ * (replacedChain), since a change asked of one of them is the standing
+ * card's. Pending while it waits in the queue, or while its turn is the last
+ * one asked and the conversation is busy. Refused when the queue dropped it
+ * (`dropped`), or when the reply to a change of `cardId` itself holds text,
+ * the harness's reason. Idle otherwise, which includes a change that
+ * succeeded: the card then has a new id that no edit turn names yet.
  */
 export const changeStatus = ({
     messages,
@@ -372,25 +424,43 @@ export const changeStatus = ({
     cardId,
     key,
     role,
+    replaced = [],
     queued = [],
+    dropped = [],
 }: {
     messages: readonly ChangeMessage[];
     thinking: boolean;
     cardId: string;
     key: ChangeRowKey;
     role?: string;
+    replaced?: readonly string[];
     queued?: readonly QueuedChange[];
+    dropped?: readonly DroppedChange[];
 }): ChangeStatus => {
-    if (queued.some((item) => queuedFor(item, cardId, key, role))) {
+    const cardIds = [cardId, ...replaced];
+
+    if (changeQueued(queued, cardIds, key, role)) {
         return { state: 'pending' };
     }
 
-    const at = messages.findLastIndex(
-        (message) =>
-            editedCard(message) === cardId &&
-            message.edit?.row === key &&
-            message.edit.role === role,
+    const drop = dropped.findLast(
+        (item) => item.card === cardId && item.row === key && item.role === role,
     );
+
+    if (drop) {
+        return { state: 'refused', detail: drop.detail };
+    }
+
+    const at = messages.findLastIndex((message) => {
+        const card = editedCard(message);
+
+        return (
+            card !== undefined &&
+            cardIds.includes(card) &&
+            message.edit?.row === key &&
+            message.edit.role === role
+        );
+    });
 
     if (at < 0) {
         return { state: 'idle' };
@@ -400,6 +470,13 @@ export const changeStatus = ({
 
     if (thinking && lastAsked) {
         return { state: 'pending' };
+    }
+
+    // A refusal of a change asked of a card since replaced is that card's.
+    const asked = messages[at];
+
+    if (!asked || editedCard(asked) !== cardId) {
+        return { state: 'idle' };
     }
 
     const reply = messages[at + 1];

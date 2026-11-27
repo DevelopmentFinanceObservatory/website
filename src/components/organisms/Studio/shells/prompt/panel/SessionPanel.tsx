@@ -140,6 +140,14 @@ const SessionPanel = () => {
     const behind = trail.at(-2);
     const backLabel = behind ? (pageTitleOf(input, behind) ?? 'Back') : 'Session';
 
+    // The model rebuilds `canvas.flyTo` on every render, so nav reads it
+    // through a ref and its consumers render only when the trail changes.
+    const flyTo = useRef(canvas.flyTo);
+
+    useEffect(() => {
+        flyTo.current = canvas.flyTo;
+    });
+
     const nav = useMemo<PanelNav>(
         () => ({
             show: (page, opener) => {
@@ -151,9 +159,9 @@ const SessionPanel = () => {
                 dispatch({ type: 'panel.back' });
             },
             backLabel,
-            fly: (id) => canvas.flyTo(id),
+            fly: (id) => flyTo.current(id),
         }),
-        [trail.length, backLabel, dispatch, canvas],
+        [trail.length, backLabel, dispatch],
     );
 
     useEffect(() => {

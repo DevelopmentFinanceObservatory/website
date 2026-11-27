@@ -52,7 +52,18 @@
             "alternatives": ["Current USD"],
             "reason": "A multi-year comparison across 2016\u20132024 needs inflation held still.",
             "resolved_by": "default",
-            "step_ids": ["s2", "s3"]
+            "step_ids": ["s2", "s3"],
+            "kind": "unit"
+        },
+        {
+            "id": "d3",
+            "question": "Which years?",
+            "chosen": "2016 to 2024",
+            "alternatives": ["2010 to 2024"],
+            "reason": "The question names the years since 2016.",
+            "resolved_by": "user",
+            "step_ids": ["s2", "s3"],
+            "kind": "window"
         }
     ],
     "actions": ["approve", "amend", "reject"],

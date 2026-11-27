@@ -31,7 +31,7 @@ import { cardDescription, panelViewOf } from './infoPanel.ts';
 import { approvedView, type ApprovedPlan } from './plan.ts';
 import type { CardPlan } from './planLink';
 import type { DecisionKind } from './wire';
-import { sourceKey, throughOf } from './sessionView.ts';
+import { cardSources, sourceMeta, throughOf } from './sessionView.ts';
 import { isPrompt } from './transcript.ts';
 
 /** One row of `What it measures`. `key` is stable across cards, so a
@@ -308,19 +308,25 @@ const rowKind = (entry: MeasureRow): DecisionKind | null => {
 
 /**
  * `Set by the plan`: the approved plan's choices that shape the card's own
- * step (a choice's `step_ids` include it), less a choice a row of the card
- * shows already, matched on the choice's `kind`. A card linked to its plan
- * by turn, or a plan whose choices name no steps, lists every choice.
+ * step (a choice's `step_ids` include it), less a choice the page shows
+ * already, matched on the choice's `kind`: a row's kind (`rowKind`), and
+ * `count`, how the flows are counted, while the page shows the measure line.
+ * A card linked to its plan by turn, or a plan whose choices name no steps,
+ * lists every choice.
  */
 const planSection = (
     plan: CardPageInput['plan'],
     cardId: string,
     rows: readonly MeasureRow[],
+    measureShown: boolean,
 ): CardPageView['plan'] => {
     if (!plan) return null;
 
     const stepId = plan.link.stepId;
-    const kinds = new Set(rows.map(rowKind));
+    const kinds = new Set<DecisionKind | null>([
+        ...rows.map(rowKind),
+        ...(measureShown ? ['count' as const] : []),
+    ]);
     const choices = plan.approved.choices ?? [];
 
     return {
@@ -339,16 +345,20 @@ const planSection = (
     };
 };
 
-// Each source keyed as the session's source pages are, with how far the
-// card's data runs.
-const sourceRowsOf = (sources: readonly PanelSource[], widget: Widget): CardSourceRow[] => {
-    const through = widget.info ? throughOf(widget.info) : null;
+// The card's sources as the session's source rows read them (`cardSources`),
+// with the line under each name built by the same rule (`sourceMeta`).
+const sourceRowsOf = (widget: Widget): CardSourceRow[] => {
+    const { info } = widget;
 
-    return sources.map((source) => ({
-        key: sourceKey(source),
+    if (!info) return [];
+
+    const through = throughOf(info);
+
+    return cardSources(info).map((source) => ({
+        key: source.key,
         name: source.name,
         through,
-        meta: source.meta,
+        meta: sourceMeta({ ...source, through }),
     }));
 };
 
@@ -358,12 +368,13 @@ const fromView = (view: PanelView, input: CardPageInput): CardPageView => {
         view.kind === 'described' ? describedMeasures(view, input.widget) : legacyMeasures(view),
         input.offers ?? [],
     );
+    const measure = view.kind === 'described' ? measureOf(view, input.widget) : null;
     const base = {
         title: input.title,
         origin,
         changedFor,
         measures,
-        plan: planSection(input.plan, input.widget.id, measures),
+        plan: planSection(input.plan, input.widget.id, measures, measure !== null),
     };
 
     if (view.kind === 'described') {
@@ -371,12 +382,12 @@ const fromView = (view: PanelView, input: CardPageInput): CardPageView => {
             ...base,
             live: view.live,
             calculation: view.calculation,
-            measure: measureOf(view, input.widget),
+            measure,
             codes: view.codes,
             keep: view.keepInMind,
             leftOut: [],
             sources: view.sources,
-            sourceRows: sourceRowsOf(view.sources, input.widget),
+            sourceRows: sourceRowsOf(input.widget),
             inputs: view.inputs,
             from: view.from,
             cite: view.cite,
@@ -394,7 +405,7 @@ const fromView = (view: PanelView, input: CardPageInput): CardPageView => {
         keep: view.blocks.find((block) => block.key === 'facts')?.items ?? [],
         leftOut: view.blocks.find((block) => block.key === 'left_out')?.items ?? [],
         sources: view.sources,
-        sourceRows: sourceRowsOf(view.sources, input.widget),
+        sourceRows: sourceRowsOf(input.widget),
         inputs: [],
         from: null,
         cite: view.citation ? { short: view.citation, full: null, offer: null } : null,

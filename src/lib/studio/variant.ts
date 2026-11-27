@@ -1,7 +1,7 @@
 // No path-alias or server-only imports, so src/proxy.ts, db/event-export.ts
 // and node --test import it directly.
 
-/** The Studio layouts: today's chat column (`classic`) and the prompt box
+/** The Studio layouts: the chat column (`classic`) and the prompt box
  *  over the canvas (`prompt`). */
 export const STUDIO_VARIANTS = ['classic', 'prompt'] as const;
 

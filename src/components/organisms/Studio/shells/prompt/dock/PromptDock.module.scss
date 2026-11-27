@@ -785,6 +785,17 @@
     padding: rem(8) rem(16) rem(14);
 }
 
+.threadItem {
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
 .threadItem + .threadItem {
     margin-top: rem(16);
     padding-top: rem(16);

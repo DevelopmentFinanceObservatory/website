@@ -218,13 +218,13 @@ export const PlanLineButton = ({
     );
 };
 
-/** A source as a row: its name, then how far its data runs; opens the
- *  source's page, which resolves while a card on the canvas uses the
- *  source (sourcePageOf). */
+/** A source as a row: its name, then how far its data runs and its
+ *  licence; opens the source's page, which resolves while a card on the
+ *  canvas uses the source (sourcePageOf). */
 export const SourceRowButton = ({
     source,
 }: {
-    source: Pick<SourceRow, 'key' | 'name' | 'through'>;
+    source: Pick<SourceRow, 'key' | 'name' | 'meta'>;
 }) => {
     const { show } = usePanelNav();
     const key = `src:${source.key}`;
@@ -241,7 +241,7 @@ export const SourceRowButton = ({
                 <span className={styles.sourceName}>{source.name}</span>
                 <Chevron direction="right" />
             </span>
-            {source.through && <span className={partStyles.mono}>{source.through}</span>}
+            {source.meta && <span className={partStyles.mono}>{source.meta}</span>}
         </button>
     );
 };

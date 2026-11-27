@@ -120,9 +120,9 @@ export const placeSlots = (
                   h: clamp(saved.h, rows.min, rows.max),
               }
             : spawnSpan(widget, resolved);
-        // A saved spot is honoured only while it's free — a card
-        // put back later (chat chip → Add) whose old place is now
-        // taken lands at the nearest free spot instead of on top.
+        // A saved spot is honoured only while it's free. A card put back
+        // later (chat chip → Add) whose old place is taken lands at the
+        // nearest free spot, not on top.
         const spot = newcomerSpot({
             widget,
             w,

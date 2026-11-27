@@ -362,7 +362,7 @@ export type CardChanges = {
 };
 
 /** Draw the card over `start_year` to `end_year`, both kept. The harness
- *  refuses an `end_year` that does not follow `start_year`. */
+ *  refuses an `end_year` before `start_year`; equal years draw one year. */
 export type WindowChange = { kind: 'window'; start_year: number; end_year: number };
 
 /** Show the places `entities` (1 to 50 ids) in role `role`. */

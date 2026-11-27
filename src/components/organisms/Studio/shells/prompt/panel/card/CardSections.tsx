@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
-import { useCopied } from '../../../../hooks/useCopied';
 import { usePromptShell } from '../../shellContext';
 import { Mark } from '../parts/Mark';
 import { PageText } from '../parts/PageShell';
 import { Section } from '../parts/Section';
 import { TextButton } from '../parts/TextButton';
+import { useConfirm } from '../parts/useConfirm';
 import { Fold } from '../parts/Fold';
 import { SourceRowButton } from '../Rows';
 import styles from './CardPage.module.scss';
@@ -82,9 +82,6 @@ const CITE_LINK_TEXT = {
 
 const COPY_FAILED = 'Could not copy';
 
-// As long as `useCopied` shows `Copied`.
-const COPY_SHOWN_MS = 1400;
-
 type CiteForm = 'short' | 'full';
 
 const CITE_FORMS: Record<CiteForm, { label: string; copy: string }> = {
@@ -113,33 +110,24 @@ export const CiteSection = ({
     onAddLink: (() => void) | undefined;
 }) => {
     const [form, setForm] = useState<CiteForm>('short');
-    const { copied, copy } = useCopied();
+    const { outcome, run } = useConfirm();
     const { announce } = usePromptShell();
-    const [copyFailed, setCopyFailed] = useState(false);
-    const failTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const shown: CiteForm = form === 'full' && cite.full ? 'full' : 'short';
     const text = shown === 'full' && cite.full ? cite.full : cite.short;
     const made = typeof link === 'object' ? snapshotUrl(link.id) : null;
     const linkFailure = link === 'failed' || link === 'limited' ? CITE_LINK_TEXT[link] : null;
-
-    useEffect(() => () => clearTimeout(failTimer.current), []);
 
     // A refused link is said once, as it arrives.
     useEffect(() => {
         if (linkFailure) announce(linkFailure);
     }, [linkFailure, announce]);
 
-    // A copy the clipboard refuses shows in the button for as long as a
-    // copy that worked, and is said.
-    const copyCitation = async () => {
-        if (await copy(text)) return;
-
-        setCopyFailed(true);
-        announce(COPY_FAILED);
-        clearTimeout(failTimer.current);
-        failTimer.current = setTimeout(() => setCopyFailed(false), COPY_SHOWN_MS);
-    };
-    const copyWords = copied ? 'Copied' : copyFailed ? COPY_FAILED : null;
+    // The copy shows how it ended in the button, and says it, as long as
+    // every panel control does (useConfirm).
+    const copyCitation = () =>
+        run(() => navigator.clipboard.writeText(text), { done: 'Copied', failed: COPY_FAILED });
+    const copyFailed = outcome === 'failed';
+    const copyWords = outcome === 'done' ? 'Copied' : copyFailed ? COPY_FAILED : null;
 
     return (
         <Section

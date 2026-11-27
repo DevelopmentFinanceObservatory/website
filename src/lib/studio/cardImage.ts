@@ -37,8 +37,7 @@ export const cardImageName = (title: string, today = new Date()): string => {
  *
  * At twice the screen's scale, so the file stands up in a slide rather than
  * only on the sheet it came from. The card's own controls, which belong to
- * the canvas and not to the card's content, are left out, as is anything
- * else marked `data-no-export`.
+ * the canvas, are left out, as is anything else marked `data-no-export`.
  */
 export const cardImageBlob = async (node: HTMLElement): Promise<Blob> => {
     const { toBlob } = await import('html-to-image');

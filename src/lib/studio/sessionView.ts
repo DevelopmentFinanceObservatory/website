@@ -16,7 +16,13 @@ import { type PanelSource, sourceEntries } from './descriptionBlocks.ts';
 import { cardDescription, legacySources } from './infoPanel.ts';
 import { plainTextFromNote } from './note.ts';
 import { firstSentence, promptsOf } from './questions.ts';
-import { approvedView, planView, type PlanState, type PlanView } from './plan.ts';
+import {
+    type ApprovedPlan,
+    approvedView,
+    planView,
+    type PlanState,
+    type PlanView,
+} from './plan.ts';
 
 /** Question groups shown before the `earlier` fold. */
 export const GROUPS_SHOWN = 3;
@@ -120,6 +126,8 @@ export type SourceRow = {
     url: string | null;
     licence: string | null;
     through: string | null;
+    /** The line under the row's name (`sourceMeta`). */
+    meta: string | null;
     lastRefreshed: string | null;
     citations: string[];
     cards: { id: string; title: string }[];
@@ -166,6 +174,8 @@ type Turn = {
     edit: { target: string } | null;
     reply: string;
     plan: PlanView | null;
+    /** The approved plan behind `plan`, whose steps carry their ids. */
+    approved: ApprovedPlan | null;
     planLive: boolean;
     entry: ActivityEntry | null;
     last: boolean;
@@ -184,6 +194,7 @@ const turnsOf = (input: SessionInput): Turn[] => {
         edit: question.edit ? { target: question.edit.card } : null,
         reply: question.reply,
         plan: question.plan ? approvedView(question.plan) : null,
+        approved: question.plan,
         planLive: false,
         entry: null,
         last: false,
@@ -464,6 +475,45 @@ const citationOf = (info: CardInfo): string | null =>
 export const sourceKey = (entry: Pick<PanelSource, 'name' | 'page' | 'lookup'>): string =>
     entry.page ?? entry.lookup ?? entry.name;
 
+/** One source a card credits, as the panel's source rows read it. */
+export type CardSourceEntry = Pick<SourceRow, 'key' | 'name' | 'page' | 'url' | 'licence'>;
+
+/** The sources `info` credits: a described card's credited sources, named
+ *  publisher first (`sourceEntries`), else its legacy sources. */
+export const cardSources = (info: CardInfo): CardSourceEntry[] => {
+    const description = cardDescription(info);
+
+    if (!description) {
+        return legacySources(info).map((source) => ({
+            key: sourceKey({ page: null, lookup: source.id, name: source.name }),
+            name: source.name,
+            page: null,
+            url: source.url,
+            licence: source.licence,
+        }));
+    }
+
+    return sourceEntries(description).map((entry) => ({
+        key: sourceKey(entry),
+        name: entry.name,
+        page: entry.page,
+        url: entry.url,
+        licence: entry.meta,
+    }));
+};
+
+/** The line under a source row's name: how far the data runs and the
+ *  licence, joined with ` · `, each left out when unknown. The publisher
+ *  leads the name already (`publisherFirst`). */
+export const sourceMeta = ({
+    through,
+    licence,
+}: Pick<SourceRow, 'through' | 'licence'>): string | null => {
+    const parts = [through, licence].filter((part) => !!part);
+
+    return parts.length > 0 ? parts.join(' · ') : null;
+};
+
 /** The sources of the cards on the canvas, each once, in the order the
  *  canvas first uses them. */
 const sourcesOf = (input: SessionInput): SourceRow[] => {
@@ -476,22 +526,7 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
 
         if (!widget || !info) continue;
 
-        const description = cardDescription(info);
-        const found = description
-            ? sourceEntries(description).map((entry) => ({
-                  key: sourceKey(entry),
-                  name: entry.name,
-                  page: entry.page,
-                  url: entry.url,
-                  licence: entry.meta,
-              }))
-            : legacySources(info).map((source) => ({
-                  key: sourceKey({ page: null, lookup: source.id, name: source.name }),
-                  name: source.name,
-                  page: null,
-                  url: source.url,
-                  licence: source.licence,
-              }));
+        const found = cardSources(info);
 
         for (const source of found) {
             const { key } = source;
@@ -502,6 +537,7 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
                 url: source.url,
                 licence: source.licence,
                 through: null,
+                meta: null,
                 lastRefreshed: null,
                 citations: [],
                 cards: [],
@@ -520,7 +556,7 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
         }
     }
 
-    return [...rows.values()];
+    return [...rows.values()].map((row) => ({ ...row, meta: sourceMeta(row) }));
 };
 
 /** The distinct caveats of the cards on the canvas, then of each approved
@@ -739,7 +775,7 @@ export type PlanStepRow = {
     label: string;
     state: RowState;
     givesAnswer: boolean;
-    /** The cards the step gave, on the answer step. */
+    /** The cards the step drew. */
     cards: { id: string; title: string }[];
     inReply: boolean;
 };
@@ -758,9 +794,11 @@ export type PlanPage = {
 };
 
 /**
- * A question's plan as its page shows it. The service does not yet say
- * which step made which card, so a plan's cards show on its answer step,
- * and each step reads done once the turn has its reply.
+ * A question's plan as its page shows it. A card shows on the step that drew
+ * it (its `planStep`) when that is a step of this plan, and on the answer
+ * step otherwise: a card with no link, or one linked to another plan's step.
+ * The answer step reads `in the reply` when no step drew a card. Each step
+ * reads done once the turn has its reply.
  */
 export const planPageOf = (input: SessionInput, turn: number): PlanPage | null => {
     const turns = turnsOf(input);
@@ -774,6 +812,17 @@ export const planPageOf = (input: SessionInput, turn: number): PlanPage | null =
     const stopped = !replied && !running(found, input) && !found.planLive;
     const answerAt = found.plan.steps.findIndex((step) => step.givesAnswer);
     const answer = answerAt < 0 ? found.plan.steps.length - 1 : answerAt;
+    const byId = new Map(input.widgets.map((widget) => [widget.id, widget]));
+    const stepOf = (id: string): number => {
+        const widget = byId.get(id);
+        const link = widget && widget.kind !== 'text' ? widget.planStep : undefined;
+        const at =
+            link && link.plan_version_id === found.approved?.plan_version_id
+                ? (found.approved.steps ?? []).findIndex((step) => step.id === link.plan_step_id)
+                : -1;
+
+        return at < 0 ? answer : at;
+    };
     const stepState: RowState = found.planLive
         ? 'pending'
         : replied
@@ -798,7 +847,7 @@ export const planPageOf = (input: SessionInput, turn: number): PlanPage | null =
             label: step.label,
             state: stepState,
             givesAnswer: index === answer,
-            cards: index === answer && !found.planLive ? cards : [],
+            cards: found.planLive ? [] : cards.filter((card) => stepOf(card.id) === index),
             inReply: index === answer && replied && cards.length === 0,
         })),
         choices: found.plan.choices.map((choice) => ({

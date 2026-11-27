@@ -96,8 +96,8 @@ const ClassicShell = () => {
                 chatShown && styles.chatShown,
             )}
         >
-            {/* Docking starts with the stage-out (not after it) — one continuous
-                move instead of two beats. */}
+            {/* Docking starts with the stage-out, so the landing leaves in one
+                continuous move. */}
             <CanvasBackdrop
                 className={classNames(
                     mode !== 'start' && styles.canvasDocked,
@@ -170,8 +170,8 @@ const ClassicShell = () => {
                 titleEditable={inWorkspace && phone && !readOnly}
                 onEditTitle={modals.title.show}
                 onBack={mode === 'start' || readOnly ? undefined : startNew}
-                // A share is a plain read-only view: no way back, no account —
-                // logo and title only.
+                // A share is a plain read-only view with the logo and title
+                // only, and no way back or account.
                 back={!readOnly}
                 account={!readOnly}
             >

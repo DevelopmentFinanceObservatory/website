@@ -440,6 +440,43 @@ test('the plan line and page read an approved plan, and a live plan waits for th
     assert.deepEqual(overviewOf(waiting).keep, []);
 });
 
+test('a plan page puts each card on the step that drew it, else on the answer step', () => {
+    const plan = approved('Plan', {
+        plan_version_id: 'pv1',
+        steps: [
+            { id: 's1', label: 'Find' },
+            { id: 's2', label: 'Chart it', gives_answer: true },
+            { id: 's3', label: 'Compare' },
+        ],
+    });
+    const linked = (id: string, version: string, step: string) => ({
+        ...chart(id, 1),
+        planStep: { plan_version_id: version, plan_step_id: step },
+    });
+
+    for (const [name, widget, cardsByStep] of [
+        ['a linked card sits on its own step', linked('a', 'pv1', 's3'), [[], [], ['a']]],
+        ['an unlinked card sits on the answer step', chart('a', 1), [[], ['a'], []]],
+        ['a link to a step the plan lacks falls back', linked('a', 'pv1', 's9'), [[], ['a'], []]],
+        ['a link to another plan version falls back', linked('a', 'pv0', 's3'), [[], ['a'], []]],
+    ] as const) {
+        const page = planPageOf(
+            input({
+                messages: [ask('Q', 1), reply('Here.', { plan })],
+                widgets: [widget],
+                canvasIds: ['a'],
+            }),
+            1,
+        );
+
+        assert.deepEqual(
+            page?.steps.map((step) => [step.cards.map((card) => card.id), step.inReply]),
+            cardsByStep.map((ids) => [ids, false]),
+            name,
+        );
+    }
+});
+
 test('a described card gives the caveats, sources and dataset; a card without a description gives its legacy facts', () => {
     const widgets = [
         chart('d', 1, { description: described }),
@@ -469,20 +506,15 @@ test('a described card gives the caveats, sources and dataset; a card without a 
         ['Values of infectious disease control in 2024 are provisional.'],
     );
     assert.deepEqual(
-        view.sources.map((source) => [
-            source.key,
-            source.page,
-            source.through,
-            source.cards.length,
-        ]),
+        view.sources.map((source) => [source.key, source.page, source.meta, source.cards.length]),
         [
             [
                 'provenance/OECDCreditorReportingSystem',
                 'provenance/OECDCreditorReportingSystem',
-                'data through 2024',
+                'data through 2024 · OECD Terms and Conditions',
                 1,
             ],
-            ['dcid:WorldBankIDS', null, 'data through 2024', 1],
+            ['dcid:WorldBankIDS', null, 'data through 2024 · CC BY 4.0', 1],
         ],
     );
     assert.deepEqual(view.citations, [

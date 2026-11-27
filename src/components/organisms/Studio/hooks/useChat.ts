@@ -12,15 +12,18 @@ import {
 } from '@/lib/studio/activity';
 import { withTurnStamps } from '@/lib/studio/activityView';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
-import { placeCard, takenOver, withReplacedCard } from '@/lib/studio/cardReplace';
+import { placeCard, replacedChain, takenOver, withReplacedCard } from '@/lib/studio/cardReplace';
 import {
     changeRefusalDetail,
     changeRefusalStale,
+    retargetChange,
     type CardChangeRequest,
     type ChangeEdit,
+    type DroppedChange,
 } from '@/lib/studio/cardChange';
 import {
     changeUnitText,
+    retargetUnitChange,
     unitRefusalDetail,
     unitRefusalStale,
     withoutCardOffers,
@@ -161,6 +164,7 @@ import {
 } from '@/lib/studio/transcript';
 import {
     cancelTurn,
+    cardChangesOf,
     CompositionRefusal,
     fetchComponentRevision,
     isNoBlock,
@@ -264,6 +268,14 @@ export type ChatMessage =
 // and saved with it; a card that replaced none has none.
 export type TurnWidget = Widget & { turn: number; madeIn?: number };
 
+// A places read callers share: the read, how many callers wait on it, and
+// the control that stops it once none does.
+type PlaceRead = { read: Promise<PlaceOptionsRead>; callers: number; stop: AbortController };
+
+// How long a card page waits for the places a role can change to before it
+// says the list could not be loaded.
+const PLACES_READ_MS = 10_000;
+
 export type { PlanState };
 
 /**
@@ -303,6 +315,9 @@ export type ChatState = {
     widgets: TurnWidget[];
     // Messages waiting behind the in-flight request, in send order.
     queued: QueuedMessage[];
+    // Card changes the queue could not send, since the card they were asked
+    // of was replaced by one that does not take them, or left the canvas.
+    dropped: DroppedChange[];
     // The Activity view's data — one entry per turn (an answered pause
     // continues the same entry).
     activity: ActivityEntry[];
@@ -455,8 +470,20 @@ const restoredTurnCount = (saved: number, messages: readonly ChatMessage[]): num
 
 // A saved canvas as the chat holds it. Without its harness session no card
 // can change its unit, years or places, so the offers go, as the chips do.
+// A save is read back as data, so its years and places offers are narrowed
+// as a frame's are (cardChangesOf).
 const restoredWidgets = (saved: ChatSnapshot): TurnWidget[] =>
-    saved.sessionId ? saved.widgets : withoutCardOffers(saved.widgets);
+    saved.sessionId
+        ? saved.widgets.map((widget) => {
+              if (widget.kind === 'text' || widget.cardChanges === undefined) return widget;
+
+              const cardChanges = cardChangesOf(widget.cardChanges);
+
+              return cardChanges
+                  ? { ...widget, cardChanges }
+                  : { ...widget, cardChanges: undefined };
+          })
+        : withoutCardOffers(saved.widgets);
 
 /**
  * Drives one Studio conversation against the harness's `/api/studio/*`
@@ -499,6 +526,7 @@ export const useChat = (
         messages: restored,
         widgets: initial ? restoredWidgets(initial) : [],
         queued: [],
+        dropped: [],
         activity: restoreActivity(initial?.activity),
         ...NO_LINE,
         thinking: false,
@@ -512,7 +540,7 @@ export const useChat = (
     // for the life of the page (placeOptions), keyed `<card>\n<role>`. A read
     // that failed is dropped, so the next asks again, and a replacement drops
     // the lists of the card it replaced.
-    const placeListsRef = useRef(new Map<string, Promise<PlaceOptionsRead>>());
+    const placeListsRef = useRef(new Map<string, PlaceRead>());
     const abortRef = useRef<AbortController | null>(null);
     // Stops the running stream's turn (set while a request runs).
     const haltRef = useRef<(() => void) | null>(null);
@@ -579,6 +607,9 @@ export const useChat = (
     // The cards as last rendered, for the state reads that draw the cards a
     // manifest names and the page lacks (drawCards).
     const widgetsRef = useRef<TurnWidget[]>([]);
+    // Each card that took another's place since the page loaded, mapped to
+    // the card it replaced, so a queued card change can follow its card.
+    const replacedRef = useRef<Record<string, string>>({});
 
     useEffect(() => {
         widgetsRef.current = state.widgets;
@@ -1321,6 +1352,8 @@ export const useChat = (
                         const from = takenOver(widget.id, takeover);
 
                         editingRef.current = null;
+
+                        if (from) replacedRef.current[widget.id] = from;
 
                         // A legacy canvas shows the card at once, and drops
                         // the card it replaced.
@@ -2519,6 +2552,22 @@ export const useChat = (
         }) => {
             const card = { title };
 
+            // A new change to the row replaces the note of one the queue
+            // dropped.
+            setState((prev) =>
+                prev.dropped.length === 0
+                    ? prev
+                    : {
+                          ...prev,
+                          dropped: prev.dropped.filter(
+                              (item) =>
+                                  item.card !== edit.card ||
+                                  item.row !== edit.row ||
+                                  item.role !== edit.role,
+                          ),
+                      },
+            );
+
             if (
                 holdTurn({
                     text,
@@ -2636,33 +2685,105 @@ export const useChat = (
 
     // The places role `role` of card `componentId` can change to, read through
     // the harness once per card and role (placeListsRef). Without a
-    // conversation there is nothing to read.
+    // conversation there is nothing to read. Callers share a read, and each
+    // passes `signal` to leave it: its own promise then rejects, and the read
+    // stops once every caller has left. Past PLACES_READ_MS the read answers
+    // as no answer.
     const placeOptions = useCallback(
-        (componentId: string, role: string): Promise<PlaceOptionsRead> => {
+        (componentId: string, role: string, signal?: AbortSignal): Promise<PlaceOptionsRead> => {
             const key = `${componentId}\n${role}`;
-            const held = placeListsRef.current.get(key);
+            const lists = placeListsRef.current;
             const conversation = sessionRef.current;
+            let held = lists.get(key);
 
-            if (held) return held;
-            if (!conversation) {
-                return Promise.resolve({
-                    kind: 'failed',
-                    status: null,
-                    code: null,
-                    detail: null,
-                    retry: false,
-                });
+            if (!held) {
+                if (!conversation) {
+                    return Promise.resolve({
+                        kind: 'failed',
+                        status: null,
+                        code: null,
+                        detail: null,
+                        retry: false,
+                    });
+                }
+
+                const stop = new AbortController();
+                const forget = () => {
+                    if (lists.get(key) === entry) lists.delete(key);
+                };
+                const entry: PlaceRead = {
+                    stop,
+                    callers: 0,
+                    read: runPlaceOptions(
+                        conversation,
+                        componentId,
+                        role,
+                        AbortSignal.any([stop.signal, AbortSignal.timeout(PLACES_READ_MS)]),
+                    ).then(
+                        (answer) => {
+                            if (answer.kind !== 'options') forget();
+
+                            return answer;
+                        },
+                        (error: unknown) => {
+                            forget();
+
+                            throw error;
+                        },
+                    ),
+                };
+
+                lists.set(key, entry);
+                held = entry;
             }
 
-            const read = runPlaceOptions(conversation, componentId, role).then((answer) => {
-                if (answer.kind !== 'options') placeListsRef.current.delete(key);
+            if (!signal) return held.read;
 
-                return answer;
+            const shared = held;
+
+            shared.callers += 1;
+
+            return new Promise((resolve, reject) => {
+                let left = false;
+                // Each caller counts once, whether the read ends or it
+                // leaves first; returns whether this call ended it.
+                const settle = (): boolean => {
+                    if (left) return false;
+
+                    left = true;
+                    signal.removeEventListener('abort', leave);
+                    shared.callers -= 1;
+
+                    return true;
+                };
+                const leave = () => {
+                    if (!settle()) return;
+
+                    if (shared.callers === 0) {
+                        shared.stop.abort();
+
+                        if (lists.get(key) === shared) lists.delete(key);
+                    }
+
+                    reject(signal.reason);
+                };
+
+                if (signal.aborted) {
+                    leave();
+
+                    return;
+                }
+
+                signal.addEventListener('abort', leave, { once: true });
+                shared.read.then(
+                    (answer) => {
+                        if (settle()) resolve(answer);
+                    },
+                    (error: unknown) => {
+                        if (settle()) reject(error);
+                    },
+                );
             });
-
-            placeListsRef.current.set(key, read);
-
-            return read;
         },
         [],
     );
@@ -2680,6 +2801,58 @@ export const useChat = (
     // is offered on its turn's reply, as a question taken out of the queue
     // is, and the next item goes.
     useEffect(() => {
+        // The card standing in the place of card `id`: itself, or the card
+        // that replaced it, or the one that replaced that, and so on. Null
+        // once none of them is held.
+        const standingCard = (id: string): TurnWidget | null =>
+            widgetsRef.current.find((widget) =>
+                replacedChain(widget.id, replacedRef.current).includes(id),
+            ) ?? null;
+
+        // A queued card change goes to the card standing in its card's place
+        // when its turn comes, rebuilt from that card's offer, since an
+        // earlier turn may have replaced the card. One the standing card
+        // does not take is dropped, with the reason on its row, and the
+        // queue goes on.
+        const sendQueuedChange = ({ unit, change }: QueuedMessage) => {
+            const asked = unit?.request.component_id ?? change?.request.component_id;
+
+            if (asked === undefined) return;
+
+            const standing = standingCard(asked);
+
+            if (unit) {
+                const ready = standing && retargetUnitChange(unit, standing);
+
+                if (ready) {
+                    applyUnit(ready);
+
+                    return;
+                }
+            } else if (change) {
+                const ready = standing && retargetChange(change, standing);
+
+                if (ready) {
+                    applyChange(ready);
+
+                    return;
+                }
+            }
+
+            const words = unit ? changeUnitText(unit) : (change?.words ?? '');
+            const drop: DroppedChange = {
+                card: standing?.id ?? asked,
+                row: unit ? 'unit' : (change?.row ?? 'years'),
+                ...(change?.role !== undefined && { role: change.role }),
+                detail: standing
+                    ? `The card changed before this change went, and it does not offer ${words}.`
+                    : 'The card left the canvas before this change went.',
+            };
+
+            setState((prev) => ({ ...prev, dropped: [...prev.dropped, drop] }));
+            drainRef.current();
+        };
+
         drainRef.current = () => {
             if (inFlightRef.current > 0 || pendingInterruptRef.current) {
                 return;
@@ -2698,10 +2871,8 @@ export const useChat = (
 
             if (next.chip) {
                 applyChoice(next.chip);
-            } else if (next.unit) {
-                applyUnit(next.unit);
-            } else if (next.change) {
-                applyChange(next.change);
+            } else if (next.unit || next.change) {
+                sendQueuedChange(next);
             } else if (next.handedBack && next.fromNewQuestion !== undefined) {
                 const turnIndex = next.fromNewQuestion;
                 const sendNext = () =>
@@ -2775,6 +2946,8 @@ export const useChat = (
                                   widgetsRef.current.some((widget) => widget.id === other),
                           )
                         : null;
+
+                    if (from) replacedRef.current[id] = from;
 
                     // A card of a turn still open has no stored card yet.
                     // The read that closes the turn brings it
@@ -3457,6 +3630,7 @@ export const useChat = (
         approvalsRef.current = new Set();
         messagesRef.current = [];
         widgetsRef.current = [];
+        replacedRef.current = {};
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         recapRef.current = null;
@@ -3464,6 +3638,7 @@ export const useChat = (
             messages: [],
             widgets: [],
             queued: [],
+            dropped: [],
             activity: [],
             ...NO_LINE,
             thinking: false,
@@ -3486,6 +3661,7 @@ export const useChat = (
             chainRef.current = Promise.resolve();
             inFlightRef.current = 0;
             queueRef.current = [];
+            replacedRef.current = {};
             pendingInterruptRef.current = null;
             turnPlanRef.current = null;
             sessionRef.current = saved.sessionId;
@@ -3509,6 +3685,7 @@ export const useChat = (
                 messages: messagesRef.current,
                 widgets: widgetsRef.current,
                 queued: [],
+                dropped: [],
                 activity: restoreActivity(saved.activity),
                 ...NO_LINE,
                 thinking: false,

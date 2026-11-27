@@ -171,7 +171,10 @@ const FeedbackWidget = ({ className }: { className?: string }) => {
     };
 
     return (
-        <div className={classNames(styles.widget, light && styles.light, className)}>
+        <div
+            className={classNames(styles.widget, light && styles.light, className)}
+            data-feedback-widget
+        >
             {open && (
                 <div
                     ref={panelRef}

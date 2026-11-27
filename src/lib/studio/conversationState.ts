@@ -34,6 +34,7 @@ import {
 import { reviseWidget, widgetFromComponent } from './widgets.ts';
 import { readHeld } from './wire.ts';
 import { placeCard } from './cardReplace.ts';
+import { cardChangesOf } from './studioClient.ts';
 import type {
     ClosedTurn,
     CompositionBlock,
@@ -580,9 +581,9 @@ export const replacedCard = (
  * their frames would have drawn once a read carries those cards (`stored`):
  * a card with no unit offer, or no offer of years and places, takes its
  * stored card's, and a card that replaced a card the page holds off the
- * canvas (`onCanvas` lacks it, replacedCard) takes that card's slot. `replaced` lists each swap, old card
- * first, so the canvas moves the old card's settings. The same array when
- * nothing changed.
+ * canvas (`onCanvas` lacks it, replacedCard) takes that card's slot.
+ * `replaced` lists each swap, old card first, so the canvas moves the old
+ * card's settings. The same array when nothing changed.
  */
 export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
     widgets: TWidget[],
@@ -608,8 +609,10 @@ export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
             next = next.map((widget) => (widget.id === id ? drawn : widget));
         }
 
-        if (card.card_changes && drawn.kind !== 'text' && !drawn.cardChanges) {
-            drawn = { ...drawn, cardChanges: card.card_changes };
+        const cardChanges = cardChangesOf(card.card_changes);
+
+        if (cardChanges && drawn.kind !== 'text' && !drawn.cardChanges) {
+            drawn = { ...drawn, cardChanges };
             next = next.map((widget) => (widget.id === id ? drawn : widget));
         }
 

@@ -38,9 +38,9 @@ import type { ShareKind } from '@/lib/chat/shareStore';
 import type { Widget } from '@/lib/chat/widgets';
 import { track } from '@/lib/events/client';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
-import { placesChange, yearsChange } from '@/lib/studio/cardChange';
+import { type CardChangeRequest, placesChange, yearsChange } from '@/lib/studio/cardChange';
 import { standingTarget } from '@/lib/studio/cardReplace';
-import { cardUnitChange } from '@/lib/studio/cardUnit';
+import { cardUnitChange, type CardUnitChange } from '@/lib/studio/cardUnit';
 import type { EditTarget } from '@/lib/studio/composer';
 import { HANDOFF_VIA_PARAM, handoffPromptSource } from '@/lib/studio/examples';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
@@ -71,8 +71,8 @@ export type StudioMode = 'start' | 'leaving' | 'workspace';
 
 export type StudioProps = {
     // A public share (/s/<id>): the Studio opens straight on the stored
-    // conversation, read-only — no input, no card actions, no saving, no
-    // way back and no account: logo, title, filters and the sheet. A `live`
+    // conversation, read-only, with no input, card actions, saving, way
+    // back or account: logo, title, filters and the sheet. A `live`
     // share's data cards arrive held and are filled from the refresh route
     // (see useLiveCards), and so are a snapshot's `undrawn` cards. `slots`
     // names the slot that draws each card, whose rows a download serves.
@@ -95,7 +95,7 @@ export type StudioProps = {
     // (that needs an account), and shares are unowned snapshots.
     guest?: boolean;
     // A gallery item: the same read-only sheet, plus the one action a
-    // curated session exists for — carrying it on in your own Studio.
+    // curated session exists for: carrying it on in your own Studio.
     continuable?: boolean;
     // The landing's example prompts for this visit (pickExamples, drawn by
     // the page). A share has no landing and passes none.
@@ -106,7 +106,7 @@ export type StudioProps = {
 };
 
 // The guest's prompt count in this browser, which decides when the wall goes
-// up. The proxy holds the real allowance (src/lib/studio/spendPrompt): a
+// up. The proxy holds the allowance (src/lib/studio/spendPrompt): a
 // guest past it, from a cleared browser too, gets its refusal as the reply.
 const GUEST_KEY = 'dfo-guest-prompts';
 const guestListeners = new Set<() => void>();
@@ -224,11 +224,14 @@ export type StudioModel = {
         isOnCanvas: (id: string) => boolean;
         titleOf: (id: string) => string;
         flyTo: (id: string) => void;
-        changeUnit: (id: string, unit: UnitChoice) => void;
+        /** Move card `id` to `unit`. Each change returns whether a turn went
+         *  (sent or queued): false when the card's offer does not take it or
+         *  the guest gate stopped it. */
+        changeUnit: (id: string, unit: UnitChoice) => boolean;
         /** A card page's change of years: redraw card `id` over `from` to `to`. */
-        changeYears: (id: string, from: number, to: number) => void;
+        changeYears: (id: string, from: number, to: number) => boolean;
         /** A card page's change of places: show `places` in role `role`. */
-        changePlaces: (id: string, role: string, places: PlaceOption[]) => void;
+        changePlaces: (id: string, role: string, places: PlaceOption[]) => boolean;
         add: (id: string) => void;
         remove: (id: string) => void;
         togglePin: (id: string) => void;
@@ -278,7 +281,7 @@ export const useStudio = ({
     const readOnly = !!shared;
     // What a signed-in user has and a guest lacks: history and saving.
     const account = !readOnly && !guest;
-    // A canvas-only or one-card share: no chat at all — the sheet takes the
+    // A canvas-only or one-card share has no chat: the sheet takes the
     // whole width and only the filters stay above it.
     const solo = !!shared && shared.kind !== 'conversation';
     const sectionRef = useReveal<HTMLElement>();
@@ -287,8 +290,8 @@ export const useStudio = ({
     const gridCell = useGridCell();
     const gridScale = gridCell / GRID_CELL;
     const [mode, setMode] = useState<StudioMode>(shared ? 'workspace' : 'start');
-    // Cols/rows span a full desktop viewport — off-viewport cells on smaller
-    // screens just clip.
+    // Cols/rows span a full desktop viewport; off-viewport cells on smaller
+    // screens clip.
     const fills = useGridFills({
         shades: FILL_SHADES,
         cols: 96,
@@ -303,7 +306,7 @@ export const useStudio = ({
     const [followDraft, setFollowDraft] = useState('');
     const [chatTab, setChatTab] = useState<ChatTab>('chat');
     const [cardsTab, setCardsTab] = useState('all');
-    // A canvas/card share has no chat to show — it opens collapsed.
+    // A canvas/card share has no chat to show, so it opens collapsed.
     const [chatCollapsed, setChatCollapsed] = useState(solo);
     // The card a pending follow-up is scoped to (chip above
     // the chat input); cleared once that message is sent.
@@ -415,9 +418,9 @@ export const useStudio = ({
         );
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
-    const applyUnit: typeof conversation.applyUnit = (change) =>
+    const applyUnit = (change: CardUnitChange): boolean =>
         prompt('apply_unit', undefined, () => conversation.applyUnit(change));
-    const applyChange: typeof conversation.applyChange = (change) =>
+    const applyChange = (change: CardChangeRequest): boolean =>
         prompt(change.row === 'years' ? 'apply_years' : 'apply_places', undefined, () =>
             conversation.applyChange(change),
         );
@@ -498,14 +501,13 @@ export const useStudio = ({
     });
     const { buildSnapshot } = save;
 
-    // A guest leaving the page — most often for the sign-in the wall points
-    // at — takes the canvas with them: the snapshot waits in this tab, and
-    // the restore below puts it back once there is an account to save it to
-    // (QA-58). Hooked to the leaving itself rather than to the wall's
-    // button, so the header's sign-in and every other way out are covered
-    // the same: the cleanup catches a route change inside the app (the
-    // wall's own `router.push`, which fires no page event), `pagehide` the
-    // load that leaves the site.
+    // A guest leaving the page, most often for the sign-in the wall points
+    // at, takes the canvas with them: the snapshot waits in this tab, and
+    // the restore below puts it back once there is an account to save it to.
+    // The hook is on the leaving itself, so the header's sign-in and every
+    // other way out are covered alike: the cleanup catches a route change
+    // inside the app (the wall's own `router.push`, which fires no page
+    // event), and `pagehide` catches the load that leaves the site.
     useEffect(() => {
         if (!guest) {
             return;
@@ -564,8 +566,8 @@ export const useStudio = ({
 
         const id = uuid();
 
-        // The conversation gets its own URL, so a refresh comes back to it —
-        // for an account; a guest's is never saved, so the URL stays /studio.
+        // The conversation gets its own URL, so a refresh comes back to it.
+        // A guest's is not saved, so the URL stays /studio.
         if (account) {
             window.history.replaceState(null, '', `/studio/${id}`);
         }
@@ -577,8 +579,9 @@ export const useStudio = ({
         enterWorkspace();
     };
 
-    // Reopen a saved conversation exactly as it was left — same transcript,
-    // widgets, pins and card layout; follow-ups keep saving under its id.
+    // Reopen a saved conversation exactly as it was left, with the same
+    // transcript, widgets, pins and card layout; follow-ups keep saving under
+    // its id.
     // A guest canvas restored after sign-in (`fromGuest`) has no owner until
     // its first save claims it, and before then the harness state read
     // answers 404, so the restore reads the harness once that save lands.
@@ -628,10 +631,10 @@ export const useStudio = ({
         enterWorkspace();
     };
 
-    // The other half of QA-58: signed in, with a guest canvas waiting in
-    // this tab, Studio reopens it instead of the empty landing. Saving is on
-    // now, so hydrating it is also what writes it to history. Deferred by a
-    // tick for the same reason the `?q=` handover below is — see its note.
+    // Signed in, with a guest canvas waiting in this tab, Studio reopens it
+    // instead of the empty landing. Saving is on by then, so hydrating it
+    // also writes it to history. Deferred by a tick for the same reason as
+    // the `?q=` handover below (see its note).
     const restored = useRef(false);
 
     useEffect(() => {
@@ -741,21 +744,24 @@ export const useStudio = ({
     // The follow-up's card follows its replacements to the card standing in
     // its place, and the target goes once no card of its chain is on the
     // canvas.
-    const followedTarget = standingTarget(editTarget, { has: isOnCanvas }, doc.replacedIds);
     const cardTitleOf = (id: string): string => {
         const widget = visibleWidgets.find((other) => other.id === id);
 
         return doc.titles[id] ?? (widget ? widgetTitle(widget) : 'Card');
     };
+    const followedTarget = standingTarget(
+        editTarget,
+        { has: isOnCanvas },
+        doc.replacedIds,
+        cardTitleOf,
+    );
     const flyToCard = (id: string) => flyToCardRef.current?.(id);
     // Card menu → Change unit → Send: a turn that moves the card to `unit`.
     const changeUnit = (id: string, unit: UnitChoice) => {
         const widget = chat.widgets.find((other) => other.id === id);
         const change = widget && cardUnitChange(widget, cardTitleOf(id), unit);
 
-        if (change) {
-            chat.applyUnit(change);
-        }
+        return !!change && chat.applyUnit(change);
     };
 
     // A card page's change of years or places: a turn that redraws the card.
@@ -763,17 +769,13 @@ export const useStudio = ({
         const widget = chat.widgets.find((other) => other.id === id);
         const change = widget && yearsChange(widget, cardTitleOf(id), from, to);
 
-        if (change) {
-            chat.applyChange(change);
-        }
+        return !!change && chat.applyChange(change);
     };
     const changePlaces = (id: string, role: string, places: PlaceOption[]) => {
         const widget = chat.widgets.find((other) => other.id === id);
         const change = widget && placesChange(widget, cardTitleOf(id), role, places);
 
-        if (change) {
-            chat.applyChange(change);
-        }
+        return !!change && chat.applyChange(change);
     };
 
     // A card the harness holds goes on and off the canvas by the harness's
@@ -845,8 +847,8 @@ export const useStudio = ({
     useEffect(() => {
         // Deferred by a tick on purpose. `begin` starts the landing's
         // stage-out on a timer that the mount effect's cleanup clears, and in
-        // development React mounts, cleans up and mounts again — starting the
-        // turn inside that window would cancel the transition and leave the
+        // development React mounts, cleans up and mounts again, so starting
+        // the turn inside that window would cancel the transition and leave the
         // page on a blank stage. A tick puts it safely after.
         const handle = window.setTimeout(() => {
             if (handover && !handedOver.current) {
@@ -868,7 +870,7 @@ export const useStudio = ({
     // Card menu → Ask follow up: the question itself is typed in the chat
     // input, so this only arms the card as its target (chip above the input)
     // and opens the chat to type into. The turn then carries the card's
-    // component_ref, so the agent answers about — or reworks — that card
+    // component_ref, so the agent answers about, or reworks, that card
     // instead of re-deriving what "it" means from the transcript.
     const askFollowUp = (id: string, title: string) => {
         setChatCollapsed(false);
@@ -905,7 +907,7 @@ export const useStudio = ({
         ...tabFor('notes', 'Notes', 'text'),
     ];
     const activeCardsTab = cardTabItems.some((tab) => tab.id === cardsTab) ? cardsTab : 'all';
-    // A share shows the filters only when there's something to filter —
+    // A share shows the filters only when there's something to filter:
     // at least two kinds of card on the sheet.
     const showFilters =
         visibleWidgets.length > 0 && (!shared || Object.keys(kindCounts).length >= 2);
@@ -927,7 +929,7 @@ export const useStudio = ({
     const inWorkspace = mode === 'workspace';
 
     // Phone: the card filters get their own tools row while the sheet is on
-    // screen — the section moves the sheet's top down for it.
+    // screen; the section moves the sheet's top down for it.
     const filtersRow = phone && showFilters && (solo || chatCollapsed);
     // Phone: while the chat is on screen the sheet hides behind it.
     const chatShown = phone && inWorkspace && !solo && !chatCollapsed;

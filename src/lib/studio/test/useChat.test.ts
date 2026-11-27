@@ -845,3 +845,177 @@ test('an answer to a clarifying question keeps the question it answered', async 
     );
     page.unmount();
 });
+
+test('a card change queued behind another goes to the card that replaced its card, or is dropped with a reason when that card does not offer it', async (t) => {
+    const created = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-06-component-created.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ComponentCreated;
+    const window = { start_year: 2016, end_year: 2024, first_year: 2000, last_year: 2024 };
+    const card = placesCard();
+    const old = card.id;
+    const offered = widgetFromComponent({
+        ...created,
+        card_changes: { spec_id: 'spec_1', window, places: placesCard().cardChanges?.places },
+    });
+
+    assert.ok(offered && offered.kind !== 'text');
+
+    for (const [name, replacementWindow, sent] of [
+        ['re-targeted', window, 2],
+        ['dropped', undefined, 1],
+    ] as const) {
+        const bodies: Record<string, unknown>[] = [];
+
+        t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+            if (!String(input).startsWith('/api/studio/turn')) {
+                return new Response('{}', { status: 404 });
+            }
+
+            bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+
+            const frames =
+                bodies.length === 1
+                    ? [
+                          {
+                              ...created,
+                              component_id: 'cmp_2',
+                              replaces: old,
+                              card_changes: {
+                                  spec_id: 'spec_2',
+                                  ...(replacementWindow && { window: replacementWindow }),
+                                  places: [
+                                      {
+                                          role: 'destination',
+                                          multiple: false,
+                                          chosen: [{ id: 'country/KEN', label: 'Kenya' }],
+                                      },
+                                  ],
+                              },
+                          },
+                          { event: 'done', seq: 9, trace_id: 't' },
+                      ]
+                    : [{ event: 'done', seq: 9, trace_id: 't' }];
+
+            return new Response(
+                frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join(''),
+                { headers: { 'x-dfo-turn-index': String(bodies.length + 1) } },
+            );
+        });
+        t.mock.method(console, 'warn', () => {});
+
+        const page = renderHook(() => useChat());
+
+        page.result().hydrate({
+            sessionId: 'conv_1',
+            messages: [
+                { role: 'user', text: 'Q', turn: 1, harnessTurn: 1 },
+                { role: 'bot', text: 'A' },
+            ],
+            widgets: [{ ...offered, turn: 1 }],
+            turnCount: 1,
+        });
+        await page.settle();
+        page.result().applyChange({
+            title: 'Aid',
+            row: 'shows',
+            role: 'destination',
+            label: 'Recipient',
+            words: 'Kenya',
+            request: {
+                component_id: old,
+                spec_id: 'spec_1',
+                change: { kind: 'places', role: 'destination', entities: ['country/KEN'] },
+            },
+        });
+        // Asked of the same card while the first change runs.
+        page.result().applyChange({
+            title: 'Aid',
+            row: 'years',
+            label: 'Years',
+            words: '2010 to 2020',
+            request: {
+                component_id: old,
+                spec_id: 'spec_1',
+                change: { kind: 'window', start_year: 2010, end_year: 2020 },
+            },
+        });
+        await page.settle(120);
+
+        assert.equal(bodies.length, sent, name);
+
+        if (sent === 2) {
+            assert.deepEqual(bodies[1]?.['apply_change'], {
+                component_id: 'cmp_2',
+                spec_id: 'spec_2',
+                change: { kind: 'window', start_year: 2010, end_year: 2020 },
+            });
+            assert.deepEqual(page.result().dropped, []);
+        } else {
+            assert.deepEqual(
+                page.result().dropped.map(({ card: id, row }) => [id, row]),
+                [['cmp_2', 'years']],
+            );
+        }
+
+        page.unmount();
+        t.mock.restoreAll();
+    }
+});
+
+test('a places read stops once every caller has left it, and a caller that stays gets its answer', async (t) => {
+    const signals: AbortSignal[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), 'http://site.test');
+        const signal = init?.signal;
+
+        assert.ok(signal);
+        signals.push(signal);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        signal.throwIfAborted();
+
+        return Response.json({
+            component_id: url.searchParams.get('component_id'),
+            role: url.searchParams.get('role'),
+            options: [{ id: 'country/KEN', label: 'Kenya' }],
+            truncated: false,
+        });
+    });
+
+    const page = renderHook(() => useChat());
+
+    page.result().hydrate({ sessionId: 'conv_1', messages: [], widgets: [], turnCount: 0 });
+    await page.settle();
+
+    const { placeOptions } = page.result();
+    // A picker that closes at once, as a remounted effect does, then opens
+    // again.
+    const closed = new AbortController();
+    const first = placeOptions('cmp_1', 'destination', closed.signal);
+
+    closed.abort();
+    await assert.rejects(first);
+
+    const again = await placeOptions('cmp_1', 'destination', new AbortController().signal);
+
+    assert.equal(again.kind, 'options');
+    assert.deepEqual(
+        signals.map((signal) => signal.aborted),
+        [true, false],
+    );
+
+    // Two callers share one read; one leaving leaves it running.
+    const leaving = new AbortController();
+    const left = placeOptions('cmp_1', 'origin', leaving.signal);
+    const staying = placeOptions('cmp_1', 'origin', new AbortController().signal);
+
+    leaving.abort();
+    await assert.rejects(left);
+    assert.equal((await staying).kind, 'options');
+    assert.equal(signals.length, 3);
+    assert.equal(signals[2]?.aborted, false);
+    page.unmount();
+});

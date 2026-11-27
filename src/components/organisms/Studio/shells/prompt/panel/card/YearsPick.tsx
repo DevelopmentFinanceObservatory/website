@@ -12,7 +12,8 @@ const span = (window: WindowOffer): number[] =>
  * The years picker's choices: `From` and `To` as native selects over every
  * year the card's data spans, or one `Year` select for a card that shows one
  * value per series (`single`), which sets both ends. A year with no data
- * cannot start or end the range, so it is disabled.
+ * cannot start or end the range, so it is disabled, and so are the `From`
+ * years after `To` and the `To` years before `From`.
  */
 const YearsPick = ({
     window,
@@ -27,11 +28,12 @@ const YearsPick = ({
 }) => {
     const missing = new Set(window.missing_years ?? []);
     const years = span(window);
-    const options = years.map((year) => (
-        <option key={year} value={year} disabled={missing.has(year)}>
-            {year}
-        </option>
-    ));
+    const options = (outside: (year: number) => boolean) =>
+        years.map((year) => (
+            <option key={year} value={year} disabled={missing.has(year) || outside(year)}>
+                {year}
+            </option>
+        ));
 
     if (window.single) {
         return (
@@ -48,7 +50,7 @@ const YearsPick = ({
                             onChange(year, year);
                         }}
                     >
-                        {options}
+                        {options(() => false)}
                     </select>
                 </label>
             </div>
@@ -65,7 +67,7 @@ const YearsPick = ({
                     data-pick-focus
                     onChange={(event) => onChange(Number(event.target.value), to)}
                 >
-                    {options}
+                    {options((year) => year > to)}
                 </select>
             </label>
             <label className={styles.pickField}>
@@ -75,10 +77,9 @@ const YearsPick = ({
                     value={to}
                     onChange={(event) => onChange(from, Number(event.target.value))}
                 >
-                    {options}
+                    {options((year) => year < from)}
                 </select>
             </label>
-            {from > to && <p className={styles.pickNote}>The range ends before it starts.</p>}
         </div>
     );
 };

@@ -267,6 +267,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         messages: spec.messages,
         widgets: spec.cards.map(({ widget }) => ({ ...widget, turn })),
         queued: [],
+        dropped: [],
         activity: spec.activity ?? [],
         status: null,
         statusDetail: null,

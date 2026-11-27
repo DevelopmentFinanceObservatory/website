@@ -414,8 +414,6 @@ const Whiteboard = ({
             : undefined,
     });
 
-    // The held card comes into view when it changes, and again once the
-    // panel that holds it has changed the canvas's width.
     // The live cards when the running turn began, to tell which landed in it.
     const turnStart = useRef<ReadonlySet<string> | null>(null);
     const markTurn = useEffectEvent(() => {
@@ -473,6 +471,8 @@ const Whiteboard = ({
         };
     }, [replying]);
 
+    // The held card comes into view when it changes, and again once the
+    // panel that holds it has changed the canvas's width.
     const revealHeld = useEffectEvent(() => {
         const slot = heldId ? slots[heldId] : undefined;
         const scroller = scrollerOf(boardRef);
@@ -510,8 +510,8 @@ const Whiteboard = ({
         closedMenu: boolean;
     } | null>(null);
 
-    // A card that leaves the sheet is pointed at no longer, and its menu,
-    // which unmounts with it, no longer counts as open.
+    // A card that leaves the sheet stops being pointed at, and its menu,
+    // which unmounts with it, stops counting as open.
     useEffect(() => {
         const isLive = (id: string) => !!slots[id] && !slots[id].leaving;
         const id = pointedId();

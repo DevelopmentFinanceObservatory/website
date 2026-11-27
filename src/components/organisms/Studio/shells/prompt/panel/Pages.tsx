@@ -43,7 +43,9 @@ export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean
                                 sheet: newest ? 'open' : 'thread',
                                 turn: page.turn,
                             });
-                            focusField();
+                            // On an older question the conversation sheet
+                            // moves focus to that question itself.
+                            if (newest) focusField();
                         }}
                     >
                         Read it at the prompt

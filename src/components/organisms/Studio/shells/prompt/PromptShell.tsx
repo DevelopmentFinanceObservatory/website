@@ -168,6 +168,10 @@ const PromptStage = () => {
         plans: links,
     } = shell;
     const unit = useDesignUnit();
+    // A question's turn is running. A card change's turn (its prompt marked
+    // `edit`) redraws one card in place, so the canvas stays where it is.
+    const asked = model.chat.messages.findLast((message) => message.role === 'user');
+    const replying = model.chat.thinking && !(asked?.role === 'user' && asked.edit);
     const viewPlanIds = useMemo(() => new Set(links.plans.flatMap((plan) => plan.cards)), [links]);
     const litIds = useMemo(
         () => litCards({ state, panelOpen, planOf: links.planOf, plans: links.plans }),
@@ -291,7 +295,7 @@ const PromptStage = () => {
                                 onCardInfo={(id) =>
                                     dispatch({ type: 'panel.show', page: { kind: 'card', id } })
                                 }
-                                replying={model.chat.thinking}
+                                replying={replying}
                                 placement="blocks"
                                 dockAware
                                 reserveRight={reserveRight}
@@ -354,8 +358,8 @@ const PromptStage = () => {
 
 /**
  * The Prompt layout: the canvas under the top bar, the prompt dock floating
- * over its foot and the session panel at the right. Never drawn for a share
- * or a gallery item (shellFor), so nothing here is read-only.
+ * over its foot and the session panel at the right. shellFor picks it
+ * for the prompt variant on an unshared page, so nothing here is read-only.
  */
 const PromptShell = () => (
     <PromptShellProvider>

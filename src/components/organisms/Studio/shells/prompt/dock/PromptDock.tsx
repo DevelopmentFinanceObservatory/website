@@ -512,6 +512,7 @@ const PromptDock = () => {
                     <ThreadSheet
                         questions={view.questions}
                         runningTurn={streaming ? (question?.turn ?? null) : null}
+                        focusTurn={view.threadTurn}
                         chips={chips}
                         onClose={fold}
                     />

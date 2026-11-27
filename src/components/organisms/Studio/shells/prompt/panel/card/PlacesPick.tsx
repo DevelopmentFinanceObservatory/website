@@ -63,20 +63,25 @@ const PlacesPick = ({
     const id = useId();
     const listId = `${id}-list`;
 
+    // The read stops when the picker closes or its card changes; a read
+    // stopped that way ends in silence.
     useEffect(() => {
-        let live = true;
+        const stop = new AbortController();
 
-        void read(componentId, role).then((answer) => {
-            if (!live) return;
+        read(componentId, role, stop.signal).then(
+            (answer) => {
+                if (stop.signal.aborted) return;
 
-            setList(listOf(answer));
+                const next = listOf(answer);
 
-            if (answer.kind === 'failed') announce(answer.detail ?? FAILED);
-        });
+                setList(next);
 
-        return () => {
-            live = false;
-        };
+                if (next.state === 'failed') announce(next.detail ?? FAILED);
+            },
+            () => {},
+        );
+
+        return () => stop.abort();
     }, [read, componentId, role, attempt, announce]);
 
     const places = pickablePlaces(shown, list.state === 'ready' ? list.options : []);
