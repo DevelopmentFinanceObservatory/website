@@ -62,6 +62,7 @@ import { cardRefOf } from '@/lib/studio/cardDownload';
 import { cardImageName, cardNode, downloadCardImage } from '@/lib/studio/cardImage';
 import { cardUnitOffer } from '@/lib/studio/cardUnit';
 import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
+import { flyTarget } from '@/lib/studio/promptShell';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import type { UnitChoice } from '@/lib/studio/wire';
 
@@ -642,8 +643,15 @@ const Whiteboard = ({
         if (dockAware && scroller) {
             pan.stopGlide();
             scrollView(scroller, {
-                left: cx - view.width / 2,
-                top: cy - view.height / 2,
+                ...flyTarget({
+                    cx,
+                    cy,
+                    view,
+                    max: {
+                        left: scroller.scrollWidth - scroller.clientWidth,
+                        top: scroller.scrollHeight - scroller.clientHeight,
+                    },
+                }),
                 behavior: scrollBehavior(),
             });
 

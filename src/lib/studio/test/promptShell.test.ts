@@ -1,12 +1,14 @@
 /**
  * `promptShell.ts`: the Prompt layout's shell reducer, when the session
- * panel shows, and where the prompt box lands from the landing.
+ * panel shows, where the prompt box lands from the landing, and where the
+ * canvas's view flies to.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
     dockArrival,
+    flyTarget,
     heldCard,
     initialShell,
     litCards,
@@ -201,4 +203,13 @@ test("lit cards: the pointed card's siblings, and the panel's plan while the pan
         ),
         ['a', 'b', 'c', 'y'],
     );
+});
+
+test('a fly to a point near an edge of the sheet stops at that edge', () => {
+    const view = { width: 1000, height: 600 };
+    const max = { left: 2000, top: 3000 };
+
+    assert.deepEqual(flyTarget({ cx: 200, cy: 100, view, max }), { left: 0, top: 0 });
+    assert.deepEqual(flyTarget({ cx: 2900, cy: 3500, view, max }), { left: 2000, top: 3000 });
+    assert.deepEqual(flyTarget({ cx: 1500, cy: 1300, view, max }), { left: 1000, top: 1000 });
 });

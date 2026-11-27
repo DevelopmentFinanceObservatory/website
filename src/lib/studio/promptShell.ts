@@ -224,3 +224,24 @@ export const litCards = ({
 
     return [...lit];
 };
+
+/**
+ * Where the Prompt canvas's view goes to centre board point (`cx`, `cy`) in a
+ * view of `view`'s size: held inside the scroll range (`max`, the largest
+ * scroll position on each axis), so a glide sent towards an edge eases all
+ * the way to it.
+ */
+export const flyTarget = ({
+    cx,
+    cy,
+    view,
+    max,
+}: {
+    cx: number;
+    cy: number;
+    view: { width: number; height: number };
+    max: { left: number; top: number };
+}): { left: number; top: number } => ({
+    left: Math.max(0, Math.min(cx - view.width / 2, max.left)),
+    top: Math.max(0, Math.min(cy - view.height / 2, max.top)),
+});
