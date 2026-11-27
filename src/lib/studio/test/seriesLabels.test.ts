@@ -17,20 +17,91 @@ test('a WHO series keeps only what the category adds', () => {
             who('Domestic private health expenditure'),
             who('External health expenditure'),
         ]),
-        ['Domestic general government', 'Domestic private', 'External'],
+        [
+            'Domestic general government health expenditure',
+            'Domestic private health expenditure',
+            'External health expenditure',
+        ],
     );
 });
 
-test('names are cut at a boundary, never mid-word', () => {
-    assert.deepEqual(legendLabels(['Kenya total', 'Kenyatta total']), ['Kenya', 'Kenyatta']);
-});
+// Indicator names as the graph and the World Development Indicators label
+// them, each set the siblings a chart compares: the shared sentence and keys
+// go, and each dimension value or name stays whole.
+for (const [labels, expected] of [
+    [
+        [
+            'Infant mortality rate [Age=Under 1 year old, Sex=Male]',
+            'Infant mortality rate [Age=Under 1 year old]',
+        ],
+        ['Under 1 year old, Sex=Male', 'Under 1 year old'],
+    ],
+    [
+        [
+            'Unemployment rate - 13th ICLS [15 years old and over, Disability status = Persons with disability] / Kenya',
+            'Unemployment rate - 13th ICLS [15 years old and over, Disability status = Persons without disability] / Kenya',
+        ],
+        ['Persons with disability', 'Persons without disability'],
+    ],
+    [
+        [
+            'Average monthly earnings of employees in international dollars at Purchasing Power Parity rates (PPP) [Economic activity=Non-agriculture]',
+            'Average monthly earnings of employees in international dollars at Purchasing Power Parity rates (PPP) [Economic activity=Total (broad sector)]',
+        ],
+        ['Non-agriculture', 'Total (broad sector)'],
+    ],
+    [
+        [
+            'Net bilateral aid flows from DAC donors, United States (current US$)',
+            'Net bilateral aid flows from DAC donors, United Kingdom (current US$)',
+        ],
+        ['United States', 'United Kingdom'],
+    ],
+] as const) {
+    test(`an indicator set shortens to whole values: ${expected.join(' | ')}`, () => {
+        assert.deepEqual(legendLabels([...labels]), expected);
+    });
+}
 
-test('a shared tail goes as well as a shared head', () => {
-    assert.deepEqual(legendLabels(['GDP of Kenya / current USD', 'GDP of Ghana / current USD']), [
-        'Kenya',
-        'Ghana',
-    ]);
-});
+// Place and organisation names share whole words with their neighbours. The
+// sets are written from the M49, DAC and multilateral names. A row without
+// an expected value expects the names unchanged.
+const nameRows: [labels: string[], expected?: string[]][] = [
+    [['United States of America', 'United Kingdom']],
+    [['South Africa', 'South Sudan']],
+    [['Republic of Korea', 'Republic of Moldova']],
+    [['Democratic Republic of the Congo', "Democratic People's Republic of Korea"]],
+    [['Northern America', 'Latin America']],
+    [['Solomon Islands', 'Marshall Islands', 'Cook Islands']],
+    [['Bolivia (Plurinational State of)', 'Venezuela (Bolivarian Republic of)']],
+    [['Virgin Islands (British)', 'Virgin Islands (U.S.)']],
+    [
+        [
+            'China, Hong Kong Special Administrative Region',
+            'China, Macao Special Administrative Region',
+        ],
+    ],
+    [['United Nations Population Fund', "United Nations Children's Fund"]],
+    [
+        ['United States of America / Current US dollars', 'United Kingdom / Current US dollars'],
+        ['United States of America', 'United Kingdom'],
+    ],
+    [
+        ['Gavi, the Vaccine Alliance / Kenya', 'Global Fund / Kenya'],
+        ['Gavi, the Vaccine Alliance', 'Global Fund'],
+    ],
+    [['Kenya total', 'Kenyatta total']],
+    [
+        ['GDP of Kenya / current USD', 'GDP of Ghana / current USD'],
+        ['GDP of Kenya', 'GDP of Ghana'],
+    ],
+];
+
+for (const [labels, expected = labels] of nameRows) {
+    test(`a shared word stays with its name: ${labels.join(' | ')}`, () => {
+        assert.deepEqual(legendLabels(labels), expected);
+    });
+}
 
 test('the leading clause stands alone when it is already unique', () => {
     assert.deepEqual(
@@ -59,7 +130,7 @@ test('an empty name leaves every name whole', () => {
 });
 
 test('cutting that would make two names the same leaves them whole', () => {
-    const labels = ['Spend (a) / Kenya', 'Spend [a] / Kenya'];
+    const labels = ['Spend [a] / Kenya', 'Spend [a / Kenya'];
 
     assert.deepEqual(legendLabels(labels), labels);
 });
