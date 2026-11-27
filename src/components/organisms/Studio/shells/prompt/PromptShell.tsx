@@ -420,7 +420,9 @@ const PromptStage = () => {
                     title={title}
                     firstPrompt={firstPrompt}
                     shareData={shareData}
+                    cardTitleOf={canvas.titleOf}
                     createShare={save.createShare}
+                    buildSnapshot={save.buildSnapshot}
                     guest={guest}
                 />
             )}

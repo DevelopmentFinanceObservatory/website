@@ -159,9 +159,13 @@ export const openStudio = async (
             return route.fulfill({ status: 204, body: '' });
         }
 
+        // A signed-in reader's own account reads go to the site, which answers
+        // them from the reader's throwaway database.
         if (
             cookie &&
-            (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/conversations'))
+            (pathname.startsWith('/api/auth/') ||
+                pathname.startsWith('/api/conversations') ||
+                pathname === '/api/account/admin')
         ) {
             return route.continue();
         }

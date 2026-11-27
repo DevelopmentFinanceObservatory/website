@@ -299,6 +299,29 @@
     border-radius: 0;
 }
 
+// Chip: a small toggle tag on a light surface, such as a topic to pick. Dark
+// while aria-pressed.
+.chip {
+    --seg-bg: var(--color-grid-bg-light);
+    --seg-hover: var(--color-popup);
+
+    .label {
+        height: rem(25);
+        padding-inline: rem(8);
+        color: var(--color-charcoal);
+        border-radius: rem(3);
+    }
+
+    &[aria-pressed="true"] {
+        --seg-bg: var(--color-charcoal);
+        --seg-hover: var(--color-charcoal);
+
+        .label {
+            color: var(--color-white);
+        }
+    }
+}
+
 // Compact size: same type, rem(20) tall segments.
 .small {
     .label,

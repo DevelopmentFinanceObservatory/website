@@ -6,12 +6,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useStudioVariant } from '../hooks/studioContext';
 import { useCopied } from '../hooks/useCopied';
 import { browserLiveDeps } from '../hooks/useLiveCards';
+import PublishPanel from './PublishPanel';
 import styles from './ShareModal.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
+import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
 import type { CardRef, Widget } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
@@ -51,6 +53,9 @@ import {
  * The server records `share.create` when it makes a link. Copying a link or
  * an embed code records `share.copy`, and a Data file saved to the device
  * records `studio.download` with `source: 'share_dialog'`.
+ *
+ * An admin has one more tab in either scope, Publish, which files the canvas
+ * or a card in the Library (./PublishPanel).
  */
 
 export type ShareScope = { kind: 'whole' } | { kind: 'card'; id: string; title: string };
@@ -74,6 +79,14 @@ type ShareModalProps = {
     // Signed out: the site keeps no write token for the links, so the dialog
     // says they are permanent and offers no switch to a snapshot.
     guest: boolean;
+    // What an admin can publish to the Library: the cards on the sheet, each
+    // one's title, and the saved conversation a publish sends. Undefined for
+    // everyone else, who see no Publish tab.
+    publish?: {
+        widgets: readonly Widget[];
+        titleOf: (id: string) => string;
+        snapshot: () => SavedConversation | null;
+    };
 };
 
 const WHOLE_TABS = [
@@ -86,6 +99,8 @@ const CARD_TABS = [
     { id: 'link', label: 'Link' },
     { id: 'embed', label: 'Embed' },
 ] as const;
+
+const PUBLISH_TAB = { id: 'publish', label: 'Publish' } as const;
 
 const MODE_TABS = [
     { id: 'live', label: 'Live Data' },
@@ -223,8 +238,15 @@ const ShareModal = ({
     offerLive,
     createShare,
     guest,
+    publish,
 }: ShareModalProps) => {
-    const [tab, setTab] = useState<string>(scope.kind === 'whole' ? 'conversation' : 'link');
+    const firstTab = scope.kind === 'whole' ? 'conversation' : 'link';
+    const [picked, setTab] = useState<string>(firstTab);
+    // Publish is an admin's tab, so without `publish` the dialog shows its first.
+    const tab = picked === 'publish' && !publish ? firstTab : picked;
+    // Once opened, the Publish form stays in the page, hidden, so its text
+    // survives a look at another tab.
+    const [published, setPublished] = useState(false);
     const [mode, setMode] = useState<ShareMode>('live');
     // The links of this opening, by kind, card, and mode (`shareLinkKey`).
     // A key with no entry is being made.
@@ -236,16 +258,19 @@ const ShareModal = ({
     const [format, setFormat] = useState<DatasetFormat>('csv');
     const [bundle, setBundle] = useState(true);
 
-    // Which share kind the current tab needs (Data needs none).
+    // Which share kind the current tab needs. Data needs none, and Publish
+    // makes its own share when its form is sent.
     const cardId = scope.kind === 'card' ? scope.id : undefined;
     const kind: StudioShareKind | null =
-        scope.kind === 'card'
-            ? 'card'
-            : tab === 'conversation'
-              ? 'conversation'
-              : tab === 'canvas'
-                ? 'canvas'
-                : null;
+        tab === 'publish'
+            ? null
+            : scope.kind === 'card'
+              ? 'card'
+              : tab === 'conversation'
+                ? 'conversation'
+                : tab === 'canvas'
+                  ? 'canvas'
+                  : null;
     const { choice: hasMode, mode: linkMode } = shareModeFor(offerLive, kind, mode);
     const key = kind ? shareLinkKey(kind, cardId, linkMode) : null;
     const link = key ? links[key] : undefined;
@@ -281,6 +306,7 @@ const ShareModal = ({
 
     const switchTab = (next: string) => {
         setTab(next);
+        setPublished((was) => was || next === 'publish');
         retryFailed();
     };
 
@@ -306,7 +332,8 @@ const ShareModal = ({
         }
     };
 
-    const tabs = scope.kind === 'whole' ? WHOLE_TABS : CARD_TABS;
+    const scopeTabs = scope.kind === 'whole' ? WHOLE_TABS : CARD_TABS;
+    const tabs = publish ? [...scopeTabs, PUBLISH_TAB] : scopeTabs;
     const embedTitle = scope.kind === 'card' ? scope.title : title;
     const pending = !!key && !link;
     const showLink = scope.kind === 'whole' ? tab !== 'data' : tab === 'link';
@@ -335,11 +362,22 @@ const ShareModal = ({
     return (
         <Modal open={open} onOpenChange={onOpenChange} title="Share" fit>
             <div className={styles.share}>
-                <div className={styles.tabs}>
+                <div className={classNames(styles.tabs, publish && styles.tabsClose)}>
                     <SegmentedTabs tabs={tabs} value={tab} onChange={switchTab} />
                 </div>
 
-                {scope.kind === 'whole' && tab === 'data' ? (
+                {publish && published && (
+                    <div hidden={tab !== 'publish'}>
+                        <PublishPanel
+                            scope={scope}
+                            title={title}
+                            widgets={publish.widgets}
+                            titleOf={publish.titleOf}
+                            snapshot={publish.snapshot}
+                        />
+                    </div>
+                )}
+                {tab === 'publish' ? null : scope.kind === 'whole' && tab === 'data' ? (
                     <>
                         <p className={styles.copyText}>{COPY.data}</p>
                         {data.length === 0 ? (

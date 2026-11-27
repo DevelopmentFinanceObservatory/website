@@ -15,8 +15,8 @@ export type { StudioProps } from './hooks/useStudio';
 const PromptShell = dynamic(() => import('./shells/prompt/PromptShell'));
 
 /**
- * The layout that draws a Studio for `variant`. A share or a gallery item
- * (`shared`) always shows the classic layout.
+ * The layout that draws a Studio for `variant`. A share (`shared`) always
+ * shows the classic layout.
  */
 const shellFor = (variant: StudioVariant, shared: boolean): ReactNode =>
     variant === 'prompt' && !shared ? <PromptShell /> : <ClassicShell />;

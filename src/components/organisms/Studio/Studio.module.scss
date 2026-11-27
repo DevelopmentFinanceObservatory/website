@@ -250,15 +250,6 @@
     }
 }
 
-// A gallery item with no chat panel (a canvas or a single card): the one
-// action it offers rides over the sheet's bottom-left corner.
-.continueBar {
-    position: fixed;
-    bottom: calc(#{rem(20)} + env(safe-area-inset-bottom));
-    left: calc(#{rem(20)} + env(safe-area-inset-left));
-    z-index: $z-header;
-}
-
 @media (prefers-reduced-motion: reduce) {
     // The move into the workspace is instant: the clip box docks, the grid's
     // fills and the bar's actions appear, and the sheet shows, all without

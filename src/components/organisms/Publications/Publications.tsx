@@ -11,7 +11,7 @@ import PageHero from '@/components/molecules/PageHero/PageHero';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 
 /**
- * Insights → Publications: research and analysis built on the knowledge
+ * About → Publications: research and analysis built on the knowledge
  * graph. The dark hero (title, lead), then one row per report on the light
  * ground — the cover on the left, title / byline / abstract / View Report
  * on the right. View Report opens the report when its link lands

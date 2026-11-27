@@ -1,0 +1,203 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.form,
+.done {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+.copyText {
+    @include font-size(13px, 1.35);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.doneTitle {
+    @include font-size(16px, 1.2);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+}
+
+.field {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+}
+
+.label {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+.select {
+    @include font-size(14px, 1.2);
+
+    width: 100%;
+    padding: rem(12) rem(30) rem(12) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    text-overflow: ellipsis;
+    appearance: none;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+    outline: none;
+
+    &:focus {
+        border-color: var(--color-charcoal);
+    }
+
+    &:disabled {
+        opacity: 1;
+    }
+}
+
+// The select's own arrow is drawn by the wrapper, clear of the edge.
+.selectBox {
+    position: relative;
+}
+
+.selectIcon {
+    position: absolute;
+    top: 50%;
+    right: rem(12);
+    width: rem(10);
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.toggle {
+    @include flex(row, flex-start, flex-start);
+
+    gap: rem(8);
+}
+
+// A native checkbox drawn as a switch: the knob sits right when it is on.
+.switch {
+    position: relative;
+    flex: none;
+    width: rem(28);
+    height: rem(16);
+    margin: 0;
+    appearance: none;
+    cursor: pointer;
+    background-color: var(--color-sage-light);
+    border-radius: rem(8);
+    transition: background-color 0.2s ease;
+
+    &::after {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: rem(16);
+        height: rem(16);
+        content: "";
+        background-color: var(--color-stone);
+        border-radius: 50%;
+        transition:
+            transform 0.2s ease,
+            background-color 0.2s ease;
+    }
+
+    &:checked::after {
+        background-color: var(--color-charcoal);
+        transform: translateX(rem(12));
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.toggleLabel {
+    @include font-size(11px, 1.45);
+
+    display: block;
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    cursor: pointer;
+}
+
+.toggleNote {
+    @include font-size(11px, 1.35);
+
+    display: block;
+    margin-top: rem(4);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+}
+
+.error {
+    @include font-size(13px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+}
+
+// The URL field: the Library's path as fixed text, then the slug.
+.addressBox {
+    @include flex(row, flex-start, center);
+
+    padding: 0 rem(10);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+    transition: border-color 0.2s ease;
+
+    &:focus-within {
+        border-color: var(--color-charcoal);
+    }
+}
+
+.addressPrefix {
+    @include font-size(14px, 1.2);
+
+    flex: none;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+// Under the URL field while the slug follows the title.
+.addressNote {
+    @include font-size(11px, 1.35);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+}
+
+.addressInput {
+    @include font-size(14px, 1.2);
+
+    flex: 1;
+    min-width: 0;
+    padding: rem(12) 0;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background: none;
+    border: 0;
+    outline: none;
+}

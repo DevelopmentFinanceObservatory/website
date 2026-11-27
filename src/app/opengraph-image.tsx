@@ -24,8 +24,7 @@ const outfit = (weight: number) =>
  * The card every page without its own shows when its link is pasted: the
  * DFO mark over the full name and the hero's line, on the site's ground.
  * Slack shows the card as a thumbnail cropped to the centre 630px square,
- * so everything sits centred inside that square. Gallery items draw their
- * own (insights/gallery/[slug]/opengraph-image.tsx).
+ * so everything sits centred inside that square.
  */
 const OpenGraphImage = async () => {
     const [regular, medium] = await Promise.all([outfit(400), outfit(500)]);

@@ -1,8 +1,8 @@
 /**
  * Which view the More Info panel shows. A card that carries a description
  * renders it (`describedPanel`). A card without one, which covers cards
- * issued before descriptions existed, conversations saved with them and the
- * gallery's curated canvases, renders the legacy view from its `CardInfo`.
+ * issued before descriptions existed and conversations saved with them,
+ * renders the legacy view from its `CardInfo`.
  */
 
 import type { CardInfo, CardSource, Widget } from '../chat/widgets.ts';
@@ -128,7 +128,7 @@ export const legacyPanel = (info: CardInfo): LegacyView => {
 };
 
 /** A card's stored description, read again as the panel and card face take
- *  it: a saved conversation, share or gallery card holds whatever JSON was
+ *  it: a saved conversation or share card holds whatever JSON was
  *  saved. Undefined when the card has none or the reader refuses it, and the
  *  card shows the legacy view. */
 export const cardDescription = (info: Pick<CardInfo, 'description'>): Description | undefined => {
@@ -142,7 +142,7 @@ export const cardDescription = (info: Pick<CardInfo, 'description'>): Descriptio
 };
 
 /** Logs each saved card whose description the reader refuses, once per card
- *  revision. A conversation, share, embed or gallery canvas calls it as it
+ *  revision. A conversation, share or embed canvas calls it as it
  *  loads: `cardDescription` falls back to the legacy view on every render
  *  without a word, so this is where the refusal is seen. */
 export const logRefusedDescriptions = (widgets: readonly Widget[]): void => {

@@ -1,28 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
 import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
 import { SharesError } from '@/lib/chat/apisShares';
 import { sharesRefusal } from '@/lib/chat/shareRefusal';
-import { studioShareBody } from '@/lib/chat/sharePayload';
 import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
-import { getShare, makeShare, slotDepsFor } from '@/lib/chat/shareStore';
-import { readBoundedText } from '@/lib/proxy/boundedBody';
+import { getShare, makeShare } from '@/lib/chat/shareStore';
+import { buildStudioShare, readShareJson } from '@/lib/chat/studioShare';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { logAccount } from '@/lib/proxy/requestLog';
 import { track, userWho } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
-import { liveCardsRefusal } from '@/lib/studio/slotCards';
-
-// The largest share request read, in bytes; a larger one gets 413.
-const MAX_SHARE_BODY = 10_000_000;
 
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
 // page is public, so an account is optional here. A signed-in sharer's
 // write token is kept. A guest's share stays as made.
-const shareSearch = async (body: any, headers: Headers) => {
+const shareSearch = async (body: unknown, headers: Headers) => {
     const request = readSearchShareRequest(body);
 
     if (!request) {
@@ -117,26 +111,13 @@ const snapshotServedAt = async (id: string): Promise<string | null> => {
 // the card's citation gives as "data as of" (`snapshotServedAt`).
 // Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (request: NextRequest) => {
-    const text = await readBoundedText(request.body, MAX_SHARE_BODY).catch(() => '');
+    const body: unknown = await readShareJson(request.body);
 
-    if (text === null) {
-        return problem({
-            status: 413,
-            code: 'payload_too_large',
-            detail: `The request body is over ${MAX_SHARE_BODY} bytes.`,
-            retryable: false,
-        });
+    if (body instanceof Response) {
+        return body;
     }
 
-    const body = (() => {
-        try {
-            return JSON.parse(text);
-        } catch {
-            return null;
-        }
-    })();
-
-    if (body?.kind === 'search') {
+    if (typeof body === 'object' && body !== null && 'kind' in body && body.kind === 'search') {
         return shareSearch(body, request.headers);
     }
 
@@ -146,30 +127,10 @@ export const POST = async (request: NextRequest) => {
         return read;
     }
 
-    const share = studioShareBody(read);
+    const share = await buildStudioShare(request.headers, read);
 
-    if ('unslotted' in share) {
-        return problem({
-            status: 400,
-            code: 'live_cards_blocked',
-            detail: 'Some data cards cannot show live data, so the share cannot be live.',
-            retryable: false,
-            extra: { cards: share.unslotted.map((id) => ({ id, reason: 'missing_ref' })) },
-        });
-    }
-
-    // A card saved before cards kept their revision has nothing dfo-apis
-    // can draw, and a card share takes at least one card.
-    if (share.kind === 'card' && share.cards.length === 0) {
-        return requestInvalidProblem('This card has no saved revision, so it cannot be shared.');
-    }
-
-    const refusal = share.latest
-        ? await liveCardsRefusal(slotDepsFor(request.headers), share)
-        : null;
-
-    if (refusal) {
-        return refusal;
+    if (share instanceof Response) {
+        return share;
     }
 
     const user = await getUser();

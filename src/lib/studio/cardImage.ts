@@ -31,24 +31,105 @@ export const cardImageName = (title: string, today = new Date()): string => {
     return `${slug}-${today.toISOString().slice(0, 10)}.png`;
 };
 
+/** An element's laid-out size in fractional px, before any transform. */
+const boxSize = (el: Element, side: 'width' | 'height'): number =>
+    parseFloat(getComputedStyle(el)[side]) || 0;
+
+/**
+ * A copy of `node` to photograph, in `holder` beside it in the same slot so
+ * it takes the same styles. The live note stops at a capped height and
+ * scrolls; the copy's `data-export` lifts the cap (CardChrome.module.scss),
+ * and the copy grows by the lines that uncovers so the body above keeps its
+ * size. The holder is a zero-size box that clips the copy, so the copy
+ * stays out of sight and cannot widen the board's scroll area.
+ * html-to-image inlines each element's computed style and has no hook on its
+ * clone, so the card on the sheet stays untouched only by photographing a
+ * separate element.
+ */
+const exportCopy = (node: HTMLElement, holder: HTMLElement): HTMLElement => {
+    const copy = node.cloneNode(true) as HTMLElement;
+    const width = boxSize(node, 'width');
+    const height = boxSize(node, 'height');
+
+    // The live card keeps the ids; a duplicate would answer its lookups.
+    copy.removeAttribute('id');
+    copy.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+    copy.setAttribute('data-export', '');
+    Object.assign(copy.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: `${width}px`,
+        height: `${height}px`,
+        // The card's entrance animation would replay from transparent.
+        animation: 'none',
+        transition: 'none',
+    });
+    holder.setAttribute('aria-hidden', 'true');
+    holder.inert = true;
+    Object.assign(holder.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '0',
+        height: '0',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+    });
+    holder.append(copy);
+    node.after(holder);
+
+    // cloneNode copies a canvas's size and leaves it blank; the drawing is
+    // copied here. drawImage throws on a canvas with no width or height.
+    const canvases = node.querySelectorAll('canvas');
+
+    copy.querySelectorAll('canvas').forEach((canvas, index) => {
+        if (canvas.width > 0 && canvas.height > 0) {
+            canvas.getContext('2d')?.drawImage(canvases[index], 0, 0);
+        }
+    });
+
+    // Each note (CardChrome's NoteLine), measured in full in the copy against
+    // its capped height on the sheet.
+    const liveNotes = node.querySelectorAll('[data-note]');
+    let hidden = 0;
+
+    copy.querySelectorAll('[data-note]').forEach((note, index) => {
+        hidden += Math.max(0, boxSize(note, 'height') - boxSize(liveNotes[index], 'height'));
+    });
+    copy.style.height = `${height + hidden}px`;
+
+    return copy;
+};
+
 /**
  * The card `node` as a PNG, as Download Image writes it and Copy image puts
  * it on the clipboard.
  *
  * At twice the screen's scale, so the file stands up in a slide rather than
  * only on the sheet it came from. The card's own controls, which belong to
- * the canvas, are left out, as is anything else marked `data-no-export`.
+ * the canvas, are left out, as is anything else marked `data-no-export`. A
+ * note is written in full, however far it scrolls on the sheet.
  */
 export const cardImageBlob = async (node: HTMLElement): Promise<Blob> => {
     const { toBlob } = await import('html-to-image');
+    // Created before the try, so the finally can remove it however far
+    // exportCopy got.
+    const holder = document.createElement('div');
+    let blob: Blob | null;
 
-    const blob = await toBlob(node, {
-        pixelRatio: 2,
-        // The card paints its own face; without this the PNG would carry
-        // the sheet's grid showing through wherever the card is not opaque.
-        backgroundColor: getComputedStyle(node).backgroundColor,
-        filter: (child) => !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
-    });
+    try {
+        blob = await toBlob(exportCopy(node, holder), {
+            pixelRatio: 2,
+            // The card paints its own face; without this the PNG would carry
+            // the sheet's grid showing through wherever the card is not opaque.
+            backgroundColor: getComputedStyle(node).backgroundColor,
+            filter: (child) =>
+                !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
+        });
+    } finally {
+        holder.remove();
+    }
 
     if (!blob) {
         throw new Error('The image could not be written.');

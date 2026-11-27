@@ -18,8 +18,7 @@ export const generateMetadata = async ({ params }: SharePageProps): Promise<Meta
     const row = await getShare(id);
 
     // A share link is unlisted: anyone holding it can read it, nobody
-    // should find it in a search (the gallery is where curated sessions
-    // are meant to be found).
+    // should find it in a search.
     return {
         title: row?.title ? `${row.title} — DFO Studio` : 'DFO Studio',
         robots: { index: false, follow: false },

@@ -39,10 +39,12 @@ const TABLE_ROWS_MIN = tableRows({
 });
 
 // Card footprints in cells: cards SPAWN at the default size, and the corner
-// grip can only take them between min and max.
+// grip takes every width between min and max.
 //
-// That holds for every width, and for the height of a stat card. Every other
-// card has a DERIVED height (see heightIsDerived): the card reports the rows
+// A stat card's grip takes its height from min to max, or up to the height
+// its slot already has, and never below the rows its content needs (the
+// slot's `need`, see gripRange and floorRange). Every other card has a
+// DERIVED height (see heightIsDerived): the card reports the rows
 // it needs and the slot takes them, between the minimum of the kind it reads
 // as (effectiveKind) and FITTED_ROWS_MAX. So `chart.h` is the floor of a
 // chart view, and `table.h` the floor of a table view, the smallest table
@@ -101,8 +103,10 @@ export type Rect = { col: number; row: number; w: number; h: number };
 export type Spot = { col: number; row: number };
 
 // A placed card. The slot carries its widget's data, so a card taken off the
-// canvas (`leaving`) can keep rendering while it fades out.
-export type Slot = Rect & { z: number; widget: Widget; leaving?: boolean };
+// canvas (`leaving`) can keep rendering while it fades out. `need` is the
+// rows a stat card's content last measured at (useSlots' fitRows), the floor
+// of its grip. It is live state, and the saved layout holds only col, row, w and h.
+export type Slot = Rect & { z: number; widget: Widget; leaving?: boolean; need?: number };
 export type Slots = Record<string, Slot>;
 
 // How long a replaced card lingers while fading (matches the CSS opacity
@@ -354,9 +358,11 @@ export const resolveCardView = (
 type ResolvedView = Pick<ReturnType<typeof resolveCardView>, 'view' | 'chartSource'>;
 
 // Whether the card's height follows its content: every card but a stat
-// card. `view` is the resolved view (resolveCardView). A table whose data
-// cannot chart has none and is derived all the same. Such a card reports its
-// rows through `onFit`; nothing else sets its height.
+// card, whose height is its kind's or the user's (its slot grows past that
+// only to hold what it shows, see useSlots' fitRows). `view` is the resolved view
+// (resolveCardView). A table whose data cannot chart has none and is derived
+// all the same. Such a card reports its rows through `onFit`; nothing else
+// sets its height.
 export const heightIsDerived = (widget: Widget, view: CardView | null): boolean =>
     widget.kind === 'text' || widget.kind === 'table' || view !== null;
 
@@ -364,7 +370,8 @@ export const heightIsDerived = (widget: Widget, view: CardView | null): boolean 
 // plot holds a ratio (a line or vertical bars). The height is derived still,
 // but from the card's own ratio, which the dragged height sets (see
 // chartFit's plotRatio). A ranking's rows and a table's rows are the
-// content's, and a stat card's height is its kind's.
+// content's. A stat card has no view, and its grip sets a height that is not
+// derived (gripRange).
 export const heightIsFree = (view: CardView | null, chartSource: ChartWidget | null): boolean =>
     view !== null &&
     view !== 'chart-table' &&
@@ -373,7 +380,8 @@ export const heightIsFree = (view: CardView | null, chartSource: ChartWidget | n
 
 // The heights in cells a card may take in its current view, by the kind it
 // reads as. A chart shown as a table takes a table's floor, and a table shown
-// as a chart a chart's.
+// as a chart a chart's. A stat card may reach FITTED_ROWS_MAX too, the room
+// a long note or source line can need.
 export const heightRange = (
     widget: Widget,
     view: CardView | null,
@@ -382,9 +390,41 @@ export const heightRange = (
 
     return {
         min: SPAN_MIN[kind].h,
-        max: heightIsDerived(widget, view) ? FITTED_ROWS_MAX : SPAN_MAX[kind].h,
+        max:
+            heightIsDerived(widget, view) || kind === 'key_number'
+                ? FITTED_ROWS_MAX
+                : SPAN_MAX[kind].h,
     };
 };
+
+// The heights a card's grip may set at grab. A stat card's fitted room is for
+// its content alone, so its grip stops at the stat span, or at the height the
+// card already has when a long note took it past that. Each grip step floors
+// the range at the slot's need (floorRange).
+export const gripRange = (
+    widget: Widget,
+    view: CardView | null,
+    rows: number,
+): { min: number; max: number } => {
+    const range = heightRange(widget, view);
+    const kind = effectiveKind(widget, view ?? undefined);
+
+    return kind === 'key_number'
+        ? { min: range.min, max: Math.max(SPAN_MAX[kind].h, rows) }
+        : range;
+};
+
+// A stat card's grip range floored at the rows its content needs, so a grip
+// step never takes it below its content, even when a narrower width has
+// raised the need past the range taken at grab. Any other card's range stays
+// as it is.
+export const floorRange = (
+    range: { min: number; max: number },
+    { widget, need = 0 }: Pick<Slot, 'widget' | 'need'>,
+): { min: number; max: number } =>
+    widget.kind === 'key_number'
+        ? { min: Math.max(range.min, need), max: Math.max(range.max, need) }
+        : range;
 
 // The footprint a fresh card spawns at, estimated from its content so the
 // measured fit that follows moves it by a cell or two at most. A chart view

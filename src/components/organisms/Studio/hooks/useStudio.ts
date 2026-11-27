@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
     type Dispatch,
     type RefObject,
@@ -32,9 +32,8 @@ import { type GridFill, useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
 import { isHarnessCard, withUnheldShownCards } from '@/lib/chat/canvas';
-import { forkOf, openedSave } from '@/lib/chat/fork';
+import { openedSave } from '@/lib/chat/fork';
 import type { SavedConversation } from '@/lib/chat/history';
-import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import type { Widget } from '@/lib/chat/widgets';
 import { track } from '@/lib/events/client';
@@ -95,14 +94,11 @@ export type StudioProps = {
     // Signed out: GUEST_PROMPTS prompts, then the wall; nothing is saved
     // (that needs an account), and shares are unowned snapshots.
     guest?: boolean;
-    // A gallery item: the same read-only sheet, plus the one action a
-    // curated session exists for: carrying it on in your own Studio.
-    continuable?: boolean;
     // The landing's example prompts for this visit (pickExamples, drawn by
     // the page). A share has no landing and passes none.
     examples?: readonly string[];
     // The layout the page picked from the `studio_variant` cookie. A share
-    // and a gallery item pass none and show the classic layout.
+    // passes none and shows the classic layout.
     variant?: StudioVariant;
 };
 
@@ -134,14 +130,13 @@ export type CardTab = { id: string; label: string; count: number };
  * values and handlers, regrouped from what the classic layout's JSX reads.
  */
 export type StudioModel = {
-    /** The layout the page picked (`classic` for a share or a gallery item). */
+    /** The layout the page picked (`classic` for a share). */
     variant: StudioVariant;
     /** The props the page passed through to the layout. */
     shared: StudioProps['shared'];
-    continuable: boolean;
     examples: readonly string[];
 
-    /** A share or a gallery item: no input, no card actions, no saving. */
+    /** A share: no input, no card actions, no saving. */
     readOnly: boolean;
     /** Signed in and not read-only: history and saving. */
     account: boolean;
@@ -173,9 +168,6 @@ export type StudioModel = {
         sendDraft: (text: string, source?: PromptSource) => void;
         /** New Chat: save, record the session's end, back to the landing. */
         startNew: () => void;
-        /** A gallery item copied into the viewer's own Studio. */
-        continueSession: () => Promise<void>;
-        forking: boolean;
     };
 
     /** The section and the grid backdrop. */
@@ -268,7 +260,6 @@ export const useStudio = ({
     shared,
     openId,
     guest = false,
-    continuable = false,
     examples = [],
     variant = 'classic',
 }: StudioProps): StudioModel => {
@@ -698,40 +689,6 @@ export const useStudio = ({
         setMode('start');
     };
 
-    // Gallery → "Continue this session": the curated snapshot becomes a
-    // conversation of the viewer's own (a new id, no agent session behind
-    // it), and the Studio opens on that copy. Signed out, the login sends
-    // them back here.
-    const router = useRouter();
-    const [forking, setForking] = useState(false);
-    const continueSession = async () => {
-        if (!sharedSaved || forking) {
-            return;
-        }
-
-        setForking(true);
-
-        // The copy's harness session holds none of the turns or cards, so
-        // every message and card it inherits is marked so (forkOf).
-        const copy: SavedConversation = {
-            ...sharedSaved,
-            ...forkOf(sharedSaved),
-            id: uuid(),
-            sessionId: null,
-            updatedAt: Date.now(),
-            shareMarks: [],
-        };
-
-        if (await pushConversation(copy)) {
-            router.push(`/studio/${copy.id}`);
-
-            return;
-        }
-
-        setForking(false);
-        router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
-    };
-
     // A live share's canvas: its data cards drawn on current data as each
     // refresh answers, and their states. A snapshot's cards its page could
     // not draw are filled the same way. The owner's own widgets pass
@@ -972,7 +929,6 @@ export const useStudio = ({
     return {
         variant,
         shared,
-        continuable,
         examples,
         readOnly,
         account,
@@ -992,8 +948,6 @@ export const useStudio = ({
             begin,
             sendDraft,
             startNew,
-            continueSession,
-            forking,
         },
         stage: {
             sectionRef,
