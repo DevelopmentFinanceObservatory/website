@@ -5,19 +5,20 @@ import { afterEach, beforeEach, test } from 'node:test';
 
 import { TypeSafeClient } from '@typesafe-ai/sdk';
 
-const { BATCH_CONCURRENCY, CLIENT_CONFIG, MAX_CANDIDATES, MODEL, evergreenRefusal } =
+const { CLIENT_CONFIG, MAX_CANDIDATES, MODEL, REQUEST_CONCURRENCY, evergreenCheck } =
     await import('../evergreen.ts');
-const { GROUP_SIZE, REASONS, candidatesOf } = await import('../evergreenRule.ts');
+const { REASONS, candidatesOf } = await import('../evergreenRule.ts');
 const { LIMITS } = await import('../publish.ts');
 
 type Sent = {
     model: string;
-    state: { sentences: { text: string }[] };
+    state: { part: string; sentence: string };
     questions: Record<string, { type: string }>;
 };
 
-// Jev's answers by sentence: its Noul and the claim kind it names.
-type Verdicts = Record<string, [number, string]>;
+// Jev's answers by sentence: its refresh Noul, and the kind question that
+// scores highest.
+type Verdicts = Record<string, [number, 'value' | 'ranking' | 'change' | 'period']>;
 
 type Reply = {
     verdicts?: Verdicts;
@@ -57,32 +58,14 @@ const standIn = (
             );
         }
 
+        const [stale, kind] = reply.verdicts?.[sent.state.sentence] ?? [0.02, 'value'];
         const answers = Object.fromEntries(
-            Object.entries(sent.questions).flatMap(([id, question]) => {
-                if (id === reply.drop) {
-                    return [];
-                }
-
-                const index = Number(id.split('_').at(-1));
-                const [noul, kind] = reply.verdicts?.[sent.state.sentences[index].text] ?? [
-                    0.02,
-                    'other',
-                ];
-
-                return [
-                    [
-                        id,
-                        question.type === 'noul'
-                            ? { type: 'noul', noul }
-                            : {
-                                  type: 'choice',
-                                  choice: kind,
-                                  confidence: 0.9,
-                                  probabilities: { [kind]: 0.92 },
-                              },
-                    ],
-                ];
-            }),
+            Object.keys(sent.questions)
+                .filter((id) => id !== reply.drop)
+                .map((id) => [
+                    id,
+                    { type: 'noul', noul: id === 'stale' ? stale : id === kind ? 0.9 : 0.05 },
+                ]),
         );
 
         return Response.json({ model: reply.model ?? sent.model, answers, usage: {} });
@@ -149,25 +132,27 @@ afterEach(() => {
 
 const CONTENT = 'This chart shows ODA as a share of income. Norway gives the most.';
 const TEXT = { title: 'ODA by donor', description: 'How much each donor gives.', content: CONTENT };
+// One sentence, so each failure sends a known number of requests.
+const ONE = { content: 'Norway gives the most.' };
 
-const body = async (response: Response | null) => {
-    assert.ok(response);
+const refusalOf = async (checked: Awaited<ReturnType<typeof evergreenCheck>>) => {
+    assert.ok('refusal' in checked, JSON.stringify(checked));
 
-    return (await response.json()) as Record<string, unknown>;
+    return {
+        response: checked.refusal,
+        document: (await checked.refusal.json()) as Record<string, unknown>,
+    };
 };
 
 test('a sentence that states what the data shows now is refused at its field and offsets', async () => {
     const { calls, client } = standIn({
         verdicts: { 'Norway gives the most.': [0.96, 'ranking'] },
     });
-    const response = await evergreenRefusal(TEXT, SUBJECT, client);
-
-    assert.equal(response?.status, 400);
-    assert.equal(response?.headers.get('Cache-Control'), 'no-store');
-
-    const document = await body(response);
+    const { response, document } = await refusalOf(await evergreenCheck(TEXT, SUBJECT, client));
     const start = CONTENT.indexOf('Norway');
 
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.equal(document.code, 'not_evergreen');
     assert.equal(document.pointer, '/content');
     assert.deepEqual(document.errors, [
@@ -180,19 +165,56 @@ test('a sentence that states what the data shows now is refused at its field and
             reason: REASONS.ranking,
         },
     ]);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].model, MODEL);
-    assert.equal(calls[0].state.sentences.length, 4);
+    assert.deepEqual(document.warnings, []);
+    // One request per sentence, each holding that sentence alone.
+    assert.deepEqual(
+        calls.map((call) => call.state.sentence).sort(),
+        candidatesOf(TEXT)
+            .map((candidate) => candidate.text)
+            .sort(),
+    );
+    assert.ok(calls.every((call) => call.model === MODEL));
+    // The refusal is logged with every Noul and without its text.
+    assert.equal(logged.length, 1);
+    assert.deepEqual(JSON.parse(logged[0]), {
+        severity: 'WARNING',
+        message: 'library_evergreen_not_evergreen',
+        publishKey: SUBJECT.publishKey,
+        pointer: '/content',
+        start,
+        end: CONTENT.length,
+        kind: 'ranking',
+        rule: 'nouls',
+        nouls: { value: 0.05, ranking: 0.9, change: 0.05, period: 0.05, stale: 0.96 },
+    });
     assert.ok(!logged.some((line) => line.includes('Norway')));
 });
 
-test('evergreen text passes, and a doubtful sentence is logged without its text', async () => {
-    const { client } = standIn({ verdicts: { 'Norway gives the most.': [0.5, 'ranking'] } });
+test('a doubtful sentence passes with a warning, logged without its text', async () => {
+    const { client } = standIn({ verdicts: { 'Norway gives the most.': [0.5, 'period'] } });
+    const checked = await evergreenCheck(TEXT, SUBJECT, client);
+    const start = CONTENT.indexOf('Norway');
 
-    assert.equal(await evergreenRefusal(TEXT, SUBJECT, client), null);
+    assert.deepEqual(checked, {
+        warnings: [
+            {
+                pointer: '/content',
+                start,
+                end: CONTENT.length,
+                quote: CONTENT.slice(start),
+                kind: 'recency',
+            },
+        ],
+    });
     assert.equal(logged.length, 1);
-    assert.equal(JSON.parse(logged[0]).message, 'library_evergreen_doubt');
-    assert.equal(JSON.parse(logged[0]).publishKey, SUBJECT.publishKey);
+    assert.deepEqual(
+        [
+            JSON.parse(logged[0]).message,
+            JSON.parse(logged[0]).publishKey,
+            JSON.parse(logged[0]).noul,
+        ],
+        ['library_evergreen_doubt', SUBJECT.publishKey, 0.5],
+    );
     assert.ok(!logged[0].includes('Norway'));
 });
 
@@ -207,7 +229,7 @@ test(
             ['server error', [{ status: 500 }], 2, 'http'],
             ['bad key', [{ status: 401 }], 1, 'http'],
             ['timeout', [{ hang: true }, { timeout: 20 }], 1, 'timeout'],
-            ['unanswered question', [{ drop: 'kind_3' }], 1, 'unanswered'],
+            ['unanswered question', [{ drop: 'period' }], 1, 'unanswered'],
             ['another model', [{ model: 'jev-1.13.0' }], 1, 'model'],
         ];
 
@@ -215,12 +237,14 @@ test(
             logged = [];
 
             const { calls, client } = standIn(...args);
-            const response = await evergreenRefusal(TEXT, SUBJECT, client);
+            const { response, document } = await refusalOf(
+                await evergreenCheck(ONE, SUBJECT, client),
+            );
 
-            assert.equal(response?.status, 503, name);
-            assert.equal(response?.headers.get('Retry-After'), '5', name);
-            assert.equal(response?.headers.get('Cache-Control'), 'no-store', name);
-            assert.equal((await body(response)).code, 'evergreen_check_unavailable', name);
+            assert.equal(response.status, 503, name);
+            assert.equal(response.headers.get('Retry-After'), '5', name);
+            assert.equal(response.headers.get('Cache-Control'), 'no-store', name);
+            assert.equal(document.code, 'evergreen_check_unavailable', name);
             assert.equal(calls.length, sent, name);
             assert.equal(logged.length, 1, name);
             assert.deepEqual(
@@ -238,11 +262,13 @@ test('a request TypeSafe refuses for its content answers 502 with no retry', asy
         logged = [];
 
         const { calls, client } = standIn({ status });
-        const response = await evergreenRefusal(TEXT, { artifact: 'a1' }, client);
+        const { response, document } = await refusalOf(
+            await evergreenCheck(ONE, { artifact: 'a1' }, client),
+        );
 
-        assert.equal(response?.status, 502, String(status));
-        assert.equal(response?.headers.get('Retry-After'), null, String(status));
-        assert.equal((await body(response)).code, 'evergreen_check_refused', String(status));
+        assert.equal(response.status, 502, String(status));
+        assert.equal(response.headers.get('Retry-After'), null, String(status));
+        assert.equal(document.code, 'evergreen_check_refused', String(status));
         assert.equal(calls.length, 1, String(status));
         assert.deepEqual(
             [JSON.parse(logged[0]).message, JSON.parse(logged[0]).artifact],
@@ -251,7 +277,7 @@ test('a request TypeSafe refuses for its content answers 502 with no retry', asy
     }
 });
 
-test('a text near the length limit is asked about in parallel batches of GROUP_SIZE', async () => {
+test('a text near the length limit is asked about one sentence per request, in parallel', async () => {
     const lines: string[] = [];
 
     for (let n = 1; [...lines, 'x'].join('\n').length < LIMITS.content - 60; n += 1) {
@@ -260,16 +286,14 @@ test('a text near the length limit is asked about in parallel batches of GROUP_S
 
     const content = lines.join('\n');
     const last = lines.at(-1) ?? '';
-    const { calls, flight, client } = standIn({ verdicts: { [last]: [0.9, 'figure'] } });
-    const response = await evergreenRefusal({ content }, SUBJECT, client);
-    const candidates = candidatesOf({ content }).length;
+    const { calls, flight, client } = standIn({ verdicts: { [last]: [0.9, 'value'] } });
+    const { document } = await refusalOf(await evergreenCheck({ content }, SUBJECT, client));
 
     assert.ok(content.length > LIMITS.content - 100 && content.length <= LIMITS.content);
-    assert.equal(calls.length, Math.ceil(candidates / GROUP_SIZE));
-    assert.ok(calls.every((call) => call.state.sentences.length <= GROUP_SIZE));
-    assert.ok(flight.peak > 1 && flight.peak <= BATCH_CONCURRENCY, String(flight.peak));
+    assert.equal(calls.length, candidatesOf({ content }).length);
+    assert.ok(flight.peak > 1 && flight.peak <= REQUEST_CONCURRENCY, String(flight.peak));
     assert.deepEqual(
-        ((await body(response)).errors as { start: number; end: number }[]).map(({ start, end }) =>
+        (document.errors as { start: number; end: number }[]).map(({ start, end }) =>
             content.slice(start, end),
         ),
         [last],
@@ -277,11 +301,11 @@ test('a text near the length limit is asked about in parallel batches of GROUP_S
 });
 
 test('without an API key the check answers 503 and logs the missing key', async () => {
-    const response = await evergreenRefusal(TEXT, SUBJECT);
+    const { response, document } = await refusalOf(await evergreenCheck(TEXT, SUBJECT));
 
-    assert.equal(response?.status, 503);
-    assert.equal(response?.headers.get('Retry-After'), '5');
-    assert.equal((await body(response)).code, 'evergreen_check_unavailable');
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Retry-After'), '5');
+    assert.equal(document.code, 'evergreen_check_unavailable');
     assert.deepEqual(
         [JSON.parse(logged[0]).message, JSON.parse(logged[0]).cause],
         ['library_evergreen_unavailable', 'missing_key'],
@@ -291,7 +315,7 @@ test('without an API key the check answers 503 and logs the missing key', async 
 test('no text skips the call', async () => {
     const { calls, client } = standIn({ status: 500 });
 
-    assert.equal(await evergreenRefusal({ content: null }, SUBJECT, client), null);
+    assert.deepEqual(await evergreenCheck({ content: null }, SUBJECT, client), { warnings: [] });
     assert.equal(calls.length, 0);
     assert.equal(logged.length, 0);
 });
@@ -303,25 +327,18 @@ test('a text of more than MAX_CANDIDATES sentences is refused at its field befor
     const within = standIn({});
 
     // The title is one sentence, so the content holds the rest.
-    assert.equal(
-        await evergreenRefusal(
-            { title, content: lines(MAX_CANDIDATES - 1) },
-            SUBJECT,
-            within.client,
-        ),
-        null,
+    assert.deepEqual(
+        await evergreenCheck({ title, content: lines(MAX_CANDIDATES - 1) }, SUBJECT, within.client),
+        { warnings: [] },
     );
-    assert.equal(within.calls.length, MAX_CANDIDATES / GROUP_SIZE);
+    assert.equal(within.calls.length, MAX_CANDIDATES);
 
     const over = standIn({});
-    const response = await evergreenRefusal(
-        { title, content: lines(MAX_CANDIDATES) },
-        SUBJECT,
-        over.client,
+    const { response, document } = await refusalOf(
+        await evergreenCheck({ title, content: lines(MAX_CANDIDATES) }, SUBJECT, over.client),
     );
-    const document = await body(response);
 
-    assert.equal(response?.status, 400);
+    assert.equal(response.status, 400);
     assert.deepEqual(
         [document.code, document.pointer, document.limit],
         ['evergreen_too_long', '/content', MAX_CANDIDATES],

@@ -1,0 +1,581 @@
+[
+    {
+        "id": "b01",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 32,
+                "text": "Aid to least developed countries",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 70,
+                "text": "ODA to the least developed countries as a share of each donor's total.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Trend",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 41,
+                "text": "Each line is one donor's share over time.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 42,
+                "end": 128,
+                "text": "A rising line means the donor sends a larger part of its aid to the poorest countries.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b02",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 38,
+                "text": "Concessional lending by the World Bank",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 75,
+                "text": "Loans and grants from the International Development Association, by region.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Growth",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 61,
+                "text": "IDA commitments peaked in 2022, during the pandemic response.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 62,
+                "end": 154,
+                "text": "Commitments are what the Bank agrees to lend in the fiscal year, whether or not it pays out.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b03",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 47,
+                "text": "Remittances to low- and middle-income countries",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 57,
+                "text": "Money migrants send home, as the World Bank estimates it.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Latest",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 98,
+                "text": "Remittances reached USD 656 billion in 2023, more than ODA and foreign direct investment together.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b04",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Remittances and other flows",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 106,
+                "text": "Remittances, ODA and foreign direct investment to low- and middle-income countries, in current US dollars.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 11,
+                "text": "Latest data",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 52,
+                "text": "The chart shows the latest year each source reports.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 53,
+                "end": 132,
+                "text": "The three series come from different sources, so their latest years can differ.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b05",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 31,
+                "text": "Debt service, change since 2015",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 78,
+                "text": "How much more or less each country pays in external debt service than in 2015.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 17,
+                "text": "Change since 2015",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 49,
+                "text": "Zambia's payments fell after its default in 2020.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 50,
+                "end": 81,
+                "text": "Kenya's have more than tripled.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b06",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 31,
+                "text": "Debt service compared with 2015",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 92,
+                "text": "Each bar is the change in a country's external debt service from its 2015 level, in percent.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "How to read it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 56,
+                "text": "Bars to the right mean a country pays more than in 2015.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 57,
+                "end": 146,
+                "text": "The series starts in 2015 because that is the first year the source covers every country.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b07",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 19,
+                "text": "ODA fell 7% in 2024",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 45,
+                "text": "Net ODA from DAC members, in constant prices.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 65,
+                "text": "The drop followed cuts by France, Germany and the United Kingdom.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b08",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 34,
+                "text": "ODA from DAC members, 2000 to 2024",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 66,
+                "text": "Net ODA from DAC members each year since 2000, in constant prices.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Method",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 99,
+                "text": "From 2018 the OECD counts loans at their grant equivalent, so earlier years use a different method.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 100,
+                "end": 132,
+                "text": "The break is marked on the axis.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b09",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 45,
+                "text": "Three donors gave half of all climate finance",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 55,
+                "text": "Climate finance by provider, as reported to the UNFCCC.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Notes",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 58,
+                "text": "Providers report under the UNFCCC's common tabular format.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 59,
+                "end": 138,
+                "text": "Multilateral finance is attributed to the providers that fund the institutions.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b10",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Climate finance by provider",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 55,
+                "text": "Climate finance by provider, as reported to the UNFCCC.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Notes",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 82,
+                "text": "The common tabular format was adopted in 2018 and first used for the 2021 reports.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 83,
+                "end": 170,
+                "text": "Before then providers used their own tables, so totals before 2021 are less comparable.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b11",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 24,
+                "text": "Arrears on external debt",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 67,
+                "text": "Overdue payments of principal and interest on external public debt.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Record",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 90,
+                "text": "Arrears hit a record in 2022, as several countries stopped paying while they restructured.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 91,
+                "end": 139,
+                "text": "Arrears count only payments past their due date.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b12",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 18,
+                "text": "Arrears, explained",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 49,
+                "text": "What counts as an arrear on external public debt.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "Definition",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 56,
+                "text": "A payment is in arrears from the day after it falls due.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 57,
+                "end": 146,
+                "text": "A country that restructures its debt can clear its arrears, and the new terms then apply.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b13",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 28,
+                "text": "Sudan's humanitarian funding",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 67,
+                "text": "Humanitarian funding to Sudan against what the UN appeal asked for.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 3,
+                "text": "Gap",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 65,
+                "text": "The 2024 appeal was less than half funded by the end of the year.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 66,
+                "end": 136,
+                "text": "Funding turned down after 2021, when donor attention moved to Ukraine.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b14",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 32,
+                "text": "Humanitarian appeals and funding",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 66,
+                "text": "Each UN appeal's requirement and the funding it received, by year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "How to read it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 80,
+                "text": "The grey bar is what the appeal asked for, and the blue bar is what donors gave.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 81,
+                "end": 118,
+                "text": "An appeal runs for one calendar year.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "b15",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 28,
+                "text": "Gavi's funding, 2021 to 2025",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 63,
+                "text": "Pledges to Gavi, the Vaccine Alliance, for its strategy period.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Change",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 81,
+                "text": "Pledges for 2026 to 2030 came in below the alliance's target of USD 11.9 billion.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 82,
+                "end": 143,
+                "text": "Each strategy period covers five years of vaccine programmes.",
+                "label": "evergreen"
+            }
+        ]
+    }
+]

@@ -1,17 +1,22 @@
 /**
- * The evaluation set of complete artifacts, apart from the sentences the
- * thresholds are fitted on (./fit.ts). eval-candidates.json holds each
- * artifact's title, description, section heading and section text.
- * eval-labelled.json holds each artifact's sentences, split as the routes
- * split them, each labelled evergreen or not. `node scripts/fit-evergreen.mjs
- * --eval` sends every artifact exactly as the publish route does and writes
- * eval-recorded.json, and ../evergreenEvalReplay.test.ts replays it in CI.
+ * Complete artifacts in the shape the publish route reads. Each set is a
+ * file of artifacts (title, description, section heading and section text)
+ * and a labelled file holding each artifact's sentences, split as the routes
+ * split them, each labelled evergreen or not. eval-candidates.json and
+ * eval-additions.json, labelled in eval-labelled.json and
+ * eval-additions-labelled.json, are part of the dev set the thresholds are
+ * fitted on, with labelled.json (./fit.ts). holdout-candidates.json,
+ * labelled in holdout-labelled.json, is the held-out set, which no fit
+ * reads. `node scripts/fit-evergreen.mjs` sends every artifact exactly as
+ * the publish route does and records the answers, and the replay tests
+ * replay the recordings in CI.
  */
 
 import {
     type Candidate,
     T_HIGH,
-    batchesOf,
+    T_KIND,
+    type Thresholds,
     candidatesOf,
     decide,
     evergreenRequest,
@@ -20,7 +25,7 @@ import {
 } from '../../evergreenRule.ts';
 import { readArtifactText } from '../../publish.ts';
 
-import type { Label } from './fit.ts';
+import { type RecordedRequest, type Label, readRequests } from './fit.ts';
 
 export type EvalArtifact = {
     id: string;
@@ -42,7 +47,7 @@ export type EvalLabelled = { id: string; sentences: EvalSentence[] };
 
 export type EvalRecorded = {
     model: string;
-    artifacts: { id: string; batches: { digest: string; answers: Record<string, unknown> }[] }[];
+    artifacts: { id: string; requests: RecordedRequest[] }[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -122,7 +127,7 @@ export const readEvalLabelled = (raw: unknown): EvalLabelled[] =>
 
 /** eval-recorded.json, narrowed. Throws when it is not one. */
 export const readEvalRecorded = (raw: unknown): EvalRecorded => {
-    const shape = '{ model, artifacts: [{ id, batches: [{ digest, answers }] }] }';
+    const shape = '{ model, artifacts: [{ id, requests: [{ digest, answers }] }] }';
 
     if (!isRecord(raw) || typeof raw.model !== 'string' || !Array.isArray(raw.artifacts)) {
         return fail('eval-recorded.json', -1, shape);
@@ -130,34 +135,27 @@ export const readEvalRecorded = (raw: unknown): EvalRecorded => {
 
     return {
         model: raw.model,
-        artifacts: raw.artifacts.map((artifact: unknown, index) => {
-            if (
-                !isRecord(artifact) ||
-                typeof artifact.id !== 'string' ||
-                !Array.isArray(artifact.batches)
-            ) {
-                return fail('eval-recorded.json', index, shape);
-            }
-
-            return {
-                id: artifact.id,
-                batches: artifact.batches.map((batch: unknown) =>
-                    isRecord(batch) && typeof batch.digest === 'string' && isRecord(batch.answers)
-                        ? { digest: batch.digest, answers: batch.answers }
-                        : fail('eval-recorded.json', index, shape),
-                ),
-            };
-        }),
+        artifacts: raw.artifacts.map((artifact: unknown, index) =>
+            isRecord(artifact) && typeof artifact.id === 'string'
+                ? {
+                      id: artifact.id,
+                      requests: readRequests(
+                          artifact.requests,
+                          `eval-recorded.json ${artifact.id}`,
+                      ),
+                  }
+                : fail('eval-recorded.json', index, shape),
+        ),
     };
 };
 
 /**
- * The batches the publish route sends for `artifact`, each with its request
- * and digest. The text is narrowed by `readArtifactText`, as the route
- * narrows it. Throws when the artifact is not valid publish text or runs
- * past `MAX_CANDIDATES`, since the route would send nothing for it.
+ * The requests the publish route sends for `artifact`, one per candidate,
+ * each with its digest. The text is narrowed by `readArtifactText`, as the
+ * route narrows it. Throws when the artifact is not valid publish text or
+ * runs past `MAX_CANDIDATES`, since the route would send nothing for it.
  */
-export const evalBatches = (artifact: EvalArtifact) => {
+export const evalRequests = (artifact: EvalArtifact) => {
     const read = readArtifactText({ ...artifact, topics: [] });
 
     if (!read.ok) {
@@ -170,61 +168,57 @@ export const evalBatches = (artifact: EvalArtifact) => {
         throw new Error(`${artifact.id}: too many sentences to check.`);
     }
 
-    return batchesOf(candidates).map((batch) => {
-        const request = evergreenRequest(batch);
+    return candidates.map((candidate: Candidate) => {
+        const request = evergreenRequest(candidate);
 
-        return { candidates: batch, request, digest: requestDigest(request) };
+        return { candidate, request, digest: requestDigest(request) };
     });
 };
 
-/** `artifact`'s sentences as the routes split them, which eval-labelled.json
- *  labels. */
+/** `artifact`'s sentences as the routes split them, which the labelled
+ *  files label. */
 export const evalSentences = (artifact: EvalArtifact): Omit<EvalSentence, 'label'>[] =>
-    evalBatches(artifact)
-        .flatMap((batch) => batch.candidates)
-        .map((candidate: Candidate) => ({
-            pointer: `/${candidate.field}`,
-            start: candidate.start,
-            end: candidate.end,
-            text: candidate.text,
-        }));
+    evalRequests(artifact).map(({ candidate }) => ({
+        pointer: `/${candidate.field}`,
+        start: candidate.start,
+        end: candidate.end,
+        text: candidate.text,
+    }));
 
 export type EvalReplay = {
     /** Sentences labelled evergreen that a refusal falls on, as `id pointer start`. */
     falseBlocks: string[];
     /** Sentences labelled not evergreen with no refusal. */
     misses: string[];
-    /** Artifacts whose recorded batches `decide` found unanswered. */
+    /** Artifacts with a recorded request `decide` found unanswered. */
     unanswered: string[];
 };
 
 const key = (id: string, at: { pointer: string; start: number }) =>
     `${id} ${at.pointer} ${at.start}`;
 
-/** What the route's decision at `tHigh` does with every recorded artifact. */
+/** What the route's decision at `thresholds` does with every recorded
+ *  artifact. */
 export const evalReplay = (
     artifacts: readonly EvalArtifact[],
     labelled: readonly EvalLabelled[],
     recorded: EvalRecorded,
-    tHigh: number = T_HIGH,
+    thresholds: Thresholds = { stale: T_HIGH, kind: T_KIND },
 ): EvalReplay => {
     const result: EvalReplay = { falseBlocks: [], misses: [], unanswered: [] };
 
     for (const artifact of artifacts) {
         const sentences = labelled.find((each) => each.id === artifact.id)?.sentences ?? [];
-        const sent = recorded.artifacts.find((each) => each.id === artifact.id)?.batches ?? [];
+        const sent = recorded.artifacts.find((each) => each.id === artifact.id)?.requests ?? [];
         const refused = new Set<string>();
 
-        for (const [index, batch] of evalBatches(artifact).entries()) {
-            const decision = decide(batch.candidates, sent[index]?.answers ?? {}, tHigh);
+        for (const [index, { candidate }] of evalRequests(artifact).entries()) {
+            const decision = decide(candidate, sent[index]?.answers ?? {}, thresholds);
 
-            if (!decision.answered) {
+            if (decision.outcome === 'unanswered' && !result.unanswered.includes(artifact.id)) {
                 result.unanswered.push(artifact.id);
-                continue;
-            }
-
-            for (const refusal of decision.refusals) {
-                refused.add(key(artifact.id, refusal));
+            } else if (decision.outcome === 'refused') {
+                refused.add(key(artifact.id, decision.refusal));
             }
         }
 

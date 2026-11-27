@@ -1,22 +1,24 @@
 /**
- * The labelled sentences the evergreen thresholds are fitted on, and their
- * replay. scripts/fit-evergreen.mjs packs labelled.json into groups, asks
- * Jev about each group as the routes would ask about an artifact's section
- * text, and writes recorded.json. ../evergreenReplay.test.ts replays
- * recorded.json through `decide` in CI.
+ * The labelled sentences the evergreen threshold is fitted on, and their
+ * replay. scripts/fit-evergreen.mjs packs the scored sentences of
+ * labelled.json into groups, one sentence per line of a section text, sends
+ * each group exactly as the routes send an artifact's text, and writes
+ * recorded.json. ../evergreenReplay.test.ts replays recorded.json through
+ * `decide` in CI.
  */
 
 import {
     type Candidate,
     type EvergreenRefusal,
+    EXAMPLE_SENTENCES,
     T_HIGH,
-    batchesOf,
+    T_KIND,
+    type Thresholds,
     candidatesOf,
     decide,
     evergreenRequest,
-    noulOf,
     requestDigest,
-    volatileId,
+    scoreOf,
 } from '../../evergreenRule.ts';
 
 export type Label = 'evergreen' | 'not_evergreen';
@@ -31,14 +33,17 @@ export type Group = {
     spans: { id: string; start: number; end: number }[];
 };
 
-export type RecordedGroup = {
-    ids: string[];
-    content: string;
-    digest: string;
-    answers: Record<string, unknown>;
-};
+/** One request's digest and answers, as a recording keeps them. */
+export type RecordedRequest = { digest: string; answers: Record<string, unknown> };
+
+/** A group's requests, one per candidate of its content, in order. */
+export type RecordedGroup = { ids: string[]; content: string; requests: RecordedRequest[] };
 
 export type Recorded = { model: string; groups: RecordedGroup[] };
+
+/** Labelled sentences per group. It sets only how the fit's text is cut up,
+ *  since each sentence goes in a request of its own. */
+export const FIT_GROUP_SIZE = 20;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,6 +70,26 @@ export const readLabelled = (raw: unknown): Labelled[] => {
     });
 };
 
+/** The labelled sentences that are scored. The questions' criteria quote
+ *  the rest, so scoring them would test the model on its own examples. */
+export const scoredOf = (labelled: readonly Labelled[]): Labelled[] =>
+    labelled.filter((item) => !EXAMPLE_SENTENCES.has(item.text));
+
+/** A recording's list of requests, narrowed. Throws when it is not one. */
+export const readRequests = (raw: unknown, where: string): RecordedRequest[] => {
+    if (!Array.isArray(raw)) {
+        throw new Error(`${where} has no requests.`);
+    }
+
+    return raw.map((entry) => {
+        if (!isRecord(entry) || typeof entry.digest !== 'string' || !isRecord(entry.answers)) {
+            throw new Error(`${where} has a request that is not { digest, answers }.`);
+        }
+
+        return { digest: entry.digest, answers: entry.answers };
+    });
+};
+
 /** recorded.json, narrowed. Throws when it is not one. */
 export const readRecorded = (raw: unknown): Recorded => {
     if (!isRecord(raw) || typeof raw.model !== 'string' || !Array.isArray(raw.groups)) {
@@ -78,28 +103,27 @@ export const readRecorded = (raw: unknown): Recorded => {
                 !isRecord(group) ||
                 !Array.isArray(group.ids) ||
                 !group.ids.every((id) => typeof id === 'string') ||
-                typeof group.content !== 'string' ||
-                typeof group.digest !== 'string' ||
-                !isRecord(group.answers)
+                typeof group.content !== 'string'
             ) {
-                throw new Error(
-                    `recorded.json group ${index} is not { ids, content, digest, answers }.`,
-                );
+                throw new Error(`recorded.json group ${index} is not { ids, content, requests }.`);
             }
 
             return {
                 ids: group.ids as string[],
                 content: group.content,
-                digest: group.digest,
-                answers: group.answers,
+                requests: readRequests(group.requests, `recorded.json group ${index}`),
             };
         }),
     };
 };
 
-/** `items` in runs of `GROUP_SIZE`, in order, each sentence on its own line. */
-export const groupsOf = (items: readonly Labelled[]): Group[] =>
-    batchesOf(items).map((run) => {
+/** `items` in runs of `FIT_GROUP_SIZE`, in order, each sentence on its own
+ *  line. */
+export const groupsOf = (items: readonly Labelled[]): Group[] => {
+    const groups: Group[] = [];
+
+    for (let at = 0; at < items.length; at += FIT_GROUP_SIZE) {
+        const run = items.slice(at, at + FIT_GROUP_SIZE);
         const spans: Group['spans'] = [];
         let offset = 0;
 
@@ -108,41 +132,49 @@ export const groupsOf = (items: readonly Labelled[]): Group[] =>
             offset += item.text.length + 1;
         }
 
-        return {
+        groups.push({
             ids: run.map((item) => item.id),
             content: run.map((item) => item.text).join('\n'),
             spans,
-        };
-    });
+        });
+    }
 
-/** The candidates and the request digest the routes would send for
- *  `content` as an artifact's section text. */
-export const groupRequest = (content: string): { candidates: Candidate[]; digest: string } => {
-    const candidates = candidatesOf({ content });
-
-    return { candidates, digest: requestDigest(evergreenRequest(candidates)) };
+    return groups;
 };
+
+/** The requests the routes would send for `content` as an artifact's
+ *  section text, one per candidate, each with its digest. */
+export const groupRequests = (content: string) =>
+    candidatesOf({ content }).map((candidate: Candidate) => {
+        const request = evergreenRequest(candidate);
+
+        return { candidate, request, digest: requestDigest(request) };
+    });
 
 const within = (span: { start: number; end: number }, at: { start: number; end: number }) =>
     at.start >= span.start && at.end <= span.end;
 
-/** Each sentence's highest Noul over the candidates inside it, by id. */
+/** Each sentence's highest refresh Noul over the candidates inside it, by
+ *  id. */
 export const sentenceScores = (
     group: Group,
-    answers: Record<string, unknown>,
+    requests: readonly RecordedRequest[],
 ): Map<string, number> => {
-    const { candidates } = groupRequest(group.content);
-    const scores = new Map<string, number>();
+    const scored = groupRequests(group.content).map(({ candidate }, at) => ({
+        candidate,
+        noul: scoreOf(requests[at]?.answers ?? {})?.stale ?? Number.NaN,
+    }));
 
-    for (const span of group.spans) {
-        const nouls = candidates.flatMap((candidate, index) =>
-            within(span, candidate) ? [noulOf(answers[volatileId(index)]) ?? Number.NaN] : [],
-        );
-
-        scores.set(span.id, Math.max(...nouls));
-    }
-
-    return scores;
+    return new Map(
+        group.spans.map((span) => [
+            span.id,
+            Math.max(
+                ...scored
+                    .filter(({ candidate }) => within(span, candidate))
+                    .map(({ noul }) => noul),
+            ),
+        ]),
+    );
 };
 
 export type Replay = {
@@ -152,29 +184,38 @@ export type Replay = {
     misses: string[];
     /** Refusals outside every sentence, or pointing at another field. */
     stray: EvergreenRefusal[];
-    /** Groups `decide` found unanswered. */
+    /** Requests `decide` found unanswered. */
     unanswered: number;
 };
 
-/** What `decide` at `tHigh` does with every recorded group. */
+/** What `decide` at `thresholds` does with every recorded group of the
+ *  scored sentences. */
 export const replay = (
     labelled: readonly Labelled[],
     recorded: Recorded,
-    tHigh: number = T_HIGH,
+    thresholds: Thresholds = { stale: T_HIGH, kind: T_KIND },
 ): Replay => {
     const labels = new Map(labelled.map((item) => [item.id, item.label]));
     const result: Replay = { falseBlocks: [], misses: [], stray: [], unanswered: 0 };
 
-    for (const [index, group] of groupsOf(labelled).entries()) {
-        const { candidates } = groupRequest(group.content);
-        const decision = decide(candidates, recorded.groups[index]?.answers ?? {}, tHigh);
+    for (const [index, group] of groupsOf(scoredOf(labelled)).entries()) {
+        const refusals: EvergreenRefusal[] = [];
 
-        if (!decision.answered) {
-            result.unanswered += 1;
-            continue;
+        for (const [at, { candidate }] of groupRequests(group.content).entries()) {
+            const decision = decide(
+                candidate,
+                recorded.groups[index]?.requests[at]?.answers ?? {},
+                thresholds,
+            );
+
+            if (decision.outcome === 'unanswered') {
+                result.unanswered += 1;
+            } else if (decision.outcome === 'refused') {
+                refusals.push(decision.refusal);
+            }
         }
 
-        for (const refusal of decision.refusals) {
+        for (const refusal of refusals) {
             if (
                 refusal.pointer !== '/content' ||
                 !group.spans.some((span) => within(span, refusal))
@@ -184,7 +225,7 @@ export const replay = (
         }
 
         for (const span of group.spans) {
-            const blocked = decision.refusals.some((refusal) => within(span, refusal));
+            const blocked = refusals.some((refusal) => within(span, refusal));
             const label = labels.get(span.id);
 
             if (blocked && label === 'evergreen') {

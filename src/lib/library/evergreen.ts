@@ -12,23 +12,22 @@ import {
 import { problem } from '@/lib/proxy/problem';
 
 import {
+    CHECK_DEADLINE_MS,
     type Candidate,
     EVERGREEN_FIX,
-    type EvergreenDoubt,
     type EvergreenRefusal,
     type EvergreenText,
+    type EvergreenWarning,
     MAX_CANDIDATES,
     MODEL,
-    batchesOf,
+    REQUEST_CONCURRENCY,
     candidatesOf,
     decide,
-    BATCH_CONCURRENCY,
-    CHECK_DEADLINE_MS,
     evergreenRequest,
     overBudget,
 } from './evergreenRule';
 
-export { KIND_MIN, MODEL, T_HIGH, T_LOW } from './evergreenRule';
+export { MODEL, T_HIGH, T_KIND, T_LOW } from './evergreenRule';
 
 /*
  * The evergreen check the publish and edit routes run on an artifact's text
@@ -59,7 +58,7 @@ export const CLIENT_CONFIG = {
     logLevel: 'off',
 } as const satisfies TypeSafeClientConfig;
 
-export { BATCH_CONCURRENCY, CHECK_DEADLINE_MS, MAX_CANDIDATES } from './evergreenRule';
+export { CHECK_DEADLINE_MS, MAX_CANDIDATES, REQUEST_CONCURRENCY } from './evergreenRule';
 
 let shared: TypeSafeClient | undefined;
 
@@ -155,14 +154,10 @@ const unavailable = (error: unknown, subject: EvergreenSubject): Response => {
           });
 };
 
-// Asks about one batch, and decides it.
-const judge = async (
-    client: TypeSafeClient,
-    batch: readonly Candidate[],
-    signal: AbortSignal,
-): Promise<{ refusals: EvergreenRefusal[]; doubts: EvergreenDoubt[] }> => {
+// Asks about one sentence, and decides it.
+const judge = async (client: TypeSafeClient, candidate: Candidate, signal: AbortSignal) => {
     const { model, answers } = await client.systemOne(
-        { ...evergreenRequest(batch), model: MODEL },
+        { ...evergreenRequest(candidate), model: MODEL },
         { signal },
     );
 
@@ -170,32 +165,32 @@ const judge = async (
         throw new CheckFailure('model');
     }
 
-    const decision = decide(batch, answers);
+    const decision = decide(candidate, answers);
 
-    if (!decision.answered) {
+    if (decision.outcome === 'unanswered') {
         throw new CheckFailure('unanswered');
     }
 
     return decision;
 };
 
-// Runs `work` on every batch, `BATCH_CONCURRENCY` at a time, in order.
+// Runs `work` on every candidate, `REQUEST_CONCURRENCY` at a time, in order.
 // The first failure cancels the rest and is thrown.
-const everyBatch = async <TResult>(
-    batches: readonly Candidate[][],
-    work: (batch: readonly Candidate[], signal: AbortSignal) => Promise<TResult>,
+const everyCandidate = async <TResult>(
+    candidates: readonly Candidate[],
+    work: (candidate: Candidate, signal: AbortSignal) => Promise<TResult>,
 ): Promise<TResult[]> => {
     const stop = new AbortController();
     const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(CHECK_DEADLINE_MS)]);
-    const results: TResult[] = new Array(batches.length);
+    const results: TResult[] = new Array(candidates.length);
     let next = 0;
 
     const worker = async () => {
-        while (next < batches.length && !signal.aborted) {
+        while (next < candidates.length && !signal.aborted) {
             const at = next++;
 
             try {
-                results[at] = await work(batches[at], signal);
+                results[at] = await work(candidates[at], signal);
             } catch (error) {
                 stop.abort();
 
@@ -205,7 +200,7 @@ const everyBatch = async <TResult>(
     };
 
     const runs = await Promise.allSettled(
-        Array.from({ length: Math.min(BATCH_CONCURRENCY, batches.length) }, worker),
+        Array.from({ length: Math.min(REQUEST_CONCURRENCY, candidates.length) }, worker),
     );
     const rejected = runs.flatMap((run) => (run.status === 'rejected' ? [run.reason] : []));
 
@@ -217,41 +212,61 @@ const everyBatch = async <TResult>(
     return results;
 };
 
+/** A sentence that passed with a warning, as the routes return it. */
+export type EvergreenNotice = Omit<EvergreenWarning, 'noul'>;
+
+/** The check's result. `refusal` is the answer to send; `warnings` go out
+ *  with the route's own answer. */
+export type EvergreenCheck = { refusal: Response } | { warnings: EvergreenNotice[] };
+
+const notices = (warnings: readonly EvergreenWarning[]): EvergreenNotice[] =>
+    warnings.map(({ pointer, start, end, quote, kind }) => ({ pointer, start, end, quote, kind }));
+
 /**
- * Checks `text` against the evergreen rule, in batches of `GROUP_SIZE`
- * sentences sent in parallel. Null when every sentence passes or there is
- * no text to check. Otherwise it is the answer to send. That is 400
- * `evergreen_too_long` at the field that takes the text past
- * `MAX_CANDIDATES` sentences, with `limit`, before any call. It is 400
- * `not_evergreen` with one entry in `errors` per refused sentence and
- * `pointer` naming the first one's field, or 503
- * `evergreen_check_unavailable` with Retry-After when TypeSafe cannot answer
- * (no key, a timeout, a 429, a 5xx, an auth error, an unanswered question or
- * another model), or 502 `evergreen_check_refused` when TypeSafe refuses the
- * request itself. `subject` names the artifact in the log lines.
+ * Checks `text` against the evergreen rule, one request per sentence, up to
+ * `REQUEST_CONCURRENCY` at once. When nothing is refused the result is the
+ * warnings, one per sentence `decide` passed with a warning, and none when
+ * there is no text to check. Otherwise
+ * it is the refusal to send. That is 400 `evergreen_too_long` at the field
+ * that takes the text past `MAX_CANDIDATES` sentences, with `limit`, before
+ * any call. It is 400 `not_evergreen` with one entry in `errors` per refused
+ * sentence, `pointer` naming the first one's field and the `warnings`, or
+ * 503 `evergreen_check_unavailable` with Retry-After when TypeSafe cannot
+ * answer (no key, a timeout, a 429, a 5xx, an auth error, an unanswered
+ * question or another model), or 502 `evergreen_check_refused` when
+ * TypeSafe refuses the request itself. `subject` names the artifact in the
+ * log lines. `library_evergreen_not_evergreen` logs each refused sentence
+ * and `library_evergreen_doubt` each warned one, with its field, offsets,
+ * kind and all five Nouls, and without its text.
  */
-export const evergreenRefusal = async (
+export const evergreenCheck = async (
     text: EvergreenText,
     subject: EvergreenSubject,
     client: () => TypeSafeClient = sharedClient,
-): Promise<Response | null> => {
+): Promise<EvergreenCheck> => {
     const candidates = candidatesOf(text);
 
     if (candidates.length === 0) {
-        return null;
+        return { warnings: [] };
     }
 
     const over = overBudget(candidates);
 
     if (over) {
-        return problem({
-            status: 400,
-            code: 'evergreen_too_long',
-            detail: `The text is too long to check. Keep it to ${MAX_CANDIDATES} sentences in all.`,
-            retryable: false,
-            headers: NO_STORE,
-            extra: { pointer: over.pointer, limit: MAX_CANDIDATES, sentences: candidates.length },
-        });
+        return {
+            refusal: problem({
+                status: 400,
+                code: 'evergreen_too_long',
+                detail: `The text is too long to check. Keep it to ${MAX_CANDIDATES} sentences in all.`,
+                retryable: false,
+                headers: NO_STORE,
+                extra: {
+                    pointer: over.pointer,
+                    limit: MAX_CANDIDATES,
+                    sentences: candidates.length,
+                },
+            }),
+        };
     }
 
     let decisions: Awaited<ReturnType<typeof judge>>[];
@@ -259,30 +274,66 @@ export const evergreenRefusal = async (
     try {
         const typesafe = client();
 
-        decisions = await everyBatch(batchesOf(candidates), (batch, signal) =>
-            judge(typesafe, batch, signal),
+        decisions = await everyCandidate(candidates, (candidate, signal) =>
+            judge(typesafe, candidate, signal),
         );
     } catch (error) {
-        return unavailable(error, subject);
+        return { refusal: unavailable(error, subject) };
     }
 
-    for (const doubt of decisions.flatMap((decision) => decision.doubts)) {
-        warn('library_evergreen_doubt', { ...subject, ...doubt });
+    const refusals: EvergreenRefusal[] = [];
+    const warnings: EvergreenWarning[] = [];
+
+    for (const decision of decisions) {
+        if (decision.outcome === 'refused') {
+            refusals.push(decision.refusal);
+        } else if (decision.outcome === 'warned') {
+            warnings.push(decision.warning);
+        }
     }
 
-    const refusals = decisions.flatMap((decision) => decision.refusals);
+    for (const decision of decisions) {
+        if (decision.outcome === 'refused') {
+            const { pointer, start, end, kind } = decision.refusal;
+
+            warn('library_evergreen_not_evergreen', {
+                ...subject,
+                pointer,
+                start,
+                end,
+                kind,
+                rule: decision.rule,
+                nouls: decision.score.nouls,
+            });
+        } else if (decision.outcome === 'warned') {
+            const { pointer, start, end, kind } = decision.warning;
+
+            warn('library_evergreen_doubt', {
+                ...subject,
+                pointer,
+                start,
+                end,
+                kind,
+                noul: decision.score.stale,
+                nouls: decision.score.nouls,
+            });
+        }
+    }
+
     const [first] = refusals;
 
     if (!first) {
-        return null;
+        return { warnings: notices(warnings) };
     }
 
-    return problem({
-        status: 400,
-        code: 'not_evergreen',
-        detail: EVERGREEN_FIX,
-        retryable: false,
-        headers: NO_STORE,
-        extra: { pointer: first.pointer, errors: refusals },
-    });
+    return {
+        refusal: problem({
+            status: 400,
+            code: 'not_evergreen',
+            detail: EVERGREEN_FIX,
+            retryable: false,
+            headers: NO_STORE,
+            extra: { pointer: first.pointer, errors: refusals, warnings: notices(warnings) },
+        }),
+    };
 };
