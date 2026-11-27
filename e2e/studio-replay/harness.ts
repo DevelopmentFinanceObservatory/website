@@ -498,7 +498,7 @@ export class Player extends EventEmitter {
                 composition_id: null,
                 composition_revision: null,
                 resolved_payload: card.payload,
-                fact_summary: card.fact_summary,
+                fact_summary: presentationFacts(card.fact_summary),
             });
         }
 
@@ -549,6 +549,47 @@ export class Player extends EventEmitter {
         return manifest;
     }
 }
+
+type StreamSeries = {
+    id: string;
+    label: string;
+    point_count: number;
+    coordinates?: Record<string, string | null>;
+    first?: number;
+    last?: number;
+};
+
+/** A card's Studio stream fact summary in the Presentation API's own shape
+ *  (dfo-apis `FactSummaryModel`), which a component read answers with: each
+ *  series with its coordinates and formatted first and last values, and the
+ *  count of series the cap cut. */
+const presentationFacts = (facts: unknown) => {
+    const {
+        series = [],
+        window = null,
+        unit = null,
+    } = (facts ?? {}) as {
+        series?: StreamSeries[];
+        window?: unknown;
+        unit?: unknown;
+    };
+    const formatted = (value: number | undefined) => (value === undefined ? null : String(value));
+
+    return {
+        changed: [],
+        series: series.map((one) => ({
+            id: one.id,
+            label: one.label,
+            coordinates: one.coordinates ?? {},
+            point_count: one.point_count,
+            first_value: formatted(one.first),
+            last_value: formatted(one.last),
+        })),
+        series_cut: 0,
+        window,
+        unit,
+    };
+};
 
 type Operation = {
     op: string;
