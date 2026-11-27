@@ -1,18 +1,18 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { useCopied } from '../../../../hooks/useCopied';
+import { usePromptShell } from '../../shellContext';
 import { Mark } from '../parts/Mark';
 import { PageText } from '../parts/PageShell';
 import { Section } from '../parts/Section';
 import { TextButton } from '../parts/TextButton';
 import { Fold } from '../parts/Fold';
+import { SourceRowButton } from '../Rows';
 import styles from './CardPage.module.scss';
 
-import Icon from '@/components/atoms/Icon/Icon';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import type { CitedSnapshot, CiteAsk } from '@/components/organisms/Studio/modals/CardInfoPanel';
 import type { CardPageView } from '@/lib/studio/cardPageView';
-import type { PanelSource } from '@/lib/studio/descriptionBlocks';
 
 /** Notes shown before `N more`. */
 const NOTES_SHOWN = 3;
@@ -43,24 +43,6 @@ export const KeepSection = ({ notes }: { notes: string[] }) => {
     );
 };
 
-const SourceRow = ({ source }: { source: PanelSource }) => (
-    <li className={styles.source} data-sp-source={source.key}>
-        {source.url ? (
-            <a className={styles.sourceName} href={source.url} target="_blank" rel="noreferrer">
-                {source.name}
-                <Icon name="arrow-up-right" className={styles.sourceIcon} />
-            </a>
-        ) : source.page ? (
-            <SourceLink className={styles.sourceName} dcid={source.page}>
-                {source.name}
-            </SourceLink>
-        ) : (
-            <span className={styles.sourceName}>{source.name}</span>
-        )}
-        {source.meta && <span className={styles.sourceMeta}>{source.meta}</span>}
-    </li>
-);
-
 /** `Source` or `Sources`: who computed the card, its sources, and a computed
  *  card's inputs when no calculation names them. */
 export const SourcesSection = ({ view }: { view: CardPageView }) => {
@@ -71,8 +53,10 @@ export const SourcesSection = ({ view }: { view: CardPageView }) => {
             {view.from && <p className={styles.computed}>{view.from}</p>}
             {view.sources.length > 0 && (
                 <ul className={styles.sources}>
-                    {view.sources.map((source) => (
-                        <SourceRow key={source.key} source={source} />
+                    {view.sourceRows.map((row, index) => (
+                        <li key={`${row.key}#${index}`} className={styles.sourceItem}>
+                            <SourceRowButton source={row} />
+                        </li>
                     ))}
                 </ul>
             )}
@@ -95,6 +79,11 @@ const CITE_LINK_TEXT = {
     failed: 'Could not make a link. Try again.',
     limited: "This network has made today's links. Try again tomorrow.",
 } as const;
+
+const COPY_FAILED = 'Could not copy';
+
+// As long as `useCopied` shows `Copied`.
+const COPY_SHOWN_MS = 1400;
 
 type CiteForm = 'short' | 'full';
 
@@ -125,9 +114,32 @@ export const CiteSection = ({
 }) => {
     const [form, setForm] = useState<CiteForm>('short');
     const { copied, copy } = useCopied();
+    const { announce } = usePromptShell();
+    const [copyFailed, setCopyFailed] = useState(false);
+    const failTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const shown: CiteForm = form === 'full' && cite.full ? 'full' : 'short';
     const text = shown === 'full' && cite.full ? cite.full : cite.short;
     const made = typeof link === 'object' ? snapshotUrl(link.id) : null;
+    const linkFailure = link === 'failed' || link === 'limited' ? CITE_LINK_TEXT[link] : null;
+
+    useEffect(() => () => clearTimeout(failTimer.current), []);
+
+    // A refused link is said once, as it arrives.
+    useEffect(() => {
+        if (linkFailure) announce(linkFailure);
+    }, [linkFailure, announce]);
+
+    // A copy the clipboard refuses shows in the button for as long as a
+    // copy that worked, and is said.
+    const copyCitation = async () => {
+        if (await copy(text)) return;
+
+        setCopyFailed(true);
+        announce(COPY_FAILED);
+        clearTimeout(failTimer.current);
+        failTimer.current = setTimeout(() => setCopyFailed(false), COPY_SHOWN_MS);
+    };
+    const copyWords = copied ? 'Copied' : copyFailed ? COPY_FAILED : null;
 
     return (
         <Section
@@ -154,10 +166,11 @@ export const CiteSection = ({
                 {text}
             </p>
             <TextButton
-                aria-label={copied ? 'Copied' : CITE_FORMS[shown].copy}
-                onClick={() => void copy(text)}
+                aria-label={copyWords ?? CITE_FORMS[shown].copy}
+                data-failed={copyFailed || undefined}
+                onClick={() => void copyCitation()}
             >
-                {copied ? 'Copied' : 'Copy'}
+                {copyWords ?? 'Copy'}
             </TextButton>
             {cite.offer && onAddLink && link !== 'limited' && !made && (
                 <p className={styles.citeNote}>
@@ -177,11 +190,7 @@ export const CiteSection = ({
                     </a>
                 </p>
             )}
-            {(link === 'failed' || link === 'limited') && (
-                <p className={styles.citeNote} role="alert">
-                    {CITE_LINK_TEXT[link]}
-                </p>
-            )}
+            {linkFailure && <p className={styles.citeNote}>{linkFailure}</p>}
         </Section>
     );
 };

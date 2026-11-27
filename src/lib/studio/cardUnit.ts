@@ -68,9 +68,12 @@ export const unitRefusalDetail = (refusal: StreamRefusal): string | null =>
         ? refusal.error.detail
         : null;
 
-/** The widgets without their unit offers, for a conversation reopened
- *  without its harness session, which holds none of the cards they move. */
-export const withoutUnitChanges = <TWidget extends Widget>(widgets: TWidget[]): TWidget[] =>
+/** The widgets without their unit offers and their offers of years and
+ *  places, for a conversation reopened without its harness session, which
+ *  holds none of the cards they move. */
+export const withoutCardOffers = <TWidget extends Widget>(widgets: TWidget[]): TWidget[] =>
     widgets.map((widget) =>
-        widget.kind !== 'text' && widget.unitChange ? { ...widget, unitChange: undefined } : widget,
+        widget.kind !== 'text' && (widget.unitChange || widget.cardChanges)
+            ? { ...widget, unitChange: undefined, cardChanges: undefined }
+            : widget,
     );

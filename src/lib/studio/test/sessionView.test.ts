@@ -265,6 +265,22 @@ test('overviewOf shows stage rows only on the newest group while it has no reply
     );
 
     assert.deepEqual(done.groups[0]?.stages, []);
+
+    // A failed row's note is its step's detail, else why the turn failed.
+    const failedTurn = (summary?: string) =>
+        overviewOf(
+            input({
+                messages: [ask('Q', 1), reply('_The data could not be read. Try again._')],
+                activity: [
+                    entry(1, [{ ...tool('get_data', 'failed', 'Fetching ODA'), summary }], {
+                        failed: true,
+                    }),
+                ],
+            }),
+        ).groups[0]?.stages.map((stage) => [stage.state, stage.note]);
+
+    assert.deepEqual(failedTurn('Timed out after 30 s'), [['failed', 'Timed out after 30 s']]);
+    assert.deepEqual(failedTurn(), [['failed', 'The data could not be read.']]);
 });
 
 test('stagesOf drops a fixed failure, follows the step before an unknown tool, and shows the planner only before its plan', () => {
@@ -479,6 +495,14 @@ test('a described card gives the caveats, sources and dataset; a card without a 
     ]);
     assert.equal(sourcePageOf(base, 'dcid:WorldBankIDS')?.licence, 'CC BY 4.0');
     assert.equal(pageTitleOf(base, { kind: 'source', id: 'gone' }), null);
+
+    // A card saved with one source by id and name keeps a source page.
+    const single = input({
+        widgets: [chart('s', 1, { sourceId: 'dcid:IMF', sourceName: 'IMF', licence: 'Open' })],
+        canvasIds: ['s'],
+    });
+
+    assert.equal(sourcePageOf(single, 'dcid:IMF')?.licence, 'Open');
 });
 
 test('datasetsOf falls back to the completed fetch steps of a question without cards', () => {
@@ -522,16 +546,13 @@ test('shortName uses the acronym only when it spells the words it follows', () =
 });
 
 test('a card a later question replaced stays in the question that first made it', () => {
-    // Turn 1 made `a`; turn 2 replaced it with `a2`, which placeCard stamps
-    // with turn 2. The steps that produced each card name its question.
-    const made = (turn: number, id: string) =>
-        entry(turn, [{ ...tool('make_charts', 'complete'), id: `make-${id}`, widgetId: id }]);
+    // Turn 1 made `a`; turn 2 drew `a2` in its place, which keeps the turn
+    // that made the chain's first card as `madeIn`, saved with the card.
     const base = input({
         messages: [ask('Q1', 1), reply('One.'), ask('Q2', 2), reply('Changed it.')],
-        widgets: [chart('a2', 2)],
-        activity: [made(1, 'a'), made(2, 'a2')],
+        widgets: [{ ...chart('a2', 2), madeIn: 1 }],
+        activity: [entry(1), entry(2)],
         canvasIds: ['a2'],
-        replaced: { a2: 'a' },
     });
     const view = overviewOf(base);
 
@@ -544,10 +565,31 @@ test('a card a later question replaced stays in the question that first made it'
     );
     assert.equal(view.groups[1]?.quiet, false);
     assert.equal(turnPageOf(base, 2)?.changed.length, 1);
-    // Without the chain (a reloaded page) the card shows under the turn it carries.
+    // A card that replaced none shows under the turn it carries.
     assert.deepEqual(
-        overviewOf({ ...base, replaced: {} }).groups.map((group) => group.cards.length),
+        overviewOf({ ...base, widgets: [chart('a2', 2)] }).groups.map(
+            (group) => group.cards.length,
+        ),
         [0, 1],
+    );
+});
+
+test('a question whose cards have all left the canvas says how many were removed', () => {
+    // Turn 2 redrew turn 1's card as a new card: nothing ties the two.
+    const view = overviewOf(
+        input({
+            messages: [ask('Q1', 1), reply('One.'), ask('Q2', 2), reply('Redrawn.')],
+            widgets: [chart('a', 1), chart('b', 1), chart('c', 2)],
+            canvasIds: ['c'],
+        }),
+    );
+
+    assert.deepEqual(
+        view.groups.map((group) => [group.cards.length, group.gone]),
+        [
+            [0, '2 cards removed'],
+            [1, ''],
+        ],
     );
 });
 

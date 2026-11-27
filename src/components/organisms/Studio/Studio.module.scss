@@ -258,3 +258,21 @@
     left: calc(#{rem(20)} + env(safe-area-inset-left));
     z-index: $z-header;
 }
+
+@media (prefers-reduced-motion: reduce) {
+    // The move into the workspace is instant: the clip box docks, the grid's
+    // fills and the bar's actions appear, and the sheet shows, all without
+    // animation.
+    .canvas,
+    .canvasInner,
+    .canvasContent,
+    .fill {
+        transition: none;
+    }
+
+    .fill,
+    .barExtra,
+    .canvasContent {
+        animation: none;
+    }
+}

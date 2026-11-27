@@ -4,6 +4,7 @@
  * holds is resumed.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test, { type TestContext } from 'node:test';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
@@ -1553,7 +1554,7 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
     });
     // The page holds cmp_a (its slot), and drew cmp_c from a poll while
     // another tab's turn ran: two Change unit swaps, cmp_a to cmp_b to cmp_c.
-    const page: (Widget & { turn: number })[] = [
+    const page: (Widget & { turn: number; madeIn?: number })[] = [
         chart('cmp_a'),
         chart('cmp_other'),
         { ...chart('cmp_c'), turn: 3 },
@@ -1593,6 +1594,14 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
         ['cmp_c', 'cmp_other'],
     );
     assert.deepEqual(replaced, [['cmp_a', 'cmp_c']]);
+    // The card keeps the question that made cmp_a, so the panel groups it there.
+    assert.deepEqual(
+        widgets.map((widget) => [widget.id, widget.turn, widget.madeIn]),
+        [
+            ['cmp_c', 3, 1],
+            ['cmp_other', 1, undefined],
+        ],
+    );
     assert.deepEqual(widgets[0]?.kind !== 'text' && widgets[0]?.unitChange, {
         spec_id: 'spec_1',
         offer,
@@ -1895,4 +1904,32 @@ test('a card a missed turn revised is kept on a legacy canvas the save hid it fr
     });
 
     assert.deepEqual(legacy.ids(), ['cmp_1', 'cmp_hidden']);
+});
+
+test('mergeClosedTurns marks a card change made in another tab, as the tab that sent it did', () => {
+    // The harness's state read (`response-02`): turn 2 changed a card's places.
+    const read = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/response-02-state-card-change.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ConversationRead;
+    const held: ChatMessage[] = [
+        { role: 'user', text: 'Aid to Kenya', harnessTurn: 1, turn: 1 },
+        { role: 'bot', text: 'Here.' },
+    ];
+    const merged = mergeClosedTurns(held, read.closed_since, 2).messages;
+
+    assert.deepEqual(merged[2], {
+        role: 'user',
+        text: 'Change Aid to Kenya to Uganda.',
+        harnessTurn: 2,
+        turn: 2,
+        edit: { card: 'cmp_01j9zc3aqw', row: 'shows', role: 'destination' },
+    });
+    // A turn the record does not mark stays a question.
+    const plain = mergeClosedTurns(held, [{ ...read.closed_since[0]!, card_change: null }], 2)
+        .messages[2];
+
+    assert.equal(plain?.role === 'user' ? plain.edit : 'not a prompt', undefined);
 });

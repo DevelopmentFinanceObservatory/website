@@ -234,6 +234,16 @@
     }
 }
 
+// Under reduced motion a card jumps to its new place and size: no glide on
+// a drop, a swap, a settle or a resize.
+
+@media (prefers-reduced-motion: reduce) {
+    .slot,
+    .slot .cardBox {
+        transition: none;
+    }
+}
+
 // No hover on touch: the grip stays visible.
 
 @media (hover: none) {
@@ -244,17 +254,30 @@
 
 // --- The Prompt layout ------------------------------------------------------
 
-// The selection blue of the Prompt layout's canvas.
-$select-blue: #6467de;
-
-// The sheet runs on below its last row by the floating prompt's height, so
-// the last row can be scrolled clear above it: the 20 px gap under the
-// prompt, the prompt's taller height (resting, or with a sheet open), and two
-// cells of air. The dock writes both heights on the shell root.
+// The floating prompt's foot, defined once: the sheet runs on below its last
+// row by it, so the last row can be scrolled clear above the prompt, and the
+// arrival and held-card scrolls keep cards above it (they measure
+// .footProbe). It is the gap under the prompt, the prompt's taller height
+// (resting, or with a sheet open), and two cells of air. The dock writes both
+// heights on the shell root; the bottom beacons rise by the gap and the
+// resting height (BeaconLayer.module.scss).
 .boardPrompt {
+    --prompt-gap: #{rem(20)};
+    --prompt-air: #{rem(40)};
     --board-foot: calc(
-        #{rem(20)} + max(var(--dock-rest, 0px), var(--dock-current, 0px)) + #{rem(40)}
+        var(--prompt-gap) + max(var(--dock-rest, 0px), var(--dock-current, 0px)) + var(--prompt-air)
     );
+}
+
+// Sized to the foot so the scroll arithmetic reads the stylesheet's number.
+.footProbe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: var(--board-foot);
+    pointer-events: none;
+    visibility: hidden;
 }
 
 // The card's selection toggle: in the tab order and read by screen readers,
@@ -277,14 +300,14 @@ $select-blue: #6467de;
 // session panel holds.
 .cardBox[data-lit] {
     border-radius: rem(8);
-    outline: 2px solid rgb(100 103 222 / 45%);
+    outline: 2px solid color-mix(in sRGB, var(--color-select) 45%, transparent);
     outline-offset: 2px;
 }
 
 .cardBox[data-selected],
 .cardBox[data-held] {
     border-radius: rem(8);
-    outline: 2px solid $select-blue;
+    outline: 2px solid var(--color-select);
     outline-offset: 2px;
 }
 

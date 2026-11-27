@@ -35,6 +35,7 @@ const STUDIO_METHODS: Readonly<Record<string, readonly string[]>> = {
     composition: ['POST'],
     resume: ['POST'],
     state: ['GET'],
+    places: ['GET'],
 };
 
 /** The `Allow` header of a Studio route: its methods and OPTIONS. */
@@ -44,9 +45,18 @@ export const studioAllow = (route: string): string =>
 // The routes that need the caller to own the conversation.
 const OWNER_ROUTES: ReadonlySet<string> = new Set(['state', 'resume']);
 
-// The routes that drive a turn. Each names the conversation it acts on, so a
-// call without one is refused here.
-const DRIVE_ROUTES: ReadonlySet<string> = new Set(['turn', 'interrupt', 'cancel', 'composition']);
+// The routes that drive a turn, and the read of the places a card can change
+// to, which the card page makes before a turn. Each names the conversation it
+// acts on, so a call without one is refused here. Like a turn, the places
+// read is open on a conversation no account owns, since a guest can change a
+// card.
+const DRIVE_ROUTES: ReadonlySet<string> = new Set([
+    'turn',
+    'interrupt',
+    'cancel',
+    'composition',
+    'places',
+]);
 
 // Only a `turn` call claims, for the signed-in caller, a conversation no
 // account owns.

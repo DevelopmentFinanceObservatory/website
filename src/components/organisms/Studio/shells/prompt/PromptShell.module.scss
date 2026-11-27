@@ -147,19 +147,25 @@
     box-shadow: 0 rem(8) rem(28) rgb(47 47 43 / 16%);
 }
 
-// The feedback tab sits at the canvas frame's foot on the left, clear of
-// the centred dock and the panel at the right. Beside a full-width dock
-// (a phone) it rides above the dock's top edge, and it steps aside while
-// the panel overlays the canvas.
+// The feedback tab sits inside the canvas frame at its foot on the left,
+// 10 above the frame's foot line, clear of the centred dock and the panel
+// at the right. Beside a full-width dock (a phone) it rides just above the
+// resting box and steps aside while the dock holds a sheet open. It also
+// steps aside while the panel overlays the canvas.
 .shell .feedback {
     right: auto;
-    left: calc(var(--pr-gutter) + env(safe-area-inset-left));
+    bottom: calc(2 * var(--pr-gutter) + env(safe-area-inset-bottom));
+    left: calc(2 * var(--pr-gutter) + env(safe-area-inset-left));
     align-items: flex-start;
 }
 
 @include breakpoint(phone) {
     .shell .feedback {
-        bottom: calc(#{rem(30)} + var(--dock-current, #{rem(52)}) + #{rem(8)});
+        bottom: calc(#{rem(30)} + var(--dock-rest, #{rem(52)}) + #{rem(8)});
+    }
+
+    .shell:has(.dockFrame [data-sheet]:not([data-sheet="none"])) .feedback {
+        visibility: hidden;
     }
 }
 

@@ -138,13 +138,16 @@ const SHARE_KINDS = every<ShareKind>()(['conversation', 'canvas', 'card', 'searc
 // share.create, share.copy and share.open send Studio's ShareMode, search.action the search's.
 const SHARE_MODES = every<SearchShareMode | ShareMode>()(['live', 'snapshot']);
 // A prompt with no card target is `new` on the first turn; a chip pick is
-// `apply_choice` and a card's Change unit `apply_unit`.
+// `apply_choice`, a card's Change unit `apply_unit`, and a card page's change
+// of years or places `apply_years` or `apply_places`.
 const PROMPT_INTENTS = every<PromptIntent>()([
     'new',
     'follow_up',
     'edit',
     'apply_choice',
     'apply_unit',
+    'apply_years',
+    'apply_places',
 ]);
 // A typed prompt has no `source`.
 const PROMPT_SOURCES = every<PromptSource>()(['example', 'availability', 'search_example']);

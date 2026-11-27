@@ -28,7 +28,7 @@ const readable = (text: string): boolean => !!text && !/^[a-z_]+=/.test(text);
 
 // The sources a legacy card cites: its list, or the one source a card saved
 // before its sources were recorded kept.
-const legacySources = (info: CardInfo): CardSource[] =>
+export const legacySources = (info: CardInfo): CardSource[] =>
     info.sources ??
     (info.sourceId && info.sourceName
         ? [

@@ -1,17 +1,17 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 
 import PlanModal from '../../../workspace/PlanModal';
 import { usePromptShell } from '../shellContext';
 import { usePanelNav } from './panelNav';
 import { CardChip, Chips } from './parts/CardChip';
 import { Chevron } from './parts/Glyphs';
-import { CONFIRM_MS } from './parts/IconAction';
 import { Mark } from './parts/Mark';
 import { PageShell, PageText } from './parts/PageShell';
 import { Pairs } from './parts/Pairs';
 import partStyles from './parts/parts.module.scss';
 import { Section } from './parts/Section';
 import { TextButton } from './parts/TextButton';
+import { useConfirm } from './parts/useConfirm';
 import { CardRowItem, ChangedLines, PlanLineButton } from './Rows';
 import styles from './SessionPanel.module.scss';
 
@@ -25,7 +25,7 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 /** A question's page: its reply's first sentence, the data it used, its
  *  plan and its cards. */
 export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean }) => {
-    const { dispatch } = usePromptShell();
+    const { dispatch, focusField } = usePromptShell();
     const { show } = usePanelNav();
     const stageKey = `stage:${page.turn}:find`;
 
@@ -37,9 +37,14 @@ export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean
                     <TextButton
                         data-sp-read
                         data-sp-key="read"
-                        onClick={() =>
-                            dispatch({ type: 'sheet.set', sheet: newest ? 'open' : 'thread' })
-                        }
+                        onClick={() => {
+                            dispatch({
+                                type: 'sheet.set',
+                                sheet: newest ? 'open' : 'thread',
+                                turn: page.turn,
+                            });
+                            focusField();
+                        }}
                     >
                         Read it at the prompt
                     </TextButton>
@@ -188,27 +193,14 @@ export const PlanPage = ({ page }: { page: PlanPageView }) => {
 /** A source the canvas's cards use: its licence and freshness, the cards
  *  that use it, its page on this site and its citation. */
 export const SourcePage = ({ source }: { source: SourceRow }) => {
-    const { announce } = usePromptShell();
-    const [copied, setCopied] = useState(false);
-    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const { outcome, run } = useConfirm();
     const usedId = useId();
 
-    useEffect(() => () => clearTimeout(timer.current), []);
-
-    const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(source.citations.join('\n\n'));
-        } catch (error) {
-            console.error(error);
-
-            return;
-        }
-
-        setCopied(true);
-        announce('Citation copied');
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => setCopied(false), CONFIRM_MS);
-    };
+    const copy = () =>
+        run(() => navigator.clipboard.writeText(source.citations.join('\n\n')), {
+            done: 'Citation copied',
+            failed: 'Citation not copied',
+        });
 
     const rows = [
         { key: 'licence', label: 'Licence', value: source.licence },
@@ -252,8 +244,16 @@ export const SourcePage = ({ source }: { source: SourceRow }) => {
                         )
                     )}
                     {source.citations.length > 0 && (
-                        <TextButton data-sp-key="copycite" onClick={() => void copy()}>
-                            {copied ? 'Copied' : 'Copy citation'}
+                        <TextButton
+                            data-sp-key="copycite"
+                            data-failed={outcome === 'failed' || undefined}
+                            onClick={() => void copy()}
+                        >
+                            {outcome === 'done'
+                                ? 'Copied'
+                                : outcome === 'failed'
+                                  ? 'Not copied'
+                                  : 'Copy citation'}
                         </TextButton>
                     )}
                 </Section>

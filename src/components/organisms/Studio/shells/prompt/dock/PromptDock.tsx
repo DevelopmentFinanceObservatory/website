@@ -34,7 +34,14 @@ import { useEscape, usePromptShell } from '../shellContext';
 
 import Icon from '@/components/atoms/Icon/Icon';
 import { amendmentCount, followUpAction } from '@/lib/studio/composer';
-import { dockField, dockView, pendingItem, planKey, runningLabel } from '@/lib/studio/dockView';
+import {
+    dockField,
+    dockView,
+    fieldShown,
+    pendingItem,
+    planKey,
+    runningLabel,
+} from '@/lib/studio/dockView';
 import { type PlanState, planView } from '@/lib/studio/plan';
 import { ESCAPE_DOCK_SHEET, type Sheet } from '@/lib/studio/promptShell';
 
@@ -73,13 +80,11 @@ const PromptDock = () => {
     const model = useStudioModel();
     const shell = usePromptShell();
     const { chat, drafts, canvas, doc, walled } = model;
-    const { state, dispatch, rootRef, dockBand, announce } = shell;
+    const { state, dispatch, rootRef, announce, registerField } = shell;
     const draft = drafts.followDraft;
     const setDraft = drafts.setFollowDraft;
     const editTarget = drafts.editTarget;
 
-    // The question the reader's sheet choice was made on.
-    const [sheetTurn, setSheetTurn] = useState<number | null>(null);
     // The plan the reader cancelled, kept so `View plan` can show it.
     const [setAside, setSetAside] = useState<{ turn: number; plan: PlanState } | null>(null);
     const [planFolded, setPlanFolded] = useState<string | null>(null);
@@ -104,7 +109,7 @@ const PromptDock = () => {
                 editTarget,
                 draft,
                 sheet: state.sheet,
-                sheetTurn,
+                sheetTurn: state.sheetTurn,
                 focus: state.focus,
                 setAside: setAside?.turn ?? null,
                 planFolded,
@@ -121,7 +126,7 @@ const PromptDock = () => {
             editTarget,
             draft,
             state.sheet,
-            sheetTurn,
+            state.sheetTurn,
             state.focus,
             setAside,
             planFolded,
@@ -137,11 +142,12 @@ const PromptDock = () => {
     const frameRef = useRef<HTMLDivElement>(null);
     const boxRef = useRef<HTMLDivElement>(null);
     const pillRef = useRef<HTMLButtonElement>(null);
+    // The control in the box that last took focus; when a redraw removes it,
+    // focus moves to its counterpart.
+    const lastFocus = useRef<HTMLElement | null>(null);
 
-    const choose = (sheet: Sheet) => {
-        setSheetTurn(question?.turn ?? null);
-        dispatch({ type: 'sheet.set', sheet });
-    };
+    // The reader's sheet choice holds for the question it was made on.
+    const choose = (sheet: Sheet) => dispatch({ type: 'sheet.set', sheet, turn: question?.turn });
     const fold = () => choose('folded');
 
     const send = () => {
@@ -171,8 +177,6 @@ const PromptDock = () => {
         widgets: chat.widgets,
         onCanvas: canvas.isOnCanvas,
         onGo: canvas.flyTo,
-        onAdd: canvas.add,
-        onRemove: canvas.remove,
     };
 
     // --- Heights for the canvas foot ---------------------------------------
@@ -204,7 +208,6 @@ const PromptDock = () => {
             const pillsRow = measured.current.pills ? current - boxHeight : 0;
             const rest = (restBox.current || boxHeight) + Math.max(0, pillsRow);
 
-            dockBand.current = { rest, current };
             root?.style.setProperty('--dock-rest', `${rest}px`);
             root?.style.setProperty('--dock-current', `${current}px`);
         };
@@ -217,7 +220,7 @@ const PromptDock = () => {
         }
 
         return () => observer.disconnect();
-    }, [rootRef, dockBand]);
+    }, [rootRef]);
 
     // --- Folding when the reader turns to the canvas ------------------------
 
@@ -231,6 +234,10 @@ const PromptDock = () => {
         ) {
             return;
         }
+
+        // The press takes focus to the page, so a control this fold removes
+        // passes focus to nothing in the dock.
+        lastFocus.current = null;
 
         if ((view.sheet === 'reply' && !view.held) || view.sheet === 'thread') {
             fold();
@@ -260,25 +267,16 @@ const PromptDock = () => {
 
     // --- Escape ----------------------------------------------------------
 
-    useEscape(ESCAPE_DOCK_SHEET, () => {
-        const active = document.activeElement;
-        const typing =
-            active instanceof HTMLElement &&
-            active.matches('input, textarea, [contenteditable="true"]') &&
-            !frameRef.current?.contains(active);
-
-        if (typing || document.querySelector('[role="dialog"][aria-modal="true"]')) {
-            return false;
-        }
-
-        if (view.sheet === 'reply' || view.sheet === 'thread') {
+    // Escape folds an open reply or closes the conversation sheet.
+    useEscape(
+        ESCAPE_DOCK_SHEET,
+        () => {
             fold();
 
             return true;
-        }
-
-        return false;
-    });
+        },
+        view.sheet === 'reply' || view.sheet === 'thread',
+    );
 
     // --- Focus mode ---------------------------------------------------------
 
@@ -304,22 +302,17 @@ const PromptDock = () => {
     }, [state.focus]);
 
     // A press on the focus pill leaves focus and puts the caret in the field.
-    const caretNext = useRef(false);
-    const leaveFocus = () => {
-        dispatch({ type: 'focus.set', on: false });
-        caretNext.current = true;
-    };
+    const leaveFocus = () => shell.focusField();
 
+    // The shell puts the caret in the field for the panel and the card page
+    // too. The field shows only while the mode is the input.
     useEffect(() => {
-        if (!state.focus && caretNext.current) {
-            caretNext.current = false;
-            fieldRef.current?.focus({ preventScroll: true });
-        }
-    }, [state.focus]);
+        registerField(fieldRef.current);
+
+        return () => registerField(null);
+    }, [registerField, view.mode]);
 
     // --- Focus when the box redraws ----------------------------------------
-
-    const lastFocus = useRef<HTMLElement | null>(null);
 
     useLayoutEffect(() => {
         const was = lastFocus.current;
@@ -339,8 +332,10 @@ const PromptDock = () => {
             ? boxRef.current?.querySelector<HTMLElement>(`[data-dock="${name}"]`)
             : null;
 
-        (next ?? boxRef.current)?.focus({ preventScroll: true });
+        // Cleared first: the focus below records the counterpart, which a
+        // later redraw may remove in turn.
         lastFocus.current = null;
+        (next ?? boxRef.current)?.focus({ preventScroll: true });
     });
 
     // --- Entering the workspace -------------------------------------------
@@ -360,7 +355,12 @@ const PromptDock = () => {
         const tryFocus = () => {
             const field = fieldRef.current;
 
-            if (field?.checkVisibility({ visibilityProperty: true })) {
+            if (
+                field &&
+                fieldShown(field, (shown) =>
+                    shown instanceof Element ? getComputedStyle(shown).visibility : 'hidden',
+                )
+            ) {
                 // The page is already placed, so focusing must not scroll it.
                 field.focus({ preventScroll: true });
 
@@ -455,6 +455,17 @@ const PromptDock = () => {
                                     <p className={styles.clarifyQuestion} title={question.text}>
                                         {question.text}
                                     </p>
+                                    {view.clarified.length > 0 && (
+                                        <dl className={styles.clarified}>
+                                            {view.clarified.map((item, index) => (
+                                                // Two clarifications can read alike.
+                                                <div key={index} className={styles.clarifiedRow}>
+                                                    <dt title={item.asked}>{item.asked}</dt>
+                                                    <dd>{item.answer}</dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    )}
                                 </div>
                             )}
                             <div className={classNames(styles.scroll, styles.clarify)}>
@@ -615,6 +626,19 @@ const PromptDock = () => {
                         lastFocus.current = event.target;
                     }
                 }}
+                // Focus that leaves the box for the page, a press on the
+                // canvas included, is the reader's move: nothing in the
+                // box takes it back when that control later redraws away.
+                // A control removed while focused stays recorded, since it
+                // is no longer connected when its blur arrives.
+                onBlur={(event) => {
+                    if (
+                        event.target.isConnected &&
+                        !boxRef.current?.contains(event.relatedTarget)
+                    ) {
+                        lastFocus.current = null;
+                    }
+                }}
             >
                 <div className={styles.upper}>
                     {head && <QuestionHead text={head.text} about={head.about} />}
@@ -624,12 +648,12 @@ const PromptDock = () => {
                         <QueuedRows queued={chat.queued} onRemove={chat.unqueue} />
                     )}
                 </div>
-                {walled ? (
+                {view.mode === 'wall' ? (
                     <div className={styles.wall}>
                         <GuestWall />
                     </div>
                 ) : (
-                    view.sheet !== 'clarify' && (
+                    view.mode === 'input' && (
                         <>
                             <DockField
                                 fieldRef={fieldRef}

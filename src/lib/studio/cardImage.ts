@@ -32,14 +32,15 @@ export const cardImageName = (title: string, today = new Date()): string => {
 };
 
 /**
- * Writes `node` to a PNG and hands it to the browser.
+ * The card `node` as a PNG, as Download Image writes it and Copy image puts
+ * it on the clipboard.
  *
  * At twice the screen's scale, so the file stands up in a slide rather than
- * only on the sheet it came from. The card's own controls are left out —
- * they are the canvas's furniture, not the card's content — and so is
- * anything else marked `data-no-export`.
+ * only on the sheet it came from. The card's own controls, which belong to
+ * the canvas and not to the card's content, are left out, as is anything
+ * else marked `data-no-export`.
  */
-export const downloadCardImage = async (node: HTMLElement, name: string): Promise<void> => {
+export const cardImageBlob = async (node: HTMLElement): Promise<Blob> => {
     const { toBlob } = await import('html-to-image');
 
     const blob = await toBlob(node, {
@@ -47,13 +48,19 @@ export const downloadCardImage = async (node: HTMLElement, name: string): Promis
         // The card paints its own face; without this the PNG would carry
         // the sheet's grid showing through wherever the card is not opaque.
         backgroundColor: getComputedStyle(node).backgroundColor,
-        filter: (child) =>
-            !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
+        filter: (child) => !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
     });
 
     if (!blob) {
         throw new Error('The image could not be written.');
     }
+
+    return blob;
+};
+
+/** Writes `node` to a PNG (cardImageBlob) and hands it to the browser. */
+export const downloadCardImage = async (node: HTMLElement, name: string): Promise<void> => {
+    const blob = await cardImageBlob(node);
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

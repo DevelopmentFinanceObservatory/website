@@ -12,7 +12,7 @@ import test from 'node:test';
 import type { NextRequest } from 'next/server';
 
 const { studioProxy } = await import('../studioProxy.ts');
-const { accessDeps } = await import('../../proxy/forward.ts');
+const { accessDeps, STUDIO_API_BASE } = await import('../../proxy/forward.ts');
 const { BACKSTOP_LIMITS, COOKIELESS_LIMITS, LIMITS } = await import('../../proxy/rateLimit.ts');
 const { mintVisitorToken, visitorKey } = await import('../../proxy/visitor.ts');
 
@@ -158,4 +158,31 @@ test('studioProxy: counts per visitor with a valid visitor token, else on the co
     assert.equal(refused.status, 429);
     assert.equal(document.code, 'rate_limited');
     assert.ok(!document.detail.includes('/docs/build/api-keys'));
+});
+
+test('studioProxy: forwards a guest read of a card’s places to the harness with its query', async (t) => {
+    const original = { ...accessDeps };
+
+    t.after(() => Object.assign(accessDeps, original));
+    accessDeps.admit = async (plan) => ({
+        refusedBy: null,
+        verdicts: { minute: { allowed: true, limit: plan.minute.limit, remaining: 1, reset: 30 } },
+    });
+
+    const answer = { component_id: 'cmp_1', role: 'destination', options: [], truncated: false };
+    const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(answer));
+    const query = 'conversation_id=conv-guest&component_id=cmp_1&role=destination';
+    const url = `http://site.test/api/v1/studio/places?${query}`;
+    const res = await handler(
+        Object.assign(new Request(url), { nextUrl: new URL(url) }) as unknown as NextRequest,
+        { params: Promise.resolve({ path: ['places'] }) },
+    );
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), answer);
+    assert.equal(fetch.mock.callCount(), 1);
+    assert.equal(
+        String(fetch.mock.calls[0]?.arguments[0]),
+        `${STUDIO_API_BASE}/api/studio/places?${query}`,
+    );
 });

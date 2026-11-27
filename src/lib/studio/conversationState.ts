@@ -175,6 +175,7 @@ export const mergeClosedTurns = (
             turn.turn_index,
             recordedPromptText(turn.user_message),
             nextTurn + appended.length,
+            turn.card_change,
         );
 
         if (merged !== before) {
@@ -577,9 +578,9 @@ export const replacedCard = (
  * `widgets` with the cards `ids`, which the page drew from a read before
  * their turn closed and so without their stored cards, brought to what
  * their frames would have drawn once a read carries those cards (`stored`):
- * a card with no unit offer takes its stored card's, and a card that
- * replaced a card the page holds off the canvas (`onCanvas` lacks it,
- * replacedCard) takes that card's slot. `replaced` lists each swap, old card
+ * a card with no unit offer, or no offer of years and places, takes its
+ * stored card's, and a card that replaced a card the page holds off the
+ * canvas (`onCanvas` lacks it, replacedCard) takes that card's slot. `replaced` lists each swap, old card
  * first, so the canvas moves the old card's settings. The same array when
  * nothing changed.
  */
@@ -604,6 +605,11 @@ export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
 
         if (card.unit_change && drawn.kind !== 'text' && !drawn.unitChange) {
             drawn = { ...drawn, unitChange: card.unit_change };
+            next = next.map((widget) => (widget.id === id ? drawn : widget));
+        }
+
+        if (card.card_changes && drawn.kind !== 'text' && !drawn.cardChanges) {
+            drawn = { ...drawn, cardChanges: card.card_changes };
             next = next.map((widget) => (widget.id === id ? drawn : widget));
         }
 
@@ -772,6 +778,7 @@ export const widgetFromRead = (
                   fact_summary: facts,
                   provenance: provenanceOfRead(read),
                   unit_change: stored?.unit_change ?? null,
+                  card_changes: stored?.card_changes ?? null,
               });
     } catch {
         return null;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -9,6 +10,7 @@ import {
     type ActivityEntry,
     type StepState,
 } from '../activity.ts';
+import type { ActivityStepFrame } from '../wire.ts';
 
 const step = (id: string, state?: StepState) => ({
     id,
@@ -202,4 +204,19 @@ test('restore: the arrival order and a failed turn are kept', () => {
         restored?.tools.map((tool) => [tool.startOrder, tool.settleOrder]),
         [[1, 2]],
     );
+});
+
+test('a line keeps the plan step its frame names, through a save', () => {
+    // The harness's running-step frame (`event-05`), on plan step s2.
+    const frame = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-05-activity-step-running.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ActivityStepFrame;
+    const entry = recordStep({ turn: 1, prompt: 'Q', startedAt: 0, tools: [] }, frame, 1);
+    const [saved] = restoreActivity(JSON.parse(JSON.stringify([entry])));
+
+    assert.equal(entry.tools[0]?.planStepId, 's2');
+    assert.equal(saved?.tools[0]?.planStepId, 's2');
 });

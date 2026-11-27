@@ -7,6 +7,7 @@ import {
     type PressAction,
     pressAction,
     type PressZone,
+    liveMenus,
     pressZone,
     type SelectTarget,
     selectionAfter,
@@ -168,4 +169,20 @@ describe('selectionAfter', () => {
             assert.equal(selectionAfter({ target, moved, closedMenu, selected }), expected);
         });
     }
+});
+
+describe('liveMenus', () => {
+    const live = new Set(['a', 'b']);
+    const isLive = (id: string) => live.has(id);
+
+    it('drops the menu of a card no longer on the sheet', () => {
+        assert.deepEqual([...liveMenus(new Set(['a', 'gone']), isLive)], ['a']);
+        assert.equal(liveMenus(new Set(['gone']), isLive).size, 0);
+    });
+
+    it('keeps the same set when every card is live', () => {
+        const open = new Set(['a']);
+
+        assert.equal(liveMenus(open, isLive), open);
+    });
 });

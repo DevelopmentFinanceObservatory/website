@@ -9,14 +9,14 @@ import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hook
 
 import type { CardInfo, Widget } from '../chat/widgets.ts';
 import type { ActivityEntry, ActivityTool } from './activity';
-import { messageTurns } from './activityView.ts';
-import { producedTurns, replacedChain, rootTurnOf } from './planLink.ts';
+import { standingFor } from './cardReplace.ts';
+import { producedTurns } from './planLink.ts';
 import type { Clarify } from './clarify';
-import { sourceEntries } from './descriptionBlocks.ts';
-import { cardDescription } from './infoPanel.ts';
+import { type PanelSource, sourceEntries } from './descriptionBlocks.ts';
+import { cardDescription, legacySources } from './infoPanel.ts';
 import { plainTextFromNote } from './note.ts';
+import { firstSentence, promptsOf } from './questions.ts';
 import { approvedView, planView, type PlanState, type PlanView } from './plan.ts';
-import { isPrompt } from './transcript.ts';
 
 /** Question groups shown before the `earlier` fold. */
 export const GROUPS_SHOWN = 3;
@@ -101,6 +101,9 @@ export type Group = {
     cards: CardRow[];
     /** The cards this question changed that an earlier one made. */
     changed: ChangedLine[];
+    /** `1 card removed`, `2 cards removed`: a group whose cards have all
+     *  left the canvas says so in one quiet line. Empty otherwise. */
+    gone: string;
 };
 
 /** `Changed <title>`: a card a question replaced, by the card standing now. */
@@ -168,43 +171,23 @@ type Turn = {
     last: boolean;
 };
 
-/**
- * The transcript's questions, oldest first. A refunded prompt opened no turn
- * the harness ran, so it makes no question. A reply's text is the last bot
- * message's before the next prompt.
- */
+/** The transcript's questions, oldest first (promptsOf) without refused
+ *  prompts, with what the panel adds: the plan's view and the turn's
+ *  Activity entry. */
 const turnsOf = (input: SessionInput): Turn[] => {
     const { messages, activity } = input;
-    const numbers = messageTurns(messages, activity);
-    const turns: Turn[] = [];
-    let open: Turn | null = null;
-
-    messages.forEach((message, index) => {
-        if (message.role === 'user' && isPrompt(message)) {
-            open = message.refunded
-                ? null
-                : {
-                      turn: numbers[index] ?? 0,
-                      question: message.text,
-                      edit: message.edit ? { target: message.edit.card } : null,
-                      reply: '',
-                      plan: null,
-                      planLive: false,
-                      entry: null,
-                      last: false,
-                  };
-
-            if (open) turns.push(open);
-
-            return;
-        }
-
-        if (open && message.role === 'bot') {
-            open.reply = message.text;
-
-            if (message.plan) open.plan = approvedView(message.plan);
-        }
-    });
+    // A refused prompt ran no turn, so the panel shows no group for it.
+    const asked = promptsOf(messages, activity).filter((question) => !question.refused);
+    const turns: Turn[] = asked.map((question) => ({
+        turn: question.turn,
+        question: question.text,
+        edit: question.edit ? { target: question.edit.card } : null,
+        reply: question.reply,
+        plan: question.plan ? approvedView(question.plan) : null,
+        planLive: false,
+        entry: null,
+        last: false,
+    }));
 
     const last = turns.at(-1);
 
@@ -250,7 +233,7 @@ const withoutFixed = (tools: ActivityTool[]): ActivityTool[] =>
                 .some((later) => later.args === tool.args && later.state === 'complete'),
     );
 
-const stageRow = (id: StageId, tools: ActivityTool[]): StageRow => {
+const stageRow = (id: StageId, tools: ActivityTool[], failure: string | null = null): StageRow => {
     const kept = withoutFixed(tools);
     const live = kept.findLast((tool) => tool.state === 'running' || tool.state === 'pending');
     const broke = kept.findLast((tool) => tool.state === 'failed');
@@ -261,7 +244,7 @@ const stageRow = (id: StageId, tools: ActivityTool[]): StageRow => {
         id,
         state,
         label: state === 'done' ? done : doing,
-        note: live ? live.name : broke ? (broke.summary ?? null) : null,
+        note: live ? live.name : broke ? broke.summary?.trim() || failure : null,
     };
 };
 
@@ -269,11 +252,17 @@ const stageRow = (id: StageId, tools: ActivityTool[]): StageRow => {
  * A turn's progress rows: `ask` while a question waits (or once one was
  * answered), then a row per stage its steps reached. A step whose tool names
  * no stage takes the stage of the step before it. The planner's row shows
- * only while it runs and no plan has arrived.
+ * only while it runs and no plan has arrived. A failed row's note is its
+ * last failed step's detail, else `failure` (why the turn failed).
  */
 export const stagesOf = (
     tools: readonly ActivityTool[],
-    { asking, asked, planned }: { asking: boolean; asked: boolean; planned: boolean },
+    {
+        asking,
+        asked,
+        planned,
+        failure = null,
+    }: { asking: boolean; asked: boolean; planned: boolean; failure?: string | null },
 ): StageRow[] => {
     const groups = new Map<StageId, ActivityTool[]>();
     let before: StageId = 'find';
@@ -299,7 +288,7 @@ export const stagesOf = (
     for (const id of ['find', 'fetch', 'calc', 'make'] as const) {
         const group = groups.get(id);
 
-        if (group) rows.push(stageRow(id, group));
+        if (group) rows.push(stageRow(id, group, failure));
     }
 
     const planning = groups.get('plan');
@@ -371,9 +360,11 @@ const planLineOf = (turn: Turn, input: SessionInput): PlanLine | null => {
 
 /**
  * The rows of the cards each question made, keyed by turn, in canvas order,
- * and the rows of the cards off the canvas. A card replaced under a unit
- * change keeps its question's turn (placeCard's `keepTurn`), so it stays in
- * its question.
+ * and the rows of the cards off the canvas. A card stays with the question
+ * that made the first card of its chain of replacements (`madeIn`), and the
+ * question that drew it in another's place shows a `Changed` line for it.
+ * A unit change keeps the card's turn (placeCard's `keepTurn`), so it shows
+ * none.
  */
 const cardRows = (input: SessionInput, turns: Turn[]) => {
     const byId = new Map(input.widgets.map((widget) => [widget.id, widget]));
@@ -409,9 +400,7 @@ const cardRows = (input: SessionInput, turns: Turn[]) => {
         change: changes.get(widget.id) ?? null,
     });
 
-    const replaced = input.replaced ?? {};
-    const produced = producedTurns(input.activity);
-    const rootOf = (widget: TurnWidget) => rootTurnOf(widget, produced, replaced);
+    const rootOf = (widget: TurnWidget) => widget.madeIn ?? widget.turn;
     const onCanvas = input.canvasIds.flatMap((id) => {
         const widget = byId.get(id);
 
@@ -428,62 +417,34 @@ const cardRows = (input: SessionInput, turns: Turn[]) => {
         byTurn.set(root, [...(byTurn.get(root) ?? []), rowOf(widget)]);
     }
 
-    // Each later question in a card's chain changed it.
     for (const widget of input.widgets) {
-        const root = rootOf(widget);
-        const line = {
-            id: widget.id,
-            title: input.titleOf(widget.id),
-            onCanvas: order.has(widget.id),
-        };
+        if (widget.turn === rootOf(widget)) continue;
 
-        for (const id of replacedChain(widget.id, replaced).slice(0, -1)) {
-            const turn = produced.get(id);
-
-            if (turn === undefined || turn === root) continue;
-
-            const lines = changedBy.get(turn) ?? [];
-
-            if (!lines.some((each) => each.id === line.id)) changedBy.set(turn, [...lines, line]);
-        }
+        changedBy.set(widget.turn, [
+            ...(changedBy.get(widget.turn) ?? []),
+            { id: widget.id, title: input.titleOf(widget.id), onCanvas: order.has(widget.id) },
+        ]);
     }
 
     const removed = input.widgets.filter((widget) => !order.has(widget.id)).map(rowOf);
     const madeBy = (turn: number) =>
         input.widgets.filter((widget) => rootOf(widget) === turn).length;
+    const removedBy = (turn: number) =>
+        input.widgets.filter((widget) => rootOf(widget) === turn && !order.has(widget.id)).length;
 
     return {
         byTurn,
         removed,
         made: (turn: number) => byTurn.get(turn)?.length ?? 0,
         madeBy,
+        removedBy,
         changed: (turn: number) => changedBy.get(turn) ?? [],
     };
 };
 
-/** The card on the canvas standing for `id`: itself, or the latest card of
- *  its replacements; null once none of them is on the canvas. */
-export const standingFor = (
-    id: string,
-    onCanvas: ReadonlyMap<string, unknown> | ReadonlySet<string>,
-    replaced: Readonly<Record<string, string>>,
-): string | null => {
-    const seen = new Set<string>();
-    let at: string | undefined = id;
-
-    while (at !== undefined && !seen.has(at)) {
-        if (onCanvas.has(at)) return at;
-
-        seen.add(at);
-        const from: string = at;
-
-        at = Object.keys(replaced).find((newer) => replaced[newer] === from);
-    }
-
-    return null;
-};
-
-const throughOf = (info: CardInfo): string | null => {
+/** How far a card's data runs, as a source row's meta line: `data through
+ *  <year>`, with projections when a served year is projected. */
+export const throughOf = (info: CardInfo): string | null => {
     const year = info.dataThrough?.match(/\d{4}/)?.[0];
 
     if (!year) return null;
@@ -497,6 +458,11 @@ const throughOf = (info: CardInfo): string | null => {
 
 const citationOf = (info: CardInfo): string | null =>
     cardDescription(info)?.cite.text ?? info.citation ?? null;
+
+/** The id a source page opens under: a described source's documentation
+ *  page, else a legacy source's id (`lookup`), else its name. */
+export const sourceKey = (entry: Pick<PanelSource, 'name' | 'page' | 'lookup'>): string =>
+    entry.page ?? entry.lookup ?? entry.name;
 
 /** The sources of the cards on the canvas, each once, in the order the
  *  canvas first uses them. */
@@ -513,14 +479,14 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
         const description = cardDescription(info);
         const found = description
             ? sourceEntries(description).map((entry) => ({
-                  key: entry.page ?? entry.name,
+                  key: sourceKey(entry),
                   name: entry.name,
                   page: entry.page,
                   url: entry.url,
                   licence: entry.meta,
               }))
-            : (info.sources ?? []).map((source) => ({
-                  key: source.id ?? source.name,
+            : legacySources(info).map((source) => ({
+                  key: sourceKey({ page: null, lookup: source.id, name: source.name }),
                   name: source.name,
                   page: null,
                   url: source.url,
@@ -596,7 +562,7 @@ const keepOf = (input: SessionInput, turns: Turn[], byTurn: Map<number, CardRow[
 export const overviewOf = (input: SessionInput): Overview => {
     const turns = turnsOf(input);
     const groupsTurns = turns.filter((turn) => !turn.edit);
-    const { byTurn, removed, made, madeBy, changed } = cardRows(input, turns);
+    const { byTurn, removed, made, madeBy, removedBy, changed } = cardRows(input, turns);
     const newest = groupsTurns.at(-1);
     const groups = groupsTurns.map((turn): Group => {
         const cards = byTurn.get(turn.turn) ?? [];
@@ -619,11 +585,16 @@ export const overviewOf = (input: SessionInput): Overview => {
                       asking: turn.last && input.clarify !== null,
                       asked: false,
                       planned: turn.plan !== null,
+                      failure: failed(turn) ? firstSentence(turn.reply) || null : null,
                   })
                 : [],
             plan,
             cards,
             changed: lines,
+            gone:
+                cards.length === 0 && removedBy(turn.turn) > 0
+                    ? `${plural(removedBy(turn.turn), 'card')} removed`
+                    : '',
         };
     });
     const hidden = Math.max(0, groups.length - GROUPS_SHOWN);
@@ -654,17 +625,6 @@ export const earlierWords = ({ questions, cards }: { questions: number; cards: n
     `${plural(questions, 'earlier question')}${cards > 0 ? `, ${plural(cards, 'card')}` : ''}`;
 
 // ---- pages ------------------------------------------------------------------
-
-/** A reply's first sentence. */
-export const firstSentence = (text: string): string => {
-    const line = text.split('\n').find((each) => each.trim());
-
-    if (!line) return '';
-
-    const match = line.match(/^.*?[.!?](?=\s|$)/);
-
-    return (match ? match[0] : line).trim();
-};
 
 export type Dataset = { measure: string; source: string | null; years: string | null };
 
@@ -765,7 +725,7 @@ export const turnPageOf = (input: SessionInput, turn: number): TurnPage | null =
         turn,
         question: found.question,
         words: wordsOf(found, count, input),
-        reply: hasReply(found, input) ? firstSentence(plainTextFromNote(found.reply)) : '',
+        reply: hasReply(found, input) ? firstSentence(found.reply) : '',
         datasets: datasetsOf(input, turn).length,
         plan: planLineOf(found, input),
         cards: byTurn.get(turn) ?? [],

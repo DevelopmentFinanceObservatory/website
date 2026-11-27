@@ -38,6 +38,8 @@ import type { ShareKind } from '@/lib/chat/shareStore';
 import type { Widget } from '@/lib/chat/widgets';
 import { track } from '@/lib/events/client';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
+import { placesChange, yearsChange } from '@/lib/studio/cardChange';
+import { standingTarget } from '@/lib/studio/cardReplace';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
 import type { EditTarget } from '@/lib/studio/composer';
 import { HANDOFF_VIA_PARAM, handoffPromptSource } from '@/lib/studio/examples';
@@ -54,7 +56,7 @@ import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, type ThemeDerived } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
 import type { StudioVariant } from '@/lib/studio/variant';
-import type { PromptSource, Seed, UnitChoice } from '@/lib/studio/wire';
+import type { PlaceOption, PromptSource, Seed, UnitChoice } from '@/lib/studio/wire';
 import { uuid } from '@/lib/uuid';
 
 // Light-canvas cell tints (hardcoded hex by the canvas-layer convention).
@@ -150,8 +152,9 @@ export type StudioModel = {
     /** Below the phone breakpoint (false on the server and in hydration). */
     phone: boolean;
 
-    /** The conversation, with `send`, `applyChoice` and `applyUnit` behind
-     *  the guest gate, which also records `studio.prompt`. */
+    /** The conversation, with `send`, `applyChoice`, `applyUnit` and
+     *  `applyChange` behind the guest gate, which also records
+     *  `studio.prompt`. */
     chat: ReturnType<typeof useChat>;
     doc: ReturnType<typeof useCanvasDocument>;
     save: ReturnType<typeof useConversationSave>;
@@ -222,6 +225,10 @@ export type StudioModel = {
         titleOf: (id: string) => string;
         flyTo: (id: string) => void;
         changeUnit: (id: string, unit: UnitChoice) => void;
+        /** A card page's change of years: redraw card `id` over `from` to `to`. */
+        changeYears: (id: string, from: number, to: number) => void;
+        /** A card page's change of places: show `places` in role `role`. */
+        changePlaces: (id: string, role: string, places: PlaceOption[]) => void;
         add: (id: string) => void;
         remove: (id: string) => void;
         togglePin: (id: string) => void;
@@ -410,7 +417,11 @@ export const useStudio = ({
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
     const applyUnit: typeof conversation.applyUnit = (change) =>
         prompt('apply_unit', undefined, () => conversation.applyUnit(change));
-    const chat = { ...conversation, send, applyChoice, applyUnit };
+    const applyChange: typeof conversation.applyChange = (change) =>
+        prompt(change.row === 'years' ? 'apply_years' : 'apply_places', undefined, () =>
+            conversation.applyChange(change),
+        );
+    const chat = { ...conversation, send, applyChoice, applyUnit, applyChange };
 
     // Usage: each card the harness puts on the canvas, once (a reopened or
     // shared conversation's cards were counted when they were made).
@@ -517,8 +528,15 @@ export const useStudio = ({
 
     useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
 
-    // The landing's stage-out, then the workspace.
+    // The landing's stage-out, then the workspace. Under reduced motion the
+    // stylesheets run no stage-out, so the workspace shows at once.
     const enterWorkspace = () => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            setMode('workspace');
+
+            return;
+        }
+
         setMode('leaving');
         leaveTimer.current = window.setTimeout(() => setMode('workspace'), STAGE_OUT_MS);
     };
@@ -720,6 +738,10 @@ export const useStudio = ({
     }, [visibleWidgets]);
 
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
+    // The follow-up's card follows its replacements to the card standing in
+    // its place, and the target goes once no card of its chain is on the
+    // canvas.
+    const followedTarget = standingTarget(editTarget, { has: isOnCanvas }, doc.replacedIds);
     const cardTitleOf = (id: string): string => {
         const widget = visibleWidgets.find((other) => other.id === id);
 
@@ -733,6 +755,24 @@ export const useStudio = ({
 
         if (change) {
             chat.applyUnit(change);
+        }
+    };
+
+    // A card page's change of years or places: a turn that redraws the card.
+    const changeYears = (id: string, from: number, to: number) => {
+        const widget = chat.widgets.find((other) => other.id === id);
+        const change = widget && yearsChange(widget, cardTitleOf(id), from, to);
+
+        if (change) {
+            chat.applyChange(change);
+        }
+    };
+    const changePlaces = (id: string, role: string, places: PlaceOption[]) => {
+        const widget = chat.widgets.find((other) => other.id === id);
+        const change = widget && placesChange(widget, cardTitleOf(id), role, places);
+
+        if (change) {
+            chat.applyChange(change);
         }
     };
 
@@ -948,7 +988,7 @@ export const useStudio = ({
             followDraft,
             setFollowDraft,
             inputRef,
-            editTarget,
+            editTarget: followedTarget,
             setEditTarget,
         },
         view: {
@@ -969,6 +1009,8 @@ export const useStudio = ({
             titleOf: cardTitleOf,
             flyTo: flyToCard,
             changeUnit,
+            changeYears,
+            changePlaces,
             add: addWidget,
             remove: removeCard,
             togglePin,

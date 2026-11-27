@@ -10,6 +10,7 @@
  */
 
 import type {
+    ApplyChange,
     ApplyChoice,
     ApplyUnit,
     CancelRequest,
@@ -19,6 +20,8 @@ import type {
     ConversationRead,
     InterruptResponse,
     MutationOperation,
+    PlaceOption,
+    PlacesOptions,
     PlanRevisionStaleError,
     ResumeRequest,
     StudioFrame,
@@ -319,6 +322,27 @@ export const runApplyUnit = (
             schema_version: 1,
             conversation_id: conversationId,
             apply_unit: { component_id, spec_id, turn, unit },
+            client_features: CLIENT_FEATURES,
+        },
+        handlers,
+        signal,
+    );
+
+/** Run a turn that changes a card's years or places: the card, the reading
+ *  its offer names and the change, and no message. */
+export const runApplyChange = (
+    conversationId: string,
+    { component_id, spec_id, change }: ApplyChange,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_change: { component_id, spec_id, change },
             client_features: CLIENT_FEATURES,
         },
         handlers,
@@ -685,6 +709,114 @@ export const readState = async (
 
         await sleep(Math.max(1, seconds) * 1000, signal);
     }
+};
+
+/** The places a card's role can change to (`options`), or why they could not
+ *  be read: `retry` says a later read may succeed (the harness or the proxy
+ *  was unavailable, or no answer came), and `detail` is the harness's words
+ *  for a refusal it gave. */
+export type PlaceOptionsRead =
+    | { kind: 'options'; options: PlaceOption[]; truncated: boolean }
+    | {
+          kind: 'failed';
+          status: number | null;
+          code: string | null;
+          detail: string | null;
+          retry: boolean;
+      };
+
+/** The places answer of GET /api/studio/places for `componentId` and `role`,
+ *  narrowed: its options with a non-empty id and a label, and whether the
+ *  list is cut. Null for an answer about another card or role, or without an
+ *  options list. */
+export const placesOptionsOf = (
+    body: unknown,
+    componentId: string,
+    role: string,
+): PlacesOptions | null => {
+    const record = asRecord(body);
+    const options = record?.['options'];
+
+    if (
+        !record ||
+        record['component_id'] !== componentId ||
+        record['role'] !== role ||
+        !Array.isArray(options)
+    ) {
+        return null;
+    }
+
+    return {
+        component_id: componentId,
+        role,
+        options: options.flatMap((entry: unknown): PlaceOption[] => {
+            const option = asRecord(entry);
+            const id = option?.['id'];
+            const label = option?.['label'];
+
+            return typeof id === 'string' && id !== '' && typeof label === 'string'
+                ? [{ id, label }]
+                : [];
+        }),
+        truncated: record['truncated'] === true,
+    };
+};
+
+/**
+ * Read the places role `role` of card `componentId` can change to. The read
+ * spends no prompt. A 5xx, a 429 or no answer may succeed later; the
+ * harness's 4xx refusals (`scope_choice_stale` for a card off the canvas,
+ * `change_not_offered` for a role it does not offer, `not_found` for the
+ * conversation) will not.
+ */
+export const runPlaceOptions = async (
+    conversationId: string,
+    componentId: string,
+    role: string,
+    signal?: AbortSignal,
+): Promise<PlaceOptionsRead> => {
+    const query = new URLSearchParams({
+        conversation_id: conversationId,
+        component_id: componentId,
+        role,
+    });
+    let res: Response;
+
+    try {
+        res = await fetch(`/api/studio/places?${query}`, { signal });
+    } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+            throw error;
+        }
+
+        return { kind: 'failed', status: null, code: null, detail: null, retry: true };
+    }
+
+    if (res.ok) {
+        let body: unknown;
+
+        try {
+            body = await res.json();
+        } catch {
+            body = null;
+        }
+
+        const read = placesOptionsOf(body, componentId, role);
+
+        return read
+            ? { kind: 'options', options: read.options, truncated: read.truncated }
+            : { kind: 'failed', status: res.status, code: null, detail: null, retry: true };
+    }
+
+    const { error, proxy } = await readRefusal(res);
+
+    return {
+        kind: 'failed',
+        status: res.status,
+        code: error?.constraint_id ?? error?.error ?? proxy?.code ?? null,
+        detail: error?.detail ?? null,
+        retry: res.status >= 500 || res.status === 429,
+    };
 };
 
 /** A canvas edit the harness or the proxy refused: the response's status,

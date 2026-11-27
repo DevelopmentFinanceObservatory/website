@@ -30,6 +30,20 @@ test('the panel shows once a card lands, unless the reader chose or focus mode i
         [[{ type: 'panel.toggle', shown: true }], 3, false, false],
         [[{ type: 'panel.toggle', shown: false }], 0, false, true],
         [[{ type: 'focus.set', on: true }], 3, false, false],
+        // Dismissing an overlay records no choice: a wider window opens it
+        // by the card rule again.
+        [
+            [{ type: 'panel.show', page: { kind: 'card', id: 'a' } }, { type: 'panel.dismiss' }],
+            1,
+            true,
+            false,
+        ],
+        [
+            [{ type: 'panel.show', page: { kind: 'card', id: 'a' } }, { type: 'panel.dismiss' }],
+            1,
+            false,
+            true,
+        ],
         // Leaving focus restores the choice made before it.
         [
             [
@@ -88,15 +102,29 @@ test('a page pushes once, opens the panel, leaves focus, and back and home walk 
     assert.deepEqual(run([{ type: 'panel.replace', page: card }]).trail, []);
 });
 
+test('a sheet choice keeps the turn it was made for until another turn replaces it', () => {
+    const chosen = run([{ type: 'sheet.set', sheet: 'open', turn: 3 }]);
+
+    assert.deepEqual([chosen.sheet, chosen.sheetTurn], ['open', 3]);
+    // A choice without a turn keeps the turn already held.
+    const folded = run([{ type: 'sheet.set', sheet: 'folded' }], chosen);
+
+    assert.deepEqual([folded.sheet, folded.sheetTurn], ['folded', 3]);
+    const thread = run([{ type: 'sheet.set', sheet: 'thread', turn: 1 }], folded);
+
+    assert.deepEqual([thread.sheet, thread.sheetTurn], ['thread', 1]);
+});
+
 test('a new question clears the sheet choice and keeps the panel page and the rest', () => {
     const before = run([
-        { type: 'sheet.set', sheet: 'folded' },
+        { type: 'sheet.set', sheet: 'folded', turn: 2 },
         { type: 'panel.show', page: { kind: 'turn', turn: 1 } },
         { type: 'point', card: 'a' },
     ]);
     const after = run([{ type: 'question.sent' }], before);
 
     assert.equal(after.sheet, 'auto');
+    assert.equal(after.sheetTurn, null);
     assert.deepEqual(after.trail, [{ kind: 'turn', turn: 1 }]);
     assert.equal(after.panelChoice, true);
     assert.equal(after.pointedCard, 'a');
@@ -106,7 +134,7 @@ test('a session reset returns the initial shell', () => {
     const state = run([
         { type: 'panel.show', page: { kind: 'source', id: 's' } },
         { type: 'focus.set', on: true },
-        { type: 'sheet.set', sheet: 'thread' },
+        { type: 'sheet.set', sheet: 'thread', turn: 4 },
         { type: 'plan.light', turn: 2 },
         { type: 'session.reset' },
     ]);

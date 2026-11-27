@@ -150,3 +150,18 @@ export const selectTarget = (target: Element): SelectTarget => {
 
     return target.closest(`${CONTROLS}, [data-beacon]`) ? 'control' : 'grid';
 };
+
+/**
+ * The cards whose menu still counts as open: those still live on the sheet.
+ * A menu that unmounts with its card (taken off, or redrawn under a new id)
+ * reports no close, so its card's id is dropped here. Returns `open` itself
+ * when every id is live.
+ */
+export const liveMenus = (
+    open: ReadonlySet<string>,
+    isLive: (id: string) => boolean,
+): ReadonlySet<string> => {
+    const kept = [...open].filter(isLive);
+
+    return kept.length === open.size ? open : new Set(kept);
+};

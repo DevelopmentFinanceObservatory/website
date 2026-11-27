@@ -11,8 +11,10 @@
 
 import type { CanvasBaseline } from './composition';
 
-/** A card as the conversation holds it: its id and the turn that drew it. */
-type PlacedCard = { id: string; turn: number };
+/** A card as the conversation holds it: its id, the turn that drew it, and
+ *  the turn of the question that made the first card of its chain of
+ *  replacements (`madeIn`), once it has taken another card's place. */
+type PlacedCard = { id: string; turn: number; madeIn?: number };
 
 type Takeover = { replaces?: string | null; editing?: string | null };
 
@@ -31,8 +33,10 @@ export const takenOver = (id: string, { replaces = null, editing = null }: Takeo
 /**
  * The cards after `card` (stamped with the turn that drew it) arrives. A card
  * that takes over a card held here (see takenOver) takes its place, and its
- * turn too when `keepTurn` (a Change unit turn). A re-used id updates that
- * card in place and pulls it into this turn; any other card goes at the end.
+ * turn too when `keepTurn` (a card change turn), and records the turn of the
+ * question that made the chain's first card (`madeIn`). A re-used id updates
+ * that card in place, keeping its `madeIn`, and pulls it into this turn; any
+ * other card goes at the end.
  */
 export const placeCard = <TCard extends PlacedCard>(
     cards: readonly TCard[],
@@ -47,13 +51,23 @@ export const placeCard = <TCard extends PlacedCard>(
             .filter((other) => other.id !== card.id)
             .map((other) =>
                 other === replaced
-                    ? { ...card, turn: keepTurn ? replaced.turn : card.turn }
+                    ? {
+                          ...card,
+                          turn: keepTurn ? replaced.turn : card.turn,
+                          madeIn: replaced.madeIn ?? replaced.turn,
+                      }
                     : other,
             );
     }
 
     return cards.some((other) => other.id === card.id)
-        ? cards.map((other) => (other.id === card.id ? card : other))
+        ? cards.map((other) =>
+              other.id === card.id
+                  ? card.madeIn === undefined && other.madeIn !== undefined
+                      ? { ...card, madeIn: other.madeIn }
+                      : card
+                  : other,
+          )
         : [...cards, card];
 };
 
@@ -104,4 +118,60 @@ export const withReplacedCard = (
             ),
         }),
     };
+};
+
+/**
+ * A card's chain of replacements, by `replaced` (each replacement's id to the
+ * id it replaced): the card itself first, then each card it replaced, newest
+ * first, so the first card of the chain is last. A loop in the map ends the
+ * chain.
+ */
+export const replacedChain = (id: string, replaced: Readonly<Record<string, string>>): string[] => {
+    const chain = [id];
+    let at = replaced[id];
+
+    while (at !== undefined && !chain.includes(at)) {
+        chain.push(at);
+        at = replaced[at];
+    }
+
+    return chain;
+};
+
+/** The card on the canvas (`onCanvas`) standing for `id`: itself, or the
+ *  latest card of its replacements, followed forward through `replaced`.
+ *  Null once none of them is on the canvas. */
+export const standingFor = (
+    id: string,
+    onCanvas: { has: (id: string) => boolean },
+    replaced: Readonly<Record<string, string>>,
+): string | null => {
+    const seen = new Set<string>();
+    let at: string | undefined = id;
+
+    while (at !== undefined && !seen.has(at)) {
+        if (onCanvas.has(at)) return at;
+
+        seen.add(at);
+        const from: string = at;
+
+        at = Object.keys(replaced).find((newer) => replaced[newer] === from);
+    }
+
+    return null;
+};
+
+/** A follow-up's target card followed to the card standing in its place on
+ *  the canvas (standingFor), or null once none of its chain is there. The
+ *  same target while its own card stands. */
+export const standingTarget = <TTarget extends { id: string }>(
+    target: TTarget | null,
+    onCanvas: { has: (id: string) => boolean },
+    replaced: Readonly<Record<string, string>>,
+): TTarget | null => {
+    const standing = target && standingFor(target.id, onCanvas, replaced);
+
+    if (!target || !standing) return null;
+
+    return standing === target.id ? target : { ...target, id: standing };
 };

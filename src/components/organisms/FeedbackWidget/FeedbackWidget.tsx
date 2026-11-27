@@ -17,9 +17,9 @@ const DONE_MS = 2500;
  * design's Feedback-Badge) that slides a short form open above itself. The
  * form posts to /api/feedback — the same door the chat's thumbs use — and
  * carries the page it was sent from, so a report can be placed without the
- * sender describing where they were.
+ * sender describing where they were. `className` places the widget on a
+ * page that needs it elsewhere.
  */
-/** `className` places the widget on a page that needs it elsewhere. */
 const FeedbackWidget = ({ className }: { className?: string }) => {
     const [open, setOpen] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);

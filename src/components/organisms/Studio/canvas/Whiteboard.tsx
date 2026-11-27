@@ -11,7 +11,7 @@ import {
     BLOCK_INSET,
     blockCols,
     type Placement,
-    promptFoot,
+    replyBlockTop,
     revealOffset,
 } from './blocks';
 import { scrollerOf } from './board';
@@ -164,6 +164,9 @@ export type WhiteboardProps = {
     // Cards a research plan made, whose menu opens with View Research Plan.
     viewPlanIds?: ReadonlySet<string>;
     onViewPlan?: (id: string) => void;
+    // A question's turn is running. When it ends, the view brings the block
+    // its cards landed in to one cell under the top.
+    replying?: boolean;
 };
 
 /**
@@ -214,6 +217,7 @@ const Whiteboard = ({
     onPoint,
     viewPlanIds,
     onViewPlan,
+    replying,
 }: WhiteboardProps) => {
     // Fluid cell: GRID_CELL scaled by the live root font-size. All cell↔px
     // math uses it; `f` scales the raw-px interaction constants (scroll
@@ -223,7 +227,9 @@ const Whiteboard = ({
     const boardRef = useRef<HTMLDivElement>(null);
     // On a phone the panel covers the sheet anyway, so the card stays put.
     const isPhone = useIsPhone();
-    const { view, origin, viewCols } = useBoardView(boardRef, CELL);
+    // Block placement measures its insets from the sheet's own frame, so its
+    // grid starts at the frame's corner.
+    const { view, origin, viewCols } = useBoardView(boardRef, CELL, placement !== 'blocks');
     // The layout is in cells, so it's the SAME arrangement on every screen —
     // on a phone the cells are just smaller (useGridCell fits them to the
     // width) and the sheet pans.
@@ -338,9 +344,13 @@ const Whiteboard = ({
         extent: { rightCol, bottomRow },
     });
 
-    // The px of the view's foot the floating prompt covers (blocks.ts).
+    // The px of the view's foot the floating prompt covers: the height of
+    // the sheet's foot probe, which the stylesheet sizes to --board-foot.
     const promptCover = (scroller: HTMLElement) =>
-        dockAware ? promptFoot(getComputedStyle(scroller).getPropertyValue('--dock-rest')) : 0;
+        dockAware
+            ? (scroller.querySelector<HTMLElement>('[data-board-foot]')?.getBoundingClientRect()
+                  .height ?? 0)
+            : 0;
 
     // The scroll that shows a card whole, above the prompt; or its top, one
     // cell in, when it is taller than the room. `top` overrides the vertical.
@@ -406,6 +416,63 @@ const Whiteboard = ({
 
     // The held card comes into view when it changes, and again once the
     // panel that holds it has changed the canvas's width.
+    // The live cards when the running turn began, to tell which landed in it.
+    const turnStart = useRef<ReadonlySet<string> | null>(null);
+    const markTurn = useEffectEvent(() => {
+        turnStart.current = new Set(
+            Object.entries(slots)
+                .filter(([, slot]) => !slot.leaving)
+                .map(([id]) => id),
+        );
+    });
+    const showReply = useEffectEvent(() => {
+        const before = turnStart.current;
+        const scroller = scrollerOf(boardRef);
+
+        turnStart.current = null;
+
+        if (!before || !scroller || dragging.isDragging() || pan.isPanning()) {
+            return;
+        }
+
+        const top = replyBlockTop(slots, before);
+
+        if (top === null) {
+            return;
+        }
+
+        pan.stopGlide();
+        scroller.scrollTo({
+            left: scroller.scrollLeft,
+            top: Math.max(0, origin.y + (top - BLOCK_INSET) * CELL),
+            behavior: scrollBehavior(),
+        });
+    });
+
+    // The turn's last cards are placed a frame after they arrive (useSlots),
+    // so the view moves two frames after the turn ends.
+    useEffect(() => {
+        if (replying === undefined) {
+            return undefined;
+        }
+
+        if (replying) {
+            markTurn();
+
+            return undefined;
+        }
+
+        let inner = 0;
+        const outer = requestAnimationFrame(() => {
+            inner = requestAnimationFrame(() => showReply());
+        });
+
+        return () => {
+            cancelAnimationFrame(outer);
+            cancelAnimationFrame(inner);
+        };
+    }, [replying]);
+
     const revealHeld = useEffectEvent(() => {
         const slot = heldId ? slots[heldId] : undefined;
         const scroller = scrollerOf(boardRef);
@@ -432,7 +499,8 @@ const Whiteboard = ({
         return () => window.clearTimeout(timer);
     }, [heldId]);
 
-    const { pointLater, unpoint, menuOpenChange, menuOpen, pointedId } = usePointing(onPoint);
+    const { pointLater, unpoint, menuOpenChange, menuOpen, pointedId, forgetGone } =
+        usePointing(onPoint);
 
     // The press a click finishes, for selection.
     const pressRef = useRef<{
@@ -442,14 +510,18 @@ const Whiteboard = ({
         closedMenu: boolean;
     } | null>(null);
 
-    // A pointed card that leaves the sheet is pointed at no longer.
+    // A card that leaves the sheet is pointed at no longer, and its menu,
+    // which unmounts with it, no longer counts as open.
     useEffect(() => {
+        const isLive = (id: string) => !!slots[id] && !slots[id].leaving;
         const id = pointedId();
 
-        if (id !== null && (!slots[id] || slots[id].leaving)) {
+        if (id !== null && !isLive(id)) {
             unpoint(id);
         }
-    }, [slots, pointedId, unpoint]);
+
+        forgetGone(isLive);
+    }, [slots, pointedId, unpoint, forgetGone]);
 
     useFilterFly({ boardRef, filter, slots, views, origin, view, CELL, stopGlide: pan.stopGlide });
 
@@ -571,6 +643,10 @@ const Whiteboard = ({
             }}
         >
             <BeaconLayer beacons={beacons} onFly={flyTo} clearPrompt={dockAware} />
+
+            {dockAware && (
+                <span className={styles.footProbe} data-board-foot="" aria-hidden="true" />
+            )}
 
             <div
                 className={styles.gridLayer}
@@ -821,6 +897,8 @@ const Whiteboard = ({
                                 <button
                                     type="button"
                                     className={styles.selectToggle}
+                                    // The shell focuses a card by this hook.
+                                    data-card-select=""
                                     aria-pressed={selected}
                                     aria-label={title}
                                     data-no-export=""

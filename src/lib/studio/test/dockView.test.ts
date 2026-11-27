@@ -11,13 +11,14 @@ import {
     type DockInput,
     dockField,
     dockView,
-    firstSentence,
+    fieldShown,
     pendingItem,
     planKey,
     planStep,
     runningLabel,
     streamBlocks,
 } from '../dockView.ts';
+import { WORKING } from '../chatLine.ts';
 import type { ApprovedPlan } from '../plan.ts';
 
 const ask = (text: string, turn: number, extra: object = {}): ChatMessage => ({
@@ -82,7 +83,7 @@ test('each row of the context table, in its order of precedence', () => {
             {
                 messages: [ask('Q', 1), reply('')],
                 thinking: true,
-                plan: { live: true, version: 1 },
+                plan: { live: true, version: 1, switching: null },
             },
             'plan',
         ],
@@ -232,7 +233,7 @@ test('a clarifying question and a waiting plan take the sheet', () => {
 
     const waiting = input({
         messages: [ask('Q', 1), reply('')],
-        plan: { live: true, version: 2 },
+        plan: { live: true, version: 2, switching: null },
     });
     const view = dockView(waiting);
 
@@ -243,12 +244,18 @@ test('a clarifying question and a waiting plan take the sheet', () => {
 });
 
 test('the send arrow is quiet while a plan waits and the field is empty', () => {
-    const waiting = input({ messages: [ask('Q', 1), reply('')], plan: { live: true, version: 1 } });
+    const waiting = input({
+        messages: [ask('Q', 1), reply('')],
+        plan: { live: true, version: 1, switching: null },
+    });
 
     assert.equal(dockView(waiting).quietSend, true);
     assert.equal(dockView({ ...waiting, draft: '  ' }).quietSend, true);
     assert.equal(dockView({ ...waiting, draft: 'fewer years' }).quietSend, false);
-    assert.equal(dockView({ ...waiting, plan: { live: false, version: 1 } }).quietSend, false);
+    assert.equal(
+        dockView({ ...waiting, plan: { live: false, version: 1, switching: null } }).quietSend,
+        false,
+    );
 });
 
 test('a card change is silent: status while it runs, the earlier view after, its refusal as the row', () => {
@@ -273,16 +280,68 @@ test('a card change is silent: status while it runs, the earlier view after, its
     assert.deepEqual(done, dockView(charted));
     assert.equal(done.questions.length, 1);
 
-    const refused = dockView({
-        ...running,
-        thinking: false,
-        messages: [...charted.messages, edit, reply('That unit is not offered. Try another.')],
-    });
+    // Refused before its turn ran (the prompt is refunded), or failed in its
+    // stream: either way the failure is the row, with no sheet, and the
+    // answer's pills stay.
+    for (const prompt of [{ ...edit, refunded: true as const }, edit]) {
+        const refused = dockView({
+            ...running,
+            thinking: false,
+            messages: [
+                ...charted.messages,
+                prompt,
+                reply('That unit is not offered. Try another.'),
+            ],
+        });
 
-    assert.deepEqual(
-        [refused.row, refused.sheet, refused.pills],
-        [{ kind: 'folded', text: 'That unit is not offered.', openable: false }, 'none', false],
-    );
+        assert.deepEqual(
+            [refused.row, refused.sheet, refused.pills, refused.questions.length],
+            [
+                { kind: 'folded', text: 'That unit is not offered.', openable: false },
+                'none',
+                true,
+                1,
+            ],
+        );
+    }
+});
+
+test('the two refusal kinds: a refused card change is the folded row, a refused question keeps its head and replies with the refusal', () => {
+    const refusal = 'You have used your questions for today. Sign in for more.';
+    const cases: [string, ChatMessage, unknown[]][] = [
+        [
+            'card change',
+            ask('Constant 2023 US dollars', 2, {
+                edit: { card: 'cmp_1', row: 'unit' },
+                refunded: true,
+            }),
+            [
+                1,
+                {
+                    kind: 'folded',
+                    text: 'You have used your questions for today.',
+                    openable: false,
+                },
+                'none',
+                true,
+                1,
+            ],
+        ],
+        ['question', ask('Aid to Ghana', 2, { refunded: true }), [2, null, 'reply', false, 2]],
+    ];
+
+    for (const [name, prompt, expected] of cases) {
+        const view = dockView({
+            ...charted,
+            messages: [...charted.messages, prompt, reply(refusal)],
+        });
+
+        assert.deepEqual(
+            [view.question?.turn, view.row, view.sheet, view.pills, view.questions.length],
+            expected,
+            name,
+        );
+    }
 });
 
 test('a card change after an answer in words leaves the held answer open', () => {
@@ -296,6 +355,75 @@ test('a card change after an answer in words leaves the held answer open', () =>
     });
 
     assert.deepEqual([dockView(words).sheet, dockView(words).held], ['reply', true]);
+});
+
+test('Step n of m names the plan step the newest running line runs, when the lines name steps', () => {
+    const plan: ApprovedPlan = {
+        ...approved(4),
+        steps: ['s1', 's2', 's3', 's4'].map((id) => ({ id, label: id })),
+    };
+    // Seven lines after the approval: each names its plan step, or none.
+    const entry = (lines: [string | undefined, 'running' | 'complete'][]): ActivityEntry => ({
+        turn: 1,
+        prompt: 'Q',
+        startedAt: 0,
+        approvedOrder: 1,
+        tools: lines.map(([planStepId, state], at) => ({
+            id: `line${at}`,
+            name: 'line',
+            args: null,
+            startedAt: 1,
+            state,
+            startOrder: 2 + at,
+            ...(planStepId && { planStepId }),
+        })),
+    });
+    const step = (lines: [string | undefined, 'running' | 'complete'][]) =>
+        planStep(plan, entry(lines))?.step;
+
+    assert.equal(
+        step([
+            ['s1', 'complete'],
+            ['s1', 'complete'],
+            ['s2', 'running'],
+            ['s2', 'running'],
+        ]),
+        2,
+    );
+    // Seven lines on four steps: the count would sit at 4 from the fourth
+    // line; the named step stays at 3 until s4 runs.
+    assert.equal(
+        step([
+            ['s1', 'complete'],
+            ['s2', 'complete'],
+            ['s3', 'complete'],
+            ['s3', 'complete'],
+            ['s3', 'complete'],
+            ['s3', 'running'],
+            [undefined, 'running'],
+        ]),
+        3,
+    );
+    // A line naming a step the plan lacks leaves n where it was.
+    assert.equal(
+        step([
+            ['s2', 'complete'],
+            ['copy', 'running'],
+        ]),
+        2,
+    );
+    // An approved plan without step ids counts lines, as before.
+    assert.equal(
+        planStep(
+            approved(4),
+            entry([
+                ['s1', 'complete'],
+                ['s1', 'complete'],
+                ['s1', 'running'],
+            ]),
+        )?.step,
+        3,
+    );
 });
 
 test('Step n of m counts the steps started after the approval, for plans of two or more steps', () => {
@@ -345,42 +473,37 @@ test('Step n of m counts the steps started after the approval, for plans of two 
     assert.deepEqual(running.row, { kind: 'status', stepOf: { step: 1, of: 3 } });
 });
 
-test('a first sentence is plain text cut at the end of its sentence', () => {
-    for (const [text, sentence] of [
-        ['\n\n**Aid** rose 3.5% in 2023. It fell later.', 'Aid rose 3.5% in 2023.'],
-        ['- First `item`! Then more', 'First item!'],
-        ['## Heading line', 'Heading line'],
-        ['_Stopped._', 'Stopped.'],
-        ['See [the data](https://example.org) here? Yes.', 'See the data here?'],
-        ['No ending', 'No ending'],
-    ]) {
-        assert.equal(firstSentence(text), sentence);
+test('the running label drops trailing dots and ellipses and falls back to the working line', () => {
+    assert.equal(runningLabel('Searching datasets...'), runningLabel('Searching datasets'));
+    assert.equal(runningLabel('Reading…'), runningLabel('Reading'));
+    assert.equal(runningLabel(null), WORKING);
+});
+
+test('the field copy: a live plan beats a selected card, which beats the follow-up and first-question copy', () => {
+    const copy = (asked: boolean, planLive: boolean, target: 'chart' | 'table' | null) =>
+        dockField({ asked, planLive, target }).placeholder;
+
+    assert.equal(copy(true, true, 'chart'), copy(false, true, null));
+    assert.equal(copy(true, false, 'chart'), copy(false, false, 'chart'));
+    assert.notEqual(copy(true, false, 'chart'), copy(true, false, 'table'));
+    assert.equal(
+        new Set([
+            copy(false, false, null),
+            copy(true, false, null),
+            copy(true, false, 'chart'),
+            copy(true, true, null),
+        ]).size,
+        4,
+    );
+
+    for (const [asked, planLive, target] of [
+        [false, false, null],
+        [true, true, 'table'],
+    ] as const) {
+        const { placeholder, label } = dockField({ asked, planLive, target });
+
+        assert.equal(label, placeholder.replace(/\.+$/, ''));
     }
-});
-
-test('the running label drops trailing dots and falls back to Working', () => {
-    assert.equal(runningLabel('Searching datasets...'), 'Searching datasets');
-    assert.equal(runningLabel('Reading…'), 'Reading');
-    assert.equal(runningLabel(null), 'Working');
-});
-
-test('the field copy follows the plan, the selected card and the first question', () => {
-    assert.deepEqual(dockField({ asked: false, planLive: false, target: null }), {
-        placeholder: 'Ask a question...',
-        label: 'Ask a question',
-    });
-    assert.equal(
-        dockField({ asked: true, planLive: false, target: null }).placeholder,
-        'Ask a follow up...',
-    );
-    assert.equal(
-        dockField({ asked: true, planLive: false, target: 'table' }).placeholder,
-        'Ask about this table...',
-    );
-    assert.equal(
-        dockField({ asked: true, planLive: true, target: 'chart' }).placeholder,
-        'Or say what to change...',
-    );
 });
 
 test('streaming text splits into blocks at blank lines outside code fences', () => {
@@ -399,4 +522,84 @@ test('the pending item that ends focus is the plan or the clarifying question', 
         'clarify:i2',
     );
     assert.equal(pendingItem(null, null), null);
+});
+
+test('a field is shown by checkVisibility where the browser has it, else by its box and visibility', () => {
+    const boxes = (count: number) => () => ({ length: count }) as DOMRectList;
+    const visible = () => 'visible';
+
+    assert.equal(
+        fieldShown({ getClientRects: boxes(1), checkVisibility: () => false }, visible),
+        false,
+    );
+    // A browser without checkVisibility (Safari before 17.4).
+    assert.equal(fieldShown({ getClientRects: boxes(1) }, visible), true);
+    assert.equal(fieldShown({ getClientRects: boxes(0) }, visible), false);
+    assert.equal(
+        fieldShown({ getClientRects: boxes(1) }, () => 'hidden'),
+        false,
+    );
+});
+
+test('waiting states take one order: the guest wall, then a waiting plan, then a clarifying question, then the field', () => {
+    const live = { live: true, version: 1, switching: null };
+    const ended = { live: false, version: 1, switching: null };
+    const asked = { messages: [ask('Q', 1), reply('')] };
+    const cases: [string, Partial<DockInput>, string, string, string | null][] = [
+        ['nothing waits', {}, 'input', 'none', null],
+        ['a plan waits', { plan: live }, 'input', 'plan', 'plan'],
+        ['a question waits', { clarify: true }, 'clarify', 'clarify', null],
+        [
+            'a plan and a question wait: the plan holds the sheet',
+            { plan: live, clarify: true },
+            'input',
+            'plan',
+            'plan',
+        ],
+        [
+            'a read-only plan and a question: the plan, with no approval',
+            { plan: ended, clarify: true },
+            'input',
+            'plan',
+            null,
+        ],
+        [
+            'the wall and a plan: the plan shows, the wall takes the field',
+            { walled: true, plan: live },
+            'wall',
+            'plan',
+            'plan',
+        ],
+        [
+            'the wall and a question: the wall takes the question too',
+            { walled: true, clarify: true },
+            'wall',
+            'none',
+            null,
+        ],
+    ];
+
+    for (const [name, over, mode, sheet, row] of cases) {
+        const view = dockView(input({ ...asked, ...over }));
+
+        assert.deepEqual([view.mode, view.sheet, view.row?.kind ?? null], [mode, sheet, row], name);
+    }
+});
+
+test('a second clarifying question lists the turn earlier clarifications with their answers', () => {
+    const first = 'Current or constant prices?';
+    const messages = [
+        ask('Q', 1),
+        ask('A earlier turn', 1, { answer: true, asked: 'Not this turn?' }),
+        ask('Q2', 2),
+        ask('Current prices', 2, { answer: true, asked: first }),
+        ask('Approve', 2, { answer: true }),
+        reply(''),
+    ];
+
+    assert.deepEqual(dockView(input({ messages, clarify: true })).clarified, [
+        { asked: first, answer: 'Current prices' },
+    ]);
+    // Only while a clarifying question waits.
+    assert.deepEqual(dockView(input({ messages })).clarified, []);
 });

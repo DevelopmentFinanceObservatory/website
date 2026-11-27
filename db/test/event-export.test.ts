@@ -153,7 +153,15 @@ test('exportRow drops a value its rule refuses', async (t) => {
 });
 
 test('exportRow keeps the intent of every prompt Studio sends', async (t) => {
-    for (const intent of ['new', 'follow_up', 'edit', 'apply_choice', 'apply_unit']) {
+    for (const intent of [
+        'new',
+        'follow_up',
+        'edit',
+        'apply_choice',
+        'apply_unit',
+        'apply_years',
+        'apply_places',
+    ]) {
         await t.test(intent, () => {
             const row = exportRow(
                 sourceEvent({ name: 'studio.prompt', props: { intent } }),

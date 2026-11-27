@@ -7,9 +7,23 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { changeOffers, changeStatus, type ChangeMessage } from '../cardChange.ts';
+import {
+    CHANGE_REFUSALS,
+    changeOffers,
+    changeRefusalDetail,
+    changeRefusalStale,
+    changeStatus,
+    type ChangeMessage,
+    pickablePlaces,
+    PLACE_OPTIONS_UNAVAILABLE,
+    placeMatches,
+    placesChange,
+    placesChanged,
+    yearsChange,
+} from '../cardChange.ts';
+import type { StreamRefusal } from '../studioClient.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { ComponentCreated } from '../wire.ts';
+import type { CardChanges, ComponentCreated, ToolError, TurnRequest } from '../wire.ts';
 
 const created = JSON.parse(
     readFileSync(
@@ -30,7 +44,7 @@ test('a card with a unit offer offers a unit change from its current unit', () =
     const offers = changeOffers(card());
 
     assert.deepEqual(
-        offers.map(({ key, current }) => [key, current]),
+        offers.map((offer) => [offer.key, offer.key === 'unit' ? offer.current : null]),
         [['unit', { currency: 'USD', prices: 'constant', base_year: 2023 }]],
     );
 });
@@ -138,4 +152,318 @@ test('a change that succeeded, or one to another card, leaves the row idle', () 
         }),
         { state: 'idle' },
     );
+});
+
+// The harness's card frame (`event-06`), with the years and places offer of
+// the agreed `card_changes` shape: places are read on demand, so an offer
+// names its role, whether it takes several, and the places shown.
+const plain = JSON.parse(
+    readFileSync(new URL('./fixtures/event-06-component-created.json', import.meta.url), 'utf8'),
+) as ComponentCreated;
+const SPEC = 'spec_8f3a1c5e9d2b4a7c6e0f1a2b3c4d5e6f';
+const changes = (overrides: Partial<CardChanges> = {}): CardChanges => ({
+    spec_id: SPEC,
+    window: {
+        start_year: 2016,
+        end_year: 2024,
+        first_year: 1990,
+        last_year: 2024,
+        missing_years: [1991, 1992],
+    },
+    places: [
+        {
+            role: 'destination',
+            multiple: false,
+            chosen: [{ id: 'country/ETH', label: 'Ethiopia' }],
+        },
+        {
+            role: 'origin',
+            multiple: true,
+            chosen: [
+                { id: 'country/FRA', label: 'France' },
+                { id: 'country/DEU', label: 'Germany' },
+            ],
+        },
+    ],
+    ...overrides,
+});
+const plainChosen = [{ id: 'country/ETH', label: 'Ethiopia' }];
+const changeable = (cardChanges: CardChanges = changes()) => {
+    const widget = widgetFromComponent({ ...plain, card_changes: cardChanges });
+
+    assert.ok(widget && widget.kind !== 'text');
+
+    return { ...widget, turn: 1 };
+};
+
+test('a card offers its years and one places row per role, labelled from the role', () => {
+    const offers = changeOffers(changeable());
+
+    assert.deepEqual(
+        offers.map((offer) => [offer.id, offer.key === 'shows' ? offer.label : null]),
+        [
+            ['years', null],
+            ['shows:destination', 'Recipient'],
+            ['shows:origin', 'Providers'],
+        ],
+    );
+
+    const single = changeOffers(
+        changeable(
+            changes({
+                window: null,
+                places: [{ role: 'observationAbout', multiple: false, chosen: plainChosen }],
+            }),
+        ),
+    );
+
+    assert.deepEqual(
+        single.map((offer) => (offer.key === 'shows' ? offer.label : offer.key)),
+        ['Shows'],
+    );
+});
+
+test('a years offer needs a range other than the one drawn', () => {
+    const only = (window: NonNullable<CardChanges['window']>) =>
+        changeOffers(changeable(changes({ window, places: null }))).map((offer) => offer.key);
+
+    // 2024 is the only year with data, and the card draws it.
+    assert.deepEqual(
+        only({
+            start_year: 2024,
+            end_year: 2024,
+            first_year: 2023,
+            last_year: 2024,
+            missing_years: [2023],
+        }),
+        [],
+    );
+    // A card of one year can move to another, or widen to both.
+    assert.deepEqual(
+        only({ start_year: 2023, end_year: 2023, first_year: 2023, last_year: 2024 }),
+        ['years'],
+    );
+});
+
+test('yearsChange builds the harness fixture request and refuses a range the offer does not take', () => {
+    const request = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/request-22-turn-apply-change-window.json', import.meta.url),
+            'utf8',
+        ),
+    ) as TurnRequest;
+    const card = changeable(
+        changes({
+            window: { start_year: 2016, end_year: 2024, first_year: 1990, last_year: 2024 },
+        }),
+    );
+
+    assert.deepEqual(yearsChange(card, 'Aid', 2010, 2024)?.request, request.apply_change);
+
+    const gappy = changeable();
+
+    for (const [from, to] of [
+        [1991, 2024],
+        [2000, 1992],
+        [1992, 1992],
+        [2010, 2030],
+    ] as const) {
+        assert.equal(yearsChange(gappy, 'Aid', from, to), null, `${from} to ${to}`);
+    }
+
+    // One year is a range: a card of 2023 moves to 2020, as the harness takes it.
+    assert.deepEqual(
+        [
+            yearsChange(gappy, 'Aid', 2020, 2020)?.request.change,
+            yearsChange(gappy, 'Aid', 2020, 2020)?.words,
+        ],
+        [{ kind: 'window', start_year: 2020, end_year: 2020 }, '2020'],
+    );
+});
+
+test('a key number changes to one year: offered while another year has data, sent as both ends', () => {
+    const single = (window: Omit<NonNullable<CardChanges['window']>, 'single'>) =>
+        changeable(changes({ window: { ...window, single: true }, places: null }));
+    const keyNumber = single({
+        start_year: 2023,
+        end_year: 2023,
+        first_year: 2018,
+        last_year: 2024,
+        missing_years: [2019],
+    });
+
+    // The only year with data, which the card draws, leaves nothing to change to.
+    assert.deepEqual(
+        changeOffers(
+            single({
+                start_year: 2024,
+                end_year: 2024,
+                first_year: 2023,
+                last_year: 2024,
+                missing_years: [2023],
+            }),
+        ),
+        [],
+    );
+    assert.deepEqual(
+        changeOffers(keyNumber).map((offer) => offer.key),
+        ['years'],
+    );
+    assert.deepEqual(yearsChange(keyNumber, 'Aid', 2020, 2020)?.request.change, {
+        kind: 'window',
+        start_year: 2020,
+        end_year: 2020,
+    });
+
+    for (const [from, to] of [
+        [2018, 2020],
+        [2019, 2019],
+        [2010, 2010],
+    ] as const) {
+        assert.equal(yearsChange(keyNumber, 'Aid', from, to), null, `${from} to ${to}`);
+    }
+});
+
+test('placesChange names the role and the ids, one place for a role that takes one', () => {
+    const card = changeable();
+    const uganda = { id: 'country/UGA', label: 'Uganda' };
+    const kenya = { id: 'country/KEN', label: 'Kenya' };
+
+    assert.deepEqual(placesChange(card, 'Aid', 'destination', [uganda])?.request, {
+        component_id: plain.component_id,
+        spec_id: SPEC,
+        change: { kind: 'places', role: 'destination', entities: ['country/UGA'] },
+    });
+    assert.deepEqual(placesChange(card, 'Aid', 'origin', [uganda, kenya])?.request.change, {
+        kind: 'places',
+        role: 'origin',
+        entities: ['country/UGA', 'country/KEN'],
+    });
+    assert.equal(placesChange(card, 'Aid', 'destination', [uganda, kenya]), null);
+    assert.equal(placesChange(card, 'Aid', 'destination', []), null);
+    assert.equal(placesChange(card, 'Aid', 'observationAbout', [uganda]), null);
+});
+
+const refusal = (status: number, error: Partial<ToolError> | null): StreamRefusal => ({
+    status,
+    detail: error?.detail ?? null,
+    error: error && {
+        error: 'constraint_violation',
+        retry: 'do_not_retry',
+        detail: 'Refused.',
+        ...error,
+    },
+});
+
+test('the harness refusals of a change give their detail, and only a stale one clears the offer', () => {
+    for (const code of CHANGE_REFUSALS) {
+        const refused = refusal(422, { constraint_id: code, pointer: '/apply_change' });
+
+        assert.equal(changeRefusalDetail(refused), 'Refused.', code);
+        assert.equal(changeRefusalStale(refused), code === 'scope_choice_stale', code);
+    }
+
+    const unavailable = refusal(503, {
+        error: 'transient_unavailable',
+        retry: 'retry_after_delay',
+        constraint_id: PLACE_OPTIONS_UNAVAILABLE,
+    });
+
+    assert.equal(changeRefusalDetail(unavailable), 'Refused.');
+    assert.equal(changeRefusalStale(unavailable), false);
+
+    for (const other of [
+        refusal(422, { constraint_id: 'scope_choice_stale', pointer: '/apply_unit' }),
+        refusal(503, { error: 'transient_unavailable', retry: 'retry_after_delay' }),
+        refusal(409, { constraint_id: 'scope_choice_stale', pointer: '/apply_change' }),
+        refusal(500, null),
+    ]) {
+        assert.equal(changeRefusalDetail(other), null);
+    }
+});
+
+test('a places change is pending and refused on its own role only', () => {
+    const shows = (role: string): ChangeMessage => ({
+        role: 'user',
+        text: 'Uganda',
+        edit: { card: 'c1', row: 'shows', role },
+    });
+    const refused = [
+        ...asked,
+        shows('destination'),
+        { role: 'bot' as const, text: '_No figures for Uganda._' },
+    ];
+    const status = (role: string) =>
+        changeStatus({ messages: refused, thinking: false, cardId: 'c1', key: 'shows', role });
+
+    assert.deepEqual(status('destination'), { state: 'refused', detail: 'No figures for Uganda.' });
+    assert.deepEqual(status('origin'), { state: 'idle' });
+    assert.deepEqual(
+        changeStatus({
+            messages: asked,
+            thinking: true,
+            cardId: 'c1',
+            key: 'shows',
+            role: 'origin',
+            queued: [{ change: { row: 'shows', role: 'origin', request: { component_id: 'c1' } } }],
+        }),
+        { state: 'pending' },
+    );
+    assert.deepEqual(
+        changeStatus({
+            messages: asked,
+            thinking: true,
+            cardId: 'c1',
+            key: 'shows',
+            role: 'destination',
+            queued: [{ change: { row: 'shows', role: 'origin', request: { component_id: 'c1' } } }],
+        }),
+        { state: 'idle' },
+    );
+});
+
+test('the places picker lists the shown places first, each place once, and matches by label', () => {
+    const shown = [{ id: 'country/ETH', label: 'Ethiopia' }];
+    const listed = pickablePlaces(shown, [
+        { id: 'country/KEN', label: 'Kenya' },
+        { id: 'country/ETH', label: 'Ethiopia' },
+    ]);
+
+    assert.deepEqual(
+        listed.map((place) => place.id),
+        ['country/ETH', 'country/KEN'],
+    );
+    assert.deepEqual(
+        listed.filter((place) => placeMatches(place, ' ken ')).map((place) => place.id),
+        ['country/KEN'],
+    );
+    assert.equal(placesChanged(shown, [{ id: 'country/ETH', label: 'Ethiopia' }]), false);
+    assert.equal(placesChanged(shown, listed), true);
+});
+
+test('the harness card frame with card_changes offers years and its place, and builds the fixture places request', () => {
+    const read = (name: string): unknown =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const widget = widgetFromComponent(
+        read('event-23-component-card-changes.json') as ComponentCreated,
+    );
+    const request = read('request-23-turn-apply-change-places.json') as TurnRequest;
+
+    assert.ok(widget && widget.kind !== 'text');
+
+    const card = { ...widget, turn: 1 };
+
+    assert.deepEqual(
+        changeOffers(card).map((offer) => offer.id),
+        ['unit', 'years', 'shows:observationAbout'],
+    );
+    assert.deepEqual(
+        placesChange(card, 'Debt service', 'observationAbout', [
+            { id: 'country/KEN', label: 'Kenya' },
+        ])?.request,
+        request.apply_change,
+    );
+    // 1991 and 1992 hold no data, so neither ends a range.
+    assert.equal(yearsChange(card, 'Debt service', 1991, 2024), null);
+    assert.ok(yearsChange(card, 'Debt service', 1990, 2024));
 });

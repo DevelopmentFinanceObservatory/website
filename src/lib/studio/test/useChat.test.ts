@@ -539,3 +539,309 @@ test('a card redrawn under a new id is on the held canvas before the manifest fr
     assert.deepEqual(shown, [created.component_id]);
     page.unmount();
 });
+
+// A card with an offer of places, as a reopened conversation holds it.
+const placesCard = () => {
+    const created = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-06-component-created.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ComponentCreated;
+    const widget = widgetFromComponent({
+        ...created,
+        card_changes: {
+            spec_id: 'spec_1',
+            places: [
+                {
+                    role: 'destination',
+                    multiple: false,
+                    chosen: [{ id: 'country/ETH', label: 'Ethiopia' }],
+                },
+            ],
+        },
+    });
+
+    assert.ok(widget && widget.kind !== 'text');
+
+    return { ...widget, turn: 1 };
+};
+
+test('a card change of places sends apply_change, marks its prompt, and only a stale refusal clears the offer', async (t) => {
+    for (const [status, constraint, cleared] of [
+        [422, 'scope_choice_stale', true],
+        [422, 'change_not_offered', false],
+        [422, 'change_no_data', false],
+        [503, 'place_options_unavailable', false],
+    ] as const) {
+        const bodies: Record<string, unknown>[] = [];
+
+        t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+            if (!String(input).startsWith('/api/studio/turn')) {
+                return new Response('{}', { status: 404 });
+            }
+
+            bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+
+            return Response.json(
+                {
+                    error: status === 503 ? 'transient_unavailable' : 'constraint_violation',
+                    retry: status === 503 ? 'retry_after_delay' : 'do_not_retry',
+                    detail: `Refused: ${constraint}.`,
+                    constraint_id: constraint,
+                    pointer: '/apply_change',
+                },
+                { status },
+            );
+        });
+        t.mock.method(console, 'warn', () => {});
+        t.mock.method(console, 'error', () => {});
+
+        const page = renderHook(() => useChat());
+        const card = placesCard();
+
+        page.result().hydrate({
+            sessionId: 'conv_1',
+            messages: [
+                { role: 'user', text: 'Q', turn: 1, harnessTurn: 1 },
+                { role: 'bot', text: 'A' },
+            ],
+            widgets: [card],
+            turnCount: 1,
+        });
+        await page.settle();
+        page.result().applyChange({
+            title: 'Aid',
+            row: 'shows',
+            role: 'destination',
+            label: 'Recipient',
+            words: 'Kenya',
+            request: {
+                component_id: card.id,
+                spec_id: 'spec_1',
+                change: { kind: 'places', role: 'destination', entities: ['country/KEN'] },
+            },
+        });
+        await page.settle(60);
+
+        const { messages, widgets } = page.result();
+        const held = widgets.find((widget) => widget.id === card.id);
+
+        assert.deepEqual(bodies[0]?.['apply_change'], {
+            component_id: card.id,
+            spec_id: 'spec_1',
+            change: { kind: 'places', role: 'destination', entities: ['country/KEN'] },
+        });
+        assert.equal(bodies[0]?.['message'], undefined);
+        assert.deepEqual(
+            messages.slice(-2).map((message) => [message.role, message.text]),
+            [
+                ['user', 'Kenya'],
+                ['bot', `_Refused: ${constraint}._`],
+            ],
+            constraint,
+        );
+        const prompt = messages.at(-2);
+
+        assert.deepEqual(prompt?.role === 'user' && prompt.edit, {
+            card: card.id,
+            row: 'shows',
+            role: 'destination',
+        });
+        assert.equal(held?.kind !== 'text' && held?.cardChanges === undefined, cleared, constraint);
+        page.unmount();
+        t.mock.restoreAll();
+    }
+});
+
+test('a card role’s places are read once, again after a failure, and anew once the card is replaced, whose replacement keeps its plan step', async (t) => {
+    const created = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/event-06-component-created.json', import.meta.url),
+            'utf8',
+        ),
+    ) as ComponentCreated;
+    // The redrawn card's frame names no plan, as an older harness's does.
+    const redrawn: ComponentCreated = {
+        ...created,
+        component_id: 'cmp_2',
+        replaces: created.component_id,
+        created_from: { step_id: 's2' },
+    };
+    const reads: string[] = [];
+    let fail = true;
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://site.test');
+
+        if (url.pathname === '/api/studio/turn') {
+            return new Response(
+                [redrawn, { event: 'done', seq: 9, trace_id: 't' }]
+                    .map((frame) => `data: ${JSON.stringify(frame)}\n\n`)
+                    .join(''),
+                { headers: { 'x-dfo-turn-index': '2' } },
+            );
+        }
+
+        if (url.pathname !== '/api/studio/places') {
+            return new Response('{}', { status: 404 });
+        }
+
+        reads.push(url.searchParams.get('component_id') ?? '');
+
+        if (fail) {
+            fail = false;
+
+            return Response.json({ error: 'transient_unavailable' }, { status: 503 });
+        }
+
+        return Response.json({
+            component_id: url.searchParams.get('component_id'),
+            role: 'destination',
+            options: [{ id: 'country/KEN', label: 'Kenya' }],
+            truncated: false,
+        });
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat());
+    const old = widgetFromComponent(created);
+
+    assert.ok(old);
+    page.result().hydrate({
+        sessionId: 'conv_1',
+        messages: [
+            { role: 'user', text: 'Q', turn: 1, harnessTurn: 1 },
+            { role: 'bot', text: 'A' },
+        ],
+        widgets: [{ ...old, turn: 1 }],
+        turnCount: 1,
+    });
+    await page.settle();
+
+    const { placeOptions } = page.result();
+    const id = created.component_id;
+    const first = await placeOptions(id, 'destination');
+    const second = await placeOptions(id, 'destination');
+    const third = await placeOptions(id, 'destination');
+
+    assert.equal(first.kind, 'failed');
+    assert.equal(second.kind, 'options');
+    assert.equal(third, second);
+    assert.deepEqual(reads, [id, id]);
+
+    page.result().send('Redraw it');
+    await page.settle(60);
+    await placeOptions(id, 'destination');
+
+    assert.deepEqual(reads, [id, id, id]);
+
+    const replacement = page.result().widgets.find((widget) => widget.id === 'cmp_2');
+
+    assert.deepEqual(replacement?.kind !== 'text' && replacement?.planStep, {
+        plan_version_id: 'plan_01j9ze2k7c',
+        plan_step_id: 's3',
+    });
+    page.unmount();
+});
+
+test('a page reloaded while a card change runs rebuilds its prompt with the edit mark', async (t) => {
+    const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+        const url = String(input);
+
+        if (url.startsWith('/api/studio/state')) {
+            return Response.json({
+                conversation_id: 'conv_1',
+                turn: {
+                    index: 2,
+                    status: 'running',
+                    trace_id: 'tr_2',
+                    user_message: 'Uganda',
+                    card_change: {
+                        component_id: 'cmp_1',
+                        kind: 'places',
+                        role: 'destination',
+                    },
+                    lease_live: false,
+                },
+                closed_since: [],
+                closed_total: 1,
+            });
+        }
+
+        if (url === '/api/studio/resume') {
+            return new Response('data: {"event":"done","seq":1,"trace_id":"tr_2"}\n\n', {
+                headers: { 'x-dfo-turn-index': '2' },
+            });
+        }
+
+        return new Response('{}', { status: 404 });
+    };
+    const page = await reopen(
+        t,
+        {
+            sessionId: 'conv_1',
+            messages: [
+                { role: 'user', text: 'Aid to Kenya', harnessTurn: 1, turn: 1 },
+                { role: 'bot', text: 'Here.' },
+            ],
+            widgets: [],
+            turnCount: 1,
+        },
+        fetch,
+    );
+    const prompt = page.result().messages[2];
+
+    assert.deepEqual(prompt?.role === 'user' && [prompt.text, prompt.edit], [
+        'Uganda',
+        { card: 'cmp_1', row: 'shows', role: 'destination' },
+    ]);
+    page.unmount();
+});
+
+test('an answer to a clarifying question keeps the question it answered', async (t) => {
+    // The harness's two-question pause (`event-14`).
+    const ask = readFileSync(
+        new URL('./fixtures/event-14-elicitation-questions.json', import.meta.url),
+        'utf8',
+    );
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url === '/api/studio/turn') {
+            return new Response(`data: ${JSON.stringify(JSON.parse(ask))}\n\n`, {
+                headers: { 'x-dfo-turn-index': '1' },
+            });
+        }
+
+        if (url === '/api/studio/interrupt') {
+            return new Response('data: {"event":"done","seq":9,"trace_id":"t"}\n\n', {
+                headers: { 'x-dfo-turn-index': '1' },
+            });
+        }
+
+        return new Response('{}', { status: 404 });
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat());
+
+    page.result().send('How much aid went to Kenya?');
+    await page.settle(60);
+    page.result().answerClarify({
+        q1: { kind: 'option', option_id: 'spec_4d5e6f7a33333333' },
+        q2: { kind: 'option', option_id: 'o2' },
+    });
+    await page.settle(60);
+
+    const answer = page
+        .result()
+        .messages.find((message) => message.role === 'user' && message.answer);
+
+    assert.equal(
+        answer?.role === 'user' && answer.asked,
+        'How should the aid be counted? Should the amounts be in current or constant prices?',
+    );
+    page.unmount();
+});

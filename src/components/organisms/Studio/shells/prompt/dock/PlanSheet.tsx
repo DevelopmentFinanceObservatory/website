@@ -109,6 +109,7 @@ const PlanSheet = ({
                             view={view}
                             plan={plan}
                             onSwitch={onSwitch}
+                            columns
                             className={styles.planLedger}
                         />
                         <PlanCaveats caveats={view.caveats} className={styles.planCaveats} />

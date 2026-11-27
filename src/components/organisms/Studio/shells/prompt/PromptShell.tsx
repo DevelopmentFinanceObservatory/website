@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import {
     type CSSProperties,
+    useCallback,
     useLayoutEffect,
     useMemo,
     useRef,
@@ -12,9 +13,10 @@ import Whiteboard from '../../canvas/Whiteboard';
 import GuestWall from '../../GuestWall';
 import { useStudioModel } from '../../hooks/studioContext';
 import StudioLanding from '../../landing/StudioLanding';
-import CardDownload from '../../modals/CardDownload';
 import StudioModals from '../../modals/StudioModals';
 import studioStyles from '../../Studio.module.scss';
+import CanvasBackdrop from '../CanvasBackdrop';
+import DownloadDataModal from '../DownloadDataModal';
 import { whiteboardProps } from '../whiteboardProps';
 import PromptDock from './dock/PromptDock';
 import SessionPanel from './panel/SessionPanel';
@@ -23,12 +25,9 @@ import { PromptShellProvider, useEscape, usePromptShell } from './shellContext';
 import { TopBarTitle, TopBarTools } from './TopBar';
 
 import Button from '@/components/atoms/Button/Button';
-import GridPattern from '@/components/atoms/GridPattern/GridPattern';
-import Modal from '@/components/molecules/Modal/Modal';
 import FeedbackWidget from '@/components/organisms/FeedbackWidget/FeedbackWidget';
 import Header from '@/components/organisms/Header/Header';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
-import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import {
     dockArrival,
     ESCAPE_OVERLAY_PANEL,
@@ -141,9 +140,8 @@ const PromptStage = () => {
         modals,
         landingHistory,
         examples,
-        shared,
         mode: { current: mode, leaving, inWorkspace, begin, sendDraft, startNew },
-        stage: { sectionRef, gridCell, gridScale, fills, theme },
+        stage: { sectionRef, theme },
         drafts: {
             query,
             setQuery,
@@ -154,7 +152,7 @@ const PromptStage = () => {
             setEditTarget,
         },
         canvas,
-        panels: { downloadWidget, setDownloadCardId, shareData },
+        panels: { shareData },
         title,
         firstPrompt,
     } = model;
@@ -166,10 +164,15 @@ const PromptStage = () => {
         rootRef,
         panelRef,
         heldCard,
+        focusField,
         plans: links,
     } = shell;
     const unit = useDesignUnit();
     const viewPlanIds = useMemo(() => new Set(links.plans.flatMap((plan) => plan.cards)), [links]);
+    const litIds = useMemo(
+        () => litCards({ state, panelOpen, planOf: links.planOf, plans: links.plans }),
+        [state, panelOpen, links],
+    );
     // Fresh cards are placed against the width they will have once the panel
     // opens by itself, on the first card.
     const reserveRight =
@@ -190,78 +193,55 @@ const PromptStage = () => {
         }
     }
 
-    useEscape(ESCAPE_OVERLAY_PANEL, () => {
-        if (!overlay || !panelOpen) return false;
+    useEscape(
+        ESCAPE_OVERLAY_PANEL,
+        () => {
+            dispatch({ type: 'panel.dismiss' });
 
-        dispatch({ type: 'panel.toggle', shown: true });
-
-        return true;
-    });
+            return true;
+        },
+        overlay && panelOpen,
+    );
 
     const docked = mode !== 'start';
+    // One callback for the life of the shell, so a re-render never detaches
+    // the root while children's layout effects read it.
+    const sectionNode = useCallback(
+        (node: HTMLElement | null) => {
+            sectionRef.current = node;
+            rootRef.current = node;
+        },
+        [sectionRef, rootRef],
+    );
 
     return (
         <section
-            ref={(node) => {
-                sectionRef.current = node;
-                rootRef.current = node;
-            }}
+            ref={sectionNode}
             className={classNames(studioStyles.section, styles.shell)}
             data-panel={panelOpen ? 'open' : 'closed'}
             data-overlay={overlay || undefined}
             data-focus={state.focus || undefined}
             data-transition={travelling || leaving || undefined}
         >
-            <div
-                className={classNames(studioStyles.canvas, docked && styles.backdropDocked)}
-                aria-hidden="true"
-            >
-                <div className={studioStyles.canvasInner}>
-                    <GridPattern variant="light" cell={gridCell} />
-                    {fills.map(({ id, x, y, w, h, shade, leaving: fillLeaving }) => (
-                        <span
-                            key={id}
-                            className={classNames(
-                                studioStyles.fill,
-                                fillLeaving && studioStyles.fillOut,
-                            )}
-                            style={{
-                                left: x * gridScale,
-                                top: y * gridScale,
-                                width: w * gridScale,
-                                height: h * gridScale,
-                                backgroundColor: shade,
-                            }}
-                        />
-                    ))}
-                </div>
-            </div>
+            <CanvasBackdrop className={docked ? styles.backdropDocked : undefined} />
 
             <Header
                 variant="studio"
                 onBack={mode === 'start' ? undefined : startNew}
-                // A phone has room for the session title alone, renamed
-                // through the dialog as in the classic layout.
-                title={inWorkspace && phone ? title : undefined}
-                titleEditable={inWorkspace && phone}
-                onEditTitle={modals.title.show}
-                titleAfter={inWorkspace && !phone ? <TopBarTitle /> : undefined}
-                tools={inWorkspace ? <TopBarTools /> : undefined}
+                // A phone has room for the session title alone, in place of
+                // the bar's own `Studio`. The bar settles once, as the move
+                // into the workspace starts.
+                title={docked && phone ? '' : undefined}
+                titleAfter={docked ? <TopBarTitle compact={phone} /> : undefined}
+                tools={docked ? <TopBarTools /> : undefined}
             >
-                {inWorkspace && (
+                {docked && (
                     <>
-                        <Button
-                            variant="bordered"
-                            className={studioStyles.barExtra}
-                            style={{ '--i': 0 } as CSSProperties}
-                            onClick={startNew}
-                        >
+                        <Button variant="bordered" onClick={startNew}>
                             New Session
                         </Button>
                         <Button
                             variant="bordered"
-                            className={studioStyles.barExtra}
-                            style={{ '--i': 1 } as CSSProperties}
                             onClick={() => modals.customize.setOpen((prev) => !prev)}
                         >
                             Customize
@@ -271,8 +251,6 @@ const PromptStage = () => {
                                 variant="dark"
                                 wide
                                 icon="arrow-up-right"
-                                className={studioStyles.barExtra}
-                                style={{ '--i': 2 } as CSSProperties}
                                 onClick={() => modals.share.show({ kind: 'whole' })}
                             >
                                 Share
@@ -306,9 +284,14 @@ const PromptStage = () => {
                             <Whiteboard
                                 {...whiteboardProps(model)}
                                 filter={undefined}
+                                onAskFollowUp={(id, cardTitle) => {
+                                    canvas.askFollowUp(id, cardTitle);
+                                    focusField();
+                                }}
                                 onCardInfo={(id) =>
                                     dispatch({ type: 'panel.show', page: { kind: 'card', id } })
                                 }
+                                replying={model.chat.thinking}
                                 placement="blocks"
                                 dockAware
                                 reserveRight={reserveRight}
@@ -317,12 +300,7 @@ const PromptStage = () => {
                                     setEditTarget(id ? { id, title: canvas.titleOf(id) } : null)
                                 }
                                 heldId={heldCard}
-                                litIds={litCards({
-                                    state,
-                                    panelOpen,
-                                    planOf: links.planOf,
-                                    plans: links.plans,
-                                })}
+                                litIds={litIds}
                                 onPoint={(id) => dispatch({ type: 'point', card: id })}
                                 viewPlanIds={viewPlanIds}
                                 onViewPlan={(id) => {
@@ -354,20 +332,7 @@ const PromptStage = () => {
                 </>
             )}
 
-            <Modal
-                open={downloadWidget !== null}
-                onOpenChange={(next) => !next && setDownloadCardId(null)}
-                title="Download Data"
-                fit
-            >
-                {downloadWidget && (
-                    <CardDownload
-                        widget={downloadWidget}
-                        details
-                        shared={sharedCardAddress(shared, downloadWidget.id)}
-                    />
-                )}
-            </Modal>
+            <DownloadDataModal />
 
             {inWorkspace && (
                 <StudioModals

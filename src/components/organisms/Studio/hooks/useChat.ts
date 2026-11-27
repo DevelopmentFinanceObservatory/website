@@ -14,10 +14,16 @@ import { withTurnStamps } from '@/lib/studio/activityView';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
 import { placeCard, takenOver, withReplacedCard } from '@/lib/studio/cardReplace';
 import {
+    changeRefusalDetail,
+    changeRefusalStale,
+    type CardChangeRequest,
+    type ChangeEdit,
+} from '@/lib/studio/cardChange';
+import {
     changeUnitText,
     unitRefusalDetail,
     unitRefusalStale,
-    withoutUnitChanges,
+    withoutCardOffers,
     type CardUnitChange,
 } from '@/lib/studio/cardUnit';
 import {
@@ -163,14 +169,17 @@ import {
     isStaleRevision,
     isStateRefusal,
     mutateComposition,
+    runApplyChange,
     runApplyChoice,
     runApplyUnit,
     runInterrupt,
+    runPlaceOptions,
     runTurn,
     STOP_GRACE_MS,
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
     whileBusy,
+    type PlaceOptionsRead,
     type StopAction,
     type StreamHandlers,
     type StreamRefusal,
@@ -211,8 +220,9 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // before prompts carried their turn (keyUnkeyedSave), or one a state read
 // shows the harness never admitted (withReadPrompts). It keeps its text and
 // numbers no harness turn. `edit` marks the prompt of a card change
-// (applyUnit), a turn that asks nothing new of the conversation, naming the
-// card it changed and the row.
+// (applyUnit, applyChange), a turn that asks nothing new of the
+// conversation, naming the card it changed, the row, and for a change of
+// places the role.
 // A bot turn's `newQuestion` is the new question its turn handed back that
 // the page offers among its `followups` for the user to send
 // (withOfferedQuestion).
@@ -226,13 +236,15 @@ export type ChatMessage =
           text: string;
           card?: { title: string };
           answer?: true;
+          // On an answer to a clarifying question: the question it answered.
+          asked?: string;
           refunded?: true;
           harnessTurn?: number;
           turn?: number;
           fromNewQuestion?: number;
           inherited?: true;
           unkeyed?: true;
-          edit?: { card: string; row: 'unit' | 'years' | 'shows' | 'split' };
+          edit?: ChangeEdit;
       }
     | {
           role: 'bot';
@@ -247,7 +259,10 @@ export type ChatMessage =
 // A widget stamped with the send() turn it arrived in. A save from before
 // the harness manifest decided the canvas shows the latest turn's widgets
 // plus whatever the user pinned (legacyCanvasWidgetsOf).
-export type TurnWidget = Widget & { turn: number };
+// `madeIn` is the turn of the question that made the first card of a
+// replacement's chain, set when the card takes another's place (placeCard)
+// and saved with it; a card that replaced none has none.
+export type TurnWidget = Widget & { turn: number; madeIn?: number };
 
 export type { PlanState };
 
@@ -265,7 +280,7 @@ export type CardTarget = {
 // A message sent while a request was in flight: it waits for the
 // conversation to be free and enters the transcript when it is sent. A
 // clicked `apply_choice` chip waits the same way, under its label, and a
-// card's unit change under its bubble's words. A new question a harness turn
+// card's change of unit, years or places under its bubble's words. A new question a harness turn
 // handed back carries that turn's index (`fromNewQuestion`), which its
 // prompt keeps, and `handedBack`, since it joined the queue without passing
 // the page's prompt gate (admitHandedBack). A picked example keeps its
@@ -278,6 +293,7 @@ export type QueuedMessage = {
     source?: PromptSource;
     chip?: ApplyChoiceSuggestion;
     unit?: CardUnitChange;
+    change?: CardChangeRequest;
     fromNewQuestion?: number;
     handedBack?: true;
 };
@@ -438,9 +454,9 @@ const restoredTurnCount = (saved: number, messages: readonly ChatMessage[]): num
     );
 
 // A saved canvas as the chat holds it. Without its harness session no card
-// can change its unit, so the offers go, as the chips do.
+// can change its unit, years or places, so the offers go, as the chips do.
 const restoredWidgets = (saved: ChatSnapshot): TurnWidget[] =>
-    saved.sessionId ? saved.widgets : withoutUnitChanges(saved.widgets);
+    saved.sessionId ? saved.widgets : withoutCardOffers(saved.widgets);
 
 /**
  * Drives one Studio conversation against the harness's `/api/studio/*`
@@ -492,6 +508,11 @@ export const useChat = (
     // The conversation id doubles as the snapshot's sessionId, so saves and
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
+    // The places each card's roles can change to, read once per card and role
+    // for the life of the page (placeOptions), keyed `<card>\n<role>`. A read
+    // that failed is dropped, so the next asks again, and a replacement drops
+    // the lists of the card it replaced.
+    const placeListsRef = useRef(new Map<string, Promise<PlaceOptionsRead>>());
     const abortRef = useRef<AbortController | null>(null);
     // Stops the running stream's turn (set while a request runs).
     const haltRef = useRef<(() => void) | null>(null);
@@ -583,8 +604,8 @@ export const useChat = (
     // from its composition) rather than a component.revised, so the canvas has
     // to retire the original — otherwise an edit leaves two cards behind.
     const editingRef = useRef<string | null>(null);
-    // Whether this turn is a Change unit, whose replacement card keeps the
-    // old card's turn (see placeCard).
+    // Whether this turn is a card change (unit, years or places), whose
+    // replacement card keeps the old card's turn (see placeCard).
     const unitTurnRef = useRef(false);
     const onCardReplacedRef = useRef(onCardReplaced);
 
@@ -791,7 +812,7 @@ export const useChat = (
             sessionLeftRef.current += 1;
 
             messagesRef.current = left(messagesRef.current);
-            widgetsRef.current = withoutUnitChanges(widgetsRef.current);
+            widgetsRef.current = withoutCardOffers(widgetsRef.current);
 
             if (turn === undefined) {
                 sessionRef.current = null;
@@ -1319,16 +1340,30 @@ export const useChat = (
                             }
                         }
 
-                        setState((prev) => ({
-                            ...prev,
-                            widgets: placeCard(
-                                prev.widgets,
-                                { ...widget, turn },
-                                { ...takeover, keepTurn },
-                            ),
-                        }));
+                        // A replacement keeps the plan step of the card it
+                        // replaced when its own frame names none.
+                        setState((prev) => {
+                            const old = from && prev.widgets.find((other) => other.id === from);
+                            const kept =
+                                old && old.kind !== 'text' && widget.kind !== 'text'
+                                    ? { ...widget, planStep: widget.planStep ?? old.planStep }
+                                    : widget;
+
+                            return {
+                                ...prev,
+                                widgets: placeCard(
+                                    prev.widgets,
+                                    { ...kept, turn },
+                                    { ...takeover, keepTurn },
+                                ),
+                            };
+                        });
 
                         if (from) {
+                            for (const key of placeListsRef.current.keys()) {
+                                if (key.startsWith(`${from}\n`)) placeListsRef.current.delete(key);
+                            }
+
                             onCardReplacedRef.current?.(from, widget.id);
                         }
 
@@ -2193,6 +2228,7 @@ export const useChat = (
             reply: ClarifyReply | Pick<InterruptResponse, 'decision' | 'plan_revision'>,
             note: string | null,
             answer?: string,
+            asked?: string,
         ) => {
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
@@ -2223,7 +2259,12 @@ export const useChat = (
                 ...withLine(prev, note ? plainTextFromNote(note) : 'Thinking'),
                 messages:
                     answer && pending
-                        ? withAnswer(prev.messages, answer, pageTurnReplyAt(prev.messages, turn))
+                        ? withAnswer(
+                              prev.messages,
+                              answer,
+                              pageTurnReplyAt(prev.messages, turn),
+                              asked,
+                          )
                         : prev.messages,
                 thinking: true,
                 clarify: null,
@@ -2272,7 +2313,12 @@ export const useChat = (
 
             const note = clarifyNote(clarify, answers);
 
-            resume(clarifyReply(clarify, answers), `_${note}_`, clarifyAnswer(clarify, answers));
+            resume(
+                clarifyReply(clarify, answers),
+                `_${note}_`,
+                clarifyAnswer(clarify, answers),
+                clarify.questions.map((question) => question.question).join(' '),
+            );
         },
         [resume],
     );
@@ -2436,66 +2482,77 @@ export const useChat = (
         [holdTurn, startTurn, stream],
     );
 
-    // A card's Change unit: a turn that moves the card to the picked unit
-    // with no message and no model reply. The transcript shows the unit under
-    // the card's tag. The harness redraws the card under a new id that
-    // `replaces` the old one, which keeps the old card's slot, turn and
-    // settings, so the answer's other cards stay on the canvas. A pick
-    // while a request is in flight waits in the queue. A change the harness
-    // refuses (the card moved on, or the unit is not offered) leaves the
-    // reply saying why.
-    const applyUnit = useCallback(
-        (change: CardUnitChange) => {
-            const text = changeUnitText(change);
-            const card = { title: change.title };
+    // A card change: a turn that redraws one card with no message and no
+    // model reply, for its unit (applyUnit) or its years or places
+    // (applyChange). The transcript shows the change under the card's tag,
+    // marked `edit` with the card, the row and the role. The harness redraws
+    // the card under a new id that `replaces` the old one, which keeps the
+    // old card's slot, turn and settings, so the answer's other cards stay
+    // on the canvas. A change asked while a request is in flight waits in
+    // the queue. A change the harness refuses leaves the reply saying why,
+    // and a refusal as stale clears the card's offer (`clearStale`).
+    const applyEdit = useCallback(
+        ({
+            text,
+            title,
+            componentId,
+            edit,
+            line,
+            queued,
+            run,
+            refusalDetail,
+            clearStale,
+        }: {
+            text: string;
+            title: string;
+            componentId: string;
+            edit: NonNullable<Extract<ChatMessage, { role: 'user' }>['edit']>;
+            line: string;
+            queued: Pick<QueuedMessage, 'unit' | 'change'>;
+            run: (
+                conversation: string,
+                handlers: StreamHandlers,
+                signal: AbortSignal,
+            ) => Promise<void>;
+            refusalDetail: (refusal: StreamRefusal) => { detail: string; stale: boolean } | null;
+            clearStale: (widget: TurnWidget) => TurnWidget;
+        }) => {
+            const card = { title };
 
             if (
                 holdTurn({
                     text,
-                    card: { componentId: change.request.component_id, intent: 'edit', ...card },
-                    unit: change,
+                    card: { componentId, intent: 'edit', ...card },
+                    ...queued,
                 })
             ) {
                 return;
             }
 
-            const { turn, conversation } = startTurn(
-                {
-                    role: 'user',
-                    text,
-                    card,
-                    edit: { card: change.request.component_id, row: 'unit' },
-                },
-                `Switching to ${changeUnitText(change)}`,
-            );
+            const { turn, conversation } = startTurn({ role: 'user', text, card, edit }, line);
 
-            editingRef.current = change.request.component_id;
+            editingRef.current = componentId;
             unitTurnRef.current = true;
 
             stream(
                 turn,
                 (handlers, signal) =>
                     whileBusy(
-                        (busyHandlers) =>
-                            runApplyUnit(conversation, change.request, busyHandlers, signal),
+                        (busyHandlers) => run(conversation, busyHandlers, signal),
                         handlers,
                         signal,
                     ),
                 {
                     metered: true,
                     onRefusal: (refusal) => {
-                        const detail = unitRefusalDetail(refusal);
+                        const refused = refusalDetail(refusal);
 
-                        if (detail === null) {
+                        if (refused === null) {
                             return false;
                         }
 
-                        if (unitRefusalStale(refusal)) {
-                            patchWidget(change.request.component_id, (widget) =>
-                                widget.kind === 'text'
-                                    ? widget
-                                    : { ...widget, unitChange: undefined },
-                            );
+                        if (refused.stale) {
+                            patchWidget(componentId, clearStale);
                         }
 
                         setState((prev) => {
@@ -2503,7 +2560,10 @@ export const useChat = (
                             const last = messages.at(-1);
 
                             if (last?.role === 'bot' && !last.text) {
-                                messages[messages.length - 1] = { ...last, text: `_${detail}_` };
+                                messages[messages.length - 1] = {
+                                    ...last,
+                                    text: `_${refused.detail}_`,
+                                };
                             }
 
                             return endTurn(
@@ -2520,6 +2580,91 @@ export const useChat = (
             );
         },
         [holdTurn, patchWidget, startTurn, stream],
+    );
+
+    // A card's Change unit. A refusal is a 422 under `/apply_unit`.
+    const applyUnit = useCallback(
+        (change: CardUnitChange) =>
+            applyEdit({
+                text: changeUnitText(change),
+                title: change.title,
+                componentId: change.request.component_id,
+                edit: { card: change.request.component_id, row: 'unit' },
+                line: `Switching to ${changeUnitText(change)}`,
+                queued: { unit: change },
+                run: (conversation, handlers, signal) =>
+                    runApplyUnit(conversation, change.request, handlers, signal),
+                refusalDetail: (refusal) => {
+                    const detail = unitRefusalDetail(refusal);
+
+                    return detail === null ? null : { detail, stale: unitRefusalStale(refusal) };
+                },
+                clearStale: (widget) =>
+                    widget.kind === 'text' ? widget : { ...widget, unitChange: undefined },
+            }),
+        [applyEdit],
+    );
+
+    // A card's change of years or places. A refusal is a 422 under
+    // `/apply_change`, or the 503 of a places change whose list the harness
+    // could not read.
+    const applyChange = useCallback(
+        (change: CardChangeRequest) =>
+            applyEdit({
+                text: change.words,
+                title: change.title,
+                componentId: change.request.component_id,
+                edit: {
+                    card: change.request.component_id,
+                    row: change.row,
+                    ...(change.role !== undefined && { role: change.role }),
+                },
+                line: `Redrawing for ${change.words}`,
+                queued: { change },
+                run: (conversation, handlers, signal) =>
+                    runApplyChange(conversation, change.request, handlers, signal),
+                refusalDetail: (refusal) => {
+                    const detail = changeRefusalDetail(refusal);
+
+                    return detail === null ? null : { detail, stale: changeRefusalStale(refusal) };
+                },
+                clearStale: (widget) =>
+                    widget.kind === 'text' ? widget : { ...widget, cardChanges: undefined },
+            }),
+        [applyEdit],
+    );
+
+    // The places role `role` of card `componentId` can change to, read through
+    // the harness once per card and role (placeListsRef). Without a
+    // conversation there is nothing to read.
+    const placeOptions = useCallback(
+        (componentId: string, role: string): Promise<PlaceOptionsRead> => {
+            const key = `${componentId}\n${role}`;
+            const held = placeListsRef.current.get(key);
+            const conversation = sessionRef.current;
+
+            if (held) return held;
+            if (!conversation) {
+                return Promise.resolve({
+                    kind: 'failed',
+                    status: null,
+                    code: null,
+                    detail: null,
+                    retry: false,
+                });
+            }
+
+            const read = runPlaceOptions(conversation, componentId, role).then((answer) => {
+                if (answer.kind !== 'options') placeListsRef.current.delete(key);
+
+                return answer;
+            });
+
+            placeListsRef.current.set(key, read);
+
+            return read;
+        },
+        [],
     );
 
     const admitHandedBackRef = useRef(admitHandedBack);
@@ -2555,6 +2700,8 @@ export const useChat = (
                 applyChoice(next.chip);
             } else if (next.unit) {
                 applyUnit(next.unit);
+            } else if (next.change) {
+                applyChange(next.change);
             } else if (next.handedBack && next.fromNewQuestion !== undefined) {
                 const turnIndex = next.fromNewQuestion;
                 const sendNext = () =>
@@ -2571,7 +2718,7 @@ export const useChat = (
                 send(next.text, next.card, next.seeds, next.fromNewQuestion, next.source);
             }
         };
-    }, [applyChoice, applyUnit, offerNewQuestion, send]);
+    }, [applyChange, applyChoice, applyUnit, offerNewQuestion, send]);
 
     // The Stop control: end the running turn (see `halt` in stream()), which
     // asks the harness to cancel once per stream, as soon as the harness has
@@ -2648,11 +2795,22 @@ export const useChat = (
                             ...prev,
                             widgets: held
                                 ? prev.widgets.map((other) =>
-                                      other.id === id ? { ...widget, turn: held.turn } : other,
+                                      other.id === id
+                                          ? {
+                                                ...widget,
+                                                turn: held.turn,
+                                                ...(held.madeIn !== undefined && {
+                                                    madeIn: held.madeIn,
+                                                }),
+                                            }
+                                          : other,
                                   )
                                 : placeCard(
                                       prev.widgets,
-                                      { ...widget, turn: turnOf.get(id) ?? turnCount.current },
+                                      {
+                                          ...widget,
+                                          turn: turnOf.get(id) ?? turnCount.current,
+                                      },
                                       { replaces: from },
                                   ),
                         };
@@ -3076,7 +3234,13 @@ export const useChat = (
                 setState((prev) => ({
                     ...prev,
                     messages: withTurnApprovals(
-                        ensureTurn(prev.messages, step.turnIndex, prompt, turn),
+                        ensureTurn(
+                            prev.messages,
+                            step.turnIndex,
+                            prompt,
+                            turn,
+                            read.turn?.card_change,
+                        ),
                         step.turnIndex,
                         approved,
                         new Set(),
@@ -3402,6 +3566,8 @@ export const useChat = (
         switchChoice,
         applyChoice,
         applyUnit,
+        applyChange,
+        placeOptions,
         stop,
         reset,
         hydrate,

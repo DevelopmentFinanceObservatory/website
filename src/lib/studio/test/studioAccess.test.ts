@@ -49,13 +49,14 @@ const OWNERS: Record<string, (string | null)[]> = {
     'conv-orphan': [null],
 };
 
-const ROUTES = ['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume'];
+const ROUTES = ['turn', 'interrupt', 'cancel', 'composition', 'state', 'places', 'resume'];
+const GET_ROUTES = new Set(['state', 'places']);
 
 const check = (
     route: string,
     userId: string | null,
     conversationId: string,
-    { method = route === 'state' ? 'GET' : 'POST' }: { method?: string } = {},
+    { method = GET_ROUTES.has(route) ? 'GET' : 'POST' }: { method?: string } = {},
 ) =>
     studioAccessRefusal({
         route,
@@ -91,8 +92,8 @@ test('studioAccessRefusal gives state and resume only to the owner', async () =>
     }
 
     // A conversation no account owns yet (a guest's, or one an account is
-    // about to claim) can drive its turn.
-    for (const route of ['turn', 'interrupt', 'cancel', 'composition']) {
+    // about to claim) can drive its turn and read a card's places.
+    for (const route of ['turn', 'interrupt', 'cancel', 'composition', 'places']) {
         assert.equal(await check(route, null, 'conv-guest'), null, `guest ${route}`);
         assert.equal(await check(route, 'user-ana', 'conv-guest'), null, route);
     }
@@ -280,8 +281,10 @@ test('studioAccess binds a new conversation to the first account to drive a turn
     const turn = (userId: string | null, route = 'turn') =>
         studioAccessRefusal({
             route,
-            method: route === 'state' ? 'GET' : 'POST',
-            search: new URLSearchParams(route === 'state' ? { conversation_id: 'conv-new' } : {}),
+            method: GET_ROUTES.has(route) ? 'GET' : 'POST',
+            search: new URLSearchParams(
+                GET_ROUTES.has(route) ? { conversation_id: 'conv-new' } : {},
+            ),
             readBody: async () => '{"conversation_id":"conv-new"}',
             readUserId: async () => userId,
             ownersOf: async (id) => [...(owners.has(id) ? [owners.get(id)!] : [])],
@@ -299,7 +302,7 @@ test('studioAccess binds a new conversation to the first account to drive a turn
     assert.equal(await turn(null), null, 'a guest claims nothing');
     assert.equal(await turn('user-ana', 'state'), 'not_found', 'a state read claims nothing');
 
-    for (const route of ['interrupt', 'cancel', 'composition']) {
+    for (const route of ['interrupt', 'cancel', 'composition', 'places']) {
         assert.equal(await turn('user-ben', route), null, `${route} claims nothing`);
     }
 
@@ -346,8 +349,8 @@ test('studioAccessRefusal refuses as unavailable when the owners cannot be read'
     assert.equal(await claimRefusal(() => Promise.reject(new Error('db down'))), 'unavailable');
 });
 
-test('a call to a route that drives a turn must name a conversation', async () => {
-    for (const route of ['turn', 'interrupt', 'cancel', 'composition']) {
+test('a call to a route that drives a turn or reads places must name a conversation', async () => {
+    for (const route of ['turn', 'interrupt', 'cancel', 'composition', 'places']) {
         for (const userId of [null, 'user-ana']) {
             assert.equal(
                 await checkStudioOwner({

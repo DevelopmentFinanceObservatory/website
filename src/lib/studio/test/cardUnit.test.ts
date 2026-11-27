@@ -14,7 +14,7 @@ import {
     changeUnitText,
     unitRefusalDetail,
     unitRefusalStale,
-    withoutUnitChanges,
+    withoutCardOffers,
 } from '../cardUnit.ts';
 import { widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated } from '../wire.ts';
@@ -91,7 +91,7 @@ test('only a scope_choice_stale unit refusal is stale', () => {
 });
 
 test('a conversation reopened without its session drops every card offer', () => {
-    const [stripped] = withoutUnitChanges([card()]);
+    const [stripped] = withoutCardOffers([card()]);
 
     assert.ok(stripped);
     assert.equal(cardUnitOffer(card())?.start.currency, 'USD');

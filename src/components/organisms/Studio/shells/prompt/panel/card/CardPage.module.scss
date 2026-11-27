@@ -262,6 +262,70 @@
     }
 }
 
+// Two selects side by side: From and To.
+.yearsPick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: rem(8);
+}
+
+.pickNote {
+    grid-column: 1 / -1;
+    font-size: rem(12);
+    line-height: rem(16);
+    color: var(--color-stone);
+}
+
+.placesPick {
+    display: flex;
+    flex-direction: column;
+    gap: rem(4);
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+
+    legend {
+        padding: 0;
+        margin-bottom: rem(4);
+    }
+}
+
+.filter {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: rem(24);
+    padding: rem(3) rem(6);
+    font: inherit;
+    color: var(--color-charcoal);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+}
+
+// About eight rows of 24 px show before the list scrolls.
+.placeList {
+    display: flex;
+    flex-direction: column;
+    gap: rem(2);
+    max-height: rem(8 * 26);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.listNote {
+    padding: rem(3) rem(4);
+    font-size: rem(12);
+    line-height: rem(16);
+    color: var(--color-stone);
+}
+
+.listFailed {
+    font-size: rem(12);
+    line-height: rem(16);
+    color: var(--color-red);
+}
+
 // ---- notes, sources, cite, made
 
 .subLabel {
@@ -286,11 +350,10 @@
 .sources {
     display: flex;
     flex-direction: column;
-    gap: rem(8);
-    padding: 0 rem(8);
+    gap: rem(2);
 }
 
-.source {
+.sourceItem {
     display: flex;
     flex-direction: column;
 }
@@ -300,22 +363,6 @@
     text-decoration: underline;
     text-decoration-color: var(--color-sage);
     text-underline-offset: rem(2);
-
-    span & {
-        text-decoration: none;
-    }
-}
-
-.sourceIcon {
-    width: rem(10);
-    height: rem(10);
-    margin-left: rem(2);
-}
-
-.sourceMeta {
-    @extend %mono;
-
-    color: var(--color-stone);
 }
 
 .segment {
@@ -367,6 +414,11 @@
     display: flex;
     flex-direction: column;
     gap: rem(8);
+}
+
+// The fold's list shows only while the fold is open.
+.made[hidden] {
+    display: none;
 }
 
 .steps {

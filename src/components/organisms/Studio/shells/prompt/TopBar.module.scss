@@ -10,6 +10,21 @@
     margin-left: rem(10);
 }
 
+// A phone: the title alone, up to two whole lines.
+.compact {
+    margin-left: 0;
+
+    .title {
+        display: -webkit-box;
+        overflow: hidden;
+        line-height: 1.25;
+        white-space: normal;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
+}
+
 .slash {
     flex-shrink: 0;
     font-family: var(--font-outfit);
@@ -125,4 +140,11 @@
     height: rem(28);
     margin-inline: rem(6);
     background-color: var(--color-yellow-800);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rename,
+    .icon {
+        transition: none;
+    }
 }

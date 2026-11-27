@@ -78,6 +78,16 @@
     overflow-wrap: anywhere;
 }
 
+// Name, value and "Change" side by side; notes and options still span the row.
+.columns .row {
+    grid-template-columns: rem(112) minmax(0, 1fr) auto;
+    align-items: baseline;
+}
+
+.columns .name {
+    grid-column: auto;
+}
+
 .value {
     @include font-size(12px, 1.3);
 

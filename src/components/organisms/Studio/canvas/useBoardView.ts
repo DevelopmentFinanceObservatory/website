@@ -11,7 +11,13 @@ import { type BoardView, scrollerOf } from './board';
  * grid on the same screen lines as the static pattern it covers, so the
  * mount swap is pixel-invisible.
  */
-export const useBoardView = (boardRef: RefObject<HTMLDivElement | null>, CELL: number) => {
+export const useBoardView = (
+    boardRef: RefObject<HTMLDivElement | null>,
+    CELL: number,
+    // False when the sheet's grid starts at its own frame's corner (no
+    // pattern beneath it to line up with): the origin stays at 0, 0.
+    alignToPage = true,
+) => {
     const [view, setView] = useState<BoardView>({
         left: 0,
         top: 0,
@@ -65,6 +71,10 @@ export const useBoardView = (boardRef: RefObject<HTMLDivElement | null>, CELL: n
     // patterns); adding the scroll offset back keeps the measurement
     // scroll-independent.
     useEffect(() => {
+        if (!alignToPage) {
+            return undefined;
+        }
+
         const frame = requestAnimationFrame(() => {
             const el = boardRef.current;
 
@@ -82,7 +92,7 @@ export const useBoardView = (boardRef: RefObject<HTMLDivElement | null>, CELL: n
         });
 
         return () => cancelAnimationFrame(frame);
-    }, [CELL, boardRef]);
+    }, [CELL, boardRef, alignToPage]);
 
     // View width in cells — keeps AUTO-placed newcomers inside the visible
     // window; it never reflows what's already placed.

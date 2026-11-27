@@ -163,12 +163,17 @@ export const revealOffset = ({
 };
 
 /**
- * The view's foot that the floating prompt covers, in px: the 20 px gap under
- * the resting prompt, the resting prompt, and 20 px of air above it. `rest`
- * is `--dock-rest` as the dock writes it on the shell root.
+ * The top row of the block a finished turn changed: the highest block holding
+ * a card that landed during the turn (a live card whose id was not on the
+ * sheet when the turn began, a replacement included). Null when the turn
+ * landed no card.
  */
-export const promptFoot = (rest: string): number => {
-    const px = Number.parseFloat(rest);
+export const replyBlockTop = (slots: Slots, before: ReadonlySet<string>): number | null => {
+    const landed = Object.entries(slots).filter(([id, slot]) => !slot.leaving && !before.has(id));
 
-    return 20 + (Number.isFinite(px) ? px : 0) + 20;
+    if (landed.length === 0) {
+        return null;
+    }
+
+    return Math.min(...landed.map(([, slot]) => arrivalBlock(slot, slots, new Set()).top));
 };

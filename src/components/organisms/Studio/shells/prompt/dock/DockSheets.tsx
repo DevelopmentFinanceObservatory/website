@@ -11,18 +11,20 @@ import MessageFeedback from '../../../workspace/MessageFeedback';
 import WidgetChips from '../../../workspace/WidgetChips';
 
 import Icon from '@/components/atoms/Icon/Icon';
-import { type DockQuestion, streamBlocks } from '@/lib/studio/dockView';
+import { streamBlocks } from '@/lib/studio/dockView';
+import type { Question } from '@/lib/studio/questions';
 
-/** What a reply's card chips do, as the chat's card rows do it. */
+/** What a reply's card chips need: the cards, their names and the way to
+ *  each on the canvas. */
 export type ChipActions = {
     titles: Record<string, string>;
     views: Record<string, CardView>;
     widgets: TurnWidget[];
     onCanvas: (id: string) => boolean;
     onGo: (id: string) => void;
-    onAdd: (id: string) => void;
-    onRemove: (id: string) => void;
 };
+
+const ignore = () => {};
 
 // Tables and code blocks scroll sideways inside the reply.
 const markdownComponents: Components = {
@@ -64,7 +66,7 @@ const ReplyContent = ({
     feedback,
     chips,
 }: {
-    question: DockQuestion;
+    question: Question;
     streaming: boolean;
     feedback: boolean;
     chips: ChipActions;
@@ -84,8 +86,11 @@ const ReplyContent = ({
                 views={chips.views}
                 onCanvas={chips.onCanvas}
                 onGo={chips.onGo}
-                onAdd={chips.onAdd}
-                onRemove={chips.onRemove}
+                // A chip in the reply names its card and flies to it; the
+                // card's own head and the panel add and remove cards.
+                readOnly
+                onAdd={ignore}
+                onRemove={ignore}
             />
         </>
     );
@@ -102,7 +107,7 @@ export const ReplySheet = ({
     onThread,
     onFold,
 }: {
-    question: DockQuestion;
+    question: Question;
     count: number;
     streaming: boolean;
     chips: ChipActions;
@@ -157,7 +162,7 @@ export const ThreadSheet = ({
     chips,
     onClose,
 }: {
-    questions: DockQuestion[];
+    questions: Question[];
     /** The turn still streaming, null when none is. */
     runningTurn: number | null;
     chips: ChipActions;

@@ -184,6 +184,12 @@
         border-color: var(--color-sage-dark);
     }
 
+    // Focus lands on the box itself when the control that held it leaves.
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+
     .dock:not([data-sheet="none"]) & {
         box-shadow: var(--dock-shadow-open);
     }
@@ -221,6 +227,14 @@
 
 .wall {
     padding: rem(10);
+
+    // The dock's box is the frame; the wall draws none of its own. The
+    // attribute outranks the component's own one-class rule.
+    > [class] {
+        max-width: none;
+        border: 0;
+        border-radius: 0;
+    }
 }
 
 .count {
@@ -802,8 +816,54 @@
     white-space: nowrap;
 }
 
+// The clarifications already answered: the question at left, the answer
+// at right.
+.clarified {
+    margin: rem(6) 0 0;
+}
+
+.clarifiedRow {
+    @include font-size(12px, 1.4);
+
+    display: flex;
+    gap: rem(12);
+    justify-content: space-between;
+    font-family: var(--font-outfit);
+
+    dt {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--color-stone);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    dd {
+        flex-shrink: 0;
+        max-width: 50%;
+        margin: 0;
+        font-weight: 500;
+        color: var(--color-charcoal);
+        text-align: right;
+    }
+}
+
 .clarify {
     padding: rem(16) rem(16) rem(14);
+
+    // The dock's box is the frame; the picker draws none of its own. The
+    // attribute outranks the component's own one-class rule.
+    > [class] {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+    }
+
+    // The question takes the box's width; the picker caps it for a narrow
+    // chat column.
+    [class] > p[class]:first-child {
+        max-width: none;
+    }
 }
 
 // --- Plan --------------------------------------------------------------------
@@ -835,6 +895,8 @@
 }
 
 .planLedger {
+    --ledger-inset: 0;
+
     margin-top: rem(10);
 }
 

@@ -11,8 +11,8 @@
     --sp-rule: var(--color-net-mid);
     --sp-faint: var(--color-gray-2600);
     --sp-ok: var(--color-mint-dark);
-    --sp-run: #6467de;
-    --sp-pointed: #ecece2;
+    --sp-run: var(--color-select);
+    --sp-pointed: var(--color-pointed);
 
     font-family: var(--font-outfit);
     font-size: rem(13);
@@ -106,6 +106,10 @@
     margin-left: rem(4);
     font-weight: 400;
     color: var(--sp-faint);
+
+    .fold > & {
+        margin-left: 0;
+    }
 }
 
 .foot {
@@ -143,6 +147,11 @@
         color: var(--color-charcoal);
         text-decoration-color: currentColor;
     }
+}
+
+.textButton[data-failed],
+.textButton[data-failed]:hover {
+    color: var(--color-red);
 }
 
 // ---- chevrons
@@ -404,6 +413,16 @@
 .act[data-done],
 .act[data-done]:hover {
     color: var(--sp-ok);
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+    }
+}
+
+.act[data-failed],
+.act[data-failed]:hover {
+    color: var(--color-red);
 
     svg {
         width: rem(12);

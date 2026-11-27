@@ -9,7 +9,16 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
-import { placeCard, renameId, renameKey, takenOver, withReplacedCard } from '../cardReplace.ts';
+import {
+    placeCard,
+    renameId,
+    renameKey,
+    replacedChain,
+    standingFor,
+    standingTarget,
+    takenOver,
+    withReplacedCard,
+} from '../cardReplace.ts';
 import { widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated } from '../wire.ts';
 
@@ -178,4 +187,36 @@ test('withReplacedCard: before the next manifest, the canvas shows the replaceme
     // The next manifest is still taken: the revision is the held one.
     assert.equal(canvas?.revision, 3);
     assert.equal(withReplacedCard(held, 'cmp_elsewhere', 'cmp_new'), held);
+});
+
+test('a replaced card is followed forward to the card standing in its place, and back along its chain', () => {
+    const replaced = { c2: 'c1', c3: 'c2' };
+
+    assert.equal(standingFor('c1', new Set(['c3']), replaced), 'c3');
+    assert.equal(standingFor('c1', new Set(['c1']), replaced), 'c1');
+    assert.equal(standingFor('c1', new Set(['x']), replaced), null);
+    assert.equal(standingFor('a', new Set(['x']), { a: 'b', b: 'a' }), null);
+    assert.deepEqual(replacedChain('c3', replaced), ['c3', 'c2', 'c1']);
+    assert.deepEqual(replacedChain('a', { a: 'b', b: 'a' }), ['a', 'b']);
+});
+
+test('placeCard records the turn of the question that made a chain’s first card, through every replacement', () => {
+    const first = placeCard([{ id: 'a', turn: 1 }], { id: 'b', turn: 3 }, { replaces: 'a' });
+    const second = placeCard(first, { id: 'c', turn: 5 }, { replaces: 'b' });
+    // A card redrawn under its own id keeps the turn it records.
+    const updated = placeCard(second, { id: 'c', turn: 6 }, {});
+
+    assert.deepEqual(first, [{ id: 'b', turn: 3, madeIn: 1 }]);
+    assert.deepEqual(second, [{ id: 'c', turn: 5, madeIn: 1 }]);
+    assert.deepEqual(updated, [{ id: 'c', turn: 6, madeIn: 1 }]);
+});
+
+test('a follow-up target follows its card to the replacement, and goes when none stands', () => {
+    const target = { id: 'c1', title: 'Aid' };
+    const replaced = { c2: 'c1' };
+
+    assert.equal(standingTarget(target, new Set(['c1']), replaced), target);
+    assert.deepEqual(standingTarget(target, new Set(['c2']), replaced), { id: 'c2', title: 'Aid' });
+    assert.equal(standingTarget(target, new Set(['x']), replaced), null);
+    assert.equal(standingTarget(null, new Set(['c1']), replaced), null);
 });

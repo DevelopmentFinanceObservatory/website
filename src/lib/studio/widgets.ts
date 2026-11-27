@@ -52,7 +52,13 @@ import {
     unitWords,
     type StatValue,
 } from './statFace.ts';
-import type { ComponentCreated, ComponentRevised, FactSummary } from './wire';
+import type {
+    ComponentCreated,
+    ComponentRevised,
+    CreatedFrom,
+    FactSummary,
+    PlanStepLink,
+} from './wire';
 import { readHeld } from './wire.ts';
 
 const structuredUnitText = (unit: StructuredUnit): string => {
@@ -581,10 +587,17 @@ const componentWidget = (
     }
 };
 
+/** The plan step a frame's `created_from` names, when it names both ids. */
+export const planStepOf = (from: CreatedFrom | null | undefined): PlanStepLink | null =>
+    from?.plan_version_id && from.plan_step_id
+        ? { plan_version_id: from.plan_version_id, plan_step_id: from.plan_step_id }
+        : null;
+
 /** One created component → one canvas widget. */
 export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
     const description = describedBy(payloadDescription(frame.payload));
     const widget = componentWidget(frame, description);
+    const planStep = planStepOf(frame.created_from);
 
     if (!widget || widget.kind === 'text') {
         // A note carries no data of its own, so it gets no info panel.
@@ -596,6 +609,8 @@ export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
         frame: payloadFrameRef(frame.payload) ?? frame.provenance.inputs[0],
         info: infoOf(frame.fact_summary, provenanceOf(frame), description),
         ...(frame.unit_change && { unitChange: frame.unit_change }),
+        ...(frame.card_changes && { cardChanges: frame.card_changes }),
+        ...(planStep && { planStep }),
     };
 };
 
@@ -689,6 +704,11 @@ export const reviseWidget = (
     // goes when it reads another, whose units the offer does not describe.
     if (redrawn.unitChange && drawnFrom?.spec_id !== redrawn.unitChange.spec_id) {
         delete redrawn.unitChange;
+    }
+
+    // The years and places offer holds by the same rule.
+    if (redrawn.cardChanges && drawnFrom?.spec_id !== redrawn.cardChanges.spec_id) {
+        delete redrawn.cardChanges;
     }
 
     return {
