@@ -119,15 +119,15 @@ wraps the pnpm scripts (listed under Scripts) plus the container and deploy
 workflows. `just` with no arguments lists everything. Install it with
 `brew install just` if you don't have it.
 
-| Section               | Recipes                                                 |
-| --------------------- | ------------------------------------------------------- |
-| Setup & Configuration | `setup`, `env`                                          |
-| Development           | `dev`, `stack`, `mail-cert`, `start`, `optimize-svg`    |
-| Database              | `db-up`, `db-migrate`, `db-reset`, `db-generate`        |
-| Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `check` |
-| Container             | `docker-build`, `run-local`, `clean`                    |
-| Diagnostics           | `status`, `doctor`, `logs`, `deployed`                  |
-| Deploy config         | `set-dev-deploy-vars`                                   |
+| Section               | Recipes                                                                  |
+| --------------------- | ------------------------------------------------------------------------ |
+| Setup & Configuration | `setup`, `env`                                                           |
+| Development           | `dev`, `stack`, `mail-cert`, `start`, `optimize-svg`                     |
+| Database              | `db-up`, `db-migrate`, `db-reset`, `db-generate`                         |
+| Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `studio-replay`, `check` |
+| Container             | `docker-build`, `run-local`, `clean`                                     |
+| Diagnostics           | `status`, `doctor`, `logs`, `deployed`                                   |
+| Deploy config         | `set-dev-deploy-vars`                                                    |
 
 Run `just <recipe>` to see what each one does, or `just --list` for the
 one-line descriptions.
@@ -291,20 +291,39 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 
 ## Scripts
 
-| Script                  | What it does                                     |
-| ----------------------- | ------------------------------------------------ |
-| `pnpm dev`              | Dev server (Turbopack)                           |
-| `pnpm build`            | Production build (standalone output)             |
-| `pnpm start`            | Serve the production build                       |
-| `pnpm lint`             | ESLint                                           |
-| `pnpm typecheck`        | `tsc --noEmit`                                   |
-| `pnpm test`             | Migration integration tests (`just db-up` first) |
-| `pnpm lint:css`         | Stylelint (SCSS, BEM pattern)                    |
-| `pnpm lint:css:fix`     | Stylelint with autofix                           |
-| `pnpm format`           | Prettier over `src/`                             |
-| `pnpm optimize:svg`     | SVGO over `src/assets` (run after adding)        |
-| `pnpm db:generate`      | Generate a migration from `db/schema.ts`         |
-| `pnpm db:migrate:local` | Apply migrations to the local database           |
+| Script                    | What it does                                                       |
+| ------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                | Dev server (Turbopack)                                             |
+| `pnpm build`              | Production build (standalone output)                               |
+| `pnpm start`              | Serve the production build                                         |
+| `pnpm lint`               | ESLint                                                             |
+| `pnpm typecheck`          | `tsc --noEmit`                                                     |
+| `pnpm test`               | Migration integration tests (`just db-up` first)                   |
+| `pnpm test:studio-replay` | Recorded Studio conversations on both layouts (`pnpm build` first) |
+| `pnpm lint:css`           | Stylelint (SCSS, BEM pattern)                                      |
+| `pnpm lint:css:fix`       | Stylelint with autofix                                             |
+| `pnpm format`             | Prettier over `src/`                                               |
+| `pnpm optimize:svg`       | SVGO over `src/assets` (run after adding)                          |
+| `pnpm db:generate`        | Generate a migration from `db/schema.ts`                           |
+| `pnpm db:migrate:local`   | Apply migrations to the local database                             |
+
+## Studio replay test
+
+`pnpm test:studio-replay` plays every recorded Studio conversation in `e2e/studio-replay/fixtures/` to its end on both layouts, `?studio=classic` and `?studio=prompt`, against the production build. It starts the standalone server on a free localhost port with a made-up environment that reaches nothing, opens each conversation in headless Chromium, and answers every request the page makes from the recording, so no model, harness, database or search service runs. A run fails on a console error, a page error, a request no route answers, a request the recording did not expect, or a page that does not show what the recording says: the plan or question at each pause, and at the end as many cards as the last canvas holds and the start of the last reply. `pnpm test` leaves it out. CI runs it after `Build`.
+
+Run it locally after `pnpm build`, or with `just studio-replay`, which builds first. The first run needs the browser: `pnpm exec playwright-core install --only-shell chromium`.
+
+### Record or edit a scenario
+
+A fixture is one conversation: its name, a description, and its turns, each with the question the test types and the harness's stream in segments. The first segment answers the question's `POST /api/studio/turn`. Each later segment answers the `POST /api/studio/interrupt` the page sends at the pause the segment before it ended on, a plan (`plan.proposed`) or a clarifying question (`elicitation.request`), and carries `act`, how the test answers that pause (`{ "kind": "approve" }`, or `{ "kind": "answer", "picks": { "q1": "<option label>" } }`), and `expect`, the members the interrupt request must carry. Frames are the harness's `data:` frames in the order it sent them.
+
+To record one, run the stack (`just stack`), send the question from Studio, and save each response body of `/api/studio/turn` and `/api/studio/interrupt` from the browser's network panel or with `curl -N`. Then:
+
+```sh
+node e2e/studio-replay/fromStream.ts <name> "<question>" turn.sse [interrupt.sse ...] > e2e/studio-replay/fixtures/<name>.json
+```
+
+Add `act` and `expect` to each later segment, a `description`, further turns by hand, and the name to `SCENARIOS` in `e2e/studio-replay/scenario.ts`. The repository is public, so before committing a fixture, reword any question a person typed unless it is one of the landing page's examples (`src/lib/studio/examples.ts`), and search it for credentials, tokens, email addresses, internal hostnames and session links. Keep every value as the harness sent it.
 
 ## API client package
 

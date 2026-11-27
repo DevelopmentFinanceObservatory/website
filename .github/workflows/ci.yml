@@ -90,6 +90,16 @@ jobs:
             - name: Build
               run: pnpm build
 
+            # The Studio replay test plays recorded conversations on both
+            # layouts against the build above, in headless Chromium with no
+            # network beyond localhost. playwright-core installs the browser
+            # build it pins, with the system libraries it needs.
+            - name: Install headless Chromium
+              run: pnpm exec playwright-core install --with-deps --only-shell chromium
+
+            - name: Studio replay
+              run: pnpm test:studio-replay
+
             # dist/** is eslint-ignored (eslint.config.mjs), so this runs after
             # Lint rather than before it -- that ignore stays a convenience for
             # local developers, not a load-bearing ordering requirement for CI.

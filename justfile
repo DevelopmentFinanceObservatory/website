@@ -388,6 +388,14 @@ test:
 build:
     pnpm build
 
+# Plays the recorded Studio conversations on both layouts against the
+# production build, in headless Chromium (`pnpm exec playwright-core install
+# --only-shell chromium` once). See "Studio replay test" in docs/development.md.
+#
+# Play the recorded Studio conversations on both layouts
+studio-replay: build
+    pnpm test:studio-replay
+
 # Checks vendor/developmentfinance-client.provenance.json against the commit
 # that vendored the tarball (see "API client package" in docs/development.md).
 #
@@ -396,7 +404,7 @@ check-client-provenance:
     pnpm check:client-provenance
 
 # Everything ci.yml runs, in CI's order. Green here means green there.
-check: check-client-provenance lint typecheck test build
+check: check-client-provenance lint typecheck test build studio-replay
 
 # ── Container ──────────────────────────────────────────
 
