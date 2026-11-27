@@ -11,6 +11,7 @@
 import { capitalise } from '../capitalise.ts';
 import type { Widget } from '../chat/widgets.ts';
 import { cardUnitOffer, SCOPE_CHOICE_STALE } from './cardUnit.ts';
+import { CHANGE_REFUSAL_CODES, type ChangeRefusalCode } from './changeRefusalCodes.ts';
 import type { StreamRefusal } from './studioClient.ts';
 import { baseYears, priceRows, servesUnit, unitText } from './unitChoice.ts';
 import type {
@@ -61,9 +62,13 @@ export type ChangeOffer =
           chosen: PlaceOption[];
       };
 
-/** Where the reader's last change to a row stands. */
+/** Where the reader's last change to a row stands. A refusal carries the
+ *  harness's code (`code`) when it sent one (changeRefusalCode); one the
+ *  harness's closing sentence gave has none. */
 export type ChangeStatus =
-    { state: 'idle' } | { state: 'pending' } | { state: 'refused'; detail: string };
+    | { state: 'idle' }
+    | { state: 'pending' }
+    | { state: 'refused'; detail: string; code?: ChangeRefusalCode };
 
 // More than one unit to choose from: two currencies, two price bases, or two
 // base years.
@@ -358,6 +363,14 @@ export const PLACE_OPTIONS_UNAVAILABLE = 'place_options_unavailable';
  *  all. It answers a places change and the places read. */
 export const CAPABILITY_UNAVAILABLE = 'capability_unavailable';
 
+/** The code of the harness's refusal of a card change, its `constraint_id`
+ *  else its `error`, when it is one of CHANGE_REFUSAL_CODES; null otherwise. */
+export const changeRefusalCode = (refusal: StreamRefusal): ChangeRefusalCode | null => {
+    const named = [refusal.error?.constraint_id, refusal.error?.error];
+
+    return CHANGE_REFUSAL_CODES.find((code) => named.includes(code)) ?? null;
+};
+
 /** The `detail` of the harness's refusal of a change of years or places (422
  *  with a pointer under `/apply_change`, or a 503 because the places could
  *  not be read or cannot be listed), or null for any other refusal. */
@@ -387,6 +400,7 @@ export type ChangeMessage = {
     role: 'user' | 'bot';
     text: string;
     edit?: ChangeEdit;
+    refusal?: ChangeRefusalCode;
 };
 
 /** A change waiting behind the request in flight, as `useChat` queues it. */
@@ -546,6 +560,7 @@ export const changeStatus = ({
 
     const reply = messages[at + 1];
     const detail = reply?.role === 'bot' ? refusalText(reply.text) : '';
+    const code = reply?.refusal;
 
-    return detail ? { state: 'refused', detail } : { state: 'idle' };
+    return detail ? { state: 'refused', detail, ...(code && { code }) } : { state: 'idle' };
 };

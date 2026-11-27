@@ -4,6 +4,13 @@ import { type RefObject, useEffect, useState } from 'react';
 
 import { type BoardView, scrollerOf } from './board';
 
+const sameView = (a: BoardView, b: BoardView): boolean =>
+    a.left === b.left &&
+    a.top === b.top &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.overhang === b.overhang;
+
 /**
  * The board's frame of reference: the live view rectangle (rAF-throttled
  * scroll position + size — anchors the off-screen beacons and sizes
@@ -37,7 +44,7 @@ export const useBoardView = (
         let raf = 0;
         const update = () => {
             raf = 0;
-            setView({
+            const next: BoardView = {
                 left: scroller.scrollLeft,
                 top: scroller.scrollTop,
                 width: scroller.clientWidth,
@@ -46,7 +53,11 @@ export const useBoardView = (
                     0,
                     Math.round(scroller.getBoundingClientRect().bottom - window.innerHeight),
                 ),
-            });
+            };
+
+            // The same values keep the same state, so a scroll event that
+            // moved nothing (a glide's frames past its end) renders nothing.
+            setView((prev) => (sameView(prev, next) ? prev : next));
         };
         const schedule = () => {
             if (!raf) {

@@ -29,25 +29,34 @@ export const questionTurn = (widget: Widget): number | null =>
 
 const live = (slots: Slots) => Object.values(slots).filter((slot) => !slot.leaving);
 
+/** What the block floor reads of a card or a placeholder standing on the sheet. */
+export type FloorItem = { row: number; h: number; turn: number | null };
+
+/** The floor items of the live cards in `slots`. */
+export const floorItems = (slots: Slots): FloorItem[] =>
+    live(slots).map((slot) => ({ row: slot.row, h: slot.h, turn: questionTurn(slot.widget) }));
+
+const floorOf = (turn: number | null, items: readonly FloorItem[]): number => {
+    const own = turn === null ? [] : items.filter((item) => item.turn === turn);
+
+    if (own.length > 0) {
+        return Math.min(...own.map((item) => item.row));
+    }
+
+    if (items.length === 0) {
+        return BLOCK_INSET;
+    }
+
+    return Math.max(...items.map((item) => item.row + item.h)) + BLOCK_GAP;
+};
+
 /**
  * The first row a newcomer of `turn` may take: the top of its question's live
  * cards, or, when that question has none on the sheet, BLOCK_GAP cells below
  * every live card. An empty sheet starts BLOCK_INSET cells down.
  */
-export const blockFloor = (turn: number | null, slots: Slots): number => {
-    const cards = live(slots);
-    const own = turn === null ? [] : cards.filter((slot) => questionTurn(slot.widget) === turn);
-
-    if (own.length > 0) {
-        return Math.min(...own.map((slot) => slot.row));
-    }
-
-    if (cards.length === 0) {
-        return BLOCK_INSET;
-    }
-
-    return Math.max(...cards.map((slot) => slot.row + slot.h)) + BLOCK_GAP;
-};
+export const blockFloor = (turn: number | null, slots: Slots): number =>
+    floorOf(turn, floorItems(slots));
 
 /**
  * The columns a newcomer may reach in a view `width` px wide, of which the
@@ -65,23 +74,25 @@ export const blockCols = (width: number, reserveRight: number, cell: number): nu
  * floor inside the insets (`blocks`).
  */
 export const newcomerSpot = ({
-    widget,
+    turn,
     w,
     h,
     saved,
     occupied,
-    slots,
+    floor,
     cols,
     placement,
     nearest,
 }: {
-    widget: Widget;
+    // The question the newcomer answers (`questionTurn`).
+    turn: number | null;
     w: number;
     h: number;
     saved: Spot | null;
     occupied: Rect[];
-    // Every slot placed so far, this batch's newcomers included.
-    slots: Slots;
+    // Every card and placeholder placed so far, this batch's newcomers
+    // included (`floorItems`).
+    floor: readonly FloorItem[];
     cols: number;
     placement: Placement;
     nearest: (spot: Spot) => Spot | null;
@@ -90,7 +101,7 @@ export const newcomerSpot = ({
         placement === 'blocks'
             ? findSpot(w, h, occupied, cols, {
                   col: BLOCK_INSET,
-                  row: blockFloor(questionTurn(widget), slots),
+                  row: floorOf(turn, floor),
               })
             : findSpot(w, h, occupied, cols);
 

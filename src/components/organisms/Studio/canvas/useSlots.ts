@@ -12,10 +12,13 @@ import {
     settleAround,
     type Slots,
 } from './layout';
+import { type Coming, type Ghosts, placeGhosts, placeholderOf } from './comingGhosts';
 import { placeSlots } from './placeSlots';
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
+
+const NONE: readonly Coming[] = [];
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -36,6 +39,9 @@ type UseSlotsArgs = {
     // Cards that replaced another in its slot, new id → old id: the new
     // card takes the old one's slot, place and size.
     replacedIds?: Record<string, string>;
+    // The cards a running turn has announced, which stand as placeholders
+    // until their cards land (comingGhosts.ts).
+    coming?: readonly Coming[];
 };
 
 /**
@@ -56,8 +62,18 @@ export const useSlots = ({
     placement = 'pack',
     onLayoutChange,
     replacedIds,
+    coming = NONE,
 }: UseSlotsArgs) => {
     const [slots, setSlots] = useState<Slots>({});
+    const [ghosts, setGhosts] = useState<Ghosts>({});
+    // The placeholders as of the last placement, which the next one reads.
+    const ghostsRef = useRef<Ghosts>({});
+    // The slots as of the last render, which a placement starts from.
+    const slotsRef = useRef<Slots>(slots);
+
+    useEffect(() => {
+        slotsRef.current = slots;
+    });
     const zRef = useRef(1);
     const leaveTimersRef = useRef<number[]>([]);
 
@@ -73,18 +89,35 @@ export const useSlots = ({
         }
 
         const frame = requestAnimationFrame(() => {
-            setSlots((current) =>
-                placeSlots(current, {
-                    widgets,
-                    pinnedIds,
-                    views,
-                    initialLayout,
-                    cols: viewCols,
-                    placement,
-                    replacedIds,
-                    nextZ: () => zRef.current++,
-                }),
-            );
+            // The cards and the placeholders are placed in one update, so a
+            // card that lands takes its placeholder's place in the frame the
+            // placeholder goes.
+            const placed = placeSlots(slotsRef.current, {
+                widgets,
+                pinnedIds,
+                views,
+                initialLayout,
+                cols: viewCols,
+                placement,
+                replacedIds,
+                nextZ: () => zRef.current++,
+                ghosts: ghostsRef.current,
+            });
+            const claimed = new Set(widgets.flatMap((widget) => placeholderOf(widget) ?? []));
+            const standing = placeGhosts({
+                current: ghostsRef.current,
+                coming,
+                claimed,
+                slots: placed,
+                cols: viewCols,
+                placement,
+                now: Date.now(),
+            });
+
+            slotsRef.current = placed;
+            ghostsRef.current = standing;
+            setSlots(placed);
+            setGhosts(standing);
 
             // Prune whatever finished fading — a no-op when nothing left.
             const timer = window.setTimeout(() => {
@@ -94,13 +127,22 @@ export const useSlots = ({
 
                     return kept.length === entries.length ? prev : Object.fromEntries(kept);
                 });
+                setGhosts((prev) => {
+                    const entries = Object.entries(prev);
+                    const kept = entries.filter(([, ghost]) => !ghost.leaving);
+
+                    ghostsRef.current =
+                        kept.length === entries.length ? prev : Object.fromEntries(kept);
+
+                    return ghostsRef.current;
+                });
             }, LEAVE_MS);
 
             leaveTimersRef.current.push(timer);
         });
 
         return () => cancelAnimationFrame(frame);
-    }, [widgets, pinnedIds, views, viewCols, placement, initialLayout, replacedIds]);
+    }, [widgets, pinnedIds, views, viewCols, placement, initialLayout, replacedIds, coming]);
 
     // Every settle (placement, drop, swap, resize) reports the live layout —
     // the parent persists it with the conversation.
@@ -155,5 +197,5 @@ export const useSlots = ({
         );
     }, []);
 
-    return { slots, setSlots, fitRows, raise };
+    return { slots, setSlots, ghosts, fitRows, raise };
 };

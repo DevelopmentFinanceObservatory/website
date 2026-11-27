@@ -182,6 +182,8 @@ const PromptStage = () => {
     // `edit`) redraws one card in place, so the canvas stays where it is.
     const asked = model.chat.messages.findLast((message) => message.role === 'user');
     const replying = model.chat.thinking && !(asked?.role === 'user' && asked.edit);
+    // The cards the running turn announced (useChat), drawn as placeholders.
+    const coming = model.chat.coming;
     const viewPlanIds = useMemo(() => new Set(links.plans.flatMap((plan) => plan.cards)), [links]);
     const litIds = useMemo(
         () => litCards({ state, panelOpen, planOf: links.planOf, plans: links.plans }),
@@ -241,6 +243,7 @@ const PromptStage = () => {
             viewPlanIds,
             onViewPlan: showPlan,
             replying,
+            coming,
         }),
         [
             reserveRight,
@@ -252,6 +255,7 @@ const PromptStage = () => {
             viewPlanIds,
             showPlan,
             replying,
+            coming,
         ],
     );
 

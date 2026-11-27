@@ -1488,6 +1488,13 @@ test('a card change the harness refuses leaves a waiting plan waiting, and one i
             await page.settle(60);
 
             assert.equal(page.result().plan === null, admitted, name);
+
+            // A refusal's reply keeps the harness's code.
+            const reply = page.result().messages.at(-1);
+
+            if (!admitted) {
+                assert.equal(reply?.role === 'bot' && reply.refusal, 'change_no_data', name);
+            }
             page.unmount();
             t.mock.restoreAll();
         }
@@ -1545,4 +1552,119 @@ test('a card change queued behind a question that pauses on a plan or a question
             t.mock.restoreAll();
         }
     }
+});
+
+test('cards on their way show from the running line, a card takes its placeholder, and the stream’s end clears the rest', async (t) => {
+    const fixture = (name: string) =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const line = fixture('event-24-activity-step-coming-cards.json');
+    const card = fixture('event-06-component-created.json') as ComponentCreated;
+    let send: (frames: unknown[]) => void = () => {};
+    let end: () => void = () => {};
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        if (String(input) !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        return new Response(
+            new ReadableStream({
+                start(controller) {
+                    send = (frames) =>
+                        controller.enqueue(
+                            new TextEncoder().encode(
+                                frames
+                                    .map((frame) => `data: ${JSON.stringify(frame)}\n\n`)
+                                    .join(''),
+                            ),
+                        );
+                    end = () => controller.close();
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': '2' } },
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat());
+
+    page.result().hydrate(drawn());
+    await page.settle();
+
+    const none = page.result().coming;
+
+    assert.deepEqual(none, []);
+    page.result().send('Aid to Ethiopia');
+    await page.settle();
+    assert.equal(page.result().coming, none);
+    send([line]);
+    await page.settle();
+    assert.deepEqual(
+        page.result().coming.map(({ id, type, turn }) => [id, type, turn]),
+        [
+            ['s1.0', 'stat_card', 2],
+            ['s1.1', 'line_chart', 2],
+        ],
+    );
+    send([{ ...card, component_id: 'cmp_new' }]);
+    await page.settle();
+    assert.deepEqual(
+        page.result().coming.map(({ id }) => id),
+        ['s1.1'],
+    );
+    assert.equal(
+        page.result().widgets.find((widget) => widget.id === 'cmp_new')?.placeholderId,
+        's1.0',
+    );
+    // The stream drops: no placeholder stays, and a reopened page shows none.
+    end();
+    await page.settle(60);
+    assert.equal(page.result().coming, none);
+    page.unmount();
+});
+
+test('a stream that ends on an error reads the canvas from the state, so a card the harness removed leaves', async (t) => {
+    let reads = 0;
+    let asked = false;
+    const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+        const url = String(input);
+
+        if (url === '/api/studio/turn') {
+            asked = true;
+
+            return chunk(2, [
+                { event: 'error', seq: 2, error: { error: 'internal', detail: 'x' } },
+            ]);
+        }
+
+        if (url.startsWith('/api/studio/state')) {
+            reads += 1;
+
+            return Response.json({
+                conversation_id: 'conv_1',
+                turn: {
+                    index: 1,
+                    status: 'done',
+                    trace_id: 'tr_1',
+                    user_message: 'Aid to Kenya',
+                    lease_live: false,
+                },
+                closed_since: [],
+                closed_total: 1,
+                // After the turn, the removal the harness held never came;
+                // the state has it.
+                manifest: asked ? { ...manifestOf([]), revision: 10 } : manifestOf(['cmp_1']),
+            });
+        }
+
+        return new Response('{}', { status: 404 });
+    };
+    const page = await reopen(t, drawn(), fetch);
+    const before = reads;
+
+    assert.deepEqual(page.result().canvas?.ids, ['cmp_1']);
+    page.result().send('Take it off and draw another');
+    await page.settle(60);
+
+    assert.ok(reads > before);
+    assert.deepEqual(page.result().canvas?.ids, []);
+    page.unmount();
 });

@@ -1,13 +1,22 @@
 'use client';
 
 import classNames from 'classnames';
-import { type MutableRefObject, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import {
+    type MutableRefObject,
+    useEffect,
+    useEffectEvent,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import BeaconLayer from './BeaconLayer';
 import { computeBeacons } from './beacons';
 import {
     arrivalBlock,
+    questionTurn,
     BLOCK_INSET,
     blockCols,
     type Placement,
@@ -19,6 +28,14 @@ import { DRAG_THRESHOLD, selectionAfter, type SelectTarget, selectTarget } from 
 import CardBody from './cards/CardBody';
 import CardNote from './cards/CardNote';
 import type { CardExtras } from './cards/types';
+import {
+    type Coming,
+    comingNotice,
+    ghostLabel,
+    placeholderOf,
+    RESEAT_MS,
+    titledGhosts,
+} from './comingGhosts';
 import {
     type CardView,
     effectiveKind,
@@ -66,6 +83,10 @@ const NOTE_DROP_MS = 400;
 // change has settled the canvas's width.
 const HELD_SETTLE_MS = 320;
 
+// The pause between emptying the status and filling it, so the same words
+// twice are announced twice.
+const NOTICE_GAP_MS = 60;
+
 const scrollBehavior = (): ScrollBehavior =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
@@ -99,6 +120,9 @@ export type PromptCanvas = {
     // A question's turn is running. When it ends, the view brings the block
     // its cards landed in to one cell under the top.
     replying: boolean;
+    // The cards the running turn has announced, drawn as placeholders where
+    // they will land (comingGhosts.ts).
+    coming: readonly Coming[];
 };
 
 export type WhiteboardProps = {
@@ -226,6 +250,7 @@ const Whiteboard = ({
     const viewPlanIds = prompt?.viewPlanIds;
     const onViewPlan = prompt?.onViewPlan;
     const replying = prompt?.replying;
+    const coming = prompt?.coming;
     const CELL = useGridCell();
     const f = CELL / GRID_CELL;
     const boardRef = useRef<HTMLDivElement>(null);
@@ -238,7 +263,7 @@ const Whiteboard = ({
     // on a phone the cells are just smaller (useGridCell fits them to the
     // width) and the sheet pans.
     const blocks = placement === 'blocks';
-    const { slots, setSlots, fitRows, raise } = useSlots({
+    const { slots, setSlots, ghosts, fitRows, raise } = useSlots({
         widgets,
         pinnedIds,
         views,
@@ -247,6 +272,7 @@ const Whiteboard = ({
         placement,
         onLayoutChange,
         replacedIds,
+        coming,
     });
     const widgetIds = useMemo(() => new Set(widgets.map((widget) => widget.id)), [widgets]);
     // Which card the pointer is resting on — the whole card, not a tag in it,
@@ -339,12 +365,14 @@ const Whiteboard = ({
     const bottomRow = Math.max(
         0,
         ...Object.values(slots).map((slot) => slot.row + slot.h),
+        ...Object.values(ghosts).map((ghost) => ghost.row + ghost.h),
         landing && dragged ? landing.row + dragged.h : 0,
         swap && swapPartner ? swap.theirRow + swapPartner.h : 0,
     );
     const rightCol = Math.max(
         0,
         ...Object.values(slots).map((slot) => slot.col + slot.w),
+        ...Object.values(ghosts).map((ghost) => ghost.col + ghost.w),
         landing && dragged ? landing.col + dragged.w : 0,
         swap && swapPartner ? swap.theirCol + swapPartner.w : 0,
     );
@@ -412,6 +440,7 @@ const Whiteboard = ({
         CELL,
         spawnWave,
         busy: () => dragging.isDragging() || pan.isPanning(),
+        quiet: (newest) => placeholderOf(newest.widget) !== null,
         // A new block comes up to one cell under the top; a card joining a
         // block is revealed just enough to show above the prompt.
         placeView: blocks
@@ -429,9 +458,77 @@ const Whiteboard = ({
             : undefined,
     });
 
+    // Placeholders that appear are announced once as a batch, and the view
+    // goes to the first of them as it goes to a block's first card, once
+    // their places have settled (comingGhosts.ts RESEAT_MS); the cards that
+    // later take their places move nothing.
+    const seenGhosts = useRef<Set<string>>(new Set());
+    const showTimer = useRef(0);
+    const noticeTimer = useRef(0);
+    const waitingGhosts = useRef<Set<string>>(new Set());
+    const [notice, setNotice] = useState('');
+    const showGhosts = useEffectEvent(() => {
+        const ids = waitingGhosts.current;
+        const scroller = scrollerOf(boardRef);
+        const fresh = Object.values(ghosts).filter((ghost) => ids.has(ghost.id) && !ghost.leaving);
+        const first = fresh.toSorted((a, b) => a.row - b.row || a.col - b.col)[0];
+
+        showTimer.current = 0;
+        ids.clear();
+
+        if (!blocks || !scroller || !first || dragging.isDragging() || pan.isPanning()) {
+            return;
+        }
+
+        const own = Object.values(slots).some(
+            (slot) => !slot.leaving && questionTurn(slot.widget) === first.turn,
+        );
+        const top = Math.min(...fresh.filter((g) => g.turn === first.turn).map((g) => g.row));
+        const target = revealRect(
+            first,
+            scroller,
+            own ? undefined : Math.max(0, origin.y + (top - BLOCK_INSET) * CELL),
+        );
+
+        if (target) {
+            scrollView(scroller, target);
+        }
+    });
+
+    useEffect(() => {
+        const fresh = Object.values(ghosts).filter(
+            (ghost) => !ghost.leaving && !seenGhosts.current.has(ghost.id),
+        );
+
+        for (const ghost of fresh) {
+            seenGhosts.current.add(ghost.id);
+            waitingGhosts.current.add(ghost.id);
+        }
+
+        if (fresh.length > 0) {
+            // Emptied first, so a batch that reads like the last is heard again.
+            const words = comingNotice(fresh);
+
+            setNotice('');
+            window.clearTimeout(noticeTimer.current);
+            noticeTimer.current = window.setTimeout(() => setNotice(words), NOTICE_GAP_MS);
+            window.clearTimeout(showTimer.current);
+            showTimer.current = window.setTimeout(showGhosts, RESEAT_MS + 20);
+        }
+    }, [ghosts]);
+
+    useEffect(
+        () => () => {
+            window.clearTimeout(showTimer.current);
+            window.clearTimeout(noticeTimer.current);
+        },
+        [],
+    );
+
     // The sheet's foot never shortens: the prompt's height falls as its reply
     // sheet folds, and a shorter sheet would clamp a scroll that has already
     // come to rest back by the difference.
+    const heldSheet = useRef(0);
     const footHold = useRef(0);
     const holdFoot = useEffectEvent(() => {
         const board = boardRef.current;
@@ -466,6 +563,7 @@ const Whiteboard = ({
     // The live cards when the running turn began, to tell which landed in it.
     const turnStart = useRef<ReadonlySet<string> | null>(null);
     const markTurn = useEffectEvent(() => {
+        heldSheet.current = 0;
         turnStart.current = new Set(
             Object.entries(slots)
                 .filter(([, slot]) => !slot.leaving)
@@ -605,9 +703,23 @@ const Whiteboard = ({
     const dimKind = filter ? FILTER_KIND[filter] : undefined;
     const beacons = computeBeacons({ slots, view, origin, CELL, f, dimKind, views, titleOf });
     const liveCount = Object.values(slots).filter((other) => !other.leaving).length;
+    const titledIds = titledGhosts(Object.values(ghosts).filter((ghost) => !ghost.leaving));
     const sheetHeight =
         origin.y +
         Math.max(bottomRow + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.rows ?? 0) * CELL;
+
+    // From one question to the next the sheet keeps the tallest height it
+    // reached: a card that lands a few rows shorter than its placeholder, or
+    // an old card that leaves, would clamp a scroll that has come to rest
+    // back by the difference. Set before the browser lays the change out.
+    useLayoutEffect(() => {
+        if (!dockAware) {
+            return;
+        }
+
+        heldSheet.current = Math.max(heldSheet.current, sheetHeight);
+        boardRef.current?.style.setProperty('--sheet-held', `${heldSheet.current}px`);
+    });
 
     return (
         <div
@@ -623,7 +735,7 @@ const Whiteboard = ({
                     Math.max(rightCol + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.cols ?? 0) *
                         CELL,
                 height: dockAware
-                    ? `calc(${sheetHeight}px + max(var(--board-foot), var(--board-foot-held, 0px)))`
+                    ? `calc(max(${sheetHeight}px, var(--sheet-held, 0px)) + max(var(--board-foot), var(--board-foot-held, 0px)))`
                     : sheetHeight,
             }}
             {...(onSelect && {
@@ -744,6 +856,35 @@ const Whiteboard = ({
                     }}
                 />
             )}
+
+            {/* The cards a running turn announced stand as dashed outlines at the
+                place and size their cards will take. They are not cards: no
+                focus stop, no menu, no selection; the status below announces
+                each batch once. */}
+            {Object.values(ghosts).map((ghost) => (
+                <div
+                    key={ghost.id}
+                    className={classNames(styles.coming, ghost.leaving && styles.comingLeaving)}
+                    style={{
+                        left: origin.x + ghost.col * CELL,
+                        top: origin.y + ghost.row * CELL,
+                        width: ghost.w * CELL,
+                        height: ghost.h * CELL,
+                    }}
+                    aria-hidden="true"
+                    data-coming={ghost.id}
+                >
+                    <p className={styles.comingLabel}>
+                        <span className={styles.comingKind}>{ghostLabel(ghost.type)}</span>
+                        {ghost.title && titledIds.has(ghost.id) && (
+                            <span className={styles.comingTitle}>{ghost.title}</span>
+                        )}
+                    </p>
+                </div>
+            ))}
+            <span role="status" className={styles.comingStatus}>
+                {notice}
+            </span>
 
             {/* Slot-driven (not props-driven) so a replaced card keeps its DOM
                 node through the leaving fade — each slot carries its widget. */}

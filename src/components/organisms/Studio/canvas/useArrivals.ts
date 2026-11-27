@@ -20,6 +20,9 @@ type UseArrivalsArgs = {
         fresh: ReadonlySet<string>,
         scroller: HTMLElement,
     ) => ScrollToOptions | null;
+    // A card that took its placeholder's place: the view already moved to the
+    // placeholder, so only the wave plays.
+    quiet?: (newest: Slot) => boolean;
 };
 
 /**
@@ -37,6 +40,7 @@ export const useArrivals = ({
     spawnWave,
     busy,
     placeView,
+    quiet,
 }: UseArrivalsArgs) => {
     const seenRef = useRef<Set<string>>(new Set());
 
@@ -59,7 +63,7 @@ export const useArrivals = ({
 
         const scroller = scrollerOf(boardRef);
 
-        if (!scroller || busy()) {
+        if (!scroller || busy() || quiet?.(newest)) {
             return;
         }
 

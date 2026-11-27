@@ -2,6 +2,7 @@
 // or alias imports) so POST /api/events, the client, the export
 // (db/event-export.ts) and the tests read one definition under plain node.
 
+import { CHANGE_REFUSAL_CODES } from '../studio/changeRefusalCodes.ts';
 import { STUDIO_VARIANTS, type StudioVariant } from '../studio/variant.ts';
 
 /**
@@ -43,12 +44,23 @@ export const STUDIO_LAYOUT_EVENTS = {
         how: ['button', 'pill'],
     },
     // A card page's `Change`: opened, applied, cancelled, refused (`why`:
-    // by the assistant or by the change queue) or blocked (`why`: a plan or
-    // a question waits, or another change is pending).
+    // the harness's refusal code, `assistant` for a refusal the harness gave
+    // as its closing sentence, or `queue` for one the change queue dropped)
+    // or blocked (`why`: a plan or a question waits, or another change is
+    // pending).
     'studio.change': {
         step: ['open', 'apply', 'cancel', 'refused', 'blocked'],
         kind: ['years', 'places', 'unit'],
-        why: { optional: ['assistant', 'queue', 'plan', 'question', 'pending'] },
+        why: {
+            optional: [
+                ...CHANGE_REFUSAL_CODES,
+                'assistant',
+                'queue',
+                'plan',
+                'question',
+                'pending',
+            ],
+        },
     },
     // The reply sheet or the conversation sheet opened or folded by the
     // reader: a button, Escape, a press on the canvas, or the panel's

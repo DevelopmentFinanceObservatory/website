@@ -10,6 +10,7 @@ import test from 'node:test';
 import {
     CHANGE_REFUSALS,
     changeOffers,
+    changeRefusalCode,
     changeRefusalDetail,
     changeRefusalStale,
     changesHeld,
@@ -27,7 +28,7 @@ import {
 } from '../cardChange.ts';
 import type { StreamRefusal } from '../studioClient.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { CardChanges, ComponentCreated, ToolError, TurnRequest } from '../wire.ts';
+import type { CardChanges, ComponentCreated, ErrorCode, ToolError, TurnRequest } from '../wire.ts';
 
 const created = JSON.parse(
     readFileSync(
@@ -146,6 +147,23 @@ test('a refused change shows the refusal on the row that asked', () => {
     assert.deepEqual(
         changeStatus({ messages: refused, thinking: false, cardId: 'c1', key: 'unit' }),
         { state: 'refused', detail: 'This card no longer reads that dataset.' },
+    );
+    // The harness's code rides with a refusal that had one.
+    assert.deepEqual(
+        changeStatus({
+            messages: [
+                ...refused.slice(0, -1),
+                { ...refused.at(-1)!, refusal: 'scope_choice_stale' },
+            ],
+            thinking: false,
+            cardId: 'c1',
+            key: 'unit',
+        }),
+        {
+            state: 'refused',
+            detail: 'This card no longer reads that dataset.',
+            code: 'scope_choice_stale',
+        },
     );
     assert.deepEqual(
         changeStatus({ messages: refused, thinking: false, cardId: 'c1', key: 'years' }),
@@ -731,5 +749,31 @@ test('a plan waiting on approval or a question waiting on an answer holds the ca
             ],
             pause,
         );
+    }
+});
+
+test('a change refusal’s code is its constraint id, else its error, when the client knows it', () => {
+    const refusal = (error: ErrorCode, constraint?: string): StreamRefusal => ({
+        status: 422,
+        detail: 'x',
+        error: {
+            error,
+            retry: 'do_not_retry',
+            detail: 'x',
+            ...(constraint && { constraint_id: constraint }),
+        },
+    });
+
+    for (const [given, code] of [
+        [refusal('constraint_violation', 'change_not_offered'), 'change_not_offered'],
+        [
+            refusal('transient_unavailable', 'place_options_unavailable'),
+            'place_options_unavailable',
+        ],
+        [refusal('capability_unavailable'), 'capability_unavailable'],
+        [refusal('constraint_violation', 'something_new'), null],
+        [refusal('constraint_violation'), null],
+    ] as const) {
+        assert.equal(changeRefusalCode(given), code);
     }
 });
