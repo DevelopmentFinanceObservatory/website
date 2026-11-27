@@ -23,14 +23,14 @@
     border-radius: rem(4);
     transition: background-color 0.25s ease;
 
-    &:hover,
     &[data-state="open"] {
         background-color: var(--color-bg);
     }
 
-    // The chip sits on the dark hero, so the ring is the light ground's.
+    // The global `*:focus { outline: none }` (styles/main.scss) hides the
+    // ring. A page on a dark ground sets --filter-ring to a light colour.
     &:focus-visible {
-        outline: 2px solid var(--color-bg);
+        outline: 2px solid var(--filter-ring, var(--color-stone));
         outline-offset: 2px;
     }
 
@@ -43,6 +43,15 @@
 // A chip with picks takes the lighter fill the hover gives.
 .triggerOn {
     background-color: var(--color-bg);
+}
+
+// Hover fills only where hover exists, as the Button atom does, so a tapped
+// chip does not stay lit.
+
+@media (hover: hover) {
+    .trigger:hover:not(:disabled) {
+        background-color: var(--color-bg);
+    }
 }
 
 .chevron {
@@ -106,6 +115,11 @@
 
     &[data-highlighted] {
         background-color: var(--color-gray-2700);
+    }
+
+    // Radix highlights an option on pointer hover too; only keyboard focus
+    // gets the outline.
+    &[data-highlighted]:focus-visible {
         outline: 1px solid var(--color-stone-light);
         outline-offset: -1px;
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import ArtifactFields, { evergreenOutcome, isComplete, type Refusals } from './ArtifactFields';
 import styles from './EditArtifact.module.scss';
@@ -48,6 +48,7 @@ const EditArtifact = ({
 }) => {
     const router = useRouter();
     const [open, setOpen] = useState(false);
+    const deleteRef = useRef<HTMLElement>(null);
     const [text, setText] = useState(() => textOf(artifact));
     const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -136,7 +137,7 @@ const EditArtifact = ({
             <Button variant="bordered" full icon="edit" onClick={() => show(true)}>
                 Edit
             </Button>
-            <Modal open={open} onOpenChange={show} title="Edit" fit autoFocus>
+            <Modal open={open} onOpenChange={show} title="Edit" fit initialFocus="form input">
                 {warnings ? (
                     <div className={styles.form}>
                         <p role="status">The changes were saved.</p>
@@ -189,7 +190,12 @@ const EditArtifact = ({
                                         variant="bordered"
                                         full
                                         autoFocus
-                                        onClick={() => setConfirming(false)}
+                                        onClick={() => {
+                                            setConfirming(false);
+                                            // The question's buttons leave the page, so
+                                            // focus goes back to the one that asked it.
+                                            queueMicrotask(() => deleteRef.current?.focus());
+                                        }}
                                         disabled={busy !== null}
                                     >
                                         Keep it
@@ -215,6 +221,7 @@ const EditArtifact = ({
                                 </>
                             ) : (
                                 <Button
+                                    ref={deleteRef}
                                     variant="bordered"
                                     full
                                     icon="remove"

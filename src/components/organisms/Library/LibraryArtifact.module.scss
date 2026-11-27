@@ -112,6 +112,11 @@
         &:hover {
             color: var(--color-stone);
         }
+
+        &:focus-visible {
+            outline: 2px solid var(--color-charcoal);
+            outline-offset: -2px;
+        }
     }
 }
 
