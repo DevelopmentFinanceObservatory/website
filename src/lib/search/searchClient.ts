@@ -254,8 +254,8 @@ export function buildRequest(
         // form and is refused with unsupported_schema_version).
         schema_version: 1,
         // `studio_routing` opts a raw-text run in to the search API's Studio
-        // router (see studioRoute.ts). Only Get Data's own submits send it;
-        // every other caller leaves it out and gets no route.
+        // router (see studioRoute.ts). Only Get Data's own submits send it,
+        // and every other caller leaves it out and gets no route.
         input:
             studioRouting && input.kind === 'raw_text' ? { ...input, studio_routing: true } : input,
         // include_observations: without it the engine skips the materialise

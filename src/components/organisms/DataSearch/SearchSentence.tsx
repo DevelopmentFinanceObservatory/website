@@ -510,7 +510,7 @@ type SearchSentenceHeadingProps = Pick<
     // What the <h1> shows before the response lands: the query, or the
     // early heading's tokens.
     fallback: ReactNode;
-    // A departure's Studio action (operation_not_applied); without it the
+    // A departure's Studio action (operation_not_applied). Without it the
     // departure shows its text alone.
     onStudio?: () => void;
     // What Refine offers (answerRefineItems), and a departure's way to open

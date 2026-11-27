@@ -273,7 +273,7 @@ export type ResolveResponse = (Resolution | wire.CatalogueAnswer | wire.Declined
 // ---------------------------------------------------------------------------
 
 /** The search API's verdict that a raw-text question belongs in Studio, on a run that sent
- *  `studio_routing: true`. `auto` ends the run as a `requires_analysis` decline; `offer` arrives
+ *  `studio_routing: true`. `auto` ends the run as a `requires_analysis` decline. `offer` arrives
  *  as an early `route` frame and the run goes on. `probability` is the router's studio
  *  probability, null when the route came from the question read's own `requires_analysis`. */
 export type StudioRoute = {

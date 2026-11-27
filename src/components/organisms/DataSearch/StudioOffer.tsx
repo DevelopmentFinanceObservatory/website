@@ -25,7 +25,7 @@ const StudioOffer = ({
     const button = useRef<HTMLElement>(null);
 
     // The in-place card replaces the callout whose "Search the data instead"
-    // button had focus, so focus would fall to the body; it lands on this
+    // button had focus, so focus would fall to the body. It lands on this
     // card's button instead.
     useEffect(() => {
         if (inPlace && (!document.activeElement || document.activeElement === document.body)) {

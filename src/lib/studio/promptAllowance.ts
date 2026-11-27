@@ -21,7 +21,7 @@ export const guestPromptsUsed = (storage: Pick<Storage, 'getItem'>): number =>
     Number(storage.getItem(GUEST_PROMPTS_KEY)) || 0;
 
 /** Whether a guest has no free prompt left, having spent or queued `used`.
- *  A signed-in user is never out. */
+ *  Always false for a signed-in user. */
 export const guestOutOfPrompts = ({ guest, used }: { guest: boolean; used: number }): boolean =>
     guest && used >= GUEST_PROMPTS;
 

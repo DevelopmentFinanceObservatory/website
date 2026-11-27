@@ -10,7 +10,7 @@ import { guestPromptsUsed } from '../studio/promptAllowance.ts';
 
 import type { ResolveResponse, StudioRoute } from './types.ts';
 
-/** `value` as a Studio route, or null when it is not one this release reads:
+/** `value` as a Studio route, or null when it is not one the page reads:
  *  a missing object, another target, an unknown mode, or a probability
  *  outside 0 to 1. A route the page cannot read is ignored, so the run
  *  shows its answer as it would without one. */

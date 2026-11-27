@@ -222,7 +222,7 @@ const SearchAnswer = ({
     onStartNew: () => void;
     // Shows the whole catalogue's starting point, with no search call.
     onShowCatalogue: () => void;
-    // Hands the question to Studio; absent while the route's Studio card
+    // Hands the question to Studio. Absent while the route's Studio card
     // stands in for it.
     onStudio?: () => void;
 }) => {

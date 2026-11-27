@@ -697,7 +697,7 @@ export const useSearchRun = () => {
                             if (searchRef.current) {
                                 searchRef.current.traceId = normalized.diagnostics.trace_id;
                             }
-                            // The response repeats the early frame's route; a
+                            // The response repeats the early frame's route. A
                             // response without one keeps the frame's.
                             if (normalized.route) {
                                 const { route: answered } = normalized;

@@ -8,7 +8,7 @@ import styles from './DataSearch.module.scss';
 import Button from '@/components/atoms/Button/Button';
 
 /** What a search shows while the search API's router moves the question to
- *  Studio (a route in `auto` mode): the loading view stays, with this in
+ *  Studio (a route in `auto` mode). The loading view stays, with this in
  *  its status line's place, from the declined answer until Studio's sheet
  *  covers the page. Its button keeps the reader on the data search
  *  (`onStay`). The callout holds the move (`onHold`) while the pointer is

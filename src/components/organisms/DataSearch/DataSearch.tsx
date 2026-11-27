@@ -150,7 +150,7 @@ type SearchAction =
     | ({ action: 'download'; partIndex: number } & DatasetDownloaded)
     | { action: 'share'; mode: SearchShareMode; shareId: string };
 
-// Studio's guest prompt count lives in localStorage; another tab's Studio
+// Studio's guest prompt count lives in localStorage. Another tab's Studio
 // changes it through the `storage` event.
 const subscribeStorage = (listener: () => void) => {
     window.addEventListener('storage', listener);
@@ -172,7 +172,8 @@ const DataSearch = ({
     guest,
 }: {
     catalogue: SearchCatalogue | null;
-    // Signed out: Studio answers only while the guest has a free prompt.
+    // True when signed out. Studio answers a guest only while a free prompt
+    // is left.
     guest: boolean;
 }) => {
     const router = useRouter();
@@ -342,9 +343,9 @@ const DataSearch = ({
         link: VersionLink;
         result: Exclude<VersionLinkResult, { kind: 'opened' }>;
     } | null>(null);
-    // A move the reader stayed out of during its pause: its route, kept as
+    // The route of a move the reader stayed out of during its pause, kept as
     // an offer while the page searches the same question as data. Only that
-    // search shows it: every other search, Start New and an opened share or
+    // search shows it. Every other search, Start New and an opened share or
     // link drop it.
     const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
     const leaveShare = useCallback(() => {
@@ -513,7 +514,7 @@ const DataSearch = ({
     // question's `routing=off` URL, so Back lands on the data search of the
     // question, run once without the router. The second, once
     // `searchParams` shows the rewrite, holds the callout for MOVE_PAUSE_MS
-    // and then opens Studio: by then the App Router has stored its own
+    // and then opens Studio. By then the App Router has stored its own
     // state for the rewritten entry, which Back needs to restore it in
     // place, and the rewrite's commit cannot take the move's transition
     // type. The pause also fetches Studio's page in full, which loads its
@@ -522,7 +523,7 @@ const DataSearch = ({
     // the transition type, so the page would swap with no slide.
     //
     // During the pause, Escape or the callout's "Search the data instead"
-    // keeps the reader here: the callout turns into the Studio card, and the
+    // keeps the reader here. The callout turns into the Studio card, and the
     // question is searched as data, with the router off (`route_back`). Only
     // those two count, since the way-back rate is what the router's auto
     // threshold is tuned on. The pause holds while the pointer is over the
