@@ -207,8 +207,8 @@
     color: var(--color-red);
 }
 
-// A row whose action waits: its icon and label fade, and the reason wraps
-// under the label at the menu's narrowest width.
+// A row whose action waits. Its icon fades, and the reason wraps under the
+// label at the menu's narrowest width.
 .cardMenuHeld {
     cursor: default;
 

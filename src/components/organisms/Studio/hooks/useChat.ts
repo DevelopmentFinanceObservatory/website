@@ -557,7 +557,7 @@ export const useChat = (
         // session (leaveSession).
         shownCards?: () => readonly string[];
         // A plan or a question holds card changes while it waits
-        // (changesHeld): `applyUnit` and `applyChange` send nothing and
+        // (changesHeld). `applyUnit` and `applyChange` send nothing and
         // return false, and the changes queued behind its turn are dropped
         // (dropChangesForPause). Without it a change sent while a plan
         // waits goes, and a queued one waits for the answer.
@@ -3299,8 +3299,9 @@ export const useChat = (
                     const isNew = !widgetsRef.current.some((widget) => widget.id === id);
                     // The cards a new card took the slots of in turn, as
                     // their frames' `replaces` would have said
-                    // (storedReplacements): first one the page holds and the
-                    // manifest lacks, then each the page never drew.
+                    // (storedReplacements). The first is a card the page holds
+                    // and the manifest lacks. The rest are cards the page
+                    // never drew.
                     const chain = isNew
                         ? storedReplacements(
                               id,

@@ -375,7 +375,7 @@ export const REGRESSIONS: Regression[] = [
     {
         // While a plan waits, the canvas card menu's Change unit and the card
         // page's Change rows are held with the reason, send no change, and
-        // leave the plan approvable; the approved plan leaves the card on
+        // leave the plan approvable. The approved plan leaves the card on
         // the canvas.
         name: 'a waiting plan holds the card menu change unit with its reason, sends no change, and stays approvable',
         layout: 'prompt',

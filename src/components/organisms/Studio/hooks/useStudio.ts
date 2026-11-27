@@ -417,8 +417,8 @@ export const useStudio = ({
         );
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
-    // A card change the chat holds (changesHeld) sends nothing, so it is
-    // no prompt.
+    // A card change the chat holds (changesHeld) sends nothing, so it
+    // spends no prompt of the reader's allowance.
     const applyUnit = (change: CardUnitChange): boolean =>
         conversation.changesHeld === null &&
         prompt('apply_unit', undefined, () => conversation.applyUnit(change));

@@ -536,7 +536,7 @@ test('a described card gives the caveats, sources and dataset; a card without a 
 
     assert.equal(sourcePageOf(single, 'dcid:IMF')?.licence, 'Open');
 
-    // Cards of one source in either canvas order give the same row: a shared
+    // Cards of one source in either canvas order give the same row. A shared
     // coverage shows, differing ones leave it off, and refresh dates span.
     const imf = (id: string, dataThrough: string, lastRefreshed: string | null) =>
         chart(id, 1, { sourceId: 'dcid:IMF', sourceName: 'IMF', dataThrough, lastRefreshed });

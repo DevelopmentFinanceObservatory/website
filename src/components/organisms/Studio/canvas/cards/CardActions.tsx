@@ -216,7 +216,7 @@ const CardMenu = ({
 };
 
 // One menu row: icon + label (red for the destructive one). A row `held`
-// says why under its label and does nothing when chosen; it stays focusable,
+// says why under its label and does nothing when chosen. It stays focusable,
 // so the reason is read with it.
 const MenuRow = ({
     icon,

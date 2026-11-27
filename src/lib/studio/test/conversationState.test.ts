@@ -1677,9 +1677,9 @@ test('the read that closes a turn corrects the cards drawn from it while it ran'
         ],
     );
 
-    // cmp_b drawn in page turn 2, cmp_c in turn 3: each replacement goes
-    // through the live rules in order, so the card's turn and history follow
-    // whichever drew cmp_b.
+    // cmp_b was drawn in page turn 2 and cmp_c in turn 3. Each replacement
+    // goes through the live rules in order, so the card's turn and history
+    // follow whichever drew cmp_b.
     const turnOf = new Map([
         ['cmp_b', 2],
         ['cmp_c', 3],
