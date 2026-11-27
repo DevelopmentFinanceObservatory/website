@@ -20,6 +20,7 @@ import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
 import { libraryEnabled } from './enabled';
+import { type LibraryView, libraryViewOf } from './switch';
 import {
     publishedFacts,
     publishedKind,
@@ -96,12 +97,11 @@ export const libraryAdmin = async () => adminFrom(await getUser(), process.env.A
  * engines are told not to index), and nobody else (`null`, answered with the
  * site's 404).
  */
-export const libraryView = async (): Promise<'open' | 'preview' | null> => {
-    if (libraryEnabled()) {
-        return 'open';
-    }
+export const libraryView = async (): Promise<LibraryView> => {
+    const enabled = libraryEnabled();
 
-    return (await libraryAdmin()) ? 'preview' : null;
+    // An open Library needs no admin lookup.
+    return libraryViewOf(enabled, !enabled && (await libraryAdmin()) !== null);
 };
 
 // The admin behind a request, or the refusal to send.

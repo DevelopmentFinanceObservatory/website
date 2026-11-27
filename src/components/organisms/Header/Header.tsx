@@ -37,7 +37,7 @@ const navItems: {
         // Coverage is deliberately absent: it isn't being built yet, so it
         // stays out of both menus until it is (DFO's own call). Whatever
         // lands here lands in the footer's Data column too, which also
-        // lists Library and Studio.
+        // lists Studio, and Library while LIBRARY_ENABLED is on.
         menu: [
             { label: 'Sources', href: '/data/sources' },
             { label: 'Roadmap', href: '/data/roadmap' },

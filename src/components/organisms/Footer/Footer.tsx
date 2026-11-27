@@ -187,7 +187,14 @@ const Footer = () => {
                                                 // has no business on a mailto.
                                                 <a href={FOOTER_ROUTES[link]}>{link}</a>
                                             ) : (
-                                                <Link href={siteHref(FOOTER_ROUTES[link])}>
+                                                // /library is force-dynamic and reads
+                                                // the database, so it is not prefetched.
+                                                <Link
+                                                    href={siteHref(FOOTER_ROUTES[link])}
+                                                    prefetch={
+                                                        link === 'Library' ? false : undefined
+                                                    }
+                                                >
                                                     {link}
                                                 </Link>
                                             )}

@@ -5,7 +5,7 @@ import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
 import WithdrawnArtifact from '@/components/organisms/Library/WithdrawnArtifact';
 import { libraryAdmin, libraryView } from '@/lib/library/admin';
 import { artifactBySlug } from '@/lib/library/store';
-import { pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
+import { NOT_FOUND_METADATA, pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,13 +15,13 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
     const view = await libraryView();
 
     if (view === null) {
-        return { title: 'Library — DFO' };
+        return NOT_FOUND_METADATA;
     }
 
     const found = await artifactBySlug((await params).slug);
 
     if (found === null) {
-        return { title: 'Library — DFO' };
+        return NOT_FOUND_METADATA;
     }
 
     // A withdrawn artifact's address answers 200, since Next has no

@@ -6,6 +6,10 @@ import type { Metadata } from 'next';
  */
 export const SITE_ORIGIN = 'https://developmentfinance.org';
 
+/** The metadata of the site's not-found page, which a hidden page reuses so its
+ *  404 carries nothing of the page. */
+export const NOT_FOUND_METADATA: Metadata = { title: 'Page not found — DFO' };
+
 export const SITE_NAME = 'Development Finance Observatory';
 
 // The website leaves NEXT_PUBLIC_SITE_LINK_ORIGIN unset. The prototypes app
