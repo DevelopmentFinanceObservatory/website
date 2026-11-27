@@ -451,6 +451,9 @@ export type TurnRequest = {
      *  of a client that names it, and keeps the set the latest request
      *  declared. */
     client_features?: ClientFeature[];
+    /** Hold a removal's `composition.updated` until after the turn's next
+     *  drawing line. Absent, the harness sends it when the removal lands. */
+    hold_removals?: boolean;
 };
 
 export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
@@ -483,6 +486,9 @@ export type InterruptResponse = {
     // Replaces the set the conversation keeps for the questions the resumed
     // turn asks next.
     client_features?: ClientFeature[];
+    /** Hold a removal's `composition.updated` until after the turn's next
+     *  drawing line. Absent, the harness sends it when the removal lands. */
+    hold_removals?: boolean;
 };
 
 /** The ticked options of a multi-select question: at least one, no repeats. */
@@ -534,6 +540,9 @@ export type ResumeRequest = {
     schema_version: 1;
     conversation_id: string;
     turn_index: number;
+    /** Hold a removal's `composition.updated` until after the turn's next
+     *  drawing line. Absent, the harness sends it when the removal lands. */
+    hold_removals?: boolean;
 };
 
 // ---------------------------------------------------------------------------

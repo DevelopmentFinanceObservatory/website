@@ -19,6 +19,7 @@ import {
     runApplyUnit,
     runInterrupt,
     runPlaceOptions,
+    runResume,
     runTurn,
     STATE_READ_ATTEMPTS,
     stopAction,
@@ -1079,4 +1080,105 @@ test('runPlaceOptions reads the harness fixture answer as it stands', async (t) 
         options: answer.options,
         truncated: answer.truncated,
     });
+});
+
+test('a stream-starting request carries hold_removals only when asked, else the body production sends', async (t) => {
+    const bodies: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+
+        return new Response('data: {"event":"done","seq":1}\n\n');
+    });
+
+    const handlers = { onFrame: () => {} };
+    const unit = { currency: 'USD', prices: 'current' } as const;
+    const send = async (hold?: { holdRemovals: boolean }) => {
+        await runTurn('conv', 'hi', handlers, undefined, { after_turn: 2 }, hold);
+        await runApplyChoice(
+            'conv',
+            { choice_id: 'c', option_id: 'o', turn: 1, spec_id: 's' },
+            handlers,
+            undefined,
+            hold,
+        );
+        await runApplyUnit(
+            'conv',
+            { component_id: 'cmp', spec_id: 's', turn: 1, unit },
+            handlers,
+            undefined,
+            hold,
+        );
+        await runApplyChange(
+            'conv',
+            {
+                component_id: 'cmp',
+                spec_id: 's',
+                change: { kind: 'window', start_year: 2010, end_year: 2020 },
+            },
+            handlers,
+            undefined,
+            hold,
+        );
+        await runInterrupt('conv', 'i1', { decision: 'approve' }, handlers, undefined, hold);
+        await runResume('conv', 3, handlers, undefined, hold);
+    };
+    // The bodies as production builds them (studioClient.ts at 392c0d59), and
+    // the years change's as the contract names it.
+    const features = ['unit_question', 'multi_select'];
+    const production = [
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            message: 'hi',
+            after_turn: 2,
+            client_features: features,
+        },
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            apply_choice: { choice_id: 'c', option_id: 'o', turn: 1, spec_id: 's' },
+            client_features: features,
+        },
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            apply_unit: { component_id: 'cmp', spec_id: 's', turn: 1, unit },
+            client_features: features,
+        },
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            apply_change: {
+                component_id: 'cmp',
+                spec_id: 's',
+                change: { kind: 'window', start_year: 2010, end_year: 2020 },
+            },
+            client_features: features,
+        },
+        {
+            kind: 'interrupt.response',
+            schema_version: 1,
+            conversation_id: 'conv',
+            interrupt_id: 'i1',
+            decision: 'approve',
+            client_features: features,
+        },
+        { kind: 'turn.resume', schema_version: 1, conversation_id: 'conv', turn_index: 3 },
+    ];
+
+    await send();
+    await send({ holdRemovals: false });
+    await send({ holdRemovals: true });
+
+    assert.deepEqual(bodies.slice(0, 6), production);
+    assert.deepEqual(bodies.slice(6, 12), production);
+    assert.deepEqual(
+        bodies.slice(12),
+        production.map((body) => ({ ...body, hold_removals: true })),
+    );
 });

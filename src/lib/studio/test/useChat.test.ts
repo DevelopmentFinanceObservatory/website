@@ -2096,3 +2096,127 @@ test('Stop clears the cards on their way at once', async (t) => {
     assert.deepEqual(page.result().coming, []);
     page.unmount();
 });
+
+test('a page that holds removals asks it on every stream it starts, and one that does not leaves the member out', async (t) => {
+    const proposed = JSON.parse(
+        readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
+    );
+
+    for (const holdRemovals of [false, true]) {
+        const asked: [string, unknown][] = [];
+
+        t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            const body = init?.body ? JSON.parse(String(init.body)) : {};
+
+            if (url === '/api/studio/turn' || url === '/api/studio/interrupt') {
+                asked.push([url, 'hold_removals' in body ? body.hold_removals : 'absent']);
+
+                return chunk(2, url === '/api/studio/turn' && body.message ? [proposed] : [done()]);
+            }
+
+            return new Response('{}', { status: 404 });
+        });
+
+        const page = renderHook(() => useChat(undefined, { holdRemovals }), { rendersLater: true });
+
+        page.result().hydrate(drawn());
+        await page.settle();
+        page.result().send('Aid to Ethiopia for health');
+        await page.settle(40);
+        page.result().respondPlan('approve');
+        await page.settle(40);
+        page.result().applyChange(yearsChange('cmp_1'));
+        await page.settle(40);
+
+        const expected = holdRemovals ? true : 'absent';
+
+        assert.deepEqual(asked, [
+            ['/api/studio/turn', expected],
+            ['/api/studio/interrupt', expected],
+            ['/api/studio/turn', expected],
+        ]);
+        page.unmount();
+        t.mock.restoreAll();
+    }
+});
+
+test('a plan answered while a card change waits for admission sends nothing, and the plan waits on as the change ends', async (t) => {
+    const proposed = JSON.parse(
+        readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
+    );
+
+    for (const admitted of [false, true]) {
+        const log: string[] = [];
+        let answerChange: () => void = () => {};
+
+        t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            const body = init?.body ? JSON.parse(String(init.body)) : {};
+
+            if (url === '/api/studio/interrupt') {
+                log.push('interrupt');
+
+                return chunk(2, [done()]);
+            }
+
+            if (url !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+            if (body.message) return chunk(2, [proposed]);
+
+            log.push('change sent');
+
+            // The change waits, unanswered, until the test answers it.
+            return new Promise<Response>((resolve) => {
+                answerChange = () => {
+                    log.push('change ended');
+                    resolve(
+                        admitted
+                            ? chunk(3, [cardFrame('cmp_2', 'cmp_1'), done()])
+                            : Response.json(
+                                  {
+                                      error: 'constraint_violation',
+                                      retry: 'do_not_retry',
+                                      detail: 'Refused.',
+                                      constraint_id: 'change_no_data',
+                                      pointer: '/apply_change',
+                                  },
+                                  { status: 422 },
+                              ),
+                    );
+                };
+            });
+        });
+        t.mock.method(console, 'warn', () => {});
+
+        const page = renderHook(() => useChat(), { rendersLater: true });
+
+        page.result().hydrate(drawn());
+        await page.settle();
+        page.result().send('Aid to Ethiopia for health');
+        await page.settle(40);
+        page.result().applyChange(yearsChange('cmp_1'));
+        await page.settle(20);
+        // The harness has not said yet whether the change closes the pause.
+        page.result().respondPlan('approve');
+        await page.settle(40);
+        assert.ok(page.result().plan, `${admitted}: the plan stays`);
+        answerChange();
+        await page.settle(60);
+        // An admitted change closed the plan; a refused one left it waiting,
+        // to be approved now.
+        assert.equal(page.result().plan === null, admitted, `${admitted}: the plan after`);
+        page.result().respondPlan('approve');
+        await page.settle(40);
+        assert.deepEqual(
+            log,
+            admitted
+                ? ['change sent', 'change ended']
+                : ['change sent', 'change ended', 'interrupt'],
+            `${admitted}`,
+        );
+
+        page.unmount();
+        t.mock.restoreAll();
+    }
+});

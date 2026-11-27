@@ -255,8 +255,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    // The landing leaves at once, with no stagger, in the Prompt layout.
-    [data-panel] .stage.stageOut.stageOut.stageOut > * {
+    // The landing leaves at once, with no stagger.
+    .stage.stageOut.stageOut.stageOut > * {
         animation: none;
     }
 }

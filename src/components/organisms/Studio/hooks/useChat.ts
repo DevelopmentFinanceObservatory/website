@@ -200,6 +200,7 @@ import {
     runApplyUnit,
     runInterrupt,
     runPlaceOptions,
+    runResume,
     runTurn,
     STOP_GRACE_MS,
     SWITCH_STOP_GRACE_MS,
@@ -207,6 +208,7 @@ import {
     whileBusy,
     type PlaceOptionsRead,
     type StopAction,
+    type StreamAsk,
     type StreamHandlers,
     type StreamRefusal,
 } from '@/lib/studio/studioClient';
@@ -538,6 +540,7 @@ export const useChat = (
         admitHandedBack,
         shownCards,
         pausesDropChanges = false,
+        holdRemovals = false,
     }: {
         onCardReplaced?: (from: string, to: string) => void;
         // The page may read the harness's state (reattach): a signed-in
@@ -556,8 +559,21 @@ export const useChat = (
         // their changes while either waits (changesHeld). Without it a
         // queued change waits for the answer.
         pausesDropChanges?: boolean;
+        // Every stream the page starts asks the harness to hold a removal's
+        // canvas frame until after the turn's next drawing line
+        // (`hold_removals`), as the Prompt layout's canvas moves cards in
+        // one step with the cards on their way. Without it the requests
+        // carry no such member.
+        holdRemovals?: boolean;
     } = {},
 ) => {
+    // What each stream request asks beyond its own members (StreamAsk), read
+    // by the request builders.
+    const askRef = useRef<StreamAsk>({ holdRemovals });
+
+    useEffect(() => {
+        askRef.current = { holdRemovals };
+    }, [holdRemovals]);
     // The saved transcript as restored, computed once for the refs and the
     // state seeded from it.
     const [restored] = useState(() => (initial ? restoredMessages(initial) : []));
@@ -756,6 +772,11 @@ export const useChat = (
     // The page turn of the stream that offered the pending pause, which the
     // answer's stream carries on, so it writes into that turn's reply.
     const pauseTurnRef = useRef(0);
+    // The page turn of a card change sent while a pause waits and not yet
+    // admitted, or null. Until the harness says whether the change closes
+    // the pause, an answer to the pause sends nothing (respondPlan,
+    // answerClarify, switchChoice), since an admitted change closes it.
+    const unadmittedRef = useRef<number | null>(null);
     // The cards on their way (comingCards.ts). They come from the stream's
     // frames alone, a save holds none, and reset and hydrate clear them.
     const comingRef = useRef<ComingState>(NO_COMING);
@@ -2309,12 +2330,19 @@ export const useChat = (
             // A question handed over from search carries its seeds, the
             // datasets the user saw there, so the harness starts from them.
             const run = (handlers: StreamHandlers, signal: AbortSignal, afterTurn?: number) =>
-                runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
-                    ...(componentRef && { component_ref: componentRef }),
-                    ...(seeds && { seed_spec: seeds }),
-                    ...(afterTurn !== undefined && { after_turn: afterTurn }),
-                    ...(source && { prompt_source: source }),
-                });
+                runTurn(
+                    conversation,
+                    recap ? `${recap}${text}` : text,
+                    handlers,
+                    signal,
+                    {
+                        ...(componentRef && { component_ref: componentRef }),
+                        ...(seeds && { seed_spec: seeds }),
+                        ...(afterTurn !== undefined && { after_turn: afterTurn }),
+                        ...(source && { prompt_source: source }),
+                    },
+                    askRef.current,
+                );
 
             const generation = generationRef.current;
             // Whether the harness admitted the new question's turn, or
@@ -2531,7 +2559,14 @@ export const useChat = (
             }
 
             const start = (handlers: StreamHandlers, signal: AbortSignal) =>
-                runInterrupt(conversation, pending.interruptId, reply, handlers, signal);
+                runInterrupt(
+                    conversation,
+                    pending.interruptId,
+                    reply,
+                    handlers,
+                    signal,
+                    askRef.current,
+                );
 
             if (after?.plan) {
                 streamSwitch(turn, after.plan, start);
@@ -2562,7 +2597,7 @@ export const useChat = (
         (answers: ClarifyAnswers) => {
             const clarify = pendingInterruptRef.current?.clarify;
 
-            if (!clarify) {
+            if (!clarify || unadmittedRef.current !== null) {
                 return;
             }
 
@@ -2601,7 +2636,7 @@ export const useChat = (
     // card has no pause to answer.
     const respondPlan = useCallback(
         (decision: 'approve' | 'amend' | 'reject', payload?: string) => {
-            if (!pendingInterruptRef.current?.plan) {
+            if (!pendingInterruptRef.current?.plan || unadmittedRef.current !== null) {
                 return;
             }
 
@@ -2640,7 +2675,7 @@ export const useChat = (
             const plan = pending?.plan;
             const reply = plan ? switchReply(plan, choiceId, optionId) : null;
 
-            if (!conversation || !pending || !plan || !reply) {
+            if (!conversation || !pending || !plan || !reply || unadmittedRef.current !== null) {
                 return;
             }
 
@@ -2664,7 +2699,14 @@ export const useChat = (
                 turn,
                 waiting,
                 (handlers, signal) =>
-                    runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
+                    runInterrupt(
+                        conversation,
+                        pending.interruptId,
+                        reply,
+                        handlers,
+                        signal,
+                        askRef.current,
+                    ),
                 {
                     refuse: (refusal) => {
                         // The card shows only a harness ToolError's detail.
@@ -2707,7 +2749,14 @@ export const useChat = (
                 turn,
                 (handlers, signal) =>
                     whileBusy(
-                        (busyHandlers) => runApplyChoice(conversation, chip, busyHandlers, signal),
+                        (busyHandlers) =>
+                            runApplyChoice(
+                                conversation,
+                                chip,
+                                busyHandlers,
+                                signal,
+                                askRef.current,
+                            ),
                         handlers,
                         signal,
                     ),
@@ -2807,6 +2856,14 @@ export const useChat = (
             editingRef.current = componentId;
             unitTurnRef.current = true;
 
+            if (pendingInterruptRef.current) unadmittedRef.current = turn;
+
+            // The page turn's hold on the pause's answers ends once the
+            // harness admits or refuses the change, or its stream ends.
+            const settleAdmission = () => {
+                if (unadmittedRef.current === turn) unadmittedRef.current = null;
+            };
+
             // The harness admitted the turn once it names it, or once a frame
             // other than an error arrives from a harness that names none (a
             // request that failed before any turn opened ends in an error
@@ -2820,6 +2877,7 @@ export const useChat = (
                 if (admitted) return;
 
                 admitted = true;
+                settleAdmission();
 
                 if (
                     generationRef.current === generation &&
@@ -2855,6 +2913,8 @@ export const useChat = (
                     // turn of its own (the answer to a plan the change kept
                     // waiting) places its cards as new ones.
                     onSettled: () => {
+                        settleAdmission();
+
                         if (turnCount.current === turn) {
                             editingRef.current = null;
                             unitTurnRef.current = false;
@@ -2912,7 +2972,7 @@ export const useChat = (
                 line: `Switching to ${changeUnitText(change)}`,
                 queued: { unit: change },
                 run: (conversation, handlers, signal) =>
-                    runApplyUnit(conversation, change.request, handlers, signal),
+                    runApplyUnit(conversation, change.request, handlers, signal, askRef.current),
                 refusalDetail: (refusal) => {
                     const detail = unitRefusalDetail(refusal);
 
@@ -2941,7 +3001,7 @@ export const useChat = (
                 line: `Redrawing for ${change.words}`,
                 queued: { change },
                 run: (conversation, handlers, signal) =>
-                    runApplyChange(conversation, change.request, handlers, signal),
+                    runApplyChange(conversation, change.request, handlers, signal, askRef.current),
                 refusalDetail: (refusal) => {
                     const detail = changeRefusalDetail(refusal);
 
@@ -3747,6 +3807,8 @@ export const useChat = (
                     return carryOnTurn({
                         conversationId: conversation,
                         first: step,
+                        resume: (id, turnIndex, resumeHandlers, resumeSignal) =>
+                            runResume(id, turnIndex, resumeHandlers, resumeSignal, askRef.current),
                         handlers,
                         signal,
                         since: () => readSince(messagesRef.current),
@@ -3934,6 +3996,7 @@ export const useChat = (
         widgetsRef.current = [];
         replacedRef.current = {};
         takeComing(NO_COMING);
+        unadmittedRef.current = null;
         pendingInterruptRef.current = null;
         turnPlanRef.current = null;
         recapRef.current = null;
@@ -3967,6 +4030,7 @@ export const useChat = (
             queueRef.current = [];
             replacedRef.current = replacementsOf(saved.widgets);
             takeComing(NO_COMING);
+            unadmittedRef.current = null;
             pendingInterruptRef.current = null;
             turnPlanRef.current = null;
             sessionRef.current = saved.sessionId;

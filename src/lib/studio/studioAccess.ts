@@ -128,7 +128,8 @@ export type StudioCall = {
  * conversation the proxy did not check. The body loses `session_id` for the
  * same older harness, so only `conversation_id` names the conversation
  * whichever harness answers. An id that fails isConversationId names no
- * conversation the site can own, and is refused.
+ * conversation the site can own, and is refused, as is a `hold_removals`
+ * that is not a boolean.
  */
 export const canonicalStudioCall = (
     method: string,
@@ -164,6 +165,10 @@ export const canonicalStudioCall = (
     const id = members.conversation_id;
 
     if (id !== undefined && (typeof id !== 'string' || !isConversationId(id))) {
+        return null;
+    }
+
+    if (members.hold_removals !== undefined && typeof members.hold_removals !== 'boolean') {
         return null;
     }
 

@@ -262,17 +262,17 @@
 @media (prefers-reduced-motion: reduce) {
     // The move into the workspace is instant: the clip box docks, the grid's
     // fills and the bar's actions appear, and the sheet shows, all without
-    // animation. The Prompt layout's section (`data-panel`) only.
-    [data-panel] .canvas,
-    [data-panel] .canvasInner,
-    [data-panel] .canvasContent,
-    [data-panel] .fill {
+    // animation.
+    .canvas,
+    .canvasInner,
+    .canvasContent,
+    .fill {
         transition: none;
     }
 
-    [data-panel] .fill,
-    [data-panel] .barExtra,
-    [data-panel] .canvasContent {
+    .fill,
+    .barExtra,
+    .canvasContent {
         animation: none;
     }
 }

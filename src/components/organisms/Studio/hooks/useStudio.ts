@@ -347,6 +347,9 @@ export const useStudio = ({
         // The Prompt layout's card pages hold card changes while a plan or
         // a question waits.
         pausesDropChanges: variant === 'prompt',
+        // The Prompt layout's canvas moves cards in one step with the cards
+        // on their way, so it asks the harness to hold removals.
+        holdRemovals: variant === 'prompt',
     });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
@@ -535,14 +538,9 @@ export const useStudio = ({
     useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
 
     // The landing's stage-out, then the workspace. Under reduced motion the
-    // Prompt layout's stylesheets run no stage-out, so its workspace shows at
-    // once. The classic layout keeps its stage-out.
+    // stylesheets run no stage-out, so the workspace shows at once.
     const enterWorkspace = () => {
-        if (
-            variant === 'prompt' &&
-            !shared &&
-            window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ) {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             setMode('workspace');
 
             return;

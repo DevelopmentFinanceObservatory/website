@@ -142,6 +142,18 @@ test('canonicalStudioCall reads the query of a GET and the JSON body otherwise',
         );
     }
     assert.equal(canonicalStudioCall('POST', search, '{"message":"hi"}')?.conversationId, null);
+    // `hold_removals` passes as the boolean it must be, and nothing else does.
+    assert.equal(
+        canonicalStudioCall('POST', search, '{"conversation_id":"c","hold_removals":true}')?.body,
+        '{"conversation_id":"c","hold_removals":true}',
+    );
+    for (const value of ['"true"', '1', 'null', '{}', '[true]']) {
+        assert.equal(
+            canonicalStudioCall('POST', search, `{"conversation_id":"c","hold_removals":${value}}`),
+            null,
+            `hold_removals ${value}`,
+        );
+    }
 
     const long = 'c'.repeat(MAX_CONVERSATION_ID_CHARS + 1);
 

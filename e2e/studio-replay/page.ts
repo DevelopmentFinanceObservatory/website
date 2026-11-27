@@ -85,7 +85,7 @@ export const openStudio = async (
         reducedMotion?: 'reduce' | 'no-preference';
     } = {},
 ): Promise<Session> => {
-    const player = new Player(scenario);
+    const player = new Player(scenario, { holdsRemovals: layout === 'prompt' });
     const harness = await serveHarness(player);
     const context = await browser.newContext({
         viewport,

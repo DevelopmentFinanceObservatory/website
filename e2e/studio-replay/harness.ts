@@ -100,9 +100,14 @@ export class Player extends EventEmitter {
     private readonly cards = new Map<string, Card>();
     private open: ServerResponse | null = null;
 
-    constructor(scenario: Scenario) {
+    // Whether the page asks every stream to hold removals (`hold_removals`):
+    // the Prompt layout sends it true, and today's layout leaves it out.
+    readonly holdsRemovals: boolean;
+
+    constructor(scenario: Scenario, { holdsRemovals = false } = {}) {
         super();
         this.scenario = scenario;
+        this.holdsRemovals = holdsRemovals;
     }
 
     private fault(text: string) {
@@ -340,6 +345,23 @@ export class Player extends EventEmitter {
         const turn = this.scenario.turns[this.turn - 1];
 
         const route = `${req.method} ${url.pathname}`;
+
+        // Every request that starts or carries on a stream asks for held
+        // removals as its layout does, and only as a boolean `true`.
+        if (
+            route === 'POST /api/studio/turn' ||
+            route === 'POST /api/studio/interrupt' ||
+            route === 'POST /api/studio/resume'
+        ) {
+            const asked = body && 'hold_removals' in body ? body.hold_removals : undefined;
+
+            if (this.holdsRemovals ? asked !== true : asked !== undefined) {
+                this.fault(
+                    `${route}: hold_removals ${JSON.stringify(asked) ?? 'absent'}, ` +
+                        `where the layout sends ${this.holdsRemovals ? 'true' : 'none'}`,
+                );
+            }
+        }
 
         // A page sends one request at a time for a conversation. A second
         // turn or answer while a stream is open would be streamed twice.

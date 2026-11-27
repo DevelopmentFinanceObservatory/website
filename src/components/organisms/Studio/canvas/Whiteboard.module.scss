@@ -239,8 +239,8 @@
 // a drop, a swap, a settle or a resize.
 
 @media (prefers-reduced-motion: reduce) {
-    .boardPrompt .slot,
-    .boardPrompt .slot .cardBox {
+    .slot,
+    .slot .cardBox {
         transition: none;
     }
 }

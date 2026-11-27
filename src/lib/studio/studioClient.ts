@@ -263,6 +263,14 @@ const streamStudio = async (
 /** The question forms the Studio renders, sent on every turn and answer. */
 export const CLIENT_FEATURES: ClientFeature[] = ['unit_question', 'multi_select'];
 
+/** What a page asks of every stream it starts: `holdRemovals`, that the
+ *  harness hold a removal's `composition.updated` until after the turn's
+ *  next drawing line. A page that leaves it out sends the body without the
+ *  member. */
+export type StreamAsk = { holdRemovals?: boolean };
+
+const askOf = ({ holdRemovals }: StreamAsk = {}) => (holdRemovals ? { hold_removals: true } : {});
+
 /** Start (or continue) a turn. */
 export const runTurn = (
     conversationId: string,
@@ -275,6 +283,7 @@ export const runTurn = (
             'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn' | 'prompt_source'
         >
     >,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -285,6 +294,7 @@ export const runTurn = (
             message,
             ...extras,
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -297,6 +307,7 @@ export const runApplyChoice = (
     { choice_id, option_id, turn, spec_id }: ApplyChoice,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -306,6 +317,7 @@ export const runApplyChoice = (
             conversation_id: conversationId,
             apply_choice: { choice_id, option_id, turn, spec_id },
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -318,6 +330,7 @@ export const runApplyUnit = (
     { component_id, spec_id, turn, unit }: ApplyUnit,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -327,6 +340,7 @@ export const runApplyUnit = (
             conversation_id: conversationId,
             apply_unit: { component_id, spec_id, turn, unit },
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -339,6 +353,7 @@ export const runApplyChange = (
     { component_id, spec_id, change }: ApplyChange,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -348,6 +363,7 @@ export const runApplyChange = (
             conversation_id: conversationId,
             apply_change: { component_id, spec_id, change },
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -363,6 +379,7 @@ export const runInterrupt = (
     >,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'interrupt',
@@ -373,6 +390,7 @@ export const runInterrupt = (
             interrupt_id: interruptId,
             ...reply,
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -385,6 +403,7 @@ export const runResume = (
     turnIndex: number,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'resume',
@@ -393,6 +412,7 @@ export const runResume = (
             schema_version: 1,
             conversation_id: conversationId,
             turn_index: turnIndex,
+            ...askOf(ask),
         },
         handlers,
         signal,
