@@ -32,24 +32,84 @@ export const cardImageName = (title: string, today = new Date()): string => {
 };
 
 /**
+ * A copy of `node` to photograph, beside it in the same slot so it takes
+ * the same styles. The live note stops at a capped height and scrolls; the
+ * copy's `data-export` lifts the cap (CardChrome.module.scss), and the copy
+ * grows by the lines that uncovers so the body above keeps its size. It is
+ * clipped out of sight and out of the slot's layout. html-to-image inlines
+ * each element's computed style and has no hook on its clone, so the card
+ * on the sheet stays untouched only by photographing a separate element.
+ */
+const exportCopy = (node: HTMLElement): HTMLElement => {
+    const copy = node.cloneNode(true) as HTMLElement;
+
+    // The live card keeps the ids; a duplicate would answer its lookups.
+    copy.removeAttribute('id');
+    copy.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+    copy.setAttribute('data-export', '');
+    copy.setAttribute('aria-hidden', 'true');
+    copy.inert = true;
+    Object.assign(copy.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: `${node.offsetWidth}px`,
+        height: `${node.offsetHeight}px`,
+        // The card's entrance animation would replay from transparent.
+        animation: 'none',
+        transition: 'none',
+        clipPath: 'inset(50%)',
+        pointerEvents: 'none',
+    });
+    node.after(copy);
+
+    // cloneNode copies a canvas's size, not what is drawn on it.
+    const canvases = node.querySelectorAll('canvas');
+
+    copy.querySelectorAll('canvas').forEach((canvas, index) => {
+        canvas.getContext('2d')?.drawImage(canvases[index], 0, 0);
+    });
+
+    // The notes that scroll on the sheet (CardChrome's NoteLine), measured
+    // in full in the copy.
+    const liveNotes = node.querySelectorAll<HTMLElement>('[data-no-drag]');
+    let hidden = 0;
+
+    copy.querySelectorAll<HTMLElement>('[data-no-drag]').forEach((note, index) => {
+        hidden += Math.max(0, note.offsetHeight - liveNotes[index].offsetHeight);
+    });
+    copy.style.height = `${node.offsetHeight + hidden}px`;
+
+    return copy;
+};
+
+/**
  * Writes `node` to a PNG and hands it to the browser.
  *
  * At twice the screen's scale, so the file stands up in a slide rather than
  * only on the sheet it came from. The card's own controls are left out —
  * they are the canvas's furniture, not the card's content — and so is
- * anything else marked `data-no-export`.
+ * anything else marked `data-no-export`. A note is written in full, however
+ * far it scrolls on the sheet.
  */
 export const downloadCardImage = async (node: HTMLElement, name: string): Promise<void> => {
     const { toBlob } = await import('html-to-image');
+    const copy = exportCopy(node);
+    let blob: Blob | null;
 
-    const blob = await toBlob(node, {
-        pixelRatio: 2,
-        // The card paints its own face; without this the PNG would carry
-        // the sheet's grid showing through wherever the card is not opaque.
-        backgroundColor: getComputedStyle(node).backgroundColor,
-        filter: (child) =>
-            !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
-    });
+    try {
+        blob = await toBlob(copy, {
+            pixelRatio: 2,
+            // The card paints its own face; without this the PNG would carry
+            // the sheet's grid showing through wherever the card is not opaque.
+            backgroundColor: getComputedStyle(node).backgroundColor,
+            style: { clipPath: 'none' },
+            filter: (child) =>
+                !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
+        });
+    } finally {
+        copy.remove();
+    }
 
     if (!blob) {
         throw new Error('The image could not be written.');
