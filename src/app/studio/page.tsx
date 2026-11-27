@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import RouteMove from '@/components/atoms/RouteMove/RouteMove';
 import Studio from '@/components/organisms/Studio/Studio';
 import { getSession } from '@/lib/auth/session';
 import { pickExamples } from '@/lib/studio/examples';
@@ -15,7 +16,11 @@ export const metadata: Metadata = {
 const StudioPage = async () => {
     const session = await getSession();
 
-    return <Studio guest={!session} examples={pickExamples()} />;
+    return (
+        <RouteMove page="studio">
+            <Studio guest={!session} examples={pickExamples()} />
+        </RouteMove>
+    );
 };
 
 export default StudioPage;

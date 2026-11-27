@@ -22,6 +22,7 @@ import {
     type RefineOpen,
 } from './SearchSentence';
 import SearchTable from './SearchTable';
+import StudioMove from './StudioMove';
 import StudioOffer from './StudioOffer';
 import type { DatasetDownloaded } from './useDatasetDownload';
 import { useSearchRun } from './useSearchRun';
@@ -61,8 +62,7 @@ import {
     studioHandoffParts,
 } from '@/lib/search/resultNotes';
 import {
-    HANDOFF_SOURCE_PARAM,
-    handoffSource,
+    handoffArrival,
     searchEventProps,
     startSearchAction,
     type SearchSource,
@@ -74,6 +74,7 @@ import {
     handoffQuestion,
     handoffSeeds,
     handoffVia,
+    ROUTE_TO_STUDIO,
     studioHref,
     type HandoffTrigger,
 } from '@/lib/search/studioHandoff';
@@ -247,16 +248,27 @@ const DataSearch = ({
         return null;
     };
 
+    // The question Studio's way back sent here (`routing=off`). The reader
+    // chose a data search for it, so a later search of the same text (a
+    // retry, the same text typed again) stays out of the router too.
+    const routedBackRef = useRef<string | null>(null);
+
     // A query as text: the starting point's own question shows the catalogue
     // the page holds, with no search call, and records `search.start_point`.
     // Other text is a search, whose events useSearchRun sends, opted in to
-    // the search API's Studio router.
+    // the search API's Studio router unless `studioRouting` is false.
     const runQuery = useCallback(
-        (text: string, source: SearchSource) => {
+        (text: string, source: SearchSource, { studioRouting = true } = {}) => {
+            if (!studioRouting) {
+                routedBackRef.current = text;
+            }
+
             if (text === STARTING_POINT_QUERY) {
                 showStartingPoint(text, source);
             } else {
-                run({ kind: 'raw_text', query: text }, text, source, { studioRouting: true });
+                run({ kind: 'raw_text', query: text }, text, source, {
+                    studioRouting: studioRouting && text !== routedBackRef.current,
+                });
             }
         },
         [run, showStartingPoint],
@@ -412,7 +424,7 @@ const DataSearch = ({
             });
 
             if (trigger === 'auto') {
-                router.replace(href);
+                router.replace(href, { transitionTypes: [ROUTE_TO_STUDIO] });
             } else {
                 router.push(href);
             }
@@ -562,9 +574,10 @@ const DataSearch = ({
     );
 
     // Permalink / homepage handoff: ?q= (and ?s=) auto-runs once per value.
-    // The homepage prompt adds `via` (typed or example). It is read here and
-    // stripped at once, so the address bar never offers it for copying and a
-    // pasted link records `permalink`.
+    // The homepage prompt adds `via` (typed or example), and Studio's way
+    // back adds `routing=off`. Both are read here and stripped at once, so
+    // the address bar never offers them for copying and a pasted link
+    // records `permalink` and opts in to the Studio router.
     useEffect(() => {
         const q = searchParams.get('q');
         const s = searchParams.get('s') ?? '';
@@ -576,17 +589,14 @@ const DataSearch = ({
 
         startedRef.current = key;
 
-        const source = handoffSource(searchParams.get(HANDOFF_SOURCE_PARAM));
+        const { source, studioRouting, href } = handoffArrival(searchParams);
 
-        if (searchParams.has(HANDOFF_SOURCE_PARAM)) {
-            const rest = new URLSearchParams(searchParams);
-
-            rest.delete(HANDOFF_SOURCE_PARAM);
-            window.history.replaceState(null, '', `/data?${rest}`);
+        if (href) {
+            window.history.replaceState(null, '', href);
         }
 
         if (!s) {
-            runRef.current(q, source);
+            runRef.current(q, source, { studioRouting });
 
             return;
         }
@@ -609,7 +619,7 @@ const DataSearch = ({
                 suppressEmptyEditWriteRef.current = true;
                 replayRef.current(state, source);
             } else {
-                runRef.current(q, source);
+                runRef.current(q, source, { studioRouting });
             }
         });
         // `run` and `replay` are deliberately absent. Watching either would
@@ -1072,16 +1082,20 @@ const DataSearch = ({
                             <div className={styles.heroMain}>
                                 <p className={styles.eyebrow}>Your Query</p>
                                 <h1 className={styles.query}>{query}</h1>
-                                <SearchAnswer
-                                    answer={answer}
-                                    catalogue={catalogue}
-                                    onRun={(text) => submitQuery(text, 'example')}
-                                    onStartNew={startNew}
-                                    onShowCatalogue={() =>
-                                        submitQuery(STARTING_POINT_QUERY, 'catalogue')
-                                    }
-                                    onStudio={studioClick}
-                                />
+                                {move === 'auto' ? (
+                                    <StudioMove />
+                                ) : (
+                                    <SearchAnswer
+                                        answer={answer}
+                                        catalogue={catalogue}
+                                        onRun={(text) => submitQuery(text, 'example')}
+                                        onStartNew={startNew}
+                                        onShowCatalogue={() =>
+                                            submitQuery(STARTING_POINT_QUERY, 'catalogue')
+                                        }
+                                        onStudio={studioClick}
+                                    />
+                                )}
                             </div>
                         </div>
                     ) : (

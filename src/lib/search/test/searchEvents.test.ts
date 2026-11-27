@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { fitsProps, MAX_PROPS_BYTES } from '../../events/limits.ts';
+import { buildRequest } from '../searchClient.ts';
 import {
     HANDOFF_SOURCE_PARAM,
+    handoffArrival,
     handoffHref,
     handoffSource,
+    routeBackHref,
     searchEventProps,
     searchOutcome,
     searchPostTracker,
@@ -694,6 +697,33 @@ test('a homepage handoff carries typed or example; any other value is a permalin
     for (const href of ['/data?q=aid', '/data?q=aid&via=share', '/data?q=aid&via=Typed']) {
         assert.equal(arrival(href), 'permalink');
     }
+});
+
+test("Studio's way back runs its one search without the Studio router and strips the param", () => {
+    const arrive = (href: string) => {
+        const arrival = handoffArrival(new URL(href, 'https://example.org').searchParams);
+        const body = buildRequest({ kind: 'raw_text', query: 'aid & debt' }, true, {
+            studioRouting: arrival.studioRouting,
+        });
+
+        return { ...arrival, routed: 'studio_routing' in body.input };
+    };
+
+    assert.deepEqual(
+        [routeBackHref('aid & debt'), handoffHref('aid & debt', 'typed'), '/data?q=aid'].map(
+            arrive,
+        ),
+        [
+            {
+                source: 'permalink',
+                studioRouting: false,
+                href: '/data?q=aid+%26+debt',
+                routed: false,
+            },
+            { source: 'typed', studioRouting: true, href: '/data?q=aid+%26+debt', routed: true },
+            { source: 'permalink', studioRouting: true, href: null, routed: true },
+        ],
+    );
 });
 
 test("a routed Studio hand-off carries its trigger and the route's probability", () => {

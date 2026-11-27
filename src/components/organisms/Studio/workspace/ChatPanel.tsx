@@ -38,6 +38,8 @@ type ChatPanelProps = {
     autoFocus?: boolean;
     // A guest past the free prompts: shown in place of the follow-up input.
     wall?: React.ReactNode;
+    // A line above the transcript, such as why a routed question opened here.
+    arrival?: React.ReactNode;
     shareMarks: ShareMark[];
     titles: Record<string, string>;
     views: Record<string, CardView>;
@@ -68,6 +70,7 @@ const ChatPanel = ({
     readOnly,
     autoFocus = false,
     wall,
+    arrival,
     shareMarks,
     titles,
     views,
@@ -170,6 +173,7 @@ const ChatPanel = ({
                     aria-hidden={tab === 'activity'}
                 >
                     <div ref={scrollRef} className={styles.chatScroll}>
+                        {arrival}
                         {chat.messages.map((message, index) => {
                             const turn = turns[index];
 

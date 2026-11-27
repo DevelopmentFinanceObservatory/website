@@ -72,6 +72,34 @@ export const handoffHref = (query: string, via: 'typed' | 'example'): string =>
 export const handoffSource = (via: string | null): SearchSource =>
     via === 'typed' || via === 'example' ? via : 'permalink';
 
+/** The `/data` query param that turns the search API's Studio router off
+ *  for the arrival's one search (`routing=off`). Studio's way back to the
+ *  data search sets it, so a question the router moved to Studio is
+ *  searched as data. `/data` strips it with `via`. */
+export const HANDOFF_ROUTING_PARAM = 'routing';
+
+/** The `/data` URL Studio's way back sends a routed question to. */
+export const routeBackHref = (query: string): string =>
+    `/data?q=${encodeURIComponent(query)}&${HANDOFF_ROUTING_PARAM}=off`;
+
+/** What a `/data` arrival's handoff params ask for: the search's source,
+ *  whether it opts in to the Studio router, and the URL with both params
+ *  stripped (null when the URL holds neither). */
+export const handoffArrival = (
+    params: URLSearchParams,
+): { source: SearchSource; studioRouting: boolean; href: string | null } => {
+    const rest = new URLSearchParams(params);
+
+    rest.delete(HANDOFF_SOURCE_PARAM);
+    rest.delete(HANDOFF_ROUTING_PARAM);
+
+    return {
+        source: handoffSource(params.get(HANDOFF_SOURCE_PARAM)),
+        studioRouting: params.get(HANDOFF_ROUTING_PARAM) !== 'off',
+        href: rest.toString() === params.toString() ? null : `/data?${rest}`,
+    };
+};
+
 /** The useSearchRun callback that posted an edit. `replay` is a permalink's
  *  stored edits, posted once after its base run lands. */
 export type EditKind =

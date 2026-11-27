@@ -1,0 +1,61 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The move between Get Data and Studio (RouteMove, ROUTE_TO_STUDIO and
+// ROUTE_TO_DATA in src/lib/search/studioHandoff.ts). Forward, the data page
+// slides left as it fades and Studio rides in from the right; back reverses
+// the direction. The leaving page fades fast so it does not compete with the
+// arriving one, which fades in once the old one has gone.
+::view-transition-old(.route-forward),
+::view-transition-old(.route-back) {
+    animation:
+        route-fade 0.15s $ease-out both reverse,
+        route-slide 0.4s $ease-custom both reverse;
+}
+
+::view-transition-new(.route-forward),
+::view-transition-new(.route-back) {
+    animation:
+        route-fade 0.21s $ease-out 0.15s both,
+        route-slide 0.4s $ease-custom both;
+}
+
+::view-transition-old(.route-forward),
+::view-transition-new(.route-back) {
+    --route-offset: #{rem(-60)};
+}
+
+::view-transition-new(.route-forward),
+::view-transition-old(.route-back) {
+    --route-offset: #{rem(60)};
+}
+
+@keyframes route-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes route-slide {
+    from {
+        translate: var(--route-offset) 0;
+    }
+}
+
+// Clicks during the move reach the arriving page.
+::view-transition {
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    // No movement: the pages swap at once.
+    ::view-transition-group(root),
+    ::view-transition-old(root),
+    ::view-transition-new(root),
+    ::view-transition-old(.route-forward),
+    ::view-transition-new(.route-forward),
+    ::view-transition-old(.route-back),
+    ::view-transition-new(.route-back) {
+        animation: none;
+    }
+}

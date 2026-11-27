@@ -144,6 +144,12 @@ export function handoffVia({
     return fromExample ? 'example' : null;
 }
 
+/** The navigation transition types of the router's automatic move to
+ *  Studio and of Studio's way back to the data search. RouteMove in the
+ *  /data and /studio pages animates only these (src/styles/_route-move.scss). */
+export const ROUTE_TO_STUDIO = 'route-to-studio';
+export const ROUTE_TO_DATA = 'route-to-data';
+
 /** Studio's URL for a handoff: the question, the token the seeds are
  *  stored under when there are any, how the question came (`via`), and the
  *  search's trace id for a routed one. */

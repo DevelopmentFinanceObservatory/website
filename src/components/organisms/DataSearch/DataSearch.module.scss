@@ -2304,6 +2304,13 @@ span.slotMarked {
     letter-spacing: -0.02em;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    // StudioMove fades in without the callout's rise.
+    .studioMove {
+        animation-name: token-fade-in;
+    }
+}
+
 // The catalogue answer, under the query: the scope line and the actions.
 .startingPoint {
     display: flex;

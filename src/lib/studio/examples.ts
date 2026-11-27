@@ -58,6 +58,19 @@ export const HANDOFF_VIA_PARAM = 'via';
  *  way-back event joins the search API's log. */
 export const HANDOFF_TRACE_PARAM = 'trace';
 
+/** A question the search API's router moved to Studio on its own
+ *  (`via=route_auto`): the question and the routed search's trace id. Any
+ *  other arrival is null. */
+export const routedArrival = (
+    params: URLSearchParams,
+): { question: string; traceId: string | null } | null => {
+    const question = params.get('q');
+
+    return question && params.get(HANDOFF_VIA_PARAM) === 'route_auto'
+        ? { question, traceId: params.get(HANDOFF_TRACE_PARAM) }
+        : null;
+};
+
 /** The prompt source of a `/studio?q=` arrival: `search_example` for
  *  `via=example`, and none for anything else. */
 export const handoffPromptSource = (via: string | null): PromptSource | undefined =>

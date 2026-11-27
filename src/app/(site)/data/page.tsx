@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import RouteMove from '@/components/atoms/RouteMove/RouteMove';
 import DataSearch from '@/components/organisms/DataSearch/DataSearch';
 import { getSession } from '@/lib/auth/session';
 import { dataPageMetadata } from '@/lib/crawl';
@@ -25,9 +26,11 @@ const DataPage = async () => {
     const [catalogue, session] = await Promise.all([loadSearchCatalogue(), getSession()]);
 
     return (
-        <main>
-            <DataSearch catalogue={catalogue} guest={!session} />
-        </main>
+        <RouteMove page="data">
+            <main>
+                <DataSearch catalogue={catalogue} guest={!session} />
+            </main>
+        </RouteMove>
     );
 };
 

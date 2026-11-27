@@ -22,6 +22,7 @@ import StudioModals from './modals/StudioModals';
 import { useStudioModals } from './modals/useStudioModals';
 import styles from './Studio.module.scss';
 import ChatPanel, { type ChatTab } from './workspace/ChatPanel';
+import RouteArrival from './workspace/RouteArrival';
 import WorkspaceToolbar from './workspace/WorkspaceToolbar';
 
 import Button from '@/components/atoms/Button/Button';
@@ -41,7 +42,7 @@ import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
-import { HANDOFF_VIA_PARAM, handoffPromptSource } from '@/lib/studio/examples';
+import { HANDOFF_VIA_PARAM, handoffPromptSource, routedArrival } from '@/lib/studio/examples';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -50,7 +51,12 @@ import {
     citeLinkOnce,
     logRefusedDescriptions,
 } from '@/lib/studio/infoPanel';
-import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
+import {
+    GUEST_PROMPTS,
+    GUEST_PROMPTS_KEY,
+    promptEvent,
+    type PromptIntent,
+} from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
@@ -99,11 +105,10 @@ export type StudioProps = {
 // The guest's prompt count in this browser, which decides when the wall goes
 // up. The proxy holds the real allowance (src/lib/studio/spendPrompt): a
 // guest past it, from a cleared browser too, gets its refusal as the reply.
-const GUEST_KEY = 'dfo-guest-prompts';
 const guestListeners = new Set<() => void>();
-const readGuestUsed = () => Number(localStorage.getItem(GUEST_KEY)) || 0;
+const readGuestUsed = () => Number(localStorage.getItem(GUEST_PROMPTS_KEY)) || 0;
 const writeGuestUsed = (used: number) => {
-    localStorage.setItem(GUEST_KEY, String(used));
+    localStorage.setItem(GUEST_PROMPTS_KEY, String(used));
     guestListeners.forEach((listener) => listener());
 };
 const subscribeGuest = (listener: () => void) => {
@@ -392,6 +397,10 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     const seedToken = searchParams.get('seed');
     const handoverSource = handoffPromptSource(searchParams.get(HANDOFF_VIA_PARAM));
     const handedOver = useRef(false);
+    // A question the search API's router moved here: its conversation says
+    // why and offers the way back, until New Chat or a saved conversation
+    // replaces it. Read once, since an account's first turn moves the URL.
+    const [routed, setRouted] = useState(() => routedArrival(searchParams));
 
     // `source` names the example a picked question came from; a typed one
     // has none.
@@ -427,6 +436,8 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     const openSaved = (stored: SavedConversation, fromGuest = false) => {
         // A fork's inherited turns and cards are marked as such (openedSave).
         const saved = openedSave(stored);
+
+        setRouted(null);
 
         window.history.replaceState(null, '', `/studio/${saved.id}`);
         saved.widgets.forEach((widget) => trackedCards.current.add(widget.id));
@@ -520,6 +531,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         save.track(null, {});
         window.history.replaceState(null, '', '/studio');
         window.clearTimeout(leaveTimer.current);
+        setRouted(null);
         setQuery('');
         setFollowDraft('');
         setChatCollapsed(false);
@@ -989,6 +1001,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                         // a share, which opens straight on the workspace.
                         autoFocus={!shared && !phone}
                         wall={walled ? <GuestWall /> : null}
+                        arrival={routed && <RouteArrival {...routed} />}
                         shareMarks={doc.shareMarks}
                         titles={doc.titles}
                         views={doc.views}
