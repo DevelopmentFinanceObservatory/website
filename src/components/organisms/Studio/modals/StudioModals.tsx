@@ -126,6 +126,11 @@ const StudioModals = ({
                         doc.setNote(modals.note.editingId, note);
                     }
                 }}
+                onRemove={() => {
+                    if (modals.note.editingId) {
+                        doc.removeNote(modals.note.editingId);
+                    }
+                }}
             />
             <ShareModal
                 key={`share-${seq}`}

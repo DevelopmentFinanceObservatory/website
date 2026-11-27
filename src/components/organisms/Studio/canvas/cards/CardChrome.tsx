@@ -1,5 +1,8 @@
 'use client';
 
+import classNames from 'classnames';
+import { useEffect, useState } from 'react';
+
 import BuiltWithMark from './BuiltWithMark';
 import styles from './CardChrome.module.scss';
 
@@ -7,6 +10,7 @@ import Icon from '@/components/atoms/Icon/Icon';
 import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import { type CardInfo, sourceLine } from '@/lib/chat/widgets';
 import { leftOutOf } from '@/lib/studio/liveCards';
+import { noteParts } from '@/lib/studio/noteLinks';
 
 // A chrome-bar tag ("Source Name") with its content in the house popup.
 // Without content it's a plain label.
@@ -29,13 +33,13 @@ const InfoTag = ({ label, content }: { label: string; content?: string }) =>
         <span className={styles.source}>{label}</span>
     );
 
-// The attribution line: "Source:" and the first source's name, how many more
-// the card cites, and an info mark at its end. A card DFO computed from
-// sources it credits none of reads "Source: DFO calculation". A click
-// anywhere on it opens the More Info panel, which lists
-// every source in full; a card that names no source shows the mark alone.
-// Without the frame's info (a text card, an older save) the bar keeps the
-// plain tag.
+// The attribution line: the info mark, the first source's full name dotted
+// underlined as a link, and how many more the card cites. "Source:" is read
+// out and not shown. A card DFO computed from sources it credits none of
+// reads "Source: DFO calculation". A click anywhere on it opens the More Info
+// panel, which lists every source in full. A card that names no source shows
+// the mark alone. Without the frame's info (a text card, an older save) the
+// bar keeps the plain tag.
 const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) => {
     const credit = sourceLine(info);
 
@@ -47,16 +51,80 @@ const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) =>
             title="More Info"
             onClick={onInfo}
         >
-            {credit && <span className={styles.creditLead}>{credit.lead}</span>}
-            {/* Spaces the line's accessible name; a flex row drops it. */}{' '}
-            <span className={styles.creditTail}>
-                {credit?.first && <span className={styles.creditName}>{credit.first}</span>}{' '}
-                {credit && credit.more > 0 && (
-                    <span className={styles.creditMore}>+{credit.more} more</span>
-                )}
-                <Icon name="info" className={styles.sourceIcon} />
-            </span>
+            <Icon name="info" className={styles.sourceIcon} />
+            {credit && (
+                <span className={styles.creditText}>
+                    <span className={credit.first ? styles.srOnly : undefined}>{credit.lead}</span>{' '}
+                    {credit.first && <span className={styles.creditName}>{credit.first}</span>}
+                    {credit.more > 0 && (
+                        <span className={styles.creditMore}> +{credit.more} more</span>
+                    )}
+                </span>
+            )}
         </button>
+    );
+};
+
+// Whether a note runs past its capped height. The observer reports on
+// observe() and whenever the note's box changes size. A new note
+// re-observes, since a note that stays at the cap keeps the same box.
+const useNoteScrolls = (note: string) => {
+    const [node, setNode] = useState<HTMLElement | null>(null);
+    const [scrolls, setScrolls] = useState(false);
+
+    useEffect(() => {
+        if (!node) {
+            return;
+        }
+
+        const observer = new ResizeObserver(() =>
+            setScrolls(node.scrollHeight > node.clientHeight),
+        );
+
+        observer.observe(node);
+
+        return () => observer.disconnect();
+    }, [node, note]);
+
+    return [setNode, scrolls] as const;
+};
+
+// The user's note under the source, in the same indented form, with the
+// links written into it (lib/studio/noteLinks). A long note stops at a fixed
+// height, the same on every card, and scrolls inside the foot. The scroller
+// takes focus for the arrow keys, and `data-no-drag` keeps a press on it from
+// panning the board (cardPress.ts), so a finger scrolls the note.
+const NoteLine = ({ note }: { note: string }) => {
+    const [noteRef, scrolls] = useNoteScrolls(note);
+
+    return (
+        <p className={styles.note}>
+            <Icon name="note" className={styles.noteIcon} />
+            {/* Read out, so a listener hears where the source ends and the
+                note begins. */}
+            <span className={styles.srOnly}>Note: </span>
+            <span
+                ref={noteRef}
+                className={styles.noteText}
+                {...(scrolls && { tabIndex: 0, 'data-no-drag': '' })}
+            >
+                {noteParts(note).map((part, index) =>
+                    part.href ? (
+                        <a
+                            key={index}
+                            href={part.href}
+                            className={styles.noteLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {part.text}
+                        </a>
+                    ) : (
+                        part.text
+                    ),
+                )}
+            </span>
+        </p>
     );
 };
 
@@ -89,26 +157,27 @@ type CardChromeProps = {
     source?: string;
     info?: CardInfo;
     onInfo?: (() => void) | null;
+    note?: string;
 };
 
-// The card's foot holds what its data leaves out (`info.leftOut`), then the bar.
-const CardChrome = (bar: CardChromeProps) => {
+// The card's foot holds what its data leaves out (`info.leftOut`), then the
+// bar, then the user's note.
+const CardChrome = ({ note, ...bar }: CardChromeProps) => {
     const leftOut = leftOutOf(bar.info);
 
-    return leftOut.length > 0 ? (
-        <div className={styles.foot}>
-            <LeftOutLine leftOut={leftOut} onInfo={bar.onInfo} />
+    return leftOut.length > 0 || note ? (
+        <div className={classNames(styles.foot, leftOut.length > 0 && styles.footLeftOut)}>
+            {leftOut.length > 0 && <LeftOutLine leftOut={leftOut} onInfo={bar.onInfo} />}
             <ChromeBar {...bar} />
+            {note && <NoteLine note={note} />}
         </div>
     ) : (
         <ChromeBar {...bar} />
     );
 };
 
-// The source tag, and Built with on the right. A user's note used to sit
-// here too, as a "User Note" tag; it is now the mark beside the pin (see
-// CardActions) with the words themselves on hovering the card (CardNote).
-const ChromeBar = ({ source, info, onInfo }: CardChromeProps) => (
+// The source tag, and Built with on the right.
+const ChromeBar = ({ source, info, onInfo }: Omit<CardChromeProps, 'note'>) => (
     <div className={styles.chrome}>
         <span className={styles.chromeTags}>
             {info && onInfo ? (
