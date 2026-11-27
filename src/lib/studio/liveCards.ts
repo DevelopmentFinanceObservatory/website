@@ -174,16 +174,18 @@ export const isLiveCanvas = (canvas: LiveCanvas | undefined): canvas is LiveCanv
     canvas !== undefined && !canvas.snapshot && Object.keys(canvas.states).length > 0;
 
 /**
- * The line a live canvas shows once. It says its data is current and its
- * titles and notes are as old as the share. The date is the UTC day of `createdAt`,
- * so the server's render and the browser's agree.
+ * The line a live canvas shows once. It says its data is current, how recent
+ * it is when `dataThrough` is given (`dataThroughText`), and that its titles
+ * and notes are as old as the share. The date is the UTC day of
+ * `createdAt`, so the server's render and the browser's agree.
  */
-export const liveNote = (createdAt: string | undefined): string => {
+export const liveNote = (createdAt: string | undefined, dataThrough?: string | null): string => {
     const written = createdAt ? new Date(createdAt) : null;
+    const data = dataThrough ? `Live data through ${dataThrough}` : 'Live data';
 
     return written && !Number.isNaN(written.getTime())
-        ? `Live data · titles and notes written ${shortDateText(written)}`
-        : 'Live data';
+        ? `${data} · titles and notes written ${shortDateText(written)}`
+        : data;
 };
 
 /** The error codes the browser sets itself. Every other code is the refresh

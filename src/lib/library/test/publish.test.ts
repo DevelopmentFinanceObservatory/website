@@ -9,6 +9,7 @@ import {
     publishedKind,
     readArtifactText,
     readPublish,
+    readReplacement,
     slugOf,
 } from '../publish.ts';
 
@@ -207,4 +208,27 @@ test('a retry keeps its publish key until the artifact, mode or chosen slug chan
     assert.notEqual(publishKeySlot('w1', 'live', null), slot);
     assert.notEqual(publishKeySlot('w1', 'snapshot', 'aid-chart'), slot);
     assert.notEqual(publishKeySlot('canvas', 'live', 'aid-chart'), slot);
+});
+
+test('a withdrawal names its replacement by id, or none', () => {
+    const cases: [unknown, unknown][] = [
+        [null, { ok: true, value: null }],
+        [{}, { ok: true, value: null }],
+        [{ replacedBy: null }, { ok: true, value: null }],
+        [{ replacedBy: 'a1' }, { ok: true, value: 'a1' }],
+        [{ replacedBy: '' }, { ok: false, pointer: '/replacedBy' }],
+        [{ replacedBy: 7 }, { ok: false, pointer: '/replacedBy' }],
+        [{ replacedBy: 'x'.repeat(65) }, { ok: false, pointer: '/replacedBy' }],
+        ['a1', { ok: false, pointer: '' }],
+    ];
+
+    for (const [input, expected] of cases) {
+        const read = readReplacement(input);
+
+        assert.deepEqual(
+            read.ok ? read : { ok: false, pointer: read.pointer },
+            expected,
+            JSON.stringify(input),
+        );
+    }
 });

@@ -13,8 +13,9 @@ const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
  * The Library's store (src/lib/library/store.ts) against the migrated tables
  * as the runtime role. A publish key makes one artifact however many tries
  * send it, at once or in turn. A withdrawn artifact keeps its slug, and its
- * share token until the take-down is settled. A topic label is taken in any
- * case.
+ * share token until the take-down is settled, and its address follows its
+ * chain of replacements to the first one published. A topic label is taken
+ * in any case.
  */
 test('library store', async (t) => {
     const database = await createTestDatabase();
@@ -68,6 +69,7 @@ test('library store', async (t) => {
             topics: [],
             sources: [],
             steps: [],
+            cardDates: [],
         };
     };
 
@@ -397,5 +399,151 @@ test('library store', async (t) => {
             [old?.slug, old?.publish_key, old?.share_write_token, old?.published_by],
             ['old-writer', 'key-o', published.shareWriteToken, 'admin'],
         );
+    });
+    // The id of the artifact under `slug`.
+    const idOf = async (slug: string) =>
+        (
+            await admin.query<{ id: string }>('select id from library_artifact where slug = $1', [
+                slug,
+            ])
+        ).rows[0].id;
+
+    await t.test("an artifact keeps its cards' data dates, withdrawn or not", async () => {
+        const cardDates = [
+            { dataThrough: '2024', lastRefreshed: '2026-11-01' },
+            { dataThrough: null, lastRefreshed: null },
+        ];
+
+        await store.insertArtifact({ ...input('key-q', 'Dated chart'), cardDates }, 'admin');
+
+        const id = await idOf('dated-chart');
+        const read = await store.artifactBySlug('dated-chart');
+
+        assert.equal(read?.status, 'published');
+        assert.ok(read?.status === 'published');
+        assert.deepEqual(read.artifact.cardDates, cardDates);
+        assert.equal(read.artifact.updatedAt, read.artifact.publishedAt);
+
+        await store.withdrawArtifact(id);
+
+        const [row] = (
+            await admin.query<{ card_dates: unknown }>(
+                'select card_dates from library_artifact where id = $1',
+                [id],
+            )
+        ).rows;
+
+        assert.deepEqual(row.card_dates, cardDates);
+    });
+
+    await t.test('only a withdrawn artifact names a replacement, never itself', async () => {
+        await store.insertArtifact(input('key-r', 'Replacement'), 'admin');
+        await store.insertArtifact(input('key-s', 'Replaced'), 'admin');
+
+        const replacement = await idOf('replacement');
+        const replaced = await idOf('replaced');
+        const runtime = database.runtimePool();
+        const violates = (constraint: string) => (error: { constraint?: string }) =>
+            error.constraint === constraint;
+
+        await assert.rejects(
+            runtime.query('update library_artifact set replaced_by = $1 where id = $2', [
+                replacement,
+                replaced,
+            ]),
+            violates('library_artifact_replaced_by_withdrawn'),
+        );
+        await assert.rejects(
+            runtime.query(
+                'update library_artifact set withdrawn_at = now(), replaced_by = id where id = $1',
+                [replaced],
+            ),
+            violates('library_artifact_replaced_by_other'),
+        );
+        await assert.rejects(
+            runtime.query(
+                `update library_artifact set withdrawn_at = now(), replaced_by = 'no-such-id' where id = $1`,
+                [replaced],
+            ),
+            violates('library_artifact_replaced_by_library_artifact_id_fk'),
+        );
+
+        // The erasing trigger leaves the pointer as the withdrawal wrote it.
+        assert.deepEqual(await store.withdrawArtifact(replaced, replacement), {
+            slug: 'replaced',
+        });
+
+        const [row] = (
+            await admin.query<{ replaced_by: string; title: string }>(
+                'select replaced_by, title from library_artifact where id = $1',
+                [replaced],
+            )
+        ).rows;
+
+        assert.deepEqual(row, { replaced_by: replacement, title: '' });
+
+        const atSlug = await store.artifactBySlug('replaced');
+
+        assert.ok(atSlug?.status === 'withdrawn');
+        assert.equal(atSlug.artifact.replacedBy, replacement);
+        assert.deepEqual(atSlug.artifact.replacement, {
+            slug: 'replacement',
+            title: 'Replacement',
+        });
+
+        // A published artifact cannot be given one later, and a withdrawn one
+        // can be pointed elsewhere or nowhere.
+        assert.equal(await store.setReplacement(replacement, replaced), 'not_found');
+        assert.deepEqual(await store.setReplacement(replaced, null), { slug: 'replaced' });
+        assert.equal(await store.replacementOf(replaced), null);
+        assert.deepEqual(await store.setReplacement(replaced, replacement), { slug: 'replaced' });
+        assert.equal(await store.isArtifactPublished(replacement), true);
+        assert.equal(await store.isArtifactPublished(replaced), false);
+        assert.ok((await store.replacementChoices()).some((choice) => choice.id === replacement));
+        assert.equal(
+            (await store.replacementChoices()).some((choice) => choice.id === replaced),
+            false,
+        );
+
+        // A deleted replacement leaves the pointer null.
+        await admin.query('delete from library_artifact where id = $1', [replacement]);
+        assert.equal(
+            (
+                await admin.query<{ replaced_by: string | null }>(
+                    'select replaced_by from library_artifact where id = $1',
+                    [replaced],
+                )
+            ).rows[0].replaced_by,
+            null,
+        );
+    });
+
+    await t.test('a withdrawn address follows its replacements to a published one', async () => {
+        // chain-0 to chain-6, each withdrawn one replaced by the next, and
+        // chain-6 published.
+        const ids: string[] = [];
+
+        for (let n = 0; n <= 6; n += 1) {
+            await store.insertArtifact(input(`key-chain-${n}`, `Chain ${n}`), 'admin');
+            ids.push(await idOf(`chain-${n}`));
+        }
+
+        for (let n = 5; n >= 0; n -= 1) {
+            assert.deepEqual(await store.withdrawArtifact(ids[n], ids[n + 1]), {
+                slug: `chain-${n}`,
+            });
+        }
+
+        const published = { slug: 'chain-6', title: 'Chain 6' };
+
+        // Five hops reach chain-6 from chain-1, and six from chain-0 do not.
+        assert.deepEqual(await store.replacementOf(ids[5]), published);
+        assert.deepEqual(await store.replacementOf(ids[1]), published);
+        assert.equal(await store.replacementOf(ids[0]), null);
+        assert.equal(await store.replacementOf(ids[6]), null);
+
+        // A loop of withdrawn artifacts links nowhere.
+        await store.setReplacement(ids[5], ids[4]);
+        assert.equal(await store.replacementOf(ids[4]), null);
     });
 });

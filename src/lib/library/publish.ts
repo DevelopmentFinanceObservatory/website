@@ -245,6 +245,31 @@ export const readSlug = (raw: unknown): Read<string | null> => {
 };
 
 /**
+ * The `replacedBy` of a withdrawal or of a later change to it: the id of the
+ * artifact the withdrawn one's address links to, or null for none. A
+ * missing body, a missing member and null all read as none.
+ */
+export const readReplacement = (body: unknown): Read<string | null> => {
+    if (body === null || body === undefined) {
+        return { ok: true, value: null };
+    }
+
+    if (!isRecord(body)) {
+        return refuse('', 'Send a JSON object.');
+    }
+
+    const raw = body.replacedBy ?? null;
+
+    if (raw === null) {
+        return { ok: true, value: null };
+    }
+
+    return typeof raw === 'string' && raw.length > 0 && raw.length <= 64
+        ? { ok: true, value: raw }
+        : refuse('/replacedBy', 'Name the replacement by its id.');
+};
+
+/**
  * The publish key's slot in the Publish tab: one key per artifact picked,
  * mode and chosen slug (`readSlug`'s value, null while the slug follows the
  * title). A retry with all three unchanged sends the key again, so a publish

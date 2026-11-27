@@ -686,6 +686,12 @@ test('the live note dates the text by the UTC day the share was made', () => {
     // A canvas with no creation time.
     assert.doesNotMatch(liveNote(undefined), /written/);
     assert.doesNotMatch(liveNote('not a date'), /written|Invalid/);
+    // The period the filled cards run through, when they name one.
+    assert.equal(
+        liveNote('2026-10-07T12:00:00.000Z', '2022–2024'),
+        'Live data through 2022–2024 · titles and notes written 7 Oct 2026',
+    );
+    assert.equal(liveNote(undefined, null), 'Live data');
 });
 
 test('a card of a live canvas retries itself, and a card off it has no live state', () => {

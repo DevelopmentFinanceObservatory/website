@@ -16,6 +16,7 @@ import { buildStudioShare, readShareJson } from '@/lib/chat/studioShare';
 import { anonymousWho } from '@/lib/events/internalEng';
 import { track } from '@/lib/events/track';
 import { problem, requestInvalidProblem, unreachableProblem } from '@/lib/proxy/problem';
+import { cardDataDates } from '@/lib/studio/dataThrough';
 import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
@@ -28,6 +29,7 @@ import {
     publishedKind,
     readArtifactText,
     readPublish,
+    readReplacement,
     topicLabel,
 } from './publish';
 import {
@@ -36,8 +38,10 @@ import {
     artifactText,
     isArtifactWithdrawn,
     insertArtifact,
+    isArtifactPublished,
     listTopics,
     publishTarget,
+    setReplacement,
     updateArtifact,
     withdrawArtifact,
 } from './store';
@@ -351,6 +355,9 @@ export const publish = async (request: Request): Promise<Response> => {
                 kind,
                 mode,
                 ...publishedFacts(kind, views),
+                cardDates: shown.flatMap((card) =>
+                    card.kind === 'text' ? [] : [cardDataDates(card.info)],
+                ),
             },
             admin.id,
         );
@@ -446,8 +453,55 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
     return Response.json({ ...changed, warnings: checked.warnings }, { headers: NO_STORE });
 };
 
+// The replacement a withdrawal or a later change names, or the refusal to
+// send: a body that is not one, an artifact naming itself, or a replacement
+// not on show.
+const namedReplacement = async (
+    request: Request,
+    id: string,
+): Promise<{ replacedBy: string | null } | { refusal: Response }> => {
+    const text = await request.text().catch(() => '');
+    let body: unknown = null;
+
+    if (text.trim()) {
+        try {
+            body = JSON.parse(text);
+        } catch {
+            return { refusal: requestInvalidProblem('Send a JSON object.', undefined, NO_STORE) };
+        }
+    }
+
+    const read = readReplacement(body);
+
+    if (!read.ok) {
+        return {
+            refusal: requestInvalidProblem(read.detail, read.pointer || undefined, NO_STORE),
+        };
+    }
+
+    if (read.value !== null && (read.value === id || !(await isArtifactPublished(read.value)))) {
+        return {
+            refusal: problem({
+                status: 400,
+                code: 'replacement_unavailable',
+                detail: 'The replacement must be another artifact on show in the Library.',
+                retryable: false,
+                extra: { pointer: '/replacedBy' },
+                headers: NO_STORE,
+            }),
+        };
+    }
+
+    return { replacedBy: read.value };
+};
+
 /**
  * DELETE /api/library/artifacts/<id> → 204, or 502 `transient_unavailable`
+ *
+ * The body is optional: `{ replacedBy }` names the artifact on show whose
+ * page the withdrawn address then links to, and a replacement that is the
+ * artifact itself or not on show answers 400 `replacement_unavailable` at
+ * `/replacedBy` before anything changes.
  *
  * Takes the artifact's share down in dfo-apis, or, when dfo-apis cannot,
  * records it in `share_cleanup` for an operator. Once one of those holds, it
@@ -467,11 +521,17 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
         return refusal;
     }
 
+    const named = await namedReplacement(request, id);
+
+    if ('refusal' in named) {
+        return named.refusal;
+    }
+
     const withdrawn = await withdraw(
         {
             ...settling(request.headers),
             share: artifactShare,
-            withdraw: withdrawArtifact,
+            withdraw: (artifactId) => withdrawArtifact(artifactId, named.replacedBy),
             isWithdrawn: isArtifactWithdrawn,
         },
         id,
@@ -492,4 +552,37 @@ export const remove = async (request: Request, id: string): Promise<Response> =>
     refresh(withdrawn.slug);
 
     return new Response(null, { status: 204, headers: NO_STORE });
+};
+
+/**
+ * PUT /api/library/artifacts/<id>/replacement { replacedBy } → { slug }
+ *
+ * Points a withdrawn artifact's address at another artifact on show, or at
+ * nothing with null. Answers 404 for an id no withdrawn artifact has, and
+ * the withdrawal's 400 `replacement_unavailable` for a replacement that is
+ * the artifact itself or not on show.
+ */
+export const replace = async (request: Request, id: string): Promise<Response> => {
+    const { refusal, admin } = await gate(request, true);
+
+    if (refusal) {
+        return refusal;
+    }
+
+    const named = await namedReplacement(request, id);
+
+    if ('refusal' in named) {
+        return named.refusal;
+    }
+
+    const changed = await setReplacement(id, named.replacedBy);
+
+    if (changed === 'not_found') {
+        return notFound();
+    }
+
+    log('replace', admin.email, changed.slug);
+    refresh(changed.slug);
+
+    return Response.json(changed, { headers: NO_STORE });
 };

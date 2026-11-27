@@ -6,9 +6,11 @@ import {
     filterArtifacts,
     filterOptions,
     type LibraryArtifact,
+    libraryDate,
     type LibraryFilters,
     parseList,
     serializeList,
+    textUpdated,
 } from '../artifact.ts';
 
 const artifact = (slug: string, partial: Partial<LibraryArtifact> = {}): LibraryArtifact => ({
@@ -24,7 +26,9 @@ const artifact = (slug: string, partial: Partial<LibraryArtifact> = {}): Library
     sources: [],
     steps: [],
     topics: [],
+    cardDates: [],
     publishedAt: '2026-12-12T10:00:00.000Z',
+    updatedAt: '2026-12-12T10:00:00.000Z',
     ...partial,
 });
 
@@ -146,4 +150,14 @@ test('the citation names the year, type, URL, access date and sources', () => {
         citation({ ...ethiopia, kind: 'key_number' }, '', new Date()),
         / \[Key number\]\. /,
     );
+});
+
+test('a date prints as its UTC day, as the citation prints it', () => {
+    assert.equal(libraryDate('2026-12-12T23:30:00.000-05:00'), '13 December 2026');
+    assert.equal(libraryDate(new Date('2027-01-27T09:00:00Z')), '27 January 2027');
+});
+
+test('the text counts as updated only after publication', () => {
+    assert.equal(textUpdated(ethiopia), false);
+    assert.equal(textUpdated({ ...ethiopia, updatedAt: '2026-12-12T10:00:01.000Z' }), true);
 });

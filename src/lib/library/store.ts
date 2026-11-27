@@ -11,9 +11,12 @@ import type {
     LibraryArtifact,
     LibrarySource,
     LibraryStep,
+    Replacement,
+    ReplacementChoice,
     WithdrawnArtifact,
 } from './artifact.ts';
 import { type ArtifactText, freeSlug, slugOf } from './publish.ts';
+import type { LibraryCardDates } from '../../../db/schema.ts';
 
 import { db } from '@/lib/db';
 import { uuid } from '@/lib/uuid';
@@ -62,8 +65,11 @@ const ARTIFACT_COLUMNS = {
     content: libraryArtifact.content,
     sources: libraryArtifact.sources,
     steps: libraryArtifact.steps,
+    cardDates: libraryArtifact.cardDates,
     publishedAt: libraryArtifact.publishedAt,
+    updatedAt: libraryArtifact.updatedAt,
     withdrawnAt: libraryArtifact.withdrawnAt,
+    replacedBy: libraryArtifact.replacedBy,
 };
 
 const selectArtifacts = () => db.select(ARTIFACT_COLUMNS).from(libraryArtifact);
@@ -84,7 +90,9 @@ const toArtifact = (row: ArtifactRow, topics: string[]): LibraryArtifact => ({
     sources: row.sources,
     steps: row.steps,
     topics,
+    cardDates: row.cardDates,
     publishedAt: row.publishedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
 });
 
 const live = isNull(libraryArtifact.withdrawnAt);
@@ -122,10 +130,13 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
         return {
             status: 'withdrawn',
             artifact: {
+                id: row.id,
                 slug: row.slug,
                 kind: row.kind as ArtifactKind,
                 publishedAt: row.publishedAt.toISOString(),
                 withdrawnAt: row.withdrawnAt.toISOString(),
+                replacedBy: row.replacedBy,
+                replacement: await replacementOf(row.id),
             },
         };
     }
@@ -135,6 +146,72 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
         artifact: toArtifact(row, (await topicsOf([row.id])).get(row.id) ?? []),
     };
 });
+
+/** How many replacements a withdrawn artifact's address follows to reach a
+ *  published one. A longer chain, or a loop of withdrawn artifacts, links
+ *  nowhere. */
+export const REPLACEMENT_HOPS = 5;
+
+/**
+ * The artifact withdrawn artifact `id`'s address links to: down the chain of
+ * `replaced_by`, the first one still published, within `REPLACEMENT_HOPS`
+ * steps. Null when none is named or none in reach is published. Read on each
+ * request, so a replacement withdrawn later hands on to its own.
+ */
+export const replacementOf = async (id: string): Promise<Replacement | null> => {
+    const { rows } = await db.execute<Replacement>(sql`
+        with recursive chain (id, replaced_by, withdrawn_at, slug, title, hops) as (
+            select dst.id, dst.replaced_by, dst.withdrawn_at, dst.slug, dst.title, 1
+              from ${libraryArtifact} src
+              join ${libraryArtifact} dst on dst.id = src.replaced_by
+             where src.id = ${id}
+            union all
+            select dst.id, dst.replaced_by, dst.withdrawn_at, dst.slug, dst.title,
+                   chain.hops + 1
+              from chain
+              join ${libraryArtifact} dst on dst.id = chain.replaced_by
+             where chain.withdrawn_at is not null and chain.hops < ${REPLACEMENT_HOPS}
+        )
+        select slug, title from chain where withdrawn_at is null order by hops limit 1
+    `);
+
+    return rows[0] ?? null;
+};
+
+/** The artifacts on show, by title, for an admin naming a replacement. */
+export const replacementChoices = async (): Promise<ReplacementChoice[]> =>
+    db
+        .select({ id: libraryArtifact.id, title: libraryArtifact.title })
+        .from(libraryArtifact)
+        .where(live)
+        .orderBy(asc(libraryArtifact.title));
+
+/** Whether artifact `id` is on show. */
+export const isArtifactPublished = async (id: string): Promise<boolean> =>
+    (
+        await db
+            .select({ id: libraryArtifact.id })
+            .from(libraryArtifact)
+            .where(and(eq(libraryArtifact.id, id), live))
+    ).length > 0;
+
+/**
+ * Points withdrawn artifact `id`'s address at `replacedBy`, or at nothing
+ * with null. The caller has checked that `replacedBy` is on show. Answers
+ * the slug, or `not_found` for an id no withdrawn artifact has.
+ */
+export const setReplacement = async (
+    id: string,
+    replacedBy: string | null,
+): Promise<{ slug: string } | 'not_found'> => {
+    const [row] = await db
+        .update(libraryArtifact)
+        .set({ replacedBy })
+        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.withdrawnAt)))
+        .returning({ slug: libraryArtifact.slug });
+
+    return row ?? 'not_found';
+};
 
 /** What a publish with `publishKey`, and with `slug` when the publisher
  *  chose one, meets before it makes a share. */
@@ -266,6 +343,7 @@ export type ArtifactInsert = ArtifactText & {
     mode: ArtifactMode;
     sources: LibrarySource[];
     steps: LibraryStep[];
+    cardDates: LibraryCardDates[];
 };
 
 type Inserted =
@@ -468,16 +546,23 @@ export const isArtifactWithdrawn = async (id: string): Promise<boolean> =>
  * the share an operator looks up. Lists, the sitemap and edits leave the row
  * out.
  *
+ * `replacedBy` names the artifact its address then links to, which the
+ * caller has checked is on show (`setReplacement` changes it later).
+ *
  * Answers the slug, or `not_found` for an id no artifact has and for one
  * whose token is gone, a withdrawn one included. A withdrawn row that still
  * holds a token keeps its first withdrawal date.
  */
-export const withdrawArtifact = async (id: string): Promise<{ slug: string } | 'not_found'> => {
+export const withdrawArtifact = async (
+    id: string,
+    replacedBy: string | null = null,
+): Promise<{ slug: string } | 'not_found'> => {
     const [row] = await db
         .update(libraryArtifact)
         .set({
             withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())`,
             shareWriteToken: null,
+            replacedBy,
         })
         .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
         .returning({ slug: libraryArtifact.slug });

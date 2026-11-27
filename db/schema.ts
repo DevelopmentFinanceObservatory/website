@@ -13,6 +13,7 @@ import {
     text,
     timestamp,
     uniqueIndex,
+    type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 import { user } from './auth-schema.ts';
@@ -319,6 +320,12 @@ export type LibrarySource = { name: string; url: string | null };
  *  detail of it when there is more to say. */
 export type LibraryStep = { title: string; detail: string | null };
 
+/** How recent one published card's data was when it was published, as the
+ *  platform wrote it: `dataThrough` is the latest period the data holds
+ *  ("2024", "2025-Q2"), and `lastRefreshed` the day its source was last
+ *  read. Either is null when the card did not say. */
+export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: string | null };
+
 /**
  * The Library: Studio and search outputs that DFO staff publish under a
  * citable URL, `/library/<slug>`. `share_id` names the share in dfo-apis that
@@ -329,7 +336,8 @@ export type LibraryStep = { title: string; detail: string | null };
  * sends with every try of one publish, so a retry finds the artifact the
  * first try made. `content_title` and `content` are the optional text
  * section the publisher writes. `sources` and `steps` are copied from the
- * published cards' descriptions, so the Library's list, filters and pages
+ * published cards' descriptions, and `card_dates` holds each published
+ * card's data dates in card order, so the Library's list, filters and pages
  * read this table alone. `published_by` is null once the publisher's account
  * is deleted, and the artifact stays.
  *
@@ -340,9 +348,16 @@ export type LibraryStep = { title: string; detail: string | null };
  * `withdrawn_at` set: `title` and `description` become the empty string,
  * `content_title` and `content` null, `sources` and `steps` empty, and the
  * topic links are deleted. The slug, kind, mode, dates, `published_by`,
- * `share_id` and `publish_key` stay. An artifact is withdrawn only once its
- * share is gone from dfo-apis or recorded in `share_cleanup`, and the same
- * write clears `share_write_token`.
+ * `share_id`, `publish_key`, `card_dates` and `replaced_by` stay. An
+ * artifact is withdrawn only once its share is gone from dfo-apis or
+ * recorded in `share_cleanup`, and the same write clears
+ * `share_write_token`.
+ *
+ * `replaced_by` names the artifact a withdrawn one's address points readers
+ * to. Only a withdrawn row holds one, never itself, and it is null once the
+ * replacement's row is deleted. The replacement was published when the
+ * pointer was written, and the page follows the chain of replacements to
+ * the first one still published.
  */
 export const libraryArtifact = pgTable(
     'library_artifact',
@@ -366,10 +381,17 @@ export const libraryArtifact = pgTable(
             .$type<LibraryStep[]>()
             .notNull()
             .default(sql`'[]'::jsonb`),
+        cardDates: jsonb('card_dates')
+            .$type<LibraryCardDates[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
         publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),
         publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
         withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+        replacedBy: text('replaced_by').references((): AnyPgColumn => libraryArtifact.id, {
+            onDelete: 'set null',
+        }),
     },
     (table) => [
         uniqueIndex('library_artifact_slug_idx').on(table.slug),
@@ -380,6 +402,14 @@ export const libraryArtifact = pgTable(
             sql`${table.kind} IN ('chart', 'table', 'key_number', 'canvas', 'data')`,
         ),
         check('library_artifact_mode', sql`${table.mode} IN ('live', 'snapshot')`),
+        check(
+            'library_artifact_replaced_by_withdrawn',
+            sql`${table.replacedBy} IS NULL OR ${table.withdrawnAt} IS NOT NULL`,
+        ),
+        check(
+            'library_artifact_replaced_by_other',
+            sql`${table.replacedBy} IS NULL OR ${table.replacedBy} <> ${table.id}`,
+        ),
         index('library_artifact_published_at_idx').on(table.publishedAt.desc()),
     ],
 );

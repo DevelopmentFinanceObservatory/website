@@ -125,9 +125,19 @@ export const editArtifact = (id: string, text: ArtifactText) =>
         'The changes were not saved. Try again.',
     );
 
-export const deleteArtifact = (id: string) =>
+/** Withdraws the artifact, its address then linking to `replacedBy` when
+ *  one is named. */
+export const deleteArtifact = (id: string, replacedBy: string | null = null) =>
     call<null>(
         `/api/library/artifacts/${encodeURIComponent(id)}`,
-        { method: 'DELETE' },
+        replacedBy ? send('DELETE', { replacedBy }) : { method: 'DELETE' },
         'It was not deleted. Try again.',
+    );
+
+/** Points a withdrawn artifact's address at `replacedBy`, or at nothing. */
+export const replaceArtifact = (id: string, replacedBy: string | null) =>
+    call<{ slug: string }>(
+        `/api/library/artifacts/${encodeURIComponent(id)}/replacement`,
+        send('PUT', { replacedBy }),
+        'The replacement was not saved. Try again.',
     );
