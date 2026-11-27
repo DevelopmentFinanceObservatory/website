@@ -363,10 +363,13 @@ const PromptDock = () => {
 
         const name = was.dataset.dock ? COUNTERPART[was.dataset.dock] : undefined;
         // The guest wall takes the field's place, and its `Sign in` takes
-        // the field's focus.
+        // the field's focus. Any other control that leaves hands focus to
+        // the box.
         const next = name
             ? boxRef.current?.querySelector<HTMLElement>(`[data-dock="${name}"]`)
-            : boxRef.current?.querySelector<HTMLElement>(`.${styles.wall} button`);
+            : was.matches(`.${styles.field}`)
+              ? boxRef.current?.querySelector<HTMLElement>(`.${styles.wall} button`)
+              : null;
 
         // Cleared first: the focus below records the counterpart, which a
         // later redraw may remove in turn.
@@ -423,7 +426,13 @@ const PromptDock = () => {
     // The turn ended in an error, its reply the error's own words.
     const failed =
         !!question && !!chat.activity.find((entry) => entry.turn === question.turn)?.failed;
-    const said = useRef({ turn: -1, started: false, ready: false });
+    // `ready` records what was said when the turn ended: a failure that
+    // lands after `Answer ready` is said too.
+    const said = useRef<{ turn: number; started: boolean; ready: false | 'ok' | 'failed' }>({
+        turn: -1,
+        started: false,
+        ready: false,
+    });
 
     useEffect(() => {
         if (!question) {
@@ -439,16 +448,20 @@ const PromptDock = () => {
             announce('Answer started');
         }
 
-        if (!chat.thinking && replyStarted && !said.current.ready) {
-            said.current.ready = true;
-
-            if (failed) {
-                announce(`The answer failed: ${plainText(question.reply)}`, 'error');
-            } else {
-                announce('Answer ready');
-            }
+        // A turn paused on a plan or a question has not answered yet; the
+        // pause says itself below.
+        if (chat.thinking || !replyStarted || pending || said.current.ready === 'failed') {
+            return;
         }
-    }, [question, streaming, replyStarted, failed, chat.thinking, announce]);
+
+        if (failed) {
+            said.current.ready = 'failed';
+            announce(`The answer failed: ${plainText(question.reply)}`, 'error');
+        } else if (!said.current.ready) {
+            said.current.ready = 'ok';
+            announce('Answer ready');
+        }
+    }, [question, streaming, replyStarted, failed, pending, chat.thinking, announce]);
 
     // A waiting plan or question is said once, when it arrives.
     const saidPending = useRef<string | null>(null);

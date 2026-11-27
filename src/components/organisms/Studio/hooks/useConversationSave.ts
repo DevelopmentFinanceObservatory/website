@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { CanvasDocument } from './useCanvasDocument';
 import type { useChat } from './useChat';
@@ -145,8 +145,11 @@ export const useConversationSave = ({
     const promptsRef = useRef(0);
 
     // Any change worth keeping (a message, a widget, a pin) refreshes the
-    // snapshot and queues a save.
-    useEffect(() => {
+    // snapshot and queues a save. A layout effect, so the snapshot takes a
+    // commit's transcript in the same commit phase as the reply store drops
+    // the text that transcript took (useChat's prune): no save timer runs
+    // between them, so a save holds that text once, in one of the two.
+    useLayoutEffect(() => {
         snapshotRef.current = {
             messages: chat.messages,
             widgets: chat.widgets,

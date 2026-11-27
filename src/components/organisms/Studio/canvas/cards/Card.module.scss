@@ -33,12 +33,6 @@
     }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .card {
-        animation: none;
-    }
-}
-
 // The slot's state reaches the card by attribute (the slot is another
 // module): lifted → the sage tint per the design; filtered out → inert.
 [data-dragging] .card {

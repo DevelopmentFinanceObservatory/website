@@ -232,6 +232,8 @@ const CardPage = ({ id }: { id: string }) => {
     const applied = useRef(new Map<string, Applied>());
     const pageRef = useRef<HTMLDivElement>(null);
     const pickerId = useId();
+    // The line saying why a `Change` is held, which each blocked button names.
+    const heldId = useId();
     const downloadId = useId();
 
     // The shell's plan links name each card's plan; the plan itself, for its
@@ -371,19 +373,13 @@ const CardPage = ({ id }: { id: string }) => {
                 report('studio.change', {
                     step: 'refused',
                     kind: changeKind(sent.key),
-                    // The harness's code when its refusal has one.
-                    why: chat.dropped.some(
-                        (drop) =>
-                            drop.card === sent.card &&
-                            drop.row === sent.key &&
-                            drop.role === sent.role,
-                    )
-                        ? 'queue'
-                        : (status.code ?? 'assistant'),
+                    // The queue's drop, else the harness's code when its
+                    // refusal has one.
+                    why: status.dropped ? 'queue' : (status.code ?? 'assistant'),
                 });
             }
         }
-    }, [statuses, current, replaced, announce, report, chat.dropped]);
+    }, [statuses, current, replaced, announce, report]);
 
     // The picker belongs to the card it opened on, so it closes when a
     // replacement takes the card's place.
@@ -538,6 +534,7 @@ const CardPage = ({ id }: { id: string }) => {
                     aria-expanded={isOpen}
                     aria-controls={isOpen ? pickerId : undefined}
                     aria-disabled={blocked || undefined}
+                    aria-describedby={held !== null ? heldId : undefined}
                     onClick={() => {
                         if (blocked) {
                             report('studio.change', {
@@ -667,7 +664,9 @@ const CardPage = ({ id }: { id: string }) => {
                     )}
                     {view.live && <PageText>{view.live}</PageText>}
                     <Pairs rows={measures.map(changeRow)} className={styles.measures} />
-                    {held && measures.some((row) => row.offer) && <PageText>{held}</PageText>}
+                    {held && measures.some((row) => row.offer) && (
+                        <PageText id={heldId}>{held}</PageText>
+                    )}
                     {view.leftOut.length > 0 && (
                         <>
                             <p className={styles.subLabel}>Left out</p>

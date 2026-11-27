@@ -16,16 +16,18 @@ import type { CanvasBaseline } from './composition';
  *  once it has taken another card's place, the turn of the question that
  *  made the first card of its chain of replacements (`madeIn`), the ids of
  *  that chain, newest first (`replaced`), and the turns of the card changes
- *  that drew a card of the chain, oldest first (`changedIn`). After a card
- *  change, `before` holds what the card's changeable rows showed when its
- *  reply drew it (keyed by offer id, `values`). The conversation saves these
- *  with the card, so its history survives a reopen. */
+ *  that drew a card of the chain since its reply drew it, oldest first
+ *  (`changedIn`). After a card change, `before` holds what the card's
+ *  changeable rows showed when its reply drew it and `after` what they show
+ *  since (keyed by offer id, `values`). The conversation saves these with
+ *  the card, so its history survives a reopen and a loss of its offers. */
 type PlacedCard = { id: string; turn: number; madeIn?: number } & CardHistory;
 
 export type CardHistory = {
     replaced?: string[];
     changedIn?: number[];
     before?: Record<string, string>;
+    after?: Record<string, string>;
 };
 
 type Takeover = { replaces?: string | null; editing?: string | null };
@@ -68,10 +70,13 @@ export const placeCard = <TCard extends PlacedCard>(
     const replaced = from ? cards.find((other) => other.id === from) : undefined;
 
     if (replaced) {
-        const changedIn = keepTurn
-            ? [...(replaced.changedIn ?? []), card.turn]
-            : replaced.changedIn;
+        // A card a question drew in another's place belongs to that
+        // question's reply, which describes it: its history starts afresh.
+        const changedIn = keepTurn ? [...(replaced.changedIn ?? []), card.turn] : undefined;
         const before = keepTurn ? (replaced.before ?? values?.(replaced)) : undefined;
+        // A row the new card offers none of keeps what the last change
+        // recorded for it.
+        const after = before && { ...replaced.after, ...values?.(card) };
 
         return cards
             .filter((other) => other.id !== card.id)
@@ -84,6 +89,7 @@ export const placeCard = <TCard extends PlacedCard>(
                           replaced: [replaced.id, ...(replaced.replaced ?? [])],
                           ...(changedIn && { changedIn }),
                           ...(before && { before }),
+                          ...(after && { after }),
                       }
                     : other,
             );
@@ -93,12 +99,14 @@ export const placeCard = <TCard extends PlacedCard>(
         ? cards.map((other) => {
               if (other.id !== card.id) return other;
 
-              const { before, ...kept } = recordOf(other);
+              const { before, after, ...kept } = recordOf(other);
+              const sameReply = other.turn === card.turn;
 
               return {
                   ...card,
                   ...kept,
-                  ...(before && other.turn === card.turn && { before }),
+                  ...(before && sameReply && { before }),
+                  ...(after && sameReply && { after }),
                   ...recordOf(card),
               };
           })
@@ -106,17 +114,20 @@ export const placeCard = <TCard extends PlacedCard>(
 };
 
 /** What a held card recorded of its chain (`madeIn`, `replaced`,
- *  `changedIn` and `before`), for a redraw of it under the same id to keep. */
+ *  `changedIn`, `before` and `after`), for a redraw of it under the same id
+ *  to keep. */
 export const recordOf = ({
     madeIn,
     replaced,
     changedIn,
     before,
-}: Pick<PlacedCard, 'madeIn' | 'replaced' | 'changedIn' | 'before'>) => ({
+    after,
+}: Pick<PlacedCard, 'madeIn' | 'replaced' | 'changedIn' | 'before' | 'after'>) => ({
     ...(madeIn !== undefined && { madeIn }),
     ...(replaced && { replaced }),
     ...(changedIn && { changedIn }),
     ...(before && { before }),
+    ...(after && { after }),
 });
 
 /** `ids` with `from` swapped for `to`, in place; the same array when it

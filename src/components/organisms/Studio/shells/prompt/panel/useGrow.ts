@@ -200,25 +200,31 @@ export const useGrow = (onPage: boolean) => {
         later('shrinkEnd', endShrink, EDGE_MS + 40);
     };
 
-    // Whether the strip the wide panel adds is empty canvas. The wide edge
-    // comes from the stylesheet: the grown state is applied for one forced
-    // layout with transitions off, read, and put back before anything paints.
+    // Whether the strip the wide panel adds is empty canvas. Both edges come
+    // from the stylesheet, read off a hidden copy of the aside at its rest and
+    // grown states, so the panel itself, which may be mid-shrink, is not
+    // touched.
     const roomToGrow = () => {
         const region = aside();
+        const parent = region?.parentElement;
+        const probe = region?.cloneNode(false);
 
-        if (!region) return false;
+        if (!region || !parent || !(probe instanceof HTMLElement)) return false;
 
-        const rest = region.getBoundingClientRect();
-        const { transition } = region.style;
+        probe.removeAttribute('id');
+        probe.removeAttribute('data-sp-grow');
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.transition = 'none';
+        probe.style.visibility = 'hidden';
+        parent.appendChild(probe);
 
-        region.style.transition = 'none';
-        region.setAttribute('data-sp-grow', 'open');
+        const rest = probe.getBoundingClientRect();
 
-        const wide = region.getBoundingClientRect();
+        probe.setAttribute('data-sp-grow', 'open');
 
-        region.removeAttribute('data-sp-grow');
-        region.getBoundingClientRect();
-        region.style.transition = transition;
+        const wide = probe.getBoundingClientRect();
+
+        probe.remove();
 
         const cards = [...document.querySelectorAll('[data-studio-canvas] [data-card-id]')].map(
             (card) => card.getBoundingClientRect(),

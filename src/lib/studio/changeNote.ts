@@ -1,13 +1,14 @@
 /**
  * The note under a reply whose card a card change redrew: the reply keeps
  * its text, which describes the card as it drew it, and the note says what
- * the card shows since. Built from the card's changeable rows (changeOffers)
- * as the reply drew them (CardHistory's `before`, recorded by placeCard) and
- * as they are now, so a row changed back to where it started drops out.
+ * the card shows since. Built from the card's changeable rows as the reply
+ * drew them and as the last change left them (CardHistory's `before` and
+ * `after`, recorded by placeCard and saved with the card), so the note needs
+ * no live offer, and a row changed back to where it started drops out.
  */
 
 import type { Widget } from '../chat/widgets.ts';
-import { type ChangeOffer, changeOffers, offerText } from './cardChange.ts';
+import { changeOffers, offerText } from './cardChange.ts';
 import type { CardHistory } from './cardReplace';
 
 type NoteCard = Widget & { turn: number } & CardHistory;
@@ -16,25 +17,24 @@ type NoteCard = Widget & { turn: number } & CardHistory;
 export const rowValues = (widget: Widget & { turn: number }): Record<string, string> =>
     Object.fromEntries(changeOffers(widget).map((offer) => [offer.id, offerText(offer)]));
 
-// Places first, then years, then the unit: the order a reader names them in.
-const ORDER: Record<ChangeOffer['key'], number> = { shows: 0, years: 1, unit: 2 };
+// Places first, then years, then the unit: the order a reader names them
+// in, read from the row's offer id (`shows:<role>`, `years`, `unit`).
+const order = (id: string): number => (id.startsWith('shows:') ? 0 : id === 'years' ? 1 : 2);
 
 // A unit reads inside the sentence in lower case ("constant 2023 US
 // dollars"); places and years keep their own case.
-const inSentence = (offer: ChangeOffer, text: string): string =>
-    offer.key === 'unit' ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : text;
+const inSentence = (id: string, text: string): string =>
+    id === 'unit' ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : text;
 
 /** The rows of `card` that show something else than its reply drew, in
  *  words, or none when no change stands. */
-const changedRows = (card: NoteCard): string[] => {
-    const before = card.before;
+const changedRows = ({ before, after }: NoteCard): string[] => {
+    if (!before || !after) return [];
 
-    if (!before) return [];
-
-    return changeOffers(card)
-        .filter((offer) => offer.id in before && before[offer.id] !== offerText(offer))
-        .toSorted((a, b) => ORDER[a.key] - ORDER[b.key])
-        .map((offer) => inSentence(offer, offerText(offer)));
+    return Object.entries(after)
+        .filter(([id, text]) => id in before && before[id] !== text)
+        .toSorted(([a], [b]) => order(a) - order(b))
+        .map(([id, text]) => inSentence(id, text));
 };
 
 /**

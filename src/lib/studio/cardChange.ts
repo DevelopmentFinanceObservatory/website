@@ -63,12 +63,13 @@ export type ChangeOffer =
       };
 
 /** Where the reader's last change to a row stands. A refusal carries the
- *  harness's code (`code`) when it sent one (changeRefusalCode); one the
- *  harness's closing sentence gave has none. */
+ *  harness's code (`code`) when it sent one (changeRefusalCode), none when
+ *  the harness's closing sentence gave it, and `dropped` when the change
+ *  queue dropped the change (DroppedChange). */
 export type ChangeStatus =
     | { state: 'idle' }
     | { state: 'pending' }
-    | { state: 'refused'; detail: string; code?: ChangeRefusalCode };
+    | { state: 'refused'; detail: string; code?: ChangeRefusalCode; dropped?: true };
 
 // More than one unit to choose from: two currencies, two price bases, or two
 // base years.
@@ -140,11 +141,11 @@ const ROLE_LABELS: Record<string, { one: string; many: string }> = {
 };
 
 /** The name of a places offer's role, as its row and its picker heading
- *  show it: the card data's own word for the role's places (`label`, plural
- *  for a role that takes several, singular for one, either form standing in
- *  for the other), capitalised, else the page's word for `role`. */
+ *  show it: the card data's own word for the role's places (`label`) in the
+ *  form the role needs, plural for a role that takes several and singular
+ *  for one, capitalised, else the page's word for `role`. */
 export const roleLabel = (role: string, multiple: boolean, label?: PlacesLabel): string => {
-    const own = multiple ? (label?.plural ?? label?.singular) : (label?.singular ?? label?.plural);
+    const own = multiple ? label?.plural : label?.singular;
 
     if (own?.trim()) return capitalise(own.trim());
 
@@ -527,7 +528,7 @@ export const changeStatus = ({
     );
 
     if (drop) {
-        return { state: 'refused', detail: drop.detail };
+        return { state: 'refused', detail: drop.detail, dropped: true };
     }
 
     const at = messages.findLastIndex((message) => {

@@ -153,12 +153,12 @@ const SessionPanel = () => {
             show: (page, opener) => {
                 pending.current = { page, opener: opener ?? null };
                 dispatch({ type: 'panel.show', page });
-                report('studio.panel_page', { page: page.kind, from: 'panel' });
+                report('studio.panel_page', { view: page.kind, from: 'panel' });
             },
             back: () => {
                 backTo.current = openers.current[trail.length - 1] ?? null;
                 dispatch({ type: 'panel.back' });
-                report('studio.panel_page', { page: behind?.kind ?? 'overview', from: 'panel' });
+                report('studio.panel_page', { view: behind?.kind ?? 'overview', from: 'panel' });
             },
             backLabel,
             fly: (id) => flyTo.current(id),

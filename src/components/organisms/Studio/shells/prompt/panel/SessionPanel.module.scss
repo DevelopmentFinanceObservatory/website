@@ -1,5 +1,6 @@
 @use "mixins" as *;
 @use "../textFloor" as *;
+@use "../touchTarget" as *;
 
 // The scroller fills the aside the shell draws (its 1 px hairline, radius
 // and clip). While the panel grows the scroller keeps one width, anchored to
@@ -546,19 +547,16 @@ button.didTitle {
 @media (pointer: coarse) {
     // Every control in the panel and on its pages reaches a 40 px square hit
     // area, drawn as a transparent layer centred on the control so nothing
-    // moves at rest. A control that clips its own overflow takes the area as
-    // padding that its negative margin takes back.
+    // moves at rest, and reaching no further than the room the layout leaves
+    // it (hit-inset in ../_touchTarget.scss). A control that clips its own
+    // overflow takes the area as padding that its negative margin takes back.
     .scroller :is(button, a[href]):not(.question, .didTitle) {
         position: relative;
 
         &::before {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            width: max(100%, 40px);
-            height: max(100%, 40px);
+            inset: hit-inset();
             content: "";
-            translate: -50% -50%;
         }
     }
 
@@ -570,6 +568,27 @@ button.didTitle {
 
     .question {
         --sp-pad: #{rem(2)};
+    }
+
+    // Where controls sit closer than 40 px, each area keeps to half the gap.
+    // A section stacks its parts rem(8) apart (parts.module.scss .section),
+    // so a control stacked in one reaches rem(4) above and below.
+    .scroller {
+        --hit-room-y: #{rem(4)};
+    }
+
+    // A card row's actions touch, and stand rem(2) from More info.
+    .scroller :is([data-sp-key^="data:"], [data-sp-key^="image:"]) {
+        --hit-room-x: 0px;
+    }
+
+    .scroller [data-sp-key^="more:"] {
+        --hit-room-x: #{rem(1)};
+    }
+
+    // The card page's action rows stand rem(4) apart.
+    .scroller :is([data-sp-key="ask"], [data-sp-key^="act:"]) {
+        --hit-room-y: #{rem(2)};
     }
 }
 

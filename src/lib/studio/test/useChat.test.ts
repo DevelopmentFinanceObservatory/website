@@ -1621,50 +1621,381 @@ test('cards on their way show from the running line, a card takes its placeholde
     page.unmount();
 });
 
-test('a stream that ends on an error reads the canvas from the state, so a card the harness removed leaves', async (t) => {
-    let reads = 0;
-    let asked = false;
+test('a stream that pauses on a plan or a question, is refused, or ends on an error reads no state', async (t) => {
+    const fixture = (name: string) =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const endings: [string, () => Response][] = [
+        ['plan', () => chunk(2, [fixture('event-03-plan-proposed.json')])],
+        ['question', () => chunk(2, [fixture('event-14-elicitation-questions.json')])],
+        [
+            'refusal',
+            () =>
+                Response.json(
+                    { error: 'constraint_violation', retry: 'do_not_retry', detail: 'No.' },
+                    { status: 422 },
+                ),
+        ],
+        [
+            'error',
+            () =>
+                chunk(2, [
+                    {
+                        event: 'error',
+                        seq: 2,
+                        error: { error: 'internal', retry: 'do_not_retry', detail: 'x' },
+                    },
+                ]),
+        ],
+    ];
+
+    for (const [name, answer] of endings) {
+        let reads = 0;
+        const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+            const url = String(input);
+
+            if (url === '/api/studio/turn') return answer();
+
+            if (url.startsWith('/api/studio/state')) {
+                reads += 1;
+
+                return Response.json({
+                    conversation_id: 'conv_1',
+                    turn: {
+                        index: 1,
+                        status: 'done',
+                        trace_id: 'tr_1',
+                        user_message: 'Aid to Kenya',
+                        lease_live: false,
+                    },
+                    closed_since: [],
+                    closed_total: 1,
+                    manifest: manifestOf(['cmp_1']),
+                });
+            }
+
+            return new Response('{}', { status: 404 });
+        };
+        const page = await reopen(t, drawn(), fetch);
+        const before = reads;
+
+        page.result().send('Aid to Ethiopia for health');
+        await page.settle(60);
+
+        assert.equal(reads, before, name);
+        page.unmount();
+        t.mock.restoreAll();
+    }
+});
+
+test('a change queued on a card the reader put back on the canvas, before the harness confirms it, goes to that card', async (t) => {
+    const changes: unknown[] = [];
+    let finish: () => void = () => {};
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        // The reader's add stays unanswered.
+        if (url === '/api/studio/composition') return new Promise<Response>(() => {});
+
+        if (url !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        const body = JSON.parse(String(init?.body));
+
+        if (body.apply_change) {
+            changes.push(body.apply_change.component_id);
+
+            return chunk(3, [done()]);
+        }
+
+        // The question takes the card off, then runs on.
+        return new Response(
+            new ReadableStream({
+                start(controller) {
+                    const send = (frames: unknown[]) =>
+                        controller.enqueue(
+                            new TextEncoder().encode(
+                                frames
+                                    .map((frame) => `data: ${JSON.stringify(frame)}\n\n`)
+                                    .join(''),
+                            ),
+                        );
+
+                    send([{ event: 'composition.updated', seq: 1, manifest: manifestOf([]) }]);
+                    finish = () => {
+                        send([done(manifestOf([]))]);
+                        controller.close();
+                    };
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': '2' } },
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat(), { rendersLater: true });
+
+    page.result().hydrate(drawn());
+    await page.settle();
+    page.result().send('Show only the totals');
+    await page.settle(20);
+    assert.deepEqual(page.result().canvas?.ids, []);
+    page.result().syncCanvas([{ op: 'add', component_id: 'cmp_1' }]);
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(20);
+    finish();
+    await page.settle(60);
+
+    assert.deepEqual(changes, ['cmp_1']);
+    assert.deepEqual(page.result().dropped, []);
+    page.unmount();
+});
+
+test('a carried-on reply the closing read rewrites shows its words once', async (t) => {
+    const openTurn = {
+        index: 2,
+        status: 'running',
+        trace_id: 'tr_2',
+        user_message: 'Aid to Uganda',
+        lease_live: false,
+    };
+    const read = cardFrame('cmp_2');
+    let resumed = false;
     const fetch = async (input: RequestInfo | URL): Promise<Response> => {
         const url = String(input);
 
-        if (url === '/api/studio/turn') {
-            asked = true;
+        if (url.startsWith('/api/studio/state')) {
+            return Response.json(
+                resumed
+                    ? {
+                          conversation_id: 'conv_1',
+                          turn: { ...openTurn, status: 'done' },
+                          closed_since: [
+                              {
+                                  turn_index: 2,
+                                  user_message: 'Aid to Uganda',
+                                  reply: 'Here is aid to Uganda.',
+                                  component_ids: ['cmp_2'],
+                                  cards: [
+                                      {
+                                          component_id: 'cmp_2',
+                                          type: 'line_chart',
+                                          title: 'Aid',
+                                          revision: 1,
+                                      },
+                                  ],
+                              },
+                          ],
+                          closed_total: 2,
+                          manifest: manifestOf(['cmp_1', 'cmp_2']),
+                      }
+                    : {
+                          conversation_id: 'conv_1',
+                          turn: openTurn,
+                          closed_since: [],
+                          closed_total: 1,
+                          // A card the running turn drew, which the page reads.
+                          manifest: manifestOf(['cmp_1', 'cmp_2']),
+                      },
+            );
+        }
 
+        if (url === '/api/studio/resume') {
+            resumed = true;
+
+            // The answer streams in and the stream closes with no `done`.
             return chunk(2, [
-                { event: 'error', seq: 2, error: { error: 'internal', detail: 'x' } },
+                {
+                    event: 'activity.step',
+                    seq: 1,
+                    step_id: 's1',
+                    label: 'Read',
+                    status: 'complete',
+                },
+                { event: 'message.delta', seq: 2, text: 'Here is aid ' },
+                { event: 'message.delta', seq: 3, text: 'to Uganda.' },
             ]);
         }
 
-        if (url.startsWith('/api/studio/state')) {
-            reads += 1;
-
+        if (url.startsWith('/api/presentation/components/cmp_2')) {
             return Response.json({
-                conversation_id: 'conv_1',
-                turn: {
-                    index: 1,
-                    status: 'done',
-                    trace_id: 'tr_1',
-                    user_message: 'Aid to Kenya',
-                    lease_live: false,
-                },
-                closed_since: [],
-                closed_total: 1,
-                // After the turn, the removal the harness held never came;
-                // the state has it.
-                manifest: asked ? { ...manifestOf([]), revision: 10 } : manifestOf(['cmp_1']),
+                resolved_payload: read.payload,
+                fact_summary: read.fact_summary,
+                catalog_version: read.catalog_version,
             });
         }
 
         return new Response('{}', { status: 404 });
     };
     const page = await reopen(t, drawn(), fetch);
-    const before = reads;
 
-    assert.deepEqual(page.result().canvas?.ids, ['cmp_1']);
-    page.result().send('Take it off and draw another');
+    await page.settle(80);
+
+    const replies = page
+        .result()
+        .messages.filter((message) => message.role === 'bot')
+        .map((message) => message.text);
+    const store = page.result().replyStream;
+
+    assert.deepEqual(replies.slice(1), ['Here is aid to Uganda.']);
+    assert.equal(store.store.since(2, store.at), '');
+    page.unmount();
+});
+
+test('a card change admitted after the page moved to another conversation leaves that conversation’s plan waiting', async (t) => {
+    const proposed = JSON.parse(
+        readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
+    );
+    let admitOld: () => void = () => {};
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        const body = JSON.parse(String(init?.body));
+
+        if (body.apply_change) {
+            // The old conversation's change is answered only later.
+            return new Promise<Response>((resolve) => {
+                admitOld = () => resolve(chunk(3, [cardFrame('cmp_9', 'cmp_1'), done()]));
+            });
+        }
+
+        return chunk(1, [proposed]);
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const page = renderHook(() => useChat(), { rendersLater: true });
+
+    page.result().hydrate(drawn());
+    await page.settle();
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(20);
+    // A new conversation, whose question waits on a plan.
+    page.result().reset();
+    await page.settle();
+    page.result().send('Aid to Ethiopia for health');
+    await page.settle(40);
+    assert.ok(page.result().plan);
+    admitOld();
     await page.settle(60);
 
-    assert.ok(reads > before);
-    assert.deepEqual(page.result().canvas?.ids, []);
+    assert.ok(page.result().plan);
     page.unmount();
+});
+
+test('a page opened on a saved conversation follows a card’s replacements from the start', async (t) => {
+    const changes: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+        const body = JSON.parse(String(init?.body));
+
+        if (body.apply_change) changes.push(body.apply_change.component_id);
+
+        return chunk(body.apply_change ? 3 : 2, [done()]);
+    });
+
+    const saved: ChatSnapshot = {
+        ...drawn(),
+        widgets: [{ ...yearsCard('cmp_3', 1), replaced: ['cmp_2', 'cmp_1'] }],
+        canvas: { compositionId: 'cps_1', revision: 1, ids: ['cmp_3'] },
+    };
+    const page = renderHook(() => useChat(saved), { rendersLater: true });
+
+    await page.settle();
+    page.result().send('And to Uganda?');
+    page.result().applyChange(yearsChange('cmp_1'));
+    await page.settle(60);
+
+    assert.deepEqual(changes, ['cmp_3']);
+    page.unmount();
+});
+
+test('a card change refused while a plan waits leaves the card on the canvas once the plan runs', async (t) => {
+    const proposed = JSON.parse(
+        readFileSync(new URL('./fixtures/event-03-plan-proposed.json', import.meta.url), 'utf8'),
+    );
+
+    for (const kind of ['unit', 'years'] as const) {
+        t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            const body = init?.body ? JSON.parse(String(init.body)) : {};
+
+            if (url === '/api/studio/interrupt') {
+                // The plan draws a card beside the chart, as the harness's
+                // canvas holds both.
+                const both = manifestOf(['cmp_1', 'cmp_p1']);
+
+                return chunk(2, [
+                    cardFrame('cmp_p1'),
+                    { event: 'composition.updated', seq: 5, manifest: both },
+                    done(both),
+                ]);
+            }
+
+            if (url !== '/api/studio/turn') return new Response('{}', { status: 404 });
+
+            if (body.message) return chunk(2, [proposed]);
+
+            return Response.json(
+                {
+                    error: 'constraint_violation',
+                    retry: 'do_not_retry',
+                    detail: 'Refused.',
+                    constraint_id: 'scope_choice_stale',
+                    pointer: kind === 'unit' ? '/apply_unit' : '/apply_change',
+                },
+                { status: 422 },
+            );
+        });
+        t.mock.method(console, 'warn', () => {});
+        t.mock.method(console, 'error', () => {});
+
+        const page = renderHook(() => useChat(), { rendersLater: true });
+
+        page.result().hydrate(drawn());
+        await page.settle();
+        page.result().send('Aid to Ethiopia for health');
+        await page.settle(60);
+        assert.ok(page.result().plan, kind);
+
+        if (kind === 'unit') {
+            page.result().applyUnit({
+                title: 'Aid',
+                offer: {
+                    currencies: [{ code: 'EUR', name: 'Euros', prices: ['current'] }],
+                    presets: [],
+                    start: { currency: 'USD', prices: 'current' },
+                },
+                request: {
+                    component_id: 'cmp_1',
+                    spec_id: 'spec_cmp_1',
+                    turn: 1,
+                    unit: { currency: 'EUR', prices: 'current' },
+                },
+            });
+        } else {
+            page.result().applyChange(yearsChange('cmp_1'));
+        }
+        await page.settle(60);
+        assert.ok(page.result().plan, kind);
+        page.result().respondPlan('approve');
+        await page.settle(80);
+
+        assert.deepEqual(page.result().canvas?.ids, ['cmp_1', 'cmp_p1'], kind);
+        assert.deepEqual(
+            canvasWidgetsOf({
+                widgets: page.result().widgets,
+                pinnedIds: [],
+                removedIds: [],
+                canvas: page.result().canvas,
+            }).map((widget) => widget.id),
+            ['cmp_1', 'cmp_p1'],
+            kind,
+        );
+        page.unmount();
+        t.mock.restoreAll();
+    }
 });

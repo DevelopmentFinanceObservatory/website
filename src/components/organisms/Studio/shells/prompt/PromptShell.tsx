@@ -201,7 +201,7 @@ const PromptStage = () => {
     const reportCardOpens = useCallback(
         (page: 'card' | 'plan') => {
             if (!panelOpen) report('studio.panel', { action: 'open', how: 'card' });
-            report('studio.panel_page', { page, from: 'card' });
+            report('studio.panel_page', { view: page, from: 'card' });
         },
         [panelOpen, report],
     );

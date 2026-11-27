@@ -51,7 +51,13 @@ export const PageShell = ({ kind, title, meta, children }: PageShellProps) => {
 export const PageText = ({
     children,
     strong = false,
+    id,
 }: {
     children: ReactNode;
     strong?: boolean;
-}) => <p className={strong ? `${styles.text} ${styles.strong}` : styles.text}>{children}</p>;
+    id?: string;
+}) => (
+    <p id={id} className={strong ? `${styles.text} ${styles.strong}` : styles.text}>
+        {children}
+    </p>
+);

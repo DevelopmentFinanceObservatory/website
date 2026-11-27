@@ -619,6 +619,33 @@ export const useChat = (
         },
         [replyStore, commitReply],
     );
+    // Moves the text streamed into every reply since the last commit into the
+    // transcript in one commit, before a state read rewrites replies
+    // (takeRead): the read's reply holds that text already, so the store and
+    // the transcript can then never both hold it.
+    const flushReplies = useCallback(() => {
+        const pending = replyStore
+            .turns()
+            .map((turn) => [turn, replyStore.since(turn, replyAtRef.current)] as const)
+            .filter(([, text]) => text);
+
+        if (pending.length === 0) return;
+
+        replyAtRef.current += 1;
+        setReplyAt(replyAtRef.current);
+        setState((prev) => {
+            const messages = pending.reduce(
+                (held, [turn, text]) =>
+                    withReplyAt(held, pageTurnReplyAt(held, turn), (reply) => ({
+                        ...reply,
+                        text: reply.text + text,
+                    })),
+                prev.messages,
+            );
+
+            return messages === prev.messages ? prev : { ...prev, messages };
+        });
+    }, [replyStore]);
     // Leaving the conversation drops any text no commit took.
     const dropReply = useCallback(() => {
         replyAtRef.current += 1;
@@ -704,7 +731,11 @@ export const useChat = (
     // the card it replaced, set with the card (cardIdentity.ts reads it). It
     // is replaced whole, never changed in place, since cardIdentity indexes
     // each map once.
-    const replacedRef = useRef<Record<string, string>>({});
+    // A saved conversation's cards record their chains (replacementsOf).
+    const [initialReplaced] = useState<Record<string, string>>(() =>
+        initial ? replacementsOf(initial.widgets) : {},
+    );
+    const replacedRef = useRef(initialReplaced);
     const setWidgets = useCallback((next: (widgets: TurnWidget[]) => TurnWidget[]) => {
         const widgets = next(widgetsRef.current);
 
@@ -735,10 +766,6 @@ export const useChat = (
         comingRef.current = next;
         setComing(next);
     }, []);
-    // The state read that reconciles the canvas after a stream that ended
-    // on an error or dropped (rereadCanvas, set once it exists, on a page
-    // that reads state).
-    const rereadRef = useRef<((session: string) => Promise<boolean>) | null>(null);
     // The latest plan this turn offered, or is waiting on a switch of. A
     // fresh plan.proposed carries its baseline (what the turn's first plan
     // held) and learns which choice its switch moved. A new turn clears it.
@@ -1863,9 +1890,6 @@ export const useChat = (
 
             // The turn's end on screen, once: at the `done` or `error` frame,
             // or else when the stream closes.
-            // A stream that ended on an error or dropped may not have sent a
-            // removal the harness held (delta 36), so the page reads the
-            // canvas from the harness's state.
             const finish = () => {
                 release();
 
@@ -1875,12 +1899,6 @@ export const useChat = (
 
                     if (generationRef.current === generation) {
                         takeComing(comingEnded(comingRef.current));
-
-                        const session = sessionRef.current;
-
-                        if (!done && sent && !stopped && session) {
-                            void rereadRef.current?.(session);
-                        }
                     }
 
                     (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed, sent });
@@ -2790,12 +2808,22 @@ export const useChat = (
             // other than an error arrives from a harness that names none (a
             // request that failed before any turn opened ends in an error
             // frame).
+            // A page that moved on to another conversation, or left this
+            // one's session, keeps the pause it holds now.
             let admitted = false;
+            const generation = generationRef.current;
+            const sessionLeft = sessionLeftRef.current;
             const admit = () => {
                 if (admitted) return;
 
                 admitted = true;
-                dropPause();
+
+                if (
+                    generationRef.current === generation &&
+                    sessionLeftRef.current === sessionLeft
+                ) {
+                    dropPause();
+                }
             };
 
             stream(
@@ -2819,6 +2847,16 @@ export const useChat = (
                     ),
                 {
                     metered: true,
+                    // The change's card and turn kind belong to its own
+                    // stream. Once it ends, a later stream that starts no
+                    // turn of its own (the answer to a plan the change kept
+                    // waiting) places its cards as new ones.
+                    onSettled: () => {
+                        if (turnCount.current === turn) {
+                            editingRef.current = null;
+                            unitTurnRef.current = false;
+                        }
+                    },
                     onRefusal: (refusal) => {
                         const refused = refusalDetail(refusal);
 
@@ -3031,17 +3069,24 @@ export const useChat = (
     // is, and the next item goes.
     useEffect(() => {
         // The card standing in the place of card `id` now (currentCard): the
-        // latest of its replacements the canvas holds, read from what the
-        // frames applied so far placed, also those in the chunk that ended
-        // the turn. Null once a question took the chain off the canvas. A
-        // legacy canvas names no cards here, so every held card counts.
-        const standingCard = (id: string): TurnWidget | null =>
-            currentCard(
+        // latest of its replacements the canvas shows, the reader's
+        // unanswered adds and removes included (shownCanvas), read from what
+        // the frames applied so far placed, also those in the chunk that
+        // ended the turn. Null once the chain left the canvas. A legacy
+        // canvas names no cards here, so every held card counts.
+        const standingCard = (id: string): TurnWidget | null => {
+            const shown =
+                canvasRef.current && !legacyRef.current
+                    ? shownCanvas(canvasRef.current, pendingCardsRef.current)
+                    : null;
+
+            return currentCard(
                 id,
                 widgetsRef.current,
                 replacedRef.current,
-                canvasRef.current && !legacyRef.current ? new Set(canvasRef.current.ids) : null,
+                shown ? new Set(shown.ids) : null,
             );
+        };
 
         // A queued card change goes to the card standing in its card's place
         // when its turn comes, rebuilt from that card's offer, since an
@@ -3296,6 +3341,8 @@ export const useChat = (
     // Returns the transcript with the read's closed turns merged in.
     const takeRead = useCallback(
         (read: ConversationRead): ChatMessage[] => {
+            flushReplies();
+
             const before = messagesRef.current;
             const owed = owedNewQuestion(read, before);
             const firstTurn = turnCount.current + 1;
@@ -3386,7 +3433,7 @@ export const useChat = (
 
             return merged;
         },
-        [applyManifest, askNewQuestion, drawCards, offerNewQuestion, reconcileCards],
+        [applyManifest, askNewQuestion, drawCards, flushReplies, offerNewQuestion, reconcileCards],
     );
 
     // The user's canvas edit, sent to the harness (syncCanvas).
@@ -3450,10 +3497,6 @@ export const useChat = (
         [applyManifest, drawCards, takeRead],
     );
 
-    // Only a page that reads state reads it after a broken stream.
-    useEffect(() => {
-        rereadRef.current = readsState ? rereadCanvas : null;
-    }, [readsState, rereadCanvas]);
     // Each canvas the page takes settles the owed removals it confirms
     // (settle), and the ones the harness still holds go again, one card at a
     // time and each against the canvas's revision when the edit queue

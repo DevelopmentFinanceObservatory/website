@@ -239,3 +239,25 @@ test('a follow-up target follows its card to the replacement, and goes when none
     assert.equal(standingTarget(target, new Set(['x']), replaced, titleOf), null);
     assert.equal(standingTarget(null, new Set(['c1']), replaced, titleOf), null);
 });
+
+test('a card a question draws in a changed card’s place starts its history afresh', () => {
+    const changed = placeCard(
+        [{ id: 'a', turn: 1 }],
+        { id: 'b', turn: 2 },
+        { replaces: 'a', keepTurn: true, values: (card) => ({ years: card.id }) },
+    );
+    const asked = placeCard(changed, { id: 'c', turn: 3 }, { replaces: 'b' });
+
+    assert.deepEqual(changed, [
+        {
+            id: 'b',
+            turn: 1,
+            madeIn: 1,
+            replaced: ['a'],
+            changedIn: [2],
+            before: { years: 'a' },
+            after: { years: 'b' },
+        },
+    ]);
+    assert.deepEqual(asked, [{ id: 'c', turn: 3, madeIn: 1, replaced: ['b', 'a'] }]);
+});
