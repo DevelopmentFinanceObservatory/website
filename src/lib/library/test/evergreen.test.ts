@@ -3,7 +3,12 @@ import '../../test/serverModules.ts';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 
-import { TypeSafeClient } from '@typesafe-ai/sdk';
+import {
+    type Questions,
+    type SystemOneRequest,
+    TypeSafeClient,
+    type TypeSafeClientConfig,
+} from '@typesafe-ai/sdk';
 
 const { CLIENT_CONFIG, MAX_CANDIDATES, MODEL, REQUEST_CONCURRENCY, evergreenCheck } =
     await import('../evergreen.ts');
@@ -83,17 +88,17 @@ const standIn = (
             flight.now -= 1;
         }
     };
-    const client = () =>
-        new TypeSafeClient({
-            ...CLIENT_CONFIG,
-            apiKey: 'stand-in',
-            compression: false,
-            fetch,
-            ...overrides,
-            retry: { ...CLIENT_CONFIG.retry, backoffInitialMs: 1, backoffJitter: 0 },
-        });
+    const config: TypeSafeClientConfig = {
+        ...CLIENT_CONFIG,
+        apiKey: 'stand-in',
+        compression: false,
+        fetch,
+        ...overrides,
+        retry: { ...CLIENT_CONFIG.retry, backoffInitialMs: 1, backoffJitter: 0 },
+    };
+    const client = () => new TypeSafeClient(config);
 
-    return { calls, flight, client };
+    return { calls, flight, client, config };
 };
 
 const SUBJECT = { publishKey: 'key-1' };
@@ -228,6 +233,8 @@ test(
             ['rate limited for long', [{ status: 429, retryAfter: '50' }], 2, 'http'],
             ['server error', [{ status: 500 }], 2, 'http'],
             ['bad key', [{ status: 401 }], 1, 'http'],
+            ['not found', [{ status: 404 }], 1, 'http'],
+            ['unprocessable', [{ status: 422 }], 1, 'http'],
             ['timeout', [{ hang: true }, { timeout: 20 }], 1, 'timeout'],
             ['unanswered question', [{ drop: 'period' }], 1, 'unanswered'],
             ['another model', [{ model: 'jev-1.13.0' }], 1, 'model'],
@@ -248,8 +255,12 @@ test(
             assert.equal(calls.length, sent, name);
             assert.equal(logged.length, 1, name);
             assert.deepEqual(
-                [JSON.parse(logged[0]).cause, JSON.parse(logged[0]).publishKey],
-                [cause, SUBJECT.publishKey],
+                [
+                    JSON.parse(logged[0]).message,
+                    JSON.parse(logged[0]).cause,
+                    JSON.parse(logged[0]).publishKey,
+                ],
+                ['library_evergreen_unavailable', cause, SUBJECT.publishKey],
                 name,
             );
             assert.ok(!logged[0].includes('Norway') && !logged[0].includes('stand-in'), name);
@@ -257,8 +268,33 @@ test(
     },
 );
 
+test('a check past its deadline answers 503 even when a request answers after it', async () => {
+    const { config } = standIn({ verdicts: {} });
+
+    // A client that answers whatever cancels the request, as one whose answer
+    // arrives as the deadline passes does.
+    class Deaf extends TypeSafeClient {
+        override systemOne<const Q extends Questions>(request: SystemOneRequest<Q>) {
+            return super.systemOne(request);
+        }
+    }
+
+    const content = Array.from(
+        { length: REQUEST_CONCURRENCY + 1 },
+        (_, n) => `Row ${n + 1} reads one donor's figure.`,
+    ).join('\n');
+    const deaf = () => new Deaf(config);
+    const { response, document } = await refusalOf(
+        await evergreenCheck({ content }, SUBJECT, deaf, 0),
+    );
+
+    assert.equal(response.status, 503);
+    assert.equal(document.code, 'evergreen_check_unavailable');
+    assert.equal(JSON.parse(logged[0]).cause, 'timeout');
+});
+
 test('a request TypeSafe refuses for its content answers 502 with no retry', async () => {
-    for (const status of [400, 413, 422]) {
+    for (const status of [400, 413]) {
         logged = [];
 
         const { calls, client } = standIn({ status });

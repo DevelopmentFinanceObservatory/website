@@ -83,22 +83,19 @@ const warn = (message: string, fields: Record<string, unknown>) =>
 
 // A failure of the check that is not the SDK's own error.
 class CheckFailure extends Error {
-    readonly reason: 'unanswered' | 'model' | 'missing_key';
+    readonly reason: 'unanswered' | 'model' | 'missing_key' | 'timeout';
 
-    constructor(reason: 'unanswered' | 'model' | 'missing_key') {
+    constructor(reason: 'unanswered' | 'model' | 'missing_key' | 'timeout') {
         super(reason);
         this.reason = reason;
     }
 }
 
-// Statuses of a request TypeSafe refuses for what it holds, such as its
-// size or shape, which a retry would send again unchanged. Auth failures,
-// 408 and 429 are left out.
+// A request TypeSafe refuses for the text it holds, as malformed (400) or
+// too large (413), which a retry would send again unchanged. Every other
+// status means the check could not run.
 const refusedRequest = (error: unknown): error is APIError =>
-    error instanceof APIError &&
-    error.status >= 400 &&
-    error.status < 500 &&
-    ![401, 402, 403, 408, 429].includes(error.status);
+    error instanceof APIError && (error.status === 400 || error.status === 413);
 
 // Why the check could not run, as a word for the log line. The SDK's error
 // messages can carry the request, so only its classes are named.
@@ -175,15 +172,19 @@ const judge = async (client: TypeSafeClient, candidate: Candidate, signal: Abort
 };
 
 // Runs `work` on every candidate, `REQUEST_CONCURRENCY` at a time, in order.
-// The first failure cancels the rest and is thrown.
+// The first failure cancels the rest and is thrown. When `deadline` passes
+// first, the check fails as a timeout, even where a request that ignored
+// the cancellation still answered.
 const everyCandidate = async <TResult>(
     candidates: readonly Candidate[],
     work: (candidate: Candidate, signal: AbortSignal) => Promise<TResult>,
+    deadline: number,
 ): Promise<TResult[]> => {
     const stop = new AbortController();
-    const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(CHECK_DEADLINE_MS)]);
+    const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(deadline)]);
     const results: TResult[] = new Array(candidates.length);
     let next = 0;
+    let done = 0;
 
     const worker = async () => {
         while (next < candidates.length && !signal.aborted) {
@@ -191,6 +192,7 @@ const everyCandidate = async <TResult>(
 
             try {
                 results[at] = await work(candidates[at], signal);
+                done += 1;
             } catch (error) {
                 stop.abort();
 
@@ -207,6 +209,10 @@ const everyCandidate = async <TResult>(
     // The failure that cancelled the rest, else the deadline's cancellation.
     if (rejected.length > 0) {
         throw rejected.find((reason) => !(reason instanceof APIUserAbortError)) ?? rejected[0];
+    }
+
+    if (signal.aborted || done < candidates.length) {
+        throw new CheckFailure('timeout');
     }
 
     return results;
@@ -232,10 +238,10 @@ const notices = (warnings: readonly EvergreenWarning[]): EvergreenNotice[] =>
  * any call. It is 400 `not_evergreen` with one entry in `errors` per refused
  * sentence, `pointer` naming the first one's field and the `warnings`, or
  * 503 `evergreen_check_unavailable` with Retry-After when TypeSafe cannot
- * answer (no key, a timeout, a 429, a 5xx, an auth error, an unanswered
- * question or another model), or 502 `evergreen_check_refused` when
- * TypeSafe refuses the request itself. `subject` names the artifact in the
- * log lines. `library_evergreen_not_evergreen` logs each refused sentence
+ * answer (no key, a timeout, a 5xx, a 4xx other than 400 or 413, an
+ * unanswered question or another model), or 502 `evergreen_check_refused`
+ * when TypeSafe refuses the text with a 400 or a 413. The whole check
+ * stops after `deadline`. `subject` names the artifact in the log lines. `library_evergreen_not_evergreen` logs each refused sentence
  * and `library_evergreen_doubt` each warned one, with its field, offsets,
  * kind and all five Nouls, and without its text.
  */
@@ -243,6 +249,7 @@ export const evergreenCheck = async (
     text: EvergreenText,
     subject: EvergreenSubject,
     client: () => TypeSafeClient = sharedClient,
+    deadline: number = CHECK_DEADLINE_MS,
 ): Promise<EvergreenCheck> => {
     const candidates = candidatesOf(text);
 
@@ -274,8 +281,10 @@ export const evergreenCheck = async (
     try {
         const typesafe = client();
 
-        decisions = await everyCandidate(candidates, (candidate, signal) =>
-            judge(typesafe, candidate, signal),
+        decisions = await everyCandidate(
+            candidates,
+            (candidate, signal) => judge(typesafe, candidate, signal),
+            deadline,
         );
     } catch (error) {
         return { refusal: unavailable(error, subject) };

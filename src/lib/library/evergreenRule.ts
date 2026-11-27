@@ -374,17 +374,18 @@ export const namesYearRange = (candidate: Candidate): boolean =>
 const DATA_YEAR =
     /\b(?:in|for|during|as of|at (?:the )?end(?: of)?)\s+(?:19|20)\d{2}\b(?!\s+(?:constant\s+)?(?:prices|(?:US\s+)?dollars))|[,:\-–—]\s*(?:19|20)\d{2}\s*$/giu;
 
-// Words before a year that make it a base year, a start or a method date,
-// which a data update leaves true.
+// Words before a year that make it a base year, a start, a method date or a
+// goal's date, which a data update leaves true.
 const NOT_DATA_YEAR =
-    /\b(?:since|from|compared with|relative to|before|after|base year|prices|constant\b.*\bprices)\s*$/iu;
+    /\b(?:since|from|compared with|relative to|before|after|base year|prices|constant\b.*\bprices|(?:target|goal|agenda|deadline)(?:\s+(?:for|of))?)\s*$/iu;
 
 /** Whether `candidate` is a title or section heading that names the year the
  *  data covers, as in "Total ODA in 2023" or "Giving by donor, 2023", which
  *  `decide` refuses whatever the answers. A year after "since", "from",
  *  "compared with", "relative to", "before", "after", "base year",
- *  "constant ... prices" or "prices", or before "prices" or "dollars", does
- *  not count. */
+ *  "constant ... prices" or "prices", or after "target", "goal", "agenda"
+ *  or "deadline" and an optional "for" or "of", or before "prices" or
+ *  "dollars", does not count. */
 export const namesDataYear = (candidate: Candidate): boolean =>
     HEADING_FIELDS.has(candidate.field) &&
     [...candidate.text.matchAll(DATA_YEAR)].some(
