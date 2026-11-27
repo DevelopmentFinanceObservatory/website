@@ -13,7 +13,8 @@ import { type ArtifactText, LIMITS } from '@/lib/library/publish';
  * The fields a publisher writes about a Library artifact: title,
  * description, topics, and the optional text section. The Studio's Publish
  * tab and the artifact page's Edit dialog both show them, with their own
- * fields (`children`) between the topics and the text section.
+ * fields (`children`) between the topics and the text section. The Publish
+ * tab also shows its URL field (`address`) under the title.
  *
  * The topics are the Library's own list, read on mount. A publisher picks
  * from them, and adds one through the "+" beside them.
@@ -130,10 +131,12 @@ type ArtifactFieldsProps = {
     // A state setter, called with updaters so a change made while a request
     // is out is kept.
     onChange: Dispatch<SetStateAction<ArtifactText>>;
+    // Shown under the title.
+    address?: ReactNode;
     children?: ReactNode;
 };
 
-const ArtifactFields = ({ value, onChange, children }: ArtifactFieldsProps) => {
+const ArtifactFields = ({ value, onChange, address, children }: ArtifactFieldsProps) => {
     // Null until the list arrives.
     const [topics, setTopics] = useState<string[] | null>(null);
     const [topicsError, setTopicsError] = useState<string | null>(null);
@@ -187,6 +190,7 @@ const ArtifactFields = ({ value, onChange, children }: ArtifactFieldsProps) => {
                     onChange={(event) => set({ title: event.target.value })}
                 />
             </label>
+            {address}
             <label className={styles.field}>
                 <span className={styles.label}>Description</span>
                 <textarea

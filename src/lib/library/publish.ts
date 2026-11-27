@@ -23,6 +23,7 @@ export const LIMITS = {
     sources: 30,
     steps: 30,
     line: 300,
+    slug: 80,
 } as const;
 
 /** The fields a publisher writes, in the publish and the edit dialogs. */
@@ -53,6 +54,9 @@ export type PublishedShare = {
  */
 export type PublishInput = ArtifactText & {
     publishKey: string;
+    /** The artifact's address in `slugOf` form. Without it the server makes
+     *  one from the title. */
+    slug?: string;
     share: PublishedShare;
 };
 
@@ -61,6 +65,8 @@ export type PublishInput = ArtifactText & {
 export type PublishRequest = {
     text: ArtifactText;
     publishKey: string;
+    /** The slug the publisher chose, or null to make one from the title. */
+    slug: string | null;
     share: Record<string, unknown> & { kind: 'canvas' | 'card' };
 };
 
@@ -218,6 +224,36 @@ export const readArtifactText = (body: unknown): Read<ArtifactText> => {
     };
 };
 
+/**
+ * A chosen slug: null when there is none (the body's `slug` absent or
+ * null), which leaves the server to make one from the title, or a slug
+ * already in `slugOf` form. The publish route
+ * reads the body's `slug` with it, and the Publish tab checks its URL field
+ * with it before sending.
+ */
+export const readSlug = (raw: unknown): Read<string | null> => {
+    if (raw === undefined || raw === null) {
+        return { ok: true, value: null };
+    }
+
+    return typeof raw === 'string' && raw !== '' && slugOf(raw) === raw
+        ? { ok: true, value: raw }
+        : refuse(
+              '/slug',
+              `Give it a URL of 1 to ${LIMITS.slug} lower-case letters, digits and single hyphens.`,
+          );
+};
+
+/**
+ * The publish key's slot in the Publish tab: one key per artifact picked,
+ * mode and chosen slug (`readSlug`'s value, null while the slug follows the
+ * title). A retry with all three unchanged sends the key again, so a publish
+ * whose answer was lost makes no second artifact. A changed slug gets a new
+ * key, so the retry is not answered with an artifact under the old one.
+ */
+export const publishKeySlot = (picked: string, mode: string, slug: string | null): string =>
+    JSON.stringify([picked, mode, slug]);
+
 /** The body of a publish, or the first field at fault. A conversation
  *  share is not an artifact, so `share.kind` is `canvas` or `card`. */
 export const readPublish = (body: unknown): Read<PublishRequest> => {
@@ -231,6 +267,12 @@ export const readPublish = (body: unknown): Read<PublishRequest> => {
         return refuse('/publishKey', 'The publish has no key.');
     }
 
+    const slug = readSlug(body.slug);
+
+    if (!slug.ok) {
+        return slug;
+    }
+
     const share = body.share;
 
     if (!isRecord(share) || (share.kind !== 'canvas' && share.kind !== 'card')) {
@@ -242,6 +284,7 @@ export const readPublish = (body: unknown): Read<PublishRequest> => {
         value: {
             text: text.value,
             publishKey: body.publishKey,
+            slug: slug.value,
             share: { ...share, kind: share.kind },
         },
     };
@@ -266,18 +309,22 @@ export const publishedKind = (
     return kind === 'chart' || kind === 'table' || kind === 'key_number' ? kind : null;
 };
 
+// Lower-case ASCII words joined by single hyphens, with no length limit.
+const slugWords = (text: string): string =>
+    text
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
+
 /**
  * The title as the artifact's address: lower-case ASCII words joined by
  * hyphens, at most 80 characters. A title with no letter or digit in it
- * reads `artifact`.
+ * reads `artifact`. A slug is its own `slugOf`.
  */
 export const slugOf = (title: string): string =>
-    title
-        .normalize('NFKD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .slice(0, 80)
+    slugWords(title)
+        .slice(0, LIMITS.slug)
         .replace(/^-+|-+$/g, '') || 'artifact';
 
 /** `base`, or `base-2`, `base-3`… the first that `taken` does not hold. */
