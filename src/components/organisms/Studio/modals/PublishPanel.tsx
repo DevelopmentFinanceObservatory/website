@@ -324,21 +324,17 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                                 // The URL follows the new artifact's title.
                                 setSlug(null);
                                 setSlugError(null);
-                                // The title follows the artifact until it is edited.
-                                setText((current) => {
-                                    const was = prefill(
-                                        picked === CANVAS ? title : titleOf(picked),
-                                    );
+                                // The title follows the artifact until it is edited,
+                                // and a replaced title drops its refusals.
+                                const was = prefill(picked === CANVAS ? title : titleOf(picked));
 
-                                    return current.title === was
-                                        ? {
-                                              ...current,
-                                              title: prefill(
-                                                  next === CANVAS ? title : titleOf(next),
-                                              ),
-                                          }
-                                        : current;
-                                });
+                                if (text.title === was) {
+                                    setText((current) => ({
+                                        ...current,
+                                        title: prefill(next === CANVAS ? title : titleOf(next)),
+                                    }));
+                                    setRefusals((current) => withoutField(current, 'title'));
+                                }
                             }}
                         >
                             {options.map((option) => (

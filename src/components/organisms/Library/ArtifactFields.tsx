@@ -206,7 +206,7 @@ type ArtifactFieldsProps = {
     children?: ReactNode;
     // The evergreen refusal of the last try, shown under the fields it names.
     refusals?: Refusals | null;
-    // A field was edited, so its refusals no longer stand.
+    // An edited field drops its refusals.
     onEdit?: (field: EvergreenField) => void;
 };
 
