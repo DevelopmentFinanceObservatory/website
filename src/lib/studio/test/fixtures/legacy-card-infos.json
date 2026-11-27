@@ -1,0 +1,258 @@
+[
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "1970"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialPosition_AmountOutstanding_Nominal",
+                "name": "Outstanding external debt (current US$)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+    },
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "1970"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialFlow_ServicingPayment_Nominal",
+                "name": "Debt service on external debt (current US$)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+    },
+    {
+        "unit": null,
+        "label": "World Development Indicators · 1 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "1993"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "dc/base/WorldDevelopmentIndicators",
+                "url": "https://datatopics.worldbank.org/world-development-indicators/",
+                "name": "World Development Indicators",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Development Indicators via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "dc/base/WorldDevelopmentIndicators",
+        "indicators": [
+            {
+                "id": "dcid:Amount_Stock_AsFractionOf_Amount_EconomicActivity_GrossDomesticProduction_Nominal",
+                "name": "Stock Value as a Percentage of Nominal GDP",
+                "description": "md=Amount_EconomicActivity_GrossDomesticProduction_Nominal,mp=amount,pt=Stock"
+            }
+        ],
+        "sourceName": "World Development Indicators",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+    },
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 2 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "1975"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialFlow_ServicingPayment_AsAFractionOf_Amount_EconomicActivity_ExportsOfGoodsServicesAndPrimaryIncome_Nominal",
+                "name": "Debt service on external debt (% of exports of goods, services and primary income)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 2
+    },
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialPosition_AmountOutstanding_Nominal",
+                "name": "Outstanding external debt (current US$)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+    },
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialFlow_ServicingPayment_Nominal",
+                "name": "Debt service on external debt (current US$)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+    },
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialPosition_AmountOutstanding_AsAFractionOf_Amount_EconomicActivity_GrossNationalIncome_Nominal",
+                "name": "Outstanding external debt (% of GNI)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+    },
+    {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 2 indicator(s)",
+        "years": {
+            "end": "2024",
+            "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+            {
+                "id": "provenance/WorldBankInternationalDebtStatistics",
+                "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+                "name": "World Bank International Debt Statistics (IDS)",
+                "licence": "Creative Commons Attribution License",
+                "retrieved": "2026-10-05"
+            }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+            {
+                "id": "dcid:Amount_FinancialFlow_ServicingPayment_AsAFractionOf_Amount_EconomicActivity_ExportsOfGoodsServicesAndPrimaryIncome_Nominal",
+                "name": "Debt service on external debt (% of exports of goods, services and primary income)",
+                "description": ""
+            }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 2
+    }
+]

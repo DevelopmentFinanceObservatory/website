@@ -1,5 +1,5 @@
 /**
- * Insights → Publications: research built on the DFO knowledge graph. The
+ * About → Publications: research built on the DFO knowledge graph. The
  * two launch reports from the design, with the live links the DFO team
  * handed over — View Report opens the report on data.one.org. A future
  * publication with no link yet leaves `reportUrl` null and its button is

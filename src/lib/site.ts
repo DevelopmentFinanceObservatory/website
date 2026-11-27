@@ -42,21 +42,6 @@ export const SITE_CARD: Card = {
 };
 
 /**
- * Next suffixes a metadata image under a route group with a hash of its
- * parent path, so the gallery item card's address carries one.
- * src/lib/test/crawl.test.ts checks it against Next's own.
- */
-const GALLERY_CARD_SUFFIX = '1pc5v7';
-
-/** A gallery item's own card, drawn by
- *  app/(studio)/insights/gallery/[slug]/opengraph-image.tsx. */
-export const galleryCard = (slug: string): Card => ({
-    url: `/insights/gallery/${slug}/opengraph-image-${GALLERY_CARD_SUFFIX}`,
-    ...CARD_SIZE,
-    type: CARD_TYPE,
-});
-
-/**
  * The Open Graph tags of a page that names itself. Next replaces a
  * segment's `openGraph` whole, so a page that sets one would drop the root
  * layout's site name and card; these keep the site name and show `image`,

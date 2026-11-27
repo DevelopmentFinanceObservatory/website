@@ -18,7 +18,8 @@ const HOVER_INTENT_MS = 150;
 /** A Button with `href` renders Next's Link, an anchor that navigates, with
  *  the same look and hover; without it, a `<button>`. */
 export type ButtonProps = {
-    variant?: 'light' | 'dark' | 'outline' | 'bordered' | 'plain' | 'paper' | 'inline' | 'card';
+    variant?:
+        'light' | 'dark' | 'outline' | 'bordered' | 'plain' | 'paper' | 'inline' | 'card' | 'chip';
     wide?: boolean;
     full?: boolean;
     small?: boolean;
@@ -29,7 +30,11 @@ export type ButtonProps = {
     ref?: React.Ref<HTMLElement>;
 } & (
     | ({ href?: undefined } & React.ButtonHTMLAttributes<HTMLButtonElement>)
-    | ({ href: string } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>)
+    | ({
+          href: string;
+          // Next's Link prefetch, false for a per-item dynamic page (AGENTS.md).
+          prefetch?: boolean;
+      } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>)
 );
 
 const Button = ({
@@ -44,9 +49,12 @@ const Button = ({
     ref,
     ...rest
 }: ButtonProps) => {
-    // Plain and inline buttons skip the word-roll machinery, so their words wrap as text.
+    // Plain, inline and chip buttons skip the word-roll machinery, so their words wrap as text.
     const words =
-        variant !== 'plain' && variant !== 'inline' && typeof children === 'string'
+        variant !== 'plain' &&
+        variant !== 'inline' &&
+        variant !== 'chip' &&
+        typeof children === 'string'
             ? children.split(' ')
             : null;
 

@@ -15,7 +15,6 @@ import { useScrollFrame } from '@/hooks/useScrollFrame';
 import { enterProgress } from '@/utils/scroll';
 import { showPrivacySettings } from '@/lib/consent';
 import { DOCS_MENU } from '@/lib/docs/nav';
-import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
 import { IS_SITE, siteHref } from '@/lib/site';
 import Logo from '@/assets/svg/logo.svg';
 import WorldMap from '@/components/atoms/WorldMap/WorldMap';
@@ -23,14 +22,11 @@ import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 // The Data column mirrors the header's Data dropdown exactly — same
 // entries, same order (Coverage is left out of both until it's built).
 const columns = [
-    {
-        title: 'Insights',
-        links: GALLERY_PUBLISHED ? ['Chat', 'Gallery', 'Publications'] : ['Chat', 'Publications'],
-    },
+    { title: 'Library', links: ['Browse Library', 'Chat'] },
     { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data'] },
     // Status is hidden for launch — see src/app/(site)/docs/status/page.tsx.
     { title: 'Docs', links: DOCS_MENU.map((entry) => entry.label) },
-    { title: 'About', links: ['About DFO', 'Contact us'] },
+    { title: 'About', links: ['About DFO', 'Publications', 'Contact us'] },
 ];
 
 // Contact opens a mail draft to the DFO team — the same address the
@@ -41,9 +37,9 @@ const CONTACT_MAILTO = 'mailto:data@one.org';
 const FOOTER_ROUTES: Record<string, string> = {
     'About DFO': '/about',
     'Contact us': CONTACT_MAILTO,
+    'Browse Library': '/library',
     Chat: '/studio',
-    Gallery: '/insights/gallery',
-    Publications: '/insights/publications',
+    Publications: '/about/publications',
     Sources: '/data/sources',
     Roadmap: '/data/roadmap',
     'Get Data': '/data',
