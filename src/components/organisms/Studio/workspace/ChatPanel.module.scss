@@ -610,6 +610,12 @@
     align-items: flex-end;
     min-height: 0;
     padding-block: rem(24);
+
+    // The region clips at its left edge, where a bot turn's first button
+    // sits, so the padding holds that button's focus ring and the margin
+    // keeps the content where it was.
+    padding-left: rem(3);
+    margin-left: rem(-3);
     mask-image:
         linear-gradient(
             to bottom,

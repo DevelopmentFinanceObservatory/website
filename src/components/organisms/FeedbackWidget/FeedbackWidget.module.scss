@@ -45,6 +45,7 @@
     --fb-field-line: var(--color-sage-dark);
     --fb-send: var(--color-charcoal);
     --fb-send-text: var(--color-bg);
+    --focus-ring: var(--color-bg);
 }
 
 .badge {
@@ -85,6 +86,9 @@
     padding: rem(16);
     background-color: var(--fb-panel);
     border-radius: rem(6);
+
+    --focus-ring: var(--fb-text);
+
     animation: feedback-pop 0.25s $ease-out;
 
     @include breakpoint(phone) {

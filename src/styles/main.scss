@@ -86,3 +86,39 @@ body {
         outline: none;
     }
 }
+
+// The keyboard focus indicator for every control: a 1px outline in the
+// ground's text colour (`--th-text` inside a themed card, else the page's
+// `--color-text`), which contrasts with what the control sits on. A control's
+// own text colour is no guide, since a filled button's text is the colour of
+// the page. A container on a ground that differs from its page sets
+// `--focus-ring`: `data-nav-dark` sections do, below. `:focus-visible` is
+// keyboard-only for buttons and links, so a click draws nothing. Text entry is
+// left out: it shows a caret and carries its own field treatment. `:where()`
+// keeps the specificity at one class, so a component's own `outline` rule that
+// comes later still wins.
+:focus-visible:where(
+    :not(
+        input:not(
+            [type="checkbox"],
+            [type="radio"],
+            [type="range"],
+            [type="button"],
+            [type="submit"],
+            [type="reset"],
+            [type="image"],
+            [type="file"],
+            [type="color"]
+        ),
+        textarea,
+        select,
+        [contenteditable]
+    )
+) {
+    outline: 1px solid var(--focus-ring, var(--th-text, var(--color-text)));
+    outline-offset: 2px;
+}
+
+[data-nav-dark] {
+    --focus-ring: var(--color-bg);
+}
