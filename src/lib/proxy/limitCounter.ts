@@ -412,15 +412,21 @@ export const refundHit = async (db: CounterDb, key: string, windowS: number): Pr
     `);
 };
 
-/** Give back a reservation only in the exact window that accepted it. */
-export const refundReservation = async (db: CounterDb, receipt: Reservation): Promise<void> => {
-    await db.execute(sql`
+/**
+ * Give back a reservation only in the exact window that accepted it. True
+ * when a hit was given back, false when the counter has since started a new
+ * window or holds none.
+ */
+export const refundReservation = async (db: CounterDb, receipt: Reservation): Promise<boolean> => {
+    const { rowCount } = await db.execute(sql`
         update ${limitCounter}
         set count = count - 1
         where key = ${receipt.key}
             and window_start = ${receipt.windowStart}
             and count > 0
     `);
+
+    return (rowCount ?? 0) > 0;
 };
 
 /**

@@ -94,7 +94,12 @@ export const PRESENTATION_HEADERS: HeaderPass = {
 /**
  * The Studio harness's routes pass one response header beyond the defaults,
  * x-dfo-turn-index, the index of the turn each stream carries, which the page
- * keys its transcript on.
+ * keys its transcript on. Two more `x-dfo-*` headers belong to the Studio
+ * proxy alone (src/lib/studio/studioProxy) and never cross to the harness: a
+ * turn request's x-dfo-hold-turn (`1` marks a turn Get Data starts while its
+ * move to Studio holds, which the proxy reads and does not forward) and a
+ * cancel answer's x-dfo-prompt-refunded (`true` when the cancel gave the
+ * turn's prompt back, else `false`), which the proxy sets itself.
  */
 export const STUDIO_HEADERS: HeaderPass = {
     request: [],

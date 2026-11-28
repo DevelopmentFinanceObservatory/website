@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
 
+import { sql } from 'drizzle-orm';
+
+import { limitCounter } from '../../../db/schema.ts';
 import { inboxOf } from '../auth/inbox.ts';
 import { limiterBucket } from '../proxy/caller.ts';
 import {
@@ -27,6 +30,12 @@ import type { ToolError } from './wire.ts';
  * Only a turn spends one, and a turn the harness never starts gets it back.
  * An interrupt answers a pause the turn itself raised, and the harness
  * bounds how many a turn can raise.
+ *
+ * A hold turn, one Get Data starts while its move to Studio holds
+ * (HOLD_TURN_HEADER), also gets its prompt back when the prompter cancels it
+ * within HOLD_REFUND_WINDOW_MS of the harness admitting it, at most
+ * HOLD_REFUNDS_PER_DAY times a UTC day (recordHoldTurn, claimHoldTurn,
+ * refundHoldTurn).
  */
 
 const DAY_S = 86_400;
@@ -65,6 +74,9 @@ const counterOf = (prompter: Prompter) =>
               allowance: USER_DAILY_PROMPTS,
           };
 
+/** The limit_counter key that counts `prompter`'s prompts. */
+export const promptCounterKey = (prompter: Prompter): string => counterOf(prompter).key;
+
 /**
  * Spend one of `prompter`'s prompts for today. An admitted spend returns its
  * receipt; a refusal returns the HTTP 429 body. Throws what the database throws.
@@ -97,8 +109,115 @@ export const spendPrompt = async (db: CounterDb, prompter: Prompter): Promise<Pr
 };
 
 /** Give back a prompt spent today on a turn the harness never started. */
-export const refundPrompt = (db: CounterDb, receipt: Reservation): Promise<void> =>
-    refundReservation(db, receipt);
+export const refundPrompt = async (db: CounterDb, receipt: Reservation): Promise<void> => {
+    await refundReservation(db, receipt);
+};
+
+/**
+ * The request header, value `1`, that marks a turn as a hold turn. The proxy
+ * reads it and the harness never sees it (STUDIO_HEADERS in
+ * src/lib/proxy/headers carries no request header).
+ */
+export const HOLD_TURN_HEADER = 'x-dfo-hold-turn';
+
+/** The cancel answer's header: `true` when the cancel gave the turn's prompt back, else `false`. */
+export const PROMPT_REFUNDED_HEADER = 'x-dfo-prompt-refunded';
+
+/** How long after the harness admits a hold turn a cancel still refunds its prompt. */
+export const HOLD_REFUND_WINDOW_MS = 2_000;
+
+/** How many hold turns a prompter's cancels refund in a UTC day. */
+export const HOLD_REFUNDS_PER_DAY = 3;
+
+/** A turn as the harness names it: its conversation and the turn's index. */
+export type HarnessTurn = { conversationId: string; turnIndex: number };
+
+/**
+ * The turn index of a harness header or body member: a non-negative integer,
+ * or a string of digits. Null for anything else.
+ */
+export const turnIndexOf = (value: unknown): number | null => {
+    const index = typeof value === 'string' && /^\d{1,15}$/.test(value) ? Number(value) : value;
+
+    return typeof index === 'number' && Number.isSafeInteger(index) && index >= 0 ? index : null;
+};
+
+// A hold turn's receipt is a limit_counter row whose window_start is the
+// spent prompt's window and whose expires_at is the refund deadline. Its key
+// starts with the prompter's counter key, so a cancel finds only its own
+// caller's receipts, and pruneCounters deletes it once the deadline passes.
+const holdReceiptKey = (counterKey: string, { conversationId, turnIndex }: HarnessTurn) =>
+    `studio-refundable:${counterKey}:${conversationId}:${turnIndex}`;
+
+const holdRefundKey = (counterKey: string) => `studio-refund:${counterKey}`;
+
+/**
+ * Record that `receipt` paid for the hold turn `turn`, refundable for
+ * `windowMs` from now on the database's clock. Throws what the database throws.
+ */
+export const recordHoldTurn = async (
+    db: CounterDb,
+    receipt: Reservation,
+    turn: HarnessTurn,
+    windowMs: number = HOLD_REFUND_WINDOW_MS,
+): Promise<void> => {
+    await db.execute(sql`
+        insert into ${limitCounter} (key, window_start, count, expires_at)
+        values (
+            ${holdReceiptKey(receipt.key, turn)},
+            ${receipt.windowStart},
+            1,
+            now() + make_interval(secs => ${windowMs / 1000})
+        )
+        on conflict (key) do update set
+            window_start = excluded.window_start,
+            count = 1,
+            expires_at = excluded.expires_at
+    `);
+};
+
+/**
+ * Take `prompter`'s receipt for the hold turn `turn` if its deadline has not
+ * passed: the prompt it paid for, or null when there is none. A receipt is
+ * taken once. Throws what the database throws.
+ */
+export const claimHoldTurn = async (
+    db: CounterDb,
+    prompter: Prompter,
+    turn: HarnessTurn,
+): Promise<Reservation | null> => {
+    const key = promptCounterKey(prompter);
+    const { rows } = await db.execute<{ window_start: Date }>(sql`
+        delete from ${limitCounter}
+        where ${limitCounter.key} = ${holdReceiptKey(key, turn)}
+            and ${limitCounter.expiresAt} > now()
+        returning window_start
+    `);
+    const windowStart = rows[0]?.window_start;
+
+    return windowStart ? { key, windowStart } : null;
+};
+
+/**
+ * Give back the prompt a claimed hold turn paid for, within the prompter's
+ * HOLD_REFUNDS_PER_DAY. False when the day's refunds are spent, or when the
+ * prompt was spent on an earlier day than today. Throws what the database throws.
+ */
+export const refundHoldTurn = async (db: CounterDb, paid: Reservation): Promise<boolean> => {
+    const cap = await reserveHit(db, holdRefundKey(paid.key), HOLD_REFUNDS_PER_DAY, DAY_S);
+
+    if (!cap.admitted) {
+        return false;
+    }
+
+    if (await refundReservation(db, paid)) {
+        return true;
+    }
+
+    await refundReservation(db, cap.receipt);
+
+    return false;
+};
 
 /**
  * The proxy's answer to a turn before it is forwarded, given `spend`, which
@@ -153,7 +272,9 @@ export const admitTurn = async (
 /**
  * Run a turn through `forward` with its prompt spent first. `forward`
  * receives `admit`, which spends the caller's prompt through `spend` and
- * answers as admitTurn does. The prompt comes back, through `refund`, when
+ * answers as admitTurn does. When the response `forward` returns is ok,
+ * `started` gets the receipt and the response before meterTurn returns it.
+ * The prompt comes back, through `refund`, when
  * the response `forward` returns is not ok, since the turn never started.
  * It also comes back when a spend lands after admitTurn gave up on it and
  * refused the turn. A prompt is refunded once. The spend refunds when it
@@ -165,7 +286,13 @@ export const meterTurn = async <R>(
     spend: () => Promise<{ receipt: R | null; refusal: ToolError | null }>,
     refund: (receipt: R) => Promise<void>,
     forward: (admit: () => Promise<Response | null>) => Promise<Response>,
-    timeoutMs: number = ADMIT_TIMEOUT_MS,
+    {
+        started,
+        timeoutMs = ADMIT_TIMEOUT_MS,
+    }: {
+        started?: (receipt: R, response: Response) => Promise<void>;
+        timeoutMs?: number;
+    } = {},
 ): Promise<Response> => {
     // Whoever spent a prompt on this call, and whether the call has been
     // answered, so exactly one side gives a prompt back.
@@ -190,8 +317,8 @@ export const meterTurn = async <R>(
 
     answered = true;
 
-    if (receipt !== null && !response.ok) {
-        await refund(receipt);
+    if (receipt !== null) {
+        await (response.ok ? started?.(receipt, response) : refund(receipt));
     }
 
     return response;
