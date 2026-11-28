@@ -669,8 +669,8 @@
             linear-gradient(#000, #000),
             linear-gradient(
                 to right,
-                #000 calc(100% - #{rem(176)}),
-                transparent calc(100% - #{rem(112)})
+                #000 calc(100% - #{rem(116)} - min(#{rem(116)}, 22%)),
+                transparent calc(100% - #{rem(116)})
             );
         mask-position: top, bottom;
         mask-repeat: no-repeat;
