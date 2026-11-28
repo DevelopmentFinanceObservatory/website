@@ -26,6 +26,7 @@ export type Regression = {
 
 const CHART = 'cmp_replay_chart_c1';
 const CHART_SPEC = 'spec_91d7345eec81a029629938b3d0ffd775';
+const G7_CARD = 'cmp_replay_plan_c2';
 const SHOW_MS = 10_000;
 
 // The harness's sentences for the refusals the regressions draw.
@@ -700,6 +701,103 @@ export const REGRESSIONS: Regression[] = [
             assert.equal(await page.getByRole('button', { name: 'Try again' }).count(), 0);
             assert.equal(reads, 1);
             clean(session, 503);
+        },
+    },
+    {
+        // A places list and a pick belong to one revision of their card: a
+        // revision closes the open picker, and the picker opened after it
+        // reads the new revision's list once and offers nothing from the old.
+        name: 'a card revision closes its open places picker, which reads the new list',
+        layout: 'prompt',
+        scenario: () => {
+            const scenario = loadScenario('plan');
+            const created = scenario.turns[0]!.segments.flatMap((segment) =>
+                segment.frames.filter(
+                    (frame) =>
+                        frame.event === 'component.created' && frame.component_id === G7_CARD,
+                ),
+            )[0]!;
+            const payload = { ...(created.payload as object), revision: 2 };
+            const frames: Frame[] = [
+                {
+                    event: 'component.revised',
+                    component_id: G7_CARD,
+                    revision: 2,
+                    changed: ['presentation'],
+                    fact_summary: created.fact_summary,
+                    payload,
+                },
+                { event: 'message.complete', text: 'The card is redrawn.' },
+                { event: 'done', trace_id: 'tr_replay_revised' },
+            ];
+
+            scenario.turns.push({
+                question: 'Redraw the G7 card.',
+                segments: [{ frames: frames.map((frame, seq) => ({ ...frame, seq })) }],
+            });
+
+            return scenario;
+        },
+        run: async (session) => {
+            const { page, player } = session;
+            const lists = [
+                [{ id: 'country/KEN', label: 'Kenya' }],
+                [{ id: 'country/GHA', label: 'Ghana' }],
+            ];
+            let reads = 0;
+
+            player.answerPlaces = (query) => {
+                reads += 1;
+
+                return {
+                    status: 200,
+                    body: {
+                        component_id: query.get('component_id'),
+                        role: query.get('role'),
+                        options: lists[Math.min(reads, lists.length) - 1],
+                        truncated: false,
+                    },
+                };
+            };
+
+            await playTurn(session, 1);
+            await openCardPage(page, 'G7');
+
+            const change = page.getByRole('button', { name: 'Change Providers' });
+            const picker = page.getByRole('group', { name: 'Change Providers', exact: true });
+
+            await change.click();
+            await picker.getByText('Kenya').waitFor({ timeout: SHOW_MS });
+
+            // The reader is back in the picker when the revision lands, so
+            // focus goes with the picker and returns to its Change.
+            const release = player.holdNext((frame) => frame.event === 'component.revised');
+            const revised = playTurn(session, 2);
+
+            await new Promise<void>((resolve) => player.once('held', resolve));
+            await picker.getByRole('searchbox').focus();
+            release();
+            await within('the revision', revised);
+            await picker.waitFor({ state: 'detached', timeout: SHOW_MS });
+            assert.equal(reads, 1);
+            await page.evaluate(() => new Promise(requestAnimationFrame));
+            await page.evaluate(() => new Promise(requestAnimationFrame));
+            assert.equal(
+                await change.evaluate((button) => button === document.activeElement),
+                true,
+            );
+
+            await change.click();
+            await picker.getByText('Ghana').waitFor({ timeout: SHOW_MS });
+            assert.equal(await picker.getByText('Kenya').count(), 0);
+            assert.equal(reads, 2);
+
+            // Closed and opened again, the picker reads nothing more.
+            await change.click();
+            await change.click();
+            await picker.getByText('Ghana').waitFor({ timeout: SHOW_MS });
+            assert.equal(reads, 2);
+            clean(session);
         },
     },
 ];

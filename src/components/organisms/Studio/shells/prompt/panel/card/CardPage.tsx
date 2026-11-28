@@ -59,8 +59,9 @@ type Pick =
     | { kind: 'years'; from: number; to: number }
     | { kind: 'shows'; places: PlaceOption[] };
 
-// An open picker: the card and the offer it belongs to, and the selection.
-type OpenPicker = { card: string; offer: string; pick: Pick };
+// An open picker: the card and the revision it opened on, the offer it
+// belongs to, and the selection.
+type OpenPicker = { card: string; revision: number | undefined; offer: string; pick: Pick };
 
 // A change sent from this page, kept by offer until the card standing in its
 // card's place is replaced by it, or it is refused, so the page can say
@@ -363,6 +364,30 @@ const CardPage = ({ id }: { id: string }) => {
         }
     }, [current, replacedIds, announce, picker, chat.queued]);
 
+    // A revision of the card under an open picker, which closes (it reads
+    // the old revision) and says why. A replacement says its own, and a
+    // picker the reader closed is gone already. Focus returns to the
+    // picker's Change only when it went with the picker, so a reader typing
+    // elsewhere, as in the prompt, keeps their place.
+    const revision = widget?.kind === 'text' ? undefined : widget?.ref?.revision;
+    const seenRevision = useRef(revision);
+
+    useEffect(() => {
+        const was = seenRevision.current;
+
+        seenRevision.current = revision;
+
+        if (was === revision || !picker || picker.card !== current || picker.revision !== was) {
+            return;
+        }
+
+        announce('The card changed, so its change picker closed.');
+
+        if (!document.activeElement || document.activeElement === document.body) {
+            focusChange(picker.offer);
+        }
+    }, [revision, current, picker, announce]);
+
     // A refusal of a change this page sent, by the harness or by the queue
     // (sentRefusal), also once the queue dropped it because its card left
     // the canvas, while the page stays mounted and draws nothing.
@@ -384,9 +409,10 @@ const CardPage = ({ id }: { id: string }) => {
         }
     }, [statuses, current, replaced, announce, report, chat.dropped]);
 
-    // The picker belongs to the card it opened on, so it closes when a
-    // replacement takes the card's place.
-    const open = picker && picker.card === current ? picker : null;
+    // The picker belongs to the card and the revision it opened on, so it
+    // closes when a replacement takes the card's place or the card redraws
+    // at another revision, and its selection goes with it.
+    const open = picker && picker.card === current && picker.revision === revision ? picker : null;
 
     const closePicker = (offerId: string) => {
         setPicker(null);
@@ -557,7 +583,12 @@ const CardPage = ({ id }: { id: string }) => {
                             return;
                         }
 
-                        setPicker({ card: current, offer: offer.id, pick: startPick(offer) });
+                        setPicker({
+                            card: current,
+                            revision,
+                            offer: offer.id,
+                            pick: startPick(offer),
+                        });
                         report('studio.change', { step: 'open', kind: changeKind(offer.key) });
                     }}
                 >

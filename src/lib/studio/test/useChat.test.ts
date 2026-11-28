@@ -24,7 +24,7 @@ import { rowValues } from '../changeNote.ts';
 import { OWED_RETRY_MS } from '../owedRemovals.ts';
 import { streamedText } from '../replyStream.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { ComponentCreated } from '../wire.ts';
+import type { ComponentCreated, ComponentRevised } from '../wire.ts';
 import type { renderHook as RenderHook } from './hookRuntime.ts';
 
 const REPO = join(import.meta.dirname, '../../../..');
@@ -735,7 +735,7 @@ test('a card change of places sends apply_change, marks its prompt, and only a s
     }
 });
 
-test('a card role’s places are read once, again after a failure, and anew once the card is replaced, whose replacement keeps its plan step', async (t) => {
+test('a card role’s places are read once per conversation and card revision, again after a failure, and anew once the card is replaced, whose replacement keeps its plan step', async (t) => {
     const created = JSON.parse(
         readFileSync(
             new URL('./fixtures/event-06-component-created.json', import.meta.url),
@@ -749,6 +749,16 @@ test('a card role’s places are read once, again after a failure, and anew once
         replaces: created.component_id,
         created_from: { step_id: 's2' },
     };
+    // The card's next revision, whose payload the page reads by id.
+    const revised: ComponentRevised = {
+        event: 'component.revised',
+        seq: 0,
+        component_id: created.component_id,
+        revision: 2,
+        changed: ['presentation'],
+        fact_summary: created.fact_summary,
+    };
+    const turns = [revised, redrawn];
     const reads: string[] = [];
     let fail = true;
 
@@ -757,10 +767,10 @@ test('a card role’s places are read once, again after a failure, and anew once
 
         if (url.pathname === '/api/studio/turn') {
             return new Response(
-                [redrawn, { event: 'done', seq: 9, trace_id: 't' }]
+                [turns.shift(), { event: 'done', seq: 9, trace_id: 't' }]
                     .map((frame) => `data: ${JSON.stringify(frame)}\n\n`)
                     .join(''),
-                { headers: { 'x-dfo-turn-index': '2' } },
+                { headers: { 'x-dfo-turn-index': String(3 - turns.length) } },
             );
         }
 
@@ -768,7 +778,9 @@ test('a card role’s places are read once, again after a failure, and anew once
             return new Response('{}', { status: 404 });
         }
 
-        reads.push(url.searchParams.get('component_id') ?? '');
+        reads.push(
+            `${url.searchParams.get('conversation_id')} ${url.searchParams.get('component_id')}`,
+        );
 
         if (fail) {
             fail = false;
@@ -809,13 +821,34 @@ test('a card role’s places are read once, again after a failure, and anew once
     assert.equal(first.kind, 'failed');
     assert.equal(second.kind, 'options');
     assert.equal(third, second);
-    assert.deepEqual(reads, [id, id]);
+    assert.deepEqual(reads, [`conv_1 ${id}`, `conv_1 ${id}`]);
+
+    // A new revision of the card reads its list once more.
+    page.result().send('Retitle it');
+    await page.settle(60);
+    await placeOptions(id, 'destination');
+    await placeOptions(id, 'destination');
+    assert.equal(reads.length, 3);
+
+    // Another conversation holding a card of the same id reads its own.
+    page.result().hydrate({
+        sessionId: 'conv_2',
+        messages: [
+            { role: 'user', text: 'Q', turn: 1, harnessTurn: 1 },
+            { role: 'bot', text: 'A' },
+        ],
+        widgets: [{ ...old, turn: 1 }],
+        turnCount: 1,
+    });
+    await page.settle();
+    await placeOptions(id, 'destination');
+    assert.deepEqual(reads.slice(3), [`conv_2 ${id}`]);
 
     page.result().send('Redraw it');
     await page.settle(60);
     await placeOptions(id, 'destination');
 
-    assert.deepEqual(reads, [id, id, id]);
+    assert.deepEqual(reads.slice(4), [`conv_2 ${id}`]);
 
     const replacement = page.result().widgets.find((widget) => widget.id === 'cmp_2');
 
