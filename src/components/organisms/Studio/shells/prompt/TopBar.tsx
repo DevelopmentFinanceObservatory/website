@@ -14,8 +14,18 @@ export const TopBarTitle = () => {
     const { title, doc, readOnly } = useStudioModel();
     const [draft, setDraft] = useState<string | null>(null);
     const pencil = useRef<HTMLButtonElement>(null);
+    // Whether the open field has finished. Enter and Escape remove the
+    // focused field, and the blur that removal can fire must not commit a
+    // second time or move focus.
+    const finished = useRef(false);
 
-    const finish = (commit: boolean) => {
+    // `refocus` returns focus to the pencil once the field has gone (Enter
+    // and Escape). A blur leaves focus where the reader sent it.
+    const finish = (commit: boolean, refocus: boolean) => {
+        if (finished.current) return;
+
+        finished.current = true;
+
         const next = draft?.trim();
 
         if (commit && next && next !== title) {
@@ -23,8 +33,8 @@ export const TopBarTitle = () => {
         }
 
         setDraft(null);
-        // The pencil returns once the input has gone.
-        requestAnimationFrame(() => pencil.current?.focus());
+
+        if (refocus) requestAnimationFrame(() => pencil.current?.focus());
     };
 
     return (
@@ -43,7 +53,10 @@ export const TopBarTitle = () => {
                             type="button"
                             className={styles.rename}
                             aria-label="Rename"
-                            onClick={() => setDraft(title)}
+                            onClick={() => {
+                                finished.current = false;
+                                setDraft(title);
+                            }}
                         >
                             <Icon name="edit-title" />
                         </button>
@@ -58,16 +71,16 @@ export const TopBarTitle = () => {
                     autoFocus
                     onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) => setDraft(event.target.value.replace(/\n/g, ' '))}
-                    onBlur={() => finish(true)}
+                    onBlur={() => finish(true, false)}
                     onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                             event.preventDefault();
-                            finish(true);
+                            finish(true, true);
                         } else if (event.key === 'Escape') {
                             // Handled here: the shell's Escape listener skips a
                             // prevented key.
                             event.preventDefault();
-                            finish(false);
+                            finish(false, true);
                         }
                     }}
                 />
