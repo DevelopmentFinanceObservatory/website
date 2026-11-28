@@ -18,7 +18,8 @@ export const QuestionHead = ({ text, about }: { text: string; about: string | nu
                 About <span className={styles.aboutTitle}>{about}</span>
             </p>
         )}
-        <p className={styles.questionText} title={text}>
+        {/* The landing's travelling prompt draws this line itself (PromptShell.tsx). */}
+        <p className={styles.questionText} title={text} data-dock-question="">
             {text}
         </p>
     </div>

@@ -106,6 +106,64 @@ const LandingTravel = ({ onLanded, onDone }: { onLanded: () => void; onDone: () 
     // When the move lands, and the box it heads for.
     const lands = useRef(0);
     const target = useRef<Rect | null>(null);
+    // A copy of the dock's rows, drawn inside the travelling box.
+    const rows = useRef<HTMLElement | null>(null);
+
+    // Draws the dock's own rows inside the travelling box, laid out as the
+    // dock lays them out, so the box shows what the dock shows before it
+    // lands and the two match when it does. The copy carries no surface and
+    // no question: the box is the surface, and the two lines of text above
+    // are the question. The first copy fades in as the move starts; a copy
+    // taken after the dock changed takes its place at once.
+    const drawRows = (node: HTMLElement, dock: HTMLElement) => {
+        const frame = dock.parentElement;
+        const copy = frame?.cloneNode(true);
+
+        if (!frame || !(copy instanceof HTMLElement)) {
+            return;
+        }
+
+        const first = rows.current === null;
+        const at = frame.getBoundingClientRect();
+        const box = dock.getBoundingClientRect();
+        const surface = copy.querySelector<HTMLElement>('[data-dock-box]');
+
+        copy.inert = true;
+        copy.querySelectorAll('[id]').forEach((part) => part.removeAttribute('id'));
+        copy.querySelector<HTMLElement>('[data-dock-question]')?.style.setProperty(
+            'visibility',
+            'hidden',
+        );
+        // The copy is not the dock's box, which this move heads for.
+        surface?.removeAttribute('data-dock-box');
+
+        if (surface) {
+            Object.assign(surface.style, {
+                background: 'none',
+                borderColor: 'transparent',
+                boxShadow: 'none',
+                backdropFilter: 'none',
+            });
+        }
+
+        Object.assign(copy.style, {
+            position: 'absolute',
+            top: `${at.top - box.top - node.clientTop}px`,
+            left: `${at.left - box.left - node.clientLeft}px`,
+            width: `${at.width}px`,
+            opacity: first ? '0' : '1',
+        });
+
+        rows.current?.remove();
+        rows.current = copy;
+        node.appendChild(copy);
+
+        if (first) {
+            void copy.offsetWidth;
+            copy.style.transition = 'opacity 240ms ease var(--ws-delay)';
+            copy.style.opacity = '1';
+        }
+    };
 
     // Heads for `rect`, and says whether that changed the target. A new
     // target mid-move takes the time the move has left, with no delay, so the
@@ -275,6 +333,10 @@ const LandingTravel = ({ onLanded, onDone }: { onLanded: () => void; onDone: () 
                 if (moved) {
                     node.style.boxShadow = getComputedStyle(dock).boxShadow;
                 }
+
+                if (moved || rows.current === null) {
+                    drawRows(node, dock);
+                }
             } else {
                 head(node, arrival(besidePanel));
             }
@@ -284,7 +346,11 @@ const LandingTravel = ({ onLanded, onDone }: { onLanded: () => void; onDone: () 
 
         follow();
 
-        return () => cancelAnimationFrame(frame);
+        return () => {
+            cancelAnimationFrame(frame);
+            rows.current?.remove();
+            rows.current = null;
+        };
     }, [besidePanel]);
 
     return (
