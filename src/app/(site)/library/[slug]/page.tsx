@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
 import WithdrawnArtifact from '@/components/organisms/Library/WithdrawnArtifact';
+import { sharesBackendFor } from '@/lib/chat/shareStore';
 import { libraryAdmin, libraryView } from '@/lib/library/admin';
 import { artifactPath } from '@/lib/library/artifact';
+import { libraryChartData } from '@/lib/library/chartData';
 import { artifactBySlug, replacementChoices } from '@/lib/library/store';
 import { NOT_FOUND_METADATA, pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
@@ -86,10 +89,16 @@ const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPage
         );
     }
 
+    const chartData =
+        found.artifact.kind === 'chart'
+            ? await libraryChartData(sharesBackendFor(await headers()), found.artifact, SITE_ORIGIN)
+            : null;
+
     return (
         <main>
             <LibraryArtifact
                 artifact={found.artifact}
+                chartData={chartData}
                 origin={SITE_ORIGIN}
                 accessed={new Date()}
                 replacements={replacements}

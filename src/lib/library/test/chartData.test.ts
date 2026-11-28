@@ -1,0 +1,163 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import type { SharesBackend } from '../../chat/apisShares.ts';
+import { componentRead, DATASET_FRAME } from '../../studio/test/fixtures/component-read.ts';
+import describedChart from '../../studio/test/fixtures/descriptions/envelope-line-chart-described.json' with { type: 'json' };
+import { libraryChartData } from '../chartData.ts';
+
+const artifact = {
+    slug: 'health-expenditure',
+    shareId: 'Ab3dEf7h',
+    title: 'Health expenditure per capita',
+    description: 'Health expenditure per person across three countries.',
+    sources: [{ name: 'World Development Indicators', url: '/data/sources/wdi' }],
+};
+const ORIGIN = 'https://developmentfinance.org';
+const CSV = '/api/share/Ab3dEf7h/cards/health/data?slot=2&format=csv&bundle=false';
+const countries = [
+    { ref: 'country/KEN', label: 'Kenya', value: 91.127 },
+    { ref: 'country/LBR', label: 'Liberia', value: 0 },
+    { ref: 'country/NER', label: 'Niger', value: 649.3679 },
+];
+
+const slotBody = (period: string, licence: string) => {
+    const body = componentRead('cmp_test', 2, DATASET_FRAME);
+
+    return {
+        ...body,
+        resolved_payload: {
+            ...body.resolved_payload,
+            component: {
+                ...describedChart.component,
+                type: 'bar_chart',
+                category_axis: { mode: 'entity', category_dimension: 'country', period },
+                series: countries.map(({ label, value }) => ({
+                    label,
+                    unit: 'USD',
+                    points: [
+                        { period, value },
+                        { period: '2022', value: 99 },
+                    ],
+                })),
+            },
+            description: {
+                ...describedChart.description,
+                about: {
+                    measure: { label: 'current health expenditure per capita', definition: null },
+                    drawn: {
+                        dimensions: [
+                            {
+                                property: { ref: 'observationAbout', label: 'country' },
+                                count: 3,
+                                of: 3,
+                                values: countries,
+                            },
+                        ],
+                    },
+                },
+                sources: [
+                    {
+                        ref: 'provenance/WorldDevelopmentIndicators',
+                        label: 'World Development Indicators',
+                        licence,
+                    },
+                ],
+            },
+        },
+    };
+};
+
+const backend = (mode: 'live' | 'snapshot', slot: () => Response): SharesBackend => ({
+    base: 'https://apis.example',
+    nameCaller: () => {},
+    fetch: async (input) => {
+        const path = new URL(String(input)).pathname;
+
+        if (path === '/api/presentation/shares/Ab3dEf7h') {
+            return Response.json({
+                id: artifact.shareId,
+                kind: 'card',
+                mode,
+                title: artifact.title,
+                slots: [
+                    {
+                        slot: 2,
+                        card: { component_id: 'cmp_test', revision: 2, frame: DATASET_FRAME },
+                    },
+                ],
+                payload: { widgets: [{ id: 'health', kind: 'chart', slot: 1 }] },
+                created_at: '2026-11-28T00:00:00Z',
+            });
+        }
+
+        assert.equal(path, '/api/presentation/shares/Ab3dEf7h/slots/2');
+
+        return slot();
+    },
+});
+
+test('a pinned country chart publishes only its plotted year, exact values and its slot CSV', async () => {
+    const licence = 'https://creativecommons.org/licenses/by/4.0/';
+    const data = await libraryChartData(
+        backend('snapshot', () => Response.json(slotBody('2023', licence))),
+        artifact,
+        ORIGIN,
+    );
+
+    assert.ok(data);
+    assert.deepEqual(
+        data.rows,
+        countries.map(({ label, value }) => ({
+            series: label,
+            period: '2023',
+            value,
+            unit: 'USD',
+        })),
+    );
+    assert.deepEqual([data.seriesHeading, data.periodHeading], ['Country', 'Year']);
+    assert.equal(data.dataset.temporalCoverage, '2023');
+    assert.equal(data.dataset.variableMeasured, 'current health expenditure per capita');
+    assert.deepEqual(data.dataset.isBasedOn, [
+        {
+            '@type': 'Dataset',
+            name: 'World Development Indicators',
+            url: `${ORIGIN}/data/sources/wdi`,
+            license: licence,
+        },
+    ]);
+    assert.equal(data.dataset.license, licence);
+    assert.equal(data.csvHref, CSV);
+    assert.deepEqual(data.dataset.distribution, {
+        '@type': 'DataDownload',
+        encodingFormat: 'text/csv',
+        contentUrl: `${ORIGIN}${CSV}`,
+    });
+});
+
+test('a live chart reports the served period and leaves an unknown licence out', async () => {
+    const data = await libraryChartData(
+        backend('live', () => Response.json(slotBody('2025-Q2', 'unknown'))),
+        artifact,
+        ORIGIN,
+    );
+
+    assert.ok(data);
+    assert.deepEqual(data.window, { start: '2025-Q2', end: '2025-Q2' });
+    assert.deepEqual(
+        [data.periodHeading, data.dataset.temporalCoverage],
+        ['Period', '2025-04/2025-06'],
+    );
+    assert.equal(data.dataset.license, undefined);
+    assert.equal(data.dataset.isBasedOn?.[0].license, undefined);
+});
+
+test('an unreadable slot does not replace a Library page with an error', async () => {
+    const data = await libraryChartData(
+        backend('live', () => Response.json({ code: 'not_found' }, { status: 404 })),
+        artifact,
+        ORIGIN,
+    );
+
+    assert.equal(data, null);
+});
