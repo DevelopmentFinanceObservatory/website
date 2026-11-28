@@ -554,11 +554,12 @@ export const updateArtifact = (
         }),
     );
 
-/** The text fields and revision of artifact `id` while it is on show, else
- *  null. The edit route checks the fields an edit changes against them. */
+/** The text, topics and revision of artifact `id` while it is on show, else
+ *  null. The edit route checks the fields an edit changes against them, and
+ *  answers a stale edit with them. */
 export const artifactText = async (
     id: string,
-): Promise<(Omit<ArtifactText, 'topics'> & { revision: number }) | null> => {
+): Promise<(ArtifactText & { revision: number }) | null> => {
     const [row] = await db
         .select({
             title: libraryArtifact.title,
@@ -570,7 +571,7 @@ export const artifactText = async (
         .from(libraryArtifact)
         .where(and(eq(libraryArtifact.id, id), live));
 
-    return row ?? null;
+    return row ? { ...row, topics: (await topicsOf([id])).get(id) ?? [] } : null;
 };
 
 /** An artifact's slug and the share the Library made for it, with that

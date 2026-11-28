@@ -225,6 +225,57 @@ export const sameField = (
 export const isArtifactChangedRefusal = (problem: unknown): boolean =>
     asRecord(problem)?.['code'] === 'artifact_changed';
 
+/** The stored text of an artifact and the revision it is at. */
+export type StoredText = { text: ArtifactText; revision: number };
+
+const isText = (value: unknown): value is string => typeof value === 'string';
+const isTextOrNull = (value: unknown): value is string | null =>
+    value === null || typeof value === 'string';
+
+/** The latest stored text and revision an `artifact_changed` refusal
+ *  carries, or null when the refusal is another one or carries none that
+ *  reads. */
+export const readLatest = (problem: unknown): StoredText | null => {
+    if (!isArtifactChangedRefusal(problem)) {
+        return null;
+    }
+
+    const latest = asRecord(asRecord(problem)?.['latest']);
+    const { title, description, contentTitle, content, topics, revision } = latest ?? {};
+
+    return isText(title) &&
+        isText(description) &&
+        isTextOrNull(contentTitle) &&
+        isTextOrNull(content) &&
+        Array.isArray(topics) &&
+        topics.every(isText) &&
+        typeof revision === 'number' &&
+        Number.isInteger(revision)
+        ? { text: { title, description, contentTitle, content, topics }, revision }
+        : null;
+};
+
+/** The fields of `draft` that hold something else in `latest`, in the
+ *  dialog's order. An empty optional field matches a missing one, and topics
+ *  match whatever their order. */
+export const differingFields = (
+    draft: ArtifactText,
+    latest: ArtifactText,
+): (keyof ArtifactText)[] => {
+    const topics = (text: ArtifactText) => [...text.topics].sort().join('\n');
+    const fields: (keyof ArtifactText)[] = [
+        'title',
+        'description',
+        'topics',
+        'contentTitle',
+        'content',
+    ];
+
+    return fields.filter((field) =>
+        field === 'topics' ? topics(draft) !== topics(latest) : !sameField(draft, latest, field),
+    );
+};
+
 /** The sentence a failure of the check shows, or null for a refusal of
  *  sentences, which show under their fields. */
 export const evergreenFailureText = (answer: EvergreenAnswer): string | null => {
