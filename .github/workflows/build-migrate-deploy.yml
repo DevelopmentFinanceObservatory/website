@@ -178,12 +178,18 @@ jobs:
       # The Library share check Job (db/check-library-shares.ts, `node
       # dist/check-library-shares.cjs`) reads `library_artifact`, so it moves
       # only once the migrations that make that table have run. infra defines
-      # the Job and its daily schedule and sets LIBRARY_SHARE_CHECK_JOB_WEBSITE,
-      # so an environment without the Job skips this step.
+      # the Job and its daily schedule in both environments and sets
+      # LIBRARY_SHARE_CHECK_JOB_WEBSITE in each. An empty variable would leave
+      # the Job on an older image, so the step fails on one.
       - name: Point the Library share check job at the new image
-        if: vars.LIBRARY_SHARE_CHECK_JOB_WEBSITE != ''
+        env:
+          JOB: ${{ vars.LIBRARY_SHARE_CHECK_JOB_WEBSITE }}
         run: |
-          gcloud run jobs update "${{ vars.LIBRARY_SHARE_CHECK_JOB_WEBSITE }}" \
+          if [ -z "$JOB" ]; then
+            echo "::error::LIBRARY_SHARE_CHECK_JOB_WEBSITE is empty in this environment. infra defines the Library share check Job in dev and production; set the variable to the Job name in the website stack outputs (dev dfo-dev-website-staging-library-share-check, production dfo-prod-website-library-share-check; deploy/README.md, Library share check)."
+            exit 1
+          fi
+          gcloud run jobs update "$JOB" \
             --image="${{ steps.pinned.outputs.image }}" \
             --region="${{ vars.REGION }}" \
             --project="${{ vars.PROJECT_ID }}" \
