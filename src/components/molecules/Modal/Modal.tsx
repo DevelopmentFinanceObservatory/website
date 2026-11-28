@@ -28,6 +28,9 @@ export type ModalProps = {
     // a drawer opened beside the content it edits; a keyboard user then
     // cannot Tab into the dialog until they click it.
     autoFocus?: boolean;
+    // A CSS selector for the element inside the dialog that takes focus when
+    // it opens, in place of the first tabbable element (the close button).
+    initialFocus?: string;
     className?: string;
     children: ReactNode;
 };
@@ -47,6 +50,7 @@ const Modal = ({
     fit = false,
     footer,
     autoFocus = false,
+    initialFocus,
     className,
     children,
 }: ModalProps) => {
@@ -76,7 +80,12 @@ const Modal = ({
                                 ? document.activeElement
                                 : null;
 
-                        if (!autoFocus) event.preventDefault();
+                        if (initialFocus) {
+                            event.preventDefault();
+                            content?.querySelector<HTMLElement>(initialFocus)?.focus();
+                        } else if (!autoFocus) {
+                            event.preventDefault();
+                        }
                     }}
                     onCloseAutoFocus={(event) => {
                         event.preventDefault();

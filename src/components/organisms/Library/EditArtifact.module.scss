@@ -5,6 +5,31 @@
     @include flex(column, flex-start, stretch);
 
     gap: rem(16);
+
+    // The Button atom draws no focus ring of its own.
+    button:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.replacementForm {
+    width: 100%;
+    max-width: rem(480);
+}
+
+.replacementActions {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(8);
+}
+
+.current {
+    @include font-size(13px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
 }
 
 .actions {
@@ -18,6 +43,10 @@
 .form .actions .delete > * {
     color: var(--color-red);
     box-shadow: inset 0 0 0 1px var(--color-red);
+}
+
+.replacement {
+    margin: rem(8) 0;
 }
 
 .warning,

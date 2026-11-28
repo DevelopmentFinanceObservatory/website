@@ -1,0 +1,716 @@
+[
+    {
+        "id": "k01",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 19,
+                "text": "Health aid for 2022",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 78,
+                "text": "Aid to the health sector from each donor, split into basic and general health.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 23,
+                "text": "Two kinds of health aid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 107,
+                "text": "Basic health covers clinics, nutrition and disease control, and general health covers policy and hospitals.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k02",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 29,
+                "text": "Debt service relative to 2010",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 85,
+                "text": "Each country's payments on external debt as an index of their level in the base year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Index",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 85,
+                "text": "Each line starts at 100 in the base year, so a value of 150 means half as much again.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k03",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 39,
+                "text": "Concessional lending, 2005 through 2020",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 56,
+                "text": "Loans with a grant element large enough to count as aid.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Lenders",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 38,
+                "text": "Pick a lender to show its loans alone.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k04",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 28,
+                "text": "Bilateral aid in 2019 prices",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 92,
+                "text": "Amounts are adjusted for inflation to the price level of one year, so years can be compared.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 9,
+                "text": "Deflators",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 71,
+                "text": "Each donor's deflator comes from its own price index and exchange rate.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k05",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Private sector instruments",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 74,
+                "text": "Loans, equity and guarantees that official agencies give to private firms.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 25,
+                "text": "The 2018 change in method",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 45,
+                "text": "Before 2018 these were counted at face value.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 46,
+                "end": 92,
+                "text": "From 2018 only the part that is a gift counts.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k06",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 23,
+                "text": "Loan reporting by donor",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 66,
+                "text": "How each donor reports the loans it makes to developing countries.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 27,
+                "text": "Why the line breaks in 2018",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 83,
+                "text": "Donors moved from reporting cash flows to reporting the grant element of each loan.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k07",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 34,
+                "text": "Each donor's newest reporting year",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 92,
+                "text": "Each donor appears at the most recent year it has reported, which can differ between donors.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 15,
+                "text": "Missing reports",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 58,
+                "text": "A grey bar means the donor has not reported for that year.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k08",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 18,
+                "text": "Pledges as of 2024",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 66,
+                "text": "Money donors have promised to the climate funds, pledge by pledge.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 16,
+                "text": "Pledged and paid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 61,
+                "text": "Hatched bars show the part of a pledge that has been paid in.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k09",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Aid to small island states",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 90,
+                "text": "Bilateral and multilateral aid to the members of the small island developing states group.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 24,
+                "text": "Since the 2015 agreement",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 100,
+                "text": "The line marks the year the SAMOA Pathway was reviewed, so aid on either side of it can be compared.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k10",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 14,
+                "text": "Food aid, 2021",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 50,
+                "text": "Emergency food and food security aid by recipient.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 15,
+                "text": "Main recipients",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 56,
+                "text": "Ethiopia and Yemen received the most food aid that year.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k21",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 29,
+                "text": "Debt statistics, 2024 edition",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 75,
+                "text": "What poorer countries owe abroad, as the World Bank publishes it each year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 9,
+                "text": "Revisions",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 77,
+                "text": "Each edition adds the newest year of data and can revise the years before it.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k11",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 33,
+                "text": "Water and sanitation aid by donor",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 78,
+                "text": "Spending on drinking water, sanitation and hygiene, by the donor that gave it.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Shading",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 27,
+                "text": "Darker blue means more aid.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k12",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 25,
+                "text": "Aid to tax administration",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 56,
+                "text": "Support for revenue authorities, tax policy and customs.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "Who gives most",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 74,
+                "text": "The European Union gives more for tax administration than any other donor.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k13",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 20,
+                "text": "Kinds of debt relief",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 42,
+                "text": "Ways creditors reduce what a country owes.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Terms",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 50,
+                "text": "Rescheduling: payments are moved to later years.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 53,
+                "end": 94,
+                "text": "Write-off: part of the debt is cancelled.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 97,
+                "end": 157,
+                "text": "Swap: debt is cancelled in return for spending on a set aim.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k14",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 29,
+                "text": "Spending in the central Sahel",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 54,
+                "text": "Aid to Burkina Faso, Chad, Mali, Mauritania and Niger.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 11,
+                "text": "Main donors",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 94,
+                "text": "Three donors gave over half the total last year:\n- France\n- the United States\n- the World Bank",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k15",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Money sent home by migrants",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 79,
+                "text": "Money migrants send home has grown faster than aid for most of the past decade.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 29,
+                "text": "Where the estimates come from",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 61,
+                "text": "Estimates come from central bank balance of payments records.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k16",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Imputed multilateral shares",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 94,
+                "text": "The part of each donor's core funding to multilateral agencies that ends up in each recipient.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 20,
+                "text": "How shares are split",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 97,
+                "text": "Each agency's spending by country is split back to the donors in proportion to what they paid in.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k17",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 23,
+                "text": "Top donors to education",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 71,
+                "text": "Donors ranked by the aid they give to education in the year you choose.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "Top donors",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 54,
+                "text": "Germany gives about USD 2 billion a year to education.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k18",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 32,
+                "text": "Newest reported year, by country",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 84,
+                "text": "The latest reported aid for each country, with the year it refers to shown on hover.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 18,
+                "text": "Shading on the map",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 74,
+                "text": "Each country is shaded by the aid it received in its latest reported year.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k19",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 17,
+                "text": "UN appeal funding",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 56,
+                "text": "Funding requested in UN appeals and the share of it met.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 11,
+                "text": "Funding gap",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 73,
+                "text": "Appeals were the least funded on record, with under half of requests met.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "k20",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 12,
+                "text": "Aid channels",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 49,
+                "text": "The organisations donors route their aid through.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 15,
+                "text": "Spending bodies",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 128,
+                "text": "The chart splits aid by who spends it:\n- the public sector\n- NGOs and civil society\n- multilateral agencies\n- the private sector",
+                "label": "evergreen"
+            }
+        ]
+    }
+]

@@ -165,6 +165,10 @@ gcloud run jobs execute "$SHARE_MIGRATE_JOB_WEBSITE" --region <region> --wait
 
 It exits 0 when every share is imported or unchanged. On exit 1, read the `share <id>: <code>` lines in its log, fix what they name, and run it again; a run again is safe. `docs/share-export.md` lists the codes. infra defines the Job. It runs as the runtime service account with the `WEBSITE_DB_*` settings, since it writes `share_token`, and has `SEARCH_API_BASE` and the secret `PRESENTATION_SHARE_IMPORT_PRINCIPAL`, which dfo-apis' share import route checks.
 
+## Library share check
+
+A Cloud Run Job named by `LIBRARY_SHARE_CHECK_JOB_WEBSITE` reads every published Library artifact's share from dfo-apis once a day. It runs the website image with the command `node dist/check-library-shares.cjs` (`db/check-library-shares.ts`, bundled by `pnpm build:check-library-shares`). `build-migrate-deploy.yml` points it at each new image after the service update, only where the variable is set. infra defines the Job, its Scheduler trigger and the alert on its failure line. It runs as the runtime service account with the `WEBSITE_DB_*` settings and `SEARCH_API_BASE`. `docs/development.md` ("Library share check") lists what it reads and logs.
+
 ## Shares left for cleanup
 
 Each signed-in owner's share in dfo-apis has its write token in `share_token`. When the website cannot take such a share down, it writes the share id, the owner, the token and dfo-apis' refusal code to `share_cleanup` and logs `share_cleanup_recorded` with the share id at error level. Two paths write a row: an account deletion whose take-down dfo-apis refuses with a `write_token_*` code (`takeDownUserShares` in `src/lib/chat/apisShares.ts`), and a new share whose token could not be stored and whose take-down failed too (`createOwnedShare`). The share stays public until an operator takes it down. The rows outlive the user. `share_cleanup_recorded` is the alert hook, so alert on that text and keep it unchanged in the code. A row the website could not write is logged as `share_cleanup_not_recorded`, with the share id, and needs the same take-down.
@@ -197,17 +201,18 @@ doesn't change between environments, only the environment it targets does.
 These are the same names `ai` uses, except the service and migration Job
 vars, so the `infra` foundation outputs slot into both repos the same way.
 
-| Name                        | Kind   | Example value                                                                               | Who provides it                                 |
-| --------------------------- | ------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `WIF_PROVIDER`              | secret | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github-actions` | infra (WIF pool/provider)                       |
-| `WIF_SA`                    | secret | `dfo-website-staging-deployer@dev-fin-observatory.iam.gserviceaccount.com`                  | infra (deployer service account)                |
-| `REGION`                    | var    | `northamerica-northeast1` (dev), `europe-west1` (production)                                | infra                                           |
-| `PROJECT_ID`                | var    | `dev-fin-observatory` (dev)                                                                 | infra                                           |
-| `AR_REPO`                   | var    | `dfo-website-staging` (dev)                                                                 | infra (Artifact Registry repo, per environment) |
-| `SERVICE_WEBSITE`           | var    | `dfo-dev-website-staging` (dev)                                                             | infra                                           |
-| `MIGRATE_JOB_WEBSITE`       | var    | `dfo-dev-website-staging-migrate` (dev)                                                     | infra (migration Cloud Run Job)                 |
-| `EXPORT_JOB_WEBSITE`        | var    | `dfo-prod-website-export` (production only)                                                 | infra (event export Cloud Run Job)              |
-| `SHARE_MIGRATE_JOB_WEBSITE` | var    | `dfo-dev-website-staging-share-migrate` (dev)                                               | infra (share migration Cloud Run Job)           |
+| Name                              | Kind   | Example value                                                                               | Who provides it                                 |
+| --------------------------------- | ------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `WIF_PROVIDER`                    | secret | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github-actions` | infra (WIF pool/provider)                       |
+| `WIF_SA`                          | secret | `dfo-website-staging-deployer@dev-fin-observatory.iam.gserviceaccount.com`                  | infra (deployer service account)                |
+| `REGION`                          | var    | `northamerica-northeast1` (dev), `europe-west1` (production)                                | infra                                           |
+| `PROJECT_ID`                      | var    | `dev-fin-observatory` (dev)                                                                 | infra                                           |
+| `AR_REPO`                         | var    | `dfo-website-staging` (dev)                                                                 | infra (Artifact Registry repo, per environment) |
+| `SERVICE_WEBSITE`                 | var    | `dfo-dev-website-staging` (dev)                                                             | infra                                           |
+| `MIGRATE_JOB_WEBSITE`             | var    | `dfo-dev-website-staging-migrate` (dev)                                                     | infra (migration Cloud Run Job)                 |
+| `EXPORT_JOB_WEBSITE`              | var    | `dfo-prod-website-export` (production only)                                                 | infra (event export Cloud Run Job)              |
+| `SHARE_MIGRATE_JOB_WEBSITE`       | var    | `dfo-dev-website-staging-share-migrate` (dev)                                               | infra (share migration Cloud Run Job)           |
+| `LIBRARY_SHARE_CHECK_JOB_WEBSITE` | var    | `dfo-dev-website-staging-library-share-check` (dev)                                         | infra (Library share check Cloud Run Job)       |
 
 The service names above are the ones infra defines; whatever appears in
 its `website` stack outputs goes in this var verbatim.
@@ -285,6 +290,7 @@ The app defines the definitive contract once it exists. Known so far:
 | `API_KEYS_MAX_PER_ACCOUNT`               | How many API keys one account may hold in the API keys panel; default 5. Housekeeping, not security, since limits are per account                                                                                                                                                            |
 | `ADMIN_EMAILS`                           | Comma-separated emails, matched case-insensitively against a signed-in user with a verified email, who may open `/admin/api-keys` (every account's keys, quotas and limits; create and delete). Everyone else gets a 404; unset or empty means no admins; secret set by infra                |
 | `LIBRARY_ENABLED`                        | Exactly `true` makes the Library public; any other value, or none, limits `/library` and its footer link to Library admins (`ADMIN_EMAILS`), who see it unindexed; plain env var set by the infra repository's `library_enabled`                                                             |
+| `TYPESAFE_API_KEY`                       | TypeSafe API key for the Library's evergreen check on each publish and text edit (`src/lib/library/evergreen.ts`). Unset, each publish and text edit answers 503 and logs `library_evergreen_unavailable` with cause `missing_key`, and the rest of the site works; secret set by infra      |
 | `OPENAI_APPS_CHALLENGE`                  | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                                                                                                                                            |
 | `TRUSTED_PROXY_HOPS`                     | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits, the guest Studio allowance and the caller digest; default 0 (Cloud Run's); +1 per load balancer                                                                                      |
 | `WEBSITE_DB_INSTANCE_CONNECTION_NAME`    | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                                                                                                                                                |

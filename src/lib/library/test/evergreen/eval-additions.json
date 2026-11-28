@@ -1,0 +1,107 @@
+[
+    {
+        "id": "b01",
+        "title": "Aid to least developed countries",
+        "description": "ODA to the least developed countries as a share of each donor's total.",
+        "contentTitle": "Trend",
+        "content": "Each line is one donor's share over time. A rising line means the donor sends a larger part of its aid to the poorest countries."
+    },
+    {
+        "id": "b02",
+        "title": "Concessional lending by the World Bank",
+        "description": "Loans and grants from the International Development Association, by region.",
+        "contentTitle": "Growth",
+        "content": "IDA commitments peaked in 2022, during the pandemic response. Commitments are what the Bank agrees to lend in the fiscal year, whether or not it pays out."
+    },
+    {
+        "id": "b03",
+        "title": "Remittances to low- and middle-income countries",
+        "description": "Money migrants send home, as the World Bank estimates it.",
+        "contentTitle": "Latest",
+        "content": "Remittances reached USD 656 billion in 2023, more than ODA and foreign direct investment together."
+    },
+    {
+        "id": "b04",
+        "title": "Remittances and other flows",
+        "description": "Remittances, ODA and foreign direct investment to low- and middle-income countries, in current US dollars.",
+        "contentTitle": "Latest data",
+        "content": "The chart shows the latest year each source reports. The three series come from different sources, so their latest years can differ."
+    },
+    {
+        "id": "b05",
+        "title": "Debt service, change since 2015",
+        "description": "How much more or less each country pays in external debt service than in 2015.",
+        "contentTitle": "Change since 2015",
+        "content": "Zambia's payments fell after its default in 2020. Kenya's have more than tripled."
+    },
+    {
+        "id": "b06",
+        "title": "Debt service compared with 2015",
+        "description": "Each bar is the change in a country's external debt service from its 2015 level, in percent.",
+        "contentTitle": "How to read it",
+        "content": "Bars to the right mean a country pays more than in 2015. The series starts in 2015 because that is the first year the source covers every country."
+    },
+    {
+        "id": "b07",
+        "title": "ODA fell 7% in 2024",
+        "description": "Net ODA from DAC members, in constant prices.",
+        "contentTitle": null,
+        "content": "The drop followed cuts by France, Germany and the United Kingdom."
+    },
+    {
+        "id": "b08",
+        "title": "ODA from DAC members, 2000 to 2024",
+        "description": "Net ODA from DAC members each year since 2000, in constant prices.",
+        "contentTitle": "Method",
+        "content": "From 2018 the OECD counts loans at their grant equivalent, so earlier years use a different method. The break is marked on the axis."
+    },
+    {
+        "id": "b09",
+        "title": "Three donors gave half of all climate finance",
+        "description": "Climate finance by provider, as reported to the UNFCCC.",
+        "contentTitle": "Notes",
+        "content": "Providers report under the UNFCCC's common tabular format. Multilateral finance is attributed to the providers that fund the institutions."
+    },
+    {
+        "id": "b10",
+        "title": "Climate finance by provider",
+        "description": "Climate finance by provider, as reported to the UNFCCC.",
+        "contentTitle": "Notes",
+        "content": "The common tabular format was adopted in 2018 and first used for the 2021 reports. Before then providers used their own tables, so totals before 2021 are less comparable."
+    },
+    {
+        "id": "b11",
+        "title": "Arrears on external debt",
+        "description": "Overdue payments of principal and interest on external public debt.",
+        "contentTitle": "Record",
+        "content": "Arrears hit a record in 2022, as several countries stopped paying while they restructured. Arrears count only payments past their due date."
+    },
+    {
+        "id": "b12",
+        "title": "Arrears, explained",
+        "description": "What counts as an arrear on external public debt.",
+        "contentTitle": "Definition",
+        "content": "A payment is in arrears from the day after it falls due. A country that restructures its debt can clear its arrears, and the new terms then apply."
+    },
+    {
+        "id": "b13",
+        "title": "Sudan's humanitarian funding",
+        "description": "Humanitarian funding to Sudan against what the UN appeal asked for.",
+        "contentTitle": "Gap",
+        "content": "The 2024 appeal was less than half funded by the end of the year. Funding turned down after 2021, when donor attention moved to Ukraine."
+    },
+    {
+        "id": "b14",
+        "title": "Humanitarian appeals and funding",
+        "description": "Each UN appeal's requirement and the funding it received, by year.",
+        "contentTitle": "How to read it",
+        "content": "The grey bar is what the appeal asked for, and the blue bar is what donors gave. An appeal runs for one calendar year."
+    },
+    {
+        "id": "b15",
+        "title": "Gavi's funding, 2021 to 2025",
+        "description": "Pledges to Gavi, the Vaccine Alliance, for its strategy period.",
+        "contentTitle": "Change",
+        "content": "Pledges for 2026 to 2030 came in below the alliance's target of USD 11.9 billion. Each strategy period covers five years of vaccine programmes."
+    }
+]

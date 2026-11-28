@@ -26,6 +26,7 @@ export const generateMetadata = async (): Promise<Metadata> => {
     return {
         title: 'Library — DFO',
         description: DESCRIPTION,
+        alternates: { canonical: '/library' },
         openGraph: pageOpenGraph({ title: 'Library', description: DESCRIPTION }),
         ...(view === 'preview' && { robots: { index: false, follow: false } }),
     };

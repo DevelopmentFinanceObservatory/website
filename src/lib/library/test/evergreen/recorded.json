@@ -1,0 +1,1931 @@
+{
+    "model": "jev-1.14.0",
+    "groups": [
+        {
+            "ids": [
+                "n01",
+                "e02",
+                "e03",
+                "n03",
+                "e04",
+                "n09",
+                "n10",
+                "e11",
+                "e12",
+                "e13",
+                "e14",
+                "n14",
+                "e15",
+                "n15",
+                "e16",
+                "n17",
+                "e18",
+                "n18",
+                "n19",
+                "e20"
+            ],
+            "content": "ODA fell by 7.1% in 2024, the largest drop in a decade.\nDebt service is principal repaid plus interest paid on external debt in the year shown.\nEach bar splits debt service by creditor type: bilateral, multilateral and private.\nDebt service payments have risen sharply since 2020 and are expected to keep climbing.\nDonors report climate finance under their own methods, so the amount of private finance counted as mobilised differs between countries.\nLow-income countries now spend more on debt service than on health.\nChina is the largest bilateral creditor to low-income countries.\nIn-donor refugee costs count as ODA when they cover a refugee's first year in the donor country.\nThe table lists every country that reports to the International Debt Statistics.\nMultilateral development banks lend on concessional terms to low-income countries and on market terms to middle-income countries.\nThe key number is the sum of all disbursements in the latest year the source reports.\nUkraine is the largest single recipient.\nCommitments are what a donor promises; disbursements are what it pays out in the year.\nExternal debt of low- and middle-income countries stands at USD 8.8 trillion.\nA country's income group follows the World Bank's classification for the fiscal year of the data.\nMost donors are below the target.\nShares are calculated from current prices, so they do not depend on the base year.\nHealth is the sector that receives the most ODA.\nThe share going to least developed countries has fallen for three years in a row.\nUnder the Paris Agreement's new goal, developed countries are to lead in providing at least USD 300 billion a year in climate finance by 2035.",
+            "requests": [
+                {
+                    "digest": "7c252d645125b6e163cc4520b98eee1507bc5d67fd01dd8134edddece1431ba0",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.25
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "899783a473e5bbe42ffd5e3e1e97d173acce2f2cd7d4c90f8123bdaa72e140ea",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.57
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "5a094f1b82d72050de97d3739ece1643681d01d15695a8234a26920fa05cabee",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "8f5268bb18c6b6737d170eccd320bb2f756f43f59c307f53925389793157c1a8",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.89
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "7dfb05067add20dd8e4637a1d70df9fb512ffdc3cc6c43d011a549ad2e1d4fce",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "c86561f41df4c465b7308362ca0f6c774d3e3c66ed4956b056f3941cefbe4958",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.2
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.22
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.29
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.76
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.94
+                        }
+                    }
+                },
+                {
+                    "digest": "47822514663bc41077df3ce601f7acc691e38155dd62a83f9b2a8d5d64cf76bf",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.2
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "a8d402a65d6c795e4992435a145e0c830ac45e6d6ac9f8a6f150471ac9d9bde4",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.19
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.25
+                        }
+                    }
+                },
+                {
+                    "digest": "88c374c6f1fb31333cabb239ba2a56ed5e039507164d97b5dcbd03042d02f604",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.59
+                        }
+                    }
+                },
+                {
+                    "digest": "9f0bbcd30d08fd6f5e2c40be7b3d3c81578ea1068d78757b34509c8d218a12bb",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.24
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.3
+                        }
+                    }
+                },
+                {
+                    "digest": "8c6096b801aff4d470ff14417e4b7b602e72a9afa78c730213f84c8bdd39c570",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.88
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.18
+                        }
+                    }
+                },
+                {
+                    "digest": "1f8f74382371cb73ddc6c80eea05f0868b6fa557feb449b32a7afe1dab3c7ffe",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.19
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "ddd0f80e7de5fc796b726acf91045553ed17baaddc561bb21ac6b5ada2f566ed",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.23
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.06
+                        }
+                    }
+                },
+                {
+                    "digest": "6924986309a52720fcb8e570026a5cf1e981f93db85c2da793b64584c14b50e8",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                },
+                {
+                    "digest": "a1b76f7773dd92c35ff296c787453be650cfccee48ef0de8a03263f658ff6477",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.3
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.22
+                        }
+                    }
+                },
+                {
+                    "digest": "7c386b2c43c2334638face33ab2241dfe54f3469903475e8be7a0ccbbd6d9a7d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.15
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.64
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "66c19a0eb7fc5260e49b544eec9f74dcf661951490989bb9bdc1c070e30994d3",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.32
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "205ec01e8805c54a38d1111654460e535b81a027aa5c618f72575b3a96b85a31",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.55
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "1380cf80af5c9bcc45a04eb82074a7dd9d0eee132659aff170c53487867d05c0",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.28
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.23
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.6
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "9f296859a1d67b64139f8fc9ed104527893f81b378bad13207bfe0380e800e36",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.15
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.3
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.75
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.47
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "ids": [
+                "e21",
+                "n21",
+                "e22",
+                "n22",
+                "e23",
+                "n23",
+                "e24",
+                "n24",
+                "e25",
+                "n25",
+                "e26",
+                "n26",
+                "e27",
+                "n27",
+                "e28",
+                "n28",
+                "e29",
+                "n29",
+                "n30",
+                "e31"
+            ],
+            "content": "Climate finance here covers mitigation, adaptation and projects that serve both.\nPrivate creditors hold 40% of these countries' external debt.\nPrivate finance mobilised is the private money that official interventions bring into a project.\nEthiopia receives more ODA than any other African country.\nDarker shades mean a larger share of government revenue goes to external debt service.\nThe gap between commitments and disbursements has narrowed this year.\nData come from the OECD Creditor Reporting System, which records each aid project a donor reports.\nMultilateral lending rose 12% last year.\nA country appears in grey when its source reports no value for the year selected.\nSweden gives 0.9% of its national income.\nThe IMF's Special Drawing Rights are a reserve asset, so allocating them adds no debt service.\nThis is the highest level of climate finance on record.\nNet flows are disbursements minus repayments, so they can be negative.\nDebt service will peak in 2026.\nEach dot is one country, placed by its income per person and its debt as a share of GDP.\nThe figure for 2024 is preliminary and may be revised.\nGross national income is the income a country's residents earn, at home and abroad.\nTwelve countries spend more than a fifth of revenue on debt service.\nAdaptation finance is still far below what countries need.\nBilateral ODA goes directly from a donor to a recipient; multilateral ODA passes through an organisation such as the World Bank.",
+            "requests": [
+                {
+                    "digest": "03f3881e2606c25fc07ca1db6362cf4b58cadef333a556958fc28760a9cb8475",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "dda409b960dfa93158b0249e9e7387bedbd16a0e5b17bd4514835ebf1e845d33",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.94
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "f77d53142078d78257b81c0007e0283a5be058da12ed988ea38abb0d7e19e94a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "87a2a322e9085a2d4c08074c4bcd2990cd1e42f7325f5d7bd9b3e94211abf5f8",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.22
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                },
+                {
+                    "digest": "a89ab4e0e3ff66b39e8d85764141525c37151c941d87b9df6e408556cfa7668a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.21
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "0b7c2b0b80beb7d6a2d7c6bb8943cbd547c00c4fb1f9b77b787d83017d456ef9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.91
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.94
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "40099c0a519e2b7b4248d05d51e339578dca3c7c77b631ff15c58d7f3368e781",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "1928f870f770c06f91cfeb4a6b47021fed074e5b76b103f61aa01a1dbfb88666",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.95
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                },
+                {
+                    "digest": "a3d6e06bccbcfbd5906d160d039743c174e3449d0c1f6bf908ad05a02dfb23cc",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.58
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "5c16ad5f8bd819d531e2e3122587d5568a0d5d7cf86abc8a27efa83403af2638",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.94
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "17c87cbce905394d0cf513f3d94cb79adc0be6cbad7037dc0b186522ba6833de",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.14
+                        }
+                    }
+                },
+                {
+                    "digest": "9796e2fb071c007f0773c12cd04a9e8e3b22afe25ed08e25fc56f8f41b924cbb",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.16
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.83
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.13
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "677e3c01461ebe45a955f26b689bc36e8cee0341ce9b346e2a3db0bdca238fce",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.06
+                        }
+                    }
+                },
+                {
+                    "digest": "cda92934bb0fed15a2d0ae49a0e15292c483f49d33b73bde76f3094b1b99d140",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.2
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.86
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "05329854a48fcd5f0a2dd98b8b5ec843413eaab633963c6d4ffd46b45a77169a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "f5504b565041f54d48e01965ba7498f3ca96b50f7162b9b996e27589f4a29228",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.5
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.95
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.57
+                        }
+                    }
+                },
+                {
+                    "digest": "f73d47a623169d576d0173a61b89d3f286e34757de8805f3ba7dd266aac3264a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.07
+                        }
+                    }
+                },
+                {
+                    "digest": "62b52d5ca45afb02f70a499f7fa07b7e806833cc227542697e03909115f117ef",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.9
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.63
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "2a0856d0e46abe8347623f9e015f5b5d5a8daaf775fe4e31871152faca691c84",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.92
+                        }
+                    }
+                },
+                {
+                    "digest": "b304bd7412cc45bc69eec9e641ac18920da2d18f18d60c18eb998923c7dd5dc1",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.08
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "ids": [
+                "n31",
+                "n32",
+                "e33",
+                "n33",
+                "e34",
+                "n34",
+                "n35",
+                "e36",
+                "n36",
+                "e37",
+                "n37",
+                "e38",
+                "n38",
+                "e39",
+                "n39",
+                "e40",
+                "e41",
+                "n41",
+                "e42",
+                "n43"
+            ],
+            "content": "Aid to Gaza has surged since October 2023.\nThe United States provides about 30% of all DAC ODA.\nThe heat map orders recipients by the ODA they receive, with the largest at the top.\nFrance has moved ahead of Japan in the donor ranking.\nA projection is drawn as a dashed line, and reported years as a solid one.\nZambia is so far the only country to have finished a restructuring under the Common Framework.\nSpending on education has stagnated since 2019.\nA debt sustainability analysis judges whether a country can meet its debt payments without exceptional support.\nThe average interest rate on new loans is 5.2%.\nSort the table by any column to compare countries.\nKenya pays more to bondholders than to any other creditor.\nConcessional loans carry interest rates below market rates and long grace periods.\nGrants make up the bulk of ODA to fragile states this year.\nThe World Bank's International Development Association gives grants and low-interest loans to the poorest countries.\nThe total is down from USD 240 billion a year earlier.\nThis card counts a project once, under the sector its donor assigned it.\nPercentages may not add to 100 because of rounding.\nMost of the increase comes from support to Ukraine.\nEmergency response covers relief, food aid and short-term reconstruction after a crisis.\nPakistan has the highest debt service of any lower-middle-income country.",
+            "requests": [
+                {
+                    "digest": "131c4ed74e952ce570407001fbd018c07f2b2dc74a981a44192a0d208a60de52",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.89
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.91
+                        }
+                    }
+                },
+                {
+                    "digest": "c99a44088e0eb560513fa9c7cc6544cd06caa6311d30da8407ee9186acf5eb63",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.94
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.18
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                },
+                {
+                    "digest": "0869bc31bec73ebbeee23116bd0c43bc6e0dc3f0e3194120fbdd3dc56a187474",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.87
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "da4959a1833d7ae68c55d2369edd3b62faf3943ba2dea67663e07e569809fcb0",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.94
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "07e704e9f6b9a34a1e85b3a636626a4b568e02f29d98c6ff89c5cc6c28f7477e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "125e2fa4bfd92111c563058cb1f2ae477896998c1337d984158d8c4cd816090a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.64
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.71
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.32
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "685ae7851b100ce7268e9d80a3a70cbbe5d5e7fda5f5af804286d0c05018f902",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.92
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "a400e8662bda9cbcc74c40c549554ca9de9995d94ff6717335e567a27d77681b",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.06
+                        }
+                    }
+                },
+                {
+                    "digest": "39c436a5cf4dd09fe43a07179d83ae328f4db8fd381ab04c93b65531cab30555",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                },
+                {
+                    "digest": "20df873de88d4e89f8cf4b09273bd3d7e62710720d08f66478587d8b24123042",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.15
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "486286da90da311f7717ef6572a3241f4c6f318934f09f1f992934e8bbc66415",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.71
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "313c07916b769133f7b92014547c37bd6c565a004195d0161ab732f0852cd9cd",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "58c343d073b9ed6954fc61ceae6ee4d4b32bfaae113eaf472a7f58da5a1c2bc6",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.34
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.22
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.95
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "ffacf58474e5d06a80e6edff42c600446e26ce0fa57647ec4cc93c15777178e7",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.42
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                },
+                {
+                    "digest": "66f8b52fcd63757552d0dc46ed114e46f91bce9175cde6e776b92bc5469e6982",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.93
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.6
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "82b223f7049096344863627a92de1d828d2abb9ee871fb8b524fa96d9e50e5ee",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "653b59633547e78d4caac007f6c79eac936c9730f02a8857d6728e31f1c853b5",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "3c363cde1ff49602e97874fd48983d341bdbf3f193ccb886f746d373b1902e7e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.26
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.43
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.93
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                },
+                {
+                    "digest": "1eece49dfdab1a20ded4b099ab54e9a5562267537d1685b38a2e11fb5139c80e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "6273a05d846af463f930f3ee9c74d53e182af178c085d57ba772b618716aac26",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.21
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "ids": [
+                "e44",
+                "n44",
+                "e45",
+                "n45",
+                "e46",
+                "n46",
+                "e47",
+                "n47",
+                "e48",
+                "n48",
+                "e49",
+                "e50",
+                "n50"
+            ],
+            "content": "Each line shows one donor's ODA as a share of its gross national income over time.\nThe figures show donors falling further behind their pledges.\nImputed multilateral shares assign core contributions to the countries those organisations spend in.\nAsia's share of ODA is smaller than it was in 2010.\nCountry names follow the source's own spelling.\nFour of the top five recipients are in conflict.\nThe Common Framework is the G20's process for restructuring the debt of eligible low-income countries.\nThe latest year shown is 2023.\nRead the bars from left to right: each segment is one sector's share of the total.\nNew commitments by the World Bank hit USD 128 billion.\nThe source revises earlier years when donors correct their reports.\nSwitch on \"per person\" to divide each value by the country's population.\nGhana's debt-to-GDP ratio is above 80%.",
+            "requests": [
+                {
+                    "digest": "35774902e96c829fc91ccec5f8646d0fd97e83cc343881cf39c400fda9ded927",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "29e35827c1483af5b4970585ede7526f68a307b19fbd6d098ca11a1cc1cefa76",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.13
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.93
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                },
+                {
+                    "digest": "e6c179d5d1f1ab781559aebe182d1e84dcb903d8468050288af77bc2464aebfa",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "77e1d335213810d7b5e5ba37d65002f75581ef551a00fcef30b1695a0e3a1c69",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.23
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.54
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.84
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "eb859bbe53fcdcafd969d3c55859c95a1f9f0209a62947a1c7659d0fee56eea1",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "88b32c8d3ab83bf6e8c673950249bc265b18a9499dabc318e181dd1af11ad050",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.94
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.61
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "3f44cfeed721e1c92a44887e45b57d877c4290315f50194ef89f2f5c8dc3ec31",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.28
+                        }
+                    }
+                },
+                {
+                    "digest": "e9e87108da95c300a0a06b44911c4e17b1e01c43075b06aa1d9de8cdacbffcd5",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.84
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.64
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "f1db0956f9992028ea5dc3ac2a91c7ecb995e6bec9300e2269692a448b7de564",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "c0e97bcafd7997c748a273eafa30626d90ccc9ceabac9e39182cf2c857661e0c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.45
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                },
+                {
+                    "digest": "6360d5cefb73a7da3bd4ecd1487c00928ab52d40834f5ec53754943758d21c09",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.23
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "41c115d78af60a76a8c1baa7b076ac176cc20ed7bedae06681f05e271c593799",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "7403db81cdad6168bfb345fef09fd917d257caf0d3350ebb3a5ffb9fdc4b05b6",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.85
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.55
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
