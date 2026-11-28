@@ -18,6 +18,7 @@ import { savedCanvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { liveDataThrough } from '@/lib/studio/dataThrough';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
@@ -90,8 +91,10 @@ const SingleCard = ({
  * tooltips work; nothing can be changed). Either way a card's
  * source line opens its More Info panel. A live share's data cards arrive
  * held and are filled here from the refresh route (see useLiveCards), and
- * the frame says once that its data is live and when its text was written,
- * on a strip under the sheet or the one card.
+ * the frame says once that its data is live, the period it runs through and
+ * when its text was written, on a strip under the sheet or the one card. The
+ * period is read from the cards filled so far, one for a card and the
+ * earliest and latest for a canvas.
  */
 const EmbedView = ({ shared }: { shared: SharedView }) => {
     const { kind, saved } = shared;
@@ -107,6 +110,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const infoWidget = widgets.find((widget) => widget.id === infoCardId) ?? null;
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);
+    const dataThrough = noted ? liveDataThrough(widgets, live) : null;
 
     return (
         <div
@@ -154,7 +158,9 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 />
             )}
 
-            {noted && <LiveNote live={live} className={styles.noteStrip} />}
+            {noted && (
+                <LiveNote live={live} dataThrough={dataThrough} className={styles.noteStrip} />
+            )}
 
             <CardInfoPanel
                 info={infoWidget?.info ?? null}

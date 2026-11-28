@@ -41,6 +41,7 @@ import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
+import { liveDataThrough } from '@/lib/studio/dataThrough';
 import { HANDOFF_VIA_PARAM, handoffPromptSource } from '@/lib/studio/examples';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
@@ -970,7 +971,14 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                         onNewChat={startNew}
                         onCustomize={() => modals.customize.setOpen((prev) => !prev)}
                         onShare={readOnly ? undefined : () => modals.share.show({ kind: 'whole' })}
-                        note={liveCanvas ? <LiveNote live={liveCanvas} /> : undefined}
+                        note={
+                            liveCanvas ? (
+                                <LiveNote
+                                    live={liveCanvas}
+                                    dataThrough={liveDataThrough(visibleWidgets, liveCanvas)}
+                                />
+                            ) : undefined
+                        }
                     />
                     <ChatPanel
                         draft={followDraft}

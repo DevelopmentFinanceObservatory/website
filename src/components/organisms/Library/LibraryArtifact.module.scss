@@ -409,10 +409,26 @@
     }
 }
 
-// The withdrawn notice's way back, under the hero.
+// The withdrawn notice's replacement, its way back and an admin's form,
+// under the hero.
 .withdrawn {
     @include page-band(rem(10));
+    @include flex(column, flex-start, flex-start);
 
+    gap: rem(24);
     padding-top: rem(40);
     padding-bottom: rem(140);
+}
+
+.replacedBy {
+    @include font-size(18px, 1.35);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+
+    a {
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
+    }
 }

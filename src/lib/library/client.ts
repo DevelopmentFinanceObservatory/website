@@ -118,16 +118,38 @@ export const publishRefusalText = (
     }
 };
 
-export const editArtifact = (id: string, text: ArtifactText) =>
+/** Changes the text and topics, as of the `revision` they were loaded at. */
+export const editArtifact = (id: string, text: ArtifactText, revision: number) =>
     call<{ slug: string }>(
         `/api/library/artifacts/${encodeURIComponent(id)}`,
-        send('PATCH', text),
+        send('PATCH', { ...text, revision }),
         'The changes were not saved. Try again.',
     );
 
-export const deleteArtifact = (id: string) =>
+/** The slug of an artifact a withdrawal took down without the replacement
+ *  it named, which was withdrawn meanwhile, or null for any other answer. */
+export const withdrawnWithoutReplacement = (problem: unknown): string | null => {
+    const record = asRecord(problem);
+    const slug = record?.['slug'];
+
+    return record?.['code'] === 'withdrawn_without_replacement' && typeof slug === 'string'
+        ? slug
+        : null;
+};
+
+/** Withdraws the artifact, its address then linking to `replacedBy` when
+ *  one is named. */
+export const deleteArtifact = (id: string, replacedBy: string | null = null) =>
     call<null>(
         `/api/library/artifacts/${encodeURIComponent(id)}`,
-        { method: 'DELETE' },
+        replacedBy ? send('DELETE', { replacedBy }) : { method: 'DELETE' },
         'It was not deleted. Try again.',
+    );
+
+/** Points a withdrawn artifact's address at `replacedBy`, or at nothing. */
+export const replaceArtifact = (id: string, replacedBy: string | null) =>
+    call<{ slug: string }>(
+        `/api/library/artifacts/${encodeURIComponent(id)}/replacement`,
+        send('PUT', { replacedBy }),
+        'The replacement was not saved. Try again.',
     );

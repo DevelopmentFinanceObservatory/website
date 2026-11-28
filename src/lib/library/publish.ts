@@ -244,6 +244,63 @@ export const readSlug = (raw: unknown): Read<string | null> => {
           );
 };
 
+/** An edit's body: the text and topics, and the revision they were read at
+ *  (`LibraryArtifact.revision`). */
+export type ArtifactEdit = { text: ArtifactText; revision: number };
+
+/** Reads an edit: the text as `readArtifactText` reads it, and `revision`, a
+ *  whole number from 0. */
+export const readEdit = (body: unknown): Read<ArtifactEdit> => {
+    const text = readArtifactText(body);
+
+    if (!text.ok) {
+        return text;
+    }
+
+    const revision = isRecord(body) ? body.revision : undefined;
+
+    return typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 0
+        ? { ok: true, value: { text: text.value, revision } }
+        : refuse('/revision', 'Send the revision the text was loaded at.');
+};
+
+/**
+ * The `replacedBy` of a withdrawal or of a later change to it: the id of the
+ * artifact the withdrawn one's address links to, or null for none.
+ * `undefined` is an empty body, which a withdrawal reads as none. A body
+ * must be a JSON object, and with `required`, as a later change sends, it
+ * must hold `replacedBy`, null to clear it. A withdrawal's body may leave
+ * the member out.
+ */
+export const readReplacement = (
+    body: unknown,
+    { required = false }: { required?: boolean } = {},
+): Read<string | null> => {
+    if (body === undefined && !required) {
+        return { ok: true, value: null };
+    }
+
+    if (!isRecord(body)) {
+        return refuse('', 'Send a JSON object.');
+    }
+
+    if (!('replacedBy' in body)) {
+        return required
+            ? refuse('/replacedBy', 'Name the replacement by its id, or send null to clear it.')
+            : { ok: true, value: null };
+    }
+
+    const raw = body.replacedBy;
+
+    if (raw === null) {
+        return { ok: true, value: null };
+    }
+
+    return typeof raw === 'string' && raw.length > 0 && raw.length <= 64
+        ? { ok: true, value: raw }
+        : refuse('/replacedBy', 'Name the replacement by its id.');
+};
+
 /**
  * The publish key's slot in the Publish tab: one key per artifact picked,
  * mode and chosen slug (`readSlug`'s value, null while the slug follows the
