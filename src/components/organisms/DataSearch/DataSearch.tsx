@@ -171,22 +171,12 @@ const subscribeStorage = (listener: () => void) => {
     return () => window.removeEventListener('storage', listener);
 };
 
-// Whether the guest count holds the prompt of the turn a running move
-// started (startHeldTurn). The page's own check of the count leaves that
-// prompt out, so counting it does not end the move.
-let holdPaid = false;
-
-// Sets holdPaid, and adds the prompt to the guest count when `paid`, since
-// the proxy spends it whether or not Studio adopts the turn. The `storage`
-// event lets this tab's readers (subscribeStorage) see both.
-const markHoldPaid = (paid: boolean) => {
-    if (paid) {
-        addGuestPrompts(window.localStorage, 1);
-    } else if (!holdPaid) {
-        return;
-    }
-
-    holdPaid = paid;
+// Adds the prompt of a turn the move started (startHeldTurn) that Studio
+// did not adopt to the guest count, since the proxy spent it and no
+// transcript counts it. The `storage` event lets this tab's readers
+// (subscribeStorage) see it.
+const countSpentHold = () => {
+    addGuestPrompts(() => window.localStorage, 1);
     window.dispatchEvent(new StorageEvent('storage', { key: GUEST_PROMPTS_KEY }));
 };
 
@@ -448,19 +438,20 @@ const DataSearch = ({
     // to Studio once the run is done, and `offer` shows the Studio card. A
     // guest with no free prompt left is offered Studio instead of moved,
     // on a card that also searches the question as data (`out_of_prompts`).
-    // The count leaves out the prompt of the turn a running move started
-    // (holdPaid).
     const guestUsed = useSyncExternalStore(
         subscribeStorage,
-        () => guestPromptsSeen({ guest, storage: () => window.localStorage }) - (holdPaid ? 1 : 0),
+        () => guestPromptsSeen({ guest, storage: () => window.localStorage }),
         () => 0,
     );
+    const guestOut = guestOutOfPrompts({ guest, used: guestUsed });
     const move = routeMove({
         route,
         kind: answer?.kind ?? (response ? 'resolution' : null),
-        guestOutOfPrompts: guestOutOfPrompts({ guest, used: guestUsed }),
+        guestOutOfPrompts: guestOut,
     });
-    const stayedRoute = stayed?.query === query ? stayed.route : null;
+    // A guest the stay's spent prompt left with none gets no stayed card,
+    // which would lead to Studio's wall.
+    const stayedRoute = stayed?.query === query && !guestOut ? stayed.route : null;
     // The route a click on the Studio card hands over: the run's own offer,
     // or the move the reader stayed out of.
     const offerRoute = move === 'offer' || move === 'out_of_prompts' ? route : stayedRoute;
@@ -480,17 +471,13 @@ const DataSearch = ({
     // offer card, the route's automatic move) opens Studio on the question,
     // with a seed for each definite part, stored in this tab's
     // sessionStorage. When the seeds cannot be stored, Studio opens on the
-    // question alone. `studioHandoff` stores the seeds and makes Studio's
-    // URL, and its `go` records the handoff and opens Studio as a new
-    // history entry with the route-to-studio transition type, so Studio
-    // slides in over the page. The automatic move opens it once the entry
-    // it leaves holds the question's `routing=off` URL (the move's effect
-    // below). A routed handoff carries the trace id of the route's early
-    // frame, or of the answer when the frame carried none. `holdToken` is
-    // the token of the turn the automatic move starts during its hold
-    // (HANDOFF_HOLD_PARAM), and `held` the question and members that turn
-    // carries, the ones Studio's arrival would send.
-    const studioHandoff = useCallback(
+    // question alone. `handoffTarget` stores the seeds and makes Studio's
+    // URL, with the question and members Studio's arrival sends (`message`,
+    // `extras`). `holdToken` is the token of the turn the automatic move
+    // starts during its hold (HANDOFF_HOLD_PARAM), which carries the same
+    // question and members. A routed handoff carries the trace id of the
+    // route's early frame, or of the answer when the frame carried none.
+    const handoffTarget = useCallback(
         (trigger: HandoffTrigger, routed: RunRoute | null = null, holdToken?: string) => {
             const edited = handoffEdited({
                 editCount: edits.length,
@@ -502,58 +489,68 @@ const DataSearch = ({
                 sentence: sentenceHeadingText(response),
             });
             const seeds = handoffSeeds(parts);
-            const token = writeSeeds(() => window.sessionStorage, seeds);
+            const seedToken = writeSeeds(() => window.sessionStorage, seeds);
             const ids = searchIds();
-            const { searchId } = ids;
             const traceId = routed?.traceId ?? ids.traceId;
             const fromExample = handoffFromExample({ fromExample: searchIsExample(), edited });
-            const href = studioHref(question, token, {
+            const href = studioHref(question, seedToken, {
                 via: handoffVia({ trigger, fromExample }),
                 traceId,
                 fromExample,
                 holdToken,
             });
-            // The members Studio's arrival reads from `href` and the seeds
-            // stored under `token`.
-            const extras = handoffExtras(
-                token ? seeds : null,
-                handoffPromptSource(new URL(href, window.location.origin).searchParams),
-            );
 
             return {
                 href,
-                held: { message: question.trim(), extras },
-                go: () => {
-                    track(
-                        'search.studio_handoff',
-                        searchEventProps({
-                            query,
-                            edited,
-                            kind: answerKind,
-                            reason: answerReason,
-                            parts,
-                            seeds: token ? seeds.length : 0,
-                            trigger,
-                            ...(routed && { probability: routed.probability }),
-                            run: { ...(searchId && { searchId }), traceId },
-                        }),
-                    );
-                    router.push(href, { transitionTypes: [ROUTE_TO_STUDIO] });
-                },
+                edited,
+                seedToken,
+                seedCount: seedToken ? seeds.length : 0,
+                searchId: ids.searchId,
+                traceId,
+                message: question.trim(),
+                // What Studio's arrival reads from `href` and the seeds
+                // stored under `seedToken`.
+                extras: handoffExtras(
+                    seedToken ? seeds : null,
+                    handoffPromptSource(new URL(href, window.location.origin).searchParams),
+                ),
             };
         },
-        [
-            router,
-            query,
-            edits.length,
-            openedShare,
-            response,
-            parts,
-            answerKind,
-            answerReason,
-            searchIds,
-            searchIsExample,
-        ],
+        [query, edits.length, openedShare, response, parts, searchIds, searchIsExample],
+    );
+    // A handoff to `target`: its `go` records the handoff and opens Studio
+    // as a new history entry with the route-to-studio transition type, so
+    // Studio slides in over the page. The automatic move opens it once the
+    // entry it leaves holds the question's `routing=off` URL (the move's
+    // effect below), at the target its hold started with.
+    const studioHandoff = useCallback(
+        (
+            trigger: HandoffTrigger,
+            routed: RunRoute | null = null,
+            target: ReturnType<typeof handoffTarget> = handoffTarget(trigger, routed),
+        ) => ({
+            href: target.href,
+            go: () => {
+                const { searchId, traceId } = target;
+
+                track(
+                    'search.studio_handoff',
+                    searchEventProps({
+                        query,
+                        edited: target.edited,
+                        kind: answerKind,
+                        reason: answerReason,
+                        parts,
+                        seeds: target.seedCount,
+                        trigger,
+                        ...(routed && { probability: routed.probability }),
+                        run: { ...(searchId && { searchId }), traceId },
+                    }),
+                );
+                router.push(target.href, { transitionTypes: [ROUTE_TO_STUDIO] });
+            },
+        }),
+        [handoffTarget, router, query, parts, answerKind, answerReason],
     );
     const openStudio = useCallback(
         (trigger: HandoffTrigger, routed: RunRoute | null = null) =>
@@ -610,15 +607,15 @@ const DataSearch = ({
     // the move `auto`, before the callout's entrance and whether or not the
     // tab shows, so Studio opens with the answer under way: the turn
     // Studio's arrival would send, under a token the move's URL carries
-    // (HANDOFF_HOLD_PARAM). It starts once per search. Its prompt is spent
-    // as it starts, and this page adds it to a guest's count then
-    // (markHoldPaid). A paused hold leaves the turn running, and the
-    // move hands it over with all it has streamed. Every other end of the
-    // move cancels it so it stops working: a stay, a link click, a new
-    // search, the page unmounting. The registry cancels it too when
-    // Studio does not take it and when the page goes. Studio's prompt()
-    // fires studio.prompt once it adopts the turn, and counts no prompt
-    // for it.
+    // (HANDOFF_HOLD_PARAM). It starts once per search, with the handoff
+    // target the move opens Studio at, so Studio's seeds are the turn's.
+    // Its prompt is spent as it starts. A paused hold leaves the turn
+    // running, and the move hands it over with all it has streamed. Every
+    // other end of the move cancels it so it stops working: a stay, a link
+    // click, a new search, the page unmounting. The registry cancels it too
+    // when Studio does not take it and when the page goes. Studio counts a
+    // turn it adopts as its own prompt, and the registry's `onSpent` adds
+    // any other to a guest's count (countSpentHold).
     const movedSearchRef = useRef<string | null>(null);
     // The hold's handlers for the callout, set while the move's effect runs.
     const moveHoldRef = useRef<{ go: () => void; stay: () => void } | null>(null);
@@ -628,12 +625,14 @@ const DataSearch = ({
     const cancelHeld = (options?: { keepalive?: boolean }) => {
         void heldRef.current?.cancel(options);
         heldRef.current = null;
-        markHoldPaid(false);
     };
-    // The token of the last search's held turn, set once per search when
-    // the turn starts, so every run of the move's effect builds the same
-    // Studio URL.
-    const holdTokenRef = useRef<{ searchId: string; token: string } | null>(null);
+    // The handoff target of the last search's held turn, set once per
+    // search when the turn starts, so every run of the move's effect opens
+    // the same Studio URL.
+    const holdTargetRef = useRef<{
+        searchId: string;
+        target: ReturnType<typeof handoffTarget>;
+    } | null>(null);
     const moveArmed =
         move === 'auto' && phase === 'done' && pageSettled && routingOffFor(searchParams, query);
     const moving = move === 'auto';
@@ -657,23 +656,30 @@ const DataSearch = ({
     // Starts Studio's turn for search `searchId`, once, unless the reader
     // has stayed or the move has gone.
     const startHold = useEffectEvent((searchId: string) => {
-        if (holdTokenRef.current?.searchId === searchId || movedSearchRef.current === searchId) {
+        if (holdTargetRef.current?.searchId === searchId || movedSearchRef.current === searchId) {
             return;
         }
 
         const token = uuid();
+        const target = handoffTarget('auto', route, token);
 
-        holdTokenRef.current = { searchId, token };
-        heldRef.current = startHeldTurn({ token, ...studioHandoff('auto', route, token).held });
-
-        if (guest) {
-            markHoldPaid(true);
-        }
+        holdTargetRef.current = { searchId, target };
+        heldRef.current = startHeldTurn({
+            token,
+            message: target.message,
+            extras: target.extras,
+            seedToken: target.seedToken,
+            ...(guest && { onSpent: countSpentHold }),
+        });
     });
     const onHoldEnd = () => moveHoldRef.current?.go();
-    const readyMove = useEffectEvent((holdToken: string) =>
-        studioHandoff('auto', route, holdToken),
-    );
+    const readyMove = useEffectEvent((searchId: string) => {
+        const held = holdTargetRef.current;
+
+        return held?.searchId === searchId
+            ? studioHandoff('auto', route, held.target)
+            : studioHandoff('auto', route);
+    });
     // Keeps the reader on the data search of a question the router sent to
     // Studio: the move's hold, or the out-of-prompts card's data action.
     // It records `search.route_stay`, turns the move's callout into the
@@ -751,8 +757,7 @@ const DataSearch = ({
             return;
         }
 
-        const held = holdTokenRef.current;
-        const handoff = readyMove(held?.searchId === searchId ? held.token : uuid());
+        const handoff = readyMove(searchId);
 
         router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
 

@@ -2,7 +2,6 @@
 
 import classNames from 'classnames';
 import {
-    type AnimationEvent,
     type FocusEvent,
     useEffect,
     useEffectEvent,
@@ -20,6 +19,11 @@ import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
  *  the time to see the move coming and the window in which the reader can
  *  stay. The line under the callout's title fills over it. */
 export const MOVE_HOLD_MS = 1200;
+
+// When the clock arms if the callout's entrance (`move-in`, 200 ms in
+// DataSearch.module.scss) reports no end: CSS that drops the animation
+// fires neither animationend nor animationcancel.
+const ENTRANCE_FALLBACK_MS = 250;
 
 const subscribeVisibility = (listener: () => void) => {
     document.addEventListener('visibilitychange', listener);
@@ -64,6 +68,7 @@ const StudioMove = ({
     // Set once the clock ends, which leaves the line full.
     const [elapsed, setElapsed] = useState(false);
     const held = (pointerIn || focusIn) && !elapsed;
+    const root = useRef<HTMLDivElement>(null);
     const fill = useRef<HTMLDivElement>(null);
     const clock = useRef<Animation | null>(null);
     // onStart runs once per mount, on the fill's first frame of play, so a
@@ -89,6 +94,27 @@ const StudioMove = ({
         reducedMotion ? [{ opacity: 0.2 }, { opacity: 1 }] : [{ scale: '0 1' }, { scale: '1 1' }],
     );
     const elapse = useEffectEvent(onElapsed);
+
+    // The entrance ends at its animationend or animationcancel, which React
+    // has no prop for, or else at the fallback.
+    useEffect(() => {
+        const callout = root.current;
+        const enter = (event?: Event) => {
+            if (!event || event.target === callout) {
+                setEntered(true);
+            }
+        };
+        const timer = setTimeout(enter, ENTRANCE_FALLBACK_MS);
+
+        callout?.addEventListener('animationend', enter);
+        callout?.addEventListener('animationcancel', enter);
+
+        return () => {
+            clearTimeout(timer);
+            callout?.removeEventListener('animationend', enter);
+            callout?.removeEventListener('animationcancel', enter);
+        };
+    }, []);
 
     useEffect(() => {
         const line = fill.current;
@@ -146,11 +172,7 @@ const StudioMove = ({
         <div
             className={classNames(styles.callout, styles.studioMove)}
             data-held={held || undefined}
-            onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
-                if (event.target === event.currentTarget) {
-                    setEntered(true);
-                }
-            }}
+            ref={root}
             onPointerEnter={() => setPointerIn(true)}
             onPointerLeave={() => setPointerIn(false)}
             onFocus={() => setFocusIn(true)}

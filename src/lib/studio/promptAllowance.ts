@@ -20,13 +20,21 @@ export const GUEST_PROMPTS_KEY = 'dfo-guest-prompts';
 export const guestPromptsUsed = (storage: Pick<Storage, 'getItem'>): number =>
     Number(storage.getItem(GUEST_PROMPTS_KEY)) || 0;
 
-/** Add `delta` prompts, which may be negative, to the guest count `storage`
- *  holds under GUEST_PROMPTS_KEY, never taking it below 0. */
+/** Add `delta` prompts, which may be negative, to the guest count the
+ *  storage `storage` returns holds under GUEST_PROMPTS_KEY, never taking it
+ *  below 0. A browser that blocks storage keeps no count, since the proxy
+ *  still meters the guest's allowance. */
 export const addGuestPrompts = (
-    storage: Pick<Storage, 'getItem' | 'setItem'>,
+    storage: () => Pick<Storage, 'getItem' | 'setItem'>,
     delta: number,
 ): void => {
-    storage.setItem(GUEST_PROMPTS_KEY, String(Math.max(0, guestPromptsUsed(storage) + delta)));
+    try {
+        const store = storage();
+
+        store.setItem(GUEST_PROMPTS_KEY, String(Math.max(0, guestPromptsUsed(store) + delta)));
+    } catch {
+        // Blocked storage: nothing to count in.
+    }
 };
 
 /** Whether a guest has no free prompt left, having spent or queued `used`.

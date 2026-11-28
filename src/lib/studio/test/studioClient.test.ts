@@ -1039,7 +1039,7 @@ test('startHeldTurn posts the request runTurn posts for the same members', async
     const extras: TurnExtras = { prompt_source: 'search_example', surface: 'studio' };
 
     const { token } = startHeldTurn({ message: 'Aid to Ghana', extras });
-    const taken = takeHeldTurn(token);
+    const taken = takeHeldTurn(token, { source: 'search_example' });
 
     assert.ok(taken && taken !== 'adopted');
     void runTurn(taken.conversationId, 'Aid to Ghana', { onFrame: () => {} }, undefined, extras);
@@ -1091,26 +1091,97 @@ const heldPosts = (fetch: ReturnType<typeof heldHarness>['fetch']) => {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('startHeldTurn: a moved turn Studio has not taken in adoptLimitMs cancels itself', async (t) => {
+test('startHeldTurn: a moved turn Studio has not run in adoptLimitMs cancels itself, taken or not', async (t) => {
     const harness = heldHarness(t);
     const untaken = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
-    const taken = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+    const reserved = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+    const adopted = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
 
     untaken.moved();
-    taken.moved();
+    reserved.moved();
+    adopted.moved();
     await harness.settle();
-    assert.notEqual(takeHeldTurn(taken.token), null);
+    assert.notEqual(takeHeldTurn(reserved.token), null);
+
+    const taken = takeHeldTurn(adopted.token);
+
+    assert.ok(taken && taken !== 'adopted');
+    void taken.run({ onFrame: () => {} }, new AbortController().signal);
     await wait(80);
 
     const { turns, cancels } = heldPosts(harness.fetch);
 
-    assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: false }]);
+    assert.deepEqual(
+        cancels.toSorted((a, b) => turns.indexOf(a.conversation) - turns.indexOf(b.conversation)),
+        [
+            { conversation: turns[0], keepalive: false },
+            { conversation: turns[1], keepalive: false },
+        ],
+    );
     assert.equal(takeHeldTurn(untaken.token), null);
+    harness.end();
+});
+
+test('startHeldTurn: onSpent runs once for a turn cancelled before Studio runs it, and never for one it runs', async (t) => {
+    const harness = heldHarness(t);
+    let spent = 0;
+    const onSpent = () => {
+        spent += 1;
+    };
+
+    // Cancelled twice: counted once, at the first cancel.
+    const stayed = startHeldTurn({ message: 'Aid to Ghana', onSpent });
+    const first = stayed.cancel();
+
+    assert.equal(spent, 1);
+    await Promise.all([first, stayed.cancel({ keepalive: true })]);
+    assert.equal(spent, 1);
+
+    // Taken and then cancelled by Studio (its gate declined it).
+    const declined = takeHeldTurn(startHeldTurn({ message: 'Aid to Ghana', onSpent }).token);
+
+    assert.ok(declined && declined !== 'adopted');
+    await declined.cancel();
+    assert.equal(spent, 2);
+
+    // Run: a later cancel does nothing.
+    const held = startHeldTurn({ message: 'Aid to Ghana', onSpent });
+    const ran = takeHeldTurn(held.token);
+
+    assert.ok(ran && ran !== 'adopted');
+    void ran.run({ onFrame: () => {} }, new AbortController().signal);
+    await Promise.all([ran.cancel(), held.cancel()]);
+    assert.equal(spent, 2);
+    assert.deepEqual(
+        heldPosts(harness.fetch).cancels.map(({ conversation }) => conversation),
+        heldPosts(harness.fetch).turns.slice(0, 2),
+    );
+    harness.end();
+});
+
+test('takeHeldTurn: a turn started for another seed token or prompt source is cancelled and answers null', async (t) => {
+    const harness = heldHarness(t);
+    let spent = 0;
+    const onSpent = () => {
+        spent += 1;
+    };
+    const extras: TurnExtras = { prompt_source: 'search_example' };
+    const seeds = startHeldTurn({ message: 'Aid to Ghana', extras, seedToken: 's1', onSpent });
+    const source = startHeldTurn({ message: 'Aid to Ghana', extras, seedToken: 's1', onSpent });
+    const match = startHeldTurn({ message: 'Aid to Ghana', extras, seedToken: 's1', onSpent });
+
+    assert.equal(takeHeldTurn(seeds.token, { seedToken: 's2', source: 'search_example' }), null);
+    assert.equal(takeHeldTurn(source.token, { seedToken: 's1' }), null);
+    assert.equal(spent, 2);
+    assert.notEqual(takeHeldTurn(match.token, { seedToken: 's1', source: 'search_example' }), null);
+    await harness.settle();
+    assert.equal(heldPosts(harness.fetch).cancels.length, 2);
+    assert.equal(spent, 2);
 });
 
 // The registry listens on the first window it sees, so one test covers
 // every pagehide case.
-test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keepalive, and a cancel waiting on the turn index goes with keepalive too', async (t) => {
+test('startHeldTurn: pagehide cancels every turn Studio has not run, with keepalive, and a cancel waiting on the turn index goes with keepalive too', async (t) => {
     const harness = heldHarness(t);
     const page = new EventTarget();
 
@@ -1120,8 +1191,10 @@ test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keep
     const untaken = startHeldTurn({ message: 'Aid to Ghana' });
     const taken = startHeldTurn({ message: 'Aid to Ghana' });
     const waiting = startHeldTurn({ message: 'Aid to Ghana' });
+    const adopted = takeHeldTurn(taken.token);
 
-    assert.notEqual(takeHeldTurn(taken.token), null);
+    assert.ok(adopted && adopted !== 'adopted');
+    void adopted.run({ onFrame: () => {} }, new AbortController().signal);
 
     // Cancelled before the harness names the turn, then the page goes.
     const cancelled = waiting.cancel();
@@ -1132,8 +1205,12 @@ test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keep
 
     const { turns, cancels } = heldPosts(harness.fetch);
 
+    // Earlier tests leave turns in the registry, which the pagehide cancels
+    // too.
     assert.deepEqual(
-        cancels.toSorted((a, b) => turns.indexOf(a.conversation) - turns.indexOf(b.conversation)),
+        cancels
+            .filter(({ conversation }) => turns.includes(conversation))
+            .toSorted((a, b) => turns.indexOf(a.conversation) - turns.indexOf(b.conversation)),
         [
             { conversation: turns[0], keepalive: true },
             { conversation: turns[2], keepalive: true },

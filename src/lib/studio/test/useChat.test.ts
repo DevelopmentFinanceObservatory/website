@@ -511,3 +511,39 @@ test('a send handed a held turn adopts it, posting no turn of its own, and one f
     await second.settle(60);
     second.unmount();
 });
+
+test('a held turn whose send New Chat overtakes before it runs is cancelled, and counted spent once', async (t) => {
+    const { startHeldTurn, takeHeldTurn } = await import('../studioClient.ts');
+    const routes: string[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        routes.push(String(input));
+
+        return String(input) === '/api/studio/turn'
+            ? new Response(new ReadableStream(), { headers: { 'x-dfo-turn-index': '1' } })
+            : new Response(null, { status: 204 });
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    let spent = 0;
+    const held = takeHeldTurn(
+        startHeldTurn({
+            message: 'Aid to Ghana',
+            onSpent: () => {
+                spent += 1;
+            },
+        }).token,
+    );
+
+    assert.ok(held && held !== 'adopted');
+
+    const page = renderHook(() => useChat());
+
+    page.result().send('Aid to Ghana', undefined, undefined, undefined, undefined, held);
+    page.result().reset();
+    await page.settle(60);
+
+    assert.equal(spent, 1);
+    assert.deepEqual(routes, ['/api/studio/turn', '/api/studio/cancel']);
+    page.unmount();
+});

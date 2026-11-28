@@ -78,18 +78,34 @@ test('guestPromptsUsed reads the count Studio stores, and 0 when there is none',
 });
 
 // Studio counts its transcript's prompts through it, and Get Data the
-// prompt of the turn it starts for Studio to adopt.
-test('addGuestPrompts adds to the stored count and never takes it below 0', () => {
+// prompt of a turn it started that Studio did not adopt.
+test('addGuestPrompts adds to the stored count, never takes it below 0, and leaves blocked storage alone', () => {
     const stored = new Map<string, string>();
     const storage = {
         getItem: (key: string) => stored.get(key) ?? null,
         setItem: (key: string, value: string) => void stored.set(key, value),
     };
 
-    addGuestPrompts(storage, 1);
+    addGuestPrompts(() => storage, 1);
     assert.equal(guestPromptsUsed(storage), 1);
-    addGuestPrompts(storage, 2);
+    addGuestPrompts(() => storage, 2);
     assert.equal(guestPromptsUsed(storage), 3);
-    addGuestPrompts(storage, -5);
+    addGuestPrompts(() => storage, -5);
     assert.equal(guestPromptsUsed(storage), 0);
+    assert.doesNotThrow(() =>
+        addGuestPrompts(() => {
+            throw new DOMException('blocked', 'SecurityError');
+        }, 1),
+    );
+    assert.doesNotThrow(() =>
+        addGuestPrompts(
+            () => ({
+                getItem: () => null,
+                setItem: () => {
+                    throw new DOMException('full', 'QuotaExceededError');
+                },
+            }),
+            1,
+        ),
+    );
 });

@@ -1084,7 +1084,8 @@ export const useChat = (
     // the frames after Stop, for up to SWITCH_STOP_GRACE_MS, with the chat
     // line on "Stopping". `onSettled` runs once, right after that end on
     // screen, unless reset or hydrate has walked away from the stream.
-    // `metered` marks a POST turn, whose prompt the site's meter gives back
+    // `onUnsent` runs once the queue skips `start`, when reset, hydrate or
+    // Stop came first. `metered` marks a POST turn, whose prompt the site's meter gives back
     // when the response is a refusal (meterTurn), so a refusal marks the
     // turn's prompt refunded. `carries` is the harness turn a stream carries
     // on, which the harness admitted already (a reopened page's). Leaving
@@ -1104,6 +1105,7 @@ export const useChat = (
                 onUnreachable,
                 onEnd,
                 onSettled,
+                onUnsent,
                 metered = false,
                 carries = null,
             }: {
@@ -1111,6 +1113,7 @@ export const useChat = (
                 onUnreachable?: () => boolean;
                 onEnd?: (ending: StreamEnding) => void;
                 onSettled?: () => void;
+                onUnsent?: () => void;
                 metered?: boolean;
                 carries?: number | null;
             } = {},
@@ -1833,6 +1836,10 @@ export const useChat = (
 
                     release();
 
+                    if (!sent) {
+                        onUnsent?.();
+                    }
+
                     if (generationRef.current !== generation) {
                         return;
                     }
@@ -1960,8 +1967,7 @@ export const useChat = (
     // again on its own (offerNewQuestion). `held` is a turn Get Data started
     // for this question (takeHeldTurn): the send adopts it in place of its
     // own request, under its conversation id, when it opens the
-    // conversation with the same text, and cancels it otherwise. Returns
-    // whether it adopted `held`.
+    // conversation with the same text, and cancels it otherwise.
     const send = useCallback(
         (
             message: string,
@@ -1970,7 +1976,7 @@ export const useChat = (
             asked?: number,
             source?: PromptSource,
             held?: HeldTurn,
-        ): boolean => {
+        ) => {
             const text = message.trim();
             const fromNewQuestion =
                 asked ??
@@ -1979,7 +1985,7 @@ export const useChat = (
             if (!text || holdTurn({ text, card, seeds, fromNewQuestion, source })) {
                 void held?.cancel();
 
-                return false;
+                return;
             }
 
             const adopted =
@@ -2076,6 +2082,8 @@ export const useChat = (
                 },
                 {
                     metered: true,
+                    // A held turn the queue never runs is cancelled.
+                    ...(adopted && { onUnsent: () => void adopted.cancel() }),
                     // Sent once and never admitted: offered, not sent again.
                     ...(fromNewQuestion !== undefined && {
                         onSettled: () => {
@@ -2086,8 +2094,6 @@ export const useChat = (
                     }),
                 },
             );
-
-            return adopted !== null;
         },
         [dropMovedQuestion, holdTurn, offerNewQuestion, startTurn, stream],
     );

@@ -888,7 +888,16 @@ type HeldEvent =
 type HeldEntry = {
     conversationId: string;
     message: string;
+    // The seed token and prompt source of the handoff the turn was started
+    // for, which Studio's arrival must match to adopt it.
+    seedToken: string | null;
+    promptSource: PromptSource | null;
+    // Studio has taken the turn (takeHeldTurn) and has not yet run it.
+    taken: boolean;
+    // Studio's stream runs the turn (HeldTurn's `run`).
     adopted: boolean;
+    // Runs once when the turn is cancelled before Studio adopts it.
+    onSpent: (() => void) | undefined;
     // The reports no stream has heard yet, in the order they came.
     events: HeldEvent[];
     turnIndex: number | null;
@@ -929,9 +938,9 @@ const heldTurns = new Map<string, HeldEntry | AdoptedMark>();
  *  cancel for every way out of the hold except the move, and `moved` for
  *  the move itself. `cancel` asks the harness to cancel the turn once it
  *  has named the turn, within STOP_GRACE_MS, and closes the stream. The
- *  turn's prompt stays spent. Cancelling a turn Studio adopted does
- *  nothing. `keepalive` sends the cancel so that it outlives the page
- *  (pagehide). */
+ *  turn's prompt stays spent, and the first cancel runs startHeldTurn's
+ *  `onSpent`. Cancelling a turn Studio adopted does nothing. `keepalive`
+ *  sends the cancel so that it outlives the page (pagehide). */
 export type HeldTurnStart = {
     token: string;
     cancel: (options?: { keepalive?: boolean }) => Promise<void>;
@@ -939,10 +948,11 @@ export type HeldTurnStart = {
 };
 
 /** A held turn Studio took (takeHeldTurn). `run` is the turn's stream for
- *  useChat: it replays what the stream reported so far through `handlers`,
- *  then passes on the rest, and settles as the request does. Aborting
- *  `signal` closes the request. `cancel` cancels a turn Studio took and
- *  will not run, as HeldTurnStart's cancel does. */
+ *  useChat, and adopts the turn: it replays what the stream reported so
+ *  far through `handlers`, then passes on the rest, and settles as the
+ *  request does. Aborting `signal` closes the request. `cancel` cancels a
+ *  turn Studio took and will not run, as HeldTurnStart's cancel does, and
+ *  does nothing once `run` has started. */
 export type HeldTurn = {
     conversationId: string;
     message: string;
@@ -1020,18 +1030,27 @@ const sendHeldCancel = async (entry: HeldEntry): Promise<void> => {
     entry.controller.abort();
 };
 
-// The cancel of every held turn, run once per turn. A turn cancelled before
-// Studio took it stays in heldTurns until its cancel settles, for a
-// pagehide to see, and takeHeldTurn answers null for it, so Studio posts
-// its own on arrival.
+// The cancel of every held turn, run once per turn, which does nothing to
+// a turn Studio adopted. A turn cancelled before Studio adopted it stays in
+// heldTurns until its cancel settles, for a pagehide to see, and
+// takeHeldTurn answers null for it, so Studio posts its own on arrival. The
+// first cancel runs `onSpent` before it sends anything.
 const cancelHeld = (
     token: string,
     entry: HeldEntry,
     { keepalive = false }: { keepalive?: boolean } = {},
 ): Promise<void> => {
+    if (entry.adopted) {
+        return Promise.resolve();
+    }
+
     clearTimeout(entry.deadline);
     entry.keepalive ||= keepalive;
-    entry.cancelling ??= sendHeldCancel(entry).then(() => releaseHeld(token, entry));
+
+    if (entry.cancelling === null) {
+        entry.cancelling = sendHeldCancel(entry).then(() => releaseHeld(token, entry));
+        entry.onSpent?.();
+    }
 
     return entry.cancelling;
 };
@@ -1043,7 +1062,7 @@ const cancelHeld = (
 let watchingPageHide = false;
 const cancelOnPageHide = () => {
     for (const [token, entry] of heldTurns) {
-        if ('controller' in entry && !entry.adopted) {
+        if ('controller' in entry) {
             void cancelHeld(token, entry, { keepalive: true });
         }
     }
@@ -1054,7 +1073,12 @@ const cancelOnPageHide = () => {
  * `token`, under a fresh conversation id. It is an ordinary turn, and
  * spends its prompt when the harness admits it, whether or not Studio
  * adopts it. The stream's reports are kept until Studio adopts it.
- * `extras` are the turn's members as Studio would send them (turnRequest).
+ * `extras` are the turn's members as Studio would send them (turnRequest),
+ * and `seedToken` the token its seeds are stored under, which Studio's
+ * arrival matches with `extras`' prompt source before it adopts the turn.
+ * `onSpent` runs once, synchronously, when the turn is cancelled before
+ * Studio adopts it, for whatever reason: the prompt is spent and no
+ * transcript counts it.
  *
  * The turn cancels itself when Studio has not taken it `adoptLimitMs`
  * after the move (HeldTurnStart's `moved`), and when the page goes
@@ -1066,18 +1090,26 @@ export const startHeldTurn = ({
     token = uuid(),
     message,
     extras,
+    seedToken = null,
+    onSpent,
     adoptLimitMs = HELD_ADOPT_LIMIT_MS,
 }: {
     token?: string;
     message: string;
     extras?: TurnExtras;
+    seedToken?: string | null;
+    onSpent?: () => void;
     adoptLimitMs?: number;
 }): HeldTurnStart => {
     let name: (index: number | null) => void = () => {};
     const entry: HeldEntry = {
         conversationId: uuid(),
         message,
+        seedToken,
+        promptSource: extras?.prompt_source ?? null,
+        taken: false,
         adopted: false,
+        onSpent,
         events: [],
         turnIndex: null,
         listener: null,
@@ -1141,8 +1173,7 @@ export const startHeldTurn = ({
 
     return {
         token,
-        cancel: (options) =>
-            entry.adopted ? Promise.resolve() : cancelHeld(token, entry, options),
+        cancel: (options) => cancelHeld(token, entry, options),
         moved: () => {
             if (entry.moved || entry.adopted || entry.cancelling) {
                 return;
@@ -1155,13 +1186,19 @@ export const startHeldTurn = ({
 };
 
 /**
- * The held turn under `token` (startHeldTurn), taken once. A later take
+ * The held turn under `token` (startHeldTurn), taken once, for the handoff
+ * with seed token `seedToken` and prompt source `source`. A later take
  * answers `adopted`, and a token this page load never started, or one
  * cancelled before Studio took it, answers null, for Studio to post its own
- * turn. The registry lets go of a taken turn once its stream settles, or
- * once Studio cancels it.
+ * turn. A turn started for another seed token or prompt source is
+ * cancelled, and answers null too. Taking a turn reserves it: its deadline
+ * runs on until HeldTurn's `run` starts, which adopts it. The registry lets
+ * go of a taken turn once its stream settles, or once Studio cancels it.
  */
-export const takeHeldTurn = (token: string): HeldTurn | 'adopted' | null => {
+export const takeHeldTurn = (
+    token: string,
+    { seedToken = null, source }: { seedToken?: string | null; source?: PromptSource } = {},
+): HeldTurn | 'adopted' | null => {
     const entry = heldTurns.get(token);
 
     if (entry && 'adoptedUntil' in entry) {
@@ -1174,21 +1211,35 @@ export const takeHeldTurn = (token: string): HeldTurn | 'adopted' | null => {
         return null;
     }
 
-    if (!entry || (entry.cancelling && !entry.adopted)) {
+    if (!entry || entry.cancelling) {
         return null;
     }
 
-    if (entry.adopted) {
+    if (entry.taken || entry.adopted) {
         return 'adopted';
     }
 
-    entry.adopted = true;
-    clearTimeout(entry.deadline);
+    if (entry.seedToken !== seedToken || entry.promptSource !== (source ?? null)) {
+        void cancelHeld(token, entry);
+
+        return null;
+    }
+
+    entry.taken = true;
 
     return {
         conversationId: entry.conversationId,
         message: entry.message,
         run: (handlers, signal) => {
+            // Cancelled between the take and the run (the deadline, a
+            // pagehide): the stream is over.
+            if (entry.cancelling) {
+                return entry.cancelling;
+            }
+
+            entry.adopted = true;
+            clearTimeout(entry.deadline);
+
             const settled = entry.request.finally(() => releaseHeld(token, entry));
 
             if (signal.aborted) {
