@@ -42,6 +42,7 @@ import { datasetsFetch } from './datasetsFetch.ts';
 import { pollOperation } from './operationPoll.ts';
 import type { OperationProgress } from './operationPoll';
 import { parsePlaceCatalogue, type PlaceCatalogue } from './catalogue.ts';
+import { studioRoute } from './studioRoute.ts';
 import {
     outcomeFromDocument,
     type VersionLink,
@@ -72,6 +73,7 @@ import {
     type Spec,
     type SpecIdentity,
     type SpecObservations,
+    type StudioRoute,
     type Warning,
 } from './types.ts';
 
@@ -137,6 +139,17 @@ export type SearchEvent =
           ms?: number | null;
       }
     | { kind: 'response'; response: ResolveResponse }
+    | {
+          /** The router's early verdict on a run that opted in to Studio
+           *  routing (`studio_routing`), sent before `interpretation`. Only an
+           *  `offer` route sends one; the run goes on, and its response
+           *  carries the same route. `traceId` is the run's trace id, which
+           *  the response's diagnostics repeat, and null when the frame
+           *  carries none. */
+          kind: 'route';
+          route: StudioRoute;
+          traceId: string | null;
+      }
     | {
           kind: 'slot_options';
           spec_id: string;
@@ -231,12 +244,20 @@ export function keyRef(key: SlotKey): string {
  *  part order. */
 export type SearchInput = RawTextInput | DatasetResubmitInput;
 
-export function buildRequest(input: SearchInput, includeCoverage: boolean) {
+export function buildRequest(
+    input: SearchInput,
+    includeCoverage: boolean,
+    { studioRouting = false }: { studioRouting?: boolean } = {},
+) {
     return {
         // Contract v1 (integer version tag; the string "1.0" was the pre-release
         // form and is refused with unsupported_schema_version).
         schema_version: 1,
-        input,
+        // `studio_routing` opts a raw-text run in to the search API's Studio
+        // router (see studioRoute.ts). Only Get Data's own submits send it,
+        // and every other caller leaves it out and gets no route.
+        input:
+            studioRouting && input.kind === 'raw_text' ? { ...input, studio_routing: true } : input,
         // include_observations: without it the engine skips the materialise
         // pass and Spec.observations / the trailing `observations` SSE event
         // never arrive. Every buildRequest caller drives the real result
@@ -642,14 +663,24 @@ function flattenPart(part: any): Part {
  */
 export function normalizeResponse(body: any): ResolveResponse {
     if (body?.kind === 'resolution' && Array.isArray(body.parts)) {
-        return { ...body, parts: body.parts.map(flattenPart) };
+        return withRoute({ ...body, parts: body.parts.map(flattenPart) });
     }
-    if (body?.kind === 'catalogue' || body?.kind === 'declined') return body;
+    if (body?.kind === 'catalogue' || body?.kind === 'declined') return withRoute(body);
     throw new Error(
         body?.kind === 'resolution'
             ? 'The search API answered with a resolution that has no parts.'
             : `The search API answered with ${body?.kind == null ? 'no kind' : `kind "${body.kind}"`}, which this site does not read.`,
     );
+}
+
+/** `body` with its `route` read by studioRoute: kept when readable, dropped
+ *  when not (a null route included). A body with no `route` key is returned
+ *  as it came. */
+function withRoute(body: any) {
+    if (!('route' in body)) return body;
+    const { route, ...rest } = body;
+    const readable = studioRoute(route);
+    return readable ? { ...rest, route: readable } : rest;
 }
 
 /**
@@ -1102,12 +1133,18 @@ export async function resolveStream(
     // A frame the page cannot read ends the stream: its `error` event is the
     // run's last, so a trailing `done` cannot settle the run over it.
     let unreadable = false;
-    const parse = makeSseParser((_event, data) => {
+    const parse = makeSseParser((event, data) => {
         if (unreadable) return;
         // `kind` inside the payload duplicates the `event:` line; trust the payload.
+        // A `route` frame's data is the route object itself, so it is read by
+        // its event name.
         try {
             const ev = JSON.parse(data);
-            if (ev?.kind === 'response') {
+            if (event === 'route' || ev?.kind === 'route') {
+                const route = studioRoute(ev);
+                const traceId = typeof ev?.trace_id === 'string' ? ev.trace_id : null;
+                if (route) onEvent({ kind: 'route', route, traceId });
+            } else if (ev?.kind === 'response') {
                 unreadable = !emitResponse(onEvent, ev.response, ev);
             } else if (ev?.kind === 'place_options') {
                 // Wire SlotOption[] -> the flat EntityOption shape a live

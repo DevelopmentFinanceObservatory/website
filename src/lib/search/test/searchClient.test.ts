@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
     applyDoneEvent,
     artifactHref,
+    buildRequest,
     createSearchShare,
     entityOptions,
     fetchDatasetOptions,
@@ -16,6 +17,7 @@ import {
     placeOptionValues,
     resolveStream,
     type SearchEvent,
+    type SearchInput,
 } from '../searchClient.ts';
 import type { SlotOption, Spec as WireSpec } from '@developmentfinance/client/wire';
 
@@ -1197,4 +1199,78 @@ test('artifactHref prefixes the Datasets API origin onto a root-relative artifac
 
     assert.equal(artifactHref(url), url);
     assert.equal(artifactHref(url, 'https://apis.example.org'), `https://apis.example.org${url}`);
+});
+
+// Only Get Data's raw-text submits opt in to the Studio router; a run that
+// leaves the field out, and every dataset_resubmit post, gets no route.
+test('buildRequest sends studio_routing only on an opted-in raw_text run', () => {
+    const rawText: SearchInput = { kind: 'raw_text', query: 'Why is aid to Kenya falling?' };
+    const resubmit: SearchInput = { kind: 'dataset_resubmit', entries: [] };
+    const cases: [string, ReturnType<typeof buildRequest>, boolean][] = [
+        ['raw_text, opted in', buildRequest(rawText, true, { studioRouting: true }), true],
+        ['raw_text, not opted in', buildRequest(rawText, true), false],
+        [
+            'dataset_resubmit, opted in',
+            buildRequest(resubmit, true, { studioRouting: true }),
+            false,
+        ],
+    ];
+
+    for (const [name, body, routed] of cases) {
+        const input: Record<string, unknown> = body.input;
+
+        assert.equal(input.studio_routing, routed ? true : undefined, name);
+        assert.equal('studio_routing' in input, routed, name);
+        assert.equal('studio_routing' in body, false, name);
+    }
+});
+
+test('normalizeResponse keeps a readable route and drops one it cannot read', () => {
+    const declined = fixtures['declined-out-of-scope'] as Record<string, unknown>;
+    const route = { target: 'studio', mode: 'auto', probability: 0.94 };
+
+    assert.deepEqual(normalizeResponse({ ...declined, route }).route, route);
+    assert.equal('route' in normalizeResponse({ ...declined, route: null }), false);
+    assert.equal(
+        'route' in normalizeResponse({ ...declined, route: { target: 'studio', mode: 'later' } }),
+        false,
+    );
+    assert.deepEqual(
+        normalizeResponse({ ...resolution(fixtures['definite-single']), route }).route,
+        route,
+    );
+});
+
+/** Every event resolveStream emits for `frames`, sent as one event stream. */
+async function rawStreamEvents(frames: string): Promise<SearchEvent[]> {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+        new Response(frames, { headers: { 'content-type': 'text/event-stream' } });
+    try {
+        const events: SearchEvent[] = [];
+        await resolveStream({}, (event) => events.push(event));
+        return events;
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+}
+
+// The early frame's data is the route object itself, with no `kind`, and
+// the run's trace id beside it.
+test('resolveStream reads an early route frame by its event name and skips an unreadable one', async () => {
+    const offer = { target: 'studio', mode: 'offer', probability: 0.71 };
+    const events = await rawStreamEvents(
+        `event: route\ndata: ${JSON.stringify({ ...offer, trace_id: 'trace-9' })}\n\n` +
+            `event: route\ndata: ${JSON.stringify(offer)}\n\n` +
+            `event: route\ndata: ${JSON.stringify({ ...offer, trace_id: 42 })}\n\n` +
+            `event: route\ndata: ${JSON.stringify({ target: 'elsewhere', mode: 'offer' })}\n\n` +
+            `event: done\ndata: ${JSON.stringify({ kind: 'done', warnings: [] })}\n\n`,
+    );
+
+    assert.deepEqual(events, [
+        { kind: 'route', route: offer, traceId: 'trace-9' },
+        { kind: 'route', route: offer, traceId: null },
+        { kind: 'route', route: offer, traceId: null },
+        { kind: 'done', warnings: [] },
+    ]);
 });

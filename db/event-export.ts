@@ -20,6 +20,8 @@ import type {
     SearchSource,
 } from '../src/lib/search/searchEvents.ts';
 import type { SearchShareMode } from '../src/lib/search/searchShareRequest.ts';
+import type { HandoffTrigger } from '../src/lib/search/studioHandoff.ts';
+import type { RouteStayTrigger } from '../src/lib/search/studioRoute.ts';
 import type { DeclinedReason, Known, ResolveResponse } from '../src/lib/search/types.ts';
 
 import {
@@ -84,6 +86,8 @@ type PropRule =
     // a list of up to MAX_LIST_IDS measure tokens (MEASURE_PATTERN, which
     // admits `|`), each one or NO_ID
     | 'measures'
+    // a number from 0 to 1, or null
+    | 'probability'
     // one of these strings
     | readonly string[];
 
@@ -108,6 +112,10 @@ const SEARCH_SOURCES = every<SearchSource>()([
     'permalink',
     'share',
     'version_link',
+    'route_back',
+    'move_back',
+    'route_stay',
+    'routing_off',
 ]);
 const EDIT_KINDS = every<EditKind>()([
     'slot',
@@ -155,6 +163,8 @@ const DATA_VIEW_VIA = every<DataViewVia>()(['share']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
 const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
+const HANDOFF_TRIGGERS = every<HandoffTrigger>()(['auto', 'offer', 'out_of_prompts', 'button']);
+const ROUTE_STAY_TRIGGERS = every<RouteStayTrigger>()(['button', 'escape', 'out_of_prompts']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -209,7 +219,10 @@ export const PROP_RULES = {
         searchId: 'token',
         traceId: 'token',
         seeds: 'count',
+        trigger: HANDOFF_TRIGGERS,
+        probability: 'probability',
     },
+    'search.route_stay': { ...EVERY_EVENT, traceId: 'token', trigger: ROUTE_STAY_TRIGGERS },
     'search.action': {
         ...EVERY_EVENT,
         searchId: 'token',
@@ -256,6 +269,7 @@ export const PROP_RULES = {
         guest: 'boolean',
     },
     'auth.signin': { ...EVERY_EVENT, provider: 'token' },
+    'studio.route_back': { ...EVERY_EVENT, traceId: 'token' },
     'guest.wall_hit': { ...EVERY_EVENT, prompts: 'count' },
     // Literals in src/app/api/feedback/route.ts, without a named type.
     'feedback.submit': { ...EVERY_EVENT, kind: ['chat', 'widget'] },
@@ -322,6 +336,8 @@ const passes = (rule: PropRule, value: unknown): boolean => {
             return listOf(TOKEN, value);
         case 'measures':
             return listOf(MEASURE, value);
+        case 'probability':
+            return value === null || (typeof value === 'number' && value >= 0 && value <= 1);
         default:
             return typeof value === 'string' && rule.includes(value);
     }
@@ -420,7 +436,7 @@ const exportPage = (page: string | null): string | null => {
 // change reaches every day (exportRules). READ_DAY_SQL, which shapes the
 // rows they take, enters the digest as its text and needs no bump. The
 // golden rows in db/test/event-export.test.ts pin each version's output.
-export const ROW_SHAPE_VERSION = 4;
+export const ROW_SHAPE_VERSION = 5;
 
 /**
  * One page of a UTC day's events (pgEventSource's readDay), with

@@ -40,6 +40,7 @@ import {
     type SpecIdentity,
 } from './types.ts';
 import { statVarsUnreadable } from './view.ts';
+import type { HandoffTrigger } from './studioHandoff.ts';
 
 /** How many entity terms a refused part keeps. */
 export const EVENT_SAMPLE = 3;
@@ -53,13 +54,31 @@ type Rung = 'full' | 'sampled' | 'minimal' | 'floor';
 
 /** Where a search's text came from: the prompt, an example sentence, the
  *  starting point's catalogue, a refine of the heading, a retry, a `?q=`
- *  permalink, a share link, or a dataset version link (`?spec=`). */
+ *  permalink, a share link, a dataset version link (`?spec=`), Studio's way
+ *  back after a routed move (`route_back`), Back to the entry an automatic
+ *  move leaves (`move_back`), the reader staying on the data search of a
+ *  question the router sent to Studio (`route_stay`), or any other
+ *  `routing=off` URL (`routing_off`: a reload, a copied link). */
 export type SearchSource =
-    'typed' | 'example' | 'catalogue' | 'refine' | 'retry' | 'permalink' | 'share' | 'version_link';
+    | 'typed'
+    | 'example'
+    | 'catalogue'
+    | 'refine'
+    | 'retry'
+    | 'permalink'
+    | 'share'
+    | 'version_link'
+    | 'route_back'
+    | 'move_back'
+    | 'route_stay'
+    | 'routing_off';
 
-/** The `/data` query param that carries a prompt's source from another page.
- *  `/data` reads it once and strips it from the URL before the search
- *  settles, so a copied link holds `?q=` alone and records `permalink`. */
+/** The `/data` query param that carries a search's source from another
+ *  page or history entry: a prompt's `typed` or `example`, Studio's way
+ *  back (`route_back`), or the entry an automatic move leaves
+ *  (`move_back`). `/data` reads it once and strips it from the URL before
+ *  the search settles, so a copied link holds `?q=` alone and records
+ *  `permalink`, or `routing_off` with `routing=off`. */
 export const HANDOFF_SOURCE_PARAM = 'via';
 
 /** The `/data` URL a prompt on another page sends its query to. */
@@ -70,6 +89,72 @@ export const handoffHref = (query: string, via: 'typed' | 'example'): string =>
  *  and `permalink` for anything else, a missing param included. */
 export const handoffSource = (via: string | null): SearchSource =>
     via === 'typed' || via === 'example' ? via : 'permalink';
+
+/** The `/data` query param that keeps the search API's Studio router off
+ *  (`routing=off`) for the question in `q`. Studio's way back sets it, and
+ *  so does an automatic move on the history entry it leaves, so the
+ *  question is searched as data. The URL keeps it while the page shows
+ *  that question, so a reload, Back and Forward, and a copied link all
+ *  search it as data too. */
+export const HANDOFF_ROUTING_PARAM = 'routing';
+
+/** Whether a search of `query` stays out of the Studio router: the URL
+ *  holds `routing=off` for that same question. A new question drops it. */
+export const routingOffFor = (params: URLSearchParams, query: string): boolean =>
+    params.get(HANDOFF_ROUTING_PARAM) === 'off' && params.get('q') === query;
+
+/** The `/data` URL of the view on screen: the question, its edits' encoded
+ *  permalink state when it has any, and `routing=off` while the router
+ *  stays off for it (routingOffFor). */
+export const dataSearchHref = ({
+    query,
+    state,
+    routingOff,
+}: {
+    query: string;
+    state?: string;
+    routingOff: boolean;
+}): string =>
+    `/data?q=${encodeURIComponent(query)}${state ? `&s=${state}` : ''}${
+        routingOff ? `&${HANDOFF_ROUTING_PARAM}=off` : ''
+    }`;
+
+/** The `/data` URL of Studio's way back. It searches `query` as data, with
+ *  no Studio router, and carries `via=route_back` so the search records
+ *  it. */
+export const routeBackHref = (query: string): string =>
+    `${dataSearchHref({ query, routingOff: true })}&${HANDOFF_SOURCE_PARAM}=route_back`;
+
+/** The `/data` URL an automatic move writes into the history entry it
+ *  leaves. It searches `query` as data, with no Studio router, and carries
+ *  `via=move_back` so Back to it records that source. */
+export const moveBackHref = (query: string): string =>
+    `${dataSearchHref({ query, routingOff: true })}&${HANDOFF_SOURCE_PARAM}=move_back`;
+
+const routingOffSource = (via: string | null): SearchSource =>
+    via === 'route_back' || via === 'move_back' ? via : 'routing_off';
+
+/** What a `/data` arrival's handoff params ask for: the search's source,
+ *  and the URL with `via` stripped (null when the URL holds none).
+ *  `routing=off` stays in the URL. With it the source is `route_back` for
+ *  Studio's way back (routeBackHref), `move_back` for Back to the entry an
+ *  automatic move leaves (moveBackHref), and `routing_off` for any other
+ *  arrival. */
+export const handoffArrival = (
+    params: URLSearchParams,
+): { source: SearchSource; href: string | null } => {
+    const rest = new URLSearchParams(params);
+
+    rest.delete(HANDOFF_SOURCE_PARAM);
+
+    return {
+        source:
+            params.get(HANDOFF_ROUTING_PARAM) !== 'off'
+                ? handoffSource(params.get(HANDOFF_SOURCE_PARAM))
+                : routingOffSource(params.get(HANDOFF_SOURCE_PARAM)),
+        href: rest.toString() === params.toString() ? null : `/data?${rest}`,
+    };
+};
 
 /** The useSearchRun callback that posted an edit. `replay` is a permalink's
  *  stored edits, posted once after its base run lands. */
@@ -117,6 +202,11 @@ export type SearchEventProps = Partial<SearchSettleProps> & {
     operations: OperationVerb[];
     /** Studio seeds stored by a handoff click. */
     seeds?: number;
+    /** What started a Studio handoff. */
+    trigger?: HandoffTrigger;
+    /** The search API router's studio probability behind a routed handoff;
+     *  null when the route came from the question read. */
+    probability?: number | null;
     /** Set when the event had to drop to its minimal form or the floor. */
     truncated?: true;
     /** The spec id of each resolved part, in order; flat so the export can keep it. */
@@ -272,6 +362,8 @@ export function searchEventProps({
     reason,
     parts,
     seeds,
+    trigger,
+    probability,
     run,
 }: {
     query: string;
@@ -281,6 +373,9 @@ export function searchEventProps({
     parts: HydratedPart[];
     /** A caller's own fields ride inside the fit, so none is added after it. */
     seeds?: number;
+    /** A Studio hand-off's trigger, and its route's probability when routed. */
+    trigger?: HandoffTrigger;
+    probability?: number | null;
     /** A settled post's fields, or the ids a Studio hand-off carries. */
     run?: Partial<SearchSettleProps>;
 }): SearchEventProps {
@@ -367,6 +462,8 @@ export function searchEventProps({
         reason,
         operations,
         ...(seeds !== undefined && { seeds }),
+        ...(trigger && { trigger }),
+        ...(probability !== undefined && { probability }),
         ...(rung === 'minimal' || rung === 'floor' ? { truncated: true as const } : {}),
         specIds,
         measures,

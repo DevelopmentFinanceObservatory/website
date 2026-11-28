@@ -9,6 +9,8 @@ test('POST /api/events takes the browser names and refuses server events', async
         ['search.query', true],
         ['studio.download', true],
         ['page.view', true],
+        ['studio.route_back', true],
+        ['search.route_stay', true],
         ['data.view', false],
         ['share.copy', true],
         ['share.open', false],

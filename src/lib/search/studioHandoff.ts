@@ -6,7 +6,11 @@
  * all describe the data the user sees.
  */
 
-import { HANDOFF_VIA_PARAM } from '../studio/examples.ts';
+import {
+    HANDOFF_EXAMPLE_PARAM,
+    HANDOFF_TRACE_PARAM,
+    HANDOFF_VIA_PARAM,
+} from '../studio/examples.ts';
 import type { Seed, SeedOperation } from '../studio/wire.ts';
 
 import { unflattenSpec } from './searchClient.ts';
@@ -103,10 +107,11 @@ const operationKey = ({ verb, phrase, over, target_year }: Operation): string =>
     JSON.stringify([verb, phrase, over ?? null, target_year ?? null]);
 
 /** Whether a search asks a Data search example's text: it was picked as
- *  an example, or it is a Retry of a search that was, which reruns the same
- *  question. `previous` is the search it replaces. */
+ *  an example, or it reruns the same question of a search that was, as a
+ *  Retry or as the data search a reader stays on instead of the router's
+ *  move to Studio (`route_stay`). `previous` is the search it replaces. */
 export function searchFromExample(source: SearchSource, previous: boolean): boolean {
-    return source === 'example' || (source === 'retry' && previous);
+    return source === 'example' || ((source === 'retry' || source === 'route_stay') && previous);
 }
 
 /** Whether the question handed to Studio is a Data search example's text:
@@ -122,18 +127,68 @@ export function handoffFromExample({
     return fromExample && !edited;
 }
 
+/** What started a Studio handoff: the search API's automatic move (`auto`),
+ *  a click on its Studio offer (`offer`), a click on the Studio card a
+ *  guest with no free prompt left gets in place of the move
+ *  (`out_of_prompts`), or a click on any other Studio action (`button`). */
+export type HandoffTrigger = 'auto' | 'offer' | 'out_of_prompts' | 'button';
+
+/** How a handed-over question came from search, as Studio's `via` param. */
+export type HandoffVia = 'example' | 'route_auto' | 'route_offer';
+
+/** The `via` a handoff carries: the route's own value for a routed one, and
+ *  `example` for a button click on a search example's question. */
+export function handoffVia({
+    trigger,
+    fromExample,
+}: {
+    trigger: HandoffTrigger;
+    fromExample: boolean;
+}): HandoffVia | null {
+    if (trigger === 'auto') return 'route_auto';
+    if (trigger === 'offer' || trigger === 'out_of_prompts') return 'route_offer';
+    return fromExample ? 'example' : null;
+}
+
+/** The navigation transition types of every Get Data handoff to Studio
+ *  (the router's automatic move, its offer, and the other Studio actions)
+ *  and of Studio's way back to the data search. RouteMove, around the site
+ *  layout and the /studio page, animates only these
+ *  (src/styles/_route-move.scss). */
+export const ROUTE_TO_STUDIO = 'route-to-studio';
+export const ROUTE_TO_DATA = 'route-to-data';
+
 /** Studio's URL for a handoff: the question, the token the seeds are
- *  stored under when there are any, and `via=example` for a search
- *  example's question. */
-export function studioHref(question: string, token: string | null, fromExample = false): string {
+ *  stored under when there are any, how the question came (`via`), the
+ *  search's trace id for a routed one, and `example=1` for a routed
+ *  question that is a Data search example's text (handoffFromExample). */
+export function studioHref(
+    question: string,
+    token: string | null,
+    {
+        via = null,
+        traceId = null,
+        fromExample = false,
+    }: { via?: HandoffVia | null; traceId?: string | null; fromExample?: boolean } = {},
+): string {
     const params = new URLSearchParams({ q: question });
 
     if (token) {
         params.set('seed', token);
     }
 
-    if (fromExample) {
-        params.set(HANDOFF_VIA_PARAM, 'example');
+    if (via) {
+        params.set(HANDOFF_VIA_PARAM, via);
+    }
+
+    if (via === 'route_auto' || via === 'route_offer') {
+        if (traceId) {
+            params.set(HANDOFF_TRACE_PARAM, traceId);
+        }
+
+        if (fromExample) {
+            params.set(HANDOFF_EXAMPLE_PARAM, '1');
+        }
     }
 
     return `/studio?${params}`;

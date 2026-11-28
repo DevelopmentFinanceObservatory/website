@@ -25,6 +25,12 @@
         opacity var(--ws-dur) var(--ws-ease) var(--ws-delay);
 }
 
+// Already in place on a question handed over from Get Data (Studio's
+// `arrival`), which the move carries in.
+[data-arrival="route"] .chatPanel {
+    animation: none;
+}
+
 // Collapsed: the panel rides back out beyond the left edge.
 .chatHidden {
     pointer-events: none;

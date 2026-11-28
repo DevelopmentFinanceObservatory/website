@@ -22,6 +22,7 @@ import StudioModals from './modals/StudioModals';
 import { useStudioModals } from './modals/useStudioModals';
 import styles from './Studio.module.scss';
 import ChatPanel, { type ChatTab } from './workspace/ChatPanel';
+import RouteArrival from './workspace/RouteArrival';
 import WorkspaceToolbar from './workspace/WorkspaceToolbar';
 
 import Button from '@/components/atoms/Button/Button';
@@ -42,7 +43,13 @@ import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { editedCanvasCards, pinEdit } from '@/lib/studio/canvasEdits';
 import { cardUnitChange } from '@/lib/studio/cardUnit';
 import { liveDataThrough } from '@/lib/studio/dataThrough';
-import { HANDOFF_VIA_PARAM, handoffPromptSource } from '@/lib/studio/examples';
+import {
+    arrivalDraftHref,
+    handoffPromptSource,
+    questionParam,
+    routedArrival,
+    STUDIO_DRAFT_PARAM,
+} from '@/lib/studio/examples';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -51,7 +58,13 @@ import {
     citeLinkOnce,
     logRefusedDescriptions,
 } from '@/lib/studio/infoPanel';
-import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
+import {
+    GUEST_PROMPTS_KEY,
+    guestOutOfPrompts,
+    guestPromptsUsed,
+    promptEvent,
+    type PromptIntent,
+} from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
@@ -64,6 +77,9 @@ const FILL_SHADES = ['#ffffff', '#eceada', '#dedcc6', '#cfceb6'];
 // Landing → workspace choreography: the landing staggers out first, then the
 // workspace mounts (pattern morphs, chat slides in, bar actions cascade).
 const STAGE_OUT_MS = 560;
+// The chat line a turn opens with (useChat's send), shown on a handed-over
+// question until its turn starts.
+const ARRIVAL_STATUS = 'Resolving the question';
 
 type Mode = 'start' | 'leaving' | 'workspace';
 
@@ -100,13 +116,17 @@ export type StudioProps = {
 // The guest's prompt count in this browser, which decides when the wall goes
 // up. The proxy holds the real allowance (src/lib/studio/spendPrompt): a
 // guest past it, from a cleared browser too, gets its refusal as the reply.
-const GUEST_KEY = 'dfo-guest-prompts';
 const guestListeners = new Set<() => void>();
-const readGuestUsed = () => Number(localStorage.getItem(GUEST_KEY)) || 0;
+const readGuestUsed = () => guestPromptsUsed(localStorage);
 const writeGuestUsed = (used: number) => {
-    localStorage.setItem(GUEST_KEY, String(used));
+    localStorage.setItem(GUEST_PROMPTS_KEY, String(used));
     guestListeners.forEach((listener) => listener());
 };
+// True once the page renders on the client: false on the server and for the
+// hydration pass, true from the first render of a client navigation.
+const subscribeNothing = () => () => {};
+const onClient = () => true;
+const onServer = () => false;
 const subscribeGuest = (listener: () => void) => {
     guestListeners.add(listener);
 
@@ -141,7 +161,18 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // whiteboard) rides the root font-size like the rest of the page.
     const gridCell = useGridCell();
     const gridScale = gridCell / GRID_CELL;
-    const [mode, setMode] = useState<Mode>(shared ? 'workspace' : 'start');
+    const searchParams = useSearchParams();
+    // A question handed over from Get Data (`/studio?q=…`, studioHref in
+    // src/lib/search/studioHandoff.ts) opens straight on the workspace, the
+    // question and a pending line already in its transcript (`shownChat`),
+    // so the page Get Data's move carries in is the page that stays. The
+    // section's `data-arrival` holds the workspace's entrance animations
+    // until New Chat leaves it. Read once, at mount. A blank question is no
+    // arrival, and opens the landing.
+    const [arrival, setArrival] = useState(() =>
+        shared || openId ? null : questionParam(searchParams, 'q'),
+    );
+    const [mode, setMode] = useState<Mode>(shared || arrival ? 'workspace' : 'start');
     // Cols/rows span a full desktop viewport — off-viewport cells on smaller
     // screens just clip.
     const fills = useGridFills({
@@ -152,7 +183,13 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     });
     // The landing's opener is a growing textarea; the type covers both.
     const inputRef = useRef<PromptField>(null);
-    const [query, setQuery] = useState(sharedSaved?.title ?? '');
+    // A guest's handed-over question, once its turn started, comes back as
+    // a draft (`/studio?draft=`, arrivalDraftHref): the landing opens with
+    // it in the opener, unsent.
+    const [query, setQuery] = useState(
+        () =>
+            sharedSaved?.title ?? arrival ?? questionParam(searchParams, STUDIO_DRAFT_PARAM) ?? '',
+    );
     // The chat's follow-up field, kept here so text typed into the landing's
     // field while it leaves carries into it (see `leaving` below).
     const [followDraft, setFollowDraft] = useState('');
@@ -198,6 +235,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     });
     // Guest prompts spent so far (0 on the server and for the hydration pass).
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
+    const clientRendered = useSyncExternalStore(subscribeNothing, onClient, onServer);
     // A prompt counts once it is actually sent (a queued one can still be
     // removed): the count follows the user turns in the transcript, so the
     // queue's own drain is covered too. A prompt the harness refused before
@@ -223,7 +261,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     }, [guest, sentCount, refundedCount]);
 
     // Queued prompts hold their place in the limit until sent or removed.
-    const walled = guest && guestUsed + conversation.queued.length >= GUEST_PROMPTS;
+    const walled = guestOutOfPrompts({ guest, used: guestUsed + conversation.queued.length });
     // Every prompt (landing, follow-up, card menu, a clicked chip) goes
     // through here: past the limit a guest's is dropped, the rest are counted
     // as usage (turn, intent and a typed prompt's length, never the text). A
@@ -388,11 +426,14 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // A question handed over from the search page (`/studio?q=…&seed=…`),
     // with the token its seeds are stored under and, for a search example,
     // its source. Consumed once, below, after `begin` exists.
-    const searchParams = useSearchParams();
-    const handover = searchParams.get('q');
+    const handover = questionParam(searchParams, 'q');
     const seedToken = searchParams.get('seed');
-    const handoverSource = handoffPromptSource(searchParams.get(HANDOFF_VIA_PARAM));
+    const handoverSource = handoffPromptSource(searchParams);
     const handedOver = useRef(false);
+    // A question the search API's router moved here: its conversation says
+    // why and offers the way back, until New Chat or a saved conversation
+    // replaces it. Read once, since an account's first turn moves the URL.
+    const [routed, setRouted] = useState(() => routedArrival(searchParams));
 
     // `source` names the example a picked question came from; a typed one
     // has none.
@@ -417,7 +458,11 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         doc.reset();
         setQuery(trimmed);
         chat.send(trimmed, undefined, seeds, undefined, source);
-        enterWorkspace();
+
+        // A handed-over question is already on the workspace.
+        if (mode === 'start') {
+            enterWorkspace();
+        }
     };
 
     // Reopen a saved conversation exactly as it was left — same transcript,
@@ -428,6 +473,8 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     const openSaved = (stored: SavedConversation, fromGuest = false) => {
         // A fork's inherited turns and cards are marked as such (openedSave).
         const saved = openedSave(stored);
+
+        setRouted(null);
 
         window.history.replaceState(null, '', `/studio/${saved.id}`);
         saved.widgets.forEach((widget) => trackedCards.current.add(widget.id));
@@ -474,7 +521,10 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // The other half of QA-58: signed in, with a guest canvas waiting in
     // this tab, Studio reopens it instead of the empty landing. Saving is on
     // now, so hydrating it is also what writes it to history. Deferred by a
-    // tick for the same reason the `?q=` handover below is — see its note.
+    // tick on purpose. `openSaved` starts the landing's stage-out on a timer
+    // that the mount effect's cleanup clears, and in development React
+    // mounts, cleans up and mounts again; starting it inside that window
+    // would cancel the transition and leave the page on a blank stage.
     const restored = useRef(false);
 
     useEffect(() => {
@@ -521,6 +571,8 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         save.track(null, {});
         window.history.replaceState(null, '', '/studio');
         window.clearTimeout(leaveTimer.current);
+        setRouted(null);
+        setArrival(null);
         setQuery('');
         setFollowDraft('');
         setChatCollapsed(false);
@@ -627,27 +679,31 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     };
 
     // Studio opens on the handed-over question instead of a blank canvas.
-    // The id-bearing URL replaces this one as soon as the turn starts, so a
-    // refresh continues the conversation rather than re-asking.
+    // For an account, the id-bearing URL replaces this one as soon as the
+    // turn starts, so a refresh continues the conversation. A guest's
+    // conversation has no URL of its own, so its entry becomes the
+    // question as a draft (arrivalDraftHref): Back, Forward, a reload or a
+    // copied link open the landing with the question unsent, and spend no
+    // second prompt. The question is already on the workspace, so the turn
+    // starts here, after the commit that showed it.
     useEffect(() => {
-        // Deferred by a tick on purpose. `begin` starts the landing's
-        // stage-out on a timer that the mount effect's cleanup clears, and in
-        // development React mounts, cleans up and mounts again — starting the
-        // turn inside that window would cancel the transition and leave the
-        // page on a blank stage. A tick puts it safely after.
-        const handle = window.setTimeout(() => {
-            if (handover && !handedOver.current) {
-                handedOver.current = true;
-                // Seeds that cannot be read leave the question alone.
-                begin(
-                    handover,
-                    handoverSource,
-                    (seedToken && takeSeeds(() => window.sessionStorage, seedToken)) || undefined,
-                );
-            }
-        }, 0);
+        if (!handover || handedOver.current) {
+            return;
+        }
 
-        return () => window.clearTimeout(handle);
+        handedOver.current = true;
+        // Seeds that cannot be read leave the question alone.
+        begin(
+            handover,
+            handoverSource,
+            (seedToken && takeSeeds(() => window.sessionStorage, seedToken)) || undefined,
+        );
+
+        const draft = !account && arrivalDraftHref(new URLSearchParams(window.location.search));
+
+        if (draft) {
+            window.history.replaceState(null, '', draft);
+        }
         // `begin` is rebuilt every render; the ref is what makes this run once.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [handover, handoverSource, seedToken]);
@@ -710,6 +766,22 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     };
 
     const title = doc.conversationTitle ?? query;
+    // A handed-over question before its turn starts: shown as the turn will
+    // show it, the question with its pending line. React runs the effects
+    // of a commit that a view transition carries only once the transition
+    // ends, so the turn the handover effect starts lands after Get Data's
+    // move, and the move carries this transcript in. A guest's wall is known
+    // only on the client, so a guest's hard load shows it from the first
+    // client render, and a guest out of prompts never sees it.
+    const shownChat =
+        arrival && chat.messages.length === 0 && !walled && (!guest || clientRendered)
+            ? {
+                  ...chat,
+                  messages: [{ role: 'user' as const, text: arrival, turn: 1 }],
+                  thinking: true,
+                  status: ARRIVAL_STATUS,
+              }
+            : chat;
     const firstPrompt = chat.messages.find((message) => message.role === 'user')?.text ?? query;
     const inWorkspace = mode === 'workspace';
 
@@ -727,6 +799,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                 filtersRow && styles.filtersRow,
                 chatShown && styles.chatShown,
             )}
+            data-arrival={arrival ? 'route' : undefined}
         >
             {/* Docking starts with the stage-out (not after it) — one continuous
                 move instead of two beats. */}
@@ -985,7 +1058,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                         onDraftChange={setFollowDraft}
                         editTarget={editTarget}
                         onClearEditTarget={() => setEditTarget(null)}
-                        chat={chat}
+                        chat={shownChat}
                         tab={chatTab}
                         collapsed={chatCollapsed}
                         gone={solo}
@@ -997,6 +1070,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
                         // a share, which opens straight on the workspace.
                         autoFocus={!shared && !phone}
                         wall={walled ? <GuestWall /> : null}
+                        arrival={routed && <RouteArrival {...routed} />}
                         shareMarks={doc.shareMarks}
                         titles={doc.titles}
                         views={doc.views}

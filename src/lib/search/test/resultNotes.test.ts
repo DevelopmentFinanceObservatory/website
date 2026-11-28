@@ -323,6 +323,15 @@ test('studioHandoffParts keeps only the first of several identical studio hand-o
     );
 });
 
+test('studioHandoffParts drops every studio hand-off when the page already offers Studio', () => {
+    const parts = [flaggedPart, studioPart, { ...studioPart, index: 2 }];
+
+    assert.deepEqual(
+        studioHandoffParts(parts, null, true).map((p) => p.index),
+        [1],
+    );
+});
+
 test('studioHandoffParts keeps every flagged/alternate callout -- each carries its own part-specific text', () => {
     const parts = [flaggedPart, { ...flaggedPart, index: 2 }];
 

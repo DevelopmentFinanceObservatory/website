@@ -39,6 +39,10 @@
     height: 100dvh;
     overflow: hidden;
     color: var(--color-charcoal);
+
+    // The page's own colour, painted here as well, so the sheet the move
+    // from Get Data carries in (RouteMove) is opaque.
+    background-color: var(--color-bg);
 }
 
 .canvas {
@@ -183,6 +187,17 @@
 @keyframes board-in {
     from {
         opacity: 0;
+    }
+}
+
+// A question handed over from Get Data opens on the workspace already in
+// place (Studio's `arrival`): the move carries the page in, so nothing in it
+// enters on its own.
+.section[data-arrival="route"] {
+    .fill,
+    .barExtra,
+    .canvasContent {
+        animation: none;
     }
 }
 

@@ -47,11 +47,59 @@ export const pickExamples = (
     return deck.slice(0, drawn);
 };
 
-/** The `/studio` query param that marks a handed-over question as a Data
- *  search example (studioHref in src/lib/search/studioHandoff.ts). */
+/** The `/studio` query param that says how a question came from Data
+ *  search (studioHref in src/lib/search/studioHandoff.ts): `example` for a
+ *  Data search example, `route_auto` for the search API's automatic move to
+ *  Studio, and `route_offer` for a click on its Studio offer. */
 export const HANDOFF_VIA_PARAM = 'via';
 
-/** The prompt source of a `/studio?q=` arrival: `search_example` for
- *  `via=example`, and none for anything else. */
-export const handoffPromptSource = (via: string | null): PromptSource | undefined =>
-    via === 'example' ? 'search_example' : undefined;
+/** The `/studio` query param that carries the trace id of the search a
+ *  routed question (`route_auto` or `route_offer`) came from, so the
+ *  way-back event joins the search API's log. */
+export const HANDOFF_TRACE_PARAM = 'trace';
+
+/** A question the search API's router moved to Studio on its own
+ *  (`via=route_auto`): the question and the routed search's trace id. Any
+ *  other arrival is null. */
+export const routedArrival = (
+    params: URLSearchParams,
+): { question: string; traceId: string | null } | null => {
+    const question = questionParam(params, 'q');
+
+    return question && params.get(HANDOFF_VIA_PARAM) === 'route_auto'
+        ? { question, traceId: params.get(HANDOFF_TRACE_PARAM) }
+        : null;
+};
+
+/** The `/studio` query param (`example=1`) that marks a question moved or
+ *  offered by the search API's router (`route_auto`, `route_offer`) as a
+ *  Data search example's text, which `via=example` marks on a click. */
+export const HANDOFF_EXAMPLE_PARAM = 'example';
+
+/** The prompt source of a `/studio?q=` arrival: `search_example` for a Data
+ *  search example's text (`via=example`, or `example=1` beside a routed
+ *  `via`), and none for anything else. */
+export const handoffPromptSource = (params: URLSearchParams): PromptSource | undefined =>
+    params.get(HANDOFF_VIA_PARAM) === 'example' || params.get(HANDOFF_EXAMPLE_PARAM) === '1'
+        ? 'search_example'
+        : undefined;
+
+/** The `/studio` query param that holds a question typed into the
+ *  landing's opener and left unsent. */
+export const STUDIO_DRAFT_PARAM = 'draft';
+
+/** The question in `param` with its outer spaces trimmed, or null when it
+ *  is missing or blank. */
+export const questionParam = (params: URLSearchParams, param: string): string | null =>
+    params.get(param)?.trim() || null;
+
+/** The `/studio?draft=` URL that replaces a guest's arrival URL once its
+ *  turn starts, or null when the URL holds no question. Back, Forward, a
+ *  reload or a copied link then open the landing with the question in the
+ *  opener, unsent, and do not spend a second prompt or replay how it
+ *  arrived. */
+export const arrivalDraftHref = (params: URLSearchParams): string | null => {
+    const question = questionParam(params, 'q');
+
+    return question && `/studio?${new URLSearchParams({ [STUDIO_DRAFT_PARAM]: question })}`;
+};
