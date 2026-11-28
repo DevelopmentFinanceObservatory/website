@@ -4,7 +4,6 @@ import type { SavedConversation } from '../chat/history.ts';
 import { isLiveStudioShare, type StudioShareKind } from '../chat/shareMode.ts';
 import type { CardInfo, Widget } from '../chat/widgets.ts';
 import { shortDateText } from '../sources/updateDates.ts';
-import type { LatestPeriod } from './dataThrough.ts';
 import type { LiveCard } from './liveBackend.ts';
 import type { Description } from './description.ts';
 import { gateOf } from './gate.ts';
@@ -176,18 +175,14 @@ export const isLiveCanvas = (canvas: LiveCanvas | undefined): canvas is LiveCanv
 
 /**
  * The line a live canvas shows once. It says its data is current, how recent
- * it is when `latest` is given: the period every card reaches, or the
- * latest one shown when the cards reach different ones; and that its titles
- * and notes are as old as the share. The date is the UTC day of
- * `createdAt`, so the server's render and the browser's agree.
+ * it is when `through` is given (`liveDataThrough`: the period every card
+ * reaches, or the earliest and latest), and that its titles and notes are as
+ * old as the share. The date is the UTC day of `createdAt`, so the server's
+ * render and the browser's agree.
  */
-export const liveNote = (createdAt: string | undefined, latest?: LatestPeriod | null): string => {
+export const liveNote = (createdAt: string | undefined, through?: string | null): string => {
     const written = createdAt ? new Date(createdAt) : null;
-    const data = !latest
-        ? 'Live data'
-        : latest.shared
-          ? `Live data through ${latest.period}`
-          : `Live data · latest period shown ${latest.period}`;
+    const data = through ? `Live data through ${through}` : 'Live data';
 
     return written && !Number.isNaN(written.getTime())
         ? `${data} · titles and notes written ${shortDateText(written)}`

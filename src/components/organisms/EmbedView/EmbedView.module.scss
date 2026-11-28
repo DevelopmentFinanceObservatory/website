@@ -31,18 +31,29 @@
 
 // A live share: the frame gives up one strip at its foot, which says the
 // data is live and when the text was written. The sheet or the card takes
-// the rest, so the line sits clear of every card.
+// the rest, so the line sits clear of every card. The line wraps on a narrow
+// frame, and the root gives up the strip's measured height (`--note-strip`,
+// set by EmbedView), one line's until it is measured.
 $note-strip: rem(28);
+$strip-floor: calc(#{$note-strip} + env(safe-area-inset-bottom));
 
 .live {
-    bottom: calc(#{$note-strip} + env(safe-area-inset-bottom));
+    bottom: var(--note-strip, #{$strip-floor});
 }
 
-.noteStrip {
+// Two classes, so the wrap outranks LiveNote's own nowrap.
+.live > .noteStrip {
     position: fixed;
     inset: auto 0 0;
-    height: calc(#{$note-strip} + env(safe-area-inset-bottom));
-    padding: 0 rem(10) env(safe-area-inset-bottom);
+    align-items: flex-start;
+    min-height: $strip-floor;
+    padding: rem(6) rem(10) calc(#{rem(6)} + env(safe-area-inset-bottom));
+    white-space: normal;
     background-color: var(--color-grid-bg-light);
     border-top: 1px solid var(--color-net-light);
+
+    // The dot sits on the first line's centre.
+    > :first-child {
+        margin-top: calc((1.3em - #{rem(6)}) / 2);
+    }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import styles from './EmbedView.module.scss';
 
@@ -174,6 +174,44 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHe
     }, [rootRef, liftHeight]);
 };
 
+// Sets `--note-strip` on the root to the live strip's height in CSS pixels:
+// one line on a wide frame and more where the line wraps. The root gives up
+// that height at its foot, so the strip covers no card and the height the
+// embed reports holds the strip. The first measure runs before paint and a
+// ResizeObserver follows the strip after. The property is written on the
+// element directly, outside the `style` React manages, so it costs no render.
+const useNoteStripReserve = (
+    rootRef: React.RefObject<HTMLDivElement | null>,
+    noted: boolean,
+): void => {
+    useLayoutEffect(() => {
+        const root = rootRef.current;
+        const strip = noted ? root?.querySelector('[data-live-note]') : null;
+
+        if (!root || !strip) {
+            return undefined;
+        }
+
+        const reserve = (height: number) => root.style.setProperty('--note-strip', `${height}px`);
+        const measured = new ResizeObserver(([entry]) => {
+            if (entry) {
+                reserve(
+                    entry.borderBoxSize?.[0]?.blockSize ??
+                        entry.target.getBoundingClientRect().height,
+                );
+            }
+        });
+
+        reserve(strip.getBoundingClientRect().height);
+        measured.observe(strip);
+
+        return () => {
+            measured.disconnect();
+            root.style.removeProperty('--note-strip');
+        };
+    }, [rootRef, noted]);
+};
+
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
 // no menu; the legend, tooltips and the source line still work.
 const SingleCard = ({
@@ -240,10 +278,12 @@ const SingleCard = ({
  * tooltips work; nothing can be changed). Either way a card's
  * source line opens its More Info panel. A live share's data cards arrive
  * held and are filled here from the refresh route (see useLiveCards), and
- * the frame says once that its data is live, the period it runs through and
- * when its text was written, on a strip under the sheet or the one card. The
- * period is read from the cards filled so far, one for a card and the
- * earliest and latest for a canvas.
+ * the frame says once that its data is live and when its text was written,
+ * on a strip under the sheet or the one card. Once every data card has
+ * filled and named a period, the strip names it too: the one period they
+ * share, or the earliest and latest for a canvas whose cards differ
+ * (`liveDataThrough`). Until then, and when a card names none or fails, it
+ * reads "Live data".
  */
 const EmbedView = ({ shared }: { shared: SharedView }) => {
     const { kind, saved } = shared;
@@ -261,6 +301,8 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const noted = isLiveCanvas(live);
     const dataThrough = noted ? liveDataThrough(widgets, live) : null;
     const rootRef = useRef<HTMLDivElement>(null);
+
+    useNoteStripReserve(rootRef, noted);
 
     useReportHeight(rootRef, single?.kind === 'table');
 
