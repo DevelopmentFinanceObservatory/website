@@ -13,8 +13,8 @@ const shownNote = ({ rows, totalRows, shownWindow }: ChartData): string =>
         : `Showing none of ${count(totalRows)} rows.`;
 
 export const LibraryChartData = ({ data }: { data: ChartData }): React.JSX.Element => {
-    // A table cut to fit the page says so under it, beside the link to the
-    // full data.
+    // A table cut to fit the page says so above it, beside the link to the
+    // full data, since a cut table can run to thousands of pixels.
     const cut = data.rows.length < data.totalRows;
     const download = (
         <a
@@ -37,7 +37,13 @@ export const LibraryChartData = ({ data }: { data: ChartData }): React.JSX.Eleme
                 <summary>
                     {data.label ? `Data for ${data.label}` : 'Data'} ({formatWindow(data.window)})
                 </summary>
-                {cut ? null : download}
+                {cut ? (
+                    <p>
+                        {shownNote(data)} {download}
+                    </p>
+                ) : (
+                    download
+                )}
                 {data.rows.length ? (
                     <table>
                         <caption>{data.dataset.variableMeasured}</caption>
@@ -60,11 +66,6 @@ export const LibraryChartData = ({ data }: { data: ChartData }): React.JSX.Eleme
                             ))}
                         </tbody>
                     </table>
-                ) : null}
-                {cut ? (
-                    <p>
-                        {shownNote(data)} {download}
-                    </p>
                 ) : null}
             </details>
         </>
