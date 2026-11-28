@@ -41,6 +41,8 @@ is `true`, `1`, `on` or `yes`. Unset or any other value draws `classic` on
 every page. Every `prompt` request carries `hold_removals`, which an older
 harness refuses, so turn the switch on after the harness that accepts
 `hold_removals` is deployed, and off before that harness is rolled back.
+A tab opened while the switch was on keeps sending `hold_removals` until it
+reloads.
 
 A live Studio share draws each card from dfo-apis' public slot card route
 (`GET /api/presentation/shares/{id}/slots/{n}`), which checks for newer data
