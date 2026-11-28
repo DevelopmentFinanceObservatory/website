@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import ArtifactFields, { evergreenOutcome, isComplete, type Refusals } from './ArtifactFields';
 import styles from './EditArtifact.module.scss';
@@ -17,6 +17,7 @@ import {
     type EvergreenWarning,
     isArtifactChangedRefusal,
     readEvergreenWarnings,
+    readRevision,
     withdrawnWithoutReplacement,
 } from '@/lib/library/client';
 import type { ArtifactText } from '@/lib/library/publish';
@@ -48,7 +49,13 @@ const EditArtifact = ({
 }) => {
     const router = useRouter();
     const [open, setOpen] = useState(false);
+    const deleteRef = useRef<HTMLElement>(null);
     const [text, setText] = useState(() => textOf(artifact));
+    // The revision the next save is made from. A save moves the row on, and
+    // the page's own copy follows only once its refresh lands.
+    const [revision, setRevision] = useState(artifact.revision);
+    // The text of the latest save, for a reopening before that refresh lands.
+    const [saved, setSaved] = useState<{ text: ArtifactText; revision: number } | null>(null);
     const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
     const [confirming, setConfirming] = useState(false);
     const [replacedBy, setReplacedBy] = useState<string | null>(null);
@@ -61,7 +68,13 @@ const EditArtifact = ({
 
     const show = (next: boolean) => {
         if (next) {
-            setText(textOf(artifact));
+            const base =
+                saved && saved.revision > artifact.revision
+                    ? saved
+                    : { text: textOf(artifact), revision: artifact.revision };
+
+            setText(base.text);
+            setRevision(base.revision);
             setConfirming(false);
             setReplacedBy(null);
             setError(null);
@@ -85,12 +98,18 @@ const EditArtifact = ({
         setRefusals(null);
         setChanged(false);
 
-        const answer = await editArtifact(artifact.id, text, artifact.revision);
+        const answer = await editArtifact(artifact.id, text, revision);
 
         setBusy(null);
 
         if (answer.ok) {
             const flagged = readEvergreenWarnings(answer.value);
+            const next = readRevision(answer.value);
+
+            if (next !== null) {
+                setRevision(next);
+                setSaved({ text, revision: next });
+            }
 
             // The page behind shows the saved text; flagged sentences keep
             // the dialog open so they are read.
@@ -136,12 +155,21 @@ const EditArtifact = ({
             <Button variant="bordered" full icon="edit" onClick={() => show(true)}>
                 Edit
             </Button>
-            <Modal open={open} onOpenChange={show} title="Edit" fit>
+            <Modal open={open} onOpenChange={show} title="Edit" fit initialFocus="form input">
+                {/* Mounted in both views, so the saved message is announced as
+                    it appears. */}
+                <div role="status">
+                    {warnings && (
+                        <>
+                            <p>The changes were saved.</p>
+                            <EvergreenWarnings warnings={warnings} />
+                        </>
+                    )}
+                </div>
                 {warnings ? (
                     <div className={styles.form}>
-                        <p role="status">The changes were saved.</p>
-                        <EvergreenWarnings warnings={warnings} />
-                        <Button variant="dark" full onClick={() => setOpen(false)}>
+                        {/* The form that held focus is replaced, so focus moves here. */}
+                        <Button variant="dark" full autoFocus onClick={() => setOpen(false)}>
                             Done
                         </Button>
                     </div>
@@ -188,7 +216,13 @@ const EditArtifact = ({
                                     <Button
                                         variant="bordered"
                                         full
-                                        onClick={() => setConfirming(false)}
+                                        autoFocus
+                                        onClick={() => {
+                                            setConfirming(false);
+                                            // The question's buttons leave the page, so
+                                            // focus goes back to the one that asked it.
+                                            queueMicrotask(() => deleteRef.current?.focus());
+                                        }}
                                         disabled={busy !== null}
                                     >
                                         Keep it
@@ -214,6 +248,7 @@ const EditArtifact = ({
                                 </>
                             ) : (
                                 <Button
+                                    ref={deleteRef}
                                     variant="bordered"
                                     full
                                     icon="remove"

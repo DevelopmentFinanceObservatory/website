@@ -144,6 +144,14 @@ export const readEvergreenWarnings = (body: unknown): EvergreenWarning[] => {
         : [];
 };
 
+/** The revision an edit wrote, from its response body, or null when the body
+ *  carries none. */
+export const readRevision = (body: unknown): number | null => {
+    const revision = asRecord(body)?.['revision'];
+
+    return typeof revision === 'number' && Number.isInteger(revision) ? revision : null;
+};
+
 const readEvergreenError = (entry: unknown): EvergreenError | null => {
     const record = asRecord(entry);
     const field = fieldOf(record?.['pointer']);
@@ -279,7 +287,7 @@ export const publishRefusalText = (
 
 /** Changes the text and topics, as of the `revision` they were loaded at. */
 export const editArtifact = (id: string, text: ArtifactText, revision: number) =>
-    call<{ slug: string }>(
+    call<{ slug: string; revision: number }>(
         `/api/library/artifacts/${encodeURIComponent(id)}`,
         send('PATCH', { ...text, revision }),
         'The changes were not saved. Try again.',

@@ -110,6 +110,10 @@
 }
 
 .filters {
+    // The chips sit on the dark hero, so their focus ring is the light ground.
+
+    --filter-ring: var(--color-bg);
+
     @include flex(row, flex-start, center);
 
     flex-wrap: wrap;
@@ -182,6 +186,12 @@
     position: absolute;
     inset: 0;
     z-index: 0;
+}
+
+// The global `*:focus { outline: none }` (styles/main.scss) hides the ring.
+.rowLink:focus-visible {
+    outline: 2px solid var(--color-charcoal);
+    outline-offset: -2px;
 }
 
 .row > :not(.rowLink) {
@@ -295,6 +305,10 @@
 
     .head {
         display: none;
+    }
+
+    .field {
+        height: rem(44);
     }
 
     .row {

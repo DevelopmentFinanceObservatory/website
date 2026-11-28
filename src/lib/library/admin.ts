@@ -417,10 +417,10 @@ const artifactChanged = (): Response =>
 
 /**
  * PATCH /api/library/artifacts/<id> (ArtifactEdit: the text and the
- * `revision` it was loaded at) → { slug, warnings }. An edit from a revision
+ * `revision` it was loaded at) → { slug, revision, warnings }. An edit from a revision
  * the artifact has moved on from answers 409 `artifact_changed`, before the
- * check and again at the write, which applies only while the row is still
- * at that revision. So the text the evergreen rule passed is the text that
+ * check and again at the write, which applies only while the row is at that
+ * revision. So the text the evergreen rule passed is the text that
  * goes live, however long the check takes. The text fields the edit changes
  * are held to the evergreen rule first, outside any transaction, with the
  * publish's 400, 502 and 503 answers. `warnings` lists the sentences that
