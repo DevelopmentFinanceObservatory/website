@@ -4,7 +4,7 @@
  * only what it can render and falls back to em dashes.
  */
 
-import { originLine, viaLabel } from '../dataCommons.ts';
+import { originLine } from '../dataCommons.ts';
 import { capitalise } from '../capitalise.ts';
 import { groupSourceCodes, type SourceCodeGroups } from '../sourceCodes.ts';
 import { spaceCamel } from '../spaceCamel.ts';
@@ -190,44 +190,6 @@ export const shapeOrigin = (shape: Shape | null | undefined): string | null => {
     const labels = origins.map((origin) => origin?.label).filter(Boolean);
 
     return labels.length ? `via ${labels.join(' and ')}` : null;
-};
-
-/** The provenance dcids a spec's own sentence names in its source slot: the
- *  bound source values, else the resolved sources the engine renders when
- *  the slot is unbound. Empty when the sentence names no source. */
-const sentenceSourceRefs = (spec: SpecReading): string[] => {
-    const named = (spec?.sentence_plan ?? []).some(
-        (token) => token?.kind === 'slot' && token.axis === 'source' && token.text,
-    );
-
-    if (!named) {
-        return [];
-    }
-
-    const binding = (spec?.slots ?? []).find((slot) => slot?.key?.axis === 'source')?.binding;
-    const refs: (GraphRef | null | undefined)[] =
-        binding?.kind === 'value'
-            ? [binding.value?.ref]
-            : binding?.kind === 'set'
-              ? binding.values.map((value) => value?.ref)
-              : (spec?.resolution?.resolved_sources ?? []);
-
-    return refs.map((ref) => ref?.ref).filter(isRef);
-};
-
-/** The origin beside a title built from the spec's own sentence (a
- *  candidate card, a Choose a Match row): shapeOrigin, less the publisher
- *  when the sentence's source slot already names it. A UN agency answer
- *  reads "... according to United Nations Children's Fund", so its line is
- *  "via UN System Data Commons" alone. */
-export const specOrigin = (spec: SpecReading): string | null => {
-    const upstream = spec?.shape?.upstream;
-
-    if (upstream && sentenceSourceRefs(spec).includes(upstream.source?.ref)) {
-        return viaLabel(upstream.data_commons);
-    }
-
-    return shapeOrigin(spec?.shape);
 };
 
 /** The origin of one of the spec's provenances, by dcid, from whichever

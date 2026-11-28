@@ -43,7 +43,6 @@ import { track } from '@/lib/events/client';
 import { shareCopyProps } from '@/lib/events/shareCopy';
 import {
     createSearchShare,
-    createSuggestionSlot,
     fetchSearchShare,
     fetchVersionLink,
     type OpenedSearchShare,
@@ -75,12 +74,7 @@ import {
     handoffSeeds,
     studioHref,
 } from '@/lib/search/studioHandoff';
-import {
-    hasDefiniteSpec,
-    isKnownPart,
-    type ResolveResponse,
-    type SentenceToken,
-} from '@/lib/search/types';
+import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
 import { writeSeeds } from '@/lib/studio/seedStore';
@@ -232,22 +226,18 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         return null;
     };
 
-    const [suggestionSlot] = useState(createSuggestionSlot);
-
     // A query as text: the starting point's own question shows the catalogue
     // the page holds, with no search call, and records `search.start_point`.
-    // Other text is a search, whose events useSearchRun sends. Every run
-    // keeps only the live suggestion stream for the same text.
+    // Other text is a search, whose events useSearchRun sends.
     const runQuery = useCallback(
         (text: string, source: SearchSource) => {
-            suggestionSlot.keepOnly(text);
             if (text === STARTING_POINT_QUERY) {
                 showStartingPoint(text, source);
             } else {
                 run({ kind: 'raw_text', query: text }, text, source);
             }
         },
-        [suggestionSlot, run, showStartingPoint],
+        [run, showStartingPoint],
     );
 
     // Latest `runQuery`/`replay`/`openShare`/`reset`, read (not watched) by the
@@ -287,8 +277,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // remounted — swapped-in DOM nodes the initial observer never saw.
     const sectionRef = useReveal<HTMLElement>(12, [phase, promptEpoch]);
     const [draft, setDraft] = useState('');
-    const [suggest, setSuggest] = useState<ResolveResponse | null>(null);
-    const [suggestPending, setSuggestPending] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
     // The share link this view was opened from (?share=<id>), while the user
@@ -394,63 +382,13 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         [searchIds],
     );
 
-    // Live suggestions: a debounced background resolve renders interpretation
-    // cards under the prompt while the user is still typing. It posts the
-    // submit's own request (see createSuggestionSlot), so submitting the same
-    // text can be served from the search API's response cache.
-    const handleDraft = useCallback((value: string) => {
-        setDraft(value);
-        setSuggest(null);
-        setSuggestPending(false);
-    }, []);
-
-    // Empties the prompt and drops its suggestions. A draft left over from a
-    // submitted question would otherwise bring idle back in typing mode,
-    // which hides a link refusal and asks for suggestions again.
+    // Empties the prompt. A draft left over from a submitted question would
+    // otherwise bring idle back in typing mode, which hides a link refusal.
     const clearPrompt = useCallback(() => {
         setDraft('');
         setPrefill('');
-        setSuggest(null);
-        setSuggestPending(false);
         setPromptEpoch((epoch) => epoch + 1);
     }, []);
-
-    useEffect(() => {
-        const text = draft.trim();
-
-        // Other text supersedes the live suggestion. Leaving idle does not:
-        // a submit of the same text is answered by that stream.
-        suggestionSlot.keepOnly(text);
-
-        if (phase !== 'idle' || text.length < 8) {
-            return;
-        }
-
-        let current = true;
-        const timer = window.setTimeout(() => {
-            setSuggestPending(true);
-            suggestionSlot
-                .suggest(text)
-                .then((body) => {
-                    if (current) {
-                        setSuggest(body);
-                        setSuggestPending(false);
-                    }
-                })
-                .catch(() => {
-                    if (current) {
-                        setSuggestPending(false);
-                    }
-                });
-        }, 900);
-
-        return () => {
-            window.clearTimeout(timer);
-            current = false;
-        };
-    }, [draft, phase, suggestionSlot]);
-
-    useEffect(() => () => suggestionSlot.keepOnly(null), [suggestionSlot]);
 
     // A share link (/s/<id> lands here as ?share=<id>): load its references
     // and replay them — live, or over the snapshot's captured data.
@@ -696,7 +634,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         leaveShare();
         reset();
         // The typing-mode trio must clear too, or idle comes back raised, with
-        // the Try row hidden and the previous suggestions still on screen.
+        // the Try row hidden.
         clearPrompt();
         // Clears the permalink effect's "already started this key" guard, so
         // a genuine later navigation back to the same `?q=` (browser back, a
@@ -759,8 +697,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
             setDraft(value);
             setPrefill(value);
-            setSuggest(null);
-            setSuggestPending(false);
             setPromptEpoch((epoch) => epoch + 1);
         },
         [phase, reset, leaveShare],
@@ -915,7 +851,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                             suggestions={catalogueChips(catalogue)}
                             suggestionsHidden={typing}
                             onSubmit={submitQuery}
-                            onChange={handleDraft}
+                            onChange={setDraft}
                             autoFocus={focusPrompt}
                         />
                         {linkRefusal && !typing && (
@@ -951,25 +887,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                             </div>
                         )}
                     </div>
-                    {typing ? (
-                        <div className={classNames(styles.idleBottom, styles.idleBottomTyping)}>
-                            {suggestPending && (
-                                <p className={styles.stepsLine} aria-live="polite">
-                                    Generating suggestions…
-                                </p>
-                            )}
-                            {suggest && (
-                                <SearchCards
-                                    part={
-                                        suggest.kind === 'resolution'
-                                            ? (suggest.parts[0] ?? null)
-                                            : null
-                                    }
-                                    onPick={applySuggestion}
-                                />
-                            )}
-                        </div>
-                    ) : (
+                    {!typing && (
                         <div className={styles.idleBottom} data-reveal-group="trigger">
                             <div className={styles.buildBox} data-reveal style={revealIndex(0)}>
                                 <h2 className={styles.buildTitle}>Build a Dataset</h2>
