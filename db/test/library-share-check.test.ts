@@ -7,6 +7,7 @@ import type { SharesBackend } from '../../src/lib/chat/apisShares.ts';
 import { componentRead, DATASET_FRAME } from '../../src/lib/studio/test/fixtures/component-read.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import {
+    beforeDeadline,
     checkArtifact,
     checkLibraryShares,
     FAILURE_EVENT,
@@ -70,7 +71,7 @@ const card = ({ undrawable = false } = {}) => {
     return Response.json({ ...body, freshness: 'current', retention: null });
 };
 
-type Answer = Response | 'no answer';
+type Answer = Response | 'no answer' | 'hang';
 type Route = 'share' | 'card' | 'data';
 type Answers = {
     [route in Route]?: (slot: number | null, read: number, shareId: string) => Answer;
@@ -95,14 +96,29 @@ const DEFAULTS: { [route in Route]: (shareId: string) => Answer } = {
     data: () => rows(3),
 };
 
+// A request dfo-apis never answers, which ends when its signal aborts.
+const hung = (signal: AbortSignal | null | undefined): Promise<Response> =>
+    new Promise((_, reject) => {
+        if (signal?.aborted) {
+            reject(signal.reason);
+        }
+
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+
 // A dfo-apis answering each route by `answers`, or by DEFAULTS. Each answer
 // is told the slot, how many times this URL was read before, and the share.
+// A request whose signal has aborted fails, as fetch's does.
 const backendOf = (answers: Answers = {}) => {
     const reads: string[] = [];
     const backend: SharesBackend = {
         base: APIS,
         nameCaller: () => {},
-        fetch: async (input) => {
+        fetch: async (input, init) => {
+            if (init?.signal?.aborted) {
+                throw init.signal.reason;
+            }
+
             const url = new URL(String(input));
             const { route, slot } = routeOf(url);
             const path = `${url.pathname}${url.search}`;
@@ -115,6 +131,10 @@ const backendOf = (answers: Answers = {}) => {
 
             if (answer === 'no answer') {
                 throw new TypeError('fetch failed');
+            }
+
+            if (answer === 'hang') {
+                return hung(init?.signal);
             }
 
             return answer;
@@ -643,100 +663,146 @@ test('a failure that remains is logged per failure and fails the run', async () 
     );
 });
 
-// A request dfo-apis never answers, which ends when its signal aborts.
-const hung = (signal: AbortSignal | null | undefined): Promise<Response> =>
-    new Promise((_, reject) => {
-        if (signal?.aborted) {
-            reject(signal.reason);
-        }
-
-        signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+test('a share whose canvas fields are malformed reads as the viewers read it, beside one that reads', async () => {
+    const { code, lines } = await run([artifact(1), artifact(2)], {
+        share: (_slot, _before, id) =>
+            Response.json(
+                id === 'Share002'
+                    ? record({
+                          id,
+                          payload: {
+                              widgets: [
+                                  { id: 'c1', kind: 'chart', chartType: 'line', turn: 1, slot: 0 },
+                              ],
+                              pinnedIds: null,
+                              canvas: { compositionId: 'cmp' },
+                              textCards: 'none',
+                          },
+                      })
+                    : record({ id }),
+            ),
     });
+
+    assert.equal(code, 0);
+    assert.deepEqual(
+        lines
+            .filter((line) => line['event'] === OK_EVENT)
+            .map((line) => line['slug'])
+            .toSorted(),
+        ['artifact-1', 'artifact-2'],
+    );
+});
 
 test('a run past its deadline logs what it left unfinished, then its summary', async (t) => {
-    const outcomes = (lines: Record<string, unknown>[]) =>
-        lines
-            .filter((line) => line['event'] !== SUMMARY_EVENT)
-            .map((line) => [line['slug'], line['result'], line['class'] ?? null]);
-
-    await t.test('reads in flight abort and artifacts not started are named', async () => {
-        const deadline = new AbortController();
-        const { backend } = backendOf();
-        const artifacts = [1, 2, 3, 4, 5, 6].map(artifact);
-        const lines: Record<string, unknown>[] = [];
-        const code = await checkLibraryShares({
-            artifacts,
-            log: (line) => lines.push(JSON.parse(line)),
-            deadline: deadline.signal,
-            wait: async () => {},
-            backend: {
-                ...backend,
-                // Artifact 2's share never answers, and the deadline passes
-                // as it is asked for.
-                fetch: (input, init) => {
-                    if (String(input).endsWith('/Share002')) {
-                        deadline.abort();
-
-                        return hung(init?.signal);
+    type Outcome = [slug: unknown, result: unknown, kind: unknown];
+    const cases: {
+        name: string;
+        artifacts: number[];
+        answers: (abort: () => void) => Answers;
+        abortOnWait?: boolean;
+        outcomes: Outcome[];
+        reads: number;
+        summary: { ok: number; unfinished: number; retried: number };
+    }[] = [
+        {
+            name: 'reads in flight are cut off, and an artifact not started is left',
+            artifacts: [1, 2, 3, 4, 5, 6],
+            // Artifact 1 reads; 2 to 4 wait on their shares, and the deadline
+            // passes as 5, which starts once 1 is done, asks for its share.
+            answers: (abort) => ({
+                share: (_slot, _before, id) => {
+                    if (id === 'Share001') {
+                        return Response.json(record({ id }));
                     }
 
-                    return backend.fetch(input, init);
+                    if (id === 'Share005') {
+                        abort();
+                    }
+
+                    return 'hang';
                 },
-            },
-        });
-
-        assert.equal(code, 1);
-
-        const seen = outcomes(lines);
-
-        // Artifact 1 read before the deadline and stands; artifact 2's read
-        // was cut off, and 5 and 6 never started.
-        assert.ok(seen.some(([slug, result]) => slug === 'artifact-1' && result === 'ok'));
-        assert.ok(seen.some(([slug]) => slug === 'artifact-2'));
-        assert.ok(
-            seen.every(([slug, result, kind]) =>
-                slug === 'artifact-1'
-                    ? result === 'ok'
-                    : result === 'unfinished' && kind === 'unfinished',
-            ),
-        );
-        assert.deepEqual(
-            seen.filter(([slug]) => slug === 'artifact-5' || slug === 'artifact-6').length,
-            2,
-        );
-
-        const summary = summaryOf(lines);
-
-        assert.deepEqual(
-            { ok: summary['ok'], failed: summary['failed'], unfinished: summary['unfinished'] },
-            { ok: 1, failed: 5, unfinished: 5 },
-        );
-    });
-
-    await t.test('a deadline during the wait leaves the second reads unmade', async () => {
-        const deadline = new AbortController();
-        const { code, reads, lines } = await run(
-            [artifact(1)],
-            {
+            }),
+            outcomes: [
+                ['artifact-1', 'ok', null],
+                ...[2, 3, 4, 5, 6].map((n): Outcome => [
+                    `artifact-${n}`,
+                    'unfinished',
+                    'unfinished',
+                ]),
+            ],
+            // Artifact 1's three, and the shares of 2 to 5.
+            reads: 7,
+            summary: { ok: 1, unfinished: 5, retried: 0 },
+        },
+        {
+            name: 'a deadline during the wait leaves the second reads unmade',
+            artifacts: [1],
+            answers: () => ({
                 card: () => problem(404, 'frame_unavailable', true),
                 data: () => problem(404, 'frame_unavailable', false),
-            },
-            { deadline: deadline.signal, onWait: () => deadline.abort() },
-        );
+            }),
+            abortOnWait: true,
+            // Both failures met before the deadline stand.
+            outcomes: [
+                ['artifact-1', 'failed', 'frame_unavailable'],
+                ['artifact-1', 'failed', 'frame_unavailable'],
+                ['artifact-1', 'unfinished', 'unfinished'],
+            ],
+            reads: 3,
+            summary: { ok: 0, unfinished: 1, retried: 0 },
+        },
+        {
+            name: 'a second read the deadline cuts off keeps its first, beside one that ended',
+            artifacts: [1],
+            answers: (abort) => ({
+                card: () => problem(503, 'service_unavailable', true),
+                data: (_slot, before) => {
+                    if (before === 0) {
+                        return problem(503, 'service_unavailable', true);
+                    }
 
-        assert.equal(code, 1);
-        assert.equal(reads.length, 3);
-        // The failure no second read would change stands beside the
-        // unfinished line.
-        assert.deepEqual(outcomes(lines), [
-            ['artifact-1', 'failed', 'frame_unavailable'],
-            ['artifact-1', 'unfinished', 'unfinished'],
-        ]);
-        assert.deepEqual(
-            { retried: summaryOf(lines)['retried'], unfinished: summaryOf(lines)['unfinished'] },
-            { retried: 0, unfinished: 1 },
-        );
-    });
+                    abort();
+
+                    return 'hang';
+                },
+            }),
+            outcomes: [
+                ['artifact-1', 'failed', 'transient'],
+                ['artifact-1', 'failed', 'transient'],
+                ['artifact-1', 'unfinished', 'unfinished'],
+            ],
+            reads: 5,
+            summary: { ok: 0, unfinished: 1, retried: 2 },
+        },
+    ];
+
+    for (const { name, artifacts, answers, abortOnWait, outcomes, reads: made, summary } of cases) {
+        await t.test(name, async () => {
+            const deadline = new AbortController();
+            const abort = () => deadline.abort();
+            const { code, reads, lines } = await run(artifacts.map(artifact), answers(abort), {
+                deadline: deadline.signal,
+                onWait: abortOnWait ? abort : undefined,
+            });
+
+            assert.equal(code, 1);
+            assert.equal(reads.length, made);
+            assert.deepEqual(
+                lines
+                    .filter((line) => line['event'] !== SUMMARY_EVENT)
+                    .map((line): Outcome => [line['slug'], line['result'], line['class'] ?? null])
+                    .toSorted((a, b) => String(a[0]).localeCompare(String(b[0]))),
+                outcomes,
+            );
+
+            const last = summaryOf(lines);
+
+            assert.deepEqual(
+                { ok: last['ok'], unfinished: last['unfinished'], retried: last['retried'] },
+                summary,
+            );
+        });
+    }
 });
 
 test('a Library with no published artifact reads nothing and passes', async () => {
@@ -786,6 +852,20 @@ test('a run that cannot run logs one failure line and fails', async (t) => {
             );
         });
     }
+
+    await t.test('a step that outlasts the deadline fails as run_deadline', async () => {
+        const lines: Record<string, unknown>[] = [];
+        const exit = await guardCheck(
+            () => beforeDeadline(new Promise<0 | 1>(() => {}), AbortSignal.abort()),
+            (line) => lines.push(JSON.parse(line)),
+        );
+
+        assert.equal(exit, 1);
+        assert.deepEqual(
+            lines.map((line) => [line['class'], line['code']]),
+            [['check_failed', 'run_deadline']],
+        );
+    });
 
     await t.test("a run that ends gives the run's exit code and logs nothing", async () => {
         const lines: string[] = [];

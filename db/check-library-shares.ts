@@ -1,9 +1,11 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
 import { apisFetch } from '../src/lib/apisAuth.ts';
 import { searchApiBase } from '../src/lib/searchApi.ts';
 import { openPool } from '../scripts/open-pool.ts';
 import {
+    beforeDeadline,
     checkLibraryShares,
     guardCheck,
     readLiveArtifacts,
@@ -11,8 +13,12 @@ import {
 } from './library-share-check.ts';
 
 // The run's deadline counts from the command's start, so the pool's open
-// and the artifacts' listing spend it too.
+// and the artifacts' listing spend it too, and a database that never
+// answers ends the run with a `check_failed` line of code `run_deadline`.
 const deadline = AbortSignal.timeout(RUN_DEADLINE_MS);
+
+// How long the run waits for the pool to close before it exits.
+const CLOSE_MS = 5_000;
 
 // The Library share check Job's command (`node dist/check-library-shares.cjs`,
 // see deploy/Dockerfile). It lists the published rows of `library_artifact`
@@ -28,21 +34,22 @@ const main = async (): Promise<0 | 1> => {
     const base = searchApiBase();
     // The check is the site's own, made for no visitor, so it names no caller.
     const backend = { base, fetch: apisFetch, nameCaller: () => {} };
-    const { pool, close } = await openPool();
+    const { pool, close } = await beforeDeadline(openPool(), deadline);
 
     try {
         return await checkLibraryShares({
-            artifacts: await readLiveArtifacts(drizzle(pool)),
+            artifacts: await beforeDeadline(readLiveArtifacts(drizzle(pool)), deadline),
             backend,
             log: (line) => console.log(line),
             deadline,
         });
     } finally {
-        await close();
+        await Promise.race([close().catch(() => {}), sleep(CLOSE_MS)]);
     }
 };
 
-// A run that cannot run logs its failure line on stderr.
-void guardCheck(main, (line) => console.error(line)).then((code) => {
-    process.exitCode = code;
-});
+// A run that cannot run logs its failure line on stderr. The command exits
+// once the run ends, so a connection or connector left open cannot hold the
+// task to its timeout. Cloud Run's stdout and stderr are pipes, which Node
+// writes synchronously on Linux, so every line is out before the exit.
+void guardCheck(main, (line) => console.error(line)).then((code) => process.exit(code));

@@ -186,7 +186,7 @@ jobs:
           JOB: ${{ vars.LIBRARY_SHARE_CHECK_JOB_WEBSITE }}
         run: |
           if [ -z "$JOB" ]; then
-            echo "::error::LIBRARY_SHARE_CHECK_JOB_WEBSITE is empty in this environment. infra defines the Library share check Job in dev and production; set the variable to its name (deploy/README.md lists it)."
+            echo "::error::LIBRARY_SHARE_CHECK_JOB_WEBSITE is empty in this environment. infra defines the Library share check Job in dev and production; set the variable to the Job name in the website stack outputs (dev dfo-dev-website-staging-library-share-check, production dfo-prod-website-library-share-check; deploy/README.md, Library share check)."
             exit 1
           fi
           gcloud run jobs update "$JOB" \

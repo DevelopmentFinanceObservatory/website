@@ -167,7 +167,7 @@ It exits 0 when every share is imported or unchanged. On exit 1, read the `share
 
 ## Library share check
 
-A Cloud Run Job named by `LIBRARY_SHARE_CHECK_JOB_WEBSITE` reads every published Library artifact's share from dfo-apis once a day. It runs the website image with the command `node dist/check-library-shares.cjs` (`db/check-library-shares.ts`, bundled by `pnpm build:check-library-shares`). `build-migrate-deploy.yml` points it at each new image after the service update, and fails when the variable is empty, since infra defines the Job in dev and production. infra defines the Job, its Scheduler trigger and the alert on its failure line. It runs as the runtime service account with the `WEBSITE_DB_*` settings and `SEARCH_API_BASE`. `docs/development.md` ("Library share check") lists what it reads and logs.
+A Cloud Run Job named by `LIBRARY_SHARE_CHECK_JOB_WEBSITE` (`dfo-dev-website-staging-library-share-check` in dev, `dfo-prod-website-library-share-check` in production) reads every published Library artifact's share from dfo-apis once a day. It runs the website image with the command `node dist/check-library-shares.cjs` (`db/check-library-shares.ts`, bundled by `pnpm build:check-library-shares`). infra defines the Job in both environments, with its Scheduler trigger and the alert on its failure line, so `build-migrate-deploy.yml` points it at each new image after the service update and fails when the variable is empty. It runs as the runtime service account with the `WEBSITE_DB_*` settings and `SEARCH_API_BASE`. `docs/development.md` ("Library share check") lists what it reads and logs.
 
 ## Shares left for cleanup
 

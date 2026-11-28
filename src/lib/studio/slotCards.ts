@@ -8,10 +8,12 @@ import {
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
-import { savedCanvasWidgetsOf } from '../chat/canvas.ts';
+import { savedCanvasWidgetsOf, type CanvasState } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { StudioShareKind } from '../chat/shareMode.ts';
-import type { CardRef, FrameRef, Widget } from '../chat/widgets.ts';
+import type { CardRef, FrameRef, TextWidget, Widget } from '../chat/widgets.ts';
+import type { CanvasBaseline } from './composition.ts';
+import type { OwedRemoval } from './owedRemovals.ts';
 import { asRecord } from '../asRecord.ts';
 import { dropEncodedLength, pick } from '../proxy/headers.ts';
 import { problem, type ProblemStatus } from '../proxy/problem.ts';
@@ -122,15 +124,17 @@ const slotCardOf = (
         : null;
 };
 
+type TurnWidget = SavedConversation['widgets'][number];
+
 // A payload's held card in the shape the card components draw: the kind,
 // id, turn, and chart shape it keeps, empty values, and its slot's `ref`.
-const heldWidget = (widget: PayloadWidget, ref: CardRef | undefined): Widget => {
+const heldWidget = (widget: PayloadWidget, ref: CardRef | undefined): TurnWidget => {
     const { id } = widget;
     const turn = widget['turn'] as number;
 
     switch (widget.kind) {
         case 'key_number':
-            return { kind: 'key_number', id, turn, label: '', value: '', ref } as Widget;
+            return { kind: 'key_number', id, turn, label: '', value: '', ref };
         case 'chart':
             return {
                 kind: 'chart',
@@ -142,9 +146,9 @@ const heldWidget = (widget: PayloadWidget, ref: CardRef | undefined): Widget => 
                 categories: [],
                 series: [],
                 ref,
-            } as Widget;
+            };
         default:
-            return { kind: 'table', id, turn, title: '', columns: [], rows: [], ref } as Widget;
+            return { kind: 'table', id, turn, title: '', columns: [], rows: [], ref };
     }
 };
 
@@ -194,9 +198,91 @@ const pageCardOf = (record: ShareRecord, widget: PayloadWidget): PageCard | null
     };
 };
 
-// The canvas a share's payload holds, with `widgets` in place of its own.
-// Fields a payload leaves out, as an SDK share's leaves them all, read as an
-// empty canvas named by the share's title.
+const stringsOf = (value: unknown): string[] | undefined =>
+    Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined;
+
+const isNumberRecord = (value: unknown): value is Record<string, number> => {
+    const record = asRecord(value);
+
+    return record !== undefined && Object.values(record).every((item) => typeof item === 'number');
+};
+
+// A payload's composition baseline, or undefined for one that is missing or
+// malformed, which the canvas reads as no baseline.
+const baselineOf = (value: unknown): CanvasBaseline | undefined => {
+    const canvas = asRecord(value);
+    const ids = stringsOf(canvas?.['ids']);
+    const compositionId = canvas?.['compositionId'];
+    const revision = canvas?.['revision'];
+    const pinned = canvas?.['pinned'];
+    const revisions = canvas?.['revisions'];
+
+    if (
+        !ids ||
+        !(compositionId === null || typeof compositionId === 'string') ||
+        typeof revision !== 'number' ||
+        (pinned !== undefined && !stringsOf(pinned)) ||
+        (revisions !== undefined && !isNumberRecord(revisions))
+    ) {
+        return undefined;
+    }
+
+    return {
+        compositionId,
+        revision,
+        ids,
+        ...(pinned === undefined ? {} : { pinned: pinned as string[] }),
+        ...(revisions === undefined ? {} : { revisions: revisions as Record<string, number> }),
+    };
+};
+
+const owedOf = (value: unknown): OwedRemoval[] | undefined =>
+    Array.isArray(value) &&
+    value.every((entry) => {
+        const owed = asRecord(entry);
+
+        return (
+            typeof owed?.['id'] === 'string' &&
+            (owed['revision'] === null || typeof owed['revision'] === 'number')
+        );
+    })
+        ? (value as OwedRemoval[])
+        : undefined;
+
+const textCardsOf = (value: unknown): TextWidget[] | undefined =>
+    Array.isArray(value)
+        ? value.filter((card): card is TextWidget => {
+              const text = asRecord(card);
+
+              return text?.['kind'] === 'text' && typeof text['id'] === 'string';
+          })
+        : undefined;
+
+// The fields of a share's payload that decide which cards its canvas shows
+// (canvasWidgetsOf), with `widgets` in place of its own. A field that is
+// missing or malformed reads as a save without it: no pins, removals,
+// baseline, local or owed cards, grace, or text cards.
+const canvasStateOf = (payload: unknown, widgets: TurnWidget[]): CanvasState => {
+    const saved = asRecord(payload);
+    const graceTurn = saved?.['graceTurn'];
+
+    return {
+        widgets,
+        pinnedIds: stringsOf(saved?.['pinnedIds']) ?? [],
+        removedIds: stringsOf(saved?.['removedIds']) ?? [],
+        graceIds: stringsOf(saved?.['graceIds']),
+        graceTurn: typeof graceTurn === 'number' ? graceTurn : undefined,
+        textCards: textCardsOf(saved?.['textCards']),
+        canvas: baselineOf(saved?.['canvas']),
+        localIds: stringsOf(saved?.['localIds']),
+        owedRemovals: owedOf(saved?.['owedRemovals']),
+    };
+};
+
+// The canvas a share's payload holds, with `widgets` in place of its own and
+// its canvas fields read by canvasStateOf. Fields a payload leaves out, as
+// an SDK share's leaves them all, read as an empty canvas named by the
+// share's title.
 const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): SavedConversation =>
     ({
         id: record.id,
@@ -205,11 +291,9 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
         updatedAt: Date.parse(record.createdAt),
         messages: [],
         turnCount: 1,
-        pinnedIds: [],
-        removedIds: [],
         layout: {},
         ...asRecord(record.payload),
-        widgets,
+        ...canvasStateOf(record.payload, widgets),
     }) as SavedConversation;
 
 /** The cards a share's page draws from its slots, in page order: the held
@@ -219,10 +303,11 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
  *  shown ones alone, so a card its canvas hides is left out. */
 export const pageCards = (record: ShareRecord): PageCard[] => {
     const widgets = pageWidgets(record);
+    // Which cards show turns on each card's id and turn alone, which its held
+    // shape keeps.
+    const held = widgets.map((widget) => heldWidget(widget, undefined));
     const shown = new Set(
-        savedCanvasWidgetsOf(
-            savedOf(record, widgets as unknown as SavedConversation['widgets']),
-        ).map((widget) => widget.id),
+        savedCanvasWidgetsOf(canvasStateOf(record.payload, held)).map((widget) => widget.id),
     );
 
     return widgets.flatMap((widget) =>

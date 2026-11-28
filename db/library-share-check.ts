@@ -83,12 +83,16 @@ export type Failure = {
 
 export type LiveArtifact = { id: string; slug: string; shareId: string };
 
-/** An artifact's reads: the share once read (null while it is not), and
- *  the reads that failed. */
+/** An artifact's reads: the share once read (null while it is not), the
+ *  reads that failed, and `cut`, true when the backend's signal aborted
+ *  before every read was made or answered. Each failure is its read's latest
+ *  attempt that ended on its own: an attempt that met no answer once the
+ *  signal had aborted is taken as cut off, and left out. */
 export type ArtifactCheck = {
     artifact: LiveArtifact;
     share: ShareRecord | null;
     failures: Failure[];
+    cut: boolean;
 };
 
 type ReadAt = Pick<Failure, 'read' | 'slot' | 'widget'>;
@@ -229,10 +233,9 @@ const readRows = async (
     }
 };
 
-// The reads of a share's page: each page card's slot card, then the rows of
-// each filled slot those cards name, once each.
-const pageReads = (share: ShareRecord): ReadAt[] => {
-    const cards = pageCards(share);
+// The reads of a share's page, from its page cards: each card's slot card,
+// then the rows of each filled slot those cards name, once each.
+const pageReads = (cards: PageCard[]): ReadAt[] => {
     const slots = new Set(
         cards.flatMap((page) => (page.ref && page.slot !== null ? [page.slot] : [])),
     );
@@ -246,40 +249,60 @@ const pageReads = (share: ShareRecord): ReadAt[] => {
 const runRead = (
     backend: SharesBackend,
     share: ShareRecord,
+    cards: PageCard[],
     at: ReadAt,
 ): Promise<Failure | null> => {
     if (at.read === 'data' && at.slot !== null) {
         return readRows(backend, share, at.slot);
     }
 
-    const page = pageCards(share).find((card) => card.id === at.widget);
+    const page = cards.find((card) => card.id === at.widget);
 
     return page ? readCard(backend, share, page) : Promise.resolve(null);
 };
 
+// A failure the backend's aborted signal caused: no answer, met after it
+// aborted.
+const cutOff = (backend: SharesBackend, failure: Failure): boolean =>
+    backend.signal?.aborted === true && failure.status === null && failure.retryable;
+
+// `reads` in turn, stopping once the backend's signal aborts, so no read is
+// made, and no token fetched, after it. `done` counts the reads that ended
+// on their own, which come first.
 const runReads = async (
     backend: SharesBackend,
     share: ShareRecord,
+    cards: PageCard[],
     reads: ReadAt[],
-): Promise<Failure[]> => {
+): Promise<{ failures: Failure[]; cut: boolean; done: number }> => {
     const failures: Failure[] = [];
 
-    for (const at of reads) {
-        const failure = await runRead(backend, share, at);
+    for (const [done, at] of reads.entries()) {
+        if (backend.signal?.aborted) {
+            return { failures, cut: true, done };
+        }
+
+        const failure = await runRead(backend, share, cards, at);
+
+        if (failure && cutOff(backend, failure)) {
+            return { failures, cut: true, done };
+        }
 
         if (failure) {
             failures.push(failure);
         }
     }
 
-    return failures;
+    return { failures, cut: false, done: reads.length };
 };
 
 /**
  * Read `artifact`'s share and every read its page makes, in turn. Given
  * `previous`, a check of the same artifact, only its retryable reads are
  * made again and its other failures stand. A share that cannot be read ends
- * the check there.
+ * the check there, and so does a payload whose page cards cannot be read
+ * (`refused`, `payload_invalid`), so one share's fault leaves the rest of
+ * the run standing.
  */
 export const checkArtifact = async (
     backend: SharesBackend,
@@ -290,8 +313,15 @@ export const checkArtifact = async (
         const { share } = previous;
         const again = previous.failures.filter((failure) => failure.retryable);
         const kept = previous.failures.filter((failure) => !failure.retryable);
+        const read = await runReads(backend, share, pageCards(share), again);
 
-        return { artifact, share, failures: [...kept, ...(await runReads(backend, share, again))] };
+        // A read whose second attempt was cut off keeps its first.
+        return {
+            artifact,
+            share,
+            failures: [...kept, ...read.failures, ...again.slice(read.done)],
+            cut: read.cut,
+        };
     }
 
     let share: ShareRecord;
@@ -299,14 +329,39 @@ export const checkArtifact = async (
     try {
         share = await readShareRecord(backend, artifact.shareId);
     } catch (error) {
+        const failure = failureOf(error, { read: 'share', slot: null, widget: null });
+
+        return cutOff(backend, failure)
+            ? { artifact, share: null, failures: [], cut: true }
+            : { artifact, share: null, failures: [failure], cut: false };
+    }
+
+    let cards: PageCard[];
+
+    try {
+        cards = pageCards(share);
+    } catch {
         return {
             artifact,
-            share: null,
-            failures: [failureOf(error, { read: 'share', slot: null, widget: null })],
+            share,
+            failures: [
+                {
+                    read: 'share',
+                    slot: null,
+                    widget: null,
+                    class: 'refused',
+                    status: 200,
+                    code: 'payload_invalid',
+                    retryable: false,
+                },
+            ],
+            cut: false,
         };
     }
 
-    return { artifact, share, failures: await runReads(backend, share, pageReads(share)) };
+    const { failures, cut } = await runReads(backend, share, cards, pageReads(cards));
+
+    return { artifact, share, failures, cut };
 };
 
 /** Every published artifact, oldest first. */
@@ -406,14 +461,14 @@ const hasRetryable = ({ failures }: ArtifactCheck): boolean =>
  * reads all pass, or fail in a way a second read would not change, is
  * logged as it finishes: one `OK_EVENT` line, or one `FAILURE_EVENT` line
  * per failure. Then, once and after `retryDelayMs`, each retryable read is
- * made again, alone, and its artifact logged. Each line names the artifact
+ * made again, alone, and its artifact logged. Each artifact's line names it
  * by its id and slug, with its `result`, and carries no share id.
  *
  * `deadline` aborts every read in flight and the wait before the second
- * reads. An artifact the run has not concluded by then is `unfinished`: its
- * final failures so far, then one `FAILURE_EVENT` line of class
- * `unfinished`. A read the deadline cut off fails as retryable, so a check
- * with no retryable failure stands whenever it ends. The last line,
+ * reads, and no read starts after it. An artifact the run has not concluded
+ * by then is `unfinished`: a line for each failure its reads met before
+ * the deadline, then one `FAILURE_EVENT` line of class `unfinished`. The
+ * last line,
  * `SUMMARY_EVENT`, counts the artifacts, the unfinished ones, the failures
  * by class, the reads made again, and the requests, response bytes and
  * milliseconds the run took. 0 when every artifact reads, else 1.
@@ -478,13 +533,10 @@ export const checkLibraryShares = async ({
         failed += 1;
         logFailures(artifact, failures);
     };
-    const leave = ({ artifact, failures }: ArtifactCheck) => {
+    const leave = ({ artifact, failures }: Pick<ArtifactCheck, 'artifact' | 'failures'>) => {
         failed += 1;
         unfinished += 1;
-        logFailures(
-            artifact,
-            failures.filter((failure) => !failure.retryable),
-        );
+        logFailures(artifact, failures);
         byClass.unfinished += 1;
         log(
             JSON.stringify({
@@ -510,10 +562,10 @@ export const checkLibraryShares = async ({
         async (artifact) => {
             const result = await checkArtifact(reads, artifact);
 
-            if (!hasRetryable(result)) {
-                finish(result);
-            } else if (deadline.aborted) {
+            if (result.cut) {
                 leave(result);
+            } else if (!hasRetryable(result)) {
+                finish(result);
             } else {
                 again.push(result);
             }
@@ -534,7 +586,7 @@ export const checkLibraryShares = async ({
 
             const result = await checkArtifact(reads, previous.artifact, previous);
 
-            if (hasRetryable(result) && deadline.aborted) {
+            if (result.cut) {
                 leave(result);
             } else {
                 finish(result);
@@ -548,7 +600,7 @@ export const checkLibraryShares = async ({
     }
 
     for (const artifact of unstarted) {
-        leave({ artifact, share: null, failures: [] });
+        leave({ artifact, failures: [] });
     }
 
     log(
@@ -570,6 +622,26 @@ export const checkLibraryShares = async ({
 
     return failed === 0 ? 0 : 1;
 };
+
+/** `work`, or a rejection with code `run_deadline` once `deadline` aborts,
+ *  whichever comes first, for a step of the run that takes no signal, such
+ *  as opening the pool or listing the artifacts. */
+export const beforeDeadline = <T>(work: Promise<T>, deadline: AbortSignal): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+        const stop = () =>
+            reject(
+                Object.assign(new Error('the run reached its deadline before its reads began'), {
+                    code: 'run_deadline',
+                }),
+            );
+
+        if (deadline.aborted) {
+            stop();
+        }
+
+        deadline.addEventListener('abort', stop, { once: true });
+        void work.then(resolve, reject).finally(() => deadline.removeEventListener('abort', stop));
+    });
 
 /**
  * Run `check`, the whole run, and give its exit code. A run that fails
