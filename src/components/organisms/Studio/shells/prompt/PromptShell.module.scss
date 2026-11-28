@@ -249,8 +249,10 @@
 // The feedback tab sits inside the canvas frame at its foot on the left,
 // 10 above the frame's foot line, clear of the centred dock and the panel
 // at the right. Under the desktop width the dock reaches the tab's column,
-// so the tab rides just above the resting dock, its pills included, and
-// steps aside while the dock holds a sheet open. It also steps aside while
+// so the tab rides just above the resting dock, its pills included, in line
+// with the text of a dock that spans the frame. There it steps aside while
+// the dock holds a sheet open and while focus mode folds the dock to its
+// pill, which leaves the tab nothing to stand on. It also steps aside while
 // the panel overlays the canvas.
 .shell .feedback {
     right: auto;
@@ -264,8 +266,10 @@
         bottom: calc(
             var(--pr-bottom) + var(--dock-foot) + var(--dock-rest, #{rem(52)}) + #{rem(8)}
         );
+        left: calc(var(--pr-left) + #{rem(31)});
     }
 
+    .shell[data-focus] .feedback,
     .shell:has(.dockFrame [data-sheet]:not([data-sheet="none"])) .feedback {
         visibility: hidden;
     }
