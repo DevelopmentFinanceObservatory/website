@@ -24,13 +24,14 @@ import { problem, requestInvalidProblem, unreachableProblem } from '@/lib/proxy/
 import { cardDataDates } from '@/lib/studio/dataThrough';
 import { cardDescription, panelViewOf } from '@/lib/studio/infoPanel';
 
-import { artifactPath, type LibraryCardCite } from './artifact';
+import { artifactPath } from './artifact';
 import { libraryEnabled } from './enabled';
 import { evergreenCheck, type PeriodLookup } from './evergreen';
 import { changedText } from './evergreenRule';
 import { allPeriodsFixed, type CardRefs } from './periods';
 import { type LibraryView, libraryViewOf } from './switch';
 import {
+    publishedCite,
     publishedFacts,
     publishedKind,
     readEdit,
@@ -223,8 +224,8 @@ const dropShare = async (
     await settleShare(settling(headers), share, adminId);
 };
 
-// The lookup of a live artifact's period modes, through the site's own
-// dfo-apis client: the component reads of the cards `refs` names.
+// The lookup of a live artifact's period modes through the site's own
+// dfo-apis client, which reads the component of each card `refs` names.
 const periodLookup =
     (headers: Headers, refs: (signal: AbortSignal) => Promise<CardRefs>): PeriodLookup =>
     async (signal) => {
@@ -235,13 +236,6 @@ const periodLookup =
             await refs(signal),
         );
     };
-
-// How a card's source asks to be cited, from its description, or null.
-const citeOf = (info: Parameters<typeof cardDescription>[0] | undefined): LibraryCardCite => {
-    const cite = info && cardDescription(info)?.cite;
-
-    return cite ? { text: cite.text, title: cite.title } : null;
-};
 
 const WITHDRAWAL_RETRY = {
     unsettled:
@@ -375,9 +369,18 @@ export const publish = async (request: Request): Promise<Response> => {
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const views = shown.flatMap((card) =>
-        card.info ? [panelViewOf(card.info, { retrievedOn: today })] : [],
+    const cards = shown.flatMap((card) =>
+        card.kind === 'text'
+            ? []
+            : [
+                  {
+                      card,
+                      view: card.info ? panelViewOf(card.info, { retrievedOn: today }) : null,
+                      cite: (card.info && cardDescription(card.info)?.cite) || null,
+                  },
+              ],
     );
+    const views = cards.flatMap(({ view }) => (view ? [view] : []));
     const backing = { shareId: created.id, writeToken: created.writeToken };
     let made: Awaited<ReturnType<typeof insertArtifact>>;
 
@@ -392,11 +395,9 @@ export const publish = async (request: Request): Promise<Response> => {
                 kind,
                 mode,
                 ...publishedFacts(kind, views),
-                cardDates: shown.flatMap((card) =>
-                    card.kind === 'text' ? [] : [cardDataDates(card.info)],
-                ),
-                cardCites: shown.flatMap((card) =>
-                    card.kind === 'text' ? [] : [citeOf(card.info)],
+                cardDates: cards.map(({ card }) => cardDataDates(card.info)),
+                cardCites: cards.map(({ card, view, cite }) =>
+                    publishedCite(card.kind === 'key_number' ? card.label : card.title, view, cite),
                 ),
             },
             admin.id,
@@ -463,7 +464,7 @@ const artifactChanged = (): Response =>
  * revision. So the text the evergreen rule passed is the text that
  * goes live, however long the check takes. The text fields the edit changes
  * are held to the evergreen rule first, outside any transaction, with the
- * publish's 400, 502 and 503 answers, as the publish holds them: a
+ * publish's 400, 502 and 503 answers, as the publish holds them. A
  * snapshot's text is not checked, and a live artifact's cards are read from
  * its share for their period modes. `warnings` lists the sentences that
  * passed with a doubt (./evergreen.ts, `EvergreenNotice`).

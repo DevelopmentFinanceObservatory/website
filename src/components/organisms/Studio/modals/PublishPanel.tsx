@@ -266,6 +266,7 @@ const PublishPanel = ({ scope, title, widgets, titleOf, snapshot }: PublishPanel
                 value={text}
                 onChange={setText}
                 refusals={refusals}
+                mode={mode}
                 address={
                     <div className={styles.field}>
                         <label className={styles.label} htmlFor={`${ids}-slug`}>

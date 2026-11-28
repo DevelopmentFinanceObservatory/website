@@ -8,7 +8,7 @@
  * the first one that fails is named by its JSON pointer.
  */
 
-import type { ArtifactKind, LibrarySource, LibraryStep } from './artifact.ts';
+import type { ArtifactKind, LibraryCardCite, LibrarySource, LibraryStep } from './artifact.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { ShareMode } from '../chat/shareMode.ts';
 import type { PanelView } from '../studio/descriptionBlocks.ts';
@@ -402,6 +402,35 @@ export const freeSlug = (base: string, taken: ReadonlySet<string>): string => {
 const clip = (text: string, max: number): string =>
     squeeze(text.replace(/\s+/g, ' ')).slice(0, max);
 
+// A source's name as the Library keeps it, which a list param can carry.
+const sourceName = (name: string): string => clip(name.replaceAll(SEPARATOR, '/'), LIMITS.line);
+
+/**
+ * How the Library cites one published card titled `title`. A card whose
+ * description gives a citation (`cite`) keeps it, and any other card keeps
+ * the names of the sources its panel view credits, each once, with its own
+ * title. Each value is cut to the Library's limits.
+ */
+export const publishedCite = (
+    title: string,
+    view: PanelView | null,
+    cite: { text: string; title: string } | null,
+): LibraryCardCite => {
+    const text = cite ? clip(cite.text, LIMITS.line) : '';
+    const dataset = cite ? clip(cite.title, LIMITS.line) : '';
+
+    if (text && dataset) {
+        return { text, title: dataset };
+    }
+
+    return {
+        sources: [...new Set((view?.sources ?? []).map((source) => sourceName(source.name)))]
+            .filter(Boolean)
+            .slice(0, LIMITS.sources),
+        title: clip(title, LIMITS.line),
+    };
+};
+
 /**
  * What the Library copies from the cards an artifact of `kind` shows, which
  * is every source they credit, each once by name, and, for an artifact of
@@ -418,7 +447,7 @@ export const publishedFacts = (
 
     for (const view of views) {
         for (const source of view.sources) {
-            const name = clip(source.name.replaceAll(SEPARATOR, '/'), LIMITS.line);
+            const name = sourceName(source.name);
 
             if (name && !sources.has(name)) {
                 const url = sourceUrl(

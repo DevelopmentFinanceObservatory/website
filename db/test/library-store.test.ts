@@ -425,7 +425,7 @@ test('library store', async (t) => {
 
             const cardCites = [
                 { text: 'World Bank (2026)', title: 'World Development Indicators' },
-                null,
+                { sources: ['OECD CRS'], title: 'Health ODA to Ethiopia' },
             ];
 
             await store.insertArtifact(

@@ -10,6 +10,8 @@ import {
     type TypeSafeClientConfig,
 } from '@typesafe-ai/sdk';
 
+import type { PeriodsFound } from '../periods.ts';
+
 const { CLIENT_CONFIG, MAX_CANDIDATES, MODEL, REQUEST_CONCURRENCY, evergreenCheck } =
     await import('../evergreen.ts');
 const { REASONS, candidatesOf } = await import('../evergreenRule.ts');
@@ -336,15 +338,25 @@ test('a text near the length limit is asked about one sentence per request, in p
     );
 });
 
-test('without an API key the check answers 503 and logs the missing key', async () => {
-    const { response, document } = await refusalOf(await evergreenCheck(TEXT, SUBJECT));
+test('without an API key the check answers 503, logs the missing key and reads no card', async () => {
+    let asked = 0;
+    const periods = async () => {
+        asked += 1;
+
+        return 'fixed' as const;
+    };
+    const { response, document } = await refusalOf(
+        await evergreenCheck({ ...TEXT, title: 'ODA by donor, 2023' }, SUBJECT, { periods }),
+    );
+
+    assert.equal(asked, 0);
 
     assert.equal(response.status, 503);
     assert.equal(response.headers.get('Retry-After'), '5');
     assert.equal(document.code, 'evergreen_check_unavailable');
     assert.deepEqual(
-        [JSON.parse(logged[0]).message, JSON.parse(logged[0]).cause],
-        ['library_evergreen_unavailable', 'missing_key'],
+        logged.map((line) => [JSON.parse(line).message, JSON.parse(line).cause]),
+        [['library_evergreen_unavailable', 'missing_key']],
     );
 });
 
@@ -393,20 +405,24 @@ test('a text of more than MAX_CANDIDATES sentences is refused at its field befor
 
 test('the year rules spare a title only when every data card is known to draw fixed periods', async () => {
     const title = 'Health expenditure per capita in Kenya, Liberia, and Niger, 2023';
-    const never = new Promise<boolean>(() => {});
+    const never = new Promise<PeriodsFound>(() => {});
+    // Each lookup, the refusal code or null for a pass, and the cause logged.
     const cases: [
         string,
-        ((signal: AbortSignal) => Promise<boolean>) | undefined,
+        ((signal: AbortSignal) => Promise<PeriodsFound>) | undefined,
+        string | null,
         string | null,
     ][] = [
-        ['fixed', async () => true, null],
-        ['rolling', async () => false, 'not_evergreen'],
-        ['no lookup', undefined, 'not_evergreen'],
-        ['a failed read', () => Promise.reject(new Error('down')), 'not_evergreen'],
-        ['a read past its deadline', () => never, 'not_evergreen'],
+        ['fixed', async () => 'fixed', null, null],
+        ['rolling', async () => 'rolling', 'not_evergreen', null],
+        ['no lookup', undefined, 'not_evergreen', null],
+        ['a read with no mode', async () => 'mode_missing', 'not_evergreen', 'mode_missing'],
+        ['a card with no revision', async () => 'no_revision', 'not_evergreen', 'no_revision'],
+        ['a failed read', () => Promise.reject(new Error('down')), 'not_evergreen', 'client'],
+        ['a read past its deadline', () => never, 'not_evergreen', 'timeout'],
     ];
 
-    for (const [name, periods, code] of cases) {
+    for (const [name, periods, code, cause] of cases) {
         logged = [];
 
         const { client } = standIn({});
@@ -415,6 +431,16 @@ test('the year rules spare a title only when every data card is known to draw fi
             deadline: 50,
             periods,
         });
+
+        const unknown = logged
+            .map((line) => JSON.parse(line))
+            .filter((line) => line.message === 'library_period_mode_unknown');
+
+        assert.deepEqual(
+            unknown.map((line) => line.cause),
+            cause ? [cause] : [],
+            name,
+        );
 
         if (code === null) {
             assert.deepEqual(checked, { warnings: [] }, name);
@@ -425,16 +451,48 @@ test('the year rules spare a title only when every data card is known to draw fi
 
         assert.deepEqual([document.code, document.pointer], [code, '/title'], name);
     }
+});
 
-    assert.equal(JSON.parse(logged[0]).message, 'library_period_mode_unknown');
-    assert.equal(JSON.parse(logged[0]).cause, 'timeout');
+test('a year in a description alone asks the lookup, and fixed periods pass its period claim', async () => {
+    const description = 'Per person health expenditure in Kenya, Liberia, and Niger for 2023';
+    const { client } = standIn({ verdicts: { [description]: [0.41, 'period'] } });
+    const asked: string[] = [];
+    const lookup = (found: PeriodsFound) => async () => {
+        asked.push(found);
+
+        return found;
+    };
+    const fixed = await evergreenCheck(
+        { title: 'Health expenditure per capita', description },
+        SUBJECT,
+        {
+            client,
+            periods: lookup('fixed'),
+        },
+    );
+    const rolling = await evergreenCheck(
+        { title: 'Health expenditure per capita', description },
+        SUBJECT,
+        {
+            client,
+            periods: lookup('rolling'),
+        },
+    );
+
+    assert.deepEqual(asked, ['fixed', 'rolling']);
+    assert.deepEqual(fixed, { warnings: [] });
+    assert.ok('warnings' in rolling);
+    assert.deepEqual(
+        rolling.warnings.map(({ pointer, kind }) => [pointer, kind]),
+        [['/description', 'recency']],
+    );
 });
 
 test('fixed periods leave the per-sentence judgment in place, and a text naming no year skips the lookup', async () => {
     const title = 'Health expenditure per capita in Kenya, 2023';
     const { client } = standIn({ verdicts: { [title]: [0.95, 'value'] } });
     const { document } = await refusalOf(
-        await evergreenCheck({ title }, SUBJECT, { client, periods: async () => true }),
+        await evergreenCheck({ title }, SUBJECT, { client, periods: async () => 'fixed' }),
     );
 
     assert.deepEqual([document.code, document.pointer], ['not_evergreen', '/title']);
@@ -446,7 +504,7 @@ test('fixed periods leave the per-sentence judgment in place, and a text naming 
         periods: async () => {
             asked += 1;
 
-            return true;
+            return 'fixed';
         },
     });
     assert.equal(asked, 0);

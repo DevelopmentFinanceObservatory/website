@@ -30,7 +30,7 @@ import {
     namesYear,
     overBudget,
 } from './evergreenRule';
-import { PERIOD_DEADLINE_MS } from './periods';
+import { PERIOD_DEADLINE_MS, type PeriodsFound } from './periods';
 
 export { MODEL, T_HIGH, T_KIND, T_LOW } from './evergreenRule';
 
@@ -170,14 +170,15 @@ const judge = async (client: TypeSafeClient, candidate: Candidate, signal: Abort
     return answers;
 };
 
-/** Whether every data card the artifact shows draws fixed periods
- *  (./periods.ts), asked only when a title or heading names a year. It ends
- *  when `signal` does. */
-export type PeriodLookup = (signal: AbortSignal) => Promise<boolean>;
+/** What the modes of the data cards the artifact shows come to
+ *  (./periods.ts), asked only when some checked sentence names a year
+ *  (`namesYear`). It ends when `signal` does. */
+export type PeriodLookup = (signal: AbortSignal) => Promise<PeriodsFound>;
 
-// What the lookup came to, false when it failed or ran past its deadline,
-// since a card whose periods are not known to be fixed may roll. The failure
-// is logged by its machine-readable code alone.
+// Whether every data card is known to be fixed. A card whose periods are not
+// known to be fixed may roll, so a failed lookup, one past its deadline, or
+// one that found no mode counts as rolling, and is logged by its
+// machine-readable cause alone.
 const periodsFixed = async (
     lookup: PeriodLookup,
     deadline: number,
@@ -191,7 +192,13 @@ const periodsFixed = async (
     );
 
     try {
-        return await Promise.race([lookup(signal), expired]);
+        const found = await Promise.race([lookup(signal), expired]);
+
+        if (found !== 'fixed' && found !== 'rolling') {
+            warn('library_period_mode_unknown', { ...subject, cause: found });
+        }
+
+        return found === 'fixed';
     } catch (error) {
         const cause =
             error instanceof CheckFailure
@@ -287,10 +294,14 @@ const notices = (warnings: readonly EvergreenWarning[]): EvergreenNotice[] =>
  * (no key, a timeout, a 5xx, a 4xx other than 400 or 413, an unanswered
  * question or another model), or 502 `evergreen_check_refused` when TypeSafe
  * refuses the text with a 400 or a 413. The whole check stops after
- * `deadline`. When a title or heading names a year and `periods` says every
- * data card is fixed, the year rules spare it and the answers decide it
- * (`decide`). The lookup runs beside the requests, for at most
- * `PERIOD_DEADLINE_MS`, and a failure counts as rolling. `subject` names the
+ * `deadline`. When a sentence in any field names a year and `periods` says
+ * every data card is fixed, the year rules spare the title and headings, and
+ * a sentence passes unless its `value`, `ranking` or `change` Noul names a
+ * claim (`decide`). The lookup starts once
+ * there is a client and runs beside the requests, for at most
+ * `PERIOD_DEADLINE_MS`. A failure, or a card whose mode it cannot name,
+ * counts as rolling and is logged as `library_period_mode_unknown` with its
+ * `cause`. `subject` names the
  * artifact in the log lines. `library_evergreen_not_evergreen` logs each
  * refused sentence and `library_evergreen_doubt` each warned one, with its
  * field, offsets, kind and all five Nouls, and without its text.
@@ -331,14 +342,16 @@ export const evergreenCheck = async (
         };
     }
 
-    const fixedPeriods =
-        periods && candidates.some(namesYear)
-            ? periodsFixed(periods, Math.min(PERIOD_DEADLINE_MS, deadline), subject)
-            : Promise.resolve(false);
     let decisions: EvergreenDecision[];
 
     try {
         const typesafe = client();
+        // Started once there is a client, so a check that cannot run reads
+        // no card.
+        const fixedPeriods =
+            periods && candidates.some(namesYear)
+                ? periodsFixed(periods, Math.min(PERIOD_DEADLINE_MS, deadline), subject)
+                : Promise.resolve(false);
         const answers = await everyCandidate(
             candidates,
             (candidate, signal) => judge(typesafe, candidate, signal),

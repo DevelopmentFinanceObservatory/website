@@ -16,6 +16,7 @@ import type {
     LibrarySource,
     LibraryStep,
 } from '../../../db/schema.ts';
+import { shortDateText } from '../sources/updateDates.ts';
 
 export type { LibraryCardCite, LibraryCardDates, LibrarySource, LibraryStep };
 
@@ -46,8 +47,8 @@ export type LibraryArtifact = {
     /** Each published card's data dates as they were at publish, in card
      *  order. */
     cardDates: LibraryCardDates[];
-    /** Each published card's citation as its source asks for it, in card
-     *  order, or empty when the row holds none. */
+    /** Each published card's citation (`LibraryCardCite`), in card order,
+     *  or empty when the row holds none. */
     cardCites: LibraryCardCite[];
     /** ISO 8601. */
     publishedAt: string;
@@ -261,29 +262,41 @@ export const textUpdated = (artifact: Pick<LibraryArtifact, 'publishedAt' | 'upd
     new Date(artifact.updatedAt).getTime() > new Date(artifact.publishedAt).getTime();
 
 /**
- * The reference a reader copies, one line per published card, each as the
- * card's own source asks to be cited (`cardCites`, Studio's full form) and
- * retrieved from the artifact's page:
+ * The reference a reader copies, one line per published card, retrieved from
+ * the artifact's page. A card whose source says how to cite it gives
+ * Studio's full form:
  *
  *   World Bank (2026). "World Development Indicators" [dataset]. Retrieved
  *   28 November 2026 from
  *   https://developmentfinance.org/library/health-expenditure-per-capita.
  *
- * Cards that cite alike give one line. A card with no citation gives the
- * artifact's sources and title instead: `OECD CRS. "Health ODA to
- * Ethiopia". Retrieved … from <url>.`, as does an artifact that holds no
- * card's citation.
+ * Any other card gives its own sources and title, as `OECD CRS. "Health ODA
+ * to Ethiopia". Retrieved … from <url>.`, and cards that cite alike give one
+ * line. An artifact that holds no card's citation gives `Development Finance
+ * Observatory (2026). "<title>". Retrieved … from <url>. Data: <sources>.`
+ * A snapshot's page is cited as Studio cites a snapshot share, with
+ * `(snapshot, data as of <publish date>)` after the URL.
  */
 export const citation = (artifact: LibraryArtifact, origin: string, accessed: Date): string => {
-    const retrieved = `Retrieved ${libraryDate(accessed)} from ${origin}${artifactPath(artifact.slug)}.`;
-    const sources = artifact.sources.map((source) => source.name).join(', ');
-    const fallback = `${sources ? `${sources}. ` : ''}"${artifact.title}". ${retrieved}`;
-    const cites = artifact.cardCites.length > 0 ? artifact.cardCites : [null];
+    const snapshot =
+        artifact.mode === 'snapshot'
+            ? ` (snapshot, data as of ${shortDateText(new Date(artifact.publishedAt))})`
+            : '';
+    const retrieved = `Retrieved ${libraryDate(accessed)} from ${origin}${artifactPath(artifact.slug)}${snapshot}.`;
+
+    if (artifact.cardCites.length === 0) {
+        const year = new Date(artifact.publishedAt).getUTCFullYear();
+        const sources = artifact.sources.map((source) => source.name).join(', ');
+
+        return `${LIBRARY_AUTHOR} (${year}). "${artifact.title}". ${retrieved}${sources ? ` Data: ${sources}.` : ''}`;
+    }
 
     return [
         ...new Set(
-            cites.map((cite) =>
-                cite ? `${cite.text}. "${cite.title}" [dataset]. ${retrieved}` : fallback,
+            artifact.cardCites.map((cite) =>
+                'text' in cite
+                    ? `${cite.text}. "${cite.title}" [dataset]. ${retrieved}`
+                    : `${cite.sources.length > 0 ? `${cite.sources.join(', ')}. ` : ''}"${cite.title}". ${retrieved}`,
             ),
         ),
     ].join('\n');

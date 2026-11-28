@@ -55,8 +55,8 @@ const Prose = ({ text }: { text: string }) => (
     </>
 );
 
-// One step of the method, as the card's info panel shows it: the verb and
-// its object ("Get · Gross national income"), with the step's sentence one
+// One step of the method as the card's info panel shows it, with the verb
+// and its object ("Get · Gross national income") and the step's sentence one
 // click away. A step stored without its two halves shows its title.
 const MethodStep = ({ step, index }: { step: LibraryStep; index: number }) => {
     const label = (
@@ -68,7 +68,7 @@ const MethodStep = ({ step, index }: { step: LibraryStep; index: number }) => {
                     {step.object}
                 </>
             ) : (
-                (step.object ?? step.title)
+                step.object || step.title
             )}
         </span>
     );

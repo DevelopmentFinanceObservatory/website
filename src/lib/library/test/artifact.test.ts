@@ -143,31 +143,44 @@ test('a list param keeps names with commas, each once', () => {
 test("the citation gives one line per card's own citation, merged when alike, from the page", () => {
     const wdi = { text: 'World Bank (2026)', title: 'World Development Indicators' };
     const crs = { text: 'OECD (2026)', title: 'Creditor Reporting System' };
+    const uncited = { sources: ['OECD CRS'], title: 'Health ODA to Ethiopia' };
     const accessed = new Date('2027-01-27T09:00:00Z');
-    const from =
-        'Retrieved 27 January 2027 from https://developmentfinance.org/library/eth-health-oda.';
-    const cite = (cardCites: LibraryArtifact['cardCites']) =>
-        citation({ ...ethiopia, cardCites }, 'https://developmentfinance.org', accessed).split(
-            '\n',
-        );
+    const page = 'https://developmentfinance.org/library/eth-health-oda';
+    const from = `Retrieved 27 January 2027 from ${page}.`;
+    const cite = (
+        cardCites: LibraryArtifact['cardCites'],
+        mode: LibraryArtifact['mode'] = 'live',
+    ) =>
+        citation(
+            { ...ethiopia, mode, cardCites },
+            'https://developmentfinance.org',
+            accessed,
+        ).split('\n');
 
     assert.deepEqual(cite([wdi, crs, wdi]), [
         `World Bank (2026). "World Development Indicators" [dataset]. ${from}`,
         `OECD (2026). "Creditor Reporting System" [dataset]. ${from}`,
     ]);
 
-    // A card without a citation, and an artifact that holds none, name the
-    // artifact's sources and title.
-    const fallback = `OECD CRS, World Bank IDS, 2024. "Health ODA to Ethiopia, 2016–2024". ${from}`;
-
-    assert.deepEqual(cite([wdi, null, null]), [
+    // A card without its source's citation names its own sources and title.
+    assert.deepEqual(cite([wdi, uncited, uncited, { sources: [], title: 'Notes' }]), [
         `World Bank (2026). "World Development Indicators" [dataset]. ${from}`,
-        fallback,
+        `OECD CRS. "Health ODA to Ethiopia". ${from}`,
+        `"Notes". ${from}`,
     ]);
-    assert.deepEqual(cite([]), [fallback]);
+
+    // A snapshot names the day its data was captured, as Studio does.
+    assert.deepEqual(cite([wdi], 'snapshot'), [
+        `World Bank (2026). "World Development Indicators" [dataset]. Retrieved 27 January 2027 from ${page} (snapshot, data as of 12 Dec 2026).`,
+    ]);
+
+    // An artifact that holds no card's citation is cited to the Observatory.
+    assert.deepEqual(cite([]), [
+        `Development Finance Observatory (2026). "Health ODA to Ethiopia, 2016–2024". ${from} Data: OECD CRS, World Bank IDS, 2024.`,
+    ]);
     assert.equal(
         citation(climate, '', accessed),
-        `"climate-finance". Retrieved 27 January 2027 from /library/climate-finance.`,
+        `Development Finance Observatory (2026). "climate-finance". Retrieved 27 January 2027 from /library/climate-finance.`,
     );
 });
 

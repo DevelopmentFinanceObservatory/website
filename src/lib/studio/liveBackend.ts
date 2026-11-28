@@ -218,15 +218,21 @@ export const readComponent = async (backend: LiveBackend, ref: CardRef): Promise
  *  data (`rolling`), as dfo-apis' component read names them. */
 export type PeriodMode = 'fixed' | 'rolling';
 
-/** The `period_mode` of one stored revision, or null when the read names
- *  neither value. */
+/** The `period_mode` of one stored revision. `missing` when the read has no
+ *  `period_mode`, and `unknown` when it names neither value. */
 export const readPeriodMode = async (
     backend: LiveBackend,
     ref: CardRef,
-): Promise<PeriodMode | null> => {
-    const mode = (
-        await json(backend, `${backend.apisBase}${componentPath(ref)}?revision=${ref.revision}`)
-    )['period_mode'];
+): Promise<PeriodMode | 'missing' | 'unknown'> => {
+    const read = await json(
+        backend,
+        `${backend.apisBase}${componentPath(ref)}?revision=${ref.revision}`,
+    );
+    const mode = read['period_mode'];
 
-    return mode === 'fixed' || mode === 'rolling' ? mode : null;
+    if (mode === undefined || mode === null) {
+        return 'missing';
+    }
+
+    return mode === 'fixed' || mode === 'rolling' ? mode : 'unknown';
 };

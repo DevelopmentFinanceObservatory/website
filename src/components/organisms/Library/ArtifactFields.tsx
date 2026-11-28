@@ -23,6 +23,7 @@ import {
     readEvergreenAnswer,
     sameField,
 } from '@/lib/library/client';
+import type { ArtifactMode } from '@/lib/library/artifact';
 import { type ArtifactText, LIMITS } from '@/lib/library/publish';
 
 /**
@@ -205,8 +206,13 @@ const HINTS: Record<EvergreenField, string> = {
     content: 'The text section below the artifact, under the content title.',
 };
 
-const RULE =
-    'Say what the data measures and how to read it. Leave the numbers to the chart, which refreshes after publication.';
+// The line above the fields. A snapshot's text is not held to the evergreen
+// rule, since its data stays as published.
+const RULE: Record<ArtifactMode, string> = {
+    live: 'Say what the data measures and how to read it. Leave the numbers to the chart, which refreshes after publication.',
+    snapshot:
+        'Say what the data measures and how to read it. A snapshot keeps its data as published, so the text can name its numbers.',
+};
 const FIELD_ORDER: readonly EvergreenField[] = ['title', 'description', 'contentTitle', 'content'];
 
 /** The refused sentences of one field, under it. `fix` is given to the first
@@ -259,6 +265,8 @@ type ArtifactFieldsProps = {
     // The evergreen refusal of the last try, shown under the fields it names
     // while they hold what was sent.
     refusals?: Refusals | null;
+    // Whether the artifact follows its data, which decides the rule line.
+    mode?: ArtifactMode;
 };
 
 const ArtifactFields = ({
@@ -267,6 +275,7 @@ const ArtifactFields = ({
     address,
     children,
     refusals = null,
+    mode = 'live',
 }: ArtifactFieldsProps) => {
     const ids = useId();
     // Null until the list arrives.
@@ -357,7 +366,7 @@ const ArtifactFields = ({
 
     return (
         <>
-            <p className={styles.rule}>{RULE}</p>
+            <p className={styles.rule}>{RULE[mode]}</p>
             <div className={styles.group}>
                 <label className={styles.field}>
                     <span className={styles.label}>Title</span>

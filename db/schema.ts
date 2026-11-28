@@ -333,10 +333,12 @@ export type LibraryStep = {
  *  read. Either is null when the card did not say. */
 export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: string | null };
 
-/** How one published card's data source asks to be cited, from the card's
- *  description (`cite.text`, the source's own attribution, and `cite.title`,
- *  the dataset's title). Null for a card whose description gave none. */
-export type LibraryCardCite = { text: string; title: string } | null;
+/** How one published card is cited. A card whose description gives a
+ *  citation holds it: `text`, the source's own attribution, and `title`, the
+ *  dataset's title. Any other card holds the names of the sources it credits
+ *  (`sources`) and its own `title`. */
+export type LibraryCardCite =
+    { text: string; title: string } | { sources: string[]; title: string };
 
 /**
  * The Library: Studio and search outputs that DFO staff publish under a
