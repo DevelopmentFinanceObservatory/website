@@ -282,7 +282,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         canvas: null,
         pendingCards: new Map(),
         owedRemovals: [],
-        send: noop,
+        send: () => false,
         unqueue: noop,
         answerClarify: noop,
         skipClarify: noop,
