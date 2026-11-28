@@ -12,7 +12,7 @@ import {
 } from '@/lib/studio/activity';
 import { withTurnStamps } from '@/lib/studio/activityView';
 import { restoreCardRevisions } from '@/lib/studio/cardDownload';
-import { placeCard, takenOver } from '@/lib/studio/cardReplace';
+import { placeCard, takenOver, withReplacedCard } from '@/lib/studio/cardReplace';
 import {
     changeUnitText,
     unitRefusalDetail,
@@ -210,7 +210,9 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // prompt whose turn the harness's record does not name: one of a save from
 // before prompts carried their turn (keyUnkeyedSave), or one a state read
 // shows the harness never admitted (withReadPrompts). It keeps its text and
-// numbers no harness turn.
+// numbers no harness turn. `edit` marks the prompt of a card change
+// (applyUnit), a turn that asks nothing new of the conversation, naming the
+// card it changed and the row.
 // A bot turn's `newQuestion` is the new question its turn handed back that
 // the page offers among its `followups` for the user to send
 // (withOfferedQuestion).
@@ -230,6 +232,7 @@ export type ChatMessage =
           fromNewQuestion?: number;
           inherited?: true;
           unkeyed?: true;
+          edit?: { card: string; row: 'unit' | 'years' | 'shows' | 'split' };
       }
     | {
           role: 'bot';
@@ -1304,6 +1307,16 @@ export const useChat = (
 
                         if (from) {
                             legacyRef.current?.drop(from);
+
+                            // The held manifest names the replacement in the
+                            // same render, so the canvas never shows neither
+                            // card while the manifest frame is on its way.
+                            const renamed = withReplacedCard(canvasRef.current, from, widget.id);
+
+                            if (renamed !== canvasRef.current) {
+                                canvasRef.current = renamed;
+                                setCanvas(renamed);
+                            }
                         }
 
                         setState((prev) => ({
@@ -2447,7 +2460,12 @@ export const useChat = (
             }
 
             const { turn, conversation } = startTurn(
-                { role: 'user', text, card },
+                {
+                    role: 'user',
+                    text,
+                    card,
+                    edit: { card: change.request.component_id, row: 'unit' },
+                },
                 `Switching to ${changeUnitText(change)}`,
             );
 

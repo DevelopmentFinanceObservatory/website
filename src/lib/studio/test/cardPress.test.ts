@@ -8,6 +8,8 @@ import {
     pressAction,
     type PressZone,
     pressZone,
+    type SelectTarget,
+    selectionAfter,
 } from '../../../components/organisms/Studio/canvas/cardPress.ts';
 
 describe('pressAction', () => {
@@ -129,4 +131,41 @@ describe('pressZone and cardPressAction', () => {
 
         assert.equal(cardPressAction({ target: text as never, pointerType: 'mouse' }), 'pan');
     });
+});
+
+describe('selectionAfter', () => {
+    const onCard = (zone: PressZone): SelectTarget => ({ card: 'a', zone });
+    // target, moved, closed a menu, selected before → selected after
+    // (undefined: unchanged).
+    const cases: [
+        string,
+        SelectTarget,
+        boolean,
+        boolean,
+        string | null,
+        string | null | undefined,
+    ][] = [
+        ['a press on a card selects it', onCard('content'), false, false, null, 'a'],
+        ['a press on its head row selects it', onCard('handle'), false, false, 'b', 'a'],
+        ['a second press clears it', onCard('content'), false, false, 'a', null],
+        ['its controls keep the press', onCard('control'), false, false, null, undefined],
+        ['a drag selects nothing', onCard('handle'), true, false, null, undefined],
+        [
+            'the press that closes a menu does nothing else',
+            onCard('content'),
+            false,
+            true,
+            null,
+            undefined,
+        ],
+        ['a press on the empty sheet clears', 'grid', false, false, 'a', null],
+        ['a pan of the empty sheet keeps it', 'grid', true, false, 'a', undefined],
+        ['a press on a beacon keeps it', 'control', false, false, 'a', undefined],
+    ];
+
+    for (const [name, target, moved, closedMenu, selected, expected] of cases) {
+        it(name, () => {
+            assert.equal(selectionAfter({ target, moved, closedMenu, selected }), expected);
+        });
+    }
 });

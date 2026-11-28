@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import type { ReactNode } from 'react';
 
 import { StudioProvider } from './hooks/studioContext';
@@ -10,13 +11,15 @@ import type { StudioVariant } from '@/lib/studio/variant';
 
 export type { StudioProps } from './hooks/useStudio';
 
+// Loaded on its own, so Classic pages carry none of the Prompt layout's code.
+const PromptShell = dynamic(() => import('./shells/prompt/PromptShell'));
+
 /**
  * The layout that draws a Studio for `variant`. A share (`shared`) always
- * shows the classic layout. Until the prompt layout
- * exists, every variant draws the classic one.
+ * shows the classic layout.
  */
 const shellFor = (variant: StudioVariant, shared: boolean): ReactNode =>
-    variant === 'prompt' && !shared ? <ClassicShell /> : <ClassicShell />;
+    variant === 'prompt' && !shared ? <PromptShell /> : <ClassicShell />;
 
 /**
  * The Studio: one model (useStudio) over the conversation, the canvas

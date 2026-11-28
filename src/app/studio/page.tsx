@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import Studio from '@/components/organisms/Studio/Studio';
 import { getSession } from '@/lib/auth/session';
 import { pickExamples } from '@/lib/studio/examples';
-import { VARIANT_COOKIE, variantOf } from '@/lib/studio/variant';
+import { pageVariant, promptEnabled, VARIANT_COOKIE } from '@/lib/studio/variant';
 
 export const metadata: Metadata = {
     title: 'DFO Studio',
@@ -16,7 +16,10 @@ export const metadata: Metadata = {
 // examples.
 const StudioPage = async () => {
     const session = await getSession();
-    const variant = variantOf((await cookies()).get(VARIANT_COOKIE)?.value);
+    const variant = pageVariant(
+        (await cookies()).get(VARIANT_COOKIE)?.value,
+        promptEnabled(process.env.STUDIO_PROMPT_ENABLED),
+    );
 
     return <Studio guest={!session} examples={pickExamples()} variant={variant} />;
 };

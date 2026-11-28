@@ -1,11 +1,21 @@
 'use client';
 
 import classNames from 'classnames';
-import { type MutableRefObject, useEffect, useMemo, useRef } from 'react';
+import { type MutableRefObject, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import BeaconLayer from './BeaconLayer';
 import { computeBeacons } from './beacons';
+import {
+    arrivalBlock,
+    BLOCK_INSET,
+    blockCols,
+    type Placement,
+    promptFoot,
+    revealOffset,
+} from './blocks';
+import { scrollerOf } from './board';
+import { DRAG_THRESHOLD, selectionAfter, type SelectTarget, selectTarget } from './cardPress';
 import CardBody from './cards/CardBody';
 import type { CardExtras } from './cards/types';
 import {
@@ -16,6 +26,8 @@ import {
     heightIsDerived,
     heightIsFree,
     gripRange,
+    heightRange,
+    type Rect,
     resolveCardView,
     widgetTitle,
 } from './layout';
@@ -25,6 +37,7 @@ import { DRAG_SLACK, useCardDrag } from './useCardDrag';
 import { useCardResize } from './useCardResize';
 import { useFilterFly } from './useFilterFly';
 import { usePan } from './usePan';
+import { usePointing } from './usePointing';
 import { useShockwave } from './useShockwave';
 import { useSlots } from './useSlots';
 import styles from './Whiteboard.module.scss';
@@ -40,6 +53,13 @@ import { cardUnitOffer } from '@/lib/studio/cardUnit';
 import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import type { UnitChoice } from '@/lib/studio/wire';
+
+// The held card is brought into view again once the session panel's width
+// change has settled the canvas's width.
+const HELD_SETTLE_MS = 320;
+
+const scrollBehavior = (): ScrollBehavior =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
 export type WhiteboardProps = {
     widgets: Widget[];
@@ -107,6 +127,35 @@ export type WhiteboardProps = {
     // card with the share's id and creation time. Absent for a snapshot and
     // in the owner's Studio.
     live?: LiveCanvas;
+    // The Prompt layout's canvas. Every prop below is absent in the classic
+    // layout, which then behaves as it always has.
+    //
+    // Where a fresh card lands: `blocks` puts each question's cards in a
+    // block of their own below the earlier ones (blocks.ts).
+    placement?: Placement;
+    // A prompt floats over the canvas's foot: the sheet runs on below its
+    // last row by the prompt's height (--dock-rest, --dock-current on an
+    // ancestor), and the bottom beacons and the arrival scroll keep clear of
+    // it.
+    dockAware?: boolean;
+    // Px the session panel is about to take at the right: fresh cards are
+    // placed against the narrower width. 0 while the panel is open already.
+    reserveRight?: number;
+    // The selected card, whose value the parent owns. With `onSelect` each
+    // card is a toggle: a press on it away from its controls, or Enter or
+    // Space, selects or clears it, and a press on the empty sheet clears.
+    selectedId?: string | null;
+    onSelect?: (id: string | null) => void;
+    // The card the session panel shows: outlined, and brought into view.
+    heldId?: string | null;
+    // Cards outlined faintly as the same plan's cards.
+    litIds?: readonly string[];
+    // The card the pointer or keyboard focus rests on, after POINT_REST_MS;
+    // null at once when it leaves. Silent while a card menu is open.
+    onPoint?: (id: string | null) => void;
+    // Cards a research plan made, whose menu opens with View Research Plan.
+    viewPlanIds?: ReadonlySet<string>;
+    onViewPlan?: (id: string) => void;
 };
 
 /**
@@ -147,6 +196,16 @@ const Whiteboard = ({
     resizable = false,
     centerSingle = false,
     live,
+    placement = 'pack',
+    dockAware = false,
+    reserveRight = 0,
+    selectedId = null,
+    onSelect,
+    heldId = null,
+    litIds,
+    onPoint,
+    viewPlanIds,
+    onViewPlan,
 }: WhiteboardProps) => {
     // Fluid cell: GRID_CELL scaled by the live root font-size. All cell↔px
     // math uses it; `f` scales the raw-px interaction constants (scroll
@@ -160,12 +219,14 @@ const Whiteboard = ({
     // The layout is in cells, so it's the SAME arrangement on every screen —
     // on a phone the cells are just smaller (useGridCell fits them to the
     // width) and the sheet pans.
+    const blocks = placement === 'blocks';
     const { slots, setSlots, fitRows, raise } = useSlots({
         widgets,
         pinnedIds,
         views,
         initialLayout,
-        viewCols,
+        viewCols: blocks ? blockCols(view.width, reserveRight, CELL) : viewCols,
+        placement,
         onLayoutChange,
         replacedIds,
     });
@@ -225,6 +286,48 @@ const Whiteboard = ({
         extent: { rightCol, bottomRow },
     });
 
+    // The px of the view's foot the floating prompt covers (blocks.ts).
+    const promptCover = (scroller: HTMLElement) =>
+        dockAware ? promptFoot(getComputedStyle(scroller).getPropertyValue('--dock-rest')) : 0;
+
+    // The scroll that shows a card whole, above the prompt; or its top, one
+    // cell in, when it is taller than the room. `top` overrides the vertical.
+    const revealRect = (
+        rect: Rect,
+        scroller: HTMLElement,
+        top?: number,
+    ): ScrollToOptions | null => {
+        const left = revealOffset({
+            start: origin.x + rect.col * CELL,
+            end: origin.x + (rect.col + rect.w) * CELL,
+            scroll: scroller.scrollLeft,
+            size: scroller.clientWidth,
+            lead: CELL,
+        });
+        const nextTop =
+            top ??
+            revealOffset({
+                start: origin.y + rect.row * CELL,
+                end: origin.y + (rect.row + rect.h) * CELL,
+                scroll: scroller.scrollTop,
+                size: scroller.clientHeight,
+                hidden: promptCover(scroller),
+                lead: CELL,
+            });
+
+        if (left === null && (nextTop === null || nextTop === scroller.scrollTop)) {
+            return null;
+        }
+
+        pan.stopGlide();
+
+        return {
+            left: left ?? scroller.scrollLeft,
+            top: nextTop ?? scroller.scrollTop,
+            behavior: scrollBehavior(),
+        };
+    };
+
     useArrivals({
         boardRef,
         slots,
@@ -232,7 +335,69 @@ const Whiteboard = ({
         CELL,
         spawnWave,
         busy: () => dragging.isDragging() || pan.isPanning(),
+        // A new block comes up to one cell under the top; a card joining a
+        // block is revealed just enough to show above the prompt.
+        placeView: blocks
+            ? (newest, fresh, scroller) => {
+                  const block = arrivalBlock(newest, slots, fresh);
+
+                  return revealRect(
+                      newest,
+                      scroller,
+                      block.isNew
+                          ? Math.max(0, origin.y + (block.top - BLOCK_INSET) * CELL)
+                          : undefined,
+                  );
+              }
+            : undefined,
     });
+
+    // The held card comes into view when it changes, and again once the
+    // panel that holds it has changed the canvas's width.
+    const revealHeld = useEffectEvent(() => {
+        const slot = heldId ? slots[heldId] : undefined;
+        const scroller = scrollerOf(boardRef);
+
+        if (!slot || slot.leaving || !scroller) {
+            return;
+        }
+
+        const target = revealRect(slot, scroller);
+
+        if (target) {
+            scroller.scrollTo(target);
+        }
+    });
+
+    useEffect(() => {
+        if (!heldId) {
+            return undefined;
+        }
+
+        revealHeld();
+        const timer = window.setTimeout(revealHeld, HELD_SETTLE_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [heldId]);
+
+    const { pointLater, unpoint, menuOpenChange, menuOpen, pointedId } = usePointing(onPoint);
+
+    // The press a click finishes, for selection.
+    const pressRef = useRef<{
+        target: SelectTarget;
+        x: number;
+        y: number;
+        closedMenu: boolean;
+    } | null>(null);
+
+    // A pointed card that leaves the sheet is pointed at no longer.
+    useEffect(() => {
+        const id = pointedId();
+
+        if (id !== null && (!slots[id] || slots[id].leaving)) {
+            unpoint(id);
+        }
+    }, [slots, pointedId, unpoint]);
 
     useFilterFly({ boardRef, filter, slots, views, origin, view, CELL, stopGlide: pan.stopGlide });
 
@@ -267,21 +432,44 @@ const Whiteboard = ({
     const dimKind = filter ? FILTER_KIND[filter] : undefined;
     const beacons = computeBeacons({ slots, view, origin, CELL, f, dimKind, views, titleOf });
     const liveCount = Object.values(slots).filter((other) => !other.leaving).length;
+    const sheetHeight =
+        origin.y +
+        Math.max(bottomRow + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.rows ?? 0) * CELL;
 
     return (
         <div
             ref={boardRef}
-            className={classNames(styles.board, pan.panning && styles.boardPanning)}
+            className={classNames(
+                styles.board,
+                pan.panning && styles.boardPanning,
+                dockAware && styles.boardPrompt,
+            )}
             style={{
                 width:
                     origin.x +
                     Math.max(rightCol + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.cols ?? 0) *
                         CELL,
-                height:
-                    origin.y +
-                    Math.max(bottomRow + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.rows ?? 0) *
-                        CELL,
+                height: dockAware ? `calc(${sheetHeight}px + var(--board-foot))` : sheetHeight,
             }}
+            {...(onSelect && {
+                // Pointer capture can retarget the click that ends a press
+                // (a pan on touch), so the press decides what it selects.
+                // Presses in a portalled menu reach here through React and
+                // are not the board's.
+                onPointerDownCapture: (event: React.PointerEvent<HTMLDivElement>) => {
+                    const target = event.target;
+
+                    pressRef.current =
+                        target instanceof Element && event.currentTarget.contains(target)
+                            ? {
+                                  target: selectTarget(target),
+                                  x: event.clientX,
+                                  y: event.clientY,
+                                  closedMenu: menuOpen(),
+                              }
+                            : null;
+                },
+            })}
             onPointerDown={pan.startPan}
             onPointerMove={pan.movePan}
             onPointerUp={pan.endPan}
@@ -290,6 +478,26 @@ const Whiteboard = ({
             // sheet (no pan, no card, no interactive target) ripples from
             // wherever you clicked.
             onClick={(event) => {
+                const press = pressRef.current;
+
+                pressRef.current = null;
+
+                // A keyboard click (detail 0) is the select toggle's own.
+                if (onSelect && press && event.detail > 0) {
+                    const next = selectionAfter({
+                        target: press.target,
+                        moved:
+                            Math.hypot(event.clientX - press.x, event.clientY - press.y) >=
+                            DRAG_THRESHOLD,
+                        closedMenu: press.closedMenu,
+                        selected: selectedId,
+                    });
+
+                    if (next !== undefined) {
+                        onSelect(next);
+                    }
+                }
+
                 const target = event.target as HTMLElement;
 
                 if (
@@ -310,7 +518,7 @@ const Whiteboard = ({
                 );
             }}
         >
-            <BeaconLayer beacons={beacons} onFly={flyTo} />
+            <BeaconLayer beacons={beacons} onFly={flyTo} clearPrompt={dockAware} />
 
             <div
                 className={styles.gridLayer}
@@ -432,7 +640,17 @@ const Whiteboard = ({
                     onShare: onShare && !readOnly ? () => onShare(widget.id) : null,
                     readOnly,
                     live: cardLiveOf(live, widget.id),
+                    onViewPlan:
+                        onViewPlan && !readOnly && viewPlanIds?.has(widget.id)
+                            ? () => onViewPlan(widget.id)
+                            : null,
+                    menuFit: !!onViewPlan,
+                    ...((onSelect || onPoint) && {
+                        onMenuOpenChange: (open: boolean) => menuOpenChange(widget.id, open),
+                    }),
                 };
+                const selected = !!onSelect && selectedId === widget.id;
+                const pointable = !!onPoint && !isLeaving;
 
                 const focused = widget.id === focusedId && !isPhone;
                 // A focused card is placed by the stylesheet (centred on the
@@ -491,14 +709,53 @@ const Whiteboard = ({
                             // card or a fading one is not draggable, so a press
                             // on it pans the board.
                             data-draggable={!isLeaving && !readOnly ? '' : undefined}
+                            data-selected={selected ? '' : undefined}
+                            data-held={heldId === widget.id ? '' : undefined}
+                            data-lit={litIds?.includes(widget.id) ? '' : undefined}
+                            {...(pointable && {
+                                onPointerEnter: (event: React.PointerEvent) => {
+                                    if (event.pointerType !== 'touch') {
+                                        pointLater(widget.id);
+                                    }
+                                },
+                                onPointerLeave: () => unpoint(widget.id),
+                                onFocus: () => pointLater(widget.id),
+                                onBlur: (event: React.FocusEvent) => {
+                                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                                        unpoint(widget.id);
+                                    }
+                                },
+                            })}
                             {...(!isLeaving &&
                                 !readOnly && {
                                     onPointerDown: dragging.startDrag(widget.id),
-                                    onPointerMove: dragging.moveDrag,
+                                    onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
+                                        // Movement restarts the rest until the
+                                        // card is pointed at.
+                                        if (pointable && event.pointerType !== 'touch') {
+                                            pointLater(widget.id);
+                                        }
+
+                                        dragging.moveDrag(event);
+                                    },
                                     onPointerUp: dragging.endDrag(true),
                                     onPointerCancel: dragging.endDrag(false),
                                 })}
                         >
+                            {/* The card's selection toggle: the keyboard's
+                                way to select it, and what a screen reader
+                                reads its state from. A pointer selects by
+                                pressing the card (the board's click). */}
+                            {onSelect && !readOnly && !isLeaving && (
+                                <button
+                                    type="button"
+                                    className={styles.selectToggle}
+                                    aria-pressed={selected}
+                                    aria-label={title}
+                                    data-no-export=""
+                                    onClick={() => onSelect(selected ? null : widget.id)}
+                                />
+                            )}
                             {!isLeaving && (!readOnly || resizable) && !isText && (
                                 <span
                                     className={classNames(

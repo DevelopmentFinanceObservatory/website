@@ -43,9 +43,10 @@ const PinButton = ({ pinned, onPin }: Pick<CardExtras, 'pinned' | 'onPin'>) => (
 const DownloadMenu = ({
     onDownload,
     onDownloadImage,
-}: Pick<CardExtras, 'onDownload' | 'onDownloadImage'>) =>
+    onMenuOpenChange,
+}: Pick<CardExtras, 'onDownload' | 'onDownloadImage' | 'onMenuOpenChange'>) =>
     !onDownload && !onDownloadImage ? null : (
-        <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Root modal={false} onOpenChange={onMenuOpenChange}>
             <DropdownMenu.Trigger asChild>
                 <button type="button" className={styles.menuBtn} aria-label="Download">
                     <Icon name="download" className={styles.actionIcon} />
@@ -105,11 +106,14 @@ const CardMenu = ({
     onNote,
     onRemoveNote,
     onView,
+    onViewPlan,
+    onMenuOpenChange,
+    menuFit,
 }: CardExtras & { onOpenUnit: (() => void) | null }) => {
     const unitAfterClose = useRef(false);
 
     return (
-        <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Root modal={false} onOpenChange={onMenuOpenChange}>
             <DropdownMenu.Trigger asChild>
                 <button type="button" className={styles.menuBtn} aria-label="Card menu">
                     <Icon name="kebab" className={styles.actionIcon} />
@@ -117,7 +121,7 @@ const CardMenu = ({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
                 <DropdownMenu.Content
-                    className={styles.cardMenu}
+                    className={classNames(styles.cardMenu, menuFit && styles.cardMenuFit)}
                     side="right"
                     align="start"
                     sideOffset={4}
@@ -132,7 +136,12 @@ const CardMenu = ({
                     }}
                 >
                     <div className={styles.cardMenuSection}>
-                        {/* First, and in the menu at all: the attribution line
+                        {onViewPlan && (
+                            <MenuRow icon="list" onSelect={onViewPlan}>
+                                View Research Plan
+                            </MenuRow>
+                        )}
+                        {/* At the top, and in the menu at all: the attribution line
                         was the only way in, and it reads as a caption rather
                         than a control (QA-21). */}
                         {onInfo && (
@@ -352,6 +361,7 @@ const CardActions = (extras: CardExtras) => {
                 <DownloadMenu
                     onDownload={extras.onDownload}
                     onDownloadImage={extras.onDownloadImage}
+                    onMenuOpenChange={extras.onMenuOpenChange}
                 />
                 <PinButton pinned={extras.pinned} onPin={extras.onPin} />
                 <CardMenu {...extras} onOpenUnit={unit ? () => setUnitOpen(true) : null} />

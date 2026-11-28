@@ -16,6 +16,12 @@
     overflow: visible;
 }
 
+// The floating prompt covers the view's foot: the bottom beacons rise above
+// it, by the 20 px gap under the prompt and its resting height.
+.beaconLayerPrompt .beaconBottom {
+    margin-top: calc(-1 * (#{rem(20)} + var(--dock-rest, 0px)));
+}
+
 // A beacon anchors its edge (not centre) to the view boundary — the inline
 // `translate` picks which. Collapsed it's just the circle; hovering swaps in
 // the full panel.

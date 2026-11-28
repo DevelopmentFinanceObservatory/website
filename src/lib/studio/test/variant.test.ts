@@ -5,12 +5,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { variantOf, variantRedirect } from '../variant.ts';
+import { pageVariant, promptEnabled, variantOf, variantRedirect } from '../variant.ts';
 
 test('only `prompt` names the prompt variant', () => {
     assert.deepEqual(
         [undefined, '', 'classic', 'PROMPT', 'prompt ', 'other', 'prompt'].map(variantOf),
         ['classic', 'classic', 'classic', 'classic', 'classic', 'classic', 'prompt'],
+    );
+});
+
+test('STUDIO_PROMPT_ENABLED is on unless set to an off word, and off means classic', () => {
+    assert.deepEqual([undefined, '', 'true', '1', 'false', ' OFF ', '0', 'no'].map(promptEnabled), [
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+    ]);
+    assert.deepEqual(
+        [
+            pageVariant('prompt', true),
+            pageVariant('prompt', false),
+            pageVariant('classic', true),
+            pageVariant(undefined, true),
+        ],
+        ['prompt', 'classic', 'classic', 'classic'],
     );
 });
 

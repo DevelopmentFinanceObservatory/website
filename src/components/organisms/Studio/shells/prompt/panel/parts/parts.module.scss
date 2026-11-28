@@ -1,0 +1,514 @@
+@use "mixins" as *;
+
+// The session panel's shared parts. The panel sits on the page colour with
+// no surface of its own; rows take the wash on hover, on keyboard focus and
+// while what they open is open. Type roles: section labels DM Mono 11/16 500
+// stone; counts DM Mono 11 gray-2600 (5.7:1 on the page colour); text Outfit
+// 13/18 charcoal; small values and tags DM Mono 11 stone.
+
+.root {
+    --sp-wash: var(--color-media-bg);
+    --sp-rule: var(--color-net-mid);
+    --sp-faint: var(--color-gray-2600);
+    --sp-ok: var(--color-mint-dark);
+    --sp-run: #6467de;
+    --sp-pointed: #ecece2;
+
+    font-family: var(--font-outfit);
+    font-size: rem(13);
+    font-weight: 400;
+    line-height: rem(18);
+    letter-spacing: -0.01em;
+    color: var(--color-charcoal);
+    overflow-wrap: anywhere;
+
+    :where(p, ul, ol, dl, dd, dt, h2, h3, pre) {
+        margin: 0;
+        padding: 0;
+    }
+
+    :where(ul, ol) {
+        list-style: none;
+    }
+
+    :where(button) {
+        padding: 0;
+        font: inherit;
+        letter-spacing: inherit;
+        color: inherit;
+        text-align: left;
+        background: none;
+        border: 0;
+        cursor: pointer;
+    }
+
+    :where(button, a, pre):focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: rem(2);
+    }
+}
+
+.mono {
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+}
+
+.vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.one {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// ---- sections
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: rem(8);
+}
+
+.section + .section {
+    margin-top: rem(20);
+    padding-top: rem(20);
+    border-top: 1px solid var(--sp-rule);
+}
+
+.head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: rem(4) rem(12);
+    padding: 0 rem(8);
+}
+
+.label {
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    font-weight: 500;
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+}
+
+.count {
+    margin-left: rem(4);
+    font-weight: 400;
+    color: var(--sp-faint);
+}
+
+.foot {
+    flex-flow: row wrap;
+    justify-content: space-between;
+    gap: rem(8) rem(16);
+    padding-inline: rem(8);
+}
+
+// ---- text buttons
+
+.textButton {
+    flex-shrink: 0;
+    align-self: flex-start;
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+    text-decoration: underline;
+    text-decoration-color: var(--color-sage);
+    text-underline-offset: rem(2);
+
+    .head & {
+        align-self: baseline;
+    }
+
+    .section > & {
+        margin-left: rem(8);
+    }
+}
+
+@media (hover: hover) {
+    .textButton:hover {
+        color: var(--color-charcoal);
+        text-decoration-color: currentColor;
+    }
+}
+
+// ---- chevrons
+
+.chev {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: rem(12);
+    height: rem(12);
+    color: var(--color-stone);
+    transition: rotate 0.25s ease;
+
+    svg {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+.chevRight,
+.chevDown {
+    rotate: -90deg;
+}
+
+.chevLeft {
+    rotate: 90deg;
+}
+
+[aria-expanded="true"] > .chevDown {
+    rotate: 0deg;
+}
+
+// ---- folds
+
+.fold {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: rem(4);
+    margin-left: rem(8);
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+
+    .section > & {
+        margin-top: rem(4);
+    }
+}
+
+@media (hover: hover) {
+    .fold:hover {
+        color: var(--color-charcoal);
+    }
+}
+
+// ---- status marks: status never rests on colour alone
+
+.mark {
+    position: relative;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    width: rem(12);
+    height: rem(12);
+    margin-top: rem(3);
+    border: 1px solid var(--color-charcoal);
+    border-radius: 50%;
+
+    &::after {
+        position: absolute;
+        content: "";
+    }
+}
+
+.mark[data-state="done"] {
+    background-color: var(--color-charcoal);
+
+    &::after {
+        top: rem(1.5);
+        left: rem(3.5);
+        width: rem(2.5);
+        height: rem(5);
+        border: solid var(--color-bg);
+        border-width: 0 1px 1px 0;
+        rotate: 45deg;
+    }
+}
+
+.mark[data-state="running"] {
+    border-color: var(--sp-run);
+
+    &::after {
+        inset: rem(2);
+        background-color: var(--sp-run);
+        border-radius: 50%;
+        animation: pulse 1s ease-in-out infinite;
+    }
+}
+
+.mark[data-state="waiting"]::after {
+    top: rem(2.5);
+    left: rem(3);
+    width: rem(2);
+    height: rem(5);
+    border-inline: 1px solid var(--color-charcoal);
+}
+
+.mark[data-state="pending"],
+.mark[data-state="skipped"] {
+    border-style: dashed;
+    border-color: var(--color-stone);
+}
+
+.mark[data-state="failed"] {
+    border-color: var(--color-red);
+
+    &::after {
+        top: rem(4.5);
+        right: rem(2);
+        left: rem(2);
+        height: 1px;
+        background-color: var(--color-red);
+    }
+}
+
+@keyframes pulse {
+    50% {
+        opacity: 0.25;
+        scale: 0.7;
+    }
+}
+
+// ---- chips
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: rem(4);
+    min-width: 0;
+    max-width: 100%;
+
+    .section > & {
+        padding: 0 rem(8);
+    }
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: rem(20);
+    padding: rem(1) rem(6);
+    font-size: rem(12);
+    line-height: rem(16);
+    color: var(--color-charcoal);
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+    transition: border-color 0.2s ease;
+}
+
+.chipText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (hover: hover) {
+    button.chip:hover {
+        border-color: var(--color-charcoal);
+    }
+}
+
+.countChip {
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+}
+
+// ---- label and value pairs
+
+.pairs {
+    display: flex;
+    flex-direction: column;
+    gap: rem(6);
+    padding: 0 rem(8);
+}
+
+.pair {
+    display: grid;
+    grid-template-columns: rem(96) minmax(0, 1fr);
+    gap: rem(6) rem(8);
+}
+
+.pairLabel {
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    line-height: rem(18);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+}
+
+// A row's action floats at the right of the value's first line; the value's
+// later lines run under it at the full width.
+.pairValue {
+    display: flow-root;
+}
+
+.pairAction {
+    float: right;
+    margin: rem(1) 0 0 rem(8);
+}
+
+.pairBelow {
+    grid-column: 1 / -1;
+}
+
+// ---- icon actions
+
+.act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: rem(24);
+    height: rem(24);
+    color: var(--color-stone);
+    border-radius: rem(6);
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease;
+
+    svg {
+        flex-shrink: 0;
+        width: rem(14);
+        height: rem(14);
+    }
+
+    &:focus-visible {
+        color: var(--color-charcoal);
+        background-color: var(--sp-wash);
+    }
+
+    &[aria-expanded="true"] {
+        color: var(--color-charcoal);
+        background-color: var(--color-white);
+    }
+}
+
+@media (hover: hover) {
+    .act:hover {
+        color: var(--color-charcoal);
+        background-color: var(--sp-wash);
+    }
+}
+
+.act[data-done],
+.act[data-done]:hover {
+    color: var(--sp-ok);
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+    }
+}
+
+.actWide {
+    gap: rem(6);
+    width: auto;
+    padding: 0 rem(8) 0 rem(6);
+    font-size: rem(12);
+    line-height: rem(16);
+    color: var(--color-charcoal);
+    border: 1px solid var(--color-sage);
+}
+
+// ---- pages
+
+.page {
+    display: flex;
+    flex-direction: column;
+
+    > .section,
+    > .section + .section {
+        margin-top: rem(16);
+        padding-top: rem(16);
+        border-top: 1px solid var(--sp-rule);
+    }
+}
+
+// The back row sticks to the top of the scroller on the panel's own ground.
+// Its negative margins cover the scroller's 14 px padding, so rows scrolling
+// under it stay hidden; sticky offsets count from the scroller's content
+// edge, so `top` takes back that padding.
+.backRow {
+    position: sticky;
+    top: rem(-14);
+    z-index: 2;
+    display: flex;
+    margin: rem(-14) rem(-14) rem(6);
+    padding: rem(12) rem(14) rem(6);
+    background-color: var(--color-bg);
+    transition: box-shadow 0.2s ease;
+
+    :global([data-sp-scrolled]) & {
+        box-shadow: 0 1px 0 var(--sp-rule);
+    }
+}
+
+.back {
+    display: flex;
+    align-items: center;
+    gap: rem(4);
+    max-width: 100%;
+    padding: rem(4) rem(8) rem(4) rem(4);
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+    border-radius: rem(6);
+}
+
+@media (hover: hover) {
+    .back:hover {
+        color: var(--color-charcoal);
+        background-color: var(--sp-wash);
+    }
+}
+
+.title {
+    padding: 0 rem(8);
+    font-size: rem(15);
+    font-weight: 500;
+    line-height: rem(20);
+}
+
+.meta {
+    margin-top: rem(2);
+    padding: 0 rem(8);
+    font-family: var(--font-dm-mono);
+    font-size: rem(11);
+    line-height: rem(16);
+    letter-spacing: -0.02em;
+    color: var(--color-stone);
+}
+
+.text {
+    padding: 0 rem(8);
+}
+
+.strong {
+    font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mark[data-state="running"]::after {
+        animation: none;
+    }
+
+    .chev,
+    .backRow,
+    .act,
+    .chip {
+        transition: none;
+    }
+}

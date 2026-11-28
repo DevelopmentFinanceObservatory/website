@@ -1,0 +1,223 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The Prompt layout's stage. Regions sit under the 60 high top bar and a
+// 10 gutter; the canvas frame runs from the left gutter to the panel (or
+// the right gutter), and every move rides the Studio's --ws-* clock.
+.shell {
+    --pr-top: calc(#{rem(70)} + var(--ws-safe-top));
+    --pr-gutter: #{rem(10)};
+    --pr-panel: #{rem(280)};
+    --panel-space: var(--pr-gutter);
+}
+
+.shell[data-panel="open"]:not([data-overlay]) {
+    --panel-space: calc(var(--pr-panel) + 2 * var(--pr-gutter));
+}
+
+// The landing's grid docks to the canvas frame. The selector outranks the
+// shared .canvas rule's inset.
+.shell .backdropDocked {
+    inset: var(--pr-top) var(--panel-space) var(--pr-gutter) var(--pr-gutter);
+    border: 1px solid var(--color-net-mid);
+    border-radius: rem(10);
+    transition:
+        inset var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        right var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        border-color var(--ws-dur) ease var(--ws-delay),
+        border-radius var(--ws-dur) ease var(--ws-delay);
+
+    > * {
+        top: calc(var(--pr-top) * -1);
+        left: calc(var(--pr-gutter) * -1);
+    }
+}
+
+// Each region is its own stacking context, so card layers stay under the
+// dock.
+.canvasRegion,
+.panel {
+    position: absolute;
+    top: var(--pr-top);
+    bottom: var(--pr-gutter);
+    z-index: 1;
+}
+
+.canvasRegion {
+    right: var(--panel-space);
+    left: var(--pr-gutter);
+    transition: right var(--ws-dur) var(--ws-ease) var(--ws-delay);
+
+    // The frame line draws over the content, so cards scroll under it.
+    &::after {
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        pointer-events: none;
+        content: "";
+        border: 1px solid var(--color-net-mid);
+        border-radius: rem(10);
+    }
+}
+
+// The scroller under the cards. It pans by drag and hides its bars, as in
+// the classic layout.
+.board {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    scrollbar-width: none;
+
+    // Cards' own z-indexes stay inside the board, under the dock and the
+    // panel.
+    isolation: isolate;
+    background-color: var(--color-grid-bg-light);
+    border-radius: rem(10);
+    animation: board-in 0.35s ease 0.45s backwards;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+@keyframes board-in {
+    from {
+        opacity: 0;
+    }
+}
+
+// The prompt's frame: centred on the canvas frame, 20 above its foot.
+.dockFrame {
+    position: absolute;
+    bottom: rem(20);
+    left: 50%;
+    z-index: 4;
+    width: min(#{rem(600)}, 100% - #{rem(40)});
+    translate: -50% 0;
+}
+
+.shell[data-transition] .dockFrame {
+    visibility: hidden;
+}
+
+.panel {
+    right: var(--pr-gutter);
+    width: var(--pr-panel);
+    overflow: hidden;
+    border: 1px solid var(--color-net-mid);
+    border-radius: rem(10);
+    transition:
+        right var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        opacity 0.4s ease var(--ws-delay),
+        visibility 0s linear var(--ws-delay);
+}
+
+.shell[data-panel="closed"] .panel {
+    right: calc(-1 * (var(--pr-panel) + var(--pr-gutter)));
+    visibility: hidden;
+    opacity: 0;
+}
+
+// The panel grows left over the canvas while a row is hovered (SessionPanel
+// sets data-sp-grow on this aside).
+.panel[data-sp-grow] {
+    --sp-edge: 320ms cubic-bezier(0.45, 0, 0.25, 1);
+
+    z-index: 30;
+    background-color: var(--color-bg);
+    transition:
+        right var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        width var(--sp-edge),
+        box-shadow var(--sp-edge),
+        opacity 0.4s ease var(--ws-delay),
+        visibility 0s linear var(--ws-delay);
+}
+
+.shell[data-panel="open"] .panel[data-sp-grow="open"] {
+    width: min(#{rem(400)}, 100% - #{rem(120)});
+    box-shadow: rem(-6) 0 rem(16) rgb(72 72 66 / 8%);
+}
+
+// A narrow window: the panel lies over the canvas on the page colour.
+.shell[data-overlay] .panel {
+    z-index: 5;
+    width: min(var(--pr-panel), 100% - 2 * var(--pr-gutter));
+    background-color: var(--color-bg);
+    box-shadow: 0 rem(8) rem(28) rgb(47 47 43 / 16%);
+}
+
+// The feedback tab sits at the canvas frame's foot on the left, clear of
+// the centred dock and the panel at the right. Beside a full-width dock
+// (a phone) it rides above the dock's top edge, and it steps aside while
+// the panel overlays the canvas.
+.shell .feedback {
+    right: auto;
+    left: calc(var(--pr-gutter) + env(safe-area-inset-left));
+    align-items: flex-start;
+}
+
+@include breakpoint(phone) {
+    .shell .feedback {
+        bottom: calc(#{rem(30)} + var(--dock-current, #{rem(52)}) + #{rem(8)});
+    }
+}
+
+.shell[data-overlay][data-panel="open"] .feedback {
+    visibility: hidden;
+}
+
+// The landing's prompt on its way into the dock.
+.travel {
+    position: fixed;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    padding: 0 rem(16);
+    overflow: hidden;
+    pointer-events: none;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+
+    &[data-moving] {
+        transition:
+            left var(--ws-dur) var(--ws-ease) var(--ws-delay),
+            top var(--ws-dur) var(--ws-ease) var(--ws-delay),
+            width var(--ws-dur) var(--ws-ease) var(--ws-delay),
+            height var(--ws-dur) var(--ws-ease) var(--ws-delay);
+    }
+}
+
+.travelText {
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-size: rem(14);
+    color: var(--color-charcoal);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shell .backdropDocked,
+    .shell .backdropDocked > *,
+    .canvasRegion,
+    .panel,
+    .panel[data-sp-grow] {
+        transition: none;
+    }
+
+    .board {
+        animation: none;
+    }
+}
+
+// The shell's one polite live region, out of sight.
+.live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

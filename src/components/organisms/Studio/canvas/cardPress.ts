@@ -100,3 +100,53 @@ export const cardPressAction = (event: {
         readOnly: !box.hasAttribute('data-draggable'),
     });
 };
+
+/**
+ * What a press landed on, for selection: a card (and where on it), the empty
+ * sheet, or a control of the sheet's own (a beacon).
+ */
+export type SelectTarget = { card: string; zone: PressZone } | 'grid' | 'control';
+
+/**
+ * The selection after a press that ended in a click, or undefined when the
+ * press changes nothing. A press that moved (a drag or a pan) or that closed
+ * a card menu selects nothing; a press on a card's controls is theirs; a
+ * press elsewhere on a card toggles it; a press on the empty sheet clears.
+ */
+export const selectionAfter = ({
+    target,
+    moved,
+    closedMenu,
+    selected,
+}: {
+    target: SelectTarget;
+    moved: boolean;
+    closedMenu: boolean;
+    selected: string | null;
+}): string | null | undefined => {
+    if (moved || closedMenu || target === 'control') {
+        return undefined;
+    }
+
+    if (target === 'grid') {
+        return selected === null ? undefined : null;
+    }
+
+    if (target.zone === 'control') {
+        return undefined;
+    }
+
+    return selected === target.card ? null : target.card;
+};
+
+/** The selection target of a pointer press inside the board element. */
+export const selectTarget = (target: Element): SelectTarget => {
+    const box = target.closest(BOX);
+    const card = box?.closest('[data-card-id]')?.getAttribute('data-card-id');
+
+    if (box && card) {
+        return { card, zone: pressZone(target, box) };
+    }
+
+    return target.closest(`${CONTROLS}, [data-beacon]`) ? 'control' : 'grid';
+};

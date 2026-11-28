@@ -388,6 +388,12 @@
     line-clamp: 2;
 }
 
+// With a second title after it, the bar's own title keeps its width and
+// the second one shrinks.
+.studioTitleHeld {
+    flex-shrink: 0;
+}
+
 // A title that needs its second line steps down a size (measured in JS).
 .studioTitleWrapped {
     @include font-size(13px, 1.1);
@@ -426,6 +432,14 @@
     svg {
         flex-shrink: 0;
     }
+}
+
+// The Studio's icon buttons at the start of the actions.
+.tools {
+    @include flex(row, flex-start, center);
+
+    flex-shrink: 0;
+    gap: rem(2);
 }
 
 // Mobile nav lives in a dropdown; the inline links hide on phone.
@@ -577,8 +591,9 @@
         transition: background-color 0.25s ease;
     }
 
-    // Phone keeps only the account button — text buttons hide.
-    .actions > *:not(.account) {
+    // Phone keeps only the account button and the Studio's icon tools; text
+    // buttons hide.
+    .actions > *:not(.account, .tools) {
         display: none;
     }
 }

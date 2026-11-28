@@ -2,28 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { Placement } from './blocks';
 import {
     type CardView,
     clamp,
-    findSpot,
     heightRange,
     LEAVE_MS,
-    MAX_COLS,
-    nearestSpot,
-    type Rect,
     resolveCardView,
     settleAround,
-    settleSpot,
     type Slots,
-    SPAN_MAX,
-    SPAN_MIN,
-    spawnSpan,
-    tooCloseRects,
 } from './layout';
+import { placeSlots } from './placeSlots';
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
-import { renameKey } from '@/lib/studio/cardReplace';
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -36,6 +28,9 @@ type UseSlotsArgs = {
     initialLayout?: CardLayout;
     // View width in cells: auto-placed newcomers stay inside the window.
     viewCols: number;
+    // Where a fresh card lands: the first free spot from the corner
+    // (`pack`), or its question's block (`blocks`, blocks.ts).
+    placement?: Placement;
     // Reports the live layout after every settle, for persistence.
     onLayoutChange?: (layout: CardLayout) => void;
     // Cards that replaced another in its slot, new id → old id: the new
@@ -46,11 +41,11 @@ type UseSlotsArgs = {
 /**
  * Where every card sits. Places widgets as they stream in; widgets that
  * vanished (taken off the canvas, or a reset) fade out in place before
- * their slot is pruned. Newcomers get PRIORITY: they take the highest spot
- * honouring only pinned cards, and any unpinned veteran they crowd slides to
- * the nearest place that still fits. Also owns the content-fit of every card
- * (rows follow the content; a stat card's only grow to hold it) and the
- * z-order counter.
+ * their slot is pruned. A fresh newcomer takes the first spot clear of every
+ * live card (blocks.ts `newcomerSpot`); a restored one takes its saved rect,
+ * and any unpinned veteran that rect crowds slides to the nearest place that
+ * still fits. Also owns the content-fit of every card (rows follow the
+ * content; a stat card's only grow to hold it) and the z-order counter.
  */
 export const useSlots = ({
     widgets,
@@ -58,6 +53,7 @@ export const useSlots = ({
     views,
     initialLayout,
     viewCols,
+    placement = 'pack',
     onLayoutChange,
     replacedIds,
 }: UseSlotsArgs) => {
@@ -77,124 +73,18 @@ export const useSlots = ({
         }
 
         const frame = requestAnimationFrame(() => {
-            const ids = new Set(widgets.map((widget) => widget.id));
-            const byId = new Map(widgets.map((widget) => [widget.id, widget]));
-
-            setSlots((current) => {
-                // A replacement takes over its old card's slot, which stops
-                // fading if it had started.
-                const prev = Object.entries(replacedIds ?? {}).reduce((acc, [to, from]) => {
-                    const slot = acc[from];
-
-                    return slot && ids.has(to) && !acc[to]
-                        ? { ...renameKey(acc, from, to), [to]: { ...slot, leaving: false } }
-                        : acc;
-                }, current);
-                const next: Slots = {};
-                let changed = prev !== current;
-
-                for (const [id, slot] of Object.entries(prev)) {
-                    if (ids.has(id)) {
-                        // Same card, possibly new content (an edited text
-                        // card): the slot re-points at the fresh widget. Its
-                        // height stays inside what its view allows, so a chart
-                        // switched to the table view comes back into the
-                        // grip's range. A new widget drops the old one's
-                        // need, and a stat card measures its own again.
-                        const fresh = byId.get(id)!;
-                        const { min, max } = heightRange(
-                            fresh,
-                            resolveCardView(fresh, views[id]).view,
-                        );
-                        const h = clamp(slot.h, min, max);
-
-                        if (fresh !== slot.widget || h !== slot.h) {
-                            next[id] = {
-                                ...slot,
-                                widget: fresh,
-                                h,
-                                need: fresh === slot.widget ? slot.need : undefined,
-                            };
-                            changed = true;
-                        } else {
-                            next[id] = slot;
-                        }
-                    } else if (slot.leaving) {
-                        next[id] = slot;
-                    } else {
-                        next[id] = { ...slot, leaving: true };
-                        changed = true;
-                    }
-                }
-
-                const newcomers = widgets.filter((widget) => !next[widget.id]);
-
-                if (newcomers.length === 0) {
-                    return changed ? next : current;
-                }
-
-                // Newcomers stack from the top, dodging the pinned cards…
-                const settled: Rect[] = Object.entries(next)
-                    .filter(([id, slot]) => pinnedIds.includes(id) && !slot.leaving)
-                    .map(([, slot]) => slot);
-                // …and, for the newcomers only, every other live card too.
-                const occupied: Rect[] = Object.entries(next)
-                    .filter(([, slot]) => !slot.leaving)
-                    .map(([, slot]) => slot);
-
-                for (const widget of newcomers) {
-                    // A restored card keeps its saved rect, its width clamped
-                    // to the kind's range and its height to what its view
-                    // allows; fresh ones auto-place at their spawn footprint.
-                    // A derived height refits once the card mounts.
-                    const saved = initialLayout?.[widget.id];
-                    const resolved = resolveCardView(widget, views[widget.id]);
-                    const rows = heightRange(widget, resolved.view);
-                    const { w, h } = saved
-                        ? {
-                              w: clamp(saved.w, SPAN_MIN[widget.kind].w, SPAN_MAX[widget.kind].w),
-                              h: clamp(saved.h, rows.min, rows.max),
-                          }
-                        : spawnSpan(widget, resolved);
-                    // A saved spot is honoured only while it's free — a card
-                    // put back later (chat chip → Add) whose old place is now
-                    // taken lands at the nearest free spot instead of on top.
-                    const savedSpot = saved ? { col: saved.col, row: saved.row } : null;
-                    const spot = savedSpot
-                        ? occupied.some((rect) => tooCloseRects({ ...savedSpot, w, h }, rect))
-                            ? (nearestSpot(savedSpot, w, h, occupied, MAX_COLS) ??
-                              findSpot(w, h, occupied, viewCols))
-                            : savedSpot
-                        : findSpot(w, h, occupied, viewCols);
-
-                    next[widget.id] = { ...spot, w, h, z: zRef.current++, widget };
-                    settled.push(next[widget.id]);
-                    occupied.push(next[widget.id]);
-                }
-
-                // Unpinned veterans make room: top-left order, keep the spot
-                // if it's still clear, otherwise slide to the nearest fit.
-                // (Newcomers already dodged them, so on a re-add nobody moves;
-                // this only bites when a saved rect had to be honoured.)
-                const veterans = Object.entries(next)
-                    .filter(
-                        ([id, slot]) =>
-                            !slot.leaving &&
-                            !pinnedIds.includes(id) &&
-                            !newcomers.some((widget) => widget.id === id),
-                    )
-                    .sort(([, a], [, b]) => a.row - b.row || a.col - b.col);
-
-                for (const [id, slot] of veterans) {
-                    if (settled.some((rect) => tooCloseRects(slot, rect))) {
-                        next[id] = { ...slot, ...settleSpot(slot, settled) };
-                    }
-
-                    settled.push(next[id]!);
-                }
-
-                return next;
-            });
+            setSlots((current) =>
+                placeSlots(current, {
+                    widgets,
+                    pinnedIds,
+                    views,
+                    initialLayout,
+                    cols: viewCols,
+                    placement,
+                    replacedIds,
+                    nextZ: () => zRef.current++,
+                }),
+            );
 
             // Prune whatever finished fading — a no-op when nothing left.
             const timer = window.setTimeout(() => {
@@ -210,7 +100,7 @@ export const useSlots = ({
         });
 
         return () => cancelAnimationFrame(frame);
-    }, [widgets, pinnedIds, views, viewCols, initialLayout, replacedIds]);
+    }, [widgets, pinnedIds, views, viewCols, placement, initialLayout, replacedIds]);
 
     // Every settle (placement, drop, swap, resize) reports the live layout —
     // the parent persists it with the conversation.

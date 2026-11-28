@@ -3,7 +3,7 @@
 import { type RefObject, useEffect, useRef } from 'react';
 
 import { scrollerOf } from './board';
-import type { Rect, Slots } from './layout';
+import type { Rect, Slot, Slots } from './layout';
 
 type UseArrivalsArgs = {
     boardRef: RefObject<HTMLDivElement | null>;
@@ -13,6 +13,13 @@ type UseArrivalsArgs = {
     spawnWave: (centerCol: number, centerRow: number, exclude?: Rect) => void;
     // The user is mid-drag / mid-pan: the view must not jump under them.
     busy: () => boolean;
+    // Where the view goes for an arrival, replacing the minimal scroll below:
+    // null leaves it. Reads the batch's ids so it can tell a new block.
+    placeView?: (
+        newest: Slot,
+        fresh: ReadonlySet<string>,
+        scroller: HTMLElement,
+    ) => ScrollToOptions | null;
 };
 
 /**
@@ -29,6 +36,7 @@ export const useArrivals = ({
     CELL,
     spawnWave,
     busy,
+    placeView,
 }: UseArrivalsArgs) => {
     const seenRef = useRef<Set<string>>(new Set());
 
@@ -55,6 +63,16 @@ export const useArrivals = ({
             return;
         }
 
+        if (placeView) {
+            const target = placeView(newest, new Set(fresh.map(([id]) => id)), scroller);
+
+            if (target) {
+                scroller.scrollTo(target);
+            }
+
+            return;
+        }
+
         const margin = 40;
         const x = origin.x + newest.col * CELL;
         const y = origin.y + newest.row * CELL;
@@ -77,7 +95,8 @@ export const useArrivals = ({
         if (left !== scroller.scrollLeft || top !== scroller.scrollTop) {
             scroller.scrollTo({ left, top, behavior: 'smooth' });
         }
-        // spawnWave/busy only touch refs; slots (and the origin) are the real trigger.
+        // spawnWave/busy/placeView only read refs and the DOM; slots (and the
+        // origin) are the real trigger.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [slots, origin]);
 };
