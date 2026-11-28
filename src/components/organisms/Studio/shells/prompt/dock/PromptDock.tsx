@@ -618,6 +618,7 @@ const PromptDock = () => {
                             failed={failed}
                             streaming={streaming}
                             chips={chips}
+                            named={view.about && editTarget ? editTarget.id : null}
                             onThread={() => openSheet('thread')}
                             onFold={() => fold('button')}
                         />
