@@ -2,7 +2,6 @@ import classNames from 'classnames';
 
 import styles from './LiveNote.module.scss';
 
-import type { LatestPeriod } from '@/lib/studio/dataThrough';
 import { isLiveCanvas, type LiveCanvas, liveNote } from '@/lib/studio/liveCards';
 
 /**
@@ -18,7 +17,7 @@ const LiveNote = ({
     className,
 }: {
     live: LiveCanvas | undefined;
-    dataThrough?: LatestPeriod | null;
+    dataThrough?: string | null;
     className?: string;
 }) =>
     isLiveCanvas(live) ? (

@@ -174,6 +174,39 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHe
     }, [rootRef, liftHeight]);
 };
 
+// The live strip's height, in CSS pixels, while it is drawn: one line on a
+// wide frame and more where the line wraps. The root gives up that height at
+// its foot (`--note-strip`), so the strip covers no card and the height the
+// embed reports holds the strip. Null until the strip is measured.
+const useNoteStripHeight = (
+    rootRef: React.RefObject<HTMLDivElement | null>,
+    noted: boolean,
+): number | null => {
+    const [height, setHeight] = useState<number | null>(null);
+
+    useEffect(() => {
+        const strip = noted ? rootRef.current?.querySelector('[data-live-note]') : null;
+
+        if (!strip) {
+            return undefined;
+        }
+
+        const measured = new ResizeObserver(([entry]) => {
+            const box = entry?.borderBoxSize[0];
+
+            if (box) {
+                setHeight(box.blockSize);
+            }
+        });
+
+        measured.observe(strip);
+
+        return () => measured.disconnect();
+    }, [rootRef, noted]);
+
+    return noted ? height : null;
+};
+
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
 // no menu; the legend, tooltips and the source line still work.
 const SingleCard = ({
@@ -262,6 +295,8 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const dataThrough = noted ? liveDataThrough(widgets, live) : null;
     const rootRef = useRef<HTMLDivElement>(null);
 
+    const stripHeight = useNoteStripHeight(rootRef, noted);
+
     useReportHeight(rootRef, single?.kind === 'table');
 
     return (
@@ -272,7 +307,12 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 kind === 'card' && single?.kind === 'text' && styles.singleText,
                 noted && styles.live,
             )}
-            style={themeVars(theme) as React.CSSProperties}
+            style={
+                {
+                    ...themeVars(theme),
+                    ...(stripHeight === null ? {} : { '--note-strip': `${stripHeight}px` }),
+                } as React.CSSProperties
+            }
         >
             {kind === 'card' ? (
                 single && (
