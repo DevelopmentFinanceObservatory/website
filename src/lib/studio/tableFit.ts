@@ -41,12 +41,14 @@ export const HEADER_LABEL_MAX = 84;
 export const ROW_LABEL_MAX = 160;
 
 // Type: 10 px Outfit in the table at line height 1.3, and the caption at 1.35.
-// The title and the source line are weight 300 at 12 px.
+// The title is weight 500 at 14 px, line height 1.2, and the source line
+// weight 300 at 12 px.
 const TABLE_TYPE = 10;
 const TABLE_LINE = 13;
 const CAPTION_LINE = 13.5;
-const TITLE_TYPE = 12;
-const TITLE_LINE = 13.2;
+const TITLE_WEIGHT = 500;
+const TITLE_TYPE = 14;
+const TITLE_LINE = 16.8;
 const FOOT_TYPE = 12;
 const FOOT_LINE = 15.6;
 
@@ -359,7 +361,7 @@ export const tableRows = ({
     const titleLines = wrappedLines(
         widget.title,
         inner - ACTIONS_WIDTH - TITLE_GAP,
-        300,
+        TITLE_WEIGHT,
         TITLE_TYPE,
     );
     const head = Math.max(HEAD_MIN, titleLines * TITLE_LINE);

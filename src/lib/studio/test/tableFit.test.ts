@@ -77,7 +77,7 @@ const recipients = (count: number, unit: string | null = null): Fixture =>
     });
 
 test('the committed advances are the ones the Outfit files carry', () => {
-    for (const weight of [300, 400, 700] as const) {
+    for (const weight of [300, 400, 500, 700] as const) {
         const metrics = readMetrics(`${FONTS}/outfit-latin-${weight}-normal.woff`);
         const read = [...OUTFIT_CHARS].map((char) => metrics.advance(char.codePointAt(0)!));
 
