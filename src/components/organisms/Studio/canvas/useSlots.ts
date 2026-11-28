@@ -74,12 +74,15 @@ export const useSlots = ({
         [],
     );
     const zRef = useRef(1);
-    const leaveTimersRef = useRef<number[]>([]);
+    // The prune timers that have not fired yet. Each removes its own id when
+    // it fires, so unmount clears only the pending ones.
+    const leaveTimersRef = useRef(new Set<number>());
 
-    useEffect(
-        () => () => leaveTimersRef.current.forEach((timer) => window.clearTimeout(timer)),
-        [],
-    );
+    useEffect(() => {
+        const timers = leaveTimersRef.current;
+
+        return () => timers.forEach((timer) => window.clearTimeout(timer));
+    }, []);
 
     // (rAF-wrapped by the house convention.)
     useEffect(() => {
@@ -110,9 +113,13 @@ export const useSlots = ({
             // LEAVE_MS, and one a later placement set leaving is not yet.
             const due = now + LEAVE_MS;
 
-            leaveTimersRef.current.push(
-                window.setTimeout(() => setBoard((prev) => pruneBoard(prev, due)), LEAVE_MS),
-            );
+            const timers = leaveTimersRef.current;
+            const timer = window.setTimeout(() => {
+                timers.delete(timer);
+                setBoard((prev) => pruneBoard(prev, due));
+            }, LEAVE_MS);
+
+            timers.add(timer);
         });
 
         return () => cancelAnimationFrame(frame);
