@@ -45,6 +45,7 @@ import { cardUnitChange } from '@/lib/studio/cardUnit';
 import { liveDataThrough } from '@/lib/studio/dataThrough';
 import {
     arrivalDraftHref,
+    HANDOFF_HOLD_PARAM,
     handoffPromptSource,
     questionParam,
     routedArrival,
@@ -66,6 +67,7 @@ import {
     type PromptIntent,
 } from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
+import { type HeldTurn, takeHeldTurn } from '@/lib/studio/studioClient';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
 import type { PromptSource, Seed, UnitChoice } from '@/lib/studio/wire';
@@ -298,14 +300,20 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
 
         return true;
     };
-    const send: typeof conversation.send = (text, options, seeds, asked, source) =>
-        prompt(
+    // A held turn (takeHeldTurn) whose prompt the gate drops is cancelled.
+    const send: typeof conversation.send = (text, options, seeds, asked, source, held) => {
+        const went = prompt(
             options?.intent,
             text.trim().length,
-            () => conversation.send(text, options, seeds, asked, source),
+            () => conversation.send(text, options, seeds, asked, source, held),
             undefined,
             source,
         );
+
+        if (!went) {
+            void held?.cancel();
+        }
+    };
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
     const applyUnit: typeof conversation.applyUnit = (change) =>
@@ -424,10 +432,12 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
 
     // A new canvas from the prompt (or a suggestion).
     // A question handed over from the search page (`/studio?q=…&seed=…`),
-    // with the token its seeds are stored under and, for a search example,
-    // its source. Consumed once, below, after `begin` exists.
+    // with the token its seeds are stored under, the token of the turn Get
+    // Data started for it (`hold`) and, for a search example, its source.
+    // Consumed once, below, after `begin` exists.
     const handover = questionParam(searchParams, 'q');
     const seedToken = searchParams.get('seed');
+    const holdToken = searchParams.get(HANDOFF_HOLD_PARAM);
     const handoverSource = handoffPromptSource(searchParams);
     const handedOver = useRef(false);
     // A question the search API's router moved here: its conversation says
@@ -436,11 +446,22 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     const [routed, setRouted] = useState(() => routedArrival(searchParams));
 
     // `source` names the example a picked question came from; a typed one
-    // has none.
-    const begin = (text: string, source?: PromptSource, seeds?: Seed[]) => {
+    // has none. `held` is the turn Get Data started for the question, or
+    // `adopted` when this page load took it already and starts nothing more.
+    const begin = (
+        text: string,
+        source?: PromptSource,
+        seeds?: Seed[],
+        held?: HeldTurn | 'adopted',
+    ) => {
         const trimmed = text.trim();
 
+        if (held === 'adopted') {
+            return;
+        }
+
         if (!trimmed) {
+            void held?.cancel();
             inputRef.current?.focus();
 
             return;
@@ -457,7 +478,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         save.track(id, {});
         doc.reset();
         setQuery(trimmed);
-        chat.send(trimmed, undefined, seeds, undefined, source);
+        chat.send(trimmed, undefined, seeds, undefined, source, held);
 
         // A handed-over question is already on the workspace.
         if (mode === 'start') {
@@ -685,7 +706,10 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // question as a draft (arrivalDraftHref): Back, Forward, a reload or a
     // copied link open the landing with the question unsent, and spend no
     // second prompt. The question is already on the workspace, so the turn
-    // starts here, after the commit that showed it.
+    // starts here, after the commit that showed it. A turn Get Data started
+    // during the move's hold is adopted, and a hard load or a reload, which
+    // find none, post their own. A turn this page load adopted already
+    // starts nothing more.
     useEffect(() => {
         if (!handover || handedOver.current) {
             return;
@@ -697,6 +721,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
             handover,
             handoverSource,
             (seedToken && takeSeeds(() => window.sessionStorage, seedToken)) || undefined,
+            (holdToken && takeHeldTurn(holdToken)) || undefined,
         );
 
         const draft = !account && arrivalDraftHref(new URLSearchParams(window.location.search));
@@ -706,7 +731,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         }
         // `begin` is rebuilt every render; the ref is what makes this run once.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [handover, handoverSource, seedToken]);
+    }, [handover, handoverSource, seedToken, holdToken]);
 
     // Card menu → Ask follow up: the question itself is typed in the chat
     // input, so this only arms the card as its target (chip above the input)

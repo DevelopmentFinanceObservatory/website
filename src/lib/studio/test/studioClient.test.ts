@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 
 import {
     cancelTurn,
@@ -18,13 +18,16 @@ import {
     runApplyUnit,
     runInterrupt,
     runTurn,
+    startHeldTurn,
     STATE_READ_ATTEMPTS,
+    takeHeldTurn,
     stopAction,
     watchAdmission,
     type CancelAnswer,
     type StopAction,
     whileBusy,
     type StreamRefusal,
+    type TurnExtras,
 } from '../studioClient.ts';
 import { cardUnitChange } from '../cardUnit.ts';
 import { widgetFromComponent } from '../widgets.ts';
@@ -904,5 +907,153 @@ test('mutateComposition: a refusal rejects with a CompositionRefusal, and says w
             assert.equal(isNoBlock(refusal), refusedBlock);
             assert.equal(isStaleRevision(refusal), stale);
         });
+    }
+});
+
+// A turn route whose stream the test writes: `write` sends a frame, `end`
+// closes the stream. The response names turn `turnIndex`.
+const heldHarness = (t: TestContext, { turnIndex = 3, refunded = 'true' } = {}) => {
+    const encoder = new TextEncoder();
+    let stream: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const fetch = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        if (String(input) === '/api/studio/cancel') {
+            return new Response(null, {
+                status: 204,
+                headers: { 'x-dfo-prompt-refunded': refunded },
+            });
+        }
+
+        return new Response(
+            new ReadableStream<Uint8Array>({
+                start(controller) {
+                    stream = controller;
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': String(turnIndex) } },
+        );
+    });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+    return {
+        fetch,
+        settle,
+        write: async (frame: object) => {
+            stream?.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+            await settle();
+        },
+        end: () => stream?.close(),
+    };
+};
+
+test('takeHeldTurn: a held turn is taken once, then answers adopted; an unknown or cancelled one is null', async (t) => {
+    heldHarness(t);
+
+    const { token } = startHeldTurn({ message: 'Aid to Ghana' });
+    const taken = takeHeldTurn(token);
+
+    assert.equal(taken !== null && taken !== 'adopted' && taken.message, 'Aid to Ghana');
+    assert.equal(takeHeldTurn(token), 'adopted');
+    assert.equal(takeHeldTurn('never-started'), null);
+
+    const cancelled = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await cancelled.cancel();
+    assert.equal(takeHeldTurn(cancelled.token), null);
+});
+
+test('takeHeldTurn: an adopted turn replays what it heard, then hears the rest live', async (t) => {
+    const harness = heldHarness(t, { turnIndex: 3 });
+    const { token } = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await harness.write({ event: 'turn.started', seq: 1 });
+
+    const taken = takeHeldTurn(token);
+
+    assert.ok(taken && taken !== 'adopted');
+
+    const heard: string[] = [];
+    const run = taken.run(
+        {
+            onTurnIndex: (index) => heard.push(`turn ${index}`),
+            onFrame: (frame) => heard.push(`${frame.event} ${frame.seq}`),
+        },
+        new AbortController().signal,
+    );
+
+    assert.deepEqual(heard, ['turn 3', 'turn.started 1']);
+
+    await harness.write({ event: 'done', seq: 2 });
+    harness.end();
+    await run;
+
+    assert.deepEqual(heard, ['turn 3', 'turn.started 1', 'done 2']);
+});
+
+test('takeHeldTurn: a refusal heard before adoption reaches the adopting onRefusal, and no error frame', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ code: 'rate_limited', upstream_status: null }, { status: 429 }),
+    );
+
+    const { token } = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const taken = takeHeldTurn(token);
+    const refusals: number[] = [];
+    const frames: string[] = [];
+
+    assert.ok(taken && taken !== 'adopted');
+    await taken.run(
+        {
+            onFrame: (frame) => frames.push(frame.event),
+            onRefusal: (refusal) => refusals.push(refusal.status) > 0,
+        },
+        new AbortController().signal,
+    );
+
+    assert.deepEqual(refusals, [429]);
+    assert.deepEqual(frames, []);
+});
+
+test('startHeldTurn posts the body runTurn posts for the same members, marked as a hold turn', async (t) => {
+    const { fetch } = heldHarness(t);
+    const extras: TurnExtras = { prompt_source: 'search_example', surface: 'studio' };
+
+    const { token } = startHeldTurn({ message: 'Aid to Ghana', extras });
+    const taken = takeHeldTurn(token);
+
+    assert.ok(taken && taken !== 'adopted');
+    void runTurn(taken.conversationId, 'Aid to Ghana', { onFrame: () => {} }, undefined, extras);
+
+    const [held, own] = fetch.mock.calls.map((call) => call.arguments[1] as RequestInit);
+    const hold = (init?: RequestInit) =>
+        (init?.headers as Record<string, string>)['x-dfo-hold-turn'];
+
+    assert.deepEqual(JSON.parse(held?.body as string), JSON.parse(own?.body as string));
+    assert.deepEqual([hold(held), hold(own)], ['1', undefined]);
+});
+
+test('startHeldTurn: cancel names the turn once the harness names it, and reads whether the prompt came back', async (t) => {
+    for (const [refunded, expected] of [
+        ['true', true],
+        ['false', false],
+    ] as const) {
+        const harness = heldHarness(t, { turnIndex: 4, refunded });
+        const { cancel } = startHeldTurn({ message: 'Aid to Ghana' });
+        // Cancelled before the harness answered: the cancel waits for the turn.
+        const answer = cancel();
+
+        assert.equal(await answer, expected, refunded);
+
+        const sent = harness.fetch.mock.calls
+            .filter((call) => call.arguments[0] === '/api/studio/cancel')
+            .map((call) => JSON.parse((call.arguments[1] as RequestInit).body as string));
+
+        assert.deepEqual(
+            sent.map((body) => body.turn_index),
+            [4],
+            refunded,
+        );
+        harness.fetch.mock.restore();
     }
 });

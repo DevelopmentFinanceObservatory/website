@@ -30,6 +30,7 @@ import { asRecord } from '../asRecord.ts';
 import { SIGN_IN_REQUIRED } from './studioAccess.ts';
 import { isTextTooLong, TEXT_TOO_LONG_MESSAGE } from './interruptText.ts';
 import type { LiveCard } from './liveBackend.ts';
+import { uuid } from '../uuid.ts';
 
 /**
  * How long the page waits on a stop: a cancelled stream may run on this long
@@ -104,7 +105,8 @@ export type StreamHandlers = {
     onKeepAlive?: () => void;
     onBusyWait?: (seconds: number | null) => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
-    onUnreachable?: () => boolean;
+    // `detail` is the failed fetch's message.
+    onUnreachable?: (detail: string) => boolean;
     // A state read found the conversation begun afresh under its id, so the
     // stream's turn belongs to a session the harness dropped (carryOnTurn).
     onSessionGone?: () => void;
@@ -141,13 +143,18 @@ const streamStudio = async (
     body: TurnRequest | InterruptResponse | ResumeRequest,
     { onFrame, onTurnIndex, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
     signal?: AbortSignal,
+    headers: Record<string, string> = {},
 ): Promise<void> => {
     let res: Response;
 
     try {
         res = await fetch(`/api/studio/${endpoint}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'text/event-stream',
+                ...headers,
+            },
             body: JSON.stringify(body),
             signal,
         });
@@ -156,7 +163,7 @@ const streamStudio = async (
             throw error;
         }
 
-        if (!onUnreachable?.()) {
+        if (!onUnreachable?.((error as Error).message)) {
             onFrame(transportError((error as Error).message));
         }
 
@@ -256,32 +263,39 @@ const streamStudio = async (
 /** The question forms the Studio renders, sent on every turn and answer. */
 export const CLIENT_FEATURES: ClientFeature[] = ['unit_question', 'multi_select'];
 
+/** The members a message turn may carry beside its message. */
+export type TurnExtras = Partial<
+    Pick<
+        TurnRequest,
+        'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn' | 'prompt_source'
+    >
+>;
+
+/** The request body of a message turn. Studio's own turns (runTurn) and a
+ *  turn Get Data starts for Studio to adopt (startHeldTurn) both build it
+ *  here, so an adopted turn is the turn Studio would have sent. */
+export const turnRequest = (
+    conversationId: string,
+    message: string,
+    extras?: TurnExtras,
+): TurnRequest => ({
+    kind: 'turn.request',
+    schema_version: 1,
+    conversation_id: conversationId,
+    message,
+    ...extras,
+    client_features: CLIENT_FEATURES,
+});
+
 /** Start (or continue) a turn. */
 export const runTurn = (
     conversationId: string,
     message: string,
     handlers: StreamHandlers,
     signal?: AbortSignal,
-    extras?: Partial<
-        Pick<
-            TurnRequest,
-            'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn' | 'prompt_source'
-        >
-    >,
+    extras?: TurnExtras,
 ): Promise<void> =>
-    streamStudio(
-        'turn',
-        {
-            kind: 'turn.request',
-            schema_version: 1,
-            conversation_id: conversationId,
-            message,
-            ...extras,
-            client_features: CLIENT_FEATURES,
-        },
-        handlers,
-        signal,
-    );
+    streamStudio('turn', turnRequest(conversationId, message, extras), handlers, signal);
 
 /** Run a turn from a clicked `apply_choice` chip: the chip's choice, option,
  *  turn and reading, copied as offered, and no message. */
@@ -790,7 +804,20 @@ export const cancelTurn = async (
     conversationId: string,
     turnIndex: number | null = null,
     timeoutMs: number = STOP_GRACE_MS,
-): Promise<CancelAnswer> => {
+): Promise<CancelAnswer> => (await sendCancel(conversationId, turnIndex, { timeoutMs })).answer;
+
+/** The response header in which the cancel route says whether it gave the
+ *  cancelled turn's prompt back (`true` or `false`). */
+export const PROMPT_REFUNDED_HEADER = 'x-dfo-prompt-refunded';
+
+// cancelTurn's request, with whether the last answer said the prompt was
+// given back (PROMPT_REFUNDED_HEADER). `keepalive` lets the request outlive
+// the page.
+const sendCancel = async (
+    conversationId: string,
+    turnIndex: number | null,
+    { timeoutMs = STOP_GRACE_MS, keepalive = false }: { timeoutMs?: number; keepalive?: boolean },
+): Promise<{ answer: CancelAnswer; refunded: boolean }> => {
     const signal = AbortSignal.timeout(timeoutMs);
     const send = (index: number | null) => {
         const body: CancelRequest = {
@@ -805,19 +832,26 @@ export const cancelTurn = async (
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
             signal,
+            ...(keepalive && { keepalive }),
         });
     };
 
-    // The answer to one send: how it went, and for `moved` the latest turn
-    // the harness named.
-    const answerOf = async (res: Response): Promise<[CancelAnswer, unknown]> => {
+    // The answer to one send: how it went, for `moved` the latest turn the
+    // harness named, and whether the prompt was given back.
+    const answerOf = async (
+        res: Response,
+    ): Promise<{ answer: CancelAnswer; latest: unknown; refunded: boolean }> => {
+        const refunded = res.headers.get(PROMPT_REFUNDED_HEADER) === 'true';
+
         if (!res.ok) {
-            return ['unanswered', null];
+            return { answer: 'unanswered', latest: null, refunded };
         }
 
         const body = res.status === 200 ? asRecord(await res.json().catch(() => null)) : null;
 
-        return body?.['code'] === 'turn_moved' ? ['moved', body['turn_index']] : ['stopped', null];
+        return body?.['code'] === 'turn_moved'
+            ? { answer: 'moved', latest: body['turn_index'], refunded }
+            : { answer: 'stopped', latest: null, refunded };
     };
 
     try {
@@ -836,18 +870,290 @@ export const cancelTurn = async (
             res = await send(null);
         }
 
-        const [answer, latest] = await answerOf(res);
+        const first = await answerOf(res);
 
-        if (answer === 'moved' && latest === turnIndex) {
-            return (await answerOf(await send(turnIndex)))[0];
+        if (first.answer === 'moved' && first.latest === turnIndex) {
+            const again = await answerOf(await send(turnIndex));
+
+            return { answer: again.answer, refunded: first.refunded || again.refunded };
         }
 
-        return answer;
+        return { answer: first.answer, refunded: first.refunded };
     } catch {
         // Cancel is best-effort (a timeout lands here too); closing the
         // stream also stops the turn.
-        return 'unanswered';
+        return { answer: 'unanswered', refunded: false };
     }
+};
+
+/** The request header that marks a turn Get Data starts during the move's
+ *  hold (startHeldTurn). The site proxy reads it and strips it, and a
+ *  prompt cancel of a turn it marks gives the turn's prompt back. */
+export const HOLD_TURN_HEADER = 'x-dfo-hold-turn';
+
+// One report of a held turn's stream from before Studio adopted it.
+type HeldEvent =
+    | { kind: 'turn-index'; index: number }
+    | { kind: 'frame'; frame: StudioFrame }
+    | { kind: 'keep-alive' }
+    | { kind: 'refusal'; refusal: StreamRefusal }
+    | { kind: 'unreachable'; detail: string };
+
+type HeldEntry = {
+    conversationId: string;
+    message: string;
+    adopted: boolean;
+    // The reports no stream has heard yet, in the order they came.
+    events: HeldEvent[];
+    turnIndex: number | null;
+    // The adopting stream's handlers, which hear every report after adoption.
+    listener: StreamHandlers | null;
+    controller: AbortController;
+    request: Promise<void>;
+    // The turn index once the harness names it, or null once the request
+    // ends without one.
+    named: Promise<number | null>;
+    cancelling: Promise<boolean> | null;
+};
+
+// The held turns of this page load by token. A taken entry stays, marked
+// adopted, so a second take does nothing and posts no second turn.
+const heldTurns = new Map<string, HeldEntry>();
+
+/** A turn started with startHeldTurn: the token Studio takes it by, and a
+ *  cancel for every way out of the hold except the move. `cancel` asks the
+ *  harness to cancel the turn once it has named the turn, closes the
+ *  stream, and resolves to whether the cancel route gave the prompt back
+ *  (PROMPT_REFUNDED_HEADER). A turn the harness refused or never received
+ *  resolves true, since the meter kept no prompt for it. A turn the
+ *  harness names in no STOP_GRACE_MS resolves false. Cancelling a turn
+ *  Studio adopted does nothing and resolves false. `keepalive` sends the
+ *  cancel so that it outlives the page (pagehide). */
+export type HeldTurnStart = {
+    token: string;
+    cancel: (options?: { keepalive?: boolean }) => Promise<boolean>;
+};
+
+/** A held turn Studio took (takeHeldTurn). `run` is the turn's stream for
+ *  useChat: it replays what the stream reported so far through `handlers`,
+ *  then passes on the rest, and settles as the request does. Aborting
+ *  `signal` closes the request. `cancel` cancels a turn Studio took and
+ *  will not run, as HeldTurnStart's cancel does. */
+export type HeldTurn = {
+    conversationId: string;
+    message: string;
+    run: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>;
+    cancel: () => Promise<boolean>;
+};
+
+const replayHeld = (event: HeldEvent, handlers: StreamHandlers) => {
+    switch (event.kind) {
+        case 'turn-index':
+            handlers.onTurnIndex?.(event.index);
+            break;
+        case 'frame':
+            handlers.onFrame(event.frame);
+            break;
+        case 'keep-alive':
+            handlers.onKeepAlive?.();
+            break;
+        // A refusal or a failed request the handlers leave is an error
+        // frame, as streamStudio makes it.
+        case 'refusal':
+            if (!handlers.onRefusal?.(event.refusal)) {
+                handlers.onFrame(
+                    transportError(event.refusal.detail ?? `HTTP ${event.refusal.status}`),
+                );
+            }
+            break;
+        case 'unreachable':
+            if (!handlers.onUnreachable?.(event.detail)) {
+                handlers.onFrame(transportError(event.detail));
+            }
+            break;
+    }
+};
+
+const settleHeldCancel = async (
+    entry: HeldEntry,
+    turnIndex: number,
+    keepalive: boolean,
+): Promise<boolean> => {
+    const { refunded } = await sendCancel(entry.conversationId, turnIndex, { keepalive });
+
+    entry.controller.abort();
+
+    return refunded;
+};
+
+const cancelHeld = (
+    token: string,
+    entry: HeldEntry,
+    { keepalive = false }: { keepalive?: boolean } = {},
+): Promise<boolean> => {
+    // A turn cancelled before Studio took it is gone, and Studio posts its
+    // own on arrival.
+    if (!entry.adopted) {
+        heldTurns.delete(token);
+    }
+
+    // The cancel goes at once when the turn is named, so a pagehide sends
+    // it before the page goes.
+    if (entry.cancelling) {
+        return entry.cancelling;
+    }
+
+    if (entry.turnIndex !== null) {
+        entry.cancelling = settleHeldCancel(entry, entry.turnIndex, keepalive);
+
+        return entry.cancelling;
+    }
+
+    // Undefined when the harness names no turn within the grace.
+    const grace = new AbortController();
+    const unnamed = abortableSleep(STOP_GRACE_MS, grace.signal).then(
+        () => undefined,
+        () => undefined,
+    );
+
+    entry.cancelling = Promise.race([entry.named, unnamed]).then((index) => {
+        grace.abort();
+
+        if (typeof index === 'number') {
+            return settleHeldCancel(entry, index, keepalive);
+        }
+
+        entry.controller.abort();
+
+        return index === null;
+    });
+
+    return entry.cancelling;
+};
+
+/**
+ * Start the turn `message` for Studio to adopt (takeHeldTurn), marked as a
+ * hold turn (HOLD_TURN_HEADER) under a fresh conversation id. The stream's
+ * reports are kept until Studio adopts it. `extras` are the turn's members
+ * as Studio would send them (turnRequest).
+ */
+export const startHeldTurn = ({
+    message,
+    extras,
+}: {
+    message: string;
+    extras?: TurnExtras;
+}): HeldTurnStart => {
+    const token = uuid();
+    let name: (index: number | null) => void = () => {};
+    const entry: HeldEntry = {
+        conversationId: uuid(),
+        message,
+        adopted: false,
+        events: [],
+        turnIndex: null,
+        listener: null,
+        controller: new AbortController(),
+        request: Promise.resolve(),
+        named: new Promise((resolve) => {
+            name = resolve;
+        }),
+        cancelling: null,
+    };
+    // Each report goes to the adopting stream, or waits for it.
+    const report = (event: HeldEvent) => {
+        entry.events.push(event);
+
+        return true;
+    };
+
+    entry.request = streamStudio(
+        'turn',
+        turnRequest(entry.conversationId, message, extras),
+        {
+            onTurnIndex: (index) => {
+                entry.turnIndex = index;
+                name(index);
+
+                if (entry.listener) {
+                    entry.listener.onTurnIndex?.(index);
+                } else {
+                    report({ kind: 'turn-index', index });
+                }
+            },
+            onFrame: (frame) =>
+                entry.listener ? entry.listener.onFrame(frame) : report({ kind: 'frame', frame }),
+            onKeepAlive: () =>
+                entry.listener ? entry.listener.onKeepAlive?.() : report({ kind: 'keep-alive' }),
+            onRefusal: (refusal) =>
+                entry.listener
+                    ? (entry.listener.onRefusal?.(refusal) ?? false)
+                    : report({ kind: 'refusal', refusal }),
+            onUnreachable: (detail) =>
+                entry.listener
+                    ? (entry.listener.onUnreachable?.(detail) ?? false)
+                    : report({ kind: 'unreachable', detail }),
+        },
+        entry.controller.signal,
+        { [HOLD_TURN_HEADER]: '1' },
+    );
+    // Nobody may adopt the turn, so its rejection is handled here too.
+    entry.request.then(
+        () => name(null),
+        () => name(null),
+    );
+    heldTurns.set(token, entry);
+
+    return {
+        token,
+        cancel: (options) =>
+            entry.adopted ? Promise.resolve(false) : cancelHeld(token, entry, options),
+    };
+};
+
+/**
+ * The held turn under `token` (startHeldTurn), once: a later take answers
+ * `adopted`, and a token this page load never started, or one cancelled
+ * before Studio took it, answers null, for Studio to post its own turn.
+ */
+export const takeHeldTurn = (token: string): HeldTurn | 'adopted' | null => {
+    const entry = heldTurns.get(token);
+
+    if (!entry) {
+        return null;
+    }
+
+    if (entry.adopted) {
+        return 'adopted';
+    }
+
+    entry.adopted = true;
+
+    return {
+        conversationId: entry.conversationId,
+        message: entry.message,
+        run: (handlers, signal) => {
+            if (signal.aborted) {
+                entry.controller.abort();
+
+                return entry.request;
+            }
+
+            signal.addEventListener('abort', () => entry.controller.abort(), { once: true });
+
+            const events = entry.events;
+
+            entry.events = [];
+            entry.listener = handlers;
+
+            for (const event of events) {
+                replayHeld(event, handlers);
+            }
+
+            return entry.request;
+        },
+        cancel: () => cancelHeld(token, entry),
+    };
 };
 
 /** One component revision as the Presentation API's read route answers it:

@@ -171,6 +171,7 @@ import {
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
     whileBusy,
+    type HeldTurn,
     type StopAction,
     type StreamHandlers,
     type StreamRefusal,
@@ -1955,7 +1956,10 @@ export const useChat = (
     // follows, so a turn another page began first refuses it `turn_moved`.
     // A send the harness never admits (refused, never reached, or stopped)
     // is offered on that turn's reply for the user to send, and not sent
-    // again on its own (offerNewQuestion).
+    // again on its own (offerNewQuestion). `held` is a turn Get Data started
+    // for this question (takeHeldTurn): the send adopts it in place of its
+    // own request, under its conversation id, when it opens the
+    // conversation with the same text, and cancels it otherwise.
     const send = useCallback(
         (
             message: string,
@@ -1963,6 +1967,7 @@ export const useChat = (
             seeds?: Seed[],
             asked?: number,
             source?: PromptSource,
+            held?: HeldTurn,
         ) => {
             const text = message.trim();
             const fromNewQuestion =
@@ -1970,7 +1975,25 @@ export const useChat = (
                 (card || seeds ? undefined : offeredQuestionTurn(messagesRef.current, text));
 
             if (!text || holdTurn({ text, card, seeds, fromNewQuestion, source })) {
+                void held?.cancel();
+
                 return;
+            }
+
+            const adopted =
+                held &&
+                held.message === text &&
+                sessionRef.current === null &&
+                recapRef.current === null &&
+                fromNewQuestion === undefined &&
+                !card
+                    ? held
+                    : null;
+
+            if (adopted) {
+                sessionRef.current = adopted.conversationId;
+            } else {
+                void held?.cancel();
             }
 
             const { turn, conversation } = startTurn(
@@ -2022,6 +2045,10 @@ export const useChat = (
             stream(
                 turn,
                 (handlers, signal) => {
+                    if (adopted) {
+                        return adopted.run(handlers, signal);
+                    }
+
                     if (fromNewQuestion === undefined) {
                         return whileBusy((busy) => run(busy, signal), handlers, signal);
                     }
