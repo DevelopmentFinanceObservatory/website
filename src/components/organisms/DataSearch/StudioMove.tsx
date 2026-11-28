@@ -16,8 +16,8 @@ import styles from './DataSearch.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
-/** How long the automatic move holds its callout before Studio opens: the
- *  time to see the move coming, and the window in which the reader can
+/** How long the automatic move holds its callout before Studio opens. It is
+ *  the time to see the move coming and the window in which the reader can
  *  stay. The line under the callout's title fills over it. */
 export const MOVE_HOLD_MS = 1200;
 
@@ -116,7 +116,7 @@ const StudioMove = ({
                 setElapsed(true);
                 elapse();
             },
-            // cancel() rejects `finished`: the clock stopped mid-hold.
+            // cancel() rejects `finished` when the clock stops mid-hold.
             () => {},
         );
 

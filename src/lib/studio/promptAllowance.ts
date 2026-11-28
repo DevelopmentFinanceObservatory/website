@@ -40,8 +40,9 @@ export const USER_DAILY_PROMPTS = 75;
 /**
  * The request header, value `1`, that marks a turn as a hold turn, one Get
  * Data starts while its move to Studio holds (startHeldTurn in
- * studioClient.ts). The site proxy reads it and the harness never sees it
- * (STUDIO_HEADERS in src/lib/proxy/headers carries no request header).
+ * studioClient.ts). The site proxy reads it, and STUDIO_HEADERS in
+ * src/lib/proxy/headers passes no request header, so the harness does not
+ * receive it.
  */
 export const HOLD_TURN_HEADER = 'x-dfo-hold-turn';
 

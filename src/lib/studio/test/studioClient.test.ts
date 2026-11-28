@@ -1058,7 +1058,7 @@ test('startHeldTurn: cancel names the turn once the harness names it, and reads 
     ] as const) {
         const harness = heldHarness(t, { turnIndex: 4, refunded });
         const { cancel } = startHeldTurn({ message: 'Aid to Ghana' });
-        // Cancelled before the harness answered: the cancel waits for the turn.
+        // Cancelled before the harness answered, so the cancel waits for the turn.
         const answer = cancel();
 
         assert.equal(await answer, expected, refunded);

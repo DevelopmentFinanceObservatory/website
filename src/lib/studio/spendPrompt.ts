@@ -172,9 +172,9 @@ export const recordHoldTurn = async (
 
 /**
  * Take `prompter`'s receipt for the hold turn `turn` if its deadline had not
- * passed `sinceMs` ago, when the cancel arrived: the prompt it paid for, or
- * null when there is none. A receipt is taken once. Throws what the
- * database throws.
+ * passed `sinceMs` ago, when the cancel arrived. Returns the prompt the
+ * receipt paid for, or null when there is none. A receipt is taken once.
+ * Throws what the database throws.
  */
 export const claimHoldTurn = async (
     db: CounterDb,

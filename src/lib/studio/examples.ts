@@ -74,7 +74,7 @@ export const routedArrival = (
 /** The `/studio` query param that carries the token of a turn Get Data
  *  started during the move's hold (startHeldTurn in studioClient.ts), for
  *  the arrival to adopt (takeHeldTurn). The arrival's URL replacement drops
- *  it: an account's conversation URL, or a guest's draft
+ *  it, for an account's conversation URL or a guest's draft
  *  (arrivalDraftHref). */
 export const HANDOFF_HOLD_PARAM = 'hold';
 

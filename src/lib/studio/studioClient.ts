@@ -948,14 +948,14 @@ const heldTurns = new Map<string, HeldEntry>();
 
 /** A turn started with startHeldTurn: the token Studio takes it by, a
  *  cancel for every way out of the hold except the move, and `moved` for
- *  the move itself. `cancel` asks the
- *  harness to cancel the turn once it has named the turn, closes the
- *  stream, and resolves to whether the cancel route gave the prompt back
- *  (PROMPT_REFUNDED_HEADER). A turn the harness refused or never received
- *  resolves true, since the meter kept no prompt for it. A turn the
- *  harness names in no STOP_GRACE_MS resolves false. Cancelling a turn
- *  Studio adopted does nothing and resolves false. `keepalive` sends the
- *  cancel so that it outlives the page (pagehide). */
+ *  the move itself. `cancel` asks the harness to cancel the turn once it
+ *  has named the turn, closes the stream, and resolves to whether the
+ *  cancel route gave the prompt back (PROMPT_REFUNDED_HEADER). A turn the
+ *  harness refused or never received resolves true, since the meter kept
+ *  no prompt for it. A turn the harness names in no STOP_GRACE_MS resolves
+ *  false. Cancelling a turn Studio adopted does nothing and resolves
+ *  false. `keepalive` sends the cancel so that it outlives the page
+ *  (pagehide). */
 export type HeldTurnStart = {
     token: string;
     cancel: (options?: { keepalive?: boolean }) => Promise<boolean>;
@@ -1091,12 +1091,12 @@ const cancelOnPageHide = () => {
  * after the harness admits it, when Studio has not taken it `adoptLimitMs`
  * after the move (HeldTurnStart's `moved`), and when the page goes
  * (`pagehide`) before Studio takes it. A pagehide before the harness has
- * named the turn sends nothing, since a cancel names its turn: that window
+ * named the turn sends nothing, since a cancel names its turn. That window
  * lasts from the request until its response headers arrive.
  *
- * `onCancelled` hears, once, how the turn's cancel ended, whoever sent it:
- * true when the cancel gave the prompt back or the meter kept none, false
- * when the prompt stays spent.
+ * `onCancelled` hears, once, how the turn's cancel ended, whoever sent it.
+ * It gets true when the cancel gave the prompt back or the meter kept none,
+ * and false when the prompt stays spent.
  */
 export const startHeldTurn = ({
     token = uuid(),
@@ -1205,9 +1205,10 @@ export const startHeldTurn = ({
 };
 
 /**
- * The held turn under `token` (startHeldTurn), once: a later take answers
- * `adopted`, and a token this page load never started, or one cancelled
- * before Studio took it, answers null, for Studio to post its own turn.
+ * The held turn under `token` (startHeldTurn), taken once. A later take
+ * answers `adopted`, and a token this page load never started, or one
+ * cancelled before Studio took it, answers null, for Studio to post its own
+ * turn.
  */
 export const takeHeldTurn = (token: string): HeldTurn | 'adopted' | null => {
     const entry = heldTurns.get(token);

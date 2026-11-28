@@ -318,9 +318,10 @@ export const studioProxy =
         );
     };
 
-// Whether the harness's cancel answer says it acted on the Stop: an ok
-// answer other than the 200 `turn_moved` (CancelSkipped) it gives a Stop
-// whose turn is no longer the conversation's latest, which stops nothing.
+// Whether the harness's cancel answer says it acted on the Stop. It did
+// when the answer is ok and is not the 200 `turn_moved` (CancelSkipped),
+// which the harness gives a Stop whose turn is not the conversation's
+// latest and which stops nothing.
 const cancelActed = async (response: Response): Promise<boolean> => {
     if (!response.ok) {
         return false;

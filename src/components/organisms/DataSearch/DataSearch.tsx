@@ -691,9 +691,9 @@ const DataSearch = ({
         noteMove(STAY_NOTE);
         stayOnData(trigger);
     });
-    // The hold's end by unmount or a new search, which take the callout
-    // away: the turn it started is cancelled. Strict Mode's rehearsal of
-    // the unmount mounts the callout again at once, which clears the timer.
+    // An unmount or a new search takes the callout away and ends the hold,
+    // which cancels the turn it started. Strict Mode's rehearsal of the
+    // unmount mounts the callout again at once, which clears the timer.
     const holdEndRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     useEffect(() => {
         if (!moveArmed) {
