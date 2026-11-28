@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 
+// Before chartData.ts, which loads next/cache.
+import { nextCache } from '../../test/nextCacheStub.ts';
 import type { SharesBackend } from '../../chat/apisShares.ts';
 import { componentRead, DATASET_FRAME } from '../../studio/test/fixtures/component-read.ts';
 import describedChart from '../../studio/test/fixtures/descriptions/envelope-line-chart-described.json' with { type: 'json' };
@@ -14,33 +16,57 @@ const artifact = {
     sources: [{ name: 'World Development Indicators', url: '/data/sources/wdi' }],
 };
 const ORIGIN = 'https://developmentfinance.org';
-const CSV = '/api/share/Ab3dEf7h/cards/health/data?slot=2&format=csv&bundle=false';
+const CSV = '/library/health-expenditure/data.csv';
 const countries = [
     { ref: 'country/KEN', label: 'Kenya', value: 91.127 },
     { ref: 'country/LBR', label: 'Liberia', value: 0 },
     { ref: 'country/NER', label: 'Niger', value: 649.3679 },
 ];
 
-const slotBody = (period: string, licence: string) => {
+const barChart = (period: string) => ({
+    ...describedChart.component,
+    type: 'bar_chart',
+    category_axis: { mode: 'entity', category_dimension: 'country', period },
+    series: countries.map(({ label, value }) => ({
+        label,
+        unit: 'USD',
+        points: [
+            { period, value },
+            { period: '2022', value: 99 },
+        ],
+    })),
+});
+
+// The same values as a Studio table: one row per country, in its columns.
+const countryTable = (period: string) => ({
+    type: 'table',
+    title: describedChart.component.title,
+    columns: [
+        { key: 'country', label: 'Country' },
+        { key: 'period', label: 'Year' },
+        { key: 'value', label: 'Value' },
+    ],
+    rows: countries.map(({ label, value }) => ({
+        series_id: 's_health',
+        dimensions: { country: label },
+        period,
+        unit: 'USD',
+        value,
+    })),
+});
+
+const slotBody = (
+    period: string,
+    licence: string,
+    component: Record<string, unknown> = barChart(period),
+) => {
     const body = componentRead('cmp_test', 2, DATASET_FRAME);
 
     return {
         ...body,
         resolved_payload: {
             ...body.resolved_payload,
-            component: {
-                ...describedChart.component,
-                type: 'bar_chart',
-                category_axis: { mode: 'entity', category_dimension: 'country', period },
-                series: countries.map(({ label, value }) => ({
-                    label,
-                    unit: 'USD',
-                    points: [
-                        { period, value },
-                        { period: '2022', value: 99 },
-                    ],
-                })),
-            },
+            component,
             description: {
                 ...describedChart.description,
                 about: {
@@ -68,7 +94,13 @@ const slotBody = (period: string, licence: string) => {
     };
 };
 
-const backend = (mode: 'live' | 'snapshot', slot: () => Response): SharesBackend => ({
+type Card = { kind: 'chart' | 'table'; view?: string };
+
+const backend = (
+    mode: 'live' | 'snapshot',
+    slot: () => Response | Promise<Response>,
+    card: Card = { kind: 'chart' },
+): SharesBackend => ({
     base: 'https://apis.example',
     nameCaller: () => {},
     fetch: async (input) => {
@@ -86,7 +118,10 @@ const backend = (mode: 'live' | 'snapshot', slot: () => Response): SharesBackend
                         card: { component_id: 'cmp_test', revision: 2, frame: DATASET_FRAME },
                     },
                 ],
-                payload: { widgets: [{ id: 'health', kind: 'chart', slot: 1 }] },
+                payload: {
+                    widgets: [{ id: 'health', kind: card.kind, slot: 1 }],
+                    ...(card.view ? { views: { health: card.view } } : {}),
+                },
                 created_at: '2026-11-28T00:00:00Z',
             });
         }
@@ -96,6 +131,8 @@ const backend = (mode: 'live' | 'snapshot', slot: () => Response): SharesBackend
         return slot();
     },
 });
+
+beforeEach(nextCache.clear);
 
 test('a pinned country chart publishes only its plotted year, exact values and its slot CSV', async () => {
     const licence = 'https://creativecommons.org/licenses/by/4.0/';
@@ -161,3 +198,114 @@ test('an unreadable slot does not replace a Library page with an error', async (
 
     assert.equal(data, null);
 });
+
+const plotted = countries.map(({ label, value }) => ({
+    series: label,
+    period: '2023',
+    value,
+    unit: 'USD',
+}));
+
+// A key number of the same measure: a card that draws no rows.
+const keyNumber = (period: string) => ({
+    type: 'stat_card',
+    title: describedChart.component.title,
+    value: 91.127,
+    label: 'Kenya',
+    period,
+    unit: 'USD',
+});
+
+for (const [label, component, card, rows] of [
+    ['a table saved as a bar chart', countryTable, { kind: 'table', view: 'chart-bar' }, plotted],
+    ['a table in its own view', countryTable, { kind: 'table' }, plotted],
+    ['a chart saved as a table', barChart, { kind: 'chart', view: 'chart-table' }, plotted],
+    ['a key number', keyNumber, { kind: 'chart' }, null],
+] as const) {
+    test(`${label} serves the rows its saved view draws`, async () => {
+        const data = await libraryChartData(
+            backend(
+                'snapshot',
+                () => Response.json(slotBody('2023', 'CC BY 4.0', component('2023'))),
+                card,
+            ),
+            artifact,
+            ORIGIN,
+        );
+
+        assert.deepEqual(data?.rows ?? null, rows);
+    });
+}
+
+test('a slow slot read leaves the page without the table, then fills the cache', async () => {
+    let reads = 0;
+    let pending: Promise<unknown> | undefined;
+    const slow = backend('snapshot', async () => {
+        reads += 1;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        return Response.json(slotBody('2023', 'unknown'));
+    });
+
+    const late = await libraryChartData(slow, artifact, ORIGIN, {
+        deadlineMs: 10,
+        waitUntil: (read) => {
+            pending = read;
+        },
+    });
+
+    assert.equal(late, null);
+    assert.ok(pending);
+    await pending;
+
+    const cached = await libraryChartData(slow, artifact, ORIGIN, { deadlineMs: 10 });
+
+    assert.deepEqual(cached?.rows, plotted);
+    assert.equal(reads, 1);
+    assert.deepEqual(
+        [...nextCache.stored.values()].map((entry) => entry.revalidate),
+        [300],
+    );
+});
+
+for (const [label, description, check] of [
+    [
+        'a one-character description gives way to one built from the chart',
+        'x',
+        (text: string) => {
+            assert.ok(text.length >= 50);
+
+            for (const part of [
+                'Current health expenditure per capita',
+                'Kenya',
+                'Niger',
+                '2023',
+            ]) {
+                assert.ok(text.includes(part), part);
+            }
+
+            assert.ok(text.includes('World Development Indicators'));
+        },
+    ],
+    [
+        'a long enough description is kept',
+        artifact.description,
+        (text: string) => assert.equal(text, artifact.description),
+    ],
+    [
+        'a description over 5,000 characters is clipped',
+        'word '.repeat(1_200),
+        (text: string) => assert.ok(text.length <= 5_000 && text.length > 4_000),
+    ],
+] as const) {
+    test(label, async () => {
+        const data = await libraryChartData(
+            backend('snapshot', () => Response.json(slotBody('2023', 'unknown'))),
+            { ...artifact, description },
+            ORIGIN,
+        );
+
+        assert.ok(data);
+        check(data.dataset.description);
+    });
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { after } from 'next/server';
 
 import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
 import WithdrawnArtifact from '@/components/organisms/Library/WithdrawnArtifact';
@@ -89,9 +90,18 @@ const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPage
         );
     }
 
+    // A chart or a table in any of its views draws rows, which the card's
+    // saved view decides (`readSlotChart`).
     const chartData =
-        found.artifact.kind === 'chart'
-            ? await libraryChartData(sharesBackendFor(await headers()), found.artifact, SITE_ORIGIN)
+        found.artifact.kind === 'chart' || found.artifact.kind === 'table'
+            ? await libraryChartData(
+                  sharesBackendFor(await headers()),
+                  found.artifact,
+                  SITE_ORIGIN,
+                  {
+                      waitUntil: after,
+                  },
+              )
             : null;
 
     return (
