@@ -231,14 +231,12 @@ test('a pinned country chart publishes only its plotted year, exact values and i
             },
         },
     );
-    assert.deepEqual(data.dataset.distribution, [
-        { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: `${ORIGIN}${CSV}` },
-        {
-            '@type': 'DataDownload',
-            encodingFormat: 'application/zip',
-            contentUrl: `${ORIGIN}/api/share/Ab3dEf7h/cards/health/data?slot=2&format=csv&bundle=true`,
-        },
-    ]);
+    assert.deepEqual(data.dataset.distribution, {
+        '@type': 'DataDownload',
+        encodingFormat: 'text/csv',
+        contentUrl: `${ORIGIN}${CSV}`,
+    });
+    assert.equal(data.label, null);
 });
 
 test('a live chart reports the served period and leaves an unknown licence out', async () => {
@@ -324,7 +322,7 @@ test('the CSV holds the rows the page showed after the slot moves on', async () 
 
     assert.ok(page);
     assert.equal(page.csvHref, pinned(DATASET_FRAME));
-    assert.equal(page.dataset.distribution[0].contentUrl, `${ORIGIN}${CSV}`);
+    assert.equal(page.dataset.distribution.contentUrl, `${ORIGIN}${CSV}`);
     assert.equal(page.dataset.dateModified, undefined);
 
     moved = true;
@@ -378,6 +376,16 @@ for (const [label, slot, expected] of [
         { status: 422, code: 'constraint_violation', retryAfter: null, reads: 1 },
     ],
     [
+        'a slot dfo-apis has taken away answers 410, and is kept',
+        () => Response.json({ code: 'gone' }, { status: 410 }),
+        { status: 410, code: 'gone', retryAfter: null, reads: 1 },
+    ],
+    [
+        "a slot answer outside dfo-apis' shape answers 404, and is kept",
+        () => Response.json({ not: 'a card' }),
+        { status: 404, code: 'not_found', retryAfter: null, reads: 1 },
+    ],
+    [
         'a card whose view draws no rows answers 404',
         () => Response.json(slotBody('2023', 'unknown', keyNumber('2023'))),
         { status: 404, code: 'not_found', retryAfter: null, reads: 1 },
@@ -407,7 +415,7 @@ for (const [label, slot, expected] of [
     });
 }
 
-test('a canvas serves each card it shows, under its own title and CSV address', async () => {
+test('a canvas serves each card it shows, under its own name and CSV address', async () => {
     const reads: number[] = [];
     const shares = shareBackend(
         'snapshot',
@@ -422,31 +430,52 @@ test('a canvas serves each card it shows, under its own title and CSV address', 
             ],
             extra: {
                 removedIds: ['gone'],
-                titles: { spend: 'Spending as a chart', rows: 'Spending as a table' },
+                titles: { spend: 'Spending as a chart' },
             },
         },
         (n) => {
             reads.push(n);
 
             return Response.json(
-                slotBody('2023', 'unknown', n === 1 ? barChart('2023') : countryTable('2022')),
+                slotBody(
+                    '2023',
+                    'unknown',
+                    n === 1 ? barChart('2023') : { ...countryTable('2022'), title: '' },
+                ),
             );
         },
     );
     const data = await libraryChartData(shares, artifact, ORIGIN);
 
     assert.deepEqual(
-        data.map(({ id, dataset, csvHref }) => [
+        data.map(({ id, label, dataset, csvHref }) => [
             id,
+            label,
             dataset.name,
             csvHref,
             dataset.temporalCoverage,
+            dataset.dateModified,
         ]),
         [
-            ['spend', 'Spending as a chart', pinned(DATASET_FRAME, { card: 'spend' }), '2023'],
-            ['rows', 'Spending as a table', pinned(DATASET_FRAME, { card: 'rows' }), '2022'],
+            [
+                'spend',
+                'Spending as a chart',
+                'Spending as a chart',
+                pinned(DATASET_FRAME, { card: 'spend' }),
+                '2023',
+                '2026-11-28T00:00:00Z',
+            ],
+            [
+                'rows',
+                'Health expenditure per capita, chart 2',
+                'Health expenditure per capita, chart 2',
+                pinned(DATASET_FRAME, { card: 'rows' }),
+                '2022',
+                '2026-11-28T00:00:00Z',
+            ],
         ],
     );
+    assert.ok(data.every(({ dataset }) => dataset.description !== artifact.description));
     assert.deepEqual(reads.toSorted(), [1, 2]);
 
     const csv = async (card: string | null) => {
@@ -462,6 +491,29 @@ test('a canvas serves each card it shows, under its own title and CSV address', 
     assert.deepEqual(
         [await csv('rows'), await csv(null), (await csv('gone'))[0]],
         [[200, 'Kenya,2022,91.127,USD'], [200, 'Kenya,2023,91.127,USD'], 404],
+    );
+});
+
+test("a canvas of one chart keeps the chart's own name and card address", async () => {
+    const [data, ...rest] = await libraryChartData(
+        shareBackend(
+            'live',
+            {
+                kind: 'canvas',
+                slots: [1],
+                widgets: [{ id: 'spend', kind: 'chart', turn: 1, slot: 0 }],
+                extra: { titles: { spend: 'Spending as a chart' } },
+            },
+            () => Response.json(slotBody('2023', 'unknown')),
+        ),
+        artifact,
+        ORIGIN,
+    );
+
+    assert.deepEqual(rest, []);
+    assert.deepEqual(
+        [data?.label, data?.dataset.name, data?.dataset.distribution.contentUrl],
+        [null, 'Spending as a chart', `${ORIGIN}${CSV}?card=spend`],
     );
 });
 

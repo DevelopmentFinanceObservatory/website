@@ -12,8 +12,15 @@ export const LibraryChartData = ({ data }: { data: ChartData }): React.JSX.Eleme
             }}
         />
         <details className={styles.chartData}>
-            <summary>Data ({formatWindow(data.window)})</summary>
-            <a href={data.csvHref}>Download CSV</a>
+            <summary>
+                {data.label ? `Data for ${data.label}` : 'Data'} ({formatWindow(data.window)})
+            </summary>
+            <a
+                href={data.csvHref}
+                aria-label={data.label ? `Download CSV of ${data.label}` : undefined}
+            >
+                Download CSV
+            </a>
             <table>
                 <caption>{data.dataset.variableMeasured}</caption>
                 <thead>

@@ -30,13 +30,12 @@ import {
 } from '../chat/apisShares.ts';
 import type { CardData, FrameRef } from '../chat/widgets.ts';
 import { toCsv } from '../graphExplorer/sheet.ts';
-import { sharedCardDataUrl } from '../studio/cardDownload.ts';
 import { cardDataDates } from '../studio/dataThrough.ts';
 import { gateOf } from '../studio/gate.ts';
 import { cardDescription } from '../studio/infoPanel.ts';
 import { BackendError, componentReadOf, drawnFrame } from '../studio/liveBackend.ts';
 import { formatPeriod } from '../studio/period.ts';
-import { problem } from '../proxy/problem.ts';
+import { problem, type ProblemStatus } from '../proxy/problem.ts';
 import {
     drawSlotCard,
     type PageCard,
@@ -48,9 +47,11 @@ import { artifactPath, type LibraryArtifact } from './artifact.ts';
 
 const REVALIDATE_SECONDS = 300;
 
-// Two dfo-apis rounds, the share and then its slots. A slot read can start
-// dfo-apis' check of a live slot for newer data, its slow path, so the page
-// gives both 1.5 s and renders without the tables after that.
+// The share read, then its slots in waves of `READ_CONCURRENCY` reads, so a
+// canvas of nine data cards takes the share read and three waves. A slot
+// read can start dfo-apis' check of a live slot for newer data, its slow
+// path. The page gives the whole read 1.5 s and renders without the tables
+// after that.
 const PAGE_DEADLINE_MS = 1_500;
 
 // How long a read that missed the page's deadline may run on to fill the
@@ -87,12 +88,6 @@ type Row = { series: string; period: string; value: number; unit: string | null 
 type Licence = string | { '@type': 'CreativeWork'; name: string };
 type Source = { '@type': 'Dataset'; name: string; url?: string; license?: Licence };
 
-type DataDownload = {
-    '@type': 'DataDownload';
-    encodingFormat: 'text/csv' | 'application/zip';
-    contentUrl: string;
-};
-
 type Dataset = {
     '@context': 'https://schema.org';
     '@type': 'Dataset';
@@ -108,9 +103,7 @@ type Dataset = {
     includedInDataCatalog: { '@type': 'DataCatalog'; name: string; url: string };
     isBasedOn?: Source[];
     license?: Licence;
-    // The CSV of the page's table, then dfo-apis' bundle of the card's data
-    // file with its citation, sources and data package.
-    distribution: [DataDownload, DataDownload];
+    distribution: { '@type': 'DataDownload'; encodingFormat: 'text/csv'; contentUrl: string };
 };
 
 /**
@@ -121,12 +114,14 @@ type Dataset = {
  */
 export type SlotChart = {
     id: string;
+    // The card's place among the cards the page shows, from 1.
+    position: number;
     slot: number;
     frame: FrameRef | null;
     title: string;
     measure: string | null;
-    // When the card's data was last refreshed, as an ISO 8601 date or time,
-    // or null when the read does not say.
+    // When the card's data last changed, as an ISO 8601 date or time, or null
+    // when nothing says.
     dateModified: string | null;
     rows: Row[];
     seriesHeading: 'Country' | 'Series';
@@ -138,14 +133,18 @@ export type SlotChart = {
 export type SlotRefusal = { card: string | null; status: number | undefined; code: string };
 
 /**
- * The cards of a share that draw rows, in the order its page shows them, and
- * the permanent refusals met on the way. Plain JSON, so the cache can hold
- * it.
+ * The cards of a share that draw rows, in the order its page shows them, the
+ * permanent refusals met on the way, and whether the share is a card share
+ * (`single`), whose one chart stands for the whole artifact. Plain JSON, so
+ * the cache can hold it.
  */
-export type SlotCharts = { charts: SlotChart[]; refused: SlotRefusal[] };
+export type SlotCharts = { charts: SlotChart[]; refused: SlotRefusal[]; single: boolean };
 
 export type LibraryChartData = {
     id: string;
+    // The chart's name, which the page shows beside its table when it shows
+    // more than one; null otherwise.
+    label: string | null;
     rows: Row[];
     seriesHeading: SlotChart['seriesHeading'];
     periodHeading: 'Year' | 'Period';
@@ -276,16 +275,21 @@ const permanentRefusal = (error: unknown, card: string | null): SlotRefusal | nu
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:\d{2})?)?$/;
 
-// When a card's data was last refreshed: a legacy card's `last_refreshed`,
-// else the date its description says its version was prepared or computed.
+// When a card's data last changed: a legacy card's `last_refreshed`, else
+// the date its description says its version was prepared or computed, else,
+// for a snapshot, whose slots keep their frames, the day the share was made.
+// A live slot's own date would take a read of the share's history, which
+// the page does not make.
 const refreshedOf = (
     info: Parameters<typeof cardDataDates>[0],
     description: ReturnType<typeof cardDescription> | undefined,
+    share: ShareRecord,
 ): string | null =>
     [
         cardDataDates(info).lastRefreshed,
         description?.freshness.prepared,
         description?.freshness.computed,
+        share.mode === 'snapshot' ? share.createdAt : null,
     ].find((date): date is string => typeof date === 'string' && ISO_DATE.test(date)) ?? null;
 
 // The rows card `page` of `share` draws, or null when the view the embed
@@ -295,6 +299,7 @@ const slotChartOf = async (
     shares: SharesBackend,
     share: ShareRecord,
     page: PageCard,
+    position: number,
 ): Promise<SlotChart | null> => {
     if (!page.ref || page.slot === null) {
         return null;
@@ -331,11 +336,12 @@ const slotChartOf = async (
 
     return {
         id: page.id,
+        position,
         slot: page.slot,
         frame: drawnFrame(componentReadOf(body).card),
         title: savedTitle(share.payload, page.id) ?? widgetTitle(widget),
         measure: description?.about.measure?.label ?? null,
-        dateModified: refreshedOf(widget.info, description),
+        dateModified: refreshedOf(widget.info, description, share),
         rows,
         seriesHeading: rows.every(({ series }) => countries.has(series.toLowerCase()))
             ? 'Country'
@@ -371,22 +377,22 @@ export const readSlotCharts = async (
         const refusal = permanentRefusal(error, null);
 
         if (refusal) {
-            return { charts: [], refused: [refusal] };
+            return { charts: [], refused: [refusal], single: true };
         }
 
         throw error;
     }
 
     if (share?.kind !== 'card' && share?.kind !== 'canvas') {
-        return { charts: [], refused: [] };
+        return { charts: [], refused: [], single: true };
     }
 
     const record = share;
     const gate = gateOf(READ_CONCURRENCY);
     const cards = await Promise.all(
-        shownPageCards(record).map(async (page) => {
+        shownPageCards(record).map(async (page, index) => {
             try {
-                return { chart: await gate(() => slotChartOf(shares, record, page)) };
+                return { chart: await gate(() => slotChartOf(shares, record, page, index + 1)) };
             } catch (error) {
                 const refusal = permanentRefusal(error, page.id);
 
@@ -402,6 +408,7 @@ export const readSlotCharts = async (
     return {
         charts: cards.flatMap(({ chart }) => chart ?? []),
         refused: cards.flatMap(({ refusal }) => refusal ?? []),
+        single: record.kind === 'card',
     };
 };
 
@@ -513,15 +520,17 @@ const csvHrefOf = (
 };
 
 /**
- * The table and Dataset block of a Library chart drawn from `chart`. An
- * artifact of one chart (`single`) names its Dataset by the artifact's
- * title, and each chart of a canvas by the chart's own.
+ * The table and Dataset block of a Library chart drawn from `chart`. The
+ * chart of a card share (`single`) names its Dataset by the artifact's
+ * title. Each chart of a canvas is named by its own title, or by the
+ * artifact's title and its place on the page when it has none. With
+ * `labelled`, the table carries that name too.
  */
 export const chartDataOf = (
     chart: SlotChart,
     artifact: ChartArtifact,
     origin: string,
-    { single = true }: { single?: boolean } = {},
+    { single = true, labelled = false }: { single?: boolean; labelled?: boolean } = {},
 ): LibraryChartData | null => {
     const [first, ...rest] = chart.rows;
 
@@ -554,10 +563,15 @@ export const chartDataOf = (
         };
     });
     const [source] = sources;
-    const measure = chart.measure?.trim() || chart.title;
+    const title =
+        chart.title.trim() ||
+        (single ? artifact.title : `${artifact.title}, chart ${chart.position}`);
+    const name = single ? artifact.title : title;
+    const measure = chart.measure?.trim() || title;
 
     return {
         id: chart.id,
+        label: labelled ? name : null,
         rows,
         seriesHeading: chart.seriesHeading,
         periodHeading,
@@ -566,7 +580,7 @@ export const chartDataOf = (
         dataset: {
             '@context': 'https://schema.org',
             '@type': 'Dataset',
-            name: single ? artifact.title : chart.title,
+            name,
             description: datasetDescription(artifact, chart, { measure, window, sources, single }),
             url: new URL(artifactPath(artifact.slug), origin).href,
             temporalCoverage: start === end ? start : `${start}/${end}`,
@@ -582,24 +596,11 @@ export const chartDataOf = (
             },
             isBasedOn: sources.length ? sources : undefined,
             license: sources.length === 1 ? source.license : undefined,
-            distribution: [
-                {
-                    '@type': 'DataDownload',
-                    encodingFormat: 'text/csv',
-                    contentUrl: new URL(datasetCsv, origin).href,
-                },
-                {
-                    '@type': 'DataDownload',
-                    encodingFormat: 'application/zip',
-                    contentUrl: new URL(
-                        sharedCardDataUrl(
-                            { shareId: artifact.shareId, cardId: chart.id, slot: chart.slot },
-                            { format: 'csv', bundle: true },
-                        ),
-                        origin,
-                    ).href,
-                },
-            ],
+            distribution: {
+                '@type': 'DataDownload',
+                encodingFormat: 'text/csv',
+                contentUrl: new URL(datasetCsv, origin).href,
+            },
         },
     };
 };
@@ -641,10 +642,11 @@ export const libraryChartData = async (
             return unavailable('page_deadline');
         }
 
-        const single = answer.charts.length === 1;
+        const { single } = answer;
+        const labelled = answer.charts.length > 1;
 
         return answer.charts.flatMap(
-            (chart) => chartDataOf(chart, artifact, origin, { single }) ?? [],
+            (chart) => chartDataOf(chart, artifact, origin, { single, labelled }) ?? [],
         );
     } catch (error) {
         if (!isReadFailure(error)) {
@@ -663,7 +665,7 @@ type Failure = Pick<SharesError, 'code' | 'retryable'> & {
 };
 
 /**
- * The CSV route's answer to a failed read or a stored refusal: a refusal
+ * The CSV route's answer to a failed read: a refusal
  * dfo-apis made of the request itself (`REQUEST_REFUSALS`, as the share
  * download maps them) under its own status, a 429 with its `Retry-After`,
  * and 502 for any other fault.
@@ -689,6 +691,26 @@ export const readFailureResponse = ({
                 : {}),
         },
     });
+};
+
+// The statuses a stored refusal answers under as dfo-apis gave them. Any
+// other, as `backend_invalid` (an answer outside dfo-apis' shape, with no
+// status) is, answers 404 `not_found`: the card has no data to serve.
+const STORED_REFUSALS = [...REQUEST_REFUSALS, 410] as const satisfies readonly ProblemStatus[];
+
+// The CSV route's answer to a refusal the cache holds.
+const storedRefusalResponse = ({ status, code }: SlotRefusal): Response => {
+    const answer = STORED_REFUSALS.find((refusal) => refusal === status);
+
+    return answer === undefined
+        ? noData()
+        : problem({
+              status: answer,
+              code,
+              detail: 'The card has no data file to serve.',
+              retryable: false,
+              headers: { 'Cache-Control': 'no-store' },
+          });
 };
 
 const noData = (): Response =>
@@ -736,7 +758,8 @@ const frameChanged = (): Response =>
  * the page shows now. A read that fails
  * answers as `readFailureResponse` maps it, a 429 with its `Retry-After`
  * among them. A card the entry holds as refused, or a share refused whole,
- * answers that refusal's status the same way, a 422 included. The file's
+ * answers that refusal's status when it is 400, 404, 410 or 422, and 404
+ * `not_found` otherwise (`storedRefusalResponse`). The file's
  * `Link` header names the artifact's page as the address to cite. Any other
  * card, and an artifact with no chart, is 404. An open Library's file is
  * cached publicly for five minutes; an admin's preview is not stored.
@@ -765,15 +788,14 @@ export const libraryCsvResponse = async (
             (refused) => card === null || refused.card === null || refused.card === card,
         );
 
-        return refusal ? readFailureResponse({ ...refusal, retryable: false }) : noData();
+        return refusal ? storedRefusalResponse(refusal) : noData();
     }
 
     if (frame !== null && (chart.frame === null || frameKey(chart.frame) !== frame)) {
         return frameChanged();
     }
 
-    const index = read.charts.indexOf(chart);
-    const name = read.charts.length === 1 ? artifact.slug : `${artifact.slug}-${index + 1}`;
+    const name = read.single ? artifact.slug : `${artifact.slug}-${chart.position}`;
 
     return new Response(chartCsv(chart), {
         headers: {

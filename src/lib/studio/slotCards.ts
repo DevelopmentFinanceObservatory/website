@@ -8,7 +8,7 @@ import {
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
-import { savedCanvasWidgetsOf } from '../chat/canvas.ts';
+import { type CanvasCard, type CanvasState, savedCanvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { StudioShareKind } from '../chat/shareMode.ts';
 import type { CardRef, FrameRef, Widget } from '../chat/widgets.ts';
@@ -206,7 +206,13 @@ export const pageCards = (record: ShareRecord): PageCard[] =>
 export const shownPageCards = (record: ShareRecord): PageCard[] => {
     const held = new Map(pageCards(record).map((card) => [card.id, card]));
     const shown = savedCanvasWidgetsOf(
-        savedOf(record, pageWidgets(record) as unknown as SavedConversation['widgets']),
+        savedOf(
+            record,
+            pageWidgets(record).map(({ id, turn }) => ({
+                id,
+                turn: typeof turn === 'number' ? turn : 0,
+            })),
+        ),
     );
 
     return (record.kind === 'card' ? shown.slice(0, 1) : shown).flatMap(
@@ -220,10 +226,14 @@ export const shownPageCards = (record: ShareRecord): PageCard[] => {
 export const drawSlotCard = (held: Widget, body: Record<string, unknown>): Widget | null =>
     widgetFromLiveCard(held, componentReadOf(body).card);
 
-// The canvas a share's payload holds, with `widgets` in place of its own.
-// Fields a payload leaves out, as an SDK share's leaves them all, read as an
-// empty canvas named by the share's title.
-const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): SavedConversation =>
+// The canvas a share's payload holds, with `widgets`, cards of any shape the
+// canvas rules read, in place of its own. Fields a payload leaves out, as an
+// SDK share's leaves them all, read as an empty canvas named by the share's
+// title.
+const savedOf = <Card extends CanvasCard>(
+    record: ShareRecord,
+    widgets: Card[],
+): Omit<SavedConversation, 'widgets'> & CanvasState<Card> =>
     ({
         id: record.id,
         sessionId: null,
@@ -236,7 +246,7 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
         layout: {},
         ...asRecord(record.payload),
         widgets,
-    }) as SavedConversation;
+    }) as Omit<SavedConversation, 'widgets'> & CanvasState<Card>;
 
 // When each slot of a snapshot began to show the frame it serves, by slot:
 // the newest entry of the share's history with that slot and frame. The

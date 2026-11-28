@@ -17,6 +17,7 @@ export const TITLES = {
     404: 'Not Found',
     405: 'Method Not Allowed',
     409: 'Conflict',
+    410: 'Gone',
     413: 'Content Too Large',
     422: 'Unprocessable Content',
     429: 'Too Many Requests',
