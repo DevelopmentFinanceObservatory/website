@@ -58,7 +58,10 @@ import {
  * or a card in the Library (./PublishPanel).
  */
 
-export type ShareScope = { kind: 'whole' } | { kind: 'card'; id: string; title: string };
+export type ShareScope =
+    | { kind: 'whole' }
+    // `tab` is the tab a card's dialog opens on; Link without it.
+    | { kind: 'card'; id: string; title: string; tab?: 'link' | 'embed' };
 
 // A card's downloadable data (Data tab): the revision its file is built from,
 // and the card's kind for `studio.download`.
@@ -240,7 +243,7 @@ const ShareModal = ({
     guest,
     publish,
 }: ShareModalProps) => {
-    const firstTab = scope.kind === 'whole' ? 'conversation' : 'link';
+    const firstTab = scope.kind === 'whole' ? 'conversation' : (scope.tab ?? 'link');
     const [picked, setTab] = useState<string>(firstTab);
     // Publish is an admin's tab, so without `publish` the dialog shows its first.
     const tab = picked === 'publish' && !publish ? firstTab : picked;

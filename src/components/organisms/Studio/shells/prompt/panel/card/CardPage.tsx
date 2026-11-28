@@ -681,7 +681,14 @@ const CardPage = ({ id }: { id: string }) => {
                             subject={title}
                             data-sp-act="embed"
                             data-sp-key="act:embed"
-                            onAction={() => modals.share.show({ kind: 'card', id: current, title })}
+                            onAction={() =>
+                                modals.share.show({
+                                    kind: 'card',
+                                    id: current,
+                                    title,
+                                    tab: 'embed',
+                                })
+                            }
                         />
                     </div>
                     {downloadOpen && (
