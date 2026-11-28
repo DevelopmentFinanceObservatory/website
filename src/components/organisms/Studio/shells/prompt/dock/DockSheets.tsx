@@ -84,7 +84,8 @@ const ReplyText = ({
 /** A reply as the chat draws one: Markdown, the feedback controls, the
  *  approved plan's pill and the question's card chips. `named` is a card
  *  the dock names already, just below the reply (the selected card's chip
- *  in the input row), which the reply leaves out of its own chips. */
+ *  in the input row): a reply whose only card it is draws no chip for it.
+ *  A reply with several cards lists them all, so its count holds. */
 const ReplyContent = ({
     question,
     stream,
@@ -118,7 +119,7 @@ const ReplyContent = ({
             )}
             {question.plan && <ApprovedPlanPill plan={question.plan} />}
             <WidgetChips
-                widgets={widgets.filter((widget) => widget.id !== named)}
+                widgets={widgets.length === 1 && widgets[0].id === named ? [] : widgets}
                 titles={chips.titles}
                 views={chips.views}
                 onCanvas={chips.onCanvas}
