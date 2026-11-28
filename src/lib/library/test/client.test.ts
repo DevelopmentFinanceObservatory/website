@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    differingFields,
     evergreenFailureText,
     isArtifactChangedRefusal,
     isSlugTakenRefusal,
@@ -9,6 +10,7 @@ import {
     publishRefusalText,
     readEvergreenAnswer,
     readEvergreenWarnings,
+    readLatest,
     readRevision,
     sameField,
 } from '../client.ts';
@@ -194,4 +196,48 @@ test('readRevision reads the revision an edit wrote and nothing else', () => {
     assert.equal(readRevision({ slug: 'a', revision: '3' }), null);
     assert.equal(readRevision({ slug: 'a' }), null);
     assert.equal(readRevision(null), null);
+});
+
+test('readLatest reads the stored text an artifact_changed refusal carries', () => {
+    const latest = {
+        title: 'Aid, by year',
+        description: 'd',
+        contentTitle: null,
+        content: 'Aid rose.',
+        topics: ['Health'],
+        revision: 4,
+    };
+    const { revision, ...text } = latest;
+
+    assert.deepEqual(readLatest(refusal('artifact_changed', { latest })), { text, revision });
+    assert.equal(readLatest(refusal('artifact_changed')), null);
+    assert.equal(
+        readLatest(refusal('artifact_changed', { latest: { ...latest, revision: '4' } })),
+        null,
+    );
+    assert.equal(
+        readLatest(refusal('artifact_changed', { latest: { ...latest, topics: [1] } })),
+        null,
+    );
+    assert.equal(readLatest(refusal('slug_taken', { latest })), null);
+});
+
+test('differingFields names the fields a draft holds apart from the latest text', () => {
+    const latest = {
+        title: 'Aid, by year',
+        description: 'd',
+        contentTitle: null,
+        content: 'Aid rose.',
+        topics: ['Debt', 'Health'],
+    };
+
+    assert.deepEqual(differingFields({ ...latest, topics: ['Health', 'Debt'] }, latest), []);
+    assert.deepEqual(differingFields({ ...latest, contentTitle: '' }, latest), []);
+    assert.deepEqual(
+        differingFields(
+            { ...latest, content: 'Aid fell.', title: 'Aid', topics: ['Debt'] },
+            latest,
+        ),
+        ['title', 'topics', 'content'],
+    );
 });

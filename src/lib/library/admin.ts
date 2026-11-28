@@ -25,6 +25,7 @@ import { evergreenCheck } from './evergreen';
 import { changedText } from './evergreenRule';
 import { type LibraryView, libraryViewOf } from './switch';
 import {
+    type ArtifactText,
     publishedFacts,
     publishedKind,
     readEdit,
@@ -406,20 +407,41 @@ export const publish = async (request: Request): Promise<Response> => {
     );
 };
 
-const artifactChanged = (): Response =>
+// `latest` is the stored text and topics with the revision they are at, so
+// the editor can compare its draft and save it from that revision.
+const artifactChanged = (latest: ArtifactText & { revision: number }): Response =>
     problem({
         status: 409,
         code: 'artifact_changed',
-        detail: 'Someone changed this artifact after you opened it. Reload the page and edit it again.',
+        detail: 'Someone changed this artifact after you opened it.',
         retryable: false,
+        extra: { latest },
         headers: NO_STORE,
     });
 
 /**
+ * GET /api/library/artifacts/<id> → { title, description, contentTitle,
+ * content, topics, revision }, the stored text an edit starts from, for an
+ * edit whose 409 carried none it could read.
+ */
+export const stored = async (request: Request, id: string): Promise<Response> => {
+    const { refusal } = await gate(request, false);
+
+    if (refusal) {
+        return refusal;
+    }
+
+    const latest = await artifactText(id);
+
+    return latest ? Response.json(latest, { headers: NO_STORE }) : notFound();
+};
+
+/**
  * PATCH /api/library/artifacts/<id> (ArtifactEdit: the text and the
  * `revision` it was loaded at) → { slug, revision, warnings }. An edit from a revision
- * the artifact has moved on from answers 409 `artifact_changed`, before the
- * check and again at the write, which applies only while the row is at that
+ * the artifact has moved on from answers 409 `artifact_changed` with the
+ * `latest` stored text, topics and revision, before the check and again at
+ * the write, which applies only while the row is at that
  * revision. So the text the evergreen rule passed is the text that
  * goes live, however long the check takes. The text fields the edit changes
  * are held to the evergreen rule first, outside any transaction, with the
@@ -447,7 +469,7 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
     }
 
     if (stored.revision !== revision) {
-        return artifactChanged();
+        return artifactChanged(stored);
     }
 
     const checked = await evergreenCheck(changedText(stored, text), { artifact: id });
@@ -463,7 +485,9 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
     }
 
     if (changed === 'artifact_changed') {
-        return artifactChanged();
+        const latest = await artifactText(id);
+
+        return latest ? artifactChanged(latest) : notFound();
     }
 
     if (changed === 'unknown_topic') {

@@ -32,14 +32,17 @@ import { uuid } from '@/lib/uuid';
  * browser.
  */
 
-const topicsOf = async (ids: string[]): Promise<Map<string, string[]>> => {
+const topicsOf = async (
+    ids: string[],
+    executor: Pick<typeof db, 'select'> = db,
+): Promise<Map<string, string[]>> => {
     const byArtifact = new Map<string, string[]>();
 
     if (ids.length === 0) {
         return byArtifact;
     }
 
-    const rows = await db
+    const rows = await executor
         .select({ artifactId: libraryArtifactTopic.artifactId, label: libraryTopic.label })
         .from(libraryArtifactTopic)
         .innerJoin(libraryTopic, eq(libraryTopic.id, libraryArtifactTopic.topicId))
@@ -554,24 +557,28 @@ export const updateArtifact = (
         }),
     );
 
-/** The text fields and revision of artifact `id` while it is on show, else
- *  null. The edit route checks the fields an edit changes against them. */
-export const artifactText = async (
-    id: string,
-): Promise<(Omit<ArtifactText, 'topics'> & { revision: number }) | null> => {
-    const [row] = await db
-        .select({
-            title: libraryArtifact.title,
-            description: libraryArtifact.description,
-            contentTitle: libraryArtifact.contentTitle,
-            content: libraryArtifact.content,
-            revision: libraryArtifact.revision,
-        })
-        .from(libraryArtifact)
-        .where(and(eq(libraryArtifact.id, id), live));
+/** The text, topics and revision of artifact `id` while it is on show, else
+ *  null. The edit route checks the fields an edit changes against them, and
+ *  answers a stale edit with them. */
+export const artifactText = (id: string): Promise<(ArtifactText & { revision: number }) | null> =>
+    // One snapshot, so the topics belong to the revision read beside them.
+    db.transaction(
+        async (tx) => {
+            const [row] = await tx
+                .select({
+                    title: libraryArtifact.title,
+                    description: libraryArtifact.description,
+                    contentTitle: libraryArtifact.contentTitle,
+                    content: libraryArtifact.content,
+                    revision: libraryArtifact.revision,
+                })
+                .from(libraryArtifact)
+                .where(and(eq(libraryArtifact.id, id), live));
 
-    return row ?? null;
-};
+            return row ? { ...row, topics: (await topicsOf([id], tx)).get(id) ?? [] } : null;
+        },
+        { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
 
 /** An artifact's slug and the share the Library made for it, with that
  *  share's owner token. */

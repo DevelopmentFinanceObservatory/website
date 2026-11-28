@@ -495,11 +495,16 @@ test('library store', async (t) => {
 
         assert.equal(opened?.revision, 0);
 
-        // Editor B replaces the title and the content meanwhile.
+        // Editor B replaces the title, the content and the topics meanwhile.
         assert.deepEqual(
             await store.updateArtifact(
                 id,
-                { ...base, title: 'Raced chart, revised', content: 'Aid rose.' },
+                {
+                    ...base,
+                    title: 'Raced chart, revised',
+                    content: 'Aid rose.',
+                    topics: ['Health'],
+                },
                 0,
             ),
             { slug: 'raced-chart', revision: 1 },
@@ -518,8 +523,8 @@ test('library store', async (t) => {
         const stored = await store.artifactText(id);
 
         assert.deepEqual(
-            [stored?.title, stored?.content, stored?.revision],
-            ['Raced chart, revised', 'Aid rose.', 1],
+            [stored?.title, stored?.content, stored?.topics, stored?.revision],
+            ['Raced chart, revised', 'Aid rose.', ['Health'], 1],
         );
 
         // Two edits from one revision at once: one lands.

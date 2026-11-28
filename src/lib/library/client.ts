@@ -225,6 +225,57 @@ export const sameField = (
 export const isArtifactChangedRefusal = (problem: unknown): boolean =>
     asRecord(problem)?.['code'] === 'artifact_changed';
 
+/** The stored text of an artifact and the revision it is at. */
+export type StoredText = { text: ArtifactText; revision: number };
+
+const isText = (value: unknown): value is string => typeof value === 'string';
+const isTextOrNull = (value: unknown): value is string | null =>
+    value === null || typeof value === 'string';
+
+/** The stored text and revision in `body`, or null when it does not read
+ *  as one. */
+export const readStored = (body: unknown): StoredText | null => {
+    const { title, description, contentTitle, content, topics, revision } = asRecord(body) ?? {};
+
+    return isText(title) &&
+        isText(description) &&
+        isTextOrNull(contentTitle) &&
+        isTextOrNull(content) &&
+        Array.isArray(topics) &&
+        topics.every(isText) &&
+        typeof revision === 'number' &&
+        Number.isInteger(revision)
+        ? { text: { title, description, contentTitle, content, topics }, revision }
+        : null;
+};
+
+/** The latest stored text and revision an `artifact_changed` refusal
+ *  carries, or null when the refusal is another one or carries none that
+ *  reads. */
+export const readLatest = (problem: unknown): StoredText | null =>
+    isArtifactChangedRefusal(problem) ? readStored(asRecord(problem)?.['latest']) : null;
+
+/** The fields of `draft` that hold something else in `latest`, in the
+ *  dialog's order. An empty optional field matches a missing one, and topics
+ *  match whatever their order. */
+export const differingFields = (
+    draft: ArtifactText,
+    latest: ArtifactText,
+): (keyof ArtifactText)[] => {
+    const topics = (text: ArtifactText) => [...text.topics].sort().join('\n');
+    const fields: (keyof ArtifactText)[] = [
+        'title',
+        'description',
+        'topics',
+        'contentTitle',
+        'content',
+    ];
+
+    return fields.filter((field) =>
+        field === 'topics' ? topics(draft) !== topics(latest) : !sameField(draft, latest, field),
+    );
+};
+
 /** The sentence a failure of the check shows, or null for a refusal of
  *  sentences, which show under their fields. */
 export const evergreenFailureText = (answer: EvergreenAnswer): string | null => {
@@ -292,6 +343,25 @@ export const editArtifact = (id: string, text: ArtifactText, revision: number) =
         send('PATCH', { ...text, revision }),
         'The changes were not saved. Try again.',
     );
+
+/** The stored text and revision of an artifact, for an edit to start from. */
+export const loadStored = async (id: string): Promise<Answer<StoredText>> => {
+    const answer = await call<unknown>(
+        `/api/library/artifacts/${encodeURIComponent(id)}`,
+        undefined,
+        'The latest version did not load. Try again.',
+    );
+
+    if (!answer.ok) {
+        return answer;
+    }
+
+    const stored = readStored(answer.value);
+
+    return stored
+        ? { ok: true, value: stored }
+        : { ok: false, detail: 'The latest version did not load. Try again.', problem: null };
+};
 
 /** The slug of an artifact a withdrawal took down without the replacement
  *  it named, which was withdrawn meanwhile, or null for any other answer. */
