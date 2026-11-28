@@ -551,9 +551,9 @@ export const cachedCurrentSlot = (
  * reads to learn whether the card draws rows on that frame. On a miss,
  * `draw` gives the chart: the page passes the chart its current read drew
  * on that frame, and the CSV route a read of the slot on that frame, so
- * either fills the entry the other reads. A `draw` that throws stores nothing, so a frame dfo-apis
- * refuses is asked again. The key goes in the key parts, as `draw` is a
- * closure.
+ * either fills the entry the other reads. A `draw` that throws stores
+ * nothing, so a frame dfo-apis refuses is asked again. The key goes in the
+ * key parts, as `draw` is a closure.
  */
 const frameChart = (
     shareId: string,
@@ -569,7 +569,7 @@ const frameChart = (
 
 // The chart card `card` shows on the page: its current read's, which also
 // fills the frame entry a pinned CSV request reads. Null when the card draws
-// no rows; a failed read throws.
+// no rows. A failed read throws.
 const pageChart = async (
     backend: SharesBackend,
     shareId: string,
@@ -617,9 +617,9 @@ type DescriptionParts = {
 
 /**
  * For an artifact of one chart, the Library description when it is long
- * enough for a Dataset; else one built from the chart: the measure, the
- * places or series, the period, the sources and the artifact's title. Either
- * is clipped to `DESCRIPTION_MAX`. Each chart of a canvas gets its own built
+ * enough for a Dataset. Otherwise one built from the chart, which names the
+ * measure, the places or series, the period, the sources and the artifact's
+ * title. Either is clipped to `DESCRIPTION_MAX`. Each chart of a canvas gets its own built
  * description, since the Library's describes the whole canvas.
  */
 const datasetDescription = (
@@ -897,9 +897,9 @@ export const readFailureResponse = ({
 };
 
 // The CSV route's answer to a refusal the cache holds: its own status when
-// it is one of `PASSED_REFUSALS`, and 404 `not_found` for any other, as
-// `backend_invalid` (an answer outside dfo-apis' shape, with no status) is:
-// the card has no data to serve.
+// it is one of `PASSED_REFUSALS`, and 404 `not_found` for any other,
+// `backend_invalid` (an answer outside dfo-apis' shape, with no status)
+// included, since the card has no data to serve.
 const storedRefusalResponse = ({ status, code }: SlotRefusal): Response => {
     const answer = PASSED_REFUSALS.find((refusal) => refusal === status);
 
@@ -928,8 +928,8 @@ type ReadFailure = SharesError | BackendError;
 // The card a request names, with its current read when finding it took one:
 // card `card`, a card share's one card, or a canvas's first card whose
 // current read draws rows. A canvas card whose read fails or is refused is
-// passed over; a canvas with no card that draws rows answers the first
-// refusal or failure its reads met, else no card.
+// passed over. A canvas with no card that draws rows answers the first
+// refusal or failure its reads met, and with none, no card.
 const requestedCard = async (
     backend: SharesBackend,
     shareId: string,
@@ -977,7 +977,7 @@ const requestedCard = async (
  * `GET /library/<slug>/data.csv?card=&spec_id=&content_version=`, for a
  * published artifact: the data file of chart `card` (the first chart when
  * `card` is null) on `frame`, the frame the page's link names, or on the
- * frame the slot serves now when `frame` is null. The file is dfo-apis'
+ * frame the slot serves when `frame` is null. The file is dfo-apis'
  * unbundled CSV export of the card's slot, with every column the card's rows
  * carry, so a link the page pinned serves the page's values from any server
  * however far the slot has moved on. A card that draws no rows on the frame,
@@ -988,7 +988,7 @@ const requestedCard = async (
  * holds as refused answers as `storedRefusalResponse` maps it. Any other
  * card, and an artifact with no chart, is 404. The file's `Link` header
  * names the artifact's page as the address to cite. An open Library's file
- * is cached publicly for five minutes; an admin's preview is not stored.
+ * is cached publicly for five minutes. An admin's preview is not stored.
  */
 export const libraryCsvResponse = async (
     backend: SharesBackend,
@@ -1040,9 +1040,9 @@ export const libraryCsvResponse = async (
         }
 
         // A request without a frame reads the file on the frame the slot
-        // serves now, so it never names a frame a stale entry kept. The body
-        // is read whole first, so a file cut off at the call's deadline
-        // answers an error and no short file.
+        // serves, whatever frame a stale entry holds. The body is read whole
+        // first, so a file cut off at the call's deadline answers an error,
+        // not a short file.
         const file = await bodyBytes(
             await readSlotFile(backend, shareId, shown.slot, {
                 format: 'csv',

@@ -449,9 +449,9 @@ const frameQuery = (frame: FrameRef | null): Record<string, string> =>
 /** Slot `slot` (from 1) of a share: its card drawn on the frame the slot
  *  serves. Reading it is what has dfo-apis check a live slot for newer data,
  *  at most once per 15 minutes, and record the frame in the share's history.
- *  With `frame`, dfo-apis draws the card on that frame instead, with no
- *  check, when the slot served its card on it: a frame it never served is
- *  404 `frame_not_served`, and one DFO no longer holds 410 `frame_expired`.
+ *  With `frame`, dfo-apis draws the card on that frame without the check,
+ *  when the slot served its card on it. A frame it never served is 404
+ *  `frame_not_served`, and one DFO no longer holds is 410 `frame_expired`.
  *  `ifNoneMatch` goes to dfo-apis as it came. */
 export const readSlotCard = async (
     backend: SharesBackend,

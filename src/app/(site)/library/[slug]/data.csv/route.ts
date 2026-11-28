@@ -10,15 +10,16 @@ type Context = { params: Promise<{ slug: string }> };
 
 export const dynamic = 'force-dynamic';
 
-// GET /library/<slug>/data.csv?card=&spec_id=&content_version= → text/csv
-// The data file of a published Library artifact's chart `card` (its only or
-// first chart without one), as `libraryCsvResponse` serves it: on the frame
-// `spec_id` and `content_version` name together, which the page's link
-// names, else on the frame the page draws the chart on now. The page's
-// Dataset blocks name the address without a frame, which robots.txt leaves
-// open, unlike /api/. It answers when the page does (`libraryView`), and 404
-// for any other artifact. One of `spec_id` and `content_version` without the
-// other is 400 `request_invalid`, as dfo-apis refuses it.
+// GET /library/<slug>/data.csv?card=&spec_id=&content_version= (text/csv)
+// The data file of chart `card` of a published Library artifact, or of its
+// only or first chart without `card`, as `libraryCsvResponse` serves it. With
+// `spec_id` and `content_version`, which the page's link names, the file is
+// on that frame. Without them it is on the frame the page draws the chart
+// on. The page's Dataset blocks name the address without a frame, and
+// robots.txt leaves it open while it closes /api/. The route answers when
+// the page does (`libraryView`) and is 404 for any other artifact. One of
+// `spec_id` and `content_version` without the other is 400
+// `request_invalid`, as dfo-apis refuses it.
 export const GET = async (request: NextRequest, { params }: Context) => {
     const view = await libraryView();
     const found = view === null ? null : await artifactBySlug((await params).slug);

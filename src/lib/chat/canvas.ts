@@ -6,7 +6,7 @@ import type { CardRef, TextWidget } from './widgets.ts';
 export type CanvasCard = { id: string; turn: number; ref?: CardRef };
 
 /** The part of a conversation that decides which cards its canvas shows,
- *  with its cards in shape `Card`, by default the conversation's own. */
+ *  with cards of type `Card`, by default the conversation's own. */
 export type CanvasState<Card extends CanvasCard = SavedConversation['widgets'][number]> = {
     widgets: Card[];
 } & Pick<
