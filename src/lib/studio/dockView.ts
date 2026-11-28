@@ -39,7 +39,7 @@ export type DockInput = {
     messages: readonly ChatMessage[];
     activity: readonly ActivityEntry[];
     /** The conversation's cards, each with the turn that drew it. */
-    widgets: readonly { turn: number }[];
+    widgets: readonly { id: string; turn: number }[];
     /** The cards on the canvas now. */
     canvasCards: number;
     thinking: boolean;
@@ -278,13 +278,20 @@ const questionView = (
     }
 
     const suggestions = (question?.followups.length ?? 0) + (question?.chips.length ?? 0);
+    // The pills speak for the newest question, so they stay beside a selected
+    // card that question drew and leave beside any other card.
+    const aboutOwn =
+        row?.kind === 'about' &&
+        input.widgets.some(
+            (widget) => widget.id === input.editTarget?.id && widget.turn === question?.turn,
+        );
     const pills =
         !input.focus &&
         !input.walled &&
         answered &&
         !clarify &&
         suggestions > 0 &&
-        (row === null || row.kind === 'folded') &&
+        (row === null || row.kind === 'folded' || aboutOwn) &&
         sheet === 'none';
 
     return {

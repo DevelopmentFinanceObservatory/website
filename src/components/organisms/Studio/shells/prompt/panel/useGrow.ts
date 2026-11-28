@@ -167,26 +167,34 @@ export const useGrow = (onPage: boolean) => {
         setSpacers({ top: 0, foot: 0 }, true);
     };
 
-    const endShrink = () => {
+    // Rest: the narrow layout, none of the state attributes, and no dissolve
+    // left to land on it. The attribute is read as well as the ref, since an
+    // earlier mount of this hook may have left it on the aside.
+    const settle = () => {
         const region = aside();
 
-        cancel('shrinkEnd');
+        cancel('fade', 'shrinkEnd');
 
-        if (grow.current.phase !== 'closing' || !region) return;
+        if (!region) return;
 
-        if (grow.current.wide) {
-            cancel('fade');
-            switchLayout(false);
-        }
+        if (grow.current.wide || region.hasAttribute('data-sp-wide')) switchLayout(false);
 
         region.removeAttribute('data-sp-fade');
         region.removeAttribute('data-sp-grow');
         region.removeAttribute('data-sp-snap');
         grow.current.phase = 'rest';
+    };
+
+    const endShrink = () => {
+        cancel('shrinkEnd');
+
+        if (grow.current.phase !== 'closing') return;
+
+        settle();
         later('release', release, reducedMotion() ? 0 : SPACER_EASE_MS);
     };
 
-    const startShrink = (now = false) => {
+    const startShrink = () => {
         const region = aside();
 
         if (!region || grow.current.phase !== 'open') return;
@@ -194,7 +202,7 @@ export const useGrow = (onPage: boolean) => {
         grow.current.phase = 'closing';
         region.setAttribute('data-sp-grow', 'closing');
 
-        if (now || reducedMotion() || region.hasAttribute('data-sp-snap')) {
+        if (reducedMotion() || region.hasAttribute('data-sp-snap')) {
             endShrink();
 
             return;
@@ -270,7 +278,15 @@ export const useGrow = (onPage: boolean) => {
     const onPageChange = useEffectEvent((shown: boolean) => {
         onPageRef.current = shown;
 
-        if (!shown) startShrink(true);
+        if (shown) return;
+
+        // The overview stands at rest, whatever stage a grow or a shrink had
+        // reached when the page left.
+        const moved = grow.current.phase !== 'rest';
+
+        settle();
+
+        if (moved) later('release', release, reducedMotion() ? 0 : SPACER_EASE_MS);
     });
 
     useEffect(() => {
@@ -279,6 +295,9 @@ export const useGrow = (onPage: boolean) => {
 
     const bind = useEffectEvent((box: HTMLDivElement) => {
         const region = aside();
+
+        settle();
+
         const onMove = (event: PointerEvent) => {
             if (event.pointerType === 'touch' || !canHover()) return;
 

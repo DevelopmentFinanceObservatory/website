@@ -55,7 +55,7 @@ const charted = input({
         ask('Aid to Kenya', 1),
         reply('Aid rose. It doubled.', { followups: ['And Ghana?'] }),
     ],
-    widgets: [{ turn: 1 }],
+    widgets: [{ id: 'c', turn: 1 }],
     canvasCards: 1,
 });
 
@@ -123,7 +123,7 @@ test('the folded row reads the reply first sentence and opens', () => {
 test('a reply that placed cards arrives folded, one that placed none arrives open', () => {
     const words = input({
         messages: [ask('Q1', 1), reply('Chart.'), ask('Q2', 2), reply('Only words.')],
-        widgets: [{ turn: 1 }],
+        widgets: [{ id: 'c', turn: 1 }],
         canvasCards: 1,
     });
 
@@ -179,18 +179,19 @@ test('a streaming reply opens at its first words and folds when its first card l
     assert.equal(dockView(streaming).row?.kind, 'status');
     assert.equal(dockView(streaming).held, false);
 
-    const landed = { ...streaming, widgets: [{ turn: 1 }], canvasCards: 1 };
+    const landed = { ...streaming, widgets: [{ id: 'c', turn: 1 }], canvasCards: 1 };
 
     assert.equal(dockView(landed).sheet, 'none');
     assert.equal(dockView({ ...landed, sheet: 'open', sheetTurn: 1 }).sheet, 'reply');
 });
 
-test('pills show only at rest or beside the folded row, never in focus, beside a sheet or behind the wall', () => {
+test('pills show at rest, beside the folded row or beside a card of their question, never in focus, beside a sheet or behind the wall', () => {
     const cases: [string, Partial<DockInput>, boolean][] = [
         ['folded reply', charted, true],
         ['focus mode', { ...charted, focus: true }, false],
         ['reply open', { ...charted, sheet: 'open', sheetTurn: 1 }, false],
-        ['card selected', { ...charted, editTarget: { id: 'c', title: 'T' } }, false],
+        ['its own card selected', { ...charted, editTarget: { id: 'c', title: 'T' } }, true],
+        ['another card selected', { ...charted, editTarget: { id: 'x', title: 'T' } }, false],
         ['clarifying question', { ...charted, clarify: true }, false],
         ['guest wall', { ...charted, walled: true }, false],
         ['no suggestions', { ...charted, messages: [ask('Q', 1), reply('Done.')] }, false],
@@ -281,7 +282,14 @@ test('a card change is silent: status while it runs, the earlier view after, its
         [{ kind: 'status', stepOf: null }, 'none', false, 'Constant 2023 US dollars', 1],
     );
 
-    const done = dockView({ ...running, thinking: false, widgets: [{ turn: 1 }, { turn: 2 }] });
+    const done = dockView({
+        ...running,
+        thinking: false,
+        widgets: [
+            { id: 'c', turn: 1 },
+            { id: 'd', turn: 2 },
+        ],
+    });
 
     assert.deepEqual(done, dockView(charted));
     assert.equal(done.questions.length, 1);
@@ -637,7 +645,10 @@ test('a second clarifying question lists the turn earlier clarifications with th
 test('the conversation sheet opens on an older question at that question, and at its foot on the newest', () => {
     const two = input({
         messages: [ask('Q1', 1), reply('One.'), ask('Q2', 2), reply('Two.')],
-        widgets: [{ turn: 1 }, { turn: 2 }],
+        widgets: [
+            { id: 'c', turn: 1 },
+            { id: 'd', turn: 2 },
+        ],
         canvasCards: 2,
     });
     const cases: [string, Partial<DockInput>, string, number | null][] = [
