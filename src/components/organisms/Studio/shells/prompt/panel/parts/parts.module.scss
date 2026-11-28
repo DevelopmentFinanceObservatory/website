@@ -44,7 +44,7 @@
     }
 
     :where(button, a, pre):focus-visible {
-        outline: 1px solid var(--color-charcoal);
+        outline: 2px solid var(--color-sage-dark);
         outline-offset: rem(2);
     }
 }

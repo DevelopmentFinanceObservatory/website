@@ -593,7 +593,7 @@ button.didTitle {
     }
 
     // More info stands rem(2) from the actions (.card column-gap).
-    .card [data-sp-key^="more:"] {
+    .card [data-sp-more] {
         --hit-room-x: #{rem(1)};
     }
 

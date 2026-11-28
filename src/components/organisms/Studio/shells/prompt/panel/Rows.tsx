@@ -24,12 +24,14 @@ import type { CardRow, ChangedLine, PlanLine, SourceRow, StageRow } from '@/lib/
 const copyCardImage = (node: HTMLElement): Promise<void> =>
     navigator.clipboard.write([new ClipboardItem({ 'image/png': cardImageBlob(node) })]);
 
-/** A card's row: glyph and title fly to the card, two actions, and the
- *  chevron that opens its page. */
+/** A card's row: glyph and title open the card's page, which brings the
+ *  card into view on the canvas, then two actions. The chevron is the same
+ *  press for a pointer, so the title is the row's one stop for it. */
 export const CardRowItem = ({ row, pointed = false }: { row: CardRow; pointed?: boolean }) => {
     const { canvas, panels } = useStudioModel();
-    const { show, fly } = usePanelNav();
+    const { show } = usePanelNav();
     const widget = canvas.widgets.find((each) => each.id === row.id);
+    const open = () => show({ kind: 'card', id: row.id }, `more:${row.id}`);
 
     return (
         <li className={styles.card} data-sp-out={row.id} data-pointed={pointed || undefined}>
@@ -37,10 +39,10 @@ export const CardRowItem = ({ row, pointed = false }: { row: CardRow; pointed?: 
                 type="button"
                 className={styles.cardMain}
                 title={row.title}
-                aria-label={`${row.title}, ${row.tag.toLowerCase()}. Show on the canvas`}
-                data-sp-fly={row.id}
-                data-sp-key={`fly:${row.id}`}
-                onClick={() => fly(row.id)}
+                aria-label={`About ${row.title}, ${row.tag.toLowerCase()}`}
+                data-sp-card={row.id}
+                data-sp-key={`more:${row.id}`}
+                onClick={open}
             >
                 <span className={styles.glyph} aria-hidden="true">
                     <Icon name={row.glyph} />
@@ -50,10 +52,10 @@ export const CardRowItem = ({ row, pointed = false }: { row: CardRow; pointed?: 
             <button
                 type="button"
                 className={styles.more}
-                aria-label={`About ${row.title}`}
-                data-sp-card={row.id}
-                data-sp-key={`more:${row.id}`}
-                onClick={() => show({ kind: 'card', id: row.id }, `more:${row.id}`)}
+                tabIndex={-1}
+                aria-hidden="true"
+                data-sp-more=""
+                onClick={open}
             >
                 <Chevron direction="right" />
             </button>
