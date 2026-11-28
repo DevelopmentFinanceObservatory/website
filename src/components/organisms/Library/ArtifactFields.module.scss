@@ -135,3 +135,60 @@ legend.label {
     font-family: var(--font-outfit);
     color: var(--color-red);
 }
+
+.rule {
+    @include font-size(12px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
+}
+
+// A field and the refusals under it.
+.group {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+    min-width: 0;
+}
+
+.input[aria-invalid="true"],
+.textarea[aria-invalid="true"] {
+    border-color: var(--color-red);
+}
+
+// A focus ring apart from the red border, so a focused invalid field differs
+// from an unfocused one.
+.input[aria-invalid="true"]:focus-visible,
+.textarea[aria-invalid="true"]:focus-visible {
+    outline: 2px solid var(--color-charcoal);
+    outline-offset: 2px;
+}
+
+.refused {
+    @include font-size(12px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+}
+
+.refusedList {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+
+    li + li {
+        margin-top: rem(4);
+    }
+}
+
+// Flagged sentences, in the stone of the labels beside the red refusals.
+.warned {
+    padding: 0;
+    margin: rem(4) 0 0;
+    color: var(--color-stone);
+    list-style: none;
+}
+
+.refusedFix {
+    margin-top: rem(4);
+}
