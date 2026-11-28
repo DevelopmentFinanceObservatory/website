@@ -1,0 +1,16 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.choices {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(4);
+}
+
+.empty {
+    @include font-size(12px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
+}
