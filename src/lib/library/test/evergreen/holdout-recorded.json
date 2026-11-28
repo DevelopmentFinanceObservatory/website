@@ -1,0 +1,3355 @@
+{
+    "model": "jev-1.14.0",
+    "artifacts": [
+        {
+            "id": "h01",
+            "requests": [
+                {
+                    "digest": "f7cf5cd352529cd76307c21a447e08e42c3c56f717a448af5f540be816c14d64",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "5903c06dab0c01f203a35fa4eea0a07773254600169bb94f0d1b636ab0f032b6",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.13
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "8a78adaee56906304e3489dfb76c83ef3c809253807858917dcf78c02202dc38",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.08
+                        }
+                    }
+                },
+                {
+                    "digest": "327bd8f17e47521cc056d39decedf0727457c780f2a08196e31452485c2779a7",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.06
+                        }
+                    }
+                },
+                {
+                    "digest": "5a54202720ac1c8d98a66481f05f33f909a9b8177c0ae3721f58625703078a04",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.11
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.16
+                        }
+                    }
+                },
+                {
+                    "digest": "448ff6594698ba3bf7adfe050dc11615a0e23573f8242660228318456dd1f1d2",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h02",
+            "requests": [
+                {
+                    "digest": "54c0ff1c7fa7a7cdab11a23a8c307203188d057fed2051905463180be973402c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.32
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.68
+                        }
+                    }
+                },
+                {
+                    "digest": "0574dfda85dabb888473d377104795d24238def098c86d5077c791fa18094d8d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.64
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.54
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.82
+                        }
+                    }
+                },
+                {
+                    "digest": "5a8d2dd6a5accf1c54d2d5a1f8de82f2441346f78ad4f2b046a2f41e5539cf13",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.34
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.11
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.31
+                        }
+                    }
+                },
+                {
+                    "digest": "5d38f23dce80ae7abdd0b675098a1ac17a1aa6416746569513ac0bf946589839",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.58
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h03",
+            "requests": [
+                {
+                    "digest": "36e7ae6001c1ff2d019ac53ab97eb3776a388fd2b44a556cb59b568a62b2da20",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.91
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.21
+                        }
+                    }
+                },
+                {
+                    "digest": "7b2909dd6b1aeecc575f5e930dab5af40457db7cc9890ff2605aa048581f6aba",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.34
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "3dd726c21ac84d9b0df644b8937089b4dbb7e6bb1e57f41432ee39655ddb4716",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "84d8f0534cd96a54daa92fb936e3098f75d1e254a99c1d4859bcabc2fd9f9422",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.24
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h04",
+            "requests": [
+                {
+                    "digest": "438965ce42d4199ed1d7858095c3e80c340ab1d132e15b7ddc64580b6c6d91d7",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.92
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.44
+                        }
+                    }
+                },
+                {
+                    "digest": "9d892d3effdaeba273ca4bcfe77530e5f6544e7c7a02406633db0c744e32cbcd",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.6
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.17
+                        }
+                    }
+                },
+                {
+                    "digest": "3788c958fc74ca510267083ab6a2ce412180a75e59c8a0afcf83da34387c2687",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.14
+                        }
+                    }
+                },
+                {
+                    "digest": "fe8f7df5c8214c70e9c4701b98324c3fe40b0512d4ff252a4e0e8cd6209d9e4b",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.11
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.41
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h05",
+            "requests": [
+                {
+                    "digest": "c1898ceb67d11986b8abea0bcf2b8dfe9bf53b13bbf275895133265433f520fe",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.36
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.53
+                        }
+                    }
+                },
+                {
+                    "digest": "563e9a4823066cadbef5056e9edce9c20dff34c3e130d3aaceb6a8fe43631516",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.15
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.18
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.68
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.32
+                        }
+                    }
+                },
+                {
+                    "digest": "0db30316e95456ac1a5f1eb5c1b272e9ecac5f55d11e06973141f639e1e3ab88",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "052e3dc4a190dde76b344c6a959749d6274067862a9418bf22668249da72e273",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.37
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.25
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h06",
+            "requests": [
+                {
+                    "digest": "84d72dd7277b8812c51ad5213594a3a3c7499e43b06fe00cc63ec27a8c68f992",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.47
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.23
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.67
+                        }
+                    }
+                },
+                {
+                    "digest": "24cfb532ab86b6b2c91386b92b3726aeb997fbcbb26159a55c5734c0b444bba3",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.39
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.4
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.54
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.82
+                        }
+                    }
+                },
+                {
+                    "digest": "a62e6ccce07f1d134f1b79b1bc75c961cc54265371798c0026915a3d4e86410f",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "38fe5ab5e8bc5c28c810e1418ca4b55632064a2a614a9477092d3bc6c22009d6",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.56
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h07",
+            "requests": [
+                {
+                    "digest": "ffde4a747bbc24d1c8f393821d5c22d9fd377d5cebcd0d7f08da3ee78b916363",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.14
+                        }
+                    }
+                },
+                {
+                    "digest": "8e895932c82e50c9ba2ace838fee02d4b56b685096e28963813e28967a4fc04c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "bee73f4891e18b77342c5eb7c44bd71c2e7959fe9150072cc6dc9e696e7b2606",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.28
+                        }
+                    }
+                },
+                {
+                    "digest": "c94dd54326eac7a1a28fd4eaa93e3414c35f4ce696bd9ec1c113f39a4c0b91df",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.86
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h08",
+            "requests": [
+                {
+                    "digest": "30d51b5a281b4d27e133899870061fb5b7b6717f56f04dcf2bf04b96868e3383",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.92
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                },
+                {
+                    "digest": "70f1fdde18977c85df56481eb064f238d473de5db952df8d8431b599072c836f",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "46d9abd39ea7246be06790ed6fcbf3394ec14e605a8d149589ddd4a5a60199dc",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "d397f86ea55f258b5c62eab659d7583222e2448f1fbb01a6b812902593388761",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h09",
+            "requests": [
+                {
+                    "digest": "5db8348125a7c8383d8cd42863fdc9f667a15e24e6dc1cbcb8279ed5afdb206b",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "45eba4a6083cef02b6b3f07cdd263746e94713b18c39f02e73ab05c38a04c3d3",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "3c3cd51e8332f9d4af6930eb30700f5abdb66a974dd980d5c51a914b30c8fc09",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "b2d87a478e4faf23ba975f7a296437f2d536c9b3ea4c2da156a0aa84722b7012",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h10",
+            "requests": [
+                {
+                    "digest": "900617839e397cf3d988cb4da79959f246314c6a60440b1419e367aacd709760",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.27
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "39c667a78f02300070e3a6646dc0d258a63b55d4770f791a3762e0cb2af706d5",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.21
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "bf0cef403747829a37ee3132a17b2ab918653af19110f5c9ecd84db86a717dda",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.27
+                        }
+                    }
+                },
+                {
+                    "digest": "c8bff33e00431f2b861b0e28736fa0e40d9353f52ee6e6fa2e871661058d404d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.91
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.89
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.93
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h11",
+            "requests": [
+                {
+                    "digest": "ec8ab088ae9d067b0c22e87f2bb2b759b016309caf64146900fd517df104179e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                },
+                {
+                    "digest": "178271eabc615083dd0a0acf32f503821137e2d3090fc5c0d08d597acf48eb12",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "991b740fb6830f28d2de48b083d262cb60088d2ec785d8ec55a338f659a742f9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.07
+                        }
+                    }
+                },
+                {
+                    "digest": "59c93e5ebabcaf3873d9a450fb396a14d46afeefc7dc05a18581af6befc1cdcd",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "1d62a61c4c39bfd8d337184e5364b01dd86c532a1b7aea0db0a5a5ed418c379e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "4dafe69ba481c81c4936a905c453926adf242d80cfca1f48d918f90504dcefd1",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h12",
+            "requests": [
+                {
+                    "digest": "4e6ed60a6062f1523c3edb79bc144151c2463890cd45ebaba411a2f8c91d4b8a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "568b7202c33120e8b9a9be8f5c5d2a8ef938f9738d582a942490566400a09ebc",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "f0cdf872e0d4f343cd7d5f9c09a4fac624ea35f8d383a8e07a7289d7c818663c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "28696ac59b82a1093714ce51f5f1eea48a73fed0620f65985d4b83f92f807b98",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.95
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h13",
+            "requests": [
+                {
+                    "digest": "68d338b8f9cd4a43fd8c4cc7ae951c899ba964b08dac2228b25b130b04b24a8c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "7c5c7c0252de13026badc6743b21806baf8e1bed8ddf4e63ed7bac061df91060",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.17
+                        }
+                    }
+                },
+                {
+                    "digest": "a26487cabbb6f69ecfe7be8876d19587eae23a32302a8a380296338ff5c2724a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.08
+                        }
+                    }
+                },
+                {
+                    "digest": "8edac42a450ae6949cb645e48f8298340e50784ef5c2fb98ca15b3a4f10fbd4a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.24
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.13
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.24
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h14",
+            "requests": [
+                {
+                    "digest": "50687e33450d248d8d5c60ee9ecd8f11d0d294d7a7cabf918ba2a1b0d5dc5f2f",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.23
+                        }
+                    }
+                },
+                {
+                    "digest": "cb92700abb3fd073abe9064c60c11ab49e7f3cb39565c530b879b98cd18dc28d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "20b44664537fb47d6585c19b0bdf0e95995f319318608b7f4a68724fa7b2f37e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.2
+                        }
+                    }
+                },
+                {
+                    "digest": "d34ae763b3895f1ca4edee60b6612558d9c406704e3c8be14da77cddc7f21717",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h15",
+            "requests": [
+                {
+                    "digest": "41905b3b3d02fd5facaba08e6b54f3b7199eb31b7f2f7591fe910f1bc73976a9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.19
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "6a6afbc189a4a49417cfc65132ee27f48ceff589d5b1d6c00f2f75fd2f0ff9d0",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.41
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.21
+                        }
+                    }
+                },
+                {
+                    "digest": "72c097e25aa0aae2bcc7211e0d3f3cdff3b9e36e7fd6c62ed594b7848d24d38c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.23
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.59
+                        }
+                    }
+                },
+                {
+                    "digest": "204b18523af23dc1118678d9b8e59cabddb4c2f5b92b670e5585f6d45d5e0c10",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.22
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h16",
+            "requests": [
+                {
+                    "digest": "cdf7fd7913cca8eba8dc1ea7f79c8e987d307a635e3d49438eb52b78498b222c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.86
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.37
+                        }
+                    }
+                },
+                {
+                    "digest": "f78c827f32bfb24dc3eaad598a665102cbe23166c4b8c20f4848111049a77c3c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.18
+                        }
+                    }
+                },
+                {
+                    "digest": "f66a083c6bf99d5cfa30ebd351a2ca5c677080b6c97236f4d319dc694bcd8a7e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "347795f1da1a0a01a2ede7ae644a3d74d7152928de8ca2da16ddd683311c9cf4",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h17",
+            "requests": [
+                {
+                    "digest": "2338790b957999836de014897a4f83fd3ee3b604f45979efe5afa4040262e6e0",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.08
+                        }
+                    }
+                },
+                {
+                    "digest": "a66a95bba4c88519161dca88b437053945a5cfaf19c56b4d42158c70b1664990",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.06
+                        }
+                    }
+                },
+                {
+                    "digest": "977c81eae65bee849b3d746a275416f63841058a752dda970968b62529fb2033",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "15b9bedb852e6a71a707a4c9e752fa91d67bbb62bfb4092c2466873f87cf5c10",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.18
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h18",
+            "requests": [
+                {
+                    "digest": "7be5a000903e06b1f48a57b9d5d0569aa1a18e5543bc35e48930ad8b5bd3f339",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "39071f492850136c5111fbf019f5cdedac27a7e56e210a91b6eab10b9634fbca",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.24
+                        }
+                    }
+                },
+                {
+                    "digest": "9c8b52d9be02fac85a86009ab0841098459099fdca08cf93319c56a0f5523f0c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "3ccdb841b948bcc9be6964741aab5cb0f6b23835cbeda00cbafc98e8d4cb614f",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.23
+                        }
+                    }
+                },
+                {
+                    "digest": "7b0486d1f12d21aa60d4327b34fe09655746ab6ba2b7319487daed75a43cc076",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.22
+                        }
+                    }
+                },
+                {
+                    "digest": "a172ee04c2a63cd3e0026de37d0e6b47e474f0dad1573e8c704918759c59041e",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.26
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h19",
+            "requests": [
+                {
+                    "digest": "46d7e86cf6544326344676836e148feb551b99cfd7d96e6e9b02268cb6431751",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.11
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.3
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.31
+                        }
+                    }
+                },
+                {
+                    "digest": "9da8bbe466488bbaf9de403f741c8d7142db45324aa3e8ae334a5ff823edf06a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.15
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.4
+                        }
+                    }
+                },
+                {
+                    "digest": "6c4bd30b3cd2a619da6025917374b9d77f00a345e4a24bb86d76f17b5aca937c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.17
+                        }
+                    }
+                },
+                {
+                    "digest": "3a5be596067e3e5a53866b9770f2e66011ec93c1a952618c065fbfc530977de4",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.97
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h20",
+            "requests": [
+                {
+                    "digest": "bbad32691a923617fed98ca71e4a7ef104a20f89ae4316847627e58991c4bf34",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.17
+                        }
+                    }
+                },
+                {
+                    "digest": "9bfb7882d3868b0984c21873e0756fb1aef77fa5bc713122c929a874948f88c2",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                },
+                {
+                    "digest": "be32a6c30dc3b9f4a95972397aca579d8df10628feee5b49bc99d032962060a9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "cd319e3db52107dc9e75cb8ba501dd0d42cc73ea3333a1de3d36aa83a31bd8ca",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h21",
+            "requests": [
+                {
+                    "digest": "87837dcf95fac70f4127cf06b311183a366bb058b15faa8bb5ed753f1d17aa43",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.14
+                        }
+                    }
+                },
+                {
+                    "digest": "3fe80789f4d5ed60d82d2100d4ed79f3656e384f09ff634ff2cb49abbbef2895",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "0d4294535d4c175ed573acf68a8df5bc9bf5d0d9e549f55c902852181522699d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.16
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.3
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.66
+                        }
+                    }
+                },
+                {
+                    "digest": "047bad03a47901df80e98b155f8a5ca9d0cca1d046eddc4fe0a8a69d6831f910",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.17
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.95
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h22",
+            "requests": [
+                {
+                    "digest": "159a213153a6dbab1861daac46d181d633825dee18bddcfb22af404b0fed9a9b",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.97
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.21
+                        }
+                    }
+                },
+                {
+                    "digest": "9e4f9d08883aa308e8c3fdc0c5df4a195e716f8214127a379a6668b2b9029888",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "c012d3a366b6a7e27de4d625f81e33459123640de8614ae067b70975b3e39ed7",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "bcb3b4dfae624a924a81607ea21b0262872d3ea0817a2906b5fa7572a69f54e3",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.14
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.12
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.18
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h23",
+            "requests": [
+                {
+                    "digest": "5308b196361c409f828fc7c0365549155a5e7e7a3db5aaecdca75edc3ea5501a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.17
+                        }
+                    }
+                },
+                {
+                    "digest": "0a09ed91b17960a06a3f76357edda5278512fe95043cf47c54b0f587eacfb8e5",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.14
+                        }
+                    }
+                },
+                {
+                    "digest": "0c89c43c32dd0a4d471c7cdd7987a78806465f3ea3dc362fee1aa8ef92a41ce1",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.39
+                        }
+                    }
+                },
+                {
+                    "digest": "1e1ba07eb5bb023e6cd3e8355e241335a4e9c8658962788103e0c45435dee692",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "a2c8f4a0b3a99b855ede2619a8e230037ee252dac4e4d2355128c7256f1f8745",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h24",
+            "requests": [
+                {
+                    "digest": "bd721608d70987201e3734c2d863e025e53a20aaca7b6c616176a686f4747247",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "2e2e2eb936d34d76191cd8b9e4ce1fde5c1ee9d400baf22af5b9c53fc157914c",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.22
+                        }
+                    }
+                },
+                {
+                    "digest": "14c558fafcbc9c870d1319c2451bcba1030dc8fa9cbcb6ec838f7542f473c20d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.1
+                        }
+                    }
+                },
+                {
+                    "digest": "47962a76bc9db45d3468f6825059cc48e4a21bcf7653afe9e4b307195dc76572",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.26
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.18
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.98
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.94
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h25",
+            "requests": [
+                {
+                    "digest": "16e23127fac7eef12228e6fb637203b0c7ee8176dd9a456728ec16c8883b89a9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.11
+                        }
+                    }
+                },
+                {
+                    "digest": "d335477e0f6cdc4e60fedad03b45b015c677dace73b107a5ba04e59e7398fb5a",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.18
+                        }
+                    }
+                },
+                {
+                    "digest": "a683a6ab78a33f296737c7b867db4668b97feff0304fdb0391bc231bf081c065",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.15
+                        }
+                    }
+                },
+                {
+                    "digest": "23e89f11345e7afa1b14b5d15185614adc8644d20538954101e1fdb05e5f4f92",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.08
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h26",
+            "requests": [
+                {
+                    "digest": "8b8a455f7044ad07a69968607e0eaac80f9ae4963bce5e4bdcebb64a8001919d",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.19
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.46
+                        }
+                    }
+                },
+                {
+                    "digest": "2ffdaf9db13ed4ec15bec7a55db5efc7be8c9ea8e72e5136cc718ac7d9d027e9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.11
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.08
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.28
+                        }
+                    }
+                },
+                {
+                    "digest": "31237330550c20b3ce6dd7bf12e3423a0b29f557871d668662b48a3bc8bea7bf",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.18
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.36
+                        }
+                    }
+                },
+                {
+                    "digest": "dd8fe658072ebc89fb6f8730f9a7ccf15c963b54499e387058e2ba28c136cecb",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.85
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.16
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.66
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.9
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h27",
+            "requests": [
+                {
+                    "digest": "e352470557ce60f4689a680882e4ec00aec4b9c3797b6584388889ea3256c3d9",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                },
+                {
+                    "digest": "bc32e8e8fa79d459fc70583af6bcb14b68a62f404ddaa1140cbf9e66d8c466ff",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "4ff8d71263f5308505d3f3c1790f594d5daac8d92537ce13dafe95eeb6501c2b",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.09
+                        }
+                    }
+                },
+                {
+                    "digest": "0c4a52728099d4a34e6484ce06f149c233c2a971475396f80a927522332e8801",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.13
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.25
+                        }
+                    }
+                },
+                {
+                    "digest": "40820dc28e539721504191b916e137d4ef07699d3443b67c2cf6e1b1e8616bc5",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.12
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h28",
+            "requests": [
+                {
+                    "digest": "e0025094fff8c14c74f0fc9c5754fb31d5a88c27f09ca9c055d2fd69d7158585",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.95
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.52
+                        }
+                    }
+                },
+                {
+                    "digest": "6f54f63d444e8de08603f4b27f1ad833b9ed1a5e6c3abdede3bfe3a3ee14241f",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.26
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.19
+                        }
+                    }
+                },
+                {
+                    "digest": "469e6844471118c294b09712b646d2a90eb43c979fa7f1ecfcf8febf0b5678ba",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.3
+                        }
+                    }
+                },
+                {
+                    "digest": "1b6276d14ab0d9fe10d316892bc6807fcf46ec48326c0b4d68634886d32f16c5",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.58
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.77
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h29",
+            "requests": [
+                {
+                    "digest": "61db4b87e5eeb79034a90b87beb9b5b324c0347ada4056218d169c74e8ff4c17",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.14
+                        }
+                    }
+                },
+                {
+                    "digest": "02c2e1f427c9266bfcf911df904b30b62c008065affb92f3dc3819946cab222f",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.13
+                        }
+                    }
+                },
+                {
+                    "digest": "ddb30b8f90fb6c1e36661734c7690129445c7e06d277d8e4162a7313c84c8685",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.01
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.07
+                        }
+                    }
+                },
+                {
+                    "digest": "80db3eb12522f2810aa99c5030636682bcf1440bdb46dced78fb15af6d46ea76",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.09
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.02
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.32
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "h30",
+            "requests": [
+                {
+                    "digest": "467d9c2ff751254725b46dac4724044631b3584d37a049bb60ae98b47fa34087",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.07
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.32
+                        }
+                    }
+                },
+                {
+                    "digest": "dc6e01d7e76bfd88d1febd82e5e396fbe99aad9e8eaf49aebff73d05aced7acb",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.06
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.05
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.16
+                        }
+                    }
+                },
+                {
+                    "digest": "72b2adc48677ce3c091ad51e8ea8aadb0d33e90b161cf31bf7f170ae3b066884",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.03
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.04
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.93
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.25
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.52
+                        }
+                    }
+                },
+                {
+                    "digest": "518ef4d78cbacb8f8a974e6148ca1d0c6753e15331886d9d03498166ec1a6618",
+                    "answers": {
+                        "value": {
+                            "type": "noul",
+                            "noul": 0.96
+                        },
+                        "ranking": {
+                            "type": "noul",
+                            "noul": 0.1
+                        },
+                        "change": {
+                            "type": "noul",
+                            "noul": 0.99
+                        },
+                        "period": {
+                            "type": "noul",
+                            "noul": 0.95
+                        },
+                        "stale": {
+                            "type": "noul",
+                            "noul": 0.96
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -20,6 +20,8 @@ import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
 import { libraryEnabled } from './enabled';
+import { evergreenCheck } from './evergreen';
+import { changedText } from './evergreenRule';
 import { type LibraryView, libraryViewOf } from './switch';
 import {
     publishedFacts,
@@ -31,6 +33,7 @@ import {
 import {
     addTopic,
     artifactShare,
+    artifactText,
     isArtifactWithdrawn,
     insertArtifact,
     listTopics,
@@ -226,6 +229,13 @@ const WITHDRAWAL_RETRY = {
  * included. Without one, the slug is made from the title, with a number
  * after it when that is taken.
  *
+ * Before the share is made, the text is held to the evergreen rule
+ * (./evergreen.ts). A 400 `not_evergreen` names each sentence that states
+ * what the data shows now, a 503 `evergreen_check_unavailable` says the
+ * check could not run, and a 502 `evergreen_check_refused` says TypeSafe
+ * refused the request. A 201 or 200 after the check carries `warnings`, the
+ * sentences that passed with a doubt (`EvergreenNotice`).
+ *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
  * the Library keeps in the artifact's row. The artifact's kind, mode,
@@ -296,6 +306,14 @@ export const publish = async (request: Request): Promise<Response> => {
         );
     }
 
+    const checked = await evergreenCheck(text, { publishKey });
+
+    if ('refusal' in checked) {
+        return checked.refusal;
+    }
+
+    const { warnings } = checked;
+
     const share = await buildStudioShare(request.headers, shareRequest);
 
     if (share instanceof Response) {
@@ -355,7 +373,10 @@ export const publish = async (request: Request): Promise<Response> => {
 
         return made === 'slug_taken'
             ? slugTaken()
-            : Response.json({ slug: made.slug, title: made.title }, { headers: NO_STORE });
+            : Response.json(
+                  { slug: made.slug, title: made.title, warnings },
+                  { headers: NO_STORE },
+              );
     }
 
     // Recorded after the response, as `POST /api/share` records its own, so
@@ -373,12 +394,17 @@ export const publish = async (request: Request): Promise<Response> => {
     refresh(made.slug);
 
     return Response.json(
-        { slug: made.slug, title: made.title },
+        { slug: made.slug, title: made.title, warnings },
         { status: 201, headers: NO_STORE },
     );
 };
 
-/** PATCH /api/library/artifacts/<id> (ArtifactText) → { slug } */
+/**
+ * PATCH /api/library/artifacts/<id> (ArtifactText) → { slug, warnings }. The
+ * text fields the edit changes are held to the evergreen rule first, with
+ * the publish's 400, 502 and 503 answers. `warnings` lists the sentences
+ * that passed with a doubt (./evergreen.ts, `EvergreenNotice`).
+ */
 export const edit = async (request: Request, id: string): Promise<Response> => {
     const { refusal, admin } = await gate(request, true);
 
@@ -390,6 +416,18 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
 
     if (!read.ok) {
         return requestInvalidProblem(read.detail, read.pointer || undefined, NO_STORE);
+    }
+
+    const stored = await artifactText(id);
+
+    if (!stored) {
+        return notFound();
+    }
+
+    const checked = await evergreenCheck(changedText(stored, read.value), { artifact: id });
+
+    if ('refusal' in checked) {
+        return checked.refusal;
     }
 
     const changed = await updateArtifact(id, read.value);
@@ -405,7 +443,7 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
     log('edit', admin.email, changed.slug);
     refresh(changed.slug);
 
-    return Response.json(changed, { headers: NO_STORE });
+    return Response.json({ ...changed, warnings: checked.warnings }, { headers: NO_STORE });
 };
 
 /**

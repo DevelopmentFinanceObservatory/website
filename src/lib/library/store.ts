@@ -403,6 +403,22 @@ export const updateArtifact = (
         }),
     );
 
+/** The text fields of artifact `id` while it is on show, else null. The
+ *  edit route checks the fields an edit changes against them. */
+export const artifactText = async (id: string): Promise<Omit<ArtifactText, 'topics'> | null> => {
+    const [row] = await db
+        .select({
+            title: libraryArtifact.title,
+            description: libraryArtifact.description,
+            contentTitle: libraryArtifact.contentTitle,
+            content: libraryArtifact.content,
+        })
+        .from(libraryArtifact)
+        .where(and(eq(libraryArtifact.id, id), live));
+
+    return row ?? null;
+};
+
 /** An artifact's slug and the share the Library made for it, with that
  *  share's owner token. */
 export type ArtifactShare = { slug: string; shareId: string; shareWriteToken: string };

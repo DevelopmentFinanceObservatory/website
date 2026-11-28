@@ -1,0 +1,1230 @@
+[
+    {
+        "id": "a01",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 53,
+                "text": "ODA as a share of gross national income, by DAC donor",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 93,
+                "text": "Each bar is one donor's official development assistance divided by its gross national income.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "How to read it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 44,
+                "text": "The dotted line marks the UN target of 0.7%.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 47,
+                "end": 89,
+                "text": "Hover over a bar to see the donor's value.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 92,
+                "end": 137,
+                "text": "Select a year to compare donors in that year.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a02",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 46,
+                "text": "Norway gives the most aid as a share of income",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 60,
+                "text": "ODA as a share of gross national income for each DAC member.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "About the data",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 39,
+                "text": "Values come from the OECD's DAC1 table.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 40,
+                "end": 96,
+                "text": "Norway, Luxembourg and Sweden are above the 0.7% target.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a03",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 29,
+                "text": "Debt service by creditor type",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 110,
+                "text": "Principal and interest paid on external public debt, split into bilateral, multilateral and private creditors.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 17,
+                "text": "Reading the chart",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 24,
+                "text": "Each column is one year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 25,
+                "end": 67,
+                "text": "The segments add up to total debt service.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 68,
+                "end": 102,
+                "text": "Amounts are in current US dollars.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a04",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 36,
+                "text": "Debt service of low-income countries",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 46,
+                "text": "Debt service has more than doubled since 2012.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 47,
+                "end": 110,
+                "text": "Payments to private creditors make up the fastest-growing part.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a05",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 40,
+                "text": "Climate finance from developed countries",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 84,
+                "text": "Climate finance provided and mobilised, as reported to the OECD, by type of finance.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 11,
+                "text": "Key figures",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 56,
+                "text": "Total climate finance reached USD 115.9 billion in 2022.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 59,
+                "end": 81,
+                "text": "Public bilateral: 41.0",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 84,
+                "end": 102,
+                "text": "Multilateral: 50.6",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 105,
+                "end": 128,
+                "text": "Private mobilised: 21.9",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a06",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Climate finance by purpose",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 70,
+                "text": "Mitigation, adaptation and cross-cutting finance, as donors report it.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Method",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 59,
+                "text": "Donors mark each project as mitigation, adaptation or both.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 60,
+                "end": 147,
+                "text": "A project that serves both appears as cross-cutting, so the three parts do not overlap.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a07",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 17,
+                "text": "Total ODA in 2023",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 90,
+                "text": "The key number is total net ODA from DAC members in the year shown, in current US dollars.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 65,
+                "text": "Net ODA from DAC members, in current US dollars:\n$223,300,000,000",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a08",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 9,
+                "text": "Total ODA",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 103,
+                "text": "This key number follows the latest year the OECD reports, so it changes when new figures are published.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "Definition",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 100,
+                "text": "Net ODA counts grants in full and loans at their grant equivalent, so repayments are not subtracted.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a09",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 31,
+                "text": "Top recipients of bilateral ODA",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 77,
+                "text": "The table lists recipients by the bilateral ODA they received, largest first.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Notes",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 54,
+                "text": "Ukraine heads the list, ahead of Türkiye and Ethiopia.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 55,
+                "end": 116,
+                "text": "Regional and unspecified amounts are left out of the ranking.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a10",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Bilateral ODA by recipient",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 80,
+                "text": "A table of bilateral ODA by recipient country, which you can sort by any column.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Columns",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 47,
+                "text": "Recipient: the country that received the aid.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 50,
+                "end": 104,
+                "text": "Gross disbursements: what donors paid out in the year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 107,
+                "end": 157,
+                "text": "Share: the recipient's share of all bilateral ODA.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a11",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 35,
+                "text": "Snapshot: ODA to sub-Saharan Africa",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 63,
+                "text": "This snapshot keeps the data as it stood when it was published.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 13,
+                "text": "What it shows",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 77,
+                "text": "In this snapshot, sub-Saharan Africa received about a third of bilateral ODA.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 78,
+                "end": 110,
+                "text": "The share has fallen since 2010.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a12",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 35,
+                "text": "ODA to sub-Saharan Africa over time",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 78,
+                "text": "A line for each year's share of bilateral ODA that went to sub-Saharan Africa.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 17,
+                "text": "Reading the chart",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 49,
+                "text": "The line follows the latest data from the source.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 50,
+                "end": 119,
+                "text": "A dashed segment marks preliminary figures, which the source revises.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a13",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 45,
+                "text": "The UK has cut aid to 0.5% of national income",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 65,
+                "text": "UK ODA as a share of gross national income, with the 0.7% target.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 58,
+                "text": "The target line is the UN's 0.7% of gross national income.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a14",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 36,
+                "text": "UK ODA as a share of national income",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 76,
+                "text": "The United Kingdom's ODA divided by its gross national income, year by year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Context",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 46,
+                "text": "The UK wrote the 0.7% target into law in 2015.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 47,
+                "end": 131,
+                "text": "The International Development Act sets out when the government may fall short of it.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a15",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 30,
+                "text": "Interest paid on external debt",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 39,
+                "text": "Interest payments are at a record high.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 40,
+                "end": 93,
+                "text": "This chart shows interest on long-term external debt.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 4,
+                "text": "Data",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 65,
+                "text": "Figures come from the World Bank's International Debt Statistics.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a16",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 47,
+                "text": "Interest paid on external debt, by income group",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 85,
+                "text": "Interest on long-term external debt for low-income and lower-middle-income countries.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 4,
+                "text": "Data",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 140,
+                "text": "The World Bank's International Debt Statistics records each loan a country reports, so the totals cover public and publicly guaranteed debt.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a17",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 10,
+                "text": "Health ODA",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 35,
+                "text": "ODA to the health sector, by donor.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "Highlights",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 35,
+                "text": "The United States gives the most.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 38,
+                "end": 66,
+                "text": "Health aid rose 12% in 2021.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 69,
+                "end": 106,
+                "text": "Amounts are in constant 2022 dollars.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a18",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 19,
+                "text": "Health ODA by donor",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 64,
+                "text": "ODA to the health sector, by donor, in constant 2022 US dollars.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "How to read it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 24,
+                "text": "Each bar is one donor.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 27,
+                "end": 81,
+                "text": "Select a sector above the chart to switch from health.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 84,
+                "end": 160,
+                "text": "Constant dollars remove the effect of inflation, so years compare by volume.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a19",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Countries in debt distress",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 80,
+                "text": "Countries the IMF and World Bank rate as in debt distress or at high risk of it.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Status",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 57,
+                "text": "As of 2024, 34 countries are in distress or at high risk.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 58,
+                "end": 141,
+                "text": "Ratings come from the joint debt sustainability framework for low-income countries.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a20",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 21,
+                "text": "Debt distress ratings",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 81,
+                "text": "The IMF and World Bank rating of each low-income country's risk of debt distress.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Ratings",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 56,
+                "text": "Low: the country can meet its debts under most shocks.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 59,
+                "end": 112,
+                "text": "Moderate: it can meet them unless a large shock hits.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 115,
+                "end": 159,
+                "text": "High: it is likely to struggle to meet them.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 162,
+                "end": 225,
+                "text": "In distress: it already cannot meet them without restructuring.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a21",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 25,
+                "text": "Private finance mobilised",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 78,
+                "text": "Private money that official finance brings into projects, as donors report it.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 9,
+                "text": "Live data",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 88,
+                "text": "This chart follows the source, so its values change when the OECD publishes new figures.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 89,
+                "end": 151,
+                "text": "Mobilised private finance remains below USD 20 billion a year.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a22",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 39,
+                "text": "Private finance mobilised by instrument",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 94,
+                "text": "Private finance mobilised by guarantees, syndicated loans, credit lines and direct investment.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Method",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 85,
+                "text": "The OECD counts private finance as mobilised when an official intervention causes it.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 86,
+                "end": 184,
+                "text": "Each instrument has its own counting rule, so totals are not comparable with flows of other kinds.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a23",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 16,
+                "text": "Humanitarian aid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 26,
+                "text": "Humanitarian ODA by donor.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 64,
+                "text": "Humanitarian aid accounts for one in every seven dollars of ODA.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 65,
+                "end": 116,
+                "text": "Germany and the United States give over half of it.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a24",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Humanitarian aid, by donor",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 61,
+                "text": "Humanitarian ODA from each DAC member, in current US dollars.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Scope",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 83,
+                "text": "Humanitarian aid covers emergency response, reconstruction and disaster prevention.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 84,
+                "end": 147,
+                "text": "It does not include development projects in the same countries.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a25",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 15,
+                "text": "The 0.7% target",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 76,
+                "text": "Which donors meet the UN target for ODA as a share of gross national income.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 12,
+                "text": "Who meets it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 40,
+                "text": "Only five donors met the target in 2023:",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 43,
+                "end": 49,
+                "text": "Norway",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 52,
+                "end": 62,
+                "text": "Luxembourg",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 65,
+                "end": 71,
+                "text": "Sweden",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 74,
+                "end": 81,
+                "text": "Germany",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 84,
+                "end": 91,
+                "text": "Denmark",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a26",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 32,
+                "text": "The 0.7% target and who meets it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 76,
+                "text": "Each donor's ODA as a share of gross national income, against the UN target.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "Reading it",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 61,
+                "text": "A donor above the line meets the target in the year selected.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 62,
+                "end": 102,
+                "text": "Move the year slider to see other years.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a27",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Net flows on debt to Africa",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 57,
+                "text": "Net flows are new loans disbursed minus principal repaid.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Trend",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 44,
+                "text": "Net flows to Africa turned negative in 2023.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 45,
+                "end": 107,
+                "text": "A negative value means a country repaid more than it borrowed.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a28",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Net flows on external debt",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 56,
+                "text": "New disbursements minus principal repayments, by region.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 17,
+                "text": "Reading the chart",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 59,
+                "text": "Bars above zero mean a region borrowed more than it repaid.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 60,
+                "end": 96,
+                "text": "Bars below zero mean it repaid more.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a29",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Education ODA, 2015 to 2023",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 46,
+                "text": "ODA to education by year, in constant dollars.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Summary",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 71,
+                "text": "Education aid has stagnated since 2019, at about USD 16 billion a year.",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 72,
+                "end": 111,
+                "text": "Basic education gets less than a third.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "a30",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 22,
+                "text": "Education ODA by level",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 65,
+                "text": "ODA to education, split into basic, secondary and post-secondary.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 11,
+                "text": "Definitions",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 61,
+                "text": "Basic education covers primary schooling and early childhood.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 62,
+                "end": 171,
+                "text": "Post-secondary includes scholarships and imputed student costs, which some donors count in their own country.",
+                "label": "evergreen"
+            }
+        ]
+    }
+]
