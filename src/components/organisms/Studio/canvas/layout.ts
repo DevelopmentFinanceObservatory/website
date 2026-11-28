@@ -62,14 +62,17 @@ const TABLE_ROWS_MIN = tableRows({
 // `width - 122` to live on — the padding, the "Built with" mark that never
 // shrinks, and the icon column — and at 260px that was 138px a line, which
 // truncated most names. At 400px it is 278px: the longest name we carry
-// ("World Bank International Debt Statistics (IDS)") fits on one line, the
-// title stops wrapping too (see .cardStat .cardTitle), and the column comes
-// to ~162px, which is what nine cells (180) hold — the leftover gathers
+// ("World Bank International Debt Statistics (IDS)") fits on one line, a
+// title of up to about 38 characters (rem(280) at 14px / 500, see
+// .cardStat .cardTitle) stays on one line too, and the column comes to
+// ~162px with a two-line caption (16.8 for the title line, 31.2 for the
+// caption), which is what nine cells (180) hold. A two-line title adds a
+// line and brings it to ~179px, which still fits. The leftover gathers
 // above the source line, which is pinned to the bottom, so every cell of
 // slack shows up there as a hole.
 //
 // The grip starts there rather than lower: a card whose title and source
-// both wrap runs to ~190px and can be dragged taller.
+// both wrap runs to ~195px and can be dragged taller.
 export const SPAN_DEFAULT: Record<Widget['kind'], { w: number; h: number }> = {
     key_number: { w: 20, h: 9 },
     chart: { w: 22, h: 14 },
