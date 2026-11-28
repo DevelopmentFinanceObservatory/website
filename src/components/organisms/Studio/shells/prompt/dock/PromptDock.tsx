@@ -25,6 +25,7 @@ import {
 import { type ChipActions, ReplySheet, ThreadSheet } from './DockSheets';
 import PlanSheet from './PlanSheet';
 import styles from './PromptDock.module.scss';
+import { useSheetTween } from './useSheetTween';
 import { useStudioModel } from '../../../hooks/studioContext';
 import { useStreamedWords } from '../../../hooks/useStreamedText';
 import GuestWall from '../../../GuestWall';
@@ -216,6 +217,17 @@ const PromptDock = () => {
     // --- Heights for the canvas foot ---------------------------------------
 
     const restBox = useRef(0);
+    const upperRef = useRef<HTMLDivElement>(null);
+    const measureRef = useRef(() => {});
+    const tween = useSheetTween({
+        sheet: view.sheet,
+        frameRef,
+        upperRef,
+        rootRef,
+        focus: state.focus,
+        onSettle: () => measureRef.current(),
+    });
+    const tweenHeld = tween.held;
 
     useEffect(() => {
         const frame = frameRef.current;
@@ -227,6 +239,10 @@ const PromptDock = () => {
         // Read from the drawn frame, since the observer can fire before
         // this render's effects run.
         const measure = () => {
+            if (tweenHeld()) {
+                return;
+            }
+
             const box = boxRef.current;
             const pill = pillRef.current;
             const root = rootRef.current;
@@ -252,6 +268,8 @@ const PromptDock = () => {
                 frame.style.setProperty('--dock-fold-y', `${pill.offsetHeight / boxHeight}`);
             }
         };
+        measureRef.current = measure;
+
         const observer = new ResizeObserver(measure);
 
         observer.observe(frame);
@@ -265,7 +283,7 @@ const PromptDock = () => {
         }
 
         return () => observer.disconnect();
-    }, [rootRef]);
+    }, [rootRef, tweenHeld]);
 
     // --- Folding when the reader turns to the canvas ------------------------
 
@@ -665,6 +683,7 @@ const PromptDock = () => {
             data-sheet={view.sheet}
             data-focus={state.focus || undefined}
         >
+            {tween.snapshot}
             {view.pills && question && (
                 <DockPills
                     followups={question.followups}
@@ -728,7 +747,7 @@ const PromptDock = () => {
                     }
                 }}
             >
-                <div className={styles.upper}>
+                <div ref={upperRef} className={styles.upper}>
                     {head && <QuestionHead text={head.text} about={head.about} />}
                     {sheet}
                     {row}

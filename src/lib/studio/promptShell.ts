@@ -154,6 +154,26 @@ export const heldCard = (state: ShellState): string | null => {
     return top?.kind === 'card' ? top.id : null;
 };
 
+/**
+ * How long, in ms, the dock's region above the field takes to change height
+ * from `from` to `to` px when its sheet changes: 2 ms per px growing, between
+ * 150 and 270 ms, and 1.4 ms per px shrinking, between 140 and 190 ms. A
+ * change of 24 px or less takes no tween, and gives 0.
+ */
+export const sheetTweenDuration = (from: number, to: number): number => {
+    const change = to - from;
+
+    if (Math.abs(change) <= 24) {
+        return 0;
+    }
+
+    return Math.round(
+        change > 0
+            ? Math.min(270, Math.max(150, 2 * change))
+            : Math.min(190, Math.max(140, -1.4 * change)),
+    );
+};
+
 export type Box = { left: number; top: number; width: number; height: number };
 
 /**

@@ -310,6 +310,17 @@
     .dock:not([data-sheet="none"]) &:not(:empty) {
         border-bottom: 1px solid var(--color-net-light);
     }
+
+    // While its height tweens to a new sheet's (useSheetTween.ts), the
+    // region's children keep their final heights against its foot, and the
+    // region clips them. Clip makes no scroll container, so focus moving in
+    // scrolls nothing.
+    &[data-tween] {
+        position: relative;
+        justify-content: flex-end;
+        max-height: none;
+        overflow: clip;
+    }
 }
 
 .wall {

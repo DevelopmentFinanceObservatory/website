@@ -16,6 +16,7 @@ import {
     type ShellAction,
     type ShellState,
     shellReducer,
+    sheetTweenDuration,
 } from '../promptShell.ts';
 
 const run = (actions: ShellAction[], from: ShellState = initialShell): ShellState =>
@@ -212,4 +213,20 @@ test('a fly to a point near an edge of the sheet stops at that edge', () => {
     assert.deepEqual(flyTarget({ cx: 200, cy: 100, view, max }), { left: 0, top: 0 });
     assert.deepEqual(flyTarget({ cx: 2900, cy: 3500, view, max }), { left: 2000, top: 3000 });
     assert.deepEqual(flyTarget({ cx: 1500, cy: 1300, view, max }), { left: 1000, top: 1000 });
+});
+
+test('a sheet change tweens the dock by its size, within the bounds of its direction', () => {
+    for (const [from, to, ms] of [
+        // 24 px or less: no tween.
+        [110, 134, 0],
+        [134, 110, 0],
+        [110, 136, 150],
+        [110, 210, 200],
+        [110, 370, 270],
+        [370, 110, 190],
+        [230, 100, 182],
+        [140, 110, 140],
+    ] as const) {
+        assert.equal(sheetTweenDuration(from, to), ms, `${from} to ${to}`);
+    }
 });
