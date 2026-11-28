@@ -4,6 +4,7 @@ import DataSearch from '@/components/organisms/DataSearch/DataSearch';
 import { getSession } from '@/lib/auth/session';
 import { dataPageMetadata } from '@/lib/crawl';
 import { loadSearchCatalogue } from '@/lib/search/catalogueLoader';
+import { studioRoutingEnabled } from '@/lib/search/studioRoutingSetting';
 import { visitorIsGuest } from '@/lib/search/studioRoute';
 
 // Rendered per request, so `next build` does not depend on the API
@@ -31,7 +32,11 @@ const DataPage = async () => {
 
     return (
         <main>
-            <DataSearch catalogue={catalogue} guest={guest} />
+            <DataSearch
+                catalogue={catalogue}
+                guest={guest}
+                studioRouting={studioRoutingEnabled()}
+            />
         </main>
     );
 };

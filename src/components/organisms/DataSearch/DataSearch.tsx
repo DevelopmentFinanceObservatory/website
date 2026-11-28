@@ -93,6 +93,7 @@ import {
     studioHref,
     type HandoffTrigger,
 } from '@/lib/search/studioHandoff';
+import { optsIntoStudioRouting } from '@/lib/search/studioRoutingSetting';
 import { clickLeavesPage, guestPromptsSeen, routeMove } from '@/lib/search/studioRoute';
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
@@ -170,8 +171,12 @@ const routingOffHere = (query: string): boolean =>
 const DataSearch = ({
     catalogue,
     guest,
+    studioRouting,
 }: {
     catalogue: SearchCatalogue | null;
+    // The server's STUDIO_ROUTING_ENABLED setting. Off, no run sends
+    // `studio_routing`, so the search API never routes.
+    studioRouting: boolean;
     // True when signed out. Studio answers a guest only while a free prompt
     // is left.
     guest: boolean;
@@ -285,11 +290,14 @@ const DataSearch = ({
                 showStartingPoint(text, source);
             } else {
                 run({ kind: 'raw_text', query: text }, text, source, {
-                    studioRouting: !routingOffHere(text),
+                    studioRouting: optsIntoStudioRouting({
+                        enabled: studioRouting,
+                        routingOff: routingOffHere(text),
+                    }),
                 });
             }
         },
-        [run, showStartingPoint],
+        [run, showStartingPoint, studioRouting],
     );
 
     // Latest `runQuery`/`replay`/`openShare`/`reset`, read (not watched) by the
