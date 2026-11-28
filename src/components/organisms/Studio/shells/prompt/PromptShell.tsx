@@ -442,14 +442,20 @@ const PromptStage = () => {
     const planOf = links.planOf;
     const { titleOf } = canvas;
     const editId = editTarget?.id ?? null;
+    // A selected card shows its page in a panel that shows, and clearing
+    // the selection returns to the page under it. A closed panel stays
+    // closed: over a narrow window it would cover the card just pressed.
     const selectCard = useCallback(
         (id: string | null) => {
             if (id === editId) return;
 
             setEditTarget(id ? { id, title: titleOf(id) } : null);
+            dispatch({ type: 'card.select', id, was: editId, shown: panelOpen });
             report('studio.card_select', { selected: id !== null });
+
+            if (id && panelOpen) report('studio.panel_page', { view: 'card', from: 'card' });
         },
-        [editId, setEditTarget, titleOf, report],
+        [editId, setEditTarget, titleOf, dispatch, panelOpen, report],
     );
     const pointCard = useCallback(
         (id: string | null) => dispatch({ type: 'point', card: id }),

@@ -44,6 +44,9 @@ export type ShellAction =
     | { type: 'panel.replace'; page: PanelPage }
     | { type: 'panel.back' }
     | { type: 'panel.home' }
+    /** The canvas selection moved from the card `was` to the card `id`
+     *  (null: none). `shown` is whether the panel shows now. */
+    | { type: 'card.select'; id: string | null; was: string | null; shown: boolean }
     | { type: 'focus.set'; on: boolean }
     | { type: 'point'; card: string | null }
     | { type: 'plan.light'; turn: number | null }
@@ -111,6 +114,27 @@ export const shellReducer = (state: ShellState, action: ShellAction): ShellState
             return { ...state, trail: state.trail.slice(0, -1) };
         case 'panel.home':
             return state.trail.length === 0 ? state : { ...state, trail: [] };
+        case 'card.select': {
+            // A panel that is closed stays closed, with its trail as it was.
+            if (!action.shown) return state;
+
+            const top = state.trail.at(-1);
+
+            // The selection cleared: the page of the card it held gives way.
+            if (action.id === null) {
+                return top?.kind === 'card' && top.id === action.was
+                    ? { ...state, trail: state.trail.slice(0, -1) }
+                    : state;
+            }
+
+            if (top?.kind === 'card' && top.id === action.id) return state;
+
+            // A card's page takes the place of another card's, and joins the
+            // trail over any other page.
+            const under = top?.kind === 'card' ? state.trail.slice(0, -1) : state.trail;
+
+            return { ...state, trail: [...under, { kind: 'card', id: action.id }] };
+        }
         case 'focus.set':
             return state.focus === action.on ? state : { ...state, focus: action.on };
         case 'point':

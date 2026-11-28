@@ -105,6 +105,42 @@ test('a page pushes once, opens the panel, leaves focus, and back and home walk 
     assert.deepEqual(run([{ type: 'panel.replace', page: card }]).trail, []);
 });
 
+test('a card selected on the canvas shows its page in a panel that shows', () => {
+    const a = { kind: 'card', id: 'a' } as const;
+    const b = { kind: 'card', id: 'b' } as const;
+    const plan = { kind: 'plan', turn: 2 } as const;
+    const select = (id: string | null, was: string | null, shown = true): ShellAction => ({
+        type: 'card.select',
+        id,
+        was,
+        shown,
+    });
+
+    for (const [name, actions, trail] of [
+        ['from the overview', [select('a', null)], [a]],
+        ['a closed panel keeps its trail', [select('a', null, false)], []],
+        ['another card takes the page', [select('a', null), select('b', 'a')], [b]],
+        ['over another page', [{ type: 'panel.show', page: plan }, select('a', null)], [plan, a]],
+        ['cleared', [select('a', null), select(null, 'a')], []],
+        // The reader moved on to another card's page; clearing leaves it.
+        [
+            'cleared under another card',
+            [select('a', null), select('b', 'a'), select(null, 'a')],
+            [b],
+        ],
+        [
+            'cleared under another page',
+            [select('a', null), { type: 'panel.show', page: plan }, select(null, 'a')],
+            [a, plan],
+        ],
+    ] as [string, ShellAction[], unknown[]][]) {
+        assert.deepEqual(run(actions).trail, trail, name);
+    }
+
+    // Selecting leaves the reader's choice of panel and focus mode alone.
+    assert.equal(run([select('a', null)]).panelChoice, initialShell.panelChoice);
+});
+
 test('a sheet choice keeps the turn it was made for until another turn replaces it', () => {
     const chosen = run([{ type: 'sheet.set', sheet: 'open', turn: 3 }]);
 
