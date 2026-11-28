@@ -145,6 +145,7 @@ import {
     withTurnApprovals,
 } from '@/lib/studio/conversationState';
 import { plainTextFromNote } from '@/lib/studio/note';
+import { placeLists } from '@/lib/studio/placeLists';
 import {
     approveReply,
     planFromFrame,
@@ -304,10 +305,6 @@ export type TurnWidget = Widget & {
     madeIn?: number;
     placeholderId?: string;
 } & CardHistory;
-
-// A places read callers share: the read, how many callers wait on it, and
-// the control that stops it once none does.
-type PlaceRead = { read: Promise<PlaceOptionsRead>; callers: number; stop: AbortController };
 
 // How long a card page waits for the places a role can change to before it
 // says the list could not be loaded.
@@ -682,11 +679,21 @@ export const useChat = (
     // The conversation id doubles as the snapshot's sessionId, so saves and
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
-    // The places each card's roles can change to, read once per card and role
-    // for the life of the page (placeOptions), keyed `<card>\n<role>`. A read
-    // that failed is dropped, so the next asks again, and a replacement drops
-    // the lists of the card it replaced.
-    const placeListsRef = useRef(new Map<string, PlaceRead>());
+    // The places each card's roles can change to (placeOptions), read once
+    // per conversation, card revision and role. Past PLACES_READ_MS a read
+    // answers as no answer. A revision or a replacement drops the card's
+    // lists and stops their reads, and leaving the conversation drops every
+    // card's.
+    const [lists] = useState(() =>
+        placeLists(({ conversation, componentId, role }, signal) =>
+            runPlaceOptions(
+                conversation,
+                componentId,
+                role,
+                AbortSignal.any([signal, AbortSignal.timeout(PLACES_READ_MS)]),
+            ),
+        ),
+    );
     const abortRef = useRef<AbortController | null>(null);
     // Stops the running stream's turn (set while a request runs).
     const haltRef = useRef<(() => void) | null>(null);
@@ -817,6 +824,15 @@ export const useChat = (
     useEffect(() => {
         onCardReplacedRef.current = onCardReplaced;
     }, [onCardReplaced]);
+    // A card another took the place of, on the stream or from a read: its
+    // places lists go, and the page's owner hears of it.
+    const cardReplaced = useCallback(
+        (from: string, to: string) => {
+            lists.drop(from);
+            onCardReplacedRef.current?.(from, to);
+        },
+        [lists],
+    );
     // component_id → the revision we're currently holding. A card-scoped turn
     // has to address both (the contract rejects a stale revision). Frames
     // keep it current; a reopened conversation starts from its saved cards.
@@ -1021,6 +1037,7 @@ export const useChat = (
 
             if (turn === undefined) {
                 sessionRef.current = null;
+                lists.clear();
                 recapRef.current = sessionRecap(messagesRef.current, refused);
             }
 
@@ -1052,7 +1069,7 @@ export const useChat = (
             setState((prev) => sessionLeftChat(prev, turn));
             drainRef.current();
         },
-        [setOwed, setPendingCards],
+        [lists, setOwed, setPendingCards],
     );
     // A new question the page sent once and the harness never admitted
     // (refused, never reached, stopped, or taken out of the queue) is offered
@@ -1600,17 +1617,14 @@ export const useChat = (
                         });
 
                         if (from) {
-                            for (const key of placeListsRef.current.keys()) {
-                                if (key.startsWith(`${from}\n`)) placeListsRef.current.delete(key);
-                            }
-
-                            onCardReplacedRef.current?.(from, widget.id);
+                            cardReplaced(from, widget.id);
                         }
 
                         break;
                     }
                     case 'component.revised': {
                         revisionsRef.current.set(frame.component_id, frame.revision);
+                        lists.drop(frame.component_id);
 
                         const revise = (revised: typeof frame) =>
                             patchWidget(revised.component_id, (widget) => ({
@@ -2155,10 +2169,12 @@ export const useChat = (
         [
             applyManifest,
             askNewQuestion,
+            cardReplaced,
             commitReply,
             dropQueuedChanges,
             flushReply,
             leaveSession,
+            lists,
             offerPlan,
             patchWidget,
             replyStore,
@@ -3030,109 +3046,43 @@ export const useChat = (
         [applyEdit],
     );
 
-    // The places role `role` of card `componentId` can change to, read through
-    // the harness once per card and role (placeListsRef). Without a
+    // The places role `role` of card `componentId` can change to, for the
+    // conversation and the card revision the page holds (lists). Without a
     // conversation there is nothing to read. Callers share a read, and each
     // passes `signal` to leave it: its own promise then rejects, and the read
-    // stops once every caller has left. Past PLACES_READ_MS the read answers
-    // as no answer.
+    // stops once every caller has left.
     const placeOptions = useCallback(
         (componentId: string, role: string, signal?: AbortSignal): Promise<PlaceOptionsRead> => {
-            const key = `${componentId}\n${role}`;
-            const lists = placeListsRef.current;
             const conversation = sessionRef.current;
-            let held = lists.get(key);
 
-            if (!held) {
-                if (!conversation) {
-                    return Promise.resolve({
-                        kind: 'failed',
-                        status: null,
-                        code: null,
-                        detail: null,
-                        retry: false,
-                    });
-                }
-
-                const stop = new AbortController();
-                const forget = () => {
-                    if (lists.get(key) === entry) lists.delete(key);
-                };
-                const entry: PlaceRead = {
-                    stop,
-                    callers: 0,
-                    read: runPlaceOptions(
-                        conversation,
-                        componentId,
-                        role,
-                        AbortSignal.any([stop.signal, AbortSignal.timeout(PLACES_READ_MS)]),
-                    ).then(
-                        (answer) => {
-                            if (answer.kind !== 'options') forget();
-
-                            return answer;
-                        },
-                        (error: unknown) => {
-                            forget();
-
-                            throw error;
-                        },
-                    ),
-                };
-
-                lists.set(key, entry);
-                held = entry;
+            if (!conversation) {
+                return Promise.resolve({
+                    kind: 'failed',
+                    status: null,
+                    code: null,
+                    detail: null,
+                    retry: false,
+                });
             }
 
-            if (!signal) return held.read;
-
-            const shared = held;
-
-            shared.callers += 1;
-
-            return new Promise((resolve, reject) => {
-                let left = false;
-                // Each caller counts once, whether the read ends or it
-                // leaves first; returns whether this call ended it.
-                const settle = (): boolean => {
-                    if (left) return false;
-
-                    left = true;
-                    signal.removeEventListener('abort', leave);
-                    shared.callers -= 1;
-
-                    return true;
-                };
-                const leave = () => {
-                    if (!settle()) return;
-
-                    if (shared.callers === 0) {
-                        shared.stop.abort();
-
-                        if (lists.get(key) === shared) lists.delete(key);
-                    }
-
-                    reject(signal.reason);
-                };
-
-                if (signal.aborted) {
-                    leave();
-
-                    return;
-                }
-
-                signal.addEventListener('abort', leave, { once: true });
-                shared.read.then(
-                    (answer) => {
-                        if (settle()) resolve(answer);
-                    },
-                    (error: unknown) => {
-                        if (settle()) reject(error);
-                    },
-                );
-            });
+            return lists.read(
+                {
+                    conversation,
+                    componentId,
+                    // The latest revision the page has heard of, as the
+                    // places route answers for the card the harness holds.
+                    // It can be ahead of the card on screen while a
+                    // revision's payload is read, and a picker open on that
+                    // card closes once the card redraws. A card the page
+                    // holds no revision for reads as revision 0, which no
+                    // card has.
+                    revision: revisionsRef.current.get(componentId) ?? 0,
+                    role,
+                },
+                signal,
+            );
         },
-        [],
+        [lists],
     );
 
     const admitHandedBackRef = useRef(admitHandedBack);
@@ -3362,12 +3312,12 @@ export const useChat = (
                     // as on the stream.
                     if (from && widgetFromRead(block, read, undefined, card)) {
                         legacyRef.current?.drop(from);
-                        onCardReplacedRef.current?.(from, id);
+                        cardReplaced(from, id);
                     }
                 },
             });
         },
-        [setWidgets],
+        [cardReplaced, setWidgets],
     );
 
     // Bring the cards drawn from a read before their turn closed to what
@@ -3424,10 +3374,10 @@ export const useChat = (
 
                 replacedRef.current = { ...replacedRef.current, ...replacementLinks(chain) };
                 legacyRef.current?.drop(from);
-                onCardReplacedRef.current?.(from, to);
+                cardReplaced(from, to);
             }
         },
-        [setWidgets],
+        [cardReplaced, setWidgets],
     );
 
     // Merge a state read into the conversation. The harness's closed turns
@@ -4008,6 +3958,7 @@ export const useChat = (
         queueRef.current = [];
         sessionRef.current = null;
         revisionsRef.current.clear();
+        lists.clear();
         canvasRef.current = null;
         setCanvas(null);
         legacyRef.current = null;
@@ -4046,7 +3997,7 @@ export const useChat = (
             clarify: null,
             plan: null,
         });
-    }, [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards, takeComing]);
+    }, [dropReply, leaveStream, lists, setOwed, setOwedHeld, setPendingCards, takeComing]);
 
     const hydrate = useCallback(
         (saved: ChatSnapshot) => {
@@ -4069,6 +4020,7 @@ export const useChat = (
             turnPlanRef.current = null;
             sessionRef.current = saved.sessionId;
             revisionsRef.current = restoreCardRevisions(saved);
+            lists.clear();
             canvasRef.current = restoreCanvas(saved);
             setCanvas(canvasRef.current ?? saved.canvas ?? null);
             startLegacy(saved, canvasRef.current);
@@ -4109,7 +4061,16 @@ export const useChat = (
             // removals wait for reattach's read before any goes again.
             setOwedHeld(saved.sessionId !== null);
         },
-        [dropReply, leaveStream, setOwed, setOwedHeld, setPendingCards, startLegacy, takeComing],
+        [
+            dropReply,
+            leaveStream,
+            lists,
+            setOwed,
+            setOwedHeld,
+            setPendingCards,
+            startLegacy,
+            takeComing,
+        ],
     );
 
     // The transcript as last drawn, `messages`, with the answer text that

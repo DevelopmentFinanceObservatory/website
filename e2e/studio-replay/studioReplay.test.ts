@@ -94,6 +94,62 @@ for (const [variant, options] of Object.entries(VARIANTS)) {
     });
 }
 
+// The top bar's session title, renamed with each of the keys that end the
+// edit. Tab leaves focus where it went, and Enter and Escape return it to
+// Rename.
+test('a session rename ends on Tab, Enter and Escape with focus where the reader sent it', async () => {
+    const scenario = loadScenario('words');
+    const session = await openStudio(browser, site.url, scenario, 'prompt');
+    const { page } = session;
+    const rename = page.getByRole('button', { name: 'Rename', exact: true });
+    const field = page.getByRole('textbox', { name: 'Session title' });
+    // The focused element's name a frame after the edit ends, when Rename
+    // takes focus back, and the title the top bar shows.
+    const after = async (key: string, text: string) => {
+        await rename.click();
+        await field.fill(text);
+        await field.press(key);
+        await field.waitFor({ state: 'detached', timeout: SHOW_MS });
+        await page.evaluate(() => new Promise(requestAnimationFrame));
+        await page.evaluate(() => new Promise(requestAnimationFrame));
+
+        return {
+            focused: await page.evaluate(() => document.activeElement?.getAttribute('aria-label')),
+            title: await rename.evaluate((button) => button.previousElementSibling?.textContent),
+        };
+    };
+
+    try {
+        await explained(session, async () => {
+            await play(session, async () => {});
+            await rename.waitFor({ timeout: SHOW_MS });
+
+            assert.deepEqual(await after('Tab', 'Kept by Tab'), {
+                focused: 'Focus canvas',
+                title: 'Kept by Tab',
+            });
+            assert.deepEqual(await after('Enter', 'Kept by Enter'), {
+                focused: 'Rename',
+                title: 'Kept by Enter',
+            });
+            assert.deepEqual(await after('Escape', 'Dropped'), {
+                focused: 'Rename',
+                title: 'Kept by Enter',
+            });
+            assert.deepEqual(await after('Enter', ' '), {
+                focused: 'Rename',
+                title: 'Kept by Enter',
+            });
+            assert.deepEqual(
+                { errors: session.errors, faults: session.player.faults },
+                { errors: [], faults: [] },
+            );
+        });
+    } finally {
+        await session.close();
+    }
+});
+
 for (const regression of [...REGRESSIONS, ...PLACEHOLDERS]) {
     test(`${regression.name} on ${regression.layout}`, { timeout: 60_000 }, async (t) => {
         if (regression.signedIn && reader instanceof Error) {

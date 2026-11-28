@@ -31,11 +31,11 @@ const ANNOUNCE_AFTER_MS = 500;
  * The places picker's choices: a filter field over a scrolling list of the
  * places role `role` of the card can show, as checkboxes, or as radios when
  * the role takes one place. The places the card shows come first. The list
- * loads when the picker opens (`chat.placeOptions`, read once per card and
- * role); until it does, the picker lists the places the card shows and a
- * quiet loading row. At least one place stays chosen, and at most `max`:
- * once that many are ticked, the others wait and a line says how many the
- * card can show.
+ * loads when the picker opens (`chat.placeOptions`, read once per card
+ * revision and role); until it does, the picker lists the places the card
+ * shows and a quiet loading row. At least one place stays chosen, and at
+ * most `max`: once that many are ticked, the others wait and a line says how
+ * many the card can show.
  */
 const PlacesPick = ({
     componentId,
