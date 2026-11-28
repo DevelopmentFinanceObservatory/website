@@ -170,11 +170,13 @@ type StudioUser = { id: string; email: string };
  *
  * A turn sent with `x-dfo-hold-turn: 1` (HOLD_TURN_HEADER) is a hold turn:
  * once the harness admits it, the proxy records its receipt before it
- * returns the stream (recordHoldTurn). A cancel that names the turn takes
- * the receipt before it is forwarded, if the caller is the turn's prompter
- * and the refund deadline has not passed (claimHoldTurn), and gives the
- * prompt back once the harness answers it ok (refundHoldTurn). Every cancel
+ * returns the stream (recordHoldTurn). A cancel that names the turn, and
+ * that the harness acted on, takes the receipt if the caller is the turn's
+ * prompter and the refund deadline had not passed when the cancel arrived
+ * (claimHoldTurn), and gives the prompt back (refundHoldTurn). Every cancel
  * answer the proxy forwards carries `x-dfo-prompt-refunded` (true or false).
+ * The receipt outlives Studio's adoption of the turn, so Studio's own Stop
+ * inside the window refunds too, and Studio reads the header.
  *
  * `getUser` reads the signed-in user, `ownersOf` and `claimOwner` the
  * account a harness conversation belongs to (src/lib/chat/conversationStore),
@@ -316,35 +318,58 @@ export const studioProxy =
         );
     };
 
-// A cancel forwarded through `forward`, answered with PROMPT_REFUNDED_HEADER:
-// the receipt of the hold turn it names is taken before the cancel goes, so
-// the harness's answer time does not count against the deadline, and the
-// prompt comes back only once the harness answers the cancel ok.
+// Whether the harness's cancel answer says it acted on the Stop: an ok
+// answer other than the 200 `turn_moved` (CancelSkipped) it gives a Stop
+// whose turn is no longer the conversation's latest, which stops nothing.
+const cancelActed = async (response: Response): Promise<boolean> => {
+    if (!response.ok) {
+        return false;
+    }
+
+    if (response.status !== 200) {
+        return true;
+    }
+
+    const body: unknown = await response
+        .clone()
+        .json()
+        .catch(() => null);
+
+    return !(
+        body !== null &&
+        typeof body === 'object' &&
+        'code' in body &&
+        body.code === 'turn_moved'
+    );
+};
+
+// A cancel forwarded through `forward`, answered with PROMPT_REFUNDED_HEADER.
+// The receipt of the hold turn it names is taken only once the harness says
+// it acted on the cancel, so a cancel that failed or stopped nothing leaves
+// it for a retry. The claim measures the deadline from the cancel's arrival,
+// so the harness's answer time does not count against it.
 const cancelWithRefund = async (
     counters: CounterDb,
     prompter: () => Promise<Prompter>,
     call: { conversationId: string | null; body: string | null },
     forwardCancel: () => Promise<Response>,
 ): Promise<Response> => {
+    const arrived = performance.now();
     const turn = cancelledTurn(call.conversationId, call.body);
-    const paid = turn
-        ? await prompter()
-              .then((caller) => claimHoldTurn(counters, caller, turn))
-              .catch((error) => {
-                  console.error('studio: a hold turn receipt was not read', error);
-
-                  return null;
-              })
-        : null;
     const response = await forwardCancel();
-    const refunded =
-        paid !== null && response.ok
-            ? await refundHoldTurn(counters, paid).catch((error) => {
-                  console.error('studio: a hold turn prompt was not given back', error);
 
-                  return false;
-              })
-            : false;
+    if (turn === null || !(await cancelActed(response))) {
+        return withRefunded(response, false);
+    }
+
+    const refunded = await prompter()
+        .then((caller) => claimHoldTurn(counters, caller, turn, performance.now() - arrived))
+        .then((paid) => (paid === null ? false : refundHoldTurn(counters, paid)))
+        .catch((error) => {
+            console.error('studio: a hold turn prompt was not given back', error);
+
+            return false;
+        });
 
     return withRefunded(response, refunded);
 };

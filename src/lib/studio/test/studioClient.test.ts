@@ -27,11 +27,18 @@ import {
     type StopAction,
     whileBusy,
     type StreamRefusal,
+    handoffExtras,
     type TurnExtras,
 } from '../studioClient.ts';
 import { cardUnitChange } from '../cardUnit.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { ApplyChoiceSuggestion, ComponentCreated, StudioFrame, TurnRequest } from '../wire.ts';
+import type {
+    ApplyChoiceSuggestion,
+    ComponentCreated,
+    Seed,
+    StudioFrame,
+    TurnRequest,
+} from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -1015,6 +1022,17 @@ test('takeHeldTurn: a refusal heard before adoption reaches the adopting onRefus
     assert.deepEqual(frames, []);
 });
 
+// Studio's arrival and Get Data's held turn both send these members.
+test('handoffExtras carries the seeds and the prompt source a handover has, and nothing it lacks', () => {
+    const seeds = [{ spec: { kind: 'stand-in' } }] as unknown as Seed[];
+
+    assert.deepEqual(handoffExtras(seeds, 'search_example'), {
+        seed_spec: seeds,
+        prompt_source: 'search_example',
+    });
+    assert.deepEqual(handoffExtras(null, undefined), {});
+});
+
 test('startHeldTurn posts the body runTurn posts for the same members, marked as a hold turn', async (t) => {
     const { fetch } = heldHarness(t);
     const extras: TurnExtras = { prompt_source: 'search_example', surface: 'studio' };
@@ -1083,10 +1101,19 @@ const heldPosts = (fetch: ReturnType<typeof heldHarness>['fetch']) => {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('startHeldTurn: a turn the move has not reached admittedLimitMs after admission cancels itself', async (t) => {
-    const harness = heldHarness(t);
-    const late = startHeldTurn({ message: 'Aid to Ghana', admittedLimitMs: 20 });
-    const moving = startHeldTurn({ message: 'Aid to Ghana', admittedLimitMs: 20 });
+test('startHeldTurn: a turn the move has not reached admittedLimitMs after admission cancels itself, and says the prompt stays spent', async (t) => {
+    const harness = heldHarness(t, { refunded: 'false' });
+    const heard: boolean[] = [];
+    const late = startHeldTurn({
+        message: 'Aid to Ghana',
+        admittedLimitMs: 20,
+        onCancelled: (refunded) => heard.push(refunded),
+    });
+    const moving = startHeldTurn({
+        message: 'Aid to Ghana',
+        admittedLimitMs: 20,
+        onCancelled: (refunded) => heard.push(refunded),
+    });
 
     moving.moved();
     await wait(80);
@@ -1094,6 +1121,7 @@ test('startHeldTurn: a turn the move has not reached admittedLimitMs after admis
     const { turns, cancels } = heldPosts(harness.fetch);
 
     assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: false }]);
+    assert.deepEqual(heard, [false]);
     assert.equal(takeHeldTurn(late.token), null);
     assert.notEqual(takeHeldTurn(moving.token), null);
 });
@@ -1115,7 +1143,9 @@ test('startHeldTurn: a moved turn Studio has not taken in adoptLimitMs cancels i
     assert.equal(takeHeldTurn(untaken.token), null);
 });
 
-test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keepalive', async (t) => {
+// The registry listens on the first window it sees, so one test covers
+// every pagehide case.
+test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keepalive, and a cancel waiting on the turn index goes with keepalive too', async (t) => {
     const harness = heldHarness(t);
     const page = new EventTarget();
 
@@ -1124,14 +1154,26 @@ test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keep
 
     const untaken = startHeldTurn({ message: 'Aid to Ghana' });
     const taken = startHeldTurn({ message: 'Aid to Ghana' });
+    const waiting = startHeldTurn({ message: 'Aid to Ghana' });
 
-    await harness.settle();
     assert.notEqual(takeHeldTurn(taken.token), null);
+
+    // Cancelled before the harness names the turn, then the page goes.
+    const cancelled = waiting.cancel();
+
     page.dispatchEvent(new Event('pagehide'));
+    await cancelled;
     await harness.settle();
 
     const { turns, cancels } = heldPosts(harness.fetch);
 
-    assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: true }]);
+    assert.deepEqual(
+        cancels.toSorted((a, b) => turns.indexOf(a.conversation) - turns.indexOf(b.conversation)),
+        [
+            { conversation: turns[0], keepalive: true },
+            { conversation: turns[2], keepalive: true },
+        ],
+    );
     assert.equal(takeHeldTurn(untaken.token), null);
+    assert.equal(takeHeldTurn(waiting.token), null);
 });

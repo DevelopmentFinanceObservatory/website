@@ -60,7 +60,7 @@ import {
     logRefusedDescriptions,
 } from '@/lib/studio/infoPanel';
 import {
-    GUEST_PROMPTS_KEY,
+    addGuestPrompts,
     guestOutOfPrompts,
     guestPromptsUsed,
     promptEvent,
@@ -120,8 +120,8 @@ export type StudioProps = {
 // guest past it, from a cleared browser too, gets its refusal as the reply.
 const guestListeners = new Set<() => void>();
 const readGuestUsed = () => guestPromptsUsed(localStorage);
-const writeGuestUsed = (used: number) => {
-    localStorage.setItem(GUEST_PROMPTS_KEY, String(used));
+const addGuestUsed = (delta: number) => {
+    addGuestPrompts(localStorage, delta);
     guestListeners.forEach((listener) => listener());
 };
 // True once the page renders on the client: false on the server and for the
@@ -258,7 +258,7 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
         refundedRef.current = refundedCount;
 
         if (guest && spent !== refunded) {
-            writeGuestUsed(Math.max(0, readGuestUsed() + spent - refunded));
+            addGuestUsed(spent - refunded);
         }
     }, [guest, sentCount, refundedCount]);
 

@@ -103,10 +103,14 @@ import {
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
-import { HANDOFF_HOLD_PARAM } from '@/lib/studio/examples';
-import { guestOutOfPrompts } from '@/lib/studio/promptAllowance';
+import { handoffPromptSource } from '@/lib/studio/examples';
+import {
+    addGuestPrompts,
+    GUEST_PROMPTS_KEY,
+    guestOutOfPrompts,
+} from '@/lib/studio/promptAllowance';
 import { writeSeeds } from '@/lib/studio/seedStore';
-import { type HeldTurnStart, startHeldTurn, type TurnExtras } from '@/lib/studio/studioClient';
+import { handoffExtras, type HeldTurnStart, startHeldTurn } from '@/lib/studio/studioClient';
 import { uuid } from '@/lib/uuid';
 
 /** The early, pre-response heading's own tokens, read-only (see
@@ -165,6 +169,14 @@ const subscribeStorage = (listener: () => void) => {
     window.addEventListener('storage', listener);
 
     return () => window.removeEventListener('storage', listener);
+};
+
+// A prompt the proxy spent on a held turn and did not give back, which no
+// Studio transcript counts: added to the guest count, with a `storage`
+// event so this tab's readers (subscribeStorage) see it too.
+const countGuestPrompt = () => {
+    addGuestPrompts(window.localStorage, 1);
+    window.dispatchEvent(new StorageEvent('storage', { key: GUEST_PROMPTS_KEY }));
 };
 
 // What the loading view's live region says as the automatic move's hold
@@ -366,8 +378,13 @@ const DataSearch = ({
     // same question as data. Only that search shows it. The out-of-prompts
     // card's data action keeps none, since its Studio card would lead a
     // guest with no free prompt left to Studio's refusal. Every other
-    // search, Start New and an opened share or link drop it.
-    const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
+    // search, Start New and an opened share or link drop it. `trigger` is
+    // how the reader stayed.
+    const [stayed, setStayed] = useState<{
+        query: string;
+        route: RunRoute;
+        trigger: RouteStayTrigger;
+    } | null>(null);
     const leaveShare = useCallback(() => {
         openedShareRef.current = null;
         setOpenedShare(null);
@@ -477,22 +494,32 @@ const DataSearch = ({
             const { searchId } = ids;
             const traceId = routed?.traceId ?? ids.traceId;
             const fromExample = handoffFromExample({ fromExample: searchIsExample(), edited });
-            const studio = studioHref(question, token, {
+            const href = studioHref(question, token, {
                 via: handoffVia({ trigger, fromExample }),
                 traceId,
                 fromExample,
+                holdToken,
             });
-            const href = holdToken
-                ? `${studio}&${new URLSearchParams({ [HANDOFF_HOLD_PARAM]: holdToken })}`
-                : studio;
-            const extras: TurnExtras = {
-                ...(token && { seed_spec: seeds }),
-                ...(fromExample && { prompt_source: 'search_example' }),
-            };
+            // The members Studio's arrival reads from `href` and the seeds
+            // stored under `token`.
+            const extras = handoffExtras(
+                token ? seeds : null,
+                handoffPromptSource(new URL(href, window.location.origin).searchParams),
+            );
 
             return {
                 href,
-                held: { message: question.trim(), extras },
+                held: {
+                    message: question.trim(),
+                    extras,
+                    // A cancel the proxy did not refund leaves the prompt
+                    // spent, which a guest's count shows.
+                    onCancelled: (refunded: boolean) => {
+                        if (guest && !refunded) {
+                            countGuestPrompt();
+                        }
+                    },
+                },
                 go: () => {
                     track(
                         'search.studio_handoff',
@@ -523,6 +550,7 @@ const DataSearch = ({
             answerReason,
             searchIds,
             searchIsExample,
+            guest,
         ],
     );
     const openStudio = useCallback(
@@ -584,7 +612,9 @@ const DataSearch = ({
     // page unmounting. The registry cancels it too when the move comes
     // late (HOLD_ADMITTED_LIMIT_MS), when Studio does not take it, and when
     // the page goes. Studio's prompt() records the prompt and counts it
-    // once it adopts the turn, so this page does neither.
+    // once it adopts the turn. A cancel the proxy does not refund leaves the
+    // prompt spent, and this page adds it to a guest's count (the held
+    // turn's `onCancelled`).
     const movedSearchRef = useRef<string | null>(null);
     // The hold's handlers for the callout, set while the move's effect runs.
     const moveHoldRef = useRef<{ start: () => void; go: () => void; stay: () => void } | null>(
@@ -593,8 +623,8 @@ const DataSearch = ({
     // The turn the hold started, until the move hands it over or the hold
     // ends without it.
     const heldRef = useRef<HeldTurnStart | null>(null);
-    const cancelHeld = () => {
-        void heldRef.current?.cancel();
+    const cancelHeld = (options?: { keepalive?: boolean }) => {
+        void heldRef.current?.cancel(options);
         heldRef.current = null;
     };
     // The token of each search's held turn, fixed for the search so every
@@ -640,7 +670,7 @@ const DataSearch = ({
         track('search.route_stay', { traceId, trigger });
 
         if (route && trigger !== 'out_of_prompts') {
-            setStayed({ query, route: { ...route, traceId } });
+            setStayed({ query, route: { ...route, traceId }, trigger });
         }
 
         // Drops the move's `via=move_back` too, so a reload of the data
@@ -673,7 +703,7 @@ const DataSearch = ({
         clearTimeout(holdEndRef.current);
 
         return () => {
-            holdEndRef.current = setTimeout(cancelHeld, 0);
+            holdEndRef.current = setTimeout(() => cancelHeld(), 0);
         };
     }, [moveArmed]);
     useEffect(() => {
@@ -738,7 +768,9 @@ const DataSearch = ({
                 )
             ) {
                 movedSearchRef.current = searchId;
-                cancelHeld();
+                // The link's navigation may unload the page before the
+                // cancel answers.
+                cancelHeld({ keepalive: true });
             }
         };
 
@@ -1387,7 +1419,11 @@ const DataSearch = ({
                                 <p className={styles.eyebrow}>Your Query</p>
                                 <h1 className={styles.query}>{query}</h1>
                                 {stayedRoute && studioOffered && (
-                                    <StudioOffer onStudio={studioClick} inPlace />
+                                    <StudioOffer
+                                        onStudio={studioClick}
+                                        inPlace
+                                        focusOnMount={stayed?.trigger === 'button'}
+                                    />
                                 )}
                                 <SearchAnswer
                                     answer={answer}
@@ -1493,7 +1529,13 @@ const DataSearch = ({
                                     />
                                 ) : (
                                     stayedRoute &&
-                                    studioOffered && <StudioOffer onStudio={studioClick} inPlace />
+                                    studioOffered && (
+                                        <StudioOffer
+                                            onStudio={studioClick}
+                                            inPlace
+                                            focusOnMount={stayed?.trigger === 'button'}
+                                        />
+                                    )
                                 )}
 
                                 {move === 'auto' ? null : !response ? (

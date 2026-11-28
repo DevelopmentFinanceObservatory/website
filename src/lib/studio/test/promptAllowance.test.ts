@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    addGuestPrompts,
     GUEST_PROMPTS,
     GUEST_PROMPTS_KEY,
     guestPromptsUsed,
@@ -74,4 +75,21 @@ test('guestPromptsUsed reads the count Studio stores, and 0 when there is none',
     assert.equal(guestPromptsUsed(storage('3')), 3);
     assert.equal(guestPromptsUsed(storage(null)), 0);
     assert.equal(guestPromptsUsed(storage('garbled')), 0);
+});
+
+// Studio counts its transcript's prompts through it, and Get Data a held
+// turn's prompt the proxy did not give back.
+test('addGuestPrompts adds to the stored count and never takes it below 0', () => {
+    const stored = new Map<string, string>();
+    const storage = {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => void stored.set(key, value),
+    };
+
+    addGuestPrompts(storage, 1);
+    assert.equal(guestPromptsUsed(storage), 1);
+    addGuestPrompts(storage, 2);
+    assert.equal(guestPromptsUsed(storage), 3);
+    addGuestPrompts(storage, -5);
+    assert.equal(guestPromptsUsed(storage), 0);
 });

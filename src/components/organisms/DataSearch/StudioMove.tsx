@@ -39,7 +39,8 @@ const subscribeVisibility = (listener: () => void) => {
  *  instead). `onStart` runs once, when the fill first plays, and
  *  `onElapsed` once it ends.
  *  The pointer over the callout, focus inside it or a hidden tab pauses it
- *  in place, and it resumes with the time it had left. */
+ *  in place, and it resumes with the time it had left. Once it has ended,
+ *  nothing pauses or replays it. */
 const StudioMove = ({
     armed,
     onStart,
@@ -60,7 +61,9 @@ const StudioMove = ({
         () => false,
     );
     const reducedMotion = usePrefersReducedMotion();
-    const held = pointerIn || focusIn;
+    // Set once the clock ends, which leaves the line full.
+    const [elapsed, setElapsed] = useState(false);
+    const held = (pointerIn || focusIn) && !elapsed;
     const fill = useRef<HTMLDivElement>(null);
     const clock = useRef<Animation | null>(null);
     // onStart runs once per mount, on the fill's first frame of play, so a
@@ -109,7 +112,10 @@ const StudioMove = ({
         }
 
         animation.finished.then(
-            () => elapse(),
+            () => {
+                setElapsed(true);
+                elapse();
+            },
             // cancel() rejects `finished`: the clock stopped mid-hold.
             () => {},
         );
@@ -123,7 +129,7 @@ const StudioMove = ({
     useEffect(() => {
         const animation = clock.current;
 
-        if (!animation) {
+        if (!animation || elapsed) {
             return;
         }
 
@@ -134,7 +140,7 @@ const StudioMove = ({
             animation.play();
             startOnPlay(animation);
         }
-    }, [held, hidden]);
+    }, [held, hidden, elapsed]);
 
     return (
         <div

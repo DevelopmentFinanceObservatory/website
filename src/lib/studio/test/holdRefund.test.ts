@@ -21,10 +21,12 @@ import { applyMigrations } from '../../../../db/apply-migrations.ts';
 import { buildCounterPool } from '../../../../db/connection.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
 
-// The stand-in harness: each turn gets the next index, and each request's
+// The stand-in harness: each turn gets the next index, each cancel gets
+// `cancelAnswer` (204, a Stop acted on, by default), and each request's
 // headers are kept so the test can read what crossed the proxy.
 const seen: { route: string; headers: IncomingHttpHeaders }[] = [];
-let cancelStatus = 200;
+const STOPPED = { status: 204, body: '' };
+let cancelAnswer = STOPPED;
 let nextTurnIndex = 0;
 const harness = createServer((req, res) => {
     const route = req.url?.split('?')[0]?.split('/').at(-1) ?? '';
@@ -42,8 +44,8 @@ const harness = createServer((req, res) => {
             return;
         }
 
-        res.writeHead(cancelStatus, { 'content-type': 'application/json' });
-        res.end('{}');
+        res.writeHead(cancelAnswer.status, { 'content-type': 'application/json' });
+        res.end(cancelAnswer.body);
     });
 });
 
@@ -192,18 +194,35 @@ test('hold turns: a cancel inside the window gives the prompt back', async (t) =
         assert.equal(await spent(owner.email), 0);
     });
 
-    await t.test('a cancel the harness does not take refunds nothing', async (st) => {
-        st.after(() => {
-            cancelStatus = 200;
-        });
-        user = { id: 'u-refused', email: 'refused@example.org' };
+    // A failed cancel, and one the harness answers `turn_moved` because it
+    // stopped nothing, leave the receipt for a retry the harness acts on.
+    await t.test(
+        'a cancel that stops nothing refunds nothing, and leaves the receipt',
+        async (st) => {
+            st.after(() => {
+                cancelAnswer = STOPPED;
+            });
 
-        const index = await turn('c-refused', true);
+            const answers = [
+                { status: 502, body: '{}' },
+                { status: 200, body: JSON.stringify({ code: 'turn_moved', turn_index: 9 }) },
+            ];
 
-        cancelStatus = 502;
-        assert.equal(await cancel('c-refused', index), 'false');
-        assert.equal(await spent(user.email), 1);
-    });
+            for (const [at, answer] of answers.entries()) {
+                user = { id: `u-unstopped-${at}`, email: `unstopped-${at}@example.org` };
+
+                const index = await turn(`c-unstopped-${at}`, true);
+
+                cancelAnswer = answer;
+                assert.equal(await cancel(`c-unstopped-${at}`, index), 'false', answer.body);
+                assert.equal(await spent(user.email), 1, answer.body);
+
+                cancelAnswer = STOPPED;
+                assert.equal(await cancel(`c-unstopped-${at}`, index), 'true', answer.body);
+                assert.equal(await spent(user.email), 0, answer.body);
+            }
+        },
+    );
 
     await t.test('the hold header never reaches the harness', () => {
         const turns = seen.filter(({ route }) => route === 'turn');
@@ -228,6 +247,16 @@ test('hold turns: a cancel inside the window gives the prompt back', async (t) =
         assert.equal(
             await claimHoldTurn(counters, prompter, { conversationId: 'c-late', turnIndex: 0 }),
             null,
+        );
+        // A cancel that arrived before the deadline is on time, however long
+        // the harness then took to answer it.
+        assert.ok(
+            await claimHoldTurn(
+                counters,
+                prompter,
+                { conversationId: 'c-late', turnIndex: 0 },
+                60_000,
+            ),
         );
         assert.ok(
             await claimHoldTurn(counters, prompter, { conversationId: 'c-late', turnIndex: 1 }),

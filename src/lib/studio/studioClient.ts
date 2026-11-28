@@ -20,7 +20,9 @@ import type {
     InterruptResponse,
     MutationOperation,
     PlanRevisionStaleError,
+    PromptSource,
     ResumeRequest,
+    Seed,
     StudioFrame,
     ToolError,
     TurnRequest,
@@ -275,6 +277,19 @@ export type TurnExtras = Partial<
         'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn' | 'prompt_source'
     >
 >;
+
+/** The members a question handed over from Get Data carries: the seeds
+ *  of the datasets the reader saw there, and the example its text came
+ *  from (handoffPromptSource). Studio's arrival (useChat's send) and the
+ *  turn Get Data starts for Studio to adopt (startHeldTurn) both build
+ *  them here. */
+export const handoffExtras = (
+    seeds: Seed[] | null | undefined,
+    source: PromptSource | undefined,
+): TurnExtras => ({
+    ...(seeds && { seed_spec: seeds }),
+    ...(source && { prompt_source: source }),
+});
 
 /** The request body of a message turn. Studio's own turns (runTurn) and a
  *  turn Get Data starts for Studio to adopt (startHeldTurn) both build it
@@ -811,10 +826,11 @@ export const cancelTurn = async (
     timeoutMs: number = STOP_GRACE_MS,
 ): Promise<CancelAnswer> => (await sendCancel(conversationId, turnIndex, { timeoutMs })).answer;
 
-// cancelTurn's request, with whether the last answer said the prompt was
-// given back (PROMPT_REFUNDED_HEADER). `keepalive` lets the request outlive
-// the page.
-const sendCancel = async (
+/** cancelTurn's request, with whether the last answer said the turn's
+ *  prompt was given back (PROMPT_REFUNDED_HEADER), as the site proxy does
+ *  for a hold turn (startHeldTurn) cancelled inside its refund window.
+ *  `keepalive` lets the request outlive the page. */
+export const sendCancel = async (
     conversationId: string,
     turnIndex: number | null,
     { timeoutMs = STOP_GRACE_MS, keepalive = false }: { timeoutMs?: number; keepalive?: boolean },
@@ -910,6 +926,11 @@ type HeldEntry = {
     // ends without one.
     named: Promise<number | null>;
     cancelling: Promise<boolean> | null;
+    // Whether the cancel goes with `keepalive`, set by a cancel that asks
+    // for it and by a pagehide while the cancel waits on the turn index.
+    keepalive: boolean;
+    // Hears how the turn's cancel ended (startHeldTurn's `onCancelled`).
+    onCancelled: ((refunded: boolean) => void) | undefined;
     // Whether Get Data has moved to Studio (HeldTurnStart's `moved`).
     moved: boolean;
     // The timer that cancels the turn when the move or the adoption comes
@@ -981,41 +1002,50 @@ const replayHeld = (event: HeldEvent, handlers: StreamHandlers) => {
     }
 };
 
-const settleHeldCancel = async (
-    entry: HeldEntry,
-    turnIndex: number,
-    keepalive: boolean,
-): Promise<boolean> => {
-    const { refunded } = await sendCancel(entry.conversationId, turnIndex, { keepalive });
+const settleHeldCancel = async (entry: HeldEntry, turnIndex: number): Promise<boolean> => {
+    const { refunded } = await sendCancel(entry.conversationId, turnIndex, {
+        keepalive: entry.keepalive,
+    });
 
     entry.controller.abort();
 
     return refunded;
 };
 
+// The cancel of every held turn, run once per turn. A turn cancelled before
+// Studio took it stays in heldTurns until its cancel settles, for a
+// pagehide to see, and takeHeldTurn answers null for it, so Studio posts
+// its own on arrival.
 const cancelHeld = (
     token: string,
     entry: HeldEntry,
     { keepalive = false }: { keepalive?: boolean } = {},
 ): Promise<boolean> => {
     clearTimeout(entry.deadline);
+    entry.keepalive ||= keepalive;
 
-    // A turn cancelled before Studio took it is gone, and Studio posts its
-    // own on arrival.
-    if (!entry.adopted) {
-        heldTurns.delete(token);
-    }
-
-    // The cancel goes at once when the turn is named, so a pagehide sends
-    // it before the page goes.
     if (entry.cancelling) {
         return entry.cancelling;
     }
 
-    if (entry.turnIndex !== null) {
-        entry.cancelling = settleHeldCancel(entry, entry.turnIndex, keepalive);
+    entry.cancelling = sendHeldCancel(entry).then((refunded) => {
+        if (!entry.adopted) {
+            heldTurns.delete(token);
+        }
 
-        return entry.cancelling;
+        entry.onCancelled?.(refunded);
+
+        return refunded;
+    });
+
+    return entry.cancelling;
+};
+
+// The cancel goes at once when the turn is named, so a pagehide sends it
+// before the page goes.
+const sendHeldCancel = (entry: HeldEntry): Promise<boolean> => {
+    if (entry.turnIndex !== null) {
+        return settleHeldCancel(entry, entry.turnIndex);
     }
 
     // Undefined when the harness names no turn within the grace.
@@ -1025,23 +1055,23 @@ const cancelHeld = (
         () => undefined,
     );
 
-    entry.cancelling = Promise.race([entry.named, unnamed]).then((index) => {
+    return Promise.race([entry.named, unnamed]).then((index) => {
         grace.abort();
 
         if (typeof index === 'number') {
-            return settleHeldCancel(entry, index, keepalive);
+            return settleHeldCancel(entry, index);
         }
 
         entry.controller.abort();
 
         return index === null;
     });
-
-    return entry.cancelling;
 };
 
 // A page that goes (a reload, a hard navigation, a closed tab) cancels
-// every held turn Studio has not taken, with requests that outlive it.
+// every held turn Studio has not taken, with requests that outlive it. A
+// cancel already waiting on the turn index goes with `keepalive` once the
+// index arrives, if the page is still there to send it.
 let watchingPageHide = false;
 const cancelOnPageHide = () => {
     for (const [token, entry] of heldTurns) {
@@ -1060,18 +1090,26 @@ const cancelOnPageHide = () => {
  * The turn cancels itself when the move comes more than `admittedLimitMs`
  * after the harness admits it, when Studio has not taken it `adoptLimitMs`
  * after the move (HeldTurnStart's `moved`), and when the page goes
- * (`pagehide`) before Studio takes it.
+ * (`pagehide`) before Studio takes it. A pagehide before the harness has
+ * named the turn sends nothing, since a cancel names its turn: that window
+ * lasts from the request until its response headers arrive.
+ *
+ * `onCancelled` hears, once, how the turn's cancel ended, whoever sent it:
+ * true when the cancel gave the prompt back or the meter kept none, false
+ * when the prompt stays spent.
  */
 export const startHeldTurn = ({
     token = uuid(),
     message,
     extras,
+    onCancelled,
     admittedLimitMs = HOLD_ADMITTED_LIMIT_MS,
     adoptLimitMs = HELD_ADOPT_LIMIT_MS,
 }: {
     token?: string;
     message: string;
     extras?: TurnExtras;
+    onCancelled?: (refunded: boolean) => void;
     admittedLimitMs?: number;
     adoptLimitMs?: number;
 }): HeldTurnStart => {
@@ -1089,6 +1127,8 @@ export const startHeldTurn = ({
             name = resolve;
         }),
         cancelling: null,
+        keepalive: false,
+        onCancelled,
         moved: false,
         deadline: undefined,
     };
@@ -1172,7 +1212,7 @@ export const startHeldTurn = ({
 export const takeHeldTurn = (token: string): HeldTurn | 'adopted' | null => {
     const entry = heldTurns.get(token);
 
-    if (!entry) {
+    if (!entry || (entry.cancelling && !entry.adopted)) {
         return null;
     }
 

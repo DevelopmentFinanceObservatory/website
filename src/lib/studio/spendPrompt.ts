@@ -12,11 +12,15 @@ import {
     type Reservation,
 } from '../proxy/limitCounter.ts';
 import { problem } from '../proxy/problem.ts';
-import { GUEST_PROMPTS, USER_DAILY_PROMPTS } from './promptAllowance.ts';
+import { GUEST_PROMPTS, HOLD_REFUND_WINDOW_MS, USER_DAILY_PROMPTS } from './promptAllowance.ts';
 import type { ToolError } from './wire.ts';
 
-// The hold turn's headers, which the proxy reads and sets.
-export { HOLD_TURN_HEADER, PROMPT_REFUNDED_HEADER } from './promptAllowance.ts';
+// The hold turn's headers, which the proxy reads and sets, and its refund window.
+export {
+    HOLD_REFUND_WINDOW_MS,
+    HOLD_TURN_HEADER,
+    PROMPT_REFUNDED_HEADER,
+} from './promptAllowance.ts';
 
 /**
  * The Studio's prompt allowances, spent by the proxy
@@ -116,9 +120,6 @@ export const refundPrompt = async (db: CounterDb, receipt: Reservation): Promise
     await refundReservation(db, receipt);
 };
 
-/** How long after the harness admits a hold turn a cancel still refunds its prompt. */
-export const HOLD_REFUND_WINDOW_MS = 2_000;
-
 /** How many hold turns a prompter's cancels refund in a UTC day. */
 export const HOLD_REFUNDS_PER_DAY = 3;
 
@@ -170,20 +171,22 @@ export const recordHoldTurn = async (
 };
 
 /**
- * Take `prompter`'s receipt for the hold turn `turn` if its deadline has not
- * passed: the prompt it paid for, or null when there is none. A receipt is
- * taken once. Throws what the database throws.
+ * Take `prompter`'s receipt for the hold turn `turn` if its deadline had not
+ * passed `sinceMs` ago, when the cancel arrived: the prompt it paid for, or
+ * null when there is none. A receipt is taken once. Throws what the
+ * database throws.
  */
 export const claimHoldTurn = async (
     db: CounterDb,
     prompter: Prompter,
     turn: HarnessTurn,
+    sinceMs: number = 0,
 ): Promise<Reservation | null> => {
     const key = promptCounterKey(prompter);
     const { rows } = await db.execute<{ window_start: Date }>(sql`
         delete from ${limitCounter}
         where ${limitCounter.key} = ${holdReceiptKey(key, turn)}
-            and ${limitCounter.expiresAt} > now()
+            and ${limitCounter.expiresAt} > now() - make_interval(secs => ${sinceMs / 1000})
         returning window_start
     `);
     const windowStart = rows[0]?.window_start;

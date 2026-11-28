@@ -136,6 +136,7 @@ import {
 import {
     ensureTurn,
     heldTurns,
+    isPrompt,
     isUnkeyedSave,
     keyUnkeyedSave,
     promptTurns,
@@ -156,6 +157,7 @@ import {
 import {
     cancelTurn,
     CompositionRefusal,
+    handoffExtras,
     fetchComponentRevision,
     isNoBlock,
     isSessionGone,
@@ -167,6 +169,7 @@ import {
     runApplyUnit,
     runInterrupt,
     runTurn,
+    sendCancel,
     STOP_GRACE_MS,
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
@@ -1058,15 +1061,22 @@ export const useChat = (
 
     // Ask the harness to cancel turn `turnIndex`, or the conversation's turn
     // when the harness has named none (cancelTurn). Requests queued behind
-    // the stream also wait for the cancel request to answer.
-    const requestCancel = useCallback((turnIndex: number | null) => {
+    // the stream also wait for the cancel request to answer. `onRefunded`
+    // runs when the answer says the site's meter gave the turn's prompt
+    // back, as it does for a turn Get Data started (startHeldTurn) stopped
+    // inside its refund window.
+    const requestCancel = useCallback((turnIndex: number | null, onRefunded?: () => void) => {
         const conversation = sessionRef.current;
 
         if (!conversation) {
             return;
         }
 
-        const cancelled = cancelTurn(conversation, turnIndex);
+        const cancelled = sendCancel(conversation, turnIndex, {}).then(({ refunded }) => {
+            if (refunded) {
+                onRefunded?.();
+            }
+        });
 
         chainRef.current = chainRef.current.then(async () => {
             await cancelled;
@@ -1512,8 +1522,38 @@ export const useChat = (
                     setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
                 }
 
+                // The prompt of page turn `turn`, which a later prompt may
+                // follow by the time the cancel answers.
+                const refundTurn = () => {
+                    if (generationRef.current !== generation) {
+                        return;
+                    }
+
+                    setState((prev) => {
+                        const at = prev.messages.findLastIndex(
+                            (message) =>
+                                message.role === 'user' &&
+                                isPrompt(message) &&
+                                message.turn === turn,
+                        );
+                        const prompt = prev.messages[at];
+
+                        return prompt?.role === 'user' && !prompt.refunded
+                            ? {
+                                  ...prev,
+                                  messages: prev.messages.map((message, other) =>
+                                      other === at ? { ...prompt, refunded: true } : message,
+                                  ),
+                              }
+                            : prev;
+                    });
+                };
+
                 if (action.cancel === 'now') {
-                    requestCancel(admission.turnIndex());
+                    requestCancel(
+                        admission.turnIndex(),
+                        metered && !action.refunded ? refundTurn : undefined,
+                    );
                 }
 
                 if (stopGrace !== null) {
@@ -2031,9 +2071,8 @@ export const useChat = (
             const run = (handlers: StreamHandlers, signal: AbortSignal, afterTurn?: number) =>
                 runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
                     ...(componentRef && { component_ref: componentRef }),
-                    ...(seeds && { seed_spec: seeds }),
+                    ...handoffExtras(seeds, source),
                     ...(afterTurn !== undefined && { after_turn: afterTurn }),
-                    ...(source && { prompt_source: source }),
                 });
 
             const generation = generationRef.current;
