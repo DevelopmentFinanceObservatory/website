@@ -2,8 +2,8 @@
 @use "mixins" as *;
 @use "breakpoints" as *;
 
-// Under the frame, on the page colour: the live line on the left, the two
-// actions on the right.
+// Under the frame, on the page colour, the live line sits on the left and
+// the two actions on the right.
 .bar {
     @include flex(row, space-between, center);
 
@@ -73,8 +73,8 @@
     color: var(--color-charcoal);
 }
 
-// Tap targets of 44 px: the padding grows each button's box, the negative
-// margin keeps the layout.
+// Tap targets of 44 px. The padding grows each button's box, and the
+// negative margin keeps the layout.
 @include breakpoint(phone) {
     .action {
         padding-block: rem(12);

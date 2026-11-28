@@ -2,25 +2,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    embedFootAck,
     embedFootMessage,
     embedImageRequest,
     embedImageResult,
     embedSnippet,
     hostEmbedPath,
+    isEmbedFootAck,
     isEmbedImageRequest,
     readEmbedFoot,
     readEmbedImageResult,
 } from '../embedHost.ts';
 import { embedHeightMessage } from '../embedHeight.ts';
 
-test('a host page reads the foot and the image result its embed posts, and nothing else', () => {
-    const foot = { note: 'Live data through 2023', image: true };
+test('each side reads the foot, the ack and the image messages, and nothing else', () => {
+    const foot = { note: 'Live data through 2023', strip: 28, image: true };
 
     assert.deepEqual(readEmbedFoot(embedFootMessage(foot)), foot);
-    assert.deepEqual(readEmbedFoot(embedFootMessage({ note: null, image: false })), {
+    assert.deepEqual(readEmbedFoot(embedFootMessage({ note: null, strip: 0, image: false })), {
         note: null,
+        strip: 0,
         image: false,
     });
+    assert.equal(isEmbedFootAck(embedFootAck()), true);
     assert.equal(readEmbedImageResult(embedImageResult(true)), true);
     assert.equal(readEmbedImageResult(embedImageResult(false)), false);
     assert.equal(isEmbedImageRequest(embedImageRequest()), true);
@@ -30,8 +34,11 @@ test('a host page reads the foot and the image result its embed posts, and nothi
         'dfo:embed-foot',
         embedHeightMessage(440),
         embedImageRequest(),
-        { type: 'dfo:embed-foot', note: 3, image: true },
-        { type: 'dfo:embed-foot', note: null },
+        embedFootAck(),
+        { type: 'dfo:embed-foot', note: 3, strip: 28, image: true },
+        { type: 'dfo:embed-foot', note: null, strip: 0 },
+        { type: 'dfo:embed-foot', note: null, image: true },
+        { type: 'dfo:embed-foot', note: null, strip: -1, image: true },
         { type: 'dfo:embed-image-result', ok: 'yes' },
     ];
 
@@ -41,6 +48,8 @@ test('a host page reads the foot and the image result its embed posts, and nothi
     }
 
     assert.equal(isEmbedImageRequest(embedFootMessage(foot)), false);
+    assert.equal(isEmbedFootAck(embedFootMessage(foot)), false);
+    assert.equal(isEmbedFootAck(embedImageRequest()), false);
 });
 
 test('the embed code frames the share at the height given, its title escaped', () => {

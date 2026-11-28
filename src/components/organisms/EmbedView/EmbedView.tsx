@@ -30,6 +30,7 @@ import {
     type EmbedFoot,
     embedFootMessage,
     embedImageResult,
+    isEmbedFootAck,
     isEmbedImageRequest,
 } from '@/lib/studio/embedHost';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
@@ -187,11 +188,15 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHe
     }, [rootRef, liftHeight]);
 };
 
-// On a page of the site that draws the embed's foot (lib/studio/embedHost):
-// tells it the foot whenever the foot changes and when it asks for the
-// height, and writes the card's PNG when it asks for the picture. The card
-// is the root's one `article`. Messages go to, and come only from, a parent
-// on the site's own origin.
+// On a page of the site that draws the embed's foot (lib/studio/embedHost),
+// the handshake that hands the foot over. The embed tells the page the foot
+// whenever the foot changes and when the page asks for the height, and
+// returns true once the page acknowledges it, so the embed hides its strip.
+// The strip's height is measured while it is drawn and sent with each foot.
+// The embed writes the card's PNG when the page asks for the picture. The
+// card is the root's one `article`. Messages go to, and come only from, a
+// parent on the site's own origin, so any other framer gets no foot and the
+// strip stays.
 const useHostFoot = ({
     enabled,
     rootRef,
@@ -200,18 +205,28 @@ const useHostFoot = ({
 }: {
     enabled: boolean;
     rootRef: React.RefObject<HTMLDivElement | null>;
-    foot: EmbedFoot;
+    foot: Omit<EmbedFoot, 'strip'>;
     title: string;
-}) => {
+}): boolean => {
     const { note, image } = foot;
+    const [drawn, setDrawn] = useState(false);
+    const stripRef = useRef(0);
 
     useEffect(() => {
         if (!enabled || window.parent === window) {
             return undefined;
         }
 
+        const strip = rootRef.current?.querySelector(`.${CSS.escape(styles.noteStrip)}`);
+
+        if (strip) {
+            stripRef.current = strip.getBoundingClientRect().height;
+        }
+
         const origin = window.location.origin;
         const post = (message: unknown) => window.parent.postMessage(message, origin);
+        const postFoot = () =>
+            post(embedFootMessage({ note, strip: note ? stripRef.current : 0, image }));
         const photograph = async () => {
             const node = rootRef.current?.querySelector('article');
 
@@ -234,18 +249,22 @@ const useHostFoot = ({
                 return;
             }
 
-            if (isEmbedHeightRequest(event.data)) {
-                post(embedFootMessage({ note, image }));
+            if (isEmbedFootAck(event.data)) {
+                setDrawn(true);
+            } else if (isEmbedHeightRequest(event.data)) {
+                postFoot();
             } else if (isEmbedImageRequest(event.data)) {
                 void photograph().then((ok) => post(embedImageResult(ok)));
             }
         };
 
-        post(embedFootMessage({ note, image }));
         window.addEventListener('message', onMessage);
+        postFoot();
 
         return () => window.removeEventListener('message', onMessage);
     }, [enabled, rootRef, note, image, title]);
+
+    return enabled && drawn;
 };
 
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
@@ -319,9 +338,9 @@ const SingleCard = ({
  * period is read from the cards filled so far, one for a card and the
  * earliest and latest for a canvas.
  *
- * With `footHost` a page of the site frames the embed and draws that line
- * itself, beside Download image for a one-card share (useHostFoot), so the
- * frame leaves out the strip.
+ * With `footHost` the embed offers its foot to the page framing it, and
+ * leaves out the strip once a page of the site answers that it draws the
+ * line itself, beside Download image for a one-card share (useHostFoot).
  */
 const EmbedView = ({ shared, footHost = false }: { shared: SharedView; footHost?: boolean }) => {
     const { kind, saved } = shared;
@@ -344,32 +363,43 @@ const EmbedView = ({ shared, footHost = false }: { shared: SharedView; footHost?
         lastInfoIdRef.current = id;
         setInfoCardId(id);
     };
+    // A one-card share draws its card with no `data-card-id`, so the root's
+    // one source line stands in.
     const sourceLineOf = () => {
         const id = lastInfoIdRef.current;
+        const root = rootRef.current;
 
-        return id
-            ? rootRef.current?.querySelector<HTMLElement>(
-                  `[data-card-id="${CSS.escape(id)}"] button[title="More Info"]`,
-              )
-            : null;
+        if (!id || !root) {
+            return null;
+        }
+
+        const lines = root.querySelectorAll<HTMLElement>('button[title="More Info"]');
+
+        return (
+            root.querySelector<HTMLElement>(
+                `[data-card-id="${CSS.escape(id)}"] button[title="More Info"]`,
+            ) ?? (lines.length === 1 ? lines[0] : null)
+        );
     };
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);
     const dataThrough = noted ? liveDataThrough(widgets, live) : null;
-    const strip = noted && !footHost;
     const singleState = single && cardLiveOf(live, single.id)?.state;
 
     useReportHeight(rootRef, single?.kind === 'table');
-    useHostFoot({
+
+    const hostDraws = useHostFoot({
         enabled: footHost,
         rootRef,
         foot: {
             note: noted ? liveNote(live.createdAt, dataThrough) : null,
-            // A live card is photographed once its data has arrived.
-            image: single !== undefined && (!singleState || singleState.status === 'ready'),
+            // A live card is photographed once it has stopped loading, its
+            // error face included.
+            image: single !== undefined && singleState?.status !== 'loading',
         },
         title: single ? (saved.titles?.[single.id] ?? widgetTitle(single)) : '',
     });
+    const strip = noted && !hostDraws;
 
     return (
         <div

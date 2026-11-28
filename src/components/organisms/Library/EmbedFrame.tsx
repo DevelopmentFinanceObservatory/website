@@ -11,25 +11,31 @@ import { clampEmbedHeight, embedHeightRequest, readEmbedHeight } from '@/lib/stu
  * message from this frame's own window, served from this site's origin,
  * counts. The frame asks for the height when it mounts and when it loads, so
  * a height the embed posted before this page hydrated still arrives.
- * `onMessage` gets every other message from the frame, and `frameRef`, when
- * given, holds the frame for the caller.
+ * `onHeight` gets each height the embed asks for, before the range is
+ * applied, `onMessage` every other message from the frame, and `onLoad` each
+ * load of the frame. `frameRef`, when given, holds the frame for the caller.
  */
 const EmbedFrame = ({
     src,
     title,
     className,
     frameRef,
+    onHeight,
     onMessage,
+    onLoad,
 }: {
     src: string;
     title: string;
     className: string;
     frameRef?: React.RefObject<HTMLIFrameElement | null>;
+    onHeight?: (height: number) => void;
     onMessage?: (data: unknown) => void;
+    onLoad?: () => void;
 }) => {
     const ownRef = useRef<HTMLIFrameElement>(null);
     const ref = frameRef ?? ownRef;
     const passOn = useEffectEvent((data: unknown) => onMessage?.(data));
+    const passHeight = useEffectEvent((height: number) => onHeight?.(height));
     const [height, setHeight] = useState<number | null>(null);
     const askHeight = () =>
         ref.current?.contentWindow?.postMessage(embedHeightRequest(), window.location.origin);
@@ -50,6 +56,7 @@ const EmbedFrame = ({
             // The embed measures its viewport, inside the frame's border.
             if (requested !== null) {
                 setHeight(clampEmbedHeight(requested) + frame.offsetHeight - frame.clientHeight);
+                passHeight(requested);
             } else {
                 passOn(event.data);
             }
@@ -68,7 +75,10 @@ const EmbedFrame = ({
             src={src}
             title={title}
             loading="lazy"
-            onLoad={askHeight}
+            onLoad={() => {
+                askHeight();
+                onLoad?.();
+            }}
             style={
                 height === null
                     ? undefined

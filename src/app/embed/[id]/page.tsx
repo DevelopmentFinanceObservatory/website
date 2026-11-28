@@ -33,8 +33,9 @@ export const generateMetadata = async ({ params }: EmbedPageProps): Promise<Meta
 // The iframe view of a share: just the read-only sheet, or the one card,
 // edge to edge. A search share has no sheet to embed. A live share's data
 // cards leave the server held and are filled in the browser
-// (src/lib/studio/slotCards). `?foot=host` leaves the live strip to the
-// site's own page framing the embed (src/lib/studio/embedHost).
+// (src/lib/studio/slotCards). `?foot=host` offers the live strip to the
+// site's own page framing the embed, which takes it over with a handshake
+// (src/lib/studio/embedHost).
 const EmbedPage = async ({ params, searchParams }: EmbedPageProps) => {
     const { id } = await params;
     const row = await getShare(id);
