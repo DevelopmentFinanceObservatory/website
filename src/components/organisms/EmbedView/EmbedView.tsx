@@ -18,6 +18,7 @@ import { savedCanvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { cardImageName, downloadCardImage } from '@/lib/studio/cardImage';
 import { liveDataThrough } from '@/lib/studio/dataThrough';
 import {
     embedHeightMessage,
@@ -25,8 +26,20 @@ import {
     isEmbedHeightRequest,
     naturalEmbedHeight,
 } from '@/lib/studio/embedHeight';
+import {
+    type EmbedFoot,
+    embedFootMessage,
+    embedImageResult,
+    isEmbedImageRequest,
+} from '@/lib/studio/embedHost';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
-import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
+import {
+    cardLiveOf,
+    isLiveCanvas,
+    type LiveCanvas,
+    liveNote,
+    type SharedView,
+} from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
 
 const noop = () => undefined;
@@ -174,6 +187,67 @@ const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHe
     }, [rootRef, liftHeight]);
 };
 
+// On a page of the site that draws the embed's foot (lib/studio/embedHost):
+// tells it the foot whenever the foot changes and when it asks for the
+// height, and writes the card's PNG when it asks for the picture. The card
+// is the root's one `article`. Messages go to, and come only from, a parent
+// on the site's own origin.
+const useHostFoot = ({
+    enabled,
+    rootRef,
+    foot,
+    title,
+}: {
+    enabled: boolean;
+    rootRef: React.RefObject<HTMLDivElement | null>;
+    foot: EmbedFoot;
+    title: string;
+}) => {
+    const { note, image } = foot;
+
+    useEffect(() => {
+        if (!enabled || window.parent === window) {
+            return undefined;
+        }
+
+        const origin = window.location.origin;
+        const post = (message: unknown) => window.parent.postMessage(message, origin);
+        const photograph = async () => {
+            const node = rootRef.current?.querySelector('article');
+
+            if (!image || !node) {
+                return false;
+            }
+
+            try {
+                await downloadCardImage(node, cardImageName(title));
+
+                return true;
+            } catch (error) {
+                console.error('embed: the card image could not be written', error);
+
+                return false;
+            }
+        };
+        const onMessage = (event: MessageEvent) => {
+            if (event.source !== window.parent || event.origin !== origin) {
+                return;
+            }
+
+            if (isEmbedHeightRequest(event.data)) {
+                post(embedFootMessage({ note, image }));
+            } else if (isEmbedImageRequest(event.data)) {
+                void photograph().then((ok) => post(embedImageResult(ok)));
+            }
+        };
+
+        post(embedFootMessage({ note, image }));
+        window.addEventListener('message', onMessage);
+
+        return () => window.removeEventListener('message', onMessage);
+    }, [enabled, rootRef, note, image, title]);
+};
+
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
 // no menu; the legend, tooltips and the source line still work.
 const SingleCard = ({
@@ -244,8 +318,12 @@ const SingleCard = ({
  * when its text was written, on a strip under the sheet or the one card. The
  * period is read from the cards filled so far, one for a card and the
  * earliest and latest for a canvas.
+ *
+ * With `footHost` a page of the site frames the embed and draws that line
+ * itself, beside Download image for a one-card share (useHostFoot), so the
+ * frame leaves out the strip.
  */
-const EmbedView = ({ shared }: { shared: SharedView }) => {
+const EmbedView = ({ shared, footHost = false }: { shared: SharedView; footHost?: boolean }) => {
     const { kind, saved } = shared;
 
     useEffect(() => {
@@ -256,13 +334,42 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const [infoCardId, setInfoCardId] = useState<string | null>(null);
     const { widgets, live } = useLiveCards(shared, savedCanvasWidgetsOf(saved));
+    const rootRef = useRef<HTMLDivElement>(null);
     const infoWidget = widgets.find((widget) => widget.id === infoCardId) ?? null;
+    // The card whose panel was last opened. On a canvas the card is drawn
+    // over the dim while its panel is open and back on the board after, so
+    // the source line that opened the panel is a new element by then.
+    const lastInfoIdRef = useRef<string | null>(null);
+    const openInfo = (id: string) => {
+        lastInfoIdRef.current = id;
+        setInfoCardId(id);
+    };
+    const sourceLineOf = () => {
+        const id = lastInfoIdRef.current;
+
+        return id
+            ? rootRef.current?.querySelector<HTMLElement>(
+                  `[data-card-id="${CSS.escape(id)}"] button[title="More Info"]`,
+              )
+            : null;
+    };
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);
     const dataThrough = noted ? liveDataThrough(widgets, live) : null;
-    const rootRef = useRef<HTMLDivElement>(null);
+    const strip = noted && !footHost;
+    const singleState = single && cardLiveOf(live, single.id)?.state;
 
     useReportHeight(rootRef, single?.kind === 'table');
+    useHostFoot({
+        enabled: footHost,
+        rootRef,
+        foot: {
+            note: noted ? liveNote(live.createdAt, dataThrough) : null,
+            // A live card is photographed once its data has arrived.
+            image: single !== undefined && (!singleState || singleState.status === 'ready'),
+        },
+        title: single ? (saved.titles?.[single.id] ?? widgetTitle(single)) : '',
+    });
 
     return (
         <div
@@ -270,7 +377,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
             className={classNames(
                 kind === 'card' ? styles.single : styles.sheet,
                 kind === 'card' && single?.kind === 'text' && styles.singleText,
-                noted && styles.live,
+                strip && styles.live,
             )}
             style={themeVars(theme) as React.CSSProperties}
         >
@@ -280,7 +387,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                         widget={single}
                         saved={saved}
                         theme={theme}
-                        onCardInfo={setInfoCardId}
+                        onCardInfo={openInfo}
                         live={live}
                     />
                 )
@@ -304,14 +411,14 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                     onViewChange={noop}
                     ratios={saved.ratios ?? {}}
                     onRatioChange={noop}
-                    onCardInfo={setInfoCardId}
+                    onCardInfo={openInfo}
                     focusedId={infoCardId}
                     readOnly
                     live={live}
                 />
             )}
 
-            {noted && (
+            {strip && (
                 <LiveNote live={live} dataThrough={dataThrough} className={styles.noteStrip} />
             )}
 
@@ -319,6 +426,8 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 info={infoWidget?.info ?? null}
                 widget={infoWidget}
                 open={infoCardId !== null}
+                autoFocus
+                returnFocus={sourceLineOf}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
                 shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
                 snapshot={

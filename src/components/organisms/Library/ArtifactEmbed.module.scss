@@ -1,0 +1,83 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Under the frame, on the page colour: the live line on the left, the two
+// actions on the right.
+.bar {
+    @include flex(row, space-between, center);
+
+    flex-wrap: wrap;
+    gap: rem(8) rem(16);
+    margin-top: rem(10);
+}
+
+.note {
+    @include flex(row, flex-start, center);
+    @include font-size(12px, 1.3);
+
+    gap: rem(6);
+    min-width: 0;
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+.dot {
+    flex-shrink: 0;
+    width: rem(6);
+    height: rem(6);
+    background-color: var(--color-mint-dark);
+    border-radius: 50%;
+}
+
+.actions {
+    @include flex(row, flex-end, center);
+
+    gap: rem(8);
+    margin-left: auto;
+}
+
+// The Button atom draws no focus ring of its own.
+.action:focus-visible {
+    outline: 2px solid var(--color-charcoal);
+    outline-offset: 2px;
+}
+
+.status {
+    @include font-size(12px, 1.3);
+
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    text-align: right;
+
+    &:not(:empty) {
+        margin-top: rem(6);
+    }
+}
+
+.embed {
+    margin-top: rem(12);
+}
+
+.embedText {
+    @include font-size(13px, 1.35);
+
+    margin-bottom: rem(8);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+}
+
+// Tap targets of 44 px: the padding grows each button's box, the negative
+// margin keeps the layout.
+@include breakpoint(phone) {
+    .action {
+        padding-block: rem(12);
+        margin-block: rem(-12);
+    }
+}

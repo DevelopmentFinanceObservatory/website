@@ -2,9 +2,9 @@ import classNames from 'classnames';
 import Link from 'next/link';
 import { Fragment } from 'react';
 
+import ArtifactEmbed from './ArtifactEmbed';
 import ArtifactToc from './ArtifactToc';
 import EditArtifact from './EditArtifact';
-import EmbedFrame from './EmbedFrame';
 import styles from './LibraryArtifact.module.scss';
 import { KIND_ICONS, StatusBadge, TopicTags } from './parts';
 import ShareButton from './ShareButton';
@@ -56,13 +56,13 @@ const Prose = ({ text }: { text: string }) => (
 
 /**
  * One Library artifact's page: the dark hero (back to the Library, title,
- * description), then the artifact drawn by its share's embed, the
- * publisher's text, the steps it was built by and its sources with the full
- * citation. Beside them, on the right, Share and Open in Studio and the
+ * description), then the artifact drawn by its share's embed with the bar
+ * under it (ArtifactEmbed), the publisher's text, the steps it was built by
+ * and its sources with the full citation. Beside them, on the right, Share and Open in Studio and the
  * artifact's type, status, publication and topics; on the left, the page's
  * sections. A phone stacks the artifact, the details, then the sections.
  *
- * A live artifact's data follows its source. The embed of a live chart,
+ * A live artifact's data follows its source. The bar under a live chart,
  * table, key number or canvas says how recent it is, and a data artifact's
  * page names no period. A snapshot's details say how recent its data was
  * when published, one period for a card and the earliest and latest for a
@@ -127,13 +127,14 @@ const LibraryArtifact = ({
                             </Button>
                         </div>
                     ) : (
-                        <EmbedFrame
+                        <ArtifactEmbed
                             className={classNames(
                                 styles.frame,
                                 artifact.kind === 'canvas' && styles.frameCanvas,
                             )}
-                            src={`/embed/${artifact.shareId}`}
+                            shareId={artifact.shareId}
                             title={artifact.title}
+                            canvas={artifact.kind === 'canvas'}
                         />
                     )}
                 </div>

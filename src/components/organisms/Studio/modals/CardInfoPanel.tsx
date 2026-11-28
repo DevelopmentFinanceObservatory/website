@@ -544,7 +544,9 @@ const snapshotAsOfOf = (snapshot: CitedSnapshot | undefined): string | null => {
  * The caller keeps it, so the card keeps one link, and one request for it,
  * however often the panel opens on it. The full citation is retrieved
  * today. On a snapshot share (`snapshot`) it names the share's link and the
- * day the card's data dates from.
+ * day the card's data dates from. With `autoFocus` focus moves into the
+ * panel when it opens; either way it returns to the control that opened it,
+ * or to `returnFocus()` when that control has left the page.
  */
 const CardInfoPanel = ({
     info,
@@ -556,6 +558,8 @@ const CardInfoPanel = ({
     canShare = false,
     citeLink,
     onCiteLink,
+    autoFocus = false,
+    returnFocus,
 }: {
     info: CardInfo | null;
     // The card itself, for Download Data.
@@ -571,6 +575,8 @@ const CardInfoPanel = ({
     // Asks for a snapshot of the card for its citation, whose progress and
     // link come back as `citeLink`.
     onCiteLink?: () => void;
+    autoFocus?: boolean;
+    returnFocus?: () => HTMLElement | null | undefined;
 }) => {
     const link: CiteLinkState = citeLink ?? 'idle';
     const cited = snapshot ?? (typeof citeLink === 'object' ? citeLink : undefined);
@@ -585,7 +591,13 @@ const CardInfoPanel = ({
     const download = widget && <CardDownload widget={widget} shared={shared} />;
 
     return (
-        <Modal open={open && view !== null} onOpenChange={onOpenChange} title="More Info">
+        <Modal
+            open={open && view !== null}
+            onOpenChange={onOpenChange}
+            title="More Info"
+            autoFocus={autoFocus}
+            returnFocus={returnFocus}
+        >
             {view?.kind === 'described' && (
                 <DescribedPanel
                     view={view}

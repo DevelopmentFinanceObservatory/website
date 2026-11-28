@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { clampEmbedHeight, embedHeightRequest, readEmbedHeight } from '@/lib/studio/embedHeight';
 
@@ -11,23 +11,31 @@ import { clampEmbedHeight, embedHeightRequest, readEmbedHeight } from '@/lib/stu
  * message from this frame's own window, served from this site's origin,
  * counts. The frame asks for the height when it mounts and when it loads, so
  * a height the embed posted before this page hydrated still arrives.
+ * `onMessage` gets every other message from the frame, and `frameRef`, when
+ * given, holds the frame for the caller.
  */
 const EmbedFrame = ({
     src,
     title,
     className,
+    frameRef,
+    onMessage,
 }: {
     src: string;
     title: string;
     className: string;
+    frameRef?: React.RefObject<HTMLIFrameElement | null>;
+    onMessage?: (data: unknown) => void;
 }) => {
-    const ref = useRef<HTMLIFrameElement>(null);
+    const ownRef = useRef<HTMLIFrameElement>(null);
+    const ref = frameRef ?? ownRef;
+    const passOn = useEffectEvent((data: unknown) => onMessage?.(data));
     const [height, setHeight] = useState<number | null>(null);
     const askHeight = () =>
         ref.current?.contentWindow?.postMessage(embedHeightRequest(), window.location.origin);
 
     useEffect(() => {
-        const onMessage = (event: MessageEvent) => {
+        const onFrameMessage = (event: MessageEvent) => {
             if (
                 event.origin !== window.location.origin ||
                 event.source === null ||
@@ -42,14 +50,16 @@ const EmbedFrame = ({
             // The embed measures its viewport, inside the frame's border.
             if (requested !== null) {
                 setHeight(clampEmbedHeight(requested) + frame.offsetHeight - frame.clientHeight);
+            } else {
+                passOn(event.data);
             }
         };
 
-        window.addEventListener('message', onMessage);
-        askHeight();
+        window.addEventListener('message', onFrameMessage);
+        ref.current?.contentWindow?.postMessage(embedHeightRequest(), window.location.origin);
 
-        return () => window.removeEventListener('message', onMessage);
-    }, []);
+        return () => window.removeEventListener('message', onFrameMessage);
+    }, [ref]);
 
     return (
         <iframe

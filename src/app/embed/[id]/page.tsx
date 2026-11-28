@@ -11,9 +11,13 @@ import { refererHost } from '@/lib/events/referer';
 import { shareViewEvent } from '@/lib/events/shareView';
 import { track } from '@/lib/events/track';
 import { requestCaller } from '@/lib/proxy/caller';
+import { EMBED_FOOT_HOST, EMBED_FOOT_PARAM } from '@/lib/studio/embedHost';
 import { sharedViewOfRecord } from '@/lib/studio/slotCards';
 
-type EmbedPageProps = { params: Promise<{ id: string }> };
+type EmbedPageProps = {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export const generateMetadata = async ({ params }: EmbedPageProps): Promise<Metadata> => {
     const { id } = await params;
@@ -29,8 +33,9 @@ export const generateMetadata = async ({ params }: EmbedPageProps): Promise<Meta
 // The iframe view of a share: just the read-only sheet, or the one card,
 // edge to edge. A search share has no sheet to embed. A live share's data
 // cards leave the server held and are filled in the browser
-// (src/lib/studio/slotCards).
-const EmbedPage = async ({ params }: EmbedPageProps) => {
+// (src/lib/studio/slotCards). `?foot=host` leaves the live strip to the
+// site's own page framing the embed (src/lib/studio/embedHost).
+const EmbedPage = async ({ params, searchParams }: EmbedPageProps) => {
     const { id } = await params;
     const row = await getShare(id);
 
@@ -85,7 +90,9 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
         }
     });
 
-    return <EmbedView shared={await sharedView} />;
+    const footHost = (await searchParams)?.[EMBED_FOOT_PARAM] === EMBED_FOOT_HOST;
+
+    return <EmbedView shared={await sharedView} footHost={footHost} />;
 };
 
 export default EmbedPage;
