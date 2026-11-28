@@ -171,11 +171,22 @@ const subscribeStorage = (listener: () => void) => {
     return () => window.removeEventListener('storage', listener);
 };
 
-// A prompt the proxy spent on a held turn and did not give back, which no
-// Studio transcript counts: added to the guest count, with a `storage`
-// event so this tab's readers (subscribeStorage) see it too.
-const countGuestPrompt = () => {
-    addGuestPrompts(window.localStorage, 1);
+// Whether the guest count holds the prompt of the turn a running move
+// started (startHeldTurn). The page's own check of the count leaves that
+// prompt out, so counting it does not end the move.
+let holdPaid = false;
+
+// Sets holdPaid, and adds the prompt to the guest count when `paid`, since
+// the proxy spends it whether or not Studio adopts the turn. The `storage`
+// event lets this tab's readers (subscribeStorage) see both.
+const markHoldPaid = (paid: boolean) => {
+    if (paid) {
+        addGuestPrompts(window.localStorage, 1);
+    } else if (!holdPaid) {
+        return;
+    }
+
+    holdPaid = paid;
     window.dispatchEvent(new StorageEvent('storage', { key: GUEST_PROMPTS_KEY }));
 };
 
@@ -437,9 +448,11 @@ const DataSearch = ({
     // to Studio once the run is done, and `offer` shows the Studio card. A
     // guest with no free prompt left is offered Studio instead of moved,
     // on a card that also searches the question as data (`out_of_prompts`).
+    // The count leaves out the prompt of the turn a running move started
+    // (holdPaid).
     const guestUsed = useSyncExternalStore(
         subscribeStorage,
-        () => guestPromptsSeen({ guest, storage: () => window.localStorage }),
+        () => guestPromptsSeen({ guest, storage: () => window.localStorage }) - (holdPaid ? 1 : 0),
         () => 0,
     );
     const move = routeMove({
@@ -509,17 +522,7 @@ const DataSearch = ({
 
             return {
                 href,
-                held: {
-                    message: question.trim(),
-                    extras,
-                    // A cancel the proxy did not refund leaves the prompt
-                    // spent, which a guest's count shows.
-                    onCancelled: (refunded: boolean) => {
-                        if (guest && !refunded) {
-                            countGuestPrompt();
-                        }
-                    },
-                },
+                held: { message: question.trim(), extras },
                 go: () => {
                     track(
                         'search.studio_handoff',
@@ -550,7 +553,6 @@ const DataSearch = ({
             answerReason,
             searchIds,
             searchIsExample,
-            guest,
         ],
     );
     const openStudio = useCallback(
@@ -604,34 +606,37 @@ const DataSearch = ({
     // link's navigation wins. A new search ends the hold too, before any
     // navigation.
     //
-    // The hold's start also starts Studio's turn (startHeldTurn), so Studio
-    // opens with the answer under way: the turn Studio's arrival would
-    // send, under a token the move's URL carries (HANDOFF_HOLD_PARAM). The
-    // move hands the turn over, and every other end of the hold cancels it
-    // so its prompt comes back: a stay, a link click, a new search, the
-    // page unmounting. The registry cancels it too when the move comes
-    // late (HOLD_ADMITTED_LIMIT_MS), when Studio does not take it, and when
-    // the page goes. Studio's prompt() records the prompt and counts it
-    // once it adopts the turn. A cancel the proxy does not refund leaves the
-    // prompt spent, and this page adds it to a guest's count (the held
-    // turn's `onCancelled`).
+    // Studio's turn (startHeldTurn) starts as soon as the run's route makes
+    // the move `auto`, before the callout's entrance and whether or not the
+    // tab shows, so Studio opens with the answer under way: the turn
+    // Studio's arrival would send, under a token the move's URL carries
+    // (HANDOFF_HOLD_PARAM). It starts once per search. Its prompt is spent
+    // as it starts, and this page adds it to a guest's count then
+    // (markHoldPaid). A paused hold leaves the turn running, and the
+    // move hands it over with all it has streamed. Every other end of the
+    // move cancels it so it stops working: a stay, a link click, a new
+    // search, the page unmounting. The registry cancels it too when
+    // Studio does not take it and when the page goes. Studio's prompt()
+    // fires studio.prompt once it adopts the turn, and counts no prompt
+    // for it.
     const movedSearchRef = useRef<string | null>(null);
     // The hold's handlers for the callout, set while the move's effect runs.
-    const moveHoldRef = useRef<{ start: () => void; go: () => void; stay: () => void } | null>(
-        null,
-    );
-    // The turn the hold started, until the move hands it over or the hold
-    // ends without it.
+    const moveHoldRef = useRef<{ go: () => void; stay: () => void } | null>(null);
+    // The turn the move started, until the move hands it over or ends
+    // without it.
     const heldRef = useRef<HeldTurnStart | null>(null);
     const cancelHeld = (options?: { keepalive?: boolean }) => {
         void heldRef.current?.cancel(options);
         heldRef.current = null;
+        markHoldPaid(false);
     };
-    // The token of each search's held turn, fixed for the search so every
-    // run of the move's effect builds the same Studio URL.
+    // The token of the last search's held turn, set once per search when
+    // the turn starts, so every run of the move's effect builds the same
+    // Studio URL.
     const holdTokenRef = useRef<{ searchId: string; token: string } | null>(null);
     const moveArmed =
         move === 'auto' && phase === 'done' && pageSettled && routingOffFor(searchParams, query);
+    const moving = move === 'auto';
     // What the loading view's live region says about the move. Each note
     // mounts a new node, so a note the same as the last is announced again.
     const [moveNote, setMoveNote] = useState({ text: '', id: 0 });
@@ -648,13 +653,27 @@ const DataSearch = ({
 
         holdStartedRef.current = searchId;
         noteMove(HOLD_NOTE);
-        moveHoldRef.current?.start();
     };
+    // Starts Studio's turn for search `searchId`, once, unless the reader
+    // has stayed or the move has gone.
+    const startHold = useEffectEvent((searchId: string) => {
+        if (holdTokenRef.current?.searchId === searchId || movedSearchRef.current === searchId) {
+            return;
+        }
+
+        const token = uuid();
+
+        holdTokenRef.current = { searchId, token };
+        heldRef.current = startHeldTurn({ token, ...studioHandoff('auto', route, token).held });
+
+        if (guest) {
+            markHoldPaid(true);
+        }
+    });
     const onHoldEnd = () => moveHoldRef.current?.go();
-    const readyMove = useEffectEvent((holdToken: string) => ({
-        ...studioHandoff('auto', route, holdToken),
-        token: holdToken,
-    }));
+    const readyMove = useEffectEvent((holdToken: string) =>
+        studioHandoff('auto', route, holdToken),
+    );
     // Keeps the reader on the data search of a question the router sent to
     // Studio: the move's hold, or the out-of-prompts card's data action.
     // It records `search.route_stay`, turns the move's callout into the
@@ -691,12 +710,12 @@ const DataSearch = ({
         noteMove(STAY_NOTE);
         stayOnData(trigger);
     });
-    // An unmount or a new search takes the callout away and ends the hold,
-    // which cancels the turn it started. Strict Mode's rehearsal of the
-    // unmount mounts the callout again at once, which clears the timer.
+    // An unmount or a new search ends the move, which cancels the turn it
+    // started. Strict Mode's rehearsal of the unmount mounts the page again
+    // at once, which clears the timer.
     const holdEndRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     useEffect(() => {
-        if (!moveArmed) {
+        if (!moving) {
             return;
         }
 
@@ -705,7 +724,16 @@ const DataSearch = ({
         return () => {
             holdEndRef.current = setTimeout(() => cancelHeld(), 0);
         };
-    }, [moveArmed]);
+    }, [moving]);
+    // The move's turn starts once the route makes the move `auto`, for a
+    // search with an id.
+    useEffect(() => {
+        const { searchId } = searchIds();
+
+        if (moving && searchId) {
+            startHold(searchId);
+        }
+    }, [moving, phase, searchIds]);
     useEffect(() => {
         if (move !== 'auto' || phase !== 'done' || !pageSettled) {
             return;
@@ -723,22 +751,11 @@ const DataSearch = ({
             return;
         }
 
-        if (holdTokenRef.current?.searchId !== searchId) {
-            holdTokenRef.current = { searchId, token: uuid() };
-        }
-
-        const handoff = readyMove(holdTokenRef.current.token);
+        const held = holdTokenRef.current;
+        const handoff = readyMove(held?.searchId === searchId ? held.token : uuid());
 
         router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
 
-        // Starts Studio's turn unless the move has stopped.
-        const start = () => {
-            if (movedSearchRef.current === searchId || heldRef.current) {
-                return;
-            }
-
-            heldRef.current = startHeldTurn({ token: handoff.token, ...handoff.held });
-        };
         // Opens Studio, with its turn, unless the move has stopped.
         const go = () => {
             if (movedSearchRef.current === searchId) {
@@ -774,7 +791,7 @@ const DataSearch = ({
             }
         };
 
-        moveHoldRef.current = { start, go, stay: () => stay(searchId, 'button') };
+        moveHoldRef.current = { go, stay: () => stay(searchId, 'button') };
         document.addEventListener('keydown', onKey, true);
         document.addEventListener('click', onClick, true);
 

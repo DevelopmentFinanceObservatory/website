@@ -244,23 +244,27 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // its turn started comes back, as the server's meter gives it back, also
     // when it then left the transcript (droppedRefunds). Only growth counts,
     // of either: New Chat empties the transcript without giving prompts back.
+    // Get Data counted the prompts of the turns it started that this page
+    // adopted (`adoptedPrompts`, send below), so the meter leaves them out.
     const sentCount = conversation.messages.filter(isPrompt).length;
+    const [adoptedPrompts, setAdoptedPrompts] = useState(0);
+    const meteredCount = sentCount - adoptedPrompts;
     const refundedCount =
         conversation.messages.filter(isRefundedPrompt).length + conversation.droppedRefunds;
-    const sentRef = useRef(sentCount);
+    const sentRef = useRef(meteredCount);
     const refundedRef = useRef(refundedCount);
 
     useEffect(() => {
-        const spent = Math.max(0, sentCount - sentRef.current);
+        const spent = Math.max(0, meteredCount - sentRef.current);
         const refunded = Math.max(0, refundedCount - refundedRef.current);
 
-        sentRef.current = sentCount;
+        sentRef.current = meteredCount;
         refundedRef.current = refundedCount;
 
         if (guest && spent !== refunded) {
             addGuestUsed(spent - refunded);
         }
-    }, [guest, sentCount, refundedCount]);
+    }, [guest, meteredCount, refundedCount]);
 
     // Queued prompts hold their place in the limit until sent or removed.
     const walled = guestOutOfPrompts({ guest, used: guestUsed + conversation.queued.length });
@@ -271,19 +275,21 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
     // inside the chat, past this gate, except a new question a turn handed
     // back, which the drain sends through here with the count of prompts
     // still queued behind it (`queued`). `source` names the example a picked
-    // question came from. Returns whether the prompt went.
+    // question came from. `paid` counts the prompts the stored count holds
+    // already, which the wall leaves out. Returns whether the prompt went.
     const prompt = (
         intent: PromptIntent | undefined,
         length: number | undefined,
         run: () => void,
         queued = conversation.queued.length,
         source?: PromptSource,
+        paid = 0,
     ): boolean => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
         const event = promptEvent({
             guest,
-            used: readGuestUsed(),
+            used: readGuestUsed() - paid,
             queued,
             sent: sentCount,
             intent,
@@ -300,19 +306,31 @@ const Studio = ({ shared, openId, guest = false, examples = [] }: StudioProps) =
 
         return true;
     };
-    // A held turn (takeHeldTurn) whose prompt the gate drops is cancelled.
+    // A held turn (takeHeldTurn) is one Get Data started and counted
+    // already, so the wall leaves its prompt out, and once adopted the
+    // meter does too. One the gate drops is cancelled.
     const send: typeof conversation.send = (text, options, seeds, asked, source, held) => {
+        let adopted = false;
         const went = prompt(
             options?.intent,
             text.trim().length,
-            () => conversation.send(text, options, seeds, asked, source, held),
+            () => {
+                adopted = conversation.send(text, options, seeds, asked, source, held);
+            },
             undefined,
             source,
+            held ? 1 : 0,
         );
 
         if (!went) {
             void held?.cancel();
         }
+
+        if (adopted) {
+            setAdoptedPrompts((count) => count + 1);
+        }
+
+        return adopted;
     };
     const applyChoice: typeof conversation.applyChoice = (chip) =>
         prompt('apply_choice', undefined, () => conversation.applyChoice(chip));

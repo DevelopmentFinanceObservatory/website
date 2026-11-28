@@ -85,29 +85,6 @@ test('meterTurn gives a prompt back only for a turn that did not start', async (
         assert.deepEqual(refunds, [receipt]);
     });
 
-    await t.test(
-        'only a turn the harness admits reaches `started`, before it is returned',
-        async () => {
-            for (const [status, startedWith, refunded] of [
-                [200, [receipt], []],
-                [502, [], [receipt]],
-            ] as const) {
-                const starts: unknown[] = [];
-                const refunds: unknown[] = [];
-                const response = await meterTurn(
-                    spends(),
-                    async (p) => void refunds.push(p),
-                    answers(status),
-                    { started: async (p) => void starts.push(p) },
-                );
-
-                assert.equal(response.status, status);
-                assert.deepEqual(starts, startedWith);
-                assert.deepEqual(refunds, refunded);
-            }
-        },
-    );
-
     await t.test('a refused spend returns its 429 and refunds nothing', async () => {
         const refunds: unknown[] = [];
         const response = await meterTurn(
@@ -136,7 +113,7 @@ test('meterTurn gives a prompt back only for a turn that did not start', async (
             late,
             async () => void events.push('refunded'),
             answers(200),
-            { timeoutMs: 10 },
+            10,
         );
 
         assert.equal(response.status, 503);

@@ -136,7 +136,6 @@ import {
 import {
     ensureTurn,
     heldTurns,
-    isPrompt,
     isUnkeyedSave,
     keyUnkeyedSave,
     promptTurns,
@@ -169,7 +168,6 @@ import {
     runApplyUnit,
     runInterrupt,
     runTurn,
-    sendCancel,
     STOP_GRACE_MS,
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
@@ -1061,22 +1059,15 @@ export const useChat = (
 
     // Ask the harness to cancel turn `turnIndex`, or the conversation's turn
     // when the harness has named none (cancelTurn). Requests queued behind
-    // the stream also wait for the cancel request to answer. `onRefunded`
-    // runs when the answer says the site's meter gave the turn's prompt
-    // back, as it does for a turn Get Data started (startHeldTurn) stopped
-    // inside its refund window.
-    const requestCancel = useCallback((turnIndex: number | null, onRefunded?: () => void) => {
+    // the stream also wait for the cancel request to answer.
+    const requestCancel = useCallback((turnIndex: number | null) => {
         const conversation = sessionRef.current;
 
         if (!conversation) {
             return;
         }
 
-        const cancelled = sendCancel(conversation, turnIndex, {}).then(({ refunded }) => {
-            if (refunded) {
-                onRefunded?.();
-            }
-        });
+        const cancelled = cancelTurn(conversation, turnIndex);
 
         chainRef.current = chainRef.current.then(async () => {
             await cancelled;
@@ -1522,38 +1513,8 @@ export const useChat = (
                     setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
                 }
 
-                // The prompt of page turn `turn`, which a later prompt may
-                // follow by the time the cancel answers.
-                const refundTurn = () => {
-                    if (generationRef.current !== generation) {
-                        return;
-                    }
-
-                    setState((prev) => {
-                        const at = prev.messages.findLastIndex(
-                            (message) =>
-                                message.role === 'user' &&
-                                isPrompt(message) &&
-                                message.turn === turn,
-                        );
-                        const prompt = prev.messages[at];
-
-                        return prompt?.role === 'user' && !prompt.refunded
-                            ? {
-                                  ...prev,
-                                  messages: prev.messages.map((message, other) =>
-                                      other === at ? { ...prompt, refunded: true } : message,
-                                  ),
-                              }
-                            : prev;
-                    });
-                };
-
                 if (action.cancel === 'now') {
-                    requestCancel(
-                        admission.turnIndex(),
-                        metered && !action.refunded ? refundTurn : undefined,
-                    );
+                    requestCancel(admission.turnIndex());
                 }
 
                 if (stopGrace !== null) {
@@ -1999,7 +1960,8 @@ export const useChat = (
     // again on its own (offerNewQuestion). `held` is a turn Get Data started
     // for this question (takeHeldTurn): the send adopts it in place of its
     // own request, under its conversation id, when it opens the
-    // conversation with the same text, and cancels it otherwise.
+    // conversation with the same text, and cancels it otherwise. Returns
+    // whether it adopted `held`.
     const send = useCallback(
         (
             message: string,
@@ -2008,7 +1970,7 @@ export const useChat = (
             asked?: number,
             source?: PromptSource,
             held?: HeldTurn,
-        ) => {
+        ): boolean => {
             const text = message.trim();
             const fromNewQuestion =
                 asked ??
@@ -2017,7 +1979,7 @@ export const useChat = (
             if (!text || holdTurn({ text, card, seeds, fromNewQuestion, source })) {
                 void held?.cancel();
 
-                return;
+                return false;
             }
 
             const adopted =
@@ -2124,6 +2086,8 @@ export const useChat = (
                     }),
                 },
             );
+
+            return adopted !== null;
         },
         [dropMovedQuestion, holdTurn, offerNewQuestion, startTurn, stream],
     );

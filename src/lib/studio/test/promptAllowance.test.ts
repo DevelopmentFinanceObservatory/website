@@ -77,8 +77,8 @@ test('guestPromptsUsed reads the count Studio stores, and 0 when there is none',
     assert.equal(guestPromptsUsed(storage('garbled')), 0);
 });
 
-// Studio counts its transcript's prompts through it, and Get Data a held
-// turn's prompt the proxy did not give back.
+// Studio counts its transcript's prompts through it, and Get Data the
+// prompt of the turn it starts for Studio to adopt.
 test('addGuestPrompts adds to the stored count and never takes it below 0', () => {
     const stored = new Map<string, string>();
     const storage = {

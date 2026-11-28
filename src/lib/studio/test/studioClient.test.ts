@@ -18,6 +18,7 @@ import {
     runApplyUnit,
     runInterrupt,
     runTurn,
+    heldTurnListener,
     startHeldTurn,
     STATE_READ_ATTEMPTS,
     takeHeldTurn,
@@ -919,15 +920,12 @@ test('mutateComposition: a refusal rejects with a CompositionRefusal, and says w
 
 // A turn route whose stream the test writes: `write` sends a frame, `end`
 // closes the stream. The response names turn `turnIndex`.
-const heldHarness = (t: TestContext, { turnIndex = 3, refunded = 'true' } = {}) => {
+const heldHarness = (t: TestContext, { turnIndex = 3 } = {}) => {
     const encoder = new TextEncoder();
     let stream: ReadableStreamDefaultController<Uint8Array> | null = null;
     const fetch = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
         if (String(input) === '/api/studio/cancel') {
-            return new Response(null, {
-                status: 204,
-                headers: { 'x-dfo-prompt-refunded': refunded },
-            });
+            return new Response(null, { status: 204 });
         }
 
         return new Response(
@@ -968,7 +966,7 @@ test('takeHeldTurn: a held turn is taken once, then answers adopted; an unknown 
     assert.equal(takeHeldTurn(cancelled.token), null);
 });
 
-test('takeHeldTurn: an adopted turn replays what it heard, then hears the rest live', async (t) => {
+test('takeHeldTurn: an adopted turn replays what it heard, hears the rest live, and is let go once it settles', async (t) => {
     const harness = heldHarness(t, { turnIndex: 3 });
     const { token } = startHeldTurn({ message: 'Aid to Ghana' });
 
@@ -988,12 +986,15 @@ test('takeHeldTurn: an adopted turn replays what it heard, then hears the rest l
     );
 
     assert.deepEqual(heard, ['turn 3', 'turn.started 1']);
+    assert.notEqual(heldTurnListener(token), null);
 
     await harness.write({ event: 'done', seq: 2 });
     harness.end();
     await run;
 
     assert.deepEqual(heard, ['turn 3', 'turn.started 1', 'done 2']);
+    assert.equal(heldTurnListener(token), null);
+    assert.equal(takeHeldTurn(token), 'adopted');
 });
 
 test('takeHeldTurn: a refusal heard before adoption reaches the adopting onRefusal, and no error frame', async (t) => {
@@ -1033,7 +1034,7 @@ test('handoffExtras carries the seeds and the prompt source a handover has, and 
     assert.deepEqual(handoffExtras(null, undefined), {});
 });
 
-test('startHeldTurn posts the body runTurn posts for the same members, marked as a hold turn', async (t) => {
+test('startHeldTurn posts the request runTurn posts for the same members', async (t) => {
     const { fetch } = heldHarness(t);
     const extras: TurnExtras = { prompt_source: 'search_example', surface: 'studio' };
 
@@ -1044,36 +1045,25 @@ test('startHeldTurn posts the body runTurn posts for the same members, marked as
     void runTurn(taken.conversationId, 'Aid to Ghana', { onFrame: () => {} }, undefined, extras);
 
     const [held, own] = fetch.mock.calls.map((call) => call.arguments[1] as RequestInit);
-    const hold = (init?: RequestInit) =>
-        (init?.headers as Record<string, string>)['x-dfo-hold-turn'];
 
     assert.deepEqual(JSON.parse(held?.body as string), JSON.parse(own?.body as string));
-    assert.deepEqual([hold(held), hold(own)], ['1', undefined]);
+    assert.deepEqual(held?.headers, own?.headers);
 });
 
-test('startHeldTurn: cancel names the turn once the harness names it, and reads whether the prompt came back', async (t) => {
-    for (const [refunded, expected] of [
-        ['true', true],
-        ['false', false],
-    ] as const) {
-        const harness = heldHarness(t, { turnIndex: 4, refunded });
-        const { cancel } = startHeldTurn({ message: 'Aid to Ghana' });
-        // Cancelled before the harness answered, so the cancel waits for the turn.
-        const answer = cancel();
+test('startHeldTurn: a cancel before the harness names the turn waits for it and names it', async (t) => {
+    const harness = heldHarness(t, { turnIndex: 4 });
+    const { cancel } = startHeldTurn({ message: 'Aid to Ghana' });
 
-        assert.equal(await answer, expected, refunded);
+    await cancel();
 
-        const sent = harness.fetch.mock.calls
-            .filter((call) => call.arguments[0] === '/api/studio/cancel')
-            .map((call) => JSON.parse((call.arguments[1] as RequestInit).body as string));
+    const sent = harness.fetch.mock.calls
+        .filter((call) => call.arguments[0] === '/api/studio/cancel')
+        .map((call) => JSON.parse((call.arguments[1] as RequestInit).body as string));
 
-        assert.deepEqual(
-            sent.map((body) => body.turn_index),
-            [4],
-            refunded,
-        );
-        harness.fetch.mock.restore();
-    }
+    assert.deepEqual(
+        sent.map((body) => body.turn_index),
+        [4],
+    );
 });
 
 // The conversation of each turn `fetch` posted and of each cancel it sent,
@@ -1100,31 +1090,6 @@ const heldPosts = (fetch: ReturnType<typeof heldHarness>['fetch']) => {
 };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-test('startHeldTurn: a turn the move has not reached admittedLimitMs after admission cancels itself, and says the prompt stays spent', async (t) => {
-    const harness = heldHarness(t, { refunded: 'false' });
-    const heard: boolean[] = [];
-    const late = startHeldTurn({
-        message: 'Aid to Ghana',
-        admittedLimitMs: 20,
-        onCancelled: (refunded) => heard.push(refunded),
-    });
-    const moving = startHeldTurn({
-        message: 'Aid to Ghana',
-        admittedLimitMs: 20,
-        onCancelled: (refunded) => heard.push(refunded),
-    });
-
-    moving.moved();
-    await wait(80);
-
-    const { turns, cancels } = heldPosts(harness.fetch);
-
-    assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: false }]);
-    assert.deepEqual(heard, [false]);
-    assert.equal(takeHeldTurn(late.token), null);
-    assert.notEqual(takeHeldTurn(moving.token), null);
-});
 
 test('startHeldTurn: a moved turn Studio has not taken in adoptLimitMs cancels itself', async (t) => {
     const harness = heldHarness(t);

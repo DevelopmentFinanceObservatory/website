@@ -7,7 +7,6 @@ import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { limitHeaders as limitHeadersOf } from '@/lib/proxy/access';
 import { clientIp, countAnonymous, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
 import { STUDIO_HEADERS } from '@/lib/proxy/headers';
-import type { CounterDb, Reservation } from '@/lib/proxy/limitCounter';
 import { notFoundProblem, problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { studioIdentity } from '@/lib/proxy/studioIdentity';
 import {
@@ -21,17 +20,10 @@ import {
     type StudioOwnerRefusal,
 } from '@/lib/studio/studioAccess';
 import {
-    claimHoldTurn,
-    HOLD_TURN_HEADER,
     meterTurn,
-    PROMPT_REFUNDED_HEADER,
-    recordHoldTurn,
-    refundHoldTurn,
     refundPrompt,
     spendPrompt,
     studioRoute,
-    turnIndexOf,
-    type HarnessTurn,
     type Prompter,
 } from '@/lib/studio/spendPrompt';
 
@@ -55,37 +47,10 @@ const queryOf = (search: URLSearchParams): string => {
     return query ? `?${query}` : '';
 };
 
-// The harness names each turn's index in this response header (STUDIO_HEADERS).
-const TURN_INDEX_HEADER = 'x-dfo-turn-index';
-
-// The turn a cancel body names, or null when it names no conversation or no
-// turn index.
-const cancelledTurn = (conversationId: string | null, body: string | null): HarnessTurn | null => {
-    if (conversationId === null || body === null) {
-        return null;
-    }
-
-    const parsed: unknown = JSON.parse(body);
-    const turnIndex =
-        parsed !== null && typeof parsed === 'object' && 'turn_index' in parsed
-            ? turnIndexOf(parsed.turn_index)
-            : null;
-
-    return turnIndex === null ? null : { conversationId, turnIndex };
-};
-
-// `response` with the cancel answer's PROMPT_REFUNDED_HEADER set.
-const withRefunded = (response: Response, refunded: boolean): Response => {
-    const headers = new Headers(response.headers);
-
-    headers.set(PROMPT_REFUNDED_HEADER, String(refunded));
-
-    return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-    });
-};
+const giveBack = (receipt: Parameters<typeof refundPrompt>[1]) =>
+    refundPrompt(counterDb, receipt).catch((error) =>
+        console.error('studio: a prompt was not given back', error),
+    );
 
 const notFoundWith = (detail: string, headers: Record<string, string>): Response =>
     problem({ status: 404, code: 'not_found', detail, retryable: false, headers });
@@ -168,31 +133,18 @@ type StudioUser = { id: string; email: string };
  * (src/lib/studio/spendPrompt) gives it back when the turn does not start.
  * Reading the state and resuming a turn spend none.
  *
- * A turn sent with `x-dfo-hold-turn: 1` (HOLD_TURN_HEADER) is a hold turn:
- * once the harness admits it, the proxy records its receipt before it
- * returns the stream (recordHoldTurn). A cancel that names the turn, and
- * that the harness acted on, takes the receipt if the caller is the turn's
- * prompter and the refund deadline had not passed when the cancel arrived
- * (claimHoldTurn), and gives the prompt back (refundHoldTurn). Every cancel
- * answer the proxy forwards carries `x-dfo-prompt-refunded` (true or false).
- * The receipt outlives Studio's adoption of the turn, so Studio's own Stop
- * inside the window refunds too, and Studio reads the header.
- *
  * `getUser` reads the signed-in user, `ownersOf` and `claimOwner` the
- * account a harness conversation belongs to (src/lib/chat/conversationStore),
- * and `counters` holds the prompt allowances.
+ * account a harness conversation belongs to (src/lib/chat/conversationStore).
  */
 export const studioProxy =
     ({
         getUser,
         ownersOf,
         claimOwner,
-        counters = counterDb,
     }: {
         getUser: () => Promise<StudioUser | null>;
         ownersOf: (conversationId: string) => Promise<(string | null)[]>;
         claimOwner: (conversationId: string, userId: string) => Promise<(string | null)[]>;
-        counters?: CounterDb;
     }) =>
     async (req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) => {
         const route = studioRoute((await params).path);
@@ -275,102 +227,18 @@ export const studioProxy =
             ...studioIdentity(route, req.headers, readUserId),
         } as const;
 
-        const prompter = async (): Promise<Prompter> => {
-            const user = await session();
-
-            return user ? { email: user.email } : { address: clientIp(req) };
-        };
-
-        if (route === 'cancel') {
-            return cancelWithRefund(counters, prompter, call, () => forward(req, options));
-        }
-
         if (route !== 'turn') {
             return forward(req, options);
         }
 
-        const giveBack = (receipt: Reservation) =>
-            refundPrompt(counters, receipt).catch((error) =>
-                console.error('studio: a prompt was not given back', error),
-            );
-        const { conversationId } = call;
-        const started =
-            req.headers.get(HOLD_TURN_HEADER) === '1' && conversationId !== null
-                ? async (receipt: Reservation, response: Response) => {
-                      const turnIndex = turnIndexOf(response.headers.get(TURN_INDEX_HEADER));
+        const spend = async () => {
+            const user = await session();
+            const prompter: Prompter = user ? { email: user.email } : { address: clientIp(req) };
 
-                      if (turnIndex !== null) {
-                          await recordHoldTurn(counters, receipt, {
-                              conversationId,
-                              turnIndex,
-                          }).catch((error) =>
-                              console.error('studio: a hold turn was not made refundable', error),
-                          );
-                      }
-                  }
-                : undefined;
+            return spendPrompt(counterDb, prompter);
+        };
 
-        return meterTurn(
-            async () => spendPrompt(counters, await prompter()),
-            giveBack,
-            (admitTurn) => forward(req, { ...options, admit: () => admitOwner(admitTurn) }),
-            { started },
+        return meterTurn(spend, giveBack, (admitTurn) =>
+            forward(req, { ...options, admit: () => admitOwner(admitTurn) }),
         );
     };
-
-// Whether the harness's cancel answer says it acted on the Stop. It did
-// when the answer is ok and is not the 200 `turn_moved` (CancelSkipped),
-// which the harness gives a Stop whose turn is not the conversation's
-// latest and which stops nothing.
-const cancelActed = async (response: Response): Promise<boolean> => {
-    if (!response.ok) {
-        return false;
-    }
-
-    if (response.status !== 200) {
-        return true;
-    }
-
-    const body: unknown = await response
-        .clone()
-        .json()
-        .catch(() => null);
-
-    return !(
-        body !== null &&
-        typeof body === 'object' &&
-        'code' in body &&
-        body.code === 'turn_moved'
-    );
-};
-
-// A cancel forwarded through `forward`, answered with PROMPT_REFUNDED_HEADER.
-// The receipt of the hold turn it names is taken only once the harness says
-// it acted on the cancel, so a cancel that failed or stopped nothing leaves
-// it for a retry. The claim measures the deadline from the cancel's arrival,
-// so the harness's answer time does not count against it.
-const cancelWithRefund = async (
-    counters: CounterDb,
-    prompter: () => Promise<Prompter>,
-    call: { conversationId: string | null; body: string | null },
-    forwardCancel: () => Promise<Response>,
-): Promise<Response> => {
-    const arrived = performance.now();
-    const turn = cancelledTurn(call.conversationId, call.body);
-    const response = await forwardCancel();
-
-    if (turn === null || !(await cancelActed(response))) {
-        return withRefunded(response, false);
-    }
-
-    const refunded = await prompter()
-        .then((caller) => claimHoldTurn(counters, caller, turn, performance.now() - arrived))
-        .then((paid) => (paid === null ? false : refundHoldTurn(counters, paid)))
-        .catch((error) => {
-            console.error('studio: a hold turn prompt was not given back', error);
-
-            return false;
-        });
-
-    return withRefunded(response, refunded);
-};
