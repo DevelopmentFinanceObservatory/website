@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import JsonLd from '@/components/atoms/JsonLd/JsonLd';
 import SourceDetail from '@/components/organisms/Sources/SourceDetail';
+import { sourceDataset } from '@/lib/sources/dataset';
 import { loadSourceDoc } from '@/lib/sources/graph';
 
 // A source is addressed by its dcid, which carries slashes
@@ -34,8 +36,11 @@ const SourcePage = async ({ params }: SourcePageProps) => {
         notFound();
     }
 
+    const dataset = sourceDataset(ref, doc);
+
     return (
         <main>
+            {dataset && <JsonLd data={dataset} />}
             {/* Suspense: the tabs read the URL (useSearchParams) on a static page. */}
             <Suspense fallback={null}>
                 <SourceDetail dcid={ref} doc={doc} now={new Date().toISOString()} />

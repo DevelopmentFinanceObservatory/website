@@ -53,6 +53,14 @@ import { formatPeriod } from '../studio/period.ts';
 import { problem, type ProblemStatus } from '../proxy/problem.ts';
 import { drawSlotCard, REQUEST_REFUSALS, shownPageCards } from '../studio/slotCards.ts';
 import { DFO_ORGANIZATION, SITE_NAME, SITE_ORIGIN } from '../site.ts';
+import {
+    clip,
+    DESCRIPTION_MAX,
+    DESCRIPTION_MIN,
+    httpUrl,
+    type Licence,
+    licenceOf,
+} from '../structuredData.ts';
 import { artifactPath, type LibraryArtifact } from './artifact.ts';
 
 const REVALIDATE_SECONDS = 300;
@@ -67,10 +75,6 @@ const PAGE_DEADLINE_MS = 1_500;
 // How long a read that missed the page's deadline may run on to fill the
 // cache.
 const FILL_DEADLINE_MS = 10_000;
-
-// Google reads a Dataset description of 50 to 5,000 characters.
-const DESCRIPTION_MIN = 50;
-const DESCRIPTION_MAX = 5_000;
 
 // dfo-apis statuses that say the share or its slot is gone or cannot be
 // drawn. A refusal under one of them is permanent unless dfo-apis marks it
@@ -95,7 +99,6 @@ type ChartArtifact = Pick<
 
 type Row = { series: string; period: string; value: number; unit: string | null };
 
-type Licence = string | { '@type': 'CreativeWork'; name: string };
 type Source = { '@type': 'Dataset'; name: string; url?: string; license?: Licence };
 
 type Dataset = {
@@ -198,24 +201,6 @@ export type LibraryChartData = {
     // frame the rows are drawn on.
     csvHref: string;
     dataset: Dataset;
-};
-
-const httpUrl = (value: string | null | undefined): string | undefined => {
-    if (value && URL.canParse(value)) {
-        const url = new URL(value);
-
-        if (url.protocol === 'https:' || url.protocol === 'http:') {
-            return url.href;
-        }
-    }
-};
-
-const licenceOf = (value: string | null | undefined): Licence | undefined => {
-    const name = value?.trim();
-
-    if (name && !/not stated|^(unknown|no licence|none|n\/a)$/i.test(name)) {
-        return httpUrl(name) ?? { '@type': 'CreativeWork', name };
-    }
 };
 
 // Compare the ends independently so an interval can overlap shorter periods.
@@ -666,18 +651,6 @@ const pageChart = async (
     }
 
     return chart;
-};
-
-// At most `max` characters, cut at a word break when one is near.
-const clip = (text: string, max: number): string => {
-    if (text.length <= max) {
-        return text;
-    }
-
-    const cut = text.slice(0, max - 1);
-    const space = cut.lastIndexOf(' ');
-
-    return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 };
 
 // "a", "a and b", "a, b, and c", or the first NAMES_LISTED and a count.

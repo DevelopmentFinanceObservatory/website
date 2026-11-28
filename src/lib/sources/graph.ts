@@ -34,7 +34,7 @@ import type {
 } from '../graph/wire.ts';
 import type { DataCommonsRef } from '../search/types.ts';
 
-import { httpOnly } from './url.ts';
+import { cleanDcid, httpOnly } from './url.ts';
 
 // Source metadata changes on a data refresh, not on a page view.
 const REVALIDATE_SECONDS = 3600;
@@ -116,9 +116,6 @@ export type DocumentError = DocumentErrorEntry;
  *  `description` and each change's `note` are CommonMark Markdown; every
  *  other string is plain text. */
 export type SourceDoc = SourceDocumentation;
-
-// Chart coordinates carry a `dcid:` prefix the path can't take (a colon).
-const cleanDcid = (dcid: string): string => dcid.replace(/^dcid:/, '');
 
 // A transient upstream or cold-start 503/504 from the API, which the read retries.
 const TRANSIENT_STATUSES = new Set([503, 504]);
