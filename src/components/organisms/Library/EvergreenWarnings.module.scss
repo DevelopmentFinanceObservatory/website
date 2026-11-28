@@ -1,0 +1,39 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.warnings {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+    padding: rem(10);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+}
+
+.heading {
+    @include font-size(13px, 1.35);
+
+    font-weight: 500;
+}
+
+.list {
+    @include font-size(13px, 1.35);
+
+    padding: 0;
+    margin: 0;
+    list-style: none;
+
+    li + li {
+        margin-top: rem(4);
+    }
+}
+
+.field {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}

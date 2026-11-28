@@ -3,14 +3,22 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import ArtifactFields, { isComplete } from './ArtifactFields';
+import ArtifactFields, { evergreenOutcome, isComplete, type Refusals } from './ArtifactFields';
 import styles from './EditArtifact.module.scss';
+import EvergreenWarnings from './EvergreenWarnings';
 import ReplacementPicker from './ReplacementPicker';
 
 import Button from '@/components/atoms/Button/Button';
 import Modal from '@/components/molecules/Modal/Modal';
 import { artifactPath, type LibraryArtifact, type ReplacementChoice } from '@/lib/library/artifact';
-import { deleteArtifact, editArtifact, withdrawnWithoutReplacement } from '@/lib/library/client';
+import {
+    deleteArtifact,
+    editArtifact,
+    type EvergreenWarning,
+    isArtifactChangedRefusal,
+    readEvergreenWarnings,
+    withdrawnWithoutReplacement,
+} from '@/lib/library/client';
 import type { ArtifactText } from '@/lib/library/publish';
 
 /**
@@ -45,6 +53,11 @@ const EditArtifact = ({
     const [confirming, setConfirming] = useState(false);
     const [replacedBy, setReplacedBy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [refusals, setRefusals] = useState<Refusals | null>(null);
+    // The edit answered that someone else saved the artifact first.
+    const [changed, setChanged] = useState(false);
+    // The sentences a saved edit flagged, shown until the dialog is closed.
+    const [warnings, setWarnings] = useState<EvergreenWarning[] | null>(null);
 
     const show = (next: boolean) => {
         if (next) {
@@ -52,6 +65,9 @@ const EditArtifact = ({
             setConfirming(false);
             setReplacedBy(null);
             setError(null);
+            setRefusals(null);
+            setChanged(false);
+            setWarnings(null);
         }
 
         setOpen(next);
@@ -66,16 +82,32 @@ const EditArtifact = ({
 
         setBusy('save');
         setError(null);
+        setRefusals(null);
+        setChanged(false);
 
         const answer = await editArtifact(artifact.id, text, artifact.revision);
 
         setBusy(null);
 
         if (answer.ok) {
-            setOpen(false);
+            const flagged = readEvergreenWarnings(answer.value);
+
+            // The page behind shows the saved text; flagged sentences keep
+            // the dialog open so they are read.
             router.refresh();
+            setOpen(flagged.length > 0);
+            setWarnings(flagged.length > 0 ? flagged : null);
         } else {
-            setError(answer.detail);
+            if (isArtifactChangedRefusal(answer.problem)) {
+                setChanged(true);
+
+                return;
+            }
+
+            const outcome = evergreenOutcome(answer.problem, answer.detail, text);
+
+            setRefusals(outcome.refusals);
+            setError(outcome.error);
         }
     };
 
@@ -105,73 +137,101 @@ const EditArtifact = ({
                 Edit
             </Button>
             <Modal open={open} onOpenChange={show} title="Edit" fit>
-                <form className={styles.form} onSubmit={save}>
-                    <ArtifactFields value={text} onChange={setText} />
-                    {error && (
-                        <p className={styles.error} role="alert">
-                            {error}
-                        </p>
-                    )}
-                    <div className={styles.actions}>
-                        <Button
-                            variant="dark"
-                            full
-                            icon="arrow"
-                            type="submit"
-                            disabled={busy !== null || !isComplete(text)}
-                        >
-                            {busy === 'save' ? 'Saving…' : 'Save Changes'}
+                {warnings ? (
+                    <div className={styles.form}>
+                        <p role="status">The changes were saved.</p>
+                        <EvergreenWarnings warnings={warnings} />
+                        <Button variant="dark" full onClick={() => setOpen(false)}>
+                            Done
                         </Button>
-                        {confirming ? (
-                            <>
-                                {/* In the place of "Delete from Library", so a
-                                    second click of a double-click keeps it. */}
+                    </div>
+                ) : (
+                    <form className={styles.form} onSubmit={save}>
+                        <ArtifactFields value={text} onChange={setText} refusals={refusals} />
+                        {changed && (
+                            <div className={styles.error} role="alert">
+                                <p>
+                                    Someone else changed this artifact. Reload to see their changes.
+                                </p>
                                 <Button
                                     variant="bordered"
-                                    full
-                                    onClick={() => setConfirming(false)}
-                                    disabled={busy !== null}
+                                    small
+                                    onClick={() => {
+                                        // Reopening shows the fresh text.
+                                        setOpen(false);
+                                        router.refresh();
+                                    }}
                                 >
-                                    Keep it
+                                    Reload
                                 </Button>
-                                <div className={styles.replacement}>
-                                    <ReplacementPicker
-                                        choices={replacements}
-                                        value={replacedBy}
-                                        onChange={setReplacedBy}
+                            </div>
+                        )}
+                        {error && (
+                            <p className={styles.error} role="alert">
+                                {error}
+                            </p>
+                        )}
+                        <div className={styles.actions}>
+                            <Button
+                                variant="dark"
+                                full
+                                icon="arrow"
+                                type="submit"
+                                disabled={busy !== null || !isComplete(text)}
+                            >
+                                {busy === 'save' ? 'Saving…' : 'Save Changes'}
+                            </Button>
+                            {confirming ? (
+                                <>
+                                    {/* In the place of "Delete from Library", so a
+                                    second click of a double-click keeps it. */}
+                                    <Button
+                                        variant="bordered"
+                                        full
+                                        onClick={() => setConfirming(false)}
                                         disabled={busy !== null}
-                                    />
-                                </div>
+                                    >
+                                        Keep it
+                                    </Button>
+                                    <div className={styles.replacement}>
+                                        <ReplacementPicker
+                                            choices={replacements}
+                                            value={replacedBy}
+                                            onChange={setReplacedBy}
+                                            disabled={busy !== null}
+                                        />
+                                    </div>
+                                    <Button
+                                        variant="bordered"
+                                        full
+                                        icon="remove"
+                                        className={styles.delete}
+                                        onClick={remove}
+                                        disabled={busy !== null}
+                                    >
+                                        {busy === 'delete' ? 'Deleting…' : 'Delete'}
+                                    </Button>
+                                </>
+                            ) : (
                                 <Button
                                     variant="bordered"
                                     full
                                     icon="remove"
                                     className={styles.delete}
-                                    onClick={remove}
+                                    onClick={() => setConfirming(true)}
                                     disabled={busy !== null}
                                 >
-                                    {busy === 'delete' ? 'Deleting…' : 'Delete'}
+                                    Delete from Library
                                 </Button>
-                            </>
-                        ) : (
-                            <Button
-                                variant="bordered"
-                                full
-                                icon="remove"
-                                className={styles.delete}
-                                onClick={() => setConfirming(true)}
-                                disabled={busy !== null}
-                            >
-                                Delete from Library
-                            </Button>
-                        )}
-                        {/* In the page from the start, so its line is announced. */}
-                        <p className={styles.warning} role="status">
-                            {confirming &&
-                                `The Library will erase its title and text, its URL will show that it was withdrawn${replacedBy ? ' and link to the replacement picked above' : ''}, and its chart will be taken down or queued for removal. This cannot be undone.`}
-                        </p>
-                    </div>
-                </form>
+                            )}
+                            {/* In the page from the start, so its line is announced. */}
+                            <p className={styles.warning} role="status">
+                                {confirming &&
+                                    `The Library will erase its title and text, its URL will show that it was withdrawn${replacedBy ? ' and link to the replacement picked above' : ''}, and its chart will be taken down or queued for removal. This cannot be undone.`}
+                            </p>
+                        </div>
+                    </form>
+                )}
             </Modal>
         </>
     );
