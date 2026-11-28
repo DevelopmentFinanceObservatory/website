@@ -143,6 +143,8 @@ test('exportRow drops a value its rule refuses', async (t) => {
         ['a `|` in a token', { name: 'studio.card', props: { source: 'OECD|DAC' } }],
         ['a `|` in a digest', { name: 'share.open', props: { shareId: 'OECD|DAC' } }],
         ['a `|` in a specIds entry', { name: 'search.query', props: { specIds: ['OECD|DAC'] } }],
+        ['a probability above 1', { name: 'search.studio_handoff', props: { probability: 1.2 } }],
+        ['a probability as text', { name: 'search.studio_handoff', props: { probability: '0.4' } }],
     ];
 
     for (const [label, overrides] of cases) {
@@ -400,6 +402,47 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
         page: '/insights',
         props: { internal_eng: false, path: '/insights' },
     }),
+    sourceEvent({
+        id: 13,
+        name: 'search.studio_handoff',
+        page: '/data?q=why%20is%20aid%20falling',
+        props: { trigger: 'offer', probability: 0.45, seeds: 0, traceId: 'trace-1' },
+    }),
+    sourceEvent({
+        id: 14,
+        name: 'search.studio_handoff',
+        props: { trigger: 'auto', probability: null },
+    }),
+    sourceEvent({
+        id: 15,
+        name: 'search.query',
+        props: { source: 'route_back', post: 0 },
+    }),
+    sourceEvent({
+        id: 16,
+        name: 'search.route_stay',
+        props: { traceId: 'trace-1', trigger: 'out_of_prompts', query: 'why is aid falling' },
+    }),
+    sourceEvent({
+        id: 17,
+        name: 'search.query',
+        props: { source: 'route_stay', post: 0 },
+    }),
+    sourceEvent({
+        id: 18,
+        name: 'search.query',
+        props: { source: 'routing_off', post: 0 },
+    }),
+    sourceEvent({
+        id: 19,
+        name: 'search.query',
+        props: { source: 'move_back', post: 0 },
+    }),
+    sourceEvent({
+        id: 20,
+        name: 'search.studio_handoff',
+        props: { trigger: 'out_of_prompts', probability: 0.9 },
+    }),
 ];
 
 // A row as versions 1 to 3 wrote it, before `day_visitor`.
@@ -574,6 +617,129 @@ const VERSION_3_ROWS: PastRow[] = [
     },
 ];
 
+// Version 4 adds `day_visitor`, copied as it is, and the `page.view` event.
+const VERSION_4_ROWS: ExportRow[] = [
+    ...VERSION_3_ROWS.map((row) => ({ ...row, day_visitor: null })),
+    {
+        id: 12,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'page.view',
+        page: '/insights',
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `path` is no prop of page.view, so it is dropped.
+        props: { internal_eng: false },
+        export_rules: 'r',
+        day_visitor: '0123456789abcdef0123456789abcdef',
+    },
+];
+
+// Version 5 keeps the router's `probability` on `search.studio_handoff` and
+// its `out_of_prompts` trigger, the `route_back`, `move_back`, `route_stay`
+// and `routing_off` search sources, and the `search.route_stay` event.
+const VERSION_5_ROWS: ExportRow[] = [
+    ...VERSION_4_ROWS,
+    {
+        id: 13,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.studio_handoff',
+        page: '/data',
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { trigger: 'offer', probability: 0.45, seeds: 0, traceId: 'trace-1' },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 14,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.studio_handoff',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // A route from the question read has no probability.
+        props: { trigger: 'auto', probability: null },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 15,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'route_back', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 16,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.route_stay',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `query` is no prop of search.route_stay, so it is dropped.
+        props: { traceId: 'trace-1', trigger: 'out_of_prompts' },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 17,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'route_stay', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 18,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'routing_off', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 19,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'move_back', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 20,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.studio_handoff',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { trigger: 'out_of_prompts', probability: 0.9 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+];
+
 // Each ROW_SHAPE_VERSION's rows for GOLDEN_SAMPLE under KEY, with rules
 // `r`. A change to the rows adds the next version with its rows, and an
 // entry never changes.
@@ -581,23 +747,8 @@ const GOLDEN_ROWS: Record<number, (PastRow | ExportRow)[]> = {
     1: VERSION_1_ROWS,
     2: VERSION_2_ROWS,
     3: VERSION_3_ROWS,
-    // Version 4 adds `day_visitor`, copied as it is, and the `page.view` event.
-    4: [
-        ...VERSION_3_ROWS.map((row) => ({ ...row, day_visitor: null })),
-        {
-            id: 12,
-            created_at: '2026-10-20T13:04:05.123456Z',
-            name: 'page.view',
-            page: '/insights',
-            signed_in: false,
-            visitor_hash: null,
-            user_hash: null,
-            // `path` is no prop of page.view, so it is dropped.
-            props: { internal_eng: false },
-            export_rules: 'r',
-            day_visitor: '0123456789abcdef0123456789abcdef',
-        },
-    ],
+    4: VERSION_4_ROWS,
+    5: VERSION_5_ROWS,
 };
 
 test('exportRow writes the rows pinned to the current ROW_SHAPE_VERSION', () => {

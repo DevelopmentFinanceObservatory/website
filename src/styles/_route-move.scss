@@ -1,0 +1,98 @@
+@use "variables" as *;
+
+// The move between Get Data and Studio (RouteMove; ROUTE_TO_STUDIO and
+// ROUTE_TO_DATA in src/lib/search/studioHandoff.ts). Forward, Studio (the
+// sheet) slides over the site from the right while the site (the under
+// layer, header included) drifts left beneath it. Back, the sheet slides off
+// to the right and the site drifts back. Both layers stay opaque, so each
+// pixel changes once, at the sheet's moving edge. Each direction has its own
+// keyframes, since `reverse` would also turn the ease-out into an ease-in.
+// The offsets are in vw because each named element of a layer is its own
+// snapshot, and a percentage would move each by its own width.
+
+// A navigation the move does not type swaps at once, where the UA would
+// crossfade the root snapshot through grey.
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+}
+
+::view-transition-new(.route-sheet) {
+    animation: route-sheet-in 0.4s $ease-out both;
+}
+
+::view-transition-old(.route-under) {
+    animation: route-under-out 0.4s $ease-out both;
+}
+
+// The leaving sheet stays above the site it uncovers.
+::view-transition-group(.route-sheet) {
+    z-index: 1;
+}
+
+::view-transition-old(.route-sheet) {
+    animation: route-sheet-out 0.34s $ease-out both;
+}
+
+::view-transition-new(.route-under) {
+    animation: route-under-in 0.34s $ease-out both;
+}
+
+// Clicks during the move reach the arriving page.
+::view-transition {
+    pointer-events: none;
+}
+
+@keyframes route-sheet-in {
+    from {
+        translate: 100vw 0;
+    }
+}
+
+@keyframes route-sheet-out {
+    to {
+        translate: 100vw 0;
+    }
+}
+
+@keyframes route-under-out {
+    to {
+        translate: -20vw 0;
+    }
+}
+
+@keyframes route-under-in {
+    from {
+        translate: -20vw 0;
+    }
+}
+
+@keyframes route-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes route-fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+// No movement: Studio fades in over the still site, and fades off it on the
+// way back, a steady brightness ramp with no grey dip.
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-new(.route-sheet) {
+        animation: route-fade-in 0.2s ease both;
+    }
+
+    ::view-transition-old(.route-sheet) {
+        animation: route-fade-out 0.16s ease both;
+    }
+
+    ::view-transition-old(.route-under),
+    ::view-transition-new(.route-under) {
+        animation: none;
+    }
+}

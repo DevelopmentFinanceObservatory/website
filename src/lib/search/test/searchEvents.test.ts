@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { fitsProps, MAX_PROPS_BYTES } from '../../events/limits.ts';
+import { buildRequest } from '../searchClient.ts';
 import {
+    dataSearchHref,
     HANDOFF_SOURCE_PARAM,
+    handoffArrival,
     handoffHref,
     handoffSource,
+    moveBackHref,
+    routeBackHref,
+    routingOffFor,
     searchEventProps,
     searchOutcome,
     searchPostTracker,
@@ -694,4 +700,74 @@ test('a homepage handoff carries typed or example; any other value is a permalin
     for (const href of ['/data?q=aid', '/data?q=aid&via=share', '/data?q=aid&via=Typed']) {
         assert.equal(arrival(href), 'permalink');
     }
+});
+
+test("a routing=off URL searches its question without the Studio router, as route_back from Studio's way back and move_back from a move's entry", () => {
+    const arrive = (href: string) => {
+        const params = new URL(href, 'https://example.org').searchParams;
+        const body = buildRequest({ kind: 'raw_text', query: 'aid & debt' }, true, {
+            studioRouting: !routingOffFor(params, 'aid & debt'),
+        });
+
+        return { ...handoffArrival(params), routed: 'studio_routing' in body.input };
+    };
+
+    assert.deepEqual(
+        [
+            routeBackHref('aid & debt'),
+            moveBackHref('aid & debt'),
+            dataSearchHref({ query: 'aid & debt', routingOff: true }),
+            `${handoffHref('aid & debt', 'typed')}&routing=off`,
+            handoffHref('aid & debt', 'typed'),
+            '/data?q=aid',
+        ].map(arrive),
+        [
+            { source: 'route_back', href: '/data?q=aid+%26+debt&routing=off', routed: false },
+            { source: 'move_back', href: '/data?q=aid+%26+debt&routing=off', routed: false },
+            { source: 'routing_off', href: null, routed: false },
+            { source: 'routing_off', href: '/data?q=aid+%26+debt&routing=off', routed: false },
+            { source: 'typed', href: '/data?q=aid+%26+debt', routed: true },
+            { source: 'permalink', href: null, routed: true },
+        ],
+    );
+});
+
+test('the page URL keeps routing=off for its own question and drops it for a new one', () => {
+    const params = new URL(routeBackHref('aid & debt'), 'https://example.org').searchParams;
+    const href = (query: string, state?: string) =>
+        dataSearchHref({ query, state, routingOff: routingOffFor(params, query) });
+    const reread = (url: string) => {
+        const next = new URL(url, 'https://example.org').searchParams;
+
+        return [next.get('q'), next.get('s'), routingOffFor(next, next.get('q') ?? '')];
+    };
+
+    assert.deepEqual(
+        [href('aid & debt'), href('aid & debt', 'eJy'), href('aid to Kenya')].map(reread),
+        [
+            ['aid & debt', null, true],
+            ['aid & debt', 'eJy', true],
+            ['aid to Kenya', null, false],
+        ],
+    );
+});
+
+test("a routed Studio hand-off carries its trigger and the route's probability", () => {
+    const props = (trigger: 'auto' | 'button', probability?: number | null) =>
+        searchEventProps({
+            query: 'Why is aid to Kenya falling?',
+            edited: false,
+            kind: 'declined',
+            reason: 'requires_analysis',
+            parts: [],
+            seeds: 0,
+            trigger,
+            ...(probability !== undefined && { probability }),
+        });
+
+    assert.equal(props('auto', 0.94).trigger, 'auto');
+    assert.equal(props('auto', 0.94).probability, 0.94);
+    assert.equal(props('auto', null).probability, null);
+    assert.equal(props('button').trigger, 'button');
+    assert.equal('probability' in props('button'), false);
 });

@@ -262,12 +262,25 @@ export function knownPart(part: Part | null | undefined): KnownPart | null {
 /** A resolution with its parts normalised. */
 export type Resolution = Omit<wire.Resolution, 'parts'> & { parts: Part[] };
 
-/** Every resolve response body after normalisation, discriminated on `kind`. */
-export type ResolveResponse = Resolution | wire.CatalogueAnswer | wire.DeclinedAnswer;
+/** Every resolve response body after normalisation, discriminated on `kind`. A raw-text run
+ *  that opted in to Studio routing may carry the router's `route`. */
+export type ResolveResponse = (Resolution | wire.CatalogueAnswer | wire.DeclinedAnswer) & {
+    route?: StudioRoute;
+};
 
 // ---------------------------------------------------------------------------
 // Stream payloads, hand-written because the OpenAPI document does not describe the SSE stream
 // ---------------------------------------------------------------------------
+
+/** The search API's verdict that a raw-text question belongs in Studio, on a run that sent
+ *  `studio_routing: true`. `auto` ends the run as a `requires_analysis` decline. `offer` arrives
+ *  as an early `route` frame and the run goes on. `probability` is the router's studio
+ *  probability, null when the route came from the question read's own `requires_analysis`. */
+export type StudioRoute = {
+    target: 'studio';
+    mode: 'auto' | 'offer';
+    probability: number | null;
+};
 
 /** Departures the stream's `done` event adds to one part. They are facts that depend on the
  *  observations read, which arrive after `response`. A folded part and the part it folded into

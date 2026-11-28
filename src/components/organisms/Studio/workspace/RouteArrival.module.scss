@@ -1,0 +1,32 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The head of the transcript, across the panel's width (.chatScroll aligns
+// its messages to the right).
+.arrival {
+    @include font-size(11px, 1.3);
+
+    align-self: stretch;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+.back {
+    color: var(--color-charcoal);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    transition: opacity 0.25s ease;
+
+    @media (hover: hover) {
+        &:hover {
+            opacity: 0.6;
+        }
+    }
+}
+
+.pending {
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
