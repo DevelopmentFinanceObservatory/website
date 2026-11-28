@@ -16,8 +16,8 @@ const FADE_IN = 150;
 const FADE_OUT = 80;
 // The incoming content starts to show this long into a growing tween, and
 // shows over the last FOLD_FADE of a shrinking one.
-const OPEN_DELAY = 60;
-const FOLD_FADE = 100;
+const OPEN_DELAY = 40;
+const FOLD_FADE = 140;
 
 /** `.upper` as drawn just before React commits a change of sheet. */
 type Snapshot = {
