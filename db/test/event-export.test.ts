@@ -418,6 +418,21 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
         name: 'search.query',
         props: { source: 'route_back', post: 0 },
     }),
+    sourceEvent({
+        id: 16,
+        name: 'search.route_stay',
+        props: { traceId: 'trace-1', trigger: 'out_of_prompts', query: 'why is aid falling' },
+    }),
+    sourceEvent({
+        id: 17,
+        name: 'search.query',
+        props: { source: 'route_stay', post: 0 },
+    }),
+    sourceEvent({
+        id: 18,
+        name: 'search.query',
+        props: { source: 'routing_off', post: 0 },
+    }),
 ];
 
 // A row as versions 1 to 3 wrote it, before `day_visitor`.
@@ -610,8 +625,9 @@ const VERSION_4_ROWS: ExportRow[] = [
     },
 ];
 
-// Version 5 keeps the router's `probability` on `search.studio_handoff`
-// and the `route_back` search source.
+// Version 5 keeps the router's `probability` on `search.studio_handoff`,
+// the `route_back`, `route_stay` and `routing_off` search sources, and the
+// `search.route_stay` event.
 const VERSION_5_ROWS: ExportRow[] = [
     ...VERSION_4_ROWS,
     {
@@ -648,6 +664,43 @@ const VERSION_5_ROWS: ExportRow[] = [
         visitor_hash: null,
         user_hash: null,
         props: { source: 'route_back', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 16,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.route_stay',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        // `query` is no prop of search.route_stay, so it is dropped.
+        props: { traceId: 'trace-1', trigger: 'out_of_prompts' },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 17,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'route_stay', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 18,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'routing_off', post: 0 },
         export_rules: 'r',
         day_visitor: null,
     },

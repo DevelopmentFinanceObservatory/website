@@ -14,12 +14,17 @@ import Button from '@/components/atoms/Button/Button';
  *  with the trace id the route's frame carried, or the answer's once it has
  *  landed (DataSearch's openStudio). The page shows no other Studio action
  *  meanwhile. `inPlace` is the card that takes over the move's callout in
- *  its slot: the text swaps where it stands, and only the button fades in. */
+ *  its slot: the text swaps where it stands, and only the button fades in.
+ *  `onData`, given for a move a guest with no free prompt left would make,
+ *  adds "Search the data instead", which searches the question as data as
+ *  staying out of the move does. */
 const StudioOffer = ({
     onStudio,
+    onData,
     inPlace = false,
 }: {
     onStudio: () => void;
+    onData?: () => void;
     inPlace?: boolean;
 }) => {
     const button = useRef<HTMLElement>(null);
@@ -40,14 +45,25 @@ const StudioOffer = ({
                 Search finds and downloads data. Studio can plan the analysis, run it and show its
                 working.
             </p>
-            <Button
-                ref={button}
-                icon="arrow"
-                onClick={onStudio}
-                className={inPlace ? styles.offerButtonIn : undefined}
-            >
-                Ask in Studio
-            </Button>
+            {onData ? (
+                <div className={styles.actions}>
+                    <Button icon="arrow" onClick={onStudio}>
+                        Ask in Studio
+                    </Button>
+                    <Button variant="outline" onClick={onData}>
+                        Search the data instead
+                    </Button>
+                </div>
+            ) : (
+                <Button
+                    ref={button}
+                    icon="arrow"
+                    onClick={onStudio}
+                    className={inPlace ? styles.offerButtonIn : undefined}
+                >
+                    Ask in Studio
+                </Button>
+            )}
         </div>
     );
 };

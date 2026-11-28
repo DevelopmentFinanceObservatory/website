@@ -108,10 +108,10 @@ const operationKey = ({ verb, phrase, over, target_year }: Operation): string =>
 
 /** Whether a search asks a Data search example's text: it was picked as
  *  an example, or it reruns the same question of a search that was, as a
- *  Retry or as the data search a reader stays on during the automatic
- *  move (`route_back`). `previous` is the search it replaces. */
+ *  Retry or as the data search a reader stays on instead of the router's
+ *  move to Studio (`route_stay`). `previous` is the search it replaces. */
 export function searchFromExample(source: SearchSource, previous: boolean): boolean {
-    return source === 'example' || ((source === 'retry' || source === 'route_back') && previous);
+    return source === 'example' || ((source === 'retry' || source === 'route_stay') && previous);
 }
 
 /** Whether the question handed to Studio is a Data search example's text:

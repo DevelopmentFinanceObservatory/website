@@ -701,7 +701,7 @@ test('a homepage handoff carries typed or example; any other value is a permalin
     }
 });
 
-test('a routing=off URL searches its question without the Studio router as route_back', () => {
+test("a routing=off URL searches its question without the Studio router, as route_back from Studio's way back", () => {
     const arrive = (href: string) => {
         const params = new URL(href, 'https://example.org').searchParams;
         const body = buildRequest({ kind: 'raw_text', query: 'aid & debt' }, true, {
@@ -714,13 +714,15 @@ test('a routing=off URL searches its question without the Studio router as route
     assert.deepEqual(
         [
             routeBackHref('aid & debt'),
+            dataSearchHref({ query: 'aid & debt', routingOff: true }),
             `${handoffHref('aid & debt', 'typed')}&routing=off`,
             handoffHref('aid & debt', 'typed'),
             '/data?q=aid',
         ].map(arrive),
         [
-            { source: 'route_back', href: null, routed: false },
             { source: 'route_back', href: '/data?q=aid+%26+debt&routing=off', routed: false },
+            { source: 'routing_off', href: null, routed: false },
+            { source: 'routing_off', href: '/data?q=aid+%26+debt&routing=off', routed: false },
             { source: 'typed', href: '/data?q=aid+%26+debt', routed: true },
             { source: 'permalink', href: null, routed: true },
         ],

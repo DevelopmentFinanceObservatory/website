@@ -470,8 +470,9 @@ test('a search asks an example when it was picked as one or reruns one that was'
         [['example', false], true],
         [['retry', true], true],
         [['retry', false], false],
-        [['route_back', true], true],
-        [['route_back', false], false],
+        [['route_stay', true], true],
+        [['route_stay', false], false],
+        [['route_back', true], false],
         [['typed', true], false],
         [['permalink', true], false],
     ];

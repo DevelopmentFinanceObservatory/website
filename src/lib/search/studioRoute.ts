@@ -35,16 +35,25 @@ export function studioRoute(value: unknown): StudioRoute | null {
     return { target, mode, probability: probability ?? null };
 }
 
-/** What the page does with a route: move the reader to Studio, or offer it. */
-export type RouteMove = 'auto' | 'offer';
+/** What the page does with a route: move the reader to Studio (`auto`),
+ *  offer it (`offer`), or offer it in place of a move a guest with no free
+ *  prompt left would make (`out_of_prompts`), beside a data search of the
+ *  same question. */
+export type RouteMove = 'auto' | 'offer' | 'out_of_prompts';
+
+/** What kept the reader on the data search of a question the router sent
+ *  to Studio: the move's "Search the data instead" button, Escape during
+ *  the move's pause, or the out-of-prompts card's data action. */
+export type RouteStayTrigger = 'button' | 'escape' | 'out_of_prompts';
 
 /**
  * The page's move for a run's route, or null for none. `auto` moves the
  * reader only on the `declined` answer the API ends an auto run with, and
  * only while a guest has a free prompt left: a guest with none
  * (guestOutOfPrompts, src/lib/studio/promptAllowance.ts) would arrive at a
- * refusal, so is offered Studio instead. A signed-in reader is moved
- * whatever their daily allowance. Every other route is an offer.
+ * refusal, so is offered Studio and a data search instead
+ * (`out_of_prompts`). A signed-in reader is moved whatever their daily
+ * allowance. Every other route is an offer.
  */
 export function routeMove({
     route,
@@ -59,7 +68,11 @@ export function routeMove({
         return null;
     }
 
-    return route.mode === 'auto' && kind === 'declined' && !guestOutOfPrompts ? 'auto' : 'offer';
+    if (route.mode !== 'auto' || kind !== 'declined') {
+        return 'offer';
+    }
+
+    return guestOutOfPrompts ? 'out_of_prompts' : 'auto';
 }
 
 /**

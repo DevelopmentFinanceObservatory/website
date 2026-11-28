@@ -43,7 +43,7 @@ test('studioRoute reads a Studio route and refuses anything else', async (t) => 
     }
 });
 
-test('routeMove moves on an auto decline, and offers Studio otherwise', async (t) => {
+test('routeMove moves on an auto decline, holds it for a guest out of prompts, and offers Studio otherwise', async (t) => {
     const auto: StudioRoute = { target: 'studio', mode: 'auto', probability: 0.95 };
     const offer: StudioRoute = { target: 'studio', mode: 'offer', probability: 0.7 };
     const cases: [string, Parameters<typeof routeMove>[0], ReturnType<typeof routeMove>][] = [
@@ -52,6 +52,11 @@ test('routeMove moves on an auto decline, and offers Studio otherwise', async (t
         [
             'auto decline for a guest with no prompt left',
             { route: auto, kind: 'declined', guestOutOfPrompts: true },
+            'out_of_prompts',
+        ],
+        [
+            'offer decline for a guest with no prompt left',
+            { route: offer, kind: 'declined', guestOutOfPrompts: true },
             'offer',
         ],
         [

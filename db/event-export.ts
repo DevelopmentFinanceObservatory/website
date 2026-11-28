@@ -21,6 +21,7 @@ import type {
 } from '../src/lib/search/searchEvents.ts';
 import type { SearchShareMode } from '../src/lib/search/searchShareRequest.ts';
 import type { HandoffTrigger } from '../src/lib/search/studioHandoff.ts';
+import type { RouteStayTrigger } from '../src/lib/search/studioRoute.ts';
 import type { DeclinedReason, Known, ResolveResponse } from '../src/lib/search/types.ts';
 
 import {
@@ -112,6 +113,8 @@ const SEARCH_SOURCES = every<SearchSource>()([
     'share',
     'version_link',
     'route_back',
+    'route_stay',
+    'routing_off',
 ]);
 const EDIT_KINDS = every<EditKind>()([
     'slot',
@@ -160,6 +163,7 @@ const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unk
 const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
 const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
 const HANDOFF_TRIGGERS = every<HandoffTrigger>()(['auto', 'offer', 'button']);
+const ROUTE_STAY_TRIGGERS = every<RouteStayTrigger>()(['button', 'escape', 'out_of_prompts']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -217,6 +221,7 @@ export const PROP_RULES = {
         trigger: HANDOFF_TRIGGERS,
         probability: 'probability',
     },
+    'search.route_stay': { ...EVERY_EVENT, traceId: 'token', trigger: ROUTE_STAY_TRIGGERS },
     'search.action': {
         ...EVERY_EVENT,
         searchId: 'token',

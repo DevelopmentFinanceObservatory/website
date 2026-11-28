@@ -18,6 +18,7 @@ export const BROWSER_EVENT_NAMES = [
     'search.action',
     'search.start_point',
     'search.studio_handoff',
+    'search.route_stay',
     'studio.prompt',
     'studio.card',
     'studio.session_end',

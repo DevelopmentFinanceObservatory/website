@@ -30,6 +30,7 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - search.action     a click on a search answer (pick, download, share, ...)
  * - search.start_point  the starting point shown, with no search call
  * - search.studio_handoff  a Studio action on a search answer
+ * - search.route_stay  the reader stayed on the data search of a question the router sent to Studio
  * - studio.prompt     a prompt sent in the Studio (turn and intent, without the text)
  * - studio.card       a card the harness put on the canvas (kind, source, years, unit)
  * - studio.session_end  a Studio session left (turns, cards, pins)
@@ -70,6 +71,7 @@ export const EVENT_NAMES = [
     'search.action',
     'search.start_point',
     'search.studio_handoff',
+    'search.route_stay',
     'studio.prompt',
     'studio.card',
     'studio.session_end',
