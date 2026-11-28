@@ -20,7 +20,8 @@ import type { CardRef, FrameRef } from './widgets.ts';
  * knows their paths, bodies, and headers:
  *
  *   POST   {apis}/api/presentation/shares                         createShare
- *   GET    {apis}/api/presentation/shares/{id}                    readShare
+ *   GET    {apis}/api/presentation/shares/{id}                    readShare,
+ *                                                                  readShareRecord
  *   GET    {apis}/api/presentation/shares/{id}/history            readShareHistory
  *   POST   {apis}/api/presentation/shares/{id}/snapshot           (token) ownerShareWrite
  *   DELETE {apis}/api/presentation/shares/{id}                    (token) ownerShareWrite,
@@ -204,11 +205,7 @@ const send = async (
             ]),
         });
     } catch (error) {
-        const timedOut =
-            error instanceof Error &&
-            (error.name === 'TimeoutError' || error.name === 'AbortError');
-
-        throw new SharesError(timedOut ? 'backend_timeout' : 'backend_unreachable');
+        throw new SharesError(timedOut(error) ? 'backend_timeout' : 'backend_unreachable');
     }
 
     // A 304 answers a request that sent `If-None-Match`.
@@ -219,8 +216,29 @@ const send = async (
     return res;
 };
 
+const timedOut = (error: unknown): boolean =>
+    error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+
+/** The text of an answer's body. A body that stops arriving, at the call's
+ *  deadline or when the connection drops, is `backend_timeout` or
+ *  `backend_unreachable`, as a call with no answer is. */
+export const bodyText = async (res: Response): Promise<string> => {
+    try {
+        return await res.text();
+    } catch (error) {
+        throw new SharesError(timedOut(error) ? 'backend_timeout' : 'backend_unreachable');
+    }
+};
+
 const json = async (res: Response): Promise<Record<string, unknown>> => {
-    const body = asRecord(await res.json().catch(() => null));
+    const text = await bodyText(res);
+    let body: Record<string, unknown> | undefined;
+
+    try {
+        body = asRecord(JSON.parse(text));
+    } catch {
+        // A body that is not JSON, such as a proxy's page, is refused below.
+    }
 
     if (!body) {
         throw new SharesError('backend_invalid');
@@ -346,22 +364,19 @@ export const createShare = async (
 };
 
 /** A share, or null when no share has this id. */
-export const readShare = async (
-    backend: SharesBackend,
-    id: string,
-): Promise<ShareRecord | null> => {
-    let body: Record<string, unknown>;
-
-    try {
-        body = await json(await send(backend, sharePath(id)));
-    } catch (error) {
+export const readShare = (backend: SharesBackend, id: string): Promise<ShareRecord | null> =>
+    readShareRecord(backend, id).catch((error: unknown) => {
         if (error instanceof SharesError && error.status === 404) {
             return null;
         }
 
         throw error;
-    }
+    });
 
+/** A share. No share under this id is a 404 SharesError with dfo-apis'
+ *  code. */
+export const readShareRecord = async (backend: SharesBackend, id: string): Promise<ShareRecord> => {
+    const body = await json(await send(backend, sharePath(id)));
     const { kind, mode, title, slots, payload, created_at: createdAt } = body;
 
     if (
