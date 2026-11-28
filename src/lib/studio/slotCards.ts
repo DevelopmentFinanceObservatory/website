@@ -8,6 +8,7 @@ import {
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
+import { savedCanvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { StudioShareKind } from '../chat/shareMode.ts';
 import type { CardRef, FrameRef, Widget } from '../chat/widgets.ts';
@@ -193,17 +194,6 @@ const pageCardOf = (record: ShareRecord, widget: PayloadWidget): PageCard | null
     };
 };
 
-/** The cards a share's page draws from its slots, in page order
- *  (`sharedViewOfRecord`). */
-export const pageCards = (record: ShareRecord): PageCard[] =>
-    pageWidgets(record).flatMap((widget) => pageCardOf(record, widget) ?? []);
-
-/** `held` drawn from a slot card read's body, as the page draws it, or null
- *  when the body's card resolves nothing to draw. A body outside dfo-apis'
- *  component read shape throws `backend_invalid`. */
-export const drawSlotCard = (held: Widget, body: Record<string, unknown>): Widget | null =>
-    widgetFromLiveCard(held, componentReadOf(body).card);
-
 // The canvas a share's payload holds, with `widgets` in place of its own.
 // Fields a payload leaves out, as an SDK share's leaves them all, read as an
 // empty canvas named by the share's title.
@@ -221,6 +211,30 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
         ...asRecord(record.payload),
         widgets,
     }) as SavedConversation;
+
+/** The cards a share's page draws from its slots, in page order: the held
+ *  cards (`sharedViewOfRecord`) among those its canvas shows
+ *  (`savedCanvasWidgetsOf`, which EmbedView and the /s/<id> viewer read). A
+ *  live share holds every data card, shown or not, and gives a slot to the
+ *  shown ones alone, so a card its canvas hides is left out. */
+export const pageCards = (record: ShareRecord): PageCard[] => {
+    const widgets = pageWidgets(record);
+    const shown = new Set(
+        savedCanvasWidgetsOf(
+            savedOf(record, widgets as unknown as SavedConversation['widgets']),
+        ).map((widget) => widget.id),
+    );
+
+    return widgets.flatMap((widget) =>
+        shown.has(widget.id) ? (pageCardOf(record, widget) ?? []) : [],
+    );
+};
+
+/** `held` drawn from a slot card read's body, as the page draws it, or null
+ *  when the body's card resolves nothing to draw. A body outside dfo-apis'
+ *  component read shape throws `backend_invalid`. */
+export const drawSlotCard = (held: Widget, body: Record<string, unknown>): Widget | null =>
+    widgetFromLiveCard(held, componentReadOf(body).card);
 
 // When each slot of a snapshot began to show the frame it serves, by slot:
 // the newest entry of the share's history with that slot and frame. The

@@ -322,8 +322,21 @@ export const readLiveArtifacts = (db: Pick<NodePgDatabase, 'select'>): Promise<L
         .orderBy(asc(libraryArtifact.publishedAt), asc(libraryArtifact.id));
 
 // Artifacts read at once. Each makes its reads in turn, so at most this
-// many reads are in flight.
+// many reads are in flight. Under that cap, reading an artifact's slots at
+// once would shorten no run that outlasts the cap's first round: a dfo-apis
+// that answers nothing makes every read wait out its 35 s call deadline,
+// four at a time either way. RUN_DEADLINE_MS bounds that case.
 const CONCURRENCY = 4;
+
+/**
+ * How long a run has, from the Job command's start, before it stops reading:
+ * 57 minutes, three under the Job's 3600 s task timeout. When it passes,
+ * every read in flight is aborted and the run logs what it has and exits.
+ * The three minutes cover the container's start before the clock does, the
+ * log lines and the pool's close after it, and leave the report out well
+ * before the platform kills the task.
+ */
+export const RUN_DEADLINE_MS = 57 * 60_000;
 
 // How long the run waits before making again the reads that failed in a
 // way that may pass.
@@ -366,67 +379,72 @@ export const meteredBackend = (
     return { backend: { ...backend, fetch }, stats };
 };
 
-const eachOf = async <T>(items: T[], work: (item: T) => Promise<void>): Promise<void> => {
+// Runs `work` on `items`, CONCURRENCY at a time, starting none once
+// `stop` aborts. Resolves with the items it did not start.
+const eachOf = async <T>(
+    items: T[],
+    work: (item: T) => Promise<void>,
+    stop: AbortSignal,
+): Promise<T[]> => {
     let next = 0;
     const worker = async () => {
-        while (next < items.length) {
+        while (next < items.length && !stop.aborted) {
             await work(items[next++]);
         }
     };
 
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
+
+    return items.slice(next);
 };
+
+const hasRetryable = ({ failures }: ArtifactCheck): boolean =>
+    failures.some((failure) => failure.retryable);
 
 /**
  * Check every artifact in `artifacts`, four at a time. An artifact whose
  * reads all pass, or fail in a way a second read would not change, is
  * logged as it finishes: one `OK_EVENT` line, or one `FAILURE_EVENT` line
  * per failure. Then, once and after `retryDelayMs`, each retryable read is
- * made again, alone, and its artifact logged. The last line, `SUMMARY_EVENT`,
- * counts the artifacts, the failures by class, the reads made again, and
- * the requests, response bytes and milliseconds the run took. 0 when every
- * artifact reads, else 1.
+ * made again, alone, and its artifact logged. Each line names the artifact
+ * by its id and slug, with its `result`, and carries no share id.
+ *
+ * `deadline` aborts every read in flight and the wait before the second
+ * reads. An artifact the run has not concluded by then is `unfinished`: its
+ * final failures so far, then one `FAILURE_EVENT` line of class
+ * `unfinished`. A read the deadline cut off fails as retryable, so a check
+ * with no retryable failure stands whenever it ends. The last line,
+ * `SUMMARY_EVENT`, counts the artifacts, the unfinished ones, the failures
+ * by class, the reads made again, and the requests, response bytes and
+ * milliseconds the run took. 0 when every artifact reads, else 1.
  */
 export const checkLibraryShares = async ({
     artifacts,
     backend,
     log,
+    deadline = AbortSignal.timeout(RUN_DEADLINE_MS),
     retryDelayMs = RETRY_DELAY_MS,
-    wait = (ms) => sleep(ms),
+    wait = (ms, signal) => sleep(ms, undefined, { signal }).catch(() => {}),
     now = Date.now,
 }: {
     artifacts: LiveArtifact[];
     backend: SharesBackend;
     log: (line: string) => void;
+    deadline?: AbortSignal;
     retryDelayMs?: number;
-    wait?: (ms: number) => Promise<unknown>;
+    wait?: (ms: number, signal: AbortSignal) => Promise<unknown>;
     now?: () => number;
 }): Promise<0 | 1> => {
     const started = now();
     const metered = meteredBackend(backend);
-    const byClass = Object.fromEntries(CLASSES.map((kind) => [kind, 0])) as Record<
-        FailureClass,
-        number
-    >;
+    const reads: SharesBackend = { ...metered.backend, signal: deadline };
+    const byClass = Object.fromEntries(
+        [...CLASSES, 'unfinished' as const].map((kind) => [kind, 0]),
+    ) as Record<FailureClass | 'unfinished', number>;
     let failed = 0;
-    const finish = ({ artifact, failures }: ArtifactCheck) => {
-        const named = { artifact: artifact.id, slug: artifact.slug, share: artifact.shareId };
-
-        if (failures.length === 0) {
-            log(
-                JSON.stringify({
-                    severity: 'INFO',
-                    event: OK_EVENT,
-                    message: `${OK_EVENT}: ${artifact.slug}`,
-                    ...named,
-                }),
-            );
-
-            return;
-        }
-
-        failed += 1;
-
+    let unfinished = 0;
+    const named = (artifact: LiveArtifact) => ({ artifact: artifact.id, slug: artifact.slug });
+    const logFailures = (artifact: LiveArtifact, failures: Failure[]) => {
         for (const { class: kind, ...failure } of failures) {
             byClass[kind] += 1;
             log(
@@ -434,35 +452,103 @@ export const checkLibraryShares = async ({
                     severity: 'ERROR',
                     event: FAILURE_EVENT,
                     message: `${FAILURE_EVENT}: ${artifact.slug} ${kind}`,
-                    ...named,
+                    ...named(artifact),
+                    result: 'failed',
                     class: kind,
                     ...failure,
                 }),
             );
         }
     };
+    const finish = ({ artifact, failures }: ArtifactCheck) => {
+        if (failures.length === 0) {
+            log(
+                JSON.stringify({
+                    severity: 'INFO',
+                    event: OK_EVENT,
+                    message: `${OK_EVENT}: ${artifact.slug}`,
+                    ...named(artifact),
+                    result: 'ok',
+                }),
+            );
+
+            return;
+        }
+
+        failed += 1;
+        logFailures(artifact, failures);
+    };
+    const leave = ({ artifact, failures }: ArtifactCheck) => {
+        failed += 1;
+        unfinished += 1;
+        logFailures(
+            artifact,
+            failures.filter((failure) => !failure.retryable),
+        );
+        byClass.unfinished += 1;
+        log(
+            JSON.stringify({
+                severity: 'ERROR',
+                event: FAILURE_EVENT,
+                message: `${FAILURE_EVENT}: ${artifact.slug} unfinished`,
+                ...named(artifact),
+                result: 'unfinished',
+                read: null,
+                slot: null,
+                widget: null,
+                class: 'unfinished',
+                status: null,
+                code: 'run_deadline',
+                retryable: false,
+            }),
+        );
+    };
     const again: ArtifactCheck[] = [];
 
-    await eachOf(artifacts, async (artifact) => {
-        const result = await checkArtifact(metered.backend, artifact);
+    const unstarted = await eachOf(
+        artifacts,
+        async (artifact) => {
+            const result = await checkArtifact(reads, artifact);
 
-        if (result.failures.some((failure) => failure.retryable)) {
-            again.push(result);
-        } else {
-            finish(result);
-        }
-    });
-
-    const retried = again.reduce(
-        (count, result) => count + result.failures.filter((failure) => failure.retryable).length,
-        0,
+            if (!hasRetryable(result)) {
+                finish(result);
+            } else if (deadline.aborted) {
+                leave(result);
+            } else {
+                again.push(result);
+            }
+        },
+        deadline,
     );
 
-    if (again.length > 0) {
-        await wait(retryDelayMs);
-        await eachOf(again, async (previous) => {
-            finish(await checkArtifact(metered.backend, previous.artifact, previous));
-        });
+    let retried = 0;
+
+    if (again.length > 0 && !deadline.aborted) {
+        await wait(retryDelayMs, deadline);
+    }
+
+    const notRetried = await eachOf(
+        again,
+        async (previous) => {
+            retried += previous.failures.filter((failure) => failure.retryable).length;
+
+            const result = await checkArtifact(reads, previous.artifact, previous);
+
+            if (hasRetryable(result) && deadline.aborted) {
+                leave(result);
+            } else {
+                finish(result);
+            }
+        },
+        deadline,
+    );
+
+    for (const previous of notRetried) {
+        leave(previous);
+    }
+
+    for (const artifact of unstarted) {
+        leave({ artifact, share: null, failures: [] });
     }
 
     log(
@@ -473,6 +559,7 @@ export const checkLibraryShares = async ({
             artifacts: artifacts.length,
             ok: artifacts.length - failed,
             failed,
+            unfinished,
             retried,
             failures: byClass,
             requests: metered.stats.requests,

@@ -218,6 +218,40 @@ test('each read is classified by what dfo-apis answers', async (t) => {
             ],
         },
         {
+            name: 'a card the canvas hides is not read, beside a shown card that fails',
+            answers: {
+                // An older live card the latest turn replaced holds no slot.
+                share: () =>
+                    Response.json(
+                        record({
+                            payload: {
+                                widgets: [
+                                    { id: 'old', kind: 'chart', chartType: 'line', turn: 1 },
+                                    {
+                                        id: 'c1',
+                                        kind: 'chart',
+                                        chartType: 'line',
+                                        turn: 2,
+                                        slot: 0,
+                                    },
+                                ],
+                                pinnedIds: [],
+                            },
+                        }),
+                    ),
+                card: () => card({ undrawable: true }),
+            },
+            failures: [
+                {
+                    ...cardRead,
+                    class: 'undrawable',
+                    status: 200,
+                    code: 'card_undrawable',
+                    retryable: false,
+                },
+            ],
+        },
+        {
             name: 'a slot card the page cannot draw, beside rows that export',
             answers: { card: () => card({ undrawable: true }) },
             failures: [
@@ -455,8 +489,13 @@ const artifact = (n: number): LiveArtifact => ({
 });
 
 // Runs the check over `artifacts` against `answers`, with a clock that
-// moves 5 ms each time it is read.
-const run = async (artifacts: LiveArtifact[], answers: Answers) => {
+// moves 5 ms each time it is read. `onWait` runs when the run waits to read
+// again.
+const run = async (
+    artifacts: LiveArtifact[],
+    answers: Answers,
+    { deadline, onWait }: { deadline?: AbortSignal; onWait?: () => void } = {},
+) => {
     const { backend, reads } = backendOf(answers);
     const lines: Record<string, unknown>[] = [];
     const waits: number[] = [];
@@ -465,8 +504,12 @@ const run = async (artifacts: LiveArtifact[], answers: Answers) => {
         artifacts,
         backend,
         log: (line) => lines.push(JSON.parse(line)),
+        deadline,
         retryDelayMs: 7,
-        wait: async (ms) => waits.push(ms),
+        wait: async (ms) => {
+            waits.push(ms);
+            onWait?.();
+        },
         now: () => (clock += 5),
     });
 
@@ -563,11 +606,11 @@ test('a failure that remains is logged per failure and fails the run', async () 
 
     assert.deepEqual(
         failures.map(
-            ({ severity, artifact: id, slug, share, read, slot, widget, class: kind, code }) => ({
+            ({ severity, artifact: id, slug, result, read, slot, widget, class: kind, code }) => ({
                 severity,
                 id,
                 slug,
-                share,
+                result,
                 read,
                 slot,
                 widget,
@@ -579,7 +622,7 @@ test('a failure that remains is logged per failure and fails the run', async () 
             severity: 'ERROR',
             id,
             slug: `artifact-${i + 1}`,
-            share: `Share00${i + 1}`,
+            result: 'failed',
             read: 'card',
             slot: 1,
             widget: 'c1',
@@ -588,6 +631,9 @@ test('a failure that remains is logged per failure and fails the run', async () 
         })),
     );
 
+    // No line carries a share id.
+    assert.ok(lines.every((line) => !/Share00\d/.test(JSON.stringify(line))));
+
     const summary = summaryOf(lines);
 
     assert.equal(summary['severity'], 'ERROR');
@@ -595,6 +641,102 @@ test('a failure that remains is logged per failure and fails the run', async () 
         { ok: summary['ok'], failed: summary['failed'], retried: summary['retried'] },
         { ok: 0, failed: 2, retried: 2 },
     );
+});
+
+// A request dfo-apis never answers, which ends when its signal aborts.
+const hung = (signal: AbortSignal | null | undefined): Promise<Response> =>
+    new Promise((_, reject) => {
+        if (signal?.aborted) {
+            reject(signal.reason);
+        }
+
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+
+test('a run past its deadline logs what it left unfinished, then its summary', async (t) => {
+    const outcomes = (lines: Record<string, unknown>[]) =>
+        lines
+            .filter((line) => line['event'] !== SUMMARY_EVENT)
+            .map((line) => [line['slug'], line['result'], line['class'] ?? null]);
+
+    await t.test('reads in flight abort and artifacts not started are named', async () => {
+        const deadline = new AbortController();
+        const { backend } = backendOf();
+        const artifacts = [1, 2, 3, 4, 5, 6].map(artifact);
+        const lines: Record<string, unknown>[] = [];
+        const code = await checkLibraryShares({
+            artifacts,
+            log: (line) => lines.push(JSON.parse(line)),
+            deadline: deadline.signal,
+            wait: async () => {},
+            backend: {
+                ...backend,
+                // Artifact 2's share never answers, and the deadline passes
+                // as it is asked for.
+                fetch: (input, init) => {
+                    if (String(input).endsWith('/Share002')) {
+                        deadline.abort();
+
+                        return hung(init?.signal);
+                    }
+
+                    return backend.fetch(input, init);
+                },
+            },
+        });
+
+        assert.equal(code, 1);
+
+        const seen = outcomes(lines);
+
+        // Artifact 1 read before the deadline and stands; artifact 2's read
+        // was cut off, and 5 and 6 never started.
+        assert.ok(seen.some(([slug, result]) => slug === 'artifact-1' && result === 'ok'));
+        assert.ok(seen.some(([slug]) => slug === 'artifact-2'));
+        assert.ok(
+            seen.every(([slug, result, kind]) =>
+                slug === 'artifact-1'
+                    ? result === 'ok'
+                    : result === 'unfinished' && kind === 'unfinished',
+            ),
+        );
+        assert.deepEqual(
+            seen.filter(([slug]) => slug === 'artifact-5' || slug === 'artifact-6').length,
+            2,
+        );
+
+        const summary = summaryOf(lines);
+
+        assert.deepEqual(
+            { ok: summary['ok'], failed: summary['failed'], unfinished: summary['unfinished'] },
+            { ok: 1, failed: 5, unfinished: 5 },
+        );
+    });
+
+    await t.test('a deadline during the wait leaves the second reads unmade', async () => {
+        const deadline = new AbortController();
+        const { code, reads, lines } = await run(
+            [artifact(1)],
+            {
+                card: () => problem(404, 'frame_unavailable', true),
+                data: () => problem(404, 'frame_unavailable', false),
+            },
+            { deadline: deadline.signal, onWait: () => deadline.abort() },
+        );
+
+        assert.equal(code, 1);
+        assert.equal(reads.length, 3);
+        // The failure no second read would change stands beside the
+        // unfinished line.
+        assert.deepEqual(outcomes(lines), [
+            ['artifact-1', 'failed', 'frame_unavailable'],
+            ['artifact-1', 'unfinished', 'unfinished'],
+        ]);
+        assert.deepEqual(
+            { retried: summaryOf(lines)['retried'], unfinished: summaryOf(lines)['unfinished'] },
+            { retried: 0, unfinished: 1 },
+        );
+    });
 });
 
 test('a Library with no published artifact reads nothing and passes', async () => {
