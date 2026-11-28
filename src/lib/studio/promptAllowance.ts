@@ -28,6 +28,23 @@ export const guestOutOfPrompts = ({ guest, used }: { guest: boolean; used: numbe
 // Prompts a day for a signed-in user, shared by every account on one inbox.
 export const USER_DAILY_PROMPTS = 75;
 
+/**
+ * The request header, value `1`, that marks a turn as a hold turn, one Get
+ * Data starts while its move to Studio holds (startHeldTurn in
+ * studioClient.ts). The site proxy reads it and the harness never sees it
+ * (STUDIO_HEADERS in src/lib/proxy/headers carries no request header).
+ */
+export const HOLD_TURN_HEADER = 'x-dfo-hold-turn';
+
+/** The cancel answer's header: `true` when the cancel gave the turn's prompt back, else `false`. */
+export const PROMPT_REFUNDED_HEADER = 'x-dfo-prompt-refunded';
+
+/** How long after the harness admits a hold turn Get Data waits for its
+ *  move to Studio before it cancels the turn, so that the cancel lands
+ *  inside the proxy's refund window (HOLD_REFUND_WINDOW_MS in
+ *  spendPrompt.ts, 2 s) and the prompt comes back. */
+export const HOLD_ADMITTED_LIMIT_MS = 1_500;
+
 /** What a Studio prompt asks: the first question, a follow-up, an edit of a
  *  card, a clicked `apply_choice` chip, or a card's unit change. */
 export type PromptIntent = 'new' | 'follow_up' | 'edit' | 'apply_choice' | 'apply_unit';

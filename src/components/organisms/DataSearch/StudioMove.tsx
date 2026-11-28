@@ -36,7 +36,8 @@ const subscribeVisibility = (listener: () => void) => {
  *  The line under the title is the hold's clock. Once `armed` and the
  *  callout's entrance has ended, one linear animation fills it over
  *  MOVE_HOLD_MS (under reduced motion it sits full and its opacity ramps
- *  instead). `onStart` runs once as it starts, and `onElapsed` once it ends.
+ *  instead). `onStart` runs once, when the fill first plays, and
+ *  `onElapsed` once it ends.
  *  The pointer over the callout, focus inside it or a hidden tab pauses it
  *  in place, and it resumes with the time it had left. */
 const StudioMove = ({
@@ -62,16 +63,28 @@ const StudioMove = ({
     const held = pointerIn || focusIn;
     const fill = useRef<HTMLDivElement>(null);
     const clock = useRef<Animation | null>(null);
-    // Strict Mode runs the clock's effect twice on one mount, and onStart
-    // runs once.
+    // onStart runs once per mount, on the fill's first frame of play, so a
+    // clock that arms paused (a hidden tab, the pointer on the callout)
+    // waits for its release. Strict Mode's second run of the clock's effect
+    // cancels the first clock, whose `ready` then rejects.
     const started = useRef(false);
+    const startOnPlay = useEffectEvent((animation: Animation) => {
+        animation.ready.then(
+            () => {
+                if (animation.playState === 'running' && !started.current) {
+                    started.current = true;
+                    onStart();
+                }
+            },
+            () => {},
+        );
+    });
     const paused = useEffectEvent(() => held || hidden);
     // Read as the clock starts, so a change of setting mid-hold leaves the
     // running clock alone.
     const keyframes = useEffectEvent((): Keyframe[] =>
         reducedMotion ? [{ opacity: 0.2 }, { opacity: 1 }] : [{ scale: '0 1' }, { scale: '1 1' }],
     );
-    const start = useEffectEvent(onStart);
     const elapse = useEffectEvent(onElapsed);
 
     useEffect(() => {
@@ -91,11 +104,8 @@ const StudioMove = ({
 
         if (paused()) {
             animation.pause();
-        }
-
-        if (!started.current) {
-            started.current = true;
-            start();
+        } else {
+            startOnPlay(animation);
         }
 
         animation.finished.then(
@@ -122,6 +132,7 @@ const StudioMove = ({
         } else if (animation.playState === 'paused') {
             // play() on a finished animation would start it again from empty.
             animation.play();
+            startOnPlay(animation);
         }
     }, [held, hidden]);
 

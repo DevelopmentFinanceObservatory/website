@@ -1057,3 +1057,81 @@ test('startHeldTurn: cancel names the turn once the harness names it, and reads 
         harness.fetch.mock.restore();
     }
 });
+
+// The conversation of each turn `fetch` posted and of each cancel it sent,
+// in order, and whether each cancel was keepalive.
+const heldPosts = (fetch: ReturnType<typeof heldHarness>['fetch']) => {
+    const posts = fetch.mock.calls.map((call) => {
+        const init = call.arguments[1] as RequestInit;
+        const body = JSON.parse(init.body as string) as { conversation_id: string };
+
+        return { route: call.arguments[0], conversation: body.conversation_id, init };
+    });
+
+    return {
+        turns: posts
+            .filter((post) => post.route === '/api/studio/turn')
+            .map((post) => post.conversation),
+        cancels: posts
+            .filter((post) => post.route === '/api/studio/cancel')
+            .map((post) => ({
+                conversation: post.conversation,
+                keepalive: post.init.keepalive === true,
+            })),
+    };
+};
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('startHeldTurn: a turn the move has not reached admittedLimitMs after admission cancels itself', async (t) => {
+    const harness = heldHarness(t);
+    const late = startHeldTurn({ message: 'Aid to Ghana', admittedLimitMs: 20 });
+    const moving = startHeldTurn({ message: 'Aid to Ghana', admittedLimitMs: 20 });
+
+    moving.moved();
+    await wait(80);
+
+    const { turns, cancels } = heldPosts(harness.fetch);
+
+    assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: false }]);
+    assert.equal(takeHeldTurn(late.token), null);
+    assert.notEqual(takeHeldTurn(moving.token), null);
+});
+
+test('startHeldTurn: a moved turn Studio has not taken in adoptLimitMs cancels itself', async (t) => {
+    const harness = heldHarness(t);
+    const untaken = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+    const taken = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+
+    untaken.moved();
+    taken.moved();
+    await harness.settle();
+    assert.notEqual(takeHeldTurn(taken.token), null);
+    await wait(80);
+
+    const { turns, cancels } = heldPosts(harness.fetch);
+
+    assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: false }]);
+    assert.equal(takeHeldTurn(untaken.token), null);
+});
+
+test('startHeldTurn: pagehide cancels every turn Studio has not taken, with keepalive', async (t) => {
+    const harness = heldHarness(t);
+    const page = new EventTarget();
+
+    Object.defineProperty(globalThis, 'window', { value: page, configurable: true });
+    t.after(() => Reflect.deleteProperty(globalThis, 'window'));
+
+    const untaken = startHeldTurn({ message: 'Aid to Ghana' });
+    const taken = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await harness.settle();
+    assert.notEqual(takeHeldTurn(taken.token), null);
+    page.dispatchEvent(new Event('pagehide'));
+    await harness.settle();
+
+    const { turns, cancels } = heldPosts(harness.fetch);
+
+    assert.deepEqual(cancels, [{ conversation: turns[0], keepalive: true }]);
+    assert.equal(takeHeldTurn(untaken.token), null);
+});

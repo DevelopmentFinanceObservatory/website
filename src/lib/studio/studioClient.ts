@@ -31,6 +31,11 @@ import { SIGN_IN_REQUIRED } from './studioAccess.ts';
 import { isTextTooLong, TEXT_TOO_LONG_MESSAGE } from './interruptText.ts';
 import type { LiveCard } from './liveBackend.ts';
 import { uuid } from '../uuid.ts';
+import {
+    HOLD_ADMITTED_LIMIT_MS,
+    HOLD_TURN_HEADER,
+    PROMPT_REFUNDED_HEADER,
+} from './promptAllowance.ts';
 
 /**
  * How long the page waits on a stop: a cancelled stream may run on this long
@@ -806,10 +811,6 @@ export const cancelTurn = async (
     timeoutMs: number = STOP_GRACE_MS,
 ): Promise<CancelAnswer> => (await sendCancel(conversationId, turnIndex, { timeoutMs })).answer;
 
-/** The response header in which the cancel route says whether it gave the
- *  cancelled turn's prompt back (`true` or `false`). */
-export const PROMPT_REFUNDED_HEADER = 'x-dfo-prompt-refunded';
-
 // cancelTurn's request, with whether the last answer said the prompt was
 // given back (PROMPT_REFUNDED_HEADER). `keepalive` lets the request outlive
 // the page.
@@ -886,11 +887,6 @@ const sendCancel = async (
     }
 };
 
-/** The request header that marks a turn Get Data starts during the move's
- *  hold (startHeldTurn). The site proxy reads it and strips it, and a
- *  prompt cancel of a turn it marks gives the turn's prompt back. */
-export const HOLD_TURN_HEADER = 'x-dfo-hold-turn';
-
 // One report of a held turn's stream from before Studio adopted it.
 type HeldEvent =
     | { kind: 'turn-index'; index: number }
@@ -914,14 +910,24 @@ type HeldEntry = {
     // ends without one.
     named: Promise<number | null>;
     cancelling: Promise<boolean> | null;
+    // Whether Get Data has moved to Studio (HeldTurnStart's `moved`).
+    moved: boolean;
+    // The timer that cancels the turn when the move or the adoption comes
+    // too late.
+    deadline: ReturnType<typeof setTimeout> | undefined;
 };
+
+/** How long after Get Data moves to Studio a held turn waits for Studio to
+ *  adopt it before it cancels itself. */
+export const HELD_ADOPT_LIMIT_MS = 30_000;
 
 // The held turns of this page load by token. A taken entry stays, marked
 // adopted, so a second take does nothing and posts no second turn.
 const heldTurns = new Map<string, HeldEntry>();
 
-/** A turn started with startHeldTurn: the token Studio takes it by, and a
- *  cancel for every way out of the hold except the move. `cancel` asks the
+/** A turn started with startHeldTurn: the token Studio takes it by, a
+ *  cancel for every way out of the hold except the move, and `moved` for
+ *  the move itself. `cancel` asks the
  *  harness to cancel the turn once it has named the turn, closes the
  *  stream, and resolves to whether the cancel route gave the prompt back
  *  (PROMPT_REFUNDED_HEADER). A turn the harness refused or never received
@@ -932,6 +938,7 @@ const heldTurns = new Map<string, HeldEntry>();
 export type HeldTurnStart = {
     token: string;
     cancel: (options?: { keepalive?: boolean }) => Promise<boolean>;
+    moved: () => void;
 };
 
 /** A held turn Studio took (takeHeldTurn). `run` is the turn's stream for
@@ -991,6 +998,8 @@ const cancelHeld = (
     entry: HeldEntry,
     { keepalive = false }: { keepalive?: boolean } = {},
 ): Promise<boolean> => {
+    clearTimeout(entry.deadline);
+
     // A turn cancelled before Studio took it is gone, and Studio posts its
     // own on arrival.
     if (!entry.adopted) {
@@ -1031,20 +1040,41 @@ const cancelHeld = (
     return entry.cancelling;
 };
 
+// A page that goes (a reload, a hard navigation, a closed tab) cancels
+// every held turn Studio has not taken, with requests that outlive it.
+let watchingPageHide = false;
+const cancelOnPageHide = () => {
+    for (const [token, entry] of heldTurns) {
+        if (!entry.adopted) {
+            void cancelHeld(token, entry, { keepalive: true });
+        }
+    }
+};
+
 /**
- * Start the turn `message` for Studio to adopt (takeHeldTurn), marked as a
- * hold turn (HOLD_TURN_HEADER) under a fresh conversation id. The stream's
- * reports are kept until Studio adopts it. `extras` are the turn's members
- * as Studio would send them (turnRequest).
+ * Start the turn `message` for Studio to adopt (takeHeldTurn) under
+ * `token`, marked as a hold turn (HOLD_TURN_HEADER) under a fresh
+ * conversation id. The stream's reports are kept until Studio adopts it.
+ * `extras` are the turn's members as Studio would send them (turnRequest).
+ *
+ * The turn cancels itself when the move comes more than `admittedLimitMs`
+ * after the harness admits it, when Studio has not taken it `adoptLimitMs`
+ * after the move (HeldTurnStart's `moved`), and when the page goes
+ * (`pagehide`) before Studio takes it.
  */
 export const startHeldTurn = ({
+    token = uuid(),
     message,
     extras,
+    admittedLimitMs = HOLD_ADMITTED_LIMIT_MS,
+    adoptLimitMs = HELD_ADOPT_LIMIT_MS,
 }: {
+    token?: string;
     message: string;
     extras?: TurnExtras;
+    admittedLimitMs?: number;
+    adoptLimitMs?: number;
 }): HeldTurnStart => {
-    const token = uuid();
     let name: (index: number | null) => void = () => {};
     const entry: HeldEntry = {
         conversationId: uuid(),
@@ -1059,6 +1089,8 @@ export const startHeldTurn = ({
             name = resolve;
         }),
         cancelling: null,
+        moved: false,
+        deadline: undefined,
     };
     // Each report goes to the adopting stream, or waits for it.
     const report = (event: HeldEvent) => {
@@ -1074,6 +1106,13 @@ export const startHeldTurn = ({
             onTurnIndex: (index) => {
                 entry.turnIndex = index;
                 name(index);
+
+                if (!entry.moved && !entry.adopted && !entry.cancelling) {
+                    entry.deadline = setTimeout(
+                        () => void cancelHeld(token, entry),
+                        admittedLimitMs,
+                    );
+                }
 
                 if (entry.listener) {
                     entry.listener.onTurnIndex?.(index);
@@ -1104,10 +1143,24 @@ export const startHeldTurn = ({
     );
     heldTurns.set(token, entry);
 
+    if (!watchingPageHide && typeof window !== 'undefined') {
+        watchingPageHide = true;
+        window.addEventListener('pagehide', cancelOnPageHide);
+    }
+
     return {
         token,
         cancel: (options) =>
             entry.adopted ? Promise.resolve(false) : cancelHeld(token, entry, options),
+        moved: () => {
+            if (entry.moved || entry.adopted || entry.cancelling) {
+                return;
+            }
+
+            entry.moved = true;
+            clearTimeout(entry.deadline);
+            entry.deadline = setTimeout(() => void cancelHeld(token, entry), adoptLimitMs);
+        },
     };
 };
 
@@ -1128,6 +1181,7 @@ export const takeHeldTurn = (token: string): HeldTurn | 'adopted' | null => {
     }
 
     entry.adopted = true;
+    clearTimeout(entry.deadline);
 
     return {
         conversationId: entry.conversationId,

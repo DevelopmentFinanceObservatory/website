@@ -15,6 +15,9 @@ import { problem } from '../proxy/problem.ts';
 import { GUEST_PROMPTS, USER_DAILY_PROMPTS } from './promptAllowance.ts';
 import type { ToolError } from './wire.ts';
 
+// The hold turn's headers, which the proxy reads and sets.
+export { HOLD_TURN_HEADER, PROMPT_REFUNDED_HEADER } from './promptAllowance.ts';
+
 /**
  * The Studio's prompt allowances, spent by the proxy
  * (src/lib/studio/studioProxy.ts) before it forwards a turn. A
@@ -112,16 +115,6 @@ export const spendPrompt = async (db: CounterDb, prompter: Prompter): Promise<Pr
 export const refundPrompt = async (db: CounterDb, receipt: Reservation): Promise<void> => {
     await refundReservation(db, receipt);
 };
-
-/**
- * The request header, value `1`, that marks a turn as a hold turn. The proxy
- * reads it and the harness never sees it (STUDIO_HEADERS in
- * src/lib/proxy/headers carries no request header).
- */
-export const HOLD_TURN_HEADER = 'x-dfo-hold-turn';
-
-/** The cancel answer's header: `true` when the cancel gave the turn's prompt back, else `false`. */
-export const PROMPT_REFUNDED_HEADER = 'x-dfo-prompt-refunded';
 
 /** How long after the harness admits a hold turn a cancel still refunds its prompt. */
 export const HOLD_REFUND_WINDOW_MS = 2_000;

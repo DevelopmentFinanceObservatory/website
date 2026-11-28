@@ -103,8 +103,11 @@ import {
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
+import { HANDOFF_HOLD_PARAM } from '@/lib/studio/examples';
 import { guestOutOfPrompts } from '@/lib/studio/promptAllowance';
 import { writeSeeds } from '@/lib/studio/seedStore';
+import { type HeldTurnStart, startHeldTurn, type TurnExtras } from '@/lib/studio/studioClient';
+import { uuid } from '@/lib/uuid';
 
 /** The early, pre-response heading's own tokens, read-only (see
  *  lib/search/sentencePlan.ts's earlySentenceTokens): the heading segment
@@ -453,9 +456,12 @@ const DataSearch = ({
     // slides in over the page. The automatic move opens it once the entry
     // it leaves holds the question's `routing=off` URL (the move's effect
     // below). A routed handoff carries the trace id of the route's early
-    // frame, or of the answer when the frame carried none.
+    // frame, or of the answer when the frame carried none. `holdToken` is
+    // the token of the turn the automatic move starts during its hold
+    // (HANDOFF_HOLD_PARAM), and `held` the question and members that turn
+    // carries, the ones Studio's arrival would send.
     const studioHandoff = useCallback(
-        (trigger: HandoffTrigger, routed: RunRoute | null = null) => {
+        (trigger: HandoffTrigger, routed: RunRoute | null = null, holdToken?: string) => {
             const edited = handoffEdited({
                 editCount: edits.length,
                 fromShare: openedShare !== null,
@@ -471,14 +477,22 @@ const DataSearch = ({
             const { searchId } = ids;
             const traceId = routed?.traceId ?? ids.traceId;
             const fromExample = handoffFromExample({ fromExample: searchIsExample(), edited });
-            const href = studioHref(question, token, {
+            const studio = studioHref(question, token, {
                 via: handoffVia({ trigger, fromExample }),
                 traceId,
                 fromExample,
             });
+            const href = holdToken
+                ? `${studio}&${new URLSearchParams({ [HANDOFF_HOLD_PARAM]: holdToken })}`
+                : studio;
+            const extras: TurnExtras = {
+                ...(token && { seed_spec: seeds }),
+                ...(fromExample && { prompt_source: 'search_example' }),
+            };
 
             return {
                 href,
+                held: { message: question.trim(), extras },
                 go: () => {
                     track(
                         'search.studio_handoff',
@@ -561,20 +575,56 @@ const DataSearch = ({
     // (clickLeavesPage) stops the move with no search and no event, so the
     // link's navigation wins. A new search ends the hold too, before any
     // navigation.
+    //
+    // The hold's start also starts Studio's turn (startHeldTurn), so Studio
+    // opens with the answer under way: the turn Studio's arrival would
+    // send, under a token the move's URL carries (HANDOFF_HOLD_PARAM). The
+    // move hands the turn over, and every other end of the hold cancels it
+    // so its prompt comes back: a stay, a link click, a new search, the
+    // page unmounting. The registry cancels it too when the move comes
+    // late (HOLD_ADMITTED_LIMIT_MS), when Studio does not take it, and when
+    // the page goes. Studio's prompt() records the prompt and counts it
+    // once it adopts the turn, so this page does neither.
     const movedSearchRef = useRef<string | null>(null);
     // The hold's handlers for the callout, set while the move's effect runs.
-    const moveHoldRef = useRef<{ go: () => void; stay: () => void } | null>(null);
+    const moveHoldRef = useRef<{ start: () => void; go: () => void; stay: () => void } | null>(
+        null,
+    );
+    // The turn the hold started, until the move hands it over or the hold
+    // ends without it.
+    const heldRef = useRef<HeldTurnStart | null>(null);
+    const cancelHeld = () => {
+        void heldRef.current?.cancel();
+        heldRef.current = null;
+    };
+    // The token of each search's held turn, fixed for the search so every
+    // run of the move's effect builds the same Studio URL.
+    const holdTokenRef = useRef<{ searchId: string; token: string } | null>(null);
     const moveArmed =
         move === 'auto' && phase === 'done' && pageSettled && routingOffFor(searchParams, query);
     // What the loading view's live region says about the move. Each note
     // mounts a new node, so a note the same as the last is announced again.
     const [moveNote, setMoveNote] = useState({ text: '', id: 0 });
     const noteMove = (text: string) => setMoveNote(({ id }) => ({ text, id: id + 1 }));
+    // The search whose hold has started. onHoldStart runs once per search,
+    // from the fill's first play.
+    const holdStartedRef = useRef<string | null>(null);
     const onHoldStart = () => {
+        const { searchId } = searchIds();
+
+        if (!searchId || holdStartedRef.current === searchId) {
+            return;
+        }
+
+        holdStartedRef.current = searchId;
         noteMove(HOLD_NOTE);
+        moveHoldRef.current?.start();
     };
     const onHoldEnd = () => moveHoldRef.current?.go();
-    const readyMove = useEffectEvent(() => studioHandoff('auto', route));
+    const readyMove = useEffectEvent((holdToken: string) => ({
+        ...studioHandoff('auto', route, holdToken),
+        token: holdToken,
+    }));
     // Keeps the reader on the data search of a question the router sent to
     // Studio: the move's hold, or the out-of-prompts card's data action.
     // It records `search.route_stay`, turns the move's callout into the
@@ -607,9 +657,25 @@ const DataSearch = ({
         }
 
         movedSearchRef.current = searchId;
+        cancelHeld();
         noteMove(STAY_NOTE);
         stayOnData(trigger);
     });
+    // The hold's end by unmount or a new search, which take the callout
+    // away: the turn it started is cancelled. Strict Mode's rehearsal of
+    // the unmount mounts the callout again at once, which clears the timer.
+    const holdEndRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    useEffect(() => {
+        if (!moveArmed) {
+            return;
+        }
+
+        clearTimeout(holdEndRef.current);
+
+        return () => {
+            holdEndRef.current = setTimeout(cancelHeld, 0);
+        };
+    }, [moveArmed]);
     useEffect(() => {
         if (move !== 'auto' || phase !== 'done' || !pageSettled) {
             return;
@@ -627,17 +693,31 @@ const DataSearch = ({
             return;
         }
 
-        const handoff = readyMove();
+        if (holdTokenRef.current?.searchId !== searchId) {
+            holdTokenRef.current = { searchId, token: uuid() };
+        }
+
+        const handoff = readyMove(holdTokenRef.current.token);
 
         router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
 
-        // Opens Studio unless the move has stopped.
+        // Starts Studio's turn unless the move has stopped.
+        const start = () => {
+            if (movedSearchRef.current === searchId || heldRef.current) {
+                return;
+            }
+
+            heldRef.current = startHeldTurn({ token: handoff.token, ...handoff.held });
+        };
+        // Opens Studio, with its turn, unless the move has stopped.
         const go = () => {
             if (movedSearchRef.current === searchId) {
                 return;
             }
 
             movedSearchRef.current = searchId;
+            heldRef.current?.moved();
+            heldRef.current = null;
             handoff.go();
         };
         const onKey = (event: KeyboardEvent) => {
@@ -658,10 +738,11 @@ const DataSearch = ({
                 )
             ) {
                 movedSearchRef.current = searchId;
+                cancelHeld();
             }
         };
 
-        moveHoldRef.current = { go, stay: () => stay(searchId, 'button') };
+        moveHoldRef.current = { start, go, stay: () => stay(searchId, 'button') };
         document.addEventListener('keydown', onKey, true);
         document.addEventListener('click', onClick, true);
 
