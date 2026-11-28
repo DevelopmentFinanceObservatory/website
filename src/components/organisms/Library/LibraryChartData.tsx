@@ -1,5 +1,6 @@
 import styles from './LibraryArtifact.module.scss';
 
+import JsonLd from '@/components/atoms/JsonLd/JsonLd';
 import type { LibraryChartData as ChartData } from '@/lib/library/chartData';
 import { formatPeriod, formatWindow } from '@/lib/studio/period';
 
@@ -27,12 +28,7 @@ export const LibraryChartData = ({ data }: { data: ChartData }): React.JSX.Eleme
 
     return (
         <>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(data.dataset).replace(/</g, '\\u003c'),
-                }}
-            />
+            <JsonLd data={data.dataset} />
             <details className={styles.chartData}>
                 <summary>
                     {data.label ? `Data for ${data.label}` : 'Data'} ({formatWindow(data.window)})
