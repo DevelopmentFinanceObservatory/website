@@ -26,6 +26,7 @@ import {
     cardDownloadMessage,
     fetchCardData,
 } from '@/lib/studio/cardDownload';
+import { embedSnippet } from '@/lib/studio/embedHost';
 import {
     openShareLink,
     type ShareLink,
@@ -137,10 +138,10 @@ const COPY = {
 
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
 
-const shareUrl = (id: string) => `${origin()}/s/${id}`;
+// The embed code's frame height, which a canvas pans inside.
+const STUDIO_EMBED_HEIGHT = 640;
 
-const embedSnippet = (id: string, title: string) =>
-    `<iframe src="${origin()}/embed/${id}" width="100%" height="640" style="border:0" title="${title.replace(/"/g, '&quot;')}"></iframe>`;
+const shareUrl = (id: string) => `${origin()}/s/${id}`;
 
 // One card on the Data tab: its title and its file from the export route, in
 // the format and bundle chosen above the list.
@@ -493,7 +494,16 @@ const ShareModal = ({
                                     </>
                                 )}
                                 <CopyBox
-                                    value={id ? embedSnippet(id, embedTitle) : ''}
+                                    value={
+                                        id
+                                            ? embedSnippet({
+                                                  origin: origin(),
+                                                  id,
+                                                  title: embedTitle,
+                                                  height: STUDIO_EMBED_HEIGHT,
+                                              })
+                                            : ''
+                                    }
                                     code
                                     pending={pending && !failed}
                                     pendingText={pendingText}

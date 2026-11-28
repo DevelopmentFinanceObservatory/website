@@ -31,6 +31,10 @@ export type ModalProps = {
     // A CSS selector for the element inside the dialog that takes focus when
     // it opens, in place of the first tabbable element (the close button).
     initialFocus?: string;
+    // The element that takes focus on close when the one that opened the
+    // dialog has left the page, as a canvas card's source line does when
+    // its card moves over the dim.
+    returnFocus?: () => HTMLElement | null | undefined;
     className?: string;
     children: ReactNode;
 };
@@ -51,6 +55,7 @@ const Modal = ({
     footer,
     autoFocus = false,
     initialFocus,
+    returnFocus,
     className,
     children,
 }: ModalProps) => {
@@ -75,8 +80,11 @@ const Modal = ({
                         className,
                     )}
                     onOpenAutoFocus={(event) => {
+                        // The body means the opener left the page as the
+                        // dialog opened.
                         openerRef.current =
-                            document.activeElement instanceof HTMLElement
+                            document.activeElement instanceof HTMLElement &&
+                            document.activeElement !== document.body
                                 ? document.activeElement
                                 : null;
 
@@ -89,7 +97,10 @@ const Modal = ({
                     }}
                     onCloseAutoFocus={(event) => {
                         event.preventDefault();
-                        openerRef.current?.focus();
+
+                        const opener = openerRef.current;
+
+                        (opener?.isConnected ? opener : returnFocus?.())?.focus();
                     }}
                 >
                     <header className={styles.head}>
