@@ -2,7 +2,8 @@
  * The server's read of one component revision from dfo-apis, the public
  * route a share's live cards are checked against before the share is made:
  *
- *   GET {apis}/api/presentation/components/{id}?revision=N        readComponent
+ *   GET {apis}/api/presentation/components/{id}?revision=N        readComponent,
+ *                                                                 readPeriodMode
  *
  * The route carries no credential. Callers inject the fetch (src/lib/apisAuth
  * through `SharesBackend`), which adds the site's Cloud Run ID token. A
@@ -212,3 +213,26 @@ export const readComponent = async (backend: LiveBackend, ref: CardRef): Promise
     componentReadOf(
         await json(backend, `${backend.apisBase}${componentPath(ref)}?revision=${ref.revision}`),
     );
+
+/** Whether a revision's periods stay as published (`fixed`) or move with new
+ *  data (`rolling`), as dfo-apis' component read names them. */
+export type PeriodMode = 'fixed' | 'rolling';
+
+/** The `period_mode` of one stored revision. `missing` when the read has no
+ *  `period_mode`, and `unknown` when it names neither value. */
+export const readPeriodMode = async (
+    backend: LiveBackend,
+    ref: CardRef,
+): Promise<PeriodMode | 'missing' | 'unknown'> => {
+    const read = await json(
+        backend,
+        `${backend.apisBase}${componentPath(ref)}?revision=${ref.revision}`,
+    );
+    const mode = read['period_mode'];
+
+    if (mode === undefined || mode === null) {
+        return 'missing';
+    }
+
+    return mode === 'fixed' || mode === 'rolling' ? mode : 'unknown';
+};

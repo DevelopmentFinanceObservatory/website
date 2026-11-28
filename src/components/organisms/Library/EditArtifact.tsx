@@ -175,7 +175,12 @@ const EditArtifact = ({
                     </div>
                 ) : (
                     <form className={styles.form} onSubmit={save}>
-                        <ArtifactFields value={text} onChange={setText} refusals={refusals} />
+                        <ArtifactFields
+                            value={text}
+                            onChange={setText}
+                            refusals={refusals}
+                            mode={artifact.mode}
+                        />
                         {changed && (
                             <div className={styles.error} role="alert">
                                 <p>

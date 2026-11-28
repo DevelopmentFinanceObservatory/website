@@ -10,9 +10,15 @@
  * text and, for each filter with values picked, one of them.
  */
 
-import type { LibraryCardDates, LibrarySource, LibraryStep } from '../../../db/schema.ts';
+import type {
+    LibraryCardCite,
+    LibraryCardDates,
+    LibrarySource,
+    LibraryStep,
+} from '../../../db/schema.ts';
+import { shortDateText } from '../sources/updateDates.ts';
 
-export type { LibraryCardDates, LibrarySource, LibraryStep };
+export type { LibraryCardCite, LibraryCardDates, LibrarySource, LibraryStep };
 
 /** The kinds an artifact can have. The check constraint on
  *  `library_artifact.kind` holds the same values. */
@@ -41,6 +47,9 @@ export type LibraryArtifact = {
     /** Each published card's data dates as they were at publish, in card
      *  order. */
     cardDates: LibraryCardDates[];
+    /** Each published card's citation (`LibraryCardCite`), in card order,
+     *  or empty when the row holds none. */
+    cardCites: LibraryCardCite[];
     /** ISO 8601. */
     publishedAt: string;
     /** ISO 8601. The last change to the text or topics, or `publishedAt`
@@ -83,7 +92,7 @@ export const KIND_LABELS: Record<ArtifactKind, string> = {
     data: 'Data',
 };
 
-/** The kind's name, as labels, filters and citations print it. */
+/** The kind's name, as labels and filters print it. */
 export const kindLabel = (kind: ArtifactKind): string => KIND_LABELS[kind];
 
 export const MODE_LABELS: Record<ArtifactMode, string> = {
@@ -235,7 +244,7 @@ export const serializeList = (values: readonly string[]): string | null =>
 /** The artifact's page, the citable URL. */
 export const artifactPath = (slug: string): string => `/library/${slug}`;
 
-/** The author every Library page and citation names. */
+/** The author every Library page names. */
 export const LIBRARY_AUTHOR = 'Development Finance Observatory';
 
 const DATE = new Intl.DateTimeFormat('en-GB', {
@@ -253,17 +262,42 @@ export const textUpdated = (artifact: Pick<LibraryArtifact, 'publishedAt' | 'upd
     new Date(artifact.updatedAt).getTime() > new Date(artifact.publishedAt).getTime();
 
 /**
- * The reference a reader copies: "Development Finance Observatory (2026).
- * Health ODA to Ethiopia, 2016–2024 [Chart]. DFO Library. <url> (Accessed:
- * 27 January 2026). Data: OECD CRS, World Bank IDS."
+ * The reference a reader copies, one line per published card, retrieved from
+ * the artifact's page. A card whose source says how to cite it gives
+ * Studio's full form:
+ *
+ *   World Bank (2026). "World Development Indicators" [dataset]. Retrieved
+ *   28 November 2026 from
+ *   https://developmentfinance.org/library/health-expenditure-per-capita.
+ *
+ * Any other card gives its own sources and title, as `OECD CRS. "Health ODA
+ * to Ethiopia". Retrieved … from <url>.`, and cards that cite alike give one
+ * line. An artifact that holds no card's citation gives `Development Finance
+ * Observatory (2026). "<title>". Retrieved … from <url>. Data: <sources>.`
+ * A snapshot's page is cited as Studio cites a snapshot share, with
+ * `(snapshot, data as of <publish date>)` after the URL.
  */
 export const citation = (artifact: LibraryArtifact, origin: string, accessed: Date): string => {
-    const year = new Date(artifact.publishedAt).getUTCFullYear();
-    const data = artifact.sources.map((source) => source.name).join(', ');
+    const snapshot =
+        artifact.mode === 'snapshot'
+            ? ` (snapshot, data as of ${shortDateText(new Date(artifact.publishedAt))})`
+            : '';
+    const retrieved = `Retrieved ${libraryDate(accessed)} from ${origin}${artifactPath(artifact.slug)}${snapshot}.`;
+
+    if (artifact.cardCites.length === 0) {
+        const year = new Date(artifact.publishedAt).getUTCFullYear();
+        const sources = artifact.sources.map((source) => source.name).join(', ');
+
+        return `${LIBRARY_AUTHOR} (${year}). "${artifact.title}". ${retrieved}${sources ? ` Data: ${sources}.` : ''}`;
+    }
 
     return [
-        `${LIBRARY_AUTHOR} (${year}). ${artifact.title} [${kindLabel(artifact.kind)}]. DFO Library.`,
-        `${origin}${artifactPath(artifact.slug)}`,
-        `(Accessed: ${libraryDate(accessed)}).${data ? ` Data: ${data}.` : ''}`,
-    ].join(' ');
+        ...new Set(
+            artifact.cardCites.map((cite) =>
+                'text' in cite
+                    ? `${cite.text}. "${cite.title}" [dataset]. ${retrieved}`
+                    : `${cite.sources.length > 0 ? `${cite.sources.join(', ')}. ` : ''}"${cite.title}". ${retrieved}`,
+            ),
+        ),
+    ].join('\n');
 };

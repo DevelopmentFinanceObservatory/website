@@ -363,7 +363,8 @@ const YEAR_RANGE =
     /\b(?:19|20)\d{2}\s*(?:-|–|—|to|through)\s*(?:19|20)\d{2}\b|\bbetween\s+(?:19|20)\d{2}\s+and\s+(?:19|20)\d{2}\b/iu;
 
 /** Whether `candidate` is a title or section heading that names a year
- *  range, which `decide` refuses whatever the answers. A range in a
+ *  range, which `decide` refuses whatever the answers unless every data card
+ *  draws fixed periods (`DecideContext.fixedPeriods`). A range in a
  *  description or section text is left to the questions. */
 export const namesYearRange = (candidate: Candidate): boolean =>
     HEADING_FIELDS.has(candidate.field) && YEAR_RANGE.test(candidate.text);
@@ -381,7 +382,8 @@ const NOT_DATA_YEAR =
 
 /** Whether `candidate` is a title or section heading that names the year the
  *  data covers, as in "Total ODA in 2023" or "Giving by donor, 2023", which
- *  `decide` refuses whatever the answers. A year after "since", "from",
+ *  `decide` refuses whatever the answers unless every data card draws fixed
+ *  periods (`DecideContext.fixedPeriods`). A year after "since", "from",
  *  "compared with", "relative to", "before", "after", "base year",
  *  "constant ... prices" or "prices", or after "target", "goal", "agenda"
  *  or "deadline" and an optional "for" or "of", or before "prices" or
@@ -560,6 +562,23 @@ const KIND_QUESTIONS = ['value', 'ranking', 'change', 'period'] as const satisfi
     'stale'
 >[];
 
+// The kind questions that name a claim when periods are fixed. A period
+// that a data update leaves as it is cannot go stale.
+const FIXED_KIND_QUESTIONS = ['value', 'ranking', 'change'] as const satisfies readonly Exclude<
+    QuestionName,
+    'stale'
+>[];
+
+// The highest Noul among `names`, with the kind it names.
+const topKind = (
+    nouls: Record<QuestionName, number>,
+    names: readonly Exclude<QuestionName, 'stale'>[],
+): { kind: ClaimKind; kindNoul: number } => {
+    const best = names.reduce((top, name) => (nouls[name] > nouls[top] ? name : top));
+
+    return { kind: KIND_OF[best], kindNoul: nouls[best] };
+};
+
 /** A request's answers: every Noul by question, the refresh Noul, and the
  *  highest kind Noul with the kind it names. Null when any question has no
  *  Noul answer. */
@@ -580,9 +599,8 @@ export const scoreOf = (answers: Record<string, unknown>): Score | null => {
     }
 
     const nouls = { value, ranking, change, period, stale };
-    const best = KIND_QUESTIONS.reduce((top, name) => (nouls[name] > nouls[top] ? name : top));
 
-    return { nouls, stale, kind: KIND_OF[best], kindNoul: nouls[best] };
+    return { nouls, stale, ...topKind(nouls, KIND_QUESTIONS) };
 };
 
 export type EvergreenDecision =
@@ -598,27 +616,51 @@ export type RefusalRule = 'year_range' | 'data_year' | 'nouls';
 /** The thresholds `decide` applies, which the fit sweeps. */
 export type Thresholds = { stale: number; kind: number };
 
+/** What else `decide` knows of the artifact. `fixedPeriods` says every data
+ *  card it shows draws periods that a data update leaves as they are, so
+ *  `decide` lifts the year rules and reads no `period` Noul. */
+export type DecideContext = { fixedPeriods?: boolean };
+
+// A year from 1900 to 2099, which every year rule's match holds.
+const ANY_YEAR = /\b(?:19|20)\d{2}\b/u;
+
+/** Whether `candidate`, in any field, names a year from 1900 to 2099, the
+ *  case for which the check looks up `DecideContext.fixedPeriods`. Every
+ *  sentence a year rule refuses names one. */
+export const namesYear = (candidate: Candidate): boolean => ANY_YEAR.test(candidate.text);
+
 /**
  * What the answers to `evergreenRequest(candidate)` call for. A title or
  * section heading that names a year range (`namesYearRange`) or the year the
- * data covers (`namesDataYear`) is refused. Any
+ * data covers (`namesDataYear`) is refused, unless `context.fixedPeriods`
+ * holds, when the answers decide it as they decide any sentence. Any
  * other sentence is refused when its refresh Noul is at least
  * `thresholds.stale` and its highest kind Noul at least `thresholds.kind`.
  * It passes with a warning when the refresh Noul is that high but no kind
  * Noul is, or when the refresh Noul is between `T_LOW` and
- * `thresholds.stale`. When any question has no Noul answer, the decision is
+ * `thresholds.stale`. Under `context.fixedPeriods` the highest kind Noul is
+ * that of `value`, `ranking` or `change`, since a fixed period cannot go
+ * stale, and a sentence with none of them at `thresholds.kind` passes
+ * without a warning, since the period is the only claim Jev sees in it.
+ * When any question has no Noul answer, the decision is
  * unanswered, and the caller treats the check as unavailable.
  */
 export const decide = (
     candidate: Candidate,
     answers: Record<string, unknown>,
     thresholds: Thresholds = { stale: T_HIGH, kind: T_KIND },
+    context: DecideContext = {},
 ): EvergreenDecision => {
-    const score = scoreOf(answers);
+    const scored = scoreOf(answers);
 
-    if (!score) {
+    if (!scored) {
         return { outcome: 'unanswered' };
     }
+
+    // Fixed periods cannot move, so the period Noul names no claim to refuse.
+    const score = context.fixedPeriods
+        ? { ...scored, ...topKind(scored.nouls, FIXED_KIND_QUESTIONS) }
+        : scored;
 
     const at = {
         pointer: `/${candidate.field}` as const,
@@ -627,7 +669,9 @@ export const decide = (
         quote: candidate.text,
     };
 
-    if (namesYearRange(candidate)) {
+    const yearRules = !context.fixedPeriods;
+
+    if (yearRules && namesYearRange(candidate)) {
         return {
             outcome: 'refused',
             refusal: { ...at, kind: 'recency', reason: YEAR_RANGE_REASON },
@@ -636,7 +680,7 @@ export const decide = (
         };
     }
 
-    if (namesDataYear(candidate)) {
+    if (yearRules && namesDataYear(candidate)) {
         return {
             outcome: 'refused',
             refusal: { ...at, kind: 'recency', reason: DATA_YEAR_REASON },
@@ -645,7 +689,15 @@ export const decide = (
         };
     }
 
-    if (score.stale >= thresholds.stale && score.kindNoul >= thresholds.kind) {
+    const claims = score.kindNoul >= thresholds.kind;
+
+    // Under fixed periods a sentence that claims no value, ranking or change
+    // has nothing a data update can make false.
+    if (context.fixedPeriods && !claims) {
+        return { outcome: 'passed' };
+    }
+
+    if (score.stale >= thresholds.stale && claims) {
         return {
             outcome: 'refused',
             refusal: { ...at, kind: score.kind, reason: REASONS[score.kind] },

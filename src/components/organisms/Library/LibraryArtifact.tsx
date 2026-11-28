@@ -21,6 +21,7 @@ import {
     LIBRARY_AUTHOR,
     type LibraryArtifact as Artifact,
     libraryDate,
+    type LibraryStep,
     type ReplacementChoice,
     textUpdated,
 } from '@/lib/library/artifact';
@@ -54,11 +55,47 @@ const Prose = ({ text }: { text: string }) => (
     </>
 );
 
+// One step of the method as the card's info panel shows it, with the verb
+// and its object ("Get · Gross national income") and the step's sentence one
+// click away. A step stored without its two halves shows its title.
+const MethodStep = ({ step, index }: { step: LibraryStep; index: number }) => {
+    const label = (
+        <span className={styles.stepLabel}>
+            {step.verb && step.object ? (
+                <>
+                    <b>{step.verb}</b>
+                    <i className={styles.stepDot}>·</i>
+                    {step.object}
+                </>
+            ) : (
+                step.object || step.title
+            )}
+        </span>
+    );
+
+    return (
+        <li className={styles.step}>
+            <span className={styles.stepIndex}>{pad(index)}</span>
+            {step.detail ? (
+                <details className={styles.stepMore}>
+                    <summary className={styles.stepRow}>
+                        {label}
+                        <Icon name="chevron-down" className={styles.stepChevron} />
+                    </summary>
+                    <p className={styles.stepDetail}>{step.detail}</p>
+                </details>
+            ) : (
+                <span className={styles.stepRow}>{label}</span>
+            )}
+        </li>
+    );
+};
+
 /**
  * One Library artifact's page: the dark hero (back to the Library, title,
  * description), then the artifact drawn by its share's embed, the
- * publisher's text, the steps it was built by and its sources with the full
- * citation. Beside them, on the right, Share and Open in Studio and the
+ * publisher's text, its sources with the full citation, and the method, the
+ * steps it was built by. Beside them, on the right, Share and Open in Studio and the
  * artifact's type, status, publication and topics; on the left, the page's
  * sections. A phone stacks the artifact, the details, then the sections.
  *
@@ -95,8 +132,8 @@ const LibraryArtifact = ({
         ...(artifact.content
             ? [{ id: 'findings', label: artifact.contentTitle ?? 'Key Findings' }]
             : []),
-        ...(artifact.steps.length > 0 ? [{ id: 'build-plan', label: 'Build Plan' }] : []),
         { id: 'sources', label: 'Sources' },
+        ...(artifact.steps.length > 0 ? [{ id: 'method', label: 'Method' }] : []),
     ];
 
     return (
@@ -212,25 +249,6 @@ const LibraryArtifact = ({
                         </section>
                     )}
 
-                    {artifact.steps.length > 0 && (
-                        <section id="build-plan" className={styles.block}>
-                            <h2 className={styles.heading}>Build Plan</h2>
-                            <ol className={styles.steps}>
-                                {artifact.steps.map((step, index) => (
-                                    <li key={index} className={styles.step}>
-                                        <span className={styles.stepIndex}>{pad(index)}</span>
-                                        <div>
-                                            <p className={styles.stepTitle}>{step.title}</p>
-                                            {step.detail && (
-                                                <p className={styles.stepDetail}>{step.detail}</p>
-                                            )}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ol>
-                        </section>
-                    )}
-
                     <section id="sources" className={styles.block}>
                         <h2 className={styles.heading}>Sources</h2>
                         {artifact.sources.length > 0 && (
@@ -256,6 +274,17 @@ const LibraryArtifact = ({
                         <p className={styles.citationLabel}>Full Citation</p>
                         <CodeBox value={citation(artifact, origin, accessed)} />
                     </section>
+
+                    {artifact.steps.length > 0 && (
+                        <section id="method" className={styles.block}>
+                            <h2 className={styles.heading}>Method</h2>
+                            <ol className={styles.steps}>
+                                {artifact.steps.map((step, index) => (
+                                    <MethodStep key={index} step={step} index={index} />
+                                ))}
+                            </ol>
+                        </section>
+                    )}
                 </div>
             </div>
 

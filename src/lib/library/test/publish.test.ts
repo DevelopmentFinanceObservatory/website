@@ -5,6 +5,7 @@ import type { PanelView } from '../../studio/descriptionBlocks.ts';
 import {
     freeSlug,
     publishKeySlot,
+    publishedCite,
     publishedFacts,
     publishedKind,
     readArtifactText,
@@ -166,8 +167,8 @@ test('a card gives its sources and steps, and a canvas each source once and no s
     assert.deepEqual(publishedFacts('chart', [one]), {
         sources: [{ name: 'A', url: '/data/sources/oecd/crs' }],
         steps: [
-            { title: 'Get thing 0', detail: null },
-            { title: 'thing 1', detail: null },
+            { title: 'Get thing 0', verb: 'Get', object: 'thing 0', detail: null },
+            { title: 'thing 1', verb: null, object: 'thing 1', detail: null },
         ],
     });
     assert.deepEqual(publishedFacts('canvas', [one]).steps, []);
@@ -199,6 +200,28 @@ test("a card's facts are cut to the Library's limits", () => {
         { name: 'Script', url: null },
         { name: 'Off site', url: null },
     ]);
+});
+
+test("a card is cited as its source asks, or by its own sources and title, within the Library's limits", () => {
+    const sources = view([
+        { name: 'OECD | CRS', url: null, page: null },
+        { name: 'OECD | CRS', url: null, page: null },
+        { name: 'World Bank', url: null, page: null },
+    ]);
+    const long = { text: `${'t'.repeat(400)}  x`, title: 'd'.repeat(400) };
+    const clipped = publishedCite('Chart', sources, long);
+
+    assert.ok('text' in clipped);
+    assert.deepEqual([clipped.text.length, clipped.title.length], [300, 300]);
+    assert.deepEqual(publishedCite('Health   ODA', sources, null), {
+        sources: ['OECD / CRS', 'World Bank'],
+        title: 'Health ODA',
+    });
+    // A citation with no text cites the card by its sources instead.
+    assert.deepEqual(publishedCite('Notes', null, { text: ' ', title: 'Dataset' }), {
+        sources: [],
+        title: 'Notes',
+    });
 });
 
 test('a retry keeps its publish key until the artifact, mode or chosen slug changes', () => {

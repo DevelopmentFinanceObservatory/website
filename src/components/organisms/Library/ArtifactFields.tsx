@@ -23,6 +23,7 @@ import {
     readEvergreenAnswer,
     sameField,
 } from '@/lib/library/client';
+import type { ArtifactMode } from '@/lib/library/artifact';
 import { type ArtifactText, LIMITS } from '@/lib/library/publish';
 
 /**
@@ -197,8 +198,21 @@ export const evergreenOutcome = (
     };
 };
 
-const RULE =
-    'Say what the data measures and how to read it. Leave the numbers to the chart, which refreshes after publication.';
+// Where each field shows, under its input.
+const HINTS: Record<EvergreenField, string> = {
+    title: 'Heads the page, the Library list and link previews.',
+    description: 'Shown under the title, in the Library list and in link previews.',
+    contentTitle: 'Heads the text section below the artifact. Left empty, it reads “Key Findings”.',
+    content: 'The text section below the artifact, under the content title.',
+};
+
+// The line above the fields. A snapshot's text is not held to the evergreen
+// rule, since its data stays as published.
+const RULE: Record<ArtifactMode, string> = {
+    live: 'Say what the data measures and how to read it. Leave the numbers to the chart, which refreshes after publication.',
+    snapshot:
+        'Say what the data measures and how to read it. A snapshot keeps its data as published, so the text can name its numbers.',
+};
 const FIELD_ORDER: readonly EvergreenField[] = ['title', 'description', 'contentTitle', 'content'];
 
 /** The refused sentences of one field, under it. `fix` is given to the first
@@ -251,6 +265,8 @@ type ArtifactFieldsProps = {
     // The evergreen refusal of the last try, shown under the fields it names
     // while they hold what was sent.
     refusals?: Refusals | null;
+    // Whether the artifact follows its data, which decides the rule line.
+    mode?: ArtifactMode;
 };
 
 const ArtifactFields = ({
@@ -259,6 +275,7 @@ const ArtifactFields = ({
     address,
     children,
     refusals = null,
+    mode = 'live',
 }: ArtifactFieldsProps) => {
     const ids = useId();
     // Null until the list arrives.
@@ -307,11 +324,17 @@ const ArtifactFields = ({
         const invalid = errors.length > 0 || limits.length > 0;
         const shown = invalid || warnings.length > 0;
         const id = `${ids}-${field}-refused`;
+        const hintId = `${ids}-${field}-hint`;
 
         return {
+            hint: (
+                <p className={styles.hint} id={hintId}>
+                    {HINTS[field]}
+                </p>
+            ),
             input: {
                 ...(invalid ? { 'aria-invalid': true } : {}),
-                ...(shown ? { 'aria-describedby': id } : {}),
+                'aria-describedby': shown ? `${hintId} ${id}` : hintId,
             },
             list:
                 refusals && shown ? (
@@ -343,7 +366,7 @@ const ArtifactFields = ({
 
     return (
         <>
-            <p className={styles.rule}>{RULE}</p>
+            <p className={styles.rule}>{RULE[mode]}</p>
             <div className={styles.group}>
                 <label className={styles.field}>
                     <span className={styles.label}>Title</span>
@@ -357,6 +380,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ title: event.target.value })}
                     />
                 </label>
+                {title.hint}
                 {title.list}
             </div>
             {address}
@@ -374,6 +398,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ description: event.target.value })}
                     />
                 </label>
+                {description.hint}
                 {description.list}
             </div>
             <fieldset className={styles.field}>
@@ -425,6 +450,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ contentTitle: event.target.value || null })}
                     />
                 </label>
+                {contentTitle.hint}
                 {contentTitle.list}
             </div>
             <div className={styles.group}>
@@ -440,6 +466,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ content: event.target.value || null })}
                     />
                 </label>
+                {content.hint}
                 {content.list}
             </div>
         </>

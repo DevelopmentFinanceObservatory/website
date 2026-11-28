@@ -143,7 +143,14 @@ const answer = (stale: number, kinds: Partial<Record<string, number>> = {}) => (
 test('the refresh Noul decides, and the highest kind Noul names the kind', () => {
     const content = 'Norway gives the most. ODA fell. It rose. This chart shows ODA.';
     const [ranked, fell, rose, shows] = candidatesOf({ content });
-    const cases: [Candidate, Record<string, unknown>, string, string | null][] = [
+    const [title, description] = candidatesOf({
+        title: 'Health expenditure per capita in Kenya, Liberia, and Niger, 2023',
+        description: 'Per person health expenditure in Kenya, Liberia, and Niger for 2023',
+    });
+    const jev = (stale: number, value: number, ranking: number, change: number, period: number) =>
+        answer(stale, { value, ranking, change, period });
+    const fixed = { fixedPeriods: true };
+    const cases: [Candidate, Record<string, unknown>, string, string | null, typeof fixed?][] = [
         [ranked, answer(0.95, { ranking: 0.9, value: 0.2 }), 'refused', 'ranking'],
         [fell, answer(T_HIGH, { change: 0.6, period: 0.5 }), 'refused', 'trend'],
         [fell, answer(0.95, { change: T_KIND }), 'refused', 'trend'],
@@ -153,20 +160,35 @@ test('the refresh Noul decides, and the highest kind Noul names the kind', () =>
         [shows, answer(0.05, { value: 0.99 }), 'passed', null],
         [rose, answer((T_LOW + T_HIGH) / 2, { period: 0.8 }), 'warned', 'recency'],
         [rose, answer(T_LOW - 0.01, { change: 0.9 }), 'passed', null],
+        // Fixed periods cannot go stale, so a sentence whose only claim is its
+        // period passes, and the other kinds warn or refuse.
+        [rose, answer(0.95, { period: 0.9 }), 'refused', 'recency'],
+        [rose, answer(0.95, { period: 0.9, value: 0.2 }), 'passed', null, fixed],
+        [rose, answer(0.5, { period: 0.9, value: T_KIND }), 'warned', 'figure', fixed],
+        [ranked, answer(0.95, { period: 0.9, ranking: T_KIND }), 'refused', 'ranking', fixed],
+        // Jev's answers to two published texts (jev-1.14.0).
+        [title, jev(0.58, 0.05, 0.05, 0.02, 0.98), 'passed', null, fixed],
+        [title, jev(0.58, 0.05, 0.05, 0.02, 0.98), 'refused', 'recency'],
+        [description, jev(0.41, 0.06, 0.05, 0.02, 0.98), 'passed', null, fixed],
+        [description, jev(0.41, 0.06, 0.05, 0.02, 0.98), 'warned', 'recency'],
     ];
 
-    for (const [candidate, answers, outcome, kind] of cases) {
-        const decision = decide(candidate, answers);
+    for (const [candidate, answers, outcome, kind, context] of cases) {
+        const decision = decide(candidate, answers, undefined, context);
 
         assert.equal(decision.outcome, outcome, candidate.text);
 
         if (decision.outcome === 'refused') {
             assert.equal(decision.refusal.kind, kind);
-            assert.equal(decision.refusal.reason, REASONS[decision.refusal.kind]);
-            assert.equal(
-                content.slice(decision.refusal.start, decision.refusal.end),
-                candidate.text,
-            );
+            assert.equal(decision.refusal.quote, candidate.text);
+
+            if (candidate.field === 'content') {
+                assert.equal(decision.refusal.reason, REASONS[decision.refusal.kind]);
+                assert.equal(
+                    content.slice(decision.refusal.start, decision.refusal.end),
+                    candidate.text,
+                );
+            }
         }
 
         if (decision.outcome === 'warned') {
