@@ -54,7 +54,7 @@ export const QuestionPage = ({ page, newest }: { page: TurnPage; newest: boolean
                             if (newest) focusField();
                         }}
                     >
-                        Read it at the prompt
+                        Read full answer
                     </TextButton>
                 </Section>
             )}

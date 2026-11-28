@@ -65,7 +65,7 @@ export const STUDIO_LAYOUT_EVENTS = {
     },
     // The reply sheet or the conversation sheet opened or folded by the
     // reader: a button, Escape, a press on the canvas, or the panel's
-    // `Read it at the prompt`.
+    // `Read full answer`.
     'studio.sheet': {
         sheet: ['reply', 'conversation'],
         action: ['open', 'fold'],
