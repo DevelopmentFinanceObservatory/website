@@ -4,10 +4,12 @@ import classNames from 'classnames';
 
 import LiveNote from '../canvas/LiveNote';
 import Whiteboard from '../canvas/Whiteboard';
+import CanvasBackdrop from './CanvasBackdrop';
+import DownloadDataModal from './DownloadDataModal';
+import { whiteboardProps } from './whiteboardProps';
 import GuestWall from '../GuestWall';
 import { useStudioModel } from '../hooks/studioContext';
 import StudioLanding from '../landing/StudioLanding';
-import CardDownload from '../modals/CardDownload';
 import CardInfoPanel from '../modals/CardInfoPanel';
 import StudioModals from '../modals/StudioModals';
 import styles from '../Studio.module.scss';
@@ -15,8 +17,6 @@ import ChatPanel from '../workspace/ChatPanel';
 import WorkspaceToolbar from '../workspace/WorkspaceToolbar';
 
 import Button from '@/components/atoms/Button/Button';
-import GridPattern from '@/components/atoms/GridPattern/GridPattern';
-import Modal from '@/components/molecules/Modal/Modal';
 import FeedbackWidget from '@/components/organisms/FeedbackWidget/FeedbackWidget';
 import Header from '@/components/organisms/Header/Header';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
@@ -28,6 +28,7 @@ import { themeVars } from '@/lib/studio/theme';
  * above, drawn from the Studio's model (useStudioModel).
  */
 const ClassicShell = () => {
+    const model = useStudioModel();
     const {
         shared,
         examples,
@@ -43,15 +44,7 @@ const ClassicShell = () => {
         modals,
         landingHistory,
         mode: { current: mode, leaving, inWorkspace, begin, sendDraft, startNew },
-        stage: {
-            sectionRef,
-            gridCell,
-            gridScale,
-            fills,
-            theme: derivedTheme,
-            filtersRow,
-            chatShown,
-        },
+        stage: { sectionRef, theme: derivedTheme, filtersRow, chatShown },
         drafts: {
             query,
             setQuery,
@@ -74,29 +67,16 @@ const ClassicShell = () => {
         canvas: {
             widgets: visibleWidgets,
             live: liveCanvas,
-            flyToCardRef,
             isOnCanvas,
             titleOf: cardTitleOf,
             flyTo: flyToCard,
-            changeUnit,
             add: addWidget,
             remove: removeCard,
-            togglePin,
-            askFollowUp,
         },
-        panels: {
-            infoCardId,
-            setInfoCardId,
-            infoWidget,
-            infoCiteLink,
-            citeInfoCard,
-            downloadWidget,
-            setDownloadCardId,
-            shareData,
-        },
+        panels: { infoCardId, setInfoCardId, infoWidget, infoCiteLink, citeInfoCard, shareData },
         title,
         firstPrompt,
-    } = useStudioModel();
+    } = model;
 
     return (
         <section
@@ -107,37 +87,15 @@ const ClassicShell = () => {
                 chatShown && styles.chatShown,
             )}
         >
-            {/* Docking starts with the stage-out (not after it) — one continuous
-                move instead of two beats. */}
-            <div
+            {/* Docking starts with the stage-out, so the landing leaves in one
+                continuous move. */}
+            <CanvasBackdrop
                 className={classNames(
-                    styles.canvas,
                     mode !== 'start' && styles.canvasDocked,
                     mode !== 'start' && chatCollapsed && styles.canvasWide,
                     solo && styles.canvasSolo,
                 )}
-                aria-hidden="true"
-            >
-                {/* Viewport-sized inner layer counter-translated on the same
-                    curve as the clip box — the grid stays screen-static and
-                    only gets cropped. */}
-                <div className={styles.canvasInner}>
-                    <GridPattern variant="light" cell={gridCell} />
-                    {fills.map(({ id, x, y, w, h, shade, leaving }) => (
-                        <span
-                            key={id}
-                            className={classNames(styles.fill, leaving && styles.fillOut)}
-                            style={{
-                                left: x * gridScale,
-                                top: y * gridScale,
-                                width: w * gridScale,
-                                height: h * gridScale,
-                                backgroundColor: shade,
-                            }}
-                        />
-                    ))}
-                </div>
-            </div>
+            />
 
             {/* Widgets ride ABOVE the clipped pattern, in the same docked
                 region (a separate scroll layer so the grid stays a backdrop). */}
@@ -151,49 +109,9 @@ const ClassicShell = () => {
                     style={themeVars(derivedTheme) as React.CSSProperties}
                 >
                     <Whiteboard
-                        widgets={visibleWidgets}
-                        filter={activeCardsTab}
-                        pinnedIds={doc.pinnedIds}
-                        onTogglePin={togglePin}
-                        onRemove={removeCard}
-                        onAskFollowUp={askFollowUp}
-                        onChangeUnit={readOnly ? undefined : changeUnit}
+                        {...whiteboardProps(model)}
                         onCardInfo={setInfoCardId}
                         focusedId={infoCardId}
-                        onEditText={modals.textCard.show}
-                        onEditTitle={modals.cardTitle.show}
-                        titles={doc.titles}
-                        notes={doc.notes}
-                        onEditNote={modals.note.show}
-                        onRemoveNote={doc.removeNote}
-                        initialLayout={save.openedLayout}
-                        onLayoutChange={save.handleLayoutChange}
-                        replacedIds={doc.replacedIds}
-                        flyToCardRef={flyToCardRef}
-                        theme={derivedTheme}
-                        views={doc.views}
-                        onViewChange={doc.setView}
-                        ratios={doc.ratios}
-                        onRatioChange={doc.setRatio}
-                        onShare={
-                            readOnly
-                                ? undefined
-                                : (id) =>
-                                      modals.share.show({
-                                          kind: 'card',
-                                          id,
-                                          title: cardTitleOf(id),
-                                      })
-                        }
-                        onDownload={setDownloadCardId}
-                        readOnly={readOnly}
-                        // A viewer may resize a share's cards for
-                        // themselves: the layout and ratios stay in this
-                        // page (a share has no conversation id, so
-                        // useConversationSave saves nothing).
-                        resizable={readOnly}
-                        centerSingle={shared?.kind === 'card'}
-                        live={liveCanvas}
                     />
                 </div>
             )}
@@ -218,20 +136,7 @@ const ClassicShell = () => {
                 onCiteLink={citeInfoCard}
             />
 
-            <Modal
-                open={downloadWidget !== null}
-                onOpenChange={(next) => !next && setDownloadCardId(null)}
-                title="Download Data"
-                fit
-            >
-                {downloadWidget && (
-                    <CardDownload
-                        widget={downloadWidget}
-                        details
-                        shared={sharedCardAddress(shared, downloadWidget.id)}
-                    />
-                )}
-            </Modal>
+            <DownloadDataModal />
 
             {inWorkspace && !readOnly && (
                 <StudioModals
@@ -257,8 +162,8 @@ const ClassicShell = () => {
                 titleEditable={inWorkspace && phone && !readOnly}
                 onEditTitle={modals.title.show}
                 onBack={mode === 'start' || readOnly ? undefined : startNew}
-                // A share is a plain read-only view: no way back, no account —
-                // logo and title only.
+                // A share is a plain read-only view with the logo and title
+                // only, and no way back or account.
                 back={!readOnly}
                 account={!readOnly}
             >

@@ -325,6 +325,83 @@ export type ApplyUnit = {
     unit: UnitChoice;
 };
 
+/** The years a card can change to: the first and last year it draws
+ *  (`start_year`, `end_year`), the first and last year its data holds
+ *  (`first_year`, `last_year`), and the years between those two that hold no
+ *  data (`missing_years`, absent when none is missing or the source states
+ *  none). `single` marks a card that shows one value per series (a key
+ *  number): it draws one year and changes to one year, so `start_year` and
+ *  `end_year` are equal. */
+export type WindowOffer = {
+    start_year: number;
+    end_year: number;
+    first_year: number;
+    last_year: number;
+    missing_years?: number[] | null;
+    single?: boolean | null;
+};
+
+/** One place a card can show: the entity's ref as Search states it, which
+ *  `apply_change` names, and its label. */
+export type PlaceOption = { id: string; label: string };
+
+/** A role of a card whose places can change: the role as the card's spec
+ *  names it (`observationAbout`, `origin`, `destination`), the places it shows
+ *  now (at least one), whether it takes several at once, the most it can
+ *  draw (`max`, absent on a card stored before it was kept), and what the
+ *  card's data calls its places (`label`, one form or both, absent where the
+ *  data names none). The places it can change to are read on demand (GET
+ *  /api/studio/places, `PlacesOptions`). */
+export type PlacesOffer = {
+    role: string;
+    multiple: boolean;
+    chosen: PlaceOption[];
+    max?: number;
+    label?: PlacesLabel;
+};
+
+/** What a card's data calls a role's places, in one form or both. */
+export type PlacesLabel = { singular?: string; plural?: string };
+
+/** On a `component.created` frame, and on a stored card, whose card draws one
+ *  retrieval's own frame: the spec the card reads, which `apply_change`
+ *  names, and each change it offers besides its unit. A member is absent when
+ *  the card cannot change that axis. */
+export type CardChanges = {
+    spec_id: string;
+    window?: WindowOffer | null;
+    places?: PlacesOffer[] | null;
+};
+
+/** Draw the card over `start_year` to `end_year`, both kept. The harness
+ *  refuses an `end_year` before `start_year`; equal years draw one year. */
+export type WindowChange = { kind: 'window'; start_year: number; end_year: number };
+
+/** Show the places `entities` (1 to 50 ids) in role `role`. */
+export type PlacesChange = { kind: 'places'; role: string; entities: string[] };
+
+export type CardChange = WindowChange | PlacesChange;
+
+/** A card's change of years or places, with no message text. The harness
+ *  refuses it 422 `constraint_violation` with pointer `/apply_change`:
+ *  `scope_choice_stale` when the card is off the canvas or reads another
+ *  spec, `change_not_offered` for a value outside the offer or the one the
+ *  card shows, `change_no_data` for years its data holds none of. A places
+ *  change can also be refused 503 `transient_unavailable` with
+ *  `constraint_id: "place_options_unavailable"`. Every change replaces the
+ *  card under a new id, so `component_id` tells a stale request. */
+export type ApplyChange = { component_id: string; spec_id: string; change: CardChange };
+
+/** GET /api/studio/places: the places role `role` of card `component_id` can
+ *  change to, in Search's order, `truncated` when Search listed more than the
+ *  harness returns. The card's chosen places may be among them. */
+export type PlacesOptions = {
+    component_id: string;
+    role: string;
+    options: PlaceOption[];
+    truncated: boolean;
+};
+
 /** A question form a client renders: a `unit` question, a `multi_select`
  *  question. */
 export type ClientFeature = 'unit_question' | 'multi_select';
@@ -339,7 +416,7 @@ export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
     conversation_id: string;
-    /** Absent only beside `apply_choice` or `apply_unit`. The harness reads
+    /** Absent only beside `apply_choice`, `apply_unit` or `apply_change`. The harness reads
      *  an absent message as "". */
     message?: string;
     /** Set only on the turn whose `message` is the picked question. */
@@ -365,12 +442,18 @@ export type TurnRequest = {
      *  turn, so of two pages sending the same new question one begins it. */
     after_turn?: number | null;
     /** A card's unit change. It comes alone, as `apply_choice` does, so a
-     *  request carries one of the two. */
+     *  request carries one of `message`, `apply_choice`, `apply_unit` and
+     *  `apply_change`. */
     apply_unit?: ApplyUnit | null;
+    /** A card's change of years or places, alone as `apply_unit` is. */
+    apply_change?: ApplyChange | null;
     /** The question forms this client renders. The harness asks a form only
      *  of a client that names it, and keeps the set the latest request
      *  declared. */
     client_features?: ClientFeature[];
+    /** Hold a removal's `composition.updated` until after the turn's next
+     *  drawing line. Absent, the harness sends it when the removal lands. */
+    hold_removals?: boolean;
 };
 
 export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
@@ -403,6 +486,9 @@ export type InterruptResponse = {
     // Replaces the set the conversation keeps for the questions the resumed
     // turn asks next.
     client_features?: ClientFeature[];
+    /** Hold a removal's `composition.updated` until after the turn's next
+     *  drawing line. Absent, the harness sends it when the removal lands. */
+    hold_removals?: boolean;
 };
 
 /** The ticked options of a multi-select question: at least one, no repeats. */
@@ -454,6 +540,9 @@ export type ResumeRequest = {
     schema_version: 1;
     conversation_id: string;
     turn_index: number;
+    /** Hold a removal's `composition.updated` until after the turn's next
+     *  drawing line. Absent, the harness sends it when the removal lands. */
+    hold_removals?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -481,6 +570,12 @@ export type PlanDecisionOption = {
     years: [number, number][] | null;
 };
 
+/** What a plan decision or an approved choice settles, so a client can tell
+ *  it from a row a card shows for the same axis. `unit`, `window` and
+ *  `places` are the kinds of `change.kind` and `card_change.kind`. */
+export type DecisionKind =
+    'unit' | 'window' | 'places' | 'sector' | 'region' | 'measure_basis' | 'provider' | 'count';
+
 export type PlanDecision = {
     id: string;
     question: string;
@@ -503,6 +598,10 @@ export type PlanDecision = {
     // are in now. Set only beside `choice_id`, whose `options` are then whole
     // units, so a switch can name any offered unit.
     unit?: UnitOffer | null;
+    // The plan steps the decision shapes. Step ids repeat across a
+    // conversation's plans, so a step is named by the pair of plan and step.
+    step_ids?: string[] | null;
+    kind?: DecisionKind | null;
 };
 
 export type PlanAction = 'approve' | 'amend' | 'reject' | 'switch';
@@ -584,7 +683,9 @@ export type PlanSwitchFailed = {
     retryable?: boolean | null;
 };
 
-export type PlanApprovedStep = { label: string; gives_answer?: boolean | null };
+/** One step of an approved plan. `id` is the step's id on the plan card,
+ *  absent from a frame stored before the harness sent it. */
+export type PlanApprovedStep = { id?: string | null; label: string; gives_answer?: boolean | null };
 
 /** One choice of an approved plan: its id (the plan card's
  *  `PlanDecision.choice_id`, `decision/<slot>` for a planner decision), its
@@ -596,6 +697,10 @@ export type PlanApprovedChoice = {
     question: string;
     chosen: string;
     changed_from?: string | null;
+    // As on `PlanDecision`; absent from a frame stored before the harness
+    // sent them.
+    step_ids?: string[] | null;
+    kind?: DecisionKind | null;
 };
 
 /** The plan the user approved, sent once on the `approve` answer before the
@@ -628,6 +733,33 @@ export type ActivityStepFrame = {
     duration_ms?: number | null;
     produced?: { component_id: string; revision: number } | null;
     progress?: StepProgress | null;
+    // The approved plan and its step this line runs, both or neither,
+    // absent off a plan.
+    plan_version_id?: string | null;
+    plan_step_id?: string | null;
+    // On the running line of a drawing call: the cards it is about to draw,
+    // in its order (comingEntriesOf narrows it).
+    coming?: ComingEntry[] | null;
+};
+
+/** A card a drawing call announces: its placeholder's id
+ *  (`<step_id>.<index>`), the type that lands, and its title as asked (the
+ *  card's own can add its period). */
+export type ComingEntry = { placeholder_id: string; type: string; title: string };
+
+/** The plan and the step of it whose result a card draws. Step ids repeat
+ *  across a conversation's plans, so the pair names the step. */
+export type PlanStepLink = { plan_version_id: string; plan_step_id: string };
+
+/** Where a card came from: the step that drew it and, for a card on a plan
+ *  step's result, that plan and step (both or neither). */
+export type CreatedFrom = {
+    step_id: string;
+    message_seq?: number | null;
+    plan_version_id?: string | null;
+    plan_step_id?: string | null;
+    // The announced card this one fills (ComingEntry's `placeholder_id`).
+    placeholder_id?: string | null;
 };
 
 export type ComponentCreated = {
@@ -647,9 +779,11 @@ export type ComponentCreated = {
     payload: Record<string, unknown>;
     fact_summary: FactSummary;
     provenance: Provenance;
-    created_from?: { step_id: string; message_seq?: number | null } | null;
+    created_from?: CreatedFrom | null;
     // Set only when the card reads from one convertible spec.
     unit_change?: UnitChange | null;
+    // Set only when the card draws one retrieval's own frame.
+    card_changes?: CardChanges | null;
     // The component_id of the card this one replaces in its slot (a Change
     // unit, or an edit the harness redrew). The page keeps the old card's
     // turn, pin, place, size, title and note on the new id.
@@ -666,6 +800,10 @@ export type ComponentRevised = {
     // Same payload shape as ComponentCreated's. Absent when only
     // presentation fields moved.
     payload?: Record<string, unknown> | null;
+    // The card's years and places offer after the revision, in
+    // ComponentCreated's shape. Present sets the offer and `null` removes
+    // it. Absent leaves the offer to reviseWidget's rule.
+    card_changes?: CardChanges | null;
 };
 
 export type ElicitationOption = {
@@ -773,6 +911,15 @@ export type StudioFrame =
 /** Where a turn stands. `running` and `paused` are open; the rest are closed. */
 export type TurnStatus = 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'abandoned';
 
+/** On a state read's turn, a turn that changed one card in place
+ *  (`apply_unit` or `apply_change`): the card the request named, what changed,
+ *  and for a change of places the role. */
+export type CardChangeMark = {
+    component_id: string;
+    kind: 'unit' | 'window' | 'places';
+    role?: string | null;
+};
+
 /** The conversation's latest turn. `user_message` is its prompt as a closed
  *  turn's record words it, so a page can show a turn it never held.
  *  `lease_live` says a stream holds the turn now, on some instance, and
@@ -785,14 +932,18 @@ export type TurnState = {
     // The `plan.approved` frame of each plan the open turn approved, one per
     // `revision`.
     approved?: PlanApproved[] | null;
+    // Set on a turn that changed a card in place.
+    card_change?: CardChangeMark | null;
     lease_live: boolean;
     retry_after_seconds?: number | null;
 };
 
 /** A card a closed turn made or changed, as the conversation stores it.
- *  `unit_change` and `replaces` are its `component.created` frame's: the
- *  offer its Change unit opens on, and the card whose canvas slot it took.
- *  A card an older harness stored carries neither. */
+ *  `unit_change`, `card_changes` and `replaces` are its `component.created`
+ *  frame's: the offers its changes open on, and the card whose canvas slot it
+ *  took. `plan_version_id` and `plan_step_id` are the plan and step its
+ *  `created_from` named, both or neither. A card an older harness stored
+ *  carries none of them. */
 export type StoredCard = {
     component_id: string;
     type: string;
@@ -800,7 +951,10 @@ export type StoredCard = {
     revision: number;
     fact_summary?: FactSummary | null;
     unit_change?: UnitChange | null;
+    card_changes?: CardChanges | null;
     replaces?: string | null;
+    plan_version_id?: string | null;
+    plan_step_id?: string | null;
 };
 
 /** One closed turn: the user's message as the turn recorded it, the reply it
@@ -820,6 +974,8 @@ export type ClosedTurn = {
     approved?: PlanApproved[] | null;
     error?: string | null;
     new_question?: string | null;
+    // Set on a turn that changed a card in place.
+    card_change?: CardChangeMark | null;
 };
 
 /** The open pause of a paused turn, and the frames it was sent as, its

@@ -27,11 +27,17 @@ export type ShellState = {
      *  (a plan line under the pointer or focus), null for none. */
     litPlan: number | null;
     sheet: Sheet;
+    /** The question turn `sheet` was chosen for; a choice holds only on its
+     *  own turn. */
+    sheetTurn: number | null;
 };
 
 export type ShellAction =
     /** The `Session panel` button; `shown` is whether the panel shows now. */
     | { type: 'panel.toggle'; shown: boolean }
+    /** Closes the panel that overlays the canvas without recording a choice,
+     *  so a wider window opens it by the card rule again. */
+    | { type: 'panel.dismiss' }
     /** Pushes a page, opens the panel and leaves focus mode. */
     | { type: 'panel.show'; page: PanelPage }
     /** Swaps the page on top (a card replaced by a new id). */
@@ -41,8 +47,10 @@ export type ShellAction =
     | { type: 'focus.set'; on: boolean }
     | { type: 'point'; card: string | null }
     | { type: 'plan.light'; turn: number | null }
-    | { type: 'sheet.set'; sheet: Sheet }
-    /** A new question: the sheet follows the reply again. An open panel page stays. */
+    /** The reader's sheet choice for the question at `turn`. */
+    | { type: 'sheet.set'; sheet: Sheet; turn?: number }
+    /** A new question: the sheet follows the reply again. An open panel
+     *  page stays. */
     | { type: 'question.sent' }
     | { type: 'session.reset' };
 
@@ -53,6 +61,7 @@ export const initialShell: ShellState = {
     pointedCard: null,
     litPlan: null,
     sheet: 'auto',
+    sheetTurn: null,
 };
 
 /** Escape handler orders: the shell calls the highest registered order first. */
@@ -83,6 +92,8 @@ export const shellReducer = (state: ShellState, action: ShellAction): ShellState
             if (state.focus) return { ...state, focus: false, panelChoice: true };
 
             return { ...state, panelChoice: !action.shown };
+        case 'panel.dismiss':
+            return state.panelChoice === null ? state : { ...state, panelChoice: null };
         case 'panel.show': {
             const top = state.trail.at(-1);
             const trail =
@@ -106,12 +117,19 @@ export const shellReducer = (state: ShellState, action: ShellAction): ShellState
             return state.pointedCard === action.card
                 ? state
                 : { ...state, pointedCard: action.card };
-        case 'sheet.set':
-            return state.sheet === action.sheet ? state : { ...state, sheet: action.sheet };
+        case 'sheet.set': {
+            const sheetTurn = action.turn ?? state.sheetTurn;
+
+            return state.sheet === action.sheet && state.sheetTurn === sheetTurn
+                ? state
+                : { ...state, sheet: action.sheet, sheetTurn };
+        }
         case 'plan.light':
             return state.litPlan === action.turn ? state : { ...state, litPlan: action.turn };
         case 'question.sent':
-            return state.sheet === 'auto' ? state : { ...state, sheet: 'auto' };
+            return state.sheet === 'auto' && state.sheetTurn === null
+                ? state
+                : { ...state, sheet: 'auto', sheetTurn: null };
         case 'session.reset':
             return initialShell;
     }
@@ -135,13 +153,6 @@ export const heldCard = (state: ShellState): string | null => {
 
     return top?.kind === 'card' ? top.id : null;
 };
-
-/**
- * The canvas's scroll foot below its last row: the gap under the prompt,
- * the prompt's taller height (resting or current), and two grid cells.
- */
-export const canvasFoot = (band: { rest: number; current: number }): number =>
-    20 + Math.max(band.rest, band.current) + 40;
 
 export type Box = { left: number; top: number; width: number; height: number };
 

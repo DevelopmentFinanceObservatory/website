@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, type RefObject, useContext } from 'react';
 
 import type { PanelPage } from '@/lib/studio/promptShell';
 
@@ -14,6 +14,9 @@ export type PanelNav = {
     backLabel: string;
     /** Moves the canvas to the card. */
     fly: (id: string) => void;
+    /** The space the panel's growth holds above the content. A page draws it
+     *  under its back row, so the back row keeps its place. */
+    topSpacer: RefObject<HTMLDivElement | null>;
 };
 
 export const PanelNavContext = createContext<PanelNav | null>(null);

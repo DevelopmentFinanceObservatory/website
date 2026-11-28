@@ -183,6 +183,7 @@ const ChoiceRow = ({
                     type="button"
                     className={styles.change}
                     aria-expanded={open}
+                    aria-label={open ? `Done changing ${choice.name}` : `Change ${choice.name}`}
                     disabled={busy && !pending}
                     onClick={onToggle}
                 >
@@ -271,19 +272,22 @@ const ChoiceRow = ({
  * switchable. An approved plan passes neither.
  * `reasons` adds why the plan holds each choice. One row opens at a time:
  * the one being switched, else the one whose switch failed, until the user
- * opens or closes another.
+ * opens or closes another. `columns` sets each row's name, value and
+ * "Change" side by side on one baseline.
  */
 export const PlanLedger = ({
     view,
     plan = null,
     onSwitch,
     reasons = false,
+    columns = false,
     className,
 }: {
     view: PlanView;
     plan?: PlanState | null;
     onSwitch?: Switch;
     reasons?: boolean;
+    columns?: boolean;
     className?: string;
 }) => {
     // The row the user opened or closed (null) for this plan. Undefined
@@ -322,7 +326,11 @@ export const PlanLedger = ({
 
     return (
         <div
-            className={classNames((ruled || general) && styles.ledger, className)}
+            className={classNames(
+                (ruled || general) && styles.ledger,
+                columns && styles.columns,
+                className,
+            )}
             onFocus={() => {
                 hadFocusRef.current = true;
             }}

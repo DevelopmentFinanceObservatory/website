@@ -22,8 +22,8 @@ type DockFieldProps = {
 };
 
 /**
- * The input row: production's growing textarea (five lines, then it
- * scrolls) and the send arrow on its last line. Enter sends and
+ * The input row: a textarea that grows with its text up to five lines,
+ * then scrolls, and the send arrow on its last line. Enter sends and
  * Shift+Enter breaks the line, which the field turns into a space, as the
  * chat's own field does.
  */

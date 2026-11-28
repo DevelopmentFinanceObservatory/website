@@ -31,9 +31,11 @@ import {
     withOfferedQuestion,
     withoutUnsentQuestion,
 } from './transcript.ts';
-import { reviseWidget, widgetFromComponent } from './widgets.ts';
+import { planStepOf, reviseWidget, widgetFromComponent } from './widgets.ts';
 import { readHeld } from './wire.ts';
-import { placeCard } from './cardReplace.ts';
+import { placeCard, type CardHistory } from './cardReplace.ts';
+import { rowValues } from './changeNote.ts';
+import { cardChangesOf } from './studioClient.ts';
 import type {
     ClosedTurn,
     CompositionBlock,
@@ -175,6 +177,7 @@ export const mergeClosedTurns = (
             turn.turn_index,
             recordedPromptText(turn.user_message),
             nextTurn + appended.length,
+            turn.card_change,
         );
 
         if (merged !== before) {
@@ -549,48 +552,121 @@ export const storedCards = (closed: readonly ClosedTurn[]): Map<string, StoredCa
     );
 
 /**
- * The card whose slot card `id` takes, as its frame's `replaces` would have
- * named it: its stored card's `replaces`, followed through `stored` while
- * the card named is one the page does not hold (`held`), as when another
- * tab changed a card's unit twice. Null when the chain reaches no held card.
+ * The cards whose slots card `id` takes in turn, oldest first, as their
+ * frames' `replaces` would have named them: the card the page holds
+ * (`held`) that its stored card's `replaces` reaches through `stored`, then
+ * each card between that the page does not hold, as when another tab changed
+ * a card's unit twice. Empty when the chain reaches no held card.
  */
-export const replacedCard = (
+export const storedReplacements = (
     id: string,
     stored: ReadonlyMap<string, StoredCard>,
     held: (id: string) => boolean,
-): string | null => {
+): string[] => {
+    const between: string[] = [];
     const seen = new Set([id]);
 
     for (let from = stored.get(id)?.replaces; from && !seen.has(from);) {
         if (held(from)) {
-            return from;
+            return [from, ...between.toReversed()];
         }
 
         seen.add(from);
+        between.push(from);
         from = stored.get(from)?.replaces;
     }
 
-    return null;
+    return [];
+};
+
+/** The replacement map entries of `chain` (oldest first, the card last):
+ *  each card's id to the id of the card before it. */
+export const replacementLinks = (chain: readonly string[]): Record<string, string> =>
+    Object.fromEntries(
+        chain.flatMap((to, at) => {
+            const from = chain[at - 1];
+
+            return from === undefined ? [] : [[to, from]];
+        }),
+    );
+
+/**
+ * `cards` once `card` arrives in the slots of `chain` (storedReplacements),
+ * each replacement placed in turn as its own `component.created` frame would
+ * have placed it (placeCard): a card between, which the page never drew,
+ * stands in with `card`'s shape and its own stored card's offers (`stored`),
+ * filed under its turn (`turnOf`, else `card`'s). A card change turn
+ * (`changes`) keeps the slot's turn and joins its history, and a question
+ * that drew one starts it afresh, so the last card sits under the question
+ * that drew the latest of the chain and lists every change since.
+ */
+export const placeReplacing = <
+    TCard extends Widget & { turn: number; madeIn?: number } & CardHistory,
+>(
+    cards: readonly TCard[],
+    card: TCard,
+    chain: readonly string[],
+    {
+        stored,
+        turnOf,
+        changes,
+    }: {
+        stored: ReadonlyMap<string, StoredCard>;
+        turnOf: ReadonlyMap<string, number>;
+        changes: ReadonlySet<number>;
+    },
+): TCard[] => {
+    const standIn = (id: string): TCard => {
+        const own = stored.get(id);
+        const turn = turnOf.get(id) ?? card.turn;
+
+        return card.kind === 'text'
+            ? { ...card, id, turn }
+            : {
+                  ...card,
+                  id,
+                  turn,
+                  unitChange: own?.unit_change ?? undefined,
+                  cardChanges: cardChangesOf(own?.card_changes) ?? undefined,
+              };
+    };
+
+    return chain.reduce<TCard[]>((next, from, at) => {
+        const to = chain[at + 1];
+        const placed = to === undefined ? card : standIn(to);
+
+        return placeCard(next, placed, {
+            replaces: from,
+            keepTurn: changes.has(placed.turn),
+            values: rowValues,
+        });
+    }, cards.slice());
 };
 
 /**
  * `widgets` with the cards `ids`, which the page drew from a read before
  * their turn closed and so without their stored cards, brought to what
  * their frames would have drawn once a read carries those cards (`stored`):
- * a card with no unit offer takes its stored card's, and a card that
- * replaced a card the page holds off the canvas (`onCanvas` lacks it,
- * replacedCard) takes that card's slot. `replaced` lists each swap, old card
- * first, so the canvas moves the old card's settings. The same array when
- * nothing changed.
+ * a card with no unit offer, no offer of years and places, or no plan step
+ * takes its stored card's, and a card that replaced a card the page holds off
+ * the canvas (`onCanvas` lacks it, storedReplacements) takes that card's
+ * slot through each replacement between (placeReplacing, with the page turn
+ * of each card, `turnOf`, and the card change turns, `changes`).
+ * `replaced` lists each chain, old card first and the card last, so the
+ * canvas moves the old card's settings. The same array when nothing changed.
  */
-export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
+export const reconcileStoredCards = <
+    TWidget extends Widget & { turn: number; madeIn?: number } & CardHistory,
+>(
     widgets: TWidget[],
     stored: ReadonlyMap<string, StoredCard>,
     ids: Iterable<string>,
     onCanvas: ReadonlySet<string>,
-): { widgets: TWidget[]; replaced: [string, string][] } => {
+    changes: ReadonlySet<number> = new Set(),
+    turnOf: ReadonlyMap<string, number> = new Map(),
+): { widgets: TWidget[]; replaced: string[][] } => {
     let next = widgets;
-    const replaced: [string, string][] = [];
+    const replaced: string[][] = [];
 
     for (const id of ids) {
         const card = stored.get(id);
@@ -607,15 +683,29 @@ export const reconcileStoredCards = <TWidget extends Widget & { turn: number }>(
             next = next.map((widget) => (widget.id === id ? drawn : widget));
         }
 
-        const from = replacedCard(
+        const cardChanges = cardChangesOf(card.card_changes);
+
+        if (cardChanges && drawn.kind !== 'text' && !drawn.cardChanges) {
+            drawn = { ...drawn, cardChanges };
+            next = next.map((widget) => (widget.id === id ? drawn : widget));
+        }
+
+        const planStep = planStepOf(card);
+
+        if (planStep && drawn.kind !== 'text' && !drawn.planStep) {
+            drawn = { ...drawn, planStep };
+            next = next.map((widget) => (widget.id === id ? drawn : widget));
+        }
+
+        const chain = storedReplacements(
             id,
             stored,
             (other) => !onCanvas.has(other) && next.some((widget) => widget.id === other),
         );
 
-        if (from) {
-            next = placeCard(next, drawn, { replaces: from });
-            replaced.push([from, id]);
+        if (chain.length > 0) {
+            next = placeReplacing(next, drawn, chain, { stored, turnOf, changes });
+            replaced.push([...chain, id]);
         }
     }
 
@@ -772,6 +862,14 @@ export const widgetFromRead = (
                   fact_summary: facts,
                   provenance: provenanceOfRead(read),
                   unit_change: stored?.unit_change ?? null,
+                  card_changes: stored?.card_changes ?? null,
+                  ...(stored && {
+                      created_from: {
+                          step_id: '',
+                          plan_version_id: stored.plan_version_id ?? null,
+                          plan_step_id: stored.plan_step_id ?? null,
+                      },
+                  }),
               });
     } catch {
         return null;

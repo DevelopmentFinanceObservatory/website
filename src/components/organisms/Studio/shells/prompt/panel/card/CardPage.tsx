@@ -21,65 +21,116 @@ import {
     SourcesSection,
 } from './CardSections';
 import ChangePicker from './ChangePicker';
+import PlacesPick from './PlacesPick';
 import UnitPick from './UnitPick';
+import YearsPick from './YearsPick';
 
 import { cardImageName, cardNode, downloadCardImage } from '@/lib/studio/cardImage';
 import {
     type ChangeOffer,
-    type ChangeRowKey,
     changeOffers,
-    changeStatus,
+    changeQueued,
+    type ChangeRowKey,
+    changeStatuses,
     type ChangeStatus,
+    placesChange,
+    placesChanged,
+    placesText,
+    sentRefusal,
+    windowChanged,
+    yearsChange,
+    yearsText,
 } from '@/lib/studio/cardChange';
-import {
-    cardPageView,
-    type CardPageView,
-    currentCardId,
-    type MeasureRow,
-    replacedChain,
-} from '@/lib/studio/cardPageView';
+import { cardPageView, type CardPageView, type MeasureRow } from '@/lib/studio/cardPageView';
+import { standingFor } from '@/lib/studio/cardIdentity';
+import { replacedChain } from '@/lib/studio/cardReplace';
 import { localDay } from '@/lib/studio/descriptionBlocks';
 import { approvedPlans, type PlanLinks } from '@/lib/studio/planLink';
+import type { Widget } from '@/lib/chat/widgets';
+import { cardUnitChange } from '@/lib/studio/cardUnit';
 import type { ApprovedPlan } from '@/lib/studio/plan';
 import { ESCAPE_CARD_PAGE, ESCAPE_PICKER } from '@/lib/studio/promptShell';
 import { servesUnit, unitChanged, unitText } from '@/lib/studio/unitChoice';
-import type { UnitChoice } from '@/lib/studio/wire';
+import type { PlaceOption, UnitChoice } from '@/lib/studio/wire';
 
-// An open picker: the card and row it belongs to, and the reader's selection.
-type OpenPicker = { card: string; key: ChangeRowKey; unit: UnitChoice };
+// The reader's selection in an open picker, one shape per kind of change.
+type Pick =
+    | { kind: 'unit'; unit: UnitChoice }
+    | { kind: 'years'; from: number; to: number }
+    | { kind: 'shows'; places: PlaceOption[] };
 
-// A change sent from this page, kept until its card is replaced or the
-// harness refuses it, so the page can say which.
-type Applied = { card: string; key: ChangeRowKey; label: string; text: string };
+// An open picker: the card and the revision it opened on, the offer it
+// belongs to, and the selection.
+type OpenPicker = { card: string; revision: number | undefined; offer: string; pick: Pick };
 
-const ROW_LABEL: Record<ChangeRowKey, string> = {
-    unit: 'Unit',
-    years: 'Years',
-    shows: 'Shows',
-    split: 'Split by',
+// A change sent from this page, kept by offer until the card standing in its
+// card's place is replaced by it, or it is refused, so the page can say
+// which.
+type Applied = {
+    card: string;
+    offer: string;
+    key: ChangeRowKey;
+    role?: string;
+    label: string;
+    text: string;
 };
 
-// The measure rows with each offer on the row it changes. An offer whose row
-// the card's facts do not show gets a row of its own, in the offer's words.
-const rowsWithOffers = (
-    rows: MeasureRow[],
-    offers: ChangeOffer[],
-): (MeasureRow & { offer: ChangeOffer | null })[] => {
-    const withOffer = rows.map((row) => ({
-        ...row,
-        offer: offers.find((offer) => offer.key === row.key) ?? null,
-    }));
-    const missing = offers
-        .filter((offer) => !rows.some((row) => row.key === offer.key))
-        .map((offer) => ({
-            key: offer.key,
-            label: ROW_LABEL[offer.key],
-            value: unitText(offer.offer, offer.current),
-            terms: null,
-            offer,
-        }));
+// A change row's kind in its usage event.
+const changeKind = (key: ChangeRowKey) => (key === 'shows' ? 'places' : key);
 
-    return [...withOffer, ...missing];
+// The selection a picker opens on: what the row holds now.
+const startPick = (offer: ChangeOffer): Pick => {
+    switch (offer.key) {
+        case 'unit':
+            return { kind: 'unit', unit: offer.current };
+        case 'years':
+            return { kind: 'years', from: offer.window.start_year, to: offer.window.end_year };
+        case 'shows':
+            return { kind: 'shows', places: offer.chosen };
+    }
+};
+
+// Whether the selection differs from the row and is a change the send
+// builds for card `widget` (cardUnitChange, yearsChange, placesChange).
+const canApply = (
+    widget: Widget & { turn: number },
+    title: string,
+    offer: ChangeOffer,
+    pick: Pick,
+): boolean => {
+    if (offer.key === 'unit' && pick.kind === 'unit') {
+        return (
+            servesUnit(offer.offer, pick.unit) &&
+            unitChanged(offer.current, pick.unit) &&
+            cardUnitChange(widget, title, pick.unit) !== null
+        );
+    }
+
+    if (offer.key === 'years' && pick.kind === 'years') {
+        return (
+            windowChanged(offer.window, pick.from, pick.to) &&
+            yearsChange(widget, title, pick.from, pick.to) !== null
+        );
+    }
+
+    return (
+        offer.key === 'shows' &&
+        pick.kind === 'shows' &&
+        placesChanged(offer.chosen, pick.places) &&
+        placesChange(widget, title, offer.role, pick.places) !== null
+    );
+};
+
+// The selection in words, as the page announces a change that arrived.
+const pickText = (offer: ChangeOffer, pick: Pick): string => {
+    switch (pick.kind) {
+        case 'unit':
+            return offer.key === 'unit' ? unitText(offer.offer, pick.unit) : '';
+        case 'years':
+            return yearsText(pick.from, pick.to);
+        case 'shows':
+            return placesText(pick.places);
+    }
 };
 
 // The approved plan a card belongs to, with the plan itself.
@@ -144,26 +195,34 @@ const RowValue = ({ row }: { row: MeasureRow }) =>
     );
 
 /**
- * The card page of the session panel (spec section 5.5): the title and where
- * the card came from, its actions, `What it measures` with a `Change` on each
- * row the card can change, `Set by the plan` for a plan card, `Keep in mind`,
- * its sources, `Cite as` and how it was made. The page follows the card when
- * a replacement takes its place, and gives way when the card leaves.
+ * The card page of the session panel: the title and where the card came
+ * from, its actions, `What it measures` with a `Change` on each row the card
+ * can change, `Set by the plan` for a plan card, `Keep in mind`, its sources,
+ * `Cite as` and how it was made. The page follows the card when a
+ * replacement takes its place, and gives way when the card leaves.
  */
 const CardPage = ({ id }: { id: string }) => {
     const model = useStudioModel();
     const {
         dispatch,
         announce,
+        focusField,
+        panelOpen,
         plans: { planOf },
+        report,
     } = usePromptShell();
-    const { chat, canvas, doc, panels, modals, readOnly, drafts } = model;
+    const { chat, canvas, doc, panels, modals } = model;
     const replacedIds = doc.replacedIds;
     const shownIds = useMemo(
         () => new Set(canvas.widgets.map((widget) => widget.id)),
         [canvas.widgets],
     );
-    const current = currentCardId(id, shownIds, replacedIds);
+    const current = standingFor(id, shownIds, replacedIds);
+    // The cards the standing card took the place of, newest first.
+    const replaced = useMemo(
+        () => (current ? replacedChain(current, replacedIds).slice(1) : []),
+        [current, replacedIds],
+    );
     const widget = current ? chat.widgets.find((other) => other.id === current) : undefined;
     // A template string, which the compiler lint reads as a primitive. The
     // bare call reads as an object a later call could mutate, and the view's
@@ -172,9 +231,11 @@ const CardPage = ({ id }: { id: string }) => {
 
     const [picker, setPicker] = useState<OpenPicker | null>(null);
     const [download, setDownload] = useState<string | null>(null);
-    const applied = useRef<Applied | null>(null);
+    const applied = useRef(new Map<string, Applied>());
     const pageRef = useRef<HTMLDivElement>(null);
     const pickerId = useId();
+    // The line saying why a `Change` is held, which each blocked button names.
+    const heldId = useId();
     const downloadId = useId();
 
     // The shell's plan links name each card's plan; the plan itself, for its
@@ -184,6 +245,7 @@ const CardPage = ({ id }: { id: string }) => {
         [chat.messages, chat.activity],
     );
 
+    const offers = useMemo(() => (widget ? changeOffers(widget) : []), [widget]);
     const citedId = typeof panels.infoCiteLink === 'object' ? panels.infoCiteLink.id : undefined;
     const view = useMemo(
         () =>
@@ -194,41 +256,51 @@ const CardPage = ({ id }: { id: string }) => {
                       options: {
                           retrievedOn: localDay(new Date()),
                           snapshotUrl: snapshotUrl(citedId),
-                          canShare: !readOnly,
+                          canShare: true,
                       },
                       messages: chat.messages,
                       activity: chat.activity,
-                      replaced: replacedChain(widget.id, replacedIds),
                       plan: planFor(widget.id, planOf, approved),
+                      offers,
                   })
                 : null,
-        [
-            widget,
-            title,
-            citedId,
-            readOnly,
-            chat.messages,
-            chat.activity,
-            replacedIds,
-            planOf,
-            approved,
-        ],
+        [widget, title, citedId, chat.messages, chat.activity, planOf, approved, offers],
     );
 
-    const offers = useMemo(
-        () => (widget && !readOnly ? changeOffers(widget) : []),
-        [widget, readOnly],
+    // Each offer's status, and that of a change whose refusal withdrew its
+    // offer (changeStatuses), matched through the cards the standing card
+    // replaced, so a change asked of one of them shows here.
+    const statuses = useMemo(
+        () =>
+            current
+                ? changeStatuses({
+                      messages: chat.messages,
+                      thinking: chat.thinking,
+                      cardId: current,
+                      replaced,
+                      queued: chat.queued,
+                      dropped: chat.dropped,
+                      offers,
+                  })
+                : new Map<string, ChangeStatus>(),
+        [offers, current, replaced, chat.messages, chat.thinking, chat.queued, chat.dropped],
     );
-    const statusOf = (key: ChangeRowKey): ChangeStatus =>
-        current
-            ? changeStatus({
-                  messages: chat.messages,
-                  thinking: chat.thinking,
-                  cardId: current,
-                  key,
-                  queued: chat.queued,
-              })
-            : { state: 'idle' };
+    // The refusal of a change whose offer the refusal withdrew, which no
+    // row's Change shows.
+    const withdrawn = [...statuses].flatMap(([rowId, status]) =>
+        status.state === 'refused' && !offers.some((offer) => offer.id === rowId)
+            ? [status.detail]
+            : [],
+    );
+    const statusOf = (offer: ChangeOffer): ChangeStatus =>
+        statuses.get(offer.id) ?? { state: 'idle' };
+    // One change at a time per card: while one is pending or queued, every
+    // Change on the page waits, since the next would be built against a card
+    // about to be replaced.
+    const changing = [...statuses.values()].some((status) => status.state === 'pending');
+    // A plan waiting on approval holds every Change (changesHeld).
+    const held = chat.changesHeld;
+    const blocked = changing || held !== null;
 
     // The model's cite-link state follows the card More Info names. The
     // Prompt layout draws no More Info, so the card page names its card.
@@ -250,10 +322,10 @@ const CardPage = ({ id }: { id: string }) => {
         }
     }, [current, id, dispatch]);
 
-    const focusChange = (key: ChangeRowKey) =>
+    const focusChange = (offerId: string) =>
         requestAnimationFrame(() =>
             pageRef.current
-                ?.querySelector<HTMLElement>(`[data-sp-change="${key}"]`)
+                ?.querySelector<HTMLElement>(`[data-sp-change="${CSS.escape(offerId)}"]`)
                 ?.focus({ preventScroll: true }),
         );
 
@@ -268,84 +340,203 @@ const CardPage = ({ id }: { id: string }) => {
         seen.current = current;
 
         if (!was || !current || was === current) return;
-        if (!replacedChain(current, replacedIds).includes(was)) return;
 
-        const sent = applied.current;
+        const chain = replacedChain(current, replacedIds);
 
-        if (sent && sent.card === was) {
-            applied.current = null;
+        if (!chain.includes(was)) return;
+
+        // A change still queued was not what replaced the card: the queue
+        // sends it to the replacement.
+        const arrived = [...applied.current.values()].filter(
+            (sent) =>
+                chain.includes(sent.card) && !changeQueued(chat.queued, chain, sent.key, sent.role),
+        );
+
+        for (const sent of arrived) {
+            applied.current.delete(sent.offer);
             announce(`${sent.label} changed to ${sent.text}`);
-            focusChange(sent.key);
-        } else if (picker?.card === was) {
-            announce('The card was replaced, so its change picker closed.');
-            focusChange(picker.key);
+            focusChange(sent.offer);
         }
-    }, [current, replacedIds, announce, picker]);
 
-    // A refusal of the change this page sent.
-    const unitStatus = statusOf('unit');
-    const refusal = unitStatus.state === 'refused' ? unitStatus.detail : null;
+        if (arrived.length === 0 && picker?.card === was) {
+            announce('The card was replaced, so its change picker closed.');
+            focusChange(picker.offer);
+        }
+    }, [current, replacedIds, announce, picker, chat.queued]);
+
+    // A revision of the card under an open picker, which closes (it reads
+    // the old revision) and says why. A replacement says its own, and a
+    // picker the reader closed is gone already. Focus returns to the
+    // picker's Change only when it went with the picker, so a reader typing
+    // elsewhere, as in the prompt, keeps their place.
+    const revision = widget?.kind === 'text' ? undefined : widget?.ref?.revision;
+    const seenRevision = useRef(revision);
 
     useEffect(() => {
-        const sent = applied.current;
+        const was = seenRevision.current;
 
-        if (refusal && sent && sent.card === current) {
-            applied.current = null;
-            announce(refusal);
+        seenRevision.current = revision;
+
+        if (was === revision || !picker || picker.card !== current || picker.revision !== was) {
+            return;
         }
-    }, [refusal, current, announce]);
 
-    // The picker belongs to the card it opened on, so it closes when a
-    // replacement takes the card's place.
-    const open = picker && picker.card === current ? picker : null;
+        announce('The card changed, so its change picker closed.');
 
-    const closePicker = (key: ChangeRowKey) => {
+        if (!document.activeElement || document.activeElement === document.body) {
+            focusChange(picker.offer);
+        }
+    }, [revision, current, picker, announce]);
+
+    // A refusal of a change this page sent, by the harness or by the queue
+    // (sentRefusal), also once the queue dropped it because its card left
+    // the canvas, while the page stays mounted and draws nothing.
+    useEffect(() => {
+        const standing = current ? [current, ...replaced] : [];
+
+        for (const sent of [...applied.current.values()]) {
+            const refused = sentRefusal(sent, standing, statuses.get(sent.offer), chat.dropped);
+
+            if (refused) {
+                applied.current.delete(sent.offer);
+                announce(refused.detail);
+                report('studio.change', {
+                    step: 'refused',
+                    kind: changeKind(sent.key),
+                    why: refused.why,
+                });
+            }
+        }
+    }, [statuses, current, replaced, announce, report, chat.dropped]);
+
+    // The picker belongs to the card and the revision it opened on, so it
+    // closes when a replacement takes the card's place or the card redraws
+    // at another revision, and its selection goes with it.
+    const open = picker && picker.card === current && picker.revision === revision ? picker : null;
+
+    const closePicker = (offerId: string) => {
         setPicker(null);
-        focusChange(key);
+        focusChange(offerId);
     };
+    const reportCancel = (offerId: string) => {
+        const offer = offers.find((other) => other.id === offerId);
 
-    useEscape(ESCAPE_PICKER, () => {
-        if (!open) return false;
-
-        closePicker(open.key);
-
-        return true;
-    });
+        if (offer) report('studio.change', { step: 'cancel', kind: changeKind(offer.key) });
+    };
 
     const downloadOpen = download !== null && download === current;
 
-    useEscape(ESCAPE_CARD_PAGE, () => {
-        if (!downloadOpen) return false;
+    // Escape closes the picker, then the download block, only while the
+    // panel shows the page.
+    useEscape(
+        ESCAPE_PICKER,
+        () => {
+            if (!open) return false;
 
-        setDownload(null);
-        pageRef.current?.querySelector<HTMLElement>('[data-sp-act="data"]')?.focus();
+            closePicker(open.offer);
+            reportCancel(open.offer);
 
-        return true;
-    });
+            return true;
+        },
+        panelOpen && !!open,
+    );
+
+    useEscape(
+        ESCAPE_CARD_PAGE,
+        () => {
+            if (!downloadOpen) return false;
+
+            setDownload(null);
+            pageRef.current?.querySelector<HTMLElement>('[data-sp-act="data"]')?.focus();
+
+            return true;
+        },
+        panelOpen && downloadOpen,
+    );
 
     if (!current || !widget || !view) return null;
 
-    const apply = (offer: ChangeOffer, unit: UnitChoice) => {
-        applied.current = {
-            card: current,
-            key: offer.key,
-            label: ROW_LABEL[offer.key],
-            text: unitText(offer.offer, unit),
-        };
-        canvas.changeUnit(current, unit);
-        closePicker(offer.key);
+    // A change the guest gate stops sends nothing and arms nothing; the
+    // guest wall says why.
+    const apply = (offer: ChangeOffer, label: string, pick: Pick) => {
+        const went =
+            pick.kind === 'unit'
+                ? canvas.changeUnit(current, pick.unit)
+                : pick.kind === 'years'
+                  ? canvas.changeYears(current, pick.from, pick.to)
+                  : offer.key === 'shows' && canvas.changePlaces(current, offer.role, pick.places);
+
+        if (went) {
+            report('studio.change', { step: 'apply', kind: changeKind(offer.key) });
+            applied.current.set(offer.id, {
+                card: current,
+                offer: offer.id,
+                key: offer.key,
+                ...(offer.key === 'shows' && { role: offer.role }),
+                label,
+                text: pickText(offer, pick),
+            });
+        }
+
+        closePicker(offer.id);
     };
 
-    const changeRow = (row: MeasureRow & { offer: ChangeOffer | null }): PairRow => {
+    // The choices of an open picker, for its offer and selection.
+    const pickBody = (offer: ChangeOffer, label: string, openOn: OpenPicker) => {
+        const { pick } = openOn;
+        const update = (next: Pick) => setPicker({ ...openOn, pick: next });
+
+        if (offer.key === 'unit' && pick.kind === 'unit') {
+            return (
+                <UnitPick
+                    offer={offer.offer}
+                    unit={pick.unit}
+                    onChange={(unit) => update({ kind: 'unit', unit })}
+                />
+            );
+        }
+
+        if (offer.key === 'years' && pick.kind === 'years') {
+            return (
+                <YearsPick
+                    window={offer.window}
+                    from={pick.from}
+                    to={pick.to}
+                    onChange={(from, to) => update({ kind: 'years', from, to })}
+                />
+            );
+        }
+
+        if (offer.key === 'shows' && pick.kind === 'shows') {
+            return (
+                <PlacesPick
+                    componentId={
+                        widget.kind === 'text' ? widget.id : (widget.ref?.component_id ?? widget.id)
+                    }
+                    role={offer.role}
+                    label={label}
+                    multiple={offer.multiple}
+                    max={offer.max}
+                    shown={offer.chosen}
+                    picked={pick.places}
+                    onChange={(places) => update({ kind: 'shows', places })}
+                />
+            );
+        }
+
+        return null;
+    };
+
+    const changeRow = (row: MeasureRow): PairRow => {
         const { offer } = row;
 
         if (!offer) {
             return { key: row.key, label: row.label, value: <RowValue row={row} /> };
         }
 
-        const status = statusOf(offer.key);
+        const status = statusOf(offer);
         const pending = status.state === 'pending';
-        const isOpen = open?.key === offer.key;
+        const isOpen = open?.offer === offer.id;
         const label = row.label;
 
         return {
@@ -366,21 +557,39 @@ const CardPage = ({ id }: { id: string }) => {
                 <button
                     type="button"
                     className={classNames(styles.change, isOpen && styles.changeOpen)}
-                    data-sp-change={offer.key}
-                    data-sp-key={`change:${offer.key}`}
+                    data-sp-change={offer.id}
+                    data-sp-key={`change:${offer.id}`}
                     aria-label={`Change ${label}`}
                     aria-expanded={isOpen}
                     aria-controls={isOpen ? pickerId : undefined}
-                    aria-disabled={pending || undefined}
+                    aria-disabled={blocked || undefined}
+                    aria-describedby={held !== null ? heldId : undefined}
                     onClick={() => {
-                        if (pending) return;
-                        if (isOpen) {
-                            closePicker(offer.key);
+                        if (blocked) {
+                            report('studio.change', {
+                                step: 'blocked',
+                                kind: changeKind(offer.key),
+                                // changesHeld reads the question before the plan.
+                                why: held === null ? 'pending' : chat.clarify ? 'question' : 'plan',
+                            });
 
                             return;
                         }
 
-                        setPicker({ card: current, key: offer.key, unit: offer.current });
+                        if (isOpen) {
+                            closePicker(offer.id);
+                            reportCancel(offer.id);
+
+                            return;
+                        }
+
+                        setPicker({
+                            card: current,
+                            revision,
+                            offer: offer.id,
+                            pick: startPick(offer),
+                        });
+                        report('studio.change', { step: 'open', kind: changeKind(offer.key) });
                     }}
                 >
                     Change
@@ -389,19 +598,16 @@ const CardPage = ({ id }: { id: string }) => {
             below: isOpen ? (
                 <ChangePicker
                     id={pickerId}
-                    rowKey={offer.key}
+                    rowKey={offer.id}
                     label={label}
-                    canApply={
-                        servesUnit(offer.offer, open.unit) && unitChanged(offer.current, open.unit)
-                    }
-                    onApply={() => apply(offer, open.unit)}
-                    onCancel={() => closePicker(offer.key)}
+                    canApply={!held && canApply(widget, title, offer, open.pick)}
+                    onApply={() => apply(offer, label, open.pick)}
+                    onCancel={() => {
+                        closePicker(offer.id);
+                        reportCancel(offer.id);
+                    }}
                 >
-                    <UnitPick
-                        offer={offer.offer}
-                        unit={open.unit}
-                        onChange={(unit) => setPicker({ ...open, unit })}
-                    />
+                    {pickBody(offer, label, open)}
                 </ChangePicker>
             ) : status.state === 'refused' ? (
                 <p className={styles.refused} data-sp-change-note>
@@ -411,7 +617,7 @@ const CardPage = ({ id }: { id: string }) => {
         };
     };
 
-    const measures = rowsWithOffers(view.measures, offers);
+    const measures = view.measures;
     const imageable = widget.kind !== 'text';
 
     return (
@@ -419,20 +625,18 @@ const CardPage = ({ id }: { id: string }) => {
             <PageShell kind="card" title={view.title} meta={<Origin view={view} />}>
                 <div className={styles.actions}>
                     <div className={styles.actionRow}>
-                        {!readOnly && (
-                            <button
-                                type="button"
-                                className={styles.ask}
-                                data-sp-ask
-                                data-sp-key="ask"
-                                onClick={() => {
-                                    canvas.askFollowUp(current, title);
-                                    drafts.inputRef.current?.focus();
-                                }}
-                            >
-                                Ask about this card
-                            </button>
-                        )}
+                        <button
+                            type="button"
+                            className={styles.ask}
+                            data-sp-ask
+                            data-sp-key="ask"
+                            onClick={() => {
+                                canvas.askFollowUp(current, title);
+                                focusField();
+                            }}
+                        >
+                            Ask about this card
+                        </button>
                         <IconAction
                             wide
                             icon="download"
@@ -462,19 +666,15 @@ const CardPage = ({ id }: { id: string }) => {
                                 }}
                             />
                         )}
-                        {!readOnly && (
-                            <IconAction
-                                wide
-                                icon="embed"
-                                label="Embed"
-                                subject={title}
-                                data-sp-act="embed"
-                                data-sp-key="act:embed"
-                                onAction={() =>
-                                    modals.share.show({ kind: 'card', id: current, title })
-                                }
-                            />
-                        )}
+                        <IconAction
+                            wide
+                            icon="embed"
+                            label="Embed"
+                            subject={title}
+                            data-sp-act="embed"
+                            data-sp-key="act:embed"
+                            onAction={() => modals.share.show({ kind: 'card', id: current, title })}
+                        />
                     </div>
                     {downloadOpen && (
                         <div id={downloadId} className={styles.download}>
@@ -492,11 +692,20 @@ const CardPage = ({ id }: { id: string }) => {
                     )}
                     {view.measure && (
                         <PageText>
-                            <b>{view.measure.label}</b>. {view.measure.definition}
+                            <b>{view.measure.label}</b>
+                            {view.measure.definition && <>. {view.measure.definition}</>}
                         </PageText>
                     )}
                     {view.live && <PageText>{view.live}</PageText>}
                     <Pairs rows={measures.map(changeRow)} className={styles.measures} />
+                    {withdrawn.map((detail) => (
+                        <p key={detail} className={styles.refused} data-sp-change-note>
+                            {detail}
+                        </p>
+                    ))}
+                    {held && measures.some((row) => row.offer) && (
+                        <PageText id={heldId}>{held}</PageText>
+                    )}
                     {view.leftOut.length > 0 && (
                         <>
                             <p className={styles.subLabel}>Left out</p>

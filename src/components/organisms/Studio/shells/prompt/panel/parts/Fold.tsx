@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
+import { Count } from './Count';
 import { Chevron } from './Glyphs';
 import styles from './parts.module.scss';
 
@@ -10,11 +11,21 @@ type FoldProps = {
     /** The id of the region the fold opens. */
     controls: string;
     children: ReactNode;
+    /** A count after the words, as a section heading shows one. */
+    count?: number;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'children'>;
 
-/** A disclosure button: its words, then a chevron pointing right when shut
- *  and down when open. */
-export const Fold = ({ open, onToggle, controls, children, className, ...rest }: FoldProps) => (
+/** A disclosure button: its words and count, then a chevron pointing right
+ *  when shut and down when open. */
+export const Fold = ({
+    open,
+    onToggle,
+    controls,
+    children,
+    count,
+    className,
+    ...rest
+}: FoldProps) => (
     <button
         type="button"
         {...rest}
@@ -24,6 +35,7 @@ export const Fold = ({ open, onToggle, controls, children, className, ...rest }:
         onClick={onToggle}
     >
         {children}
+        {count !== undefined && <Count>{count}</Count>}
         <Chevron direction="down" />
     </button>
 );

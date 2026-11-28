@@ -1,0 +1,2839 @@
+{
+    "name": "five",
+    "description": "One question, 23 steps, five cards of mixed kinds.",
+    "turns": [
+        {
+            "question": "Give me a comprehensive overview of health spending in Kenya",
+            "segments": [
+                {
+                    "frames": [
+                        {
+                            "event": "activity.step",
+                            "seq": 0,
+                            "step_id": "s1",
+                            "label": "Searching for data",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "search",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 0,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 1,
+                            "step_id": "s1",
+                            "label": "Searching for data",
+                            "status": "complete",
+                            "detail": "Looked up Kenya health spending, government spending, out-of-pocket and health aid",
+                            "tool": "search",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 1,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 2,
+                            "step_id": "s2",
+                            "label": "Searching again by series code",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "search",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 1,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 3,
+                            "step_id": "s2",
+                            "label": "Searching again by series code",
+                            "status": "complete",
+                            "detail": "Retried the same four measures by World Bank series code",
+                            "tool": "search",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 2,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 4,
+                            "step_id": "s3",
+                            "label": "Searching again by name",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "search",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 2,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 5,
+                            "step_id": "s3",
+                            "label": "Searching again by name",
+                            "status": "complete",
+                            "detail": "Searched again by name for share of GDP, per capita and out-of-pocket",
+                            "tool": "search",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 3,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 6,
+                            "step_id": "s4",
+                            "label": "Fetching health spending per person in Kenya",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "fetch",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 3,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 7,
+                            "step_id": "s4",
+                            "label": "Fetching health spending per person in Kenya",
+                            "status": "complete",
+                            "detail": "Fetched Kenya health expenditure per person, latest year",
+                            "tool": "fetch",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 4,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 8,
+                            "step_id": "s5",
+                            "label": "Fetching health spending per person in Kenya",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "get_data",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 4,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 9,
+                            "step_id": "s5",
+                            "label": "Fetching health spending per person in Kenya",
+                            "status": "complete",
+                            "detail": "Loaded the per-person spending series for Kenya",
+                            "tool": "get_data",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 5,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 10,
+                            "step_id": "s6",
+                            "label": "Checking the per-person data",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "describe_frame",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 5,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 11,
+                            "step_id": "s6",
+                            "label": "Checking the per-person data",
+                            "status": "complete",
+                            "detail": "Checked the frame's dimensions and 2023 coverage",
+                            "tool": "describe_frame",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 6,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 12,
+                            "step_id": "s7",
+                            "label": "Fetching government health spending as a share of government spending",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "fetch",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 6,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 13,
+                            "step_id": "s7",
+                            "label": "Fetching government health spending as a share of government spending",
+                            "status": "complete",
+                            "detail": "Fetched government health spending share of government spending",
+                            "tool": "fetch",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 7,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 14,
+                            "step_id": "s8",
+                            "label": "Fetching government health spending as a share of government spending",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "get_data",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 7,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 15,
+                            "step_id": "s8",
+                            "label": "Fetching government health spending as a share of government spending",
+                            "status": "complete",
+                            "detail": "Loaded the government health spending share for Kenya",
+                            "tool": "get_data",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 8,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 16,
+                            "step_id": "s9",
+                            "label": "Checking the spending share data",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "describe_frame",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 8,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 17,
+                            "step_id": "s9",
+                            "label": "Checking the spending share data",
+                            "status": "complete",
+                            "detail": "Checked the government spending share frame",
+                            "tool": "describe_frame",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 9,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 18,
+                            "step_id": "s10",
+                            "label": "Fetching current and out-of-pocket health spending shares",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "fetch",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 9,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 19,
+                            "step_id": "s10",
+                            "label": "Fetching current and out-of-pocket health spending shares",
+                            "status": "complete",
+                            "detail": "Fetched current and out-of-pocket health spending shares",
+                            "tool": "fetch",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 10,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 20,
+                            "step_id": "s11",
+                            "label": "Fetching current and out-of-pocket health spending shares",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "get_data",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 10,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 21,
+                            "step_id": "s11",
+                            "label": "Fetching current and out-of-pocket health spending shares",
+                            "status": "complete",
+                            "detail": "Loaded the two share series as separate series",
+                            "tool": "get_data",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 11,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 22,
+                            "step_id": "s12",
+                            "label": "Checking the two share series",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "describe_frame",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 11,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 23,
+                            "step_id": "s12",
+                            "label": "Checking the two share series",
+                            "status": "complete",
+                            "detail": "Checked the two-series share frame",
+                            "tool": "describe_frame",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 12,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 24,
+                            "step_id": "s13",
+                            "label": "Making 3 charts",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "make_charts",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 12,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 25,
+                            "step_id": "s13",
+                            "label": "Making 3 charts",
+                            "status": "complete",
+                            "detail": "Planned two stat cards and one bar chart of shares",
+                            "tool": "make_charts",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 13,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 26,
+                            "step_id": "s14",
+                            "label": "Making the per-person spending card",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 13,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 27,
+                            "step_id": "s14",
+                            "label": "Making the per-person spending card",
+                            "status": "complete",
+                            "detail": "Created the per-person health spending stat card",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 14,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 28,
+                            "component_id": "cmp_replay_five_c1",
+                            "revision": 1,
+                            "type": "stat_card",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_five_c1",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "spec_fa5f9826993f0da83d4c59ce1594da60",
+                                            "content_version": "cv_36c0560ccdcccc0cb4e9709e77f4ad8e"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_world_bank_wdi",
+                                            "name": "World Development Indicators",
+                                            "licence": "Creative Commons Attribution License",
+                                            "publisher": "World Bank",
+                                            "url": null,
+                                            "retrieved": "2026-10-13"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2023",
+                                        "last_refreshed": "2026-10-13",
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-10-13T10:00:00Z",
+                                    "citation": "World Development Indicators (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "component": {
+                                    "type": "stat_card",
+                                    "title": {
+                                        "text": "Health expenditure per capita in Kenya, 2023",
+                                        "authorship": "model"
+                                    },
+                                    "value": 274.4736242692,
+                                    "label": "Health expenditure per person",
+                                    "period": "2023",
+                                    "unit": "International Dollar",
+                                    "change": null
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_five_c1",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2023",
+                                    "end": "2023"
+                                },
+                                "unit": "International Dollar",
+                                "series": [
+                                    {
+                                        "id": "c1_value",
+                                        "label": "Kenya",
+                                        "point_count": 1,
+                                        "first": 274.4736242692,
+                                        "last": 274.4736242692
+                                    }
+                                ],
+                                "countries": ["Kenya"],
+                                "attribution": {
+                                    "label": "World Development Indicators · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "spec_fa5f9826993f0da83d4c59ce1594da60",
+                                        "content_version": "cv_36c0560ccdcccc0cb4e9709e77f4ad8e"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_world_bank_wdi",
+                                        "name": "World Development Indicators",
+                                        "licence": "Creative Commons Attribution License",
+                                        "publisher": "World Bank",
+                                        "url": null,
+                                        "retrieved": "2026-10-13"
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2023",
+                                    "last_refreshed": "2026-10-13",
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-10-13T10:00:00Z",
+                                "citation": "World Development Indicators (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s14",
+                                "message_seq": 0
+                            },
+                            "card_changes": {
+                                "spec_id": "spec_fa5f9826993f0da83d4c59ce1594da60",
+                                "window": {
+                                    "start_year": 2023,
+                                    "end_year": 2023,
+                                    "first_year": 2010,
+                                    "last_year": 2023,
+                                    "single": true
+                                }
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 29,
+                            "manifest": {
+                                "composition_id": "cps_replay_five",
+                                "revision": 1,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_five_c1",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Health expenditure per capita in Kenya, 2023",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 1,
+                                    "stats": 1,
+                                    "charts": 0,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 30,
+                            "step_id": "s15",
+                            "label": "Making the government spending share card",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 14,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 31,
+                            "step_id": "s15",
+                            "label": "Making the government spending share card",
+                            "status": "complete",
+                            "detail": "Created the government health spending share stat card",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 15,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 32,
+                            "component_id": "cmp_replay_five_c2",
+                            "revision": 1,
+                            "type": "stat_card",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_five_c2",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "spec_1b06b34822ac8cad25d3fa58adfd3e40",
+                                            "content_version": "cv_02df74564806694d4226aa649a11d02c"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_who",
+                                            "name": "World Health Organization (WHO)",
+                                            "licence": "not stated by the platform",
+                                            "publisher": "United Nations",
+                                            "url": null,
+                                            "retrieved": null
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2023",
+                                        "last_refreshed": null,
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-11-25T10:00:00Z",
+                                    "citation": "World Health Organization (WHO) (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "component": {
+                                    "type": "stat_card",
+                                    "title": {
+                                        "text": "Domestic general government health expenditure share of general government expenditure in Kenya, 2023",
+                                        "authorship": "model"
+                                    },
+                                    "value": 8.65115547,
+                                    "label": "Domestic general government health expenditure as a share of general government expenditure",
+                                    "period": "2023",
+                                    "unit": "Percent",
+                                    "change": null
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_five_c2",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2023",
+                                    "end": "2023"
+                                },
+                                "unit": "Percent",
+                                "series": [
+                                    {
+                                        "id": "c2_value",
+                                        "label": "Kenya",
+                                        "point_count": 1,
+                                        "first": 8.65115547,
+                                        "last": 8.65115547
+                                    }
+                                ],
+                                "countries": ["Kenya"],
+                                "attribution": {
+                                    "label": "World Health Organization (WHO) · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "spec_1b06b34822ac8cad25d3fa58adfd3e40",
+                                        "content_version": "cv_02df74564806694d4226aa649a11d02c"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_who",
+                                        "name": "World Health Organization (WHO)",
+                                        "licence": "not stated by the platform",
+                                        "publisher": "United Nations",
+                                        "url": null,
+                                        "retrieved": null
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2023",
+                                    "last_refreshed": null,
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-11-25T10:00:00Z",
+                                "citation": "World Health Organization (WHO) (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s15",
+                                "message_seq": 0
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 33,
+                            "manifest": {
+                                "composition_id": "cps_replay_five",
+                                "revision": 2,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_five_c1",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Health expenditure per capita in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c2",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Domestic general government health expenditure share of general government expenditure in Kenya, 2023",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 2,
+                                    "stats": 2,
+                                    "charts": 0,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 34,
+                            "step_id": "s16",
+                            "label": "Making the shares chart",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 15,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 35,
+                            "step_id": "s16",
+                            "label": "Making the shares chart",
+                            "status": "complete",
+                            "detail": "Created the current and out-of-pocket shares bar chart",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 16,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 36,
+                            "component_id": "cmp_replay_five_c3",
+                            "revision": 1,
+                            "type": "bar_chart",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_five_c3",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "spec_6c171d3c9eb243625261848e456b0520",
+                                            "content_version": "cv_e966caaeb093302ef0461e52fc0d518e"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_who",
+                                            "name": "World Health Organization (WHO)",
+                                            "licence": "not stated by the platform",
+                                            "publisher": "United Nations",
+                                            "url": null,
+                                            "retrieved": null
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2023",
+                                        "last_refreshed": null,
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-11-25T10:00:00Z",
+                                    "citation": "World Health Organization (WHO) (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "description": {
+                                    "describes": {
+                                        "kind": "computed_version",
+                                        "id": "ops_5d7e9f1a3b5c7d9e",
+                                        "content_version": "ocv_2b4d6f8a1c3e5a7c"
+                                    },
+                                    "title": "Gross ODA disbursements to health as a share of gross ODA disbursements",
+                                    "about": {
+                                        "name": "Gross ODA disbursements to health as a share of gross ODA disbursements",
+                                        "series": 38,
+                                        "period": {
+                                            "start": "2010",
+                                            "end": "2024",
+                                            "grain": "year"
+                                        },
+                                        "unit": {
+                                            "numerator": {
+                                                "ref": "USDollar",
+                                                "label": "US dollars"
+                                            },
+                                            "denominator": {
+                                                "ref": "USDollar",
+                                                "label": "US dollars"
+                                            }
+                                        }
+                                    },
+                                    "sources": [
+                                        {
+                                            "ref": "provenance/OECDCreditorReportingSystem",
+                                            "label": "OECD Creditor Reporting System (CRS)",
+                                            "publisher": "OECD",
+                                            "licence": "OECD Terms and Conditions",
+                                            "series": 38,
+                                            "documentation": "/api/graph/documentation/provenance/OECDCreditorReportingSystem"
+                                        },
+                                        {
+                                            "ref": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+                                            "label": "Gross ODA disbursements",
+                                            "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                                            "description": "/api/datasets/spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e/cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0/description"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "computed": "2026-10-11",
+                                        "inputs": [
+                                            {
+                                                "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+                                                "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                                                "label": "Gross ODA disbursements"
+                                            }
+                                        ],
+                                        "latest_period": "2024",
+                                        "series_reaching_it": 38,
+                                        "estimated_values": 0,
+                                        "provisional_values": 0
+                                    },
+                                    "steps": [
+                                        {
+                                            "id": "s1",
+                                            "op": "retrieve",
+                                            "input": {
+                                                "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+                                                "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                                                "label": "Gross ODA disbursements"
+                                            },
+                                            "options": {},
+                                            "text": "Retrieved gross ODA disbursements."
+                                        },
+                                        {
+                                            "id": "s2",
+                                            "op": "retrieve",
+                                            "input": {
+                                                "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+                                                "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                                                "label": "Gross ODA disbursements"
+                                            },
+                                            "options": {},
+                                            "text": "Retrieved gross ODA disbursements."
+                                        },
+                                        {
+                                            "id": "s3",
+                                            "op": "share",
+                                            "inputs": {
+                                                "numerator": "s1",
+                                                "denominator": "s2"
+                                            },
+                                            "policy": "share_of_intersect_periods",
+                                            "params": {
+                                                "numerator_by": ["recipient"],
+                                                "numerator_entity": {
+                                                    "ref": "sector/120",
+                                                    "label": "health"
+                                                }
+                                            },
+                                            "kept": {
+                                                "entities": 38,
+                                                "periods": 15,
+                                                "entities_with_fewer_periods": 0
+                                            },
+                                            "left_out": [],
+                                            "unit": {
+                                                "numerator": {
+                                                    "ref": "USDollar",
+                                                    "label": "US dollars"
+                                                },
+                                                "denominator": {
+                                                    "ref": "USDollar",
+                                                    "label": "US dollars"
+                                                }
+                                            },
+                                            "period_coverage": [
+                                                {
+                                                    "period": "2010",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "entities": 38
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "entities": 38
+                                                }
+                                            ],
+                                            "text": "Took gross ODA disbursements to health as a share of all gross ODA disbursements for each year: 38 recipients kept."
+                                        }
+                                    ],
+                                    "caveats": [],
+                                    "cite": {
+                                        "title": "Gross ODA disbursements to health as a share of gross ODA disbursements",
+                                        "text": "OECD Creditor Reporting System (CRS) (2026), processed by the Development Finance Observatory",
+                                        "id": "ops_5d7e9f1a3b5c7d9e",
+                                        "content_version": "ocv_2b4d6f8a1c3e5a7c",
+                                        "retrieved": "2026-10-11",
+                                        "data": "/api/presentation/frames/ops_5d7e9f1a3b5c7d9e/ocv_2b4d6f8a1c3e5a7c",
+                                        "inputs": [
+                                            {
+                                                "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+                                                "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                                                "label": "Gross ODA disbursements"
+                                            }
+                                        ]
+                                    },
+                                    "gaps": [],
+                                    "built_from": {
+                                        "facts_schema": 1,
+                                        "vocabulary": "voc_5e1d9a3c7b2f8e64"
+                                    }
+                                },
+                                "component": {
+                                    "type": "bar_chart",
+                                    "title": {
+                                        "text": "Current and out-of-pocket health expenditure shares in Kenya, 2023",
+                                        "authorship": "model"
+                                    },
+                                    "series": [
+                                        {
+                                            "id": "c3_out_of_pocket_share_of_current_health_ex",
+                                            "label": "Out-of-pocket, share of current health expenditure",
+                                            "unit": "Percent",
+                                            "source_ref": "src_who",
+                                            "points": [
+                                                {
+                                                    "period": "2023",
+                                                    "value": 24.24565315
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c3_current_health_expenditure_share_of_gdp",
+                                            "label": "Current health expenditure, share of GDP",
+                                            "unit": "Percent",
+                                            "source_ref": "src_who",
+                                            "points": [
+                                                {
+                                                    "period": "2023",
+                                                    "value": 4.35172892
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "category_axis": {
+                                        "mode": "entity",
+                                        "category_dimension": "measure",
+                                        "period": "2023"
+                                    },
+                                    "value_axis": {
+                                        "label": "Share",
+                                        "scale": "linear",
+                                        "range": {
+                                            "min": null,
+                                            "max": null
+                                        }
+                                    }
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_five_c3",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2023",
+                                    "end": "2023"
+                                },
+                                "unit": "Percent",
+                                "series": [
+                                    {
+                                        "id": "c3_out_of_pocket_share_of_current_health_ex",
+                                        "label": "Out-of-pocket, share of current health expenditure",
+                                        "point_count": 1,
+                                        "first": 24.24565315,
+                                        "last": 24.24565315
+                                    },
+                                    {
+                                        "id": "c3_current_health_expenditure_share_of_gdp",
+                                        "label": "Current health expenditure, share of GDP",
+                                        "point_count": 1,
+                                        "first": 4.35172892,
+                                        "last": 4.35172892
+                                    }
+                                ],
+                                "countries": ["Kenya"],
+                                "attribution": {
+                                    "label": "World Health Organization (WHO) · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "spec_6c171d3c9eb243625261848e456b0520",
+                                        "content_version": "cv_e966caaeb093302ef0461e52fc0d518e"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_who",
+                                        "name": "World Health Organization (WHO)",
+                                        "licence": "not stated by the platform",
+                                        "publisher": "United Nations",
+                                        "url": null,
+                                        "retrieved": null
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2023",
+                                    "last_refreshed": null,
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-11-25T10:00:00Z",
+                                "citation": "World Health Organization (WHO) (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s16",
+                                "message_seq": 0
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 37,
+                            "manifest": {
+                                "composition_id": "cps_replay_five",
+                                "revision": 3,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_five_c1",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Health expenditure per capita in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c2",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Domestic general government health expenditure share of general government expenditure in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c3",
+                                        "revision": 1,
+                                        "type": "bar_chart",
+                                        "title": "Current and out-of-pocket health expenditure shares in Kenya, 2023",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 3,
+                                    "stats": 2,
+                                    "charts": 1,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 38,
+                            "step_id": "s17",
+                            "label": "Fetching health spending per person, 2010 to 2023",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "fetch",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 16,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 39,
+                            "step_id": "s17",
+                            "label": "Fetching health spending per person, 2010 to 2023",
+                            "status": "complete",
+                            "detail": "Fetched per-person spending for Kenya, 2010 to 2023",
+                            "tool": "fetch",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 17,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 40,
+                            "step_id": "s18",
+                            "label": "Fetching health spending per person, 2010 to 2023",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "get_data",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 17,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 41,
+                            "step_id": "s18",
+                            "label": "Fetching health spending per person, 2010 to 2023",
+                            "status": "complete",
+                            "detail": "Loaded the 14-year per-person spending series",
+                            "tool": "get_data",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 18,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 42,
+                            "step_id": "s19",
+                            "label": "Checking the 2010 to 2023 data",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "describe_frame",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 18,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 43,
+                            "step_id": "s19",
+                            "label": "Checking the 2010 to 2023 data",
+                            "status": "complete",
+                            "detail": "Checked the 2010 to 2023 frame",
+                            "tool": "describe_frame",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 19,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 44,
+                            "step_id": "s20",
+                            "label": "Making 1 chart",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "make_charts",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 19,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 45,
+                            "step_id": "s20",
+                            "label": "Making 1 chart",
+                            "status": "complete",
+                            "detail": "Planned a line chart of per-person spending over time",
+                            "tool": "make_charts",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 20,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 46,
+                            "step_id": "s21",
+                            "label": "Making the per-person spending chart",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 20,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 47,
+                            "step_id": "s21",
+                            "label": "Making the per-person spending chart",
+                            "status": "complete",
+                            "detail": "Created the per-person spending line chart",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 21,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 48,
+                            "component_id": "cmp_replay_five_c4",
+                            "revision": 1,
+                            "type": "line_chart",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_five_c4",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "spec_b32419c01113301f1142dcf818196f1e",
+                                            "content_version": "cv_522127011a17417a863159e3b9d5b39f"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_world_bank_wdi",
+                                            "name": "World Development Indicators",
+                                            "licence": "Creative Commons Attribution License",
+                                            "publisher": "World Bank",
+                                            "url": null,
+                                            "retrieved": "2026-10-13"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2023",
+                                        "last_refreshed": "2026-10-13",
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-10-13T10:00:00Z",
+                                    "citation": "World Development Indicators (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "component": {
+                                    "type": "line_chart",
+                                    "title": {
+                                        "text": "Health expenditure per capita in Kenya over time, 2010 to 2023",
+                                        "authorship": "model"
+                                    },
+                                    "series": [
+                                        {
+                                            "id": "c4_kenya",
+                                            "label": "Kenya",
+                                            "unit": "International Dollar",
+                                            "source_ref": "src_world_bank_wdi",
+                                            "points": [
+                                                {
+                                                    "period": "2010",
+                                                    "value": 141.9811529646
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 143.073445686
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 142.8777017666
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 153.1764203371
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 165.040749757
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 175.2500241888
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 186.2090910938
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 166.5041490842
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 180.8313776995
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 204.7797115651
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 215.2861032418
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 243.9816897231
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 254.2975914661
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 274.4736242692
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "x_axis": {
+                                        "window": {
+                                            "start": "2010",
+                                            "end": "2023"
+                                        }
+                                    },
+                                    "y_axis": {
+                                        "label": "Kenya",
+                                        "scale": "linear",
+                                        "range": {
+                                            "min": null,
+                                            "max": null
+                                        }
+                                    }
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_five_c4",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2010",
+                                    "end": "2023"
+                                },
+                                "unit": "International Dollar",
+                                "series": [
+                                    {
+                                        "id": "c4_kenya",
+                                        "label": "Kenya",
+                                        "point_count": 14,
+                                        "first": 141.9811529646,
+                                        "last": 274.4736242692
+                                    }
+                                ],
+                                "countries": ["Kenya"],
+                                "attribution": {
+                                    "label": "World Development Indicators · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "spec_b32419c01113301f1142dcf818196f1e",
+                                        "content_version": "cv_522127011a17417a863159e3b9d5b39f"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_world_bank_wdi",
+                                        "name": "World Development Indicators",
+                                        "licence": "Creative Commons Attribution License",
+                                        "publisher": "World Bank",
+                                        "url": null,
+                                        "retrieved": "2026-10-13"
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2023",
+                                    "last_refreshed": "2026-10-13",
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-10-13T10:00:00Z",
+                                "citation": "World Development Indicators (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s21",
+                                "message_seq": 0
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 49,
+                            "manifest": {
+                                "composition_id": "cps_replay_five",
+                                "revision": 4,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_five_c1",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Health expenditure per capita in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c2",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Domestic general government health expenditure share of general government expenditure in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c3",
+                                        "revision": 1,
+                                        "type": "bar_chart",
+                                        "title": "Current and out-of-pocket health expenditure shares in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c4",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "Health expenditure per capita in Kenya over time, 2010 to 2023",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 4,
+                                    "stats": 2,
+                                    "charts": 2,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 50,
+                            "step_id": "s22",
+                            "label": "Fetching gross health aid to Kenya by provider",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "get_data",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 21,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 51,
+                            "step_id": "s22",
+                            "label": "Fetching gross health aid to Kenya by provider",
+                            "status": "complete",
+                            "detail": "Fetched gross health ODA to Kenya by provider",
+                            "tool": "get_data",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 22,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 52,
+                            "step_id": "s23",
+                            "label": "Making the 2024 provider ranking",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 22,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 53,
+                            "step_id": "s23",
+                            "label": "Making the 2024 provider ranking",
+                            "status": "complete",
+                            "detail": "Drew the 2024 ranking of providers",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "progress": {
+                                "completed": 23,
+                                "total": 23
+                            }
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 54,
+                            "component_id": "cmp_replay_five_c5",
+                            "revision": 1,
+                            "type": "bar_chart",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_five_c5",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "spec_b0aaab8a459bac00041b9681016cdbdc",
+                                            "content_version": "cv_fbfa0a5af07af67aa2e3d31a0579423c"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_oecd_crs",
+                                            "name": "OECD Creditor Reporting System (CRS)",
+                                            "licence": "OECD Terms and Conditions",
+                                            "publisher": "Organisation for Economic Co-operation and Development (OECD)",
+                                            "url": null,
+                                            "retrieved": "2026-10-15"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2024",
+                                        "last_refreshed": "2026-10-15",
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-10-15T10:00:00Z",
+                                    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "description": {
+                                    "describes": {
+                                        "kind": "card_revision",
+                                        "component_id": "cmp_replay_five_c5",
+                                        "revision": 1
+                                    },
+                                    "title": "Gross disbursements to Nigeria for health, 2010 to 2024",
+                                    "about": {
+                                        "measure": {
+                                            "label": "gross disbursements",
+                                            "definition": null
+                                        },
+                                        "fixed": [
+                                            {
+                                                "property": {
+                                                    "ref": "financingRecipient",
+                                                    "label": "recipient"
+                                                },
+                                                "value": {
+                                                    "ref": "country/NGA",
+                                                    "label": "Nigeria"
+                                                }
+                                            }
+                                        ],
+                                        "drawn": {
+                                            "dimensions": [
+                                                {
+                                                    "property": {
+                                                        "ref": "crsPurpose",
+                                                        "label": "sector"
+                                                    },
+                                                    "count": 3,
+                                                    "of": 19,
+                                                    "values": [
+                                                        {
+                                                            "ref": "CRSPurposeCode12220",
+                                                            "label": "basic health care",
+                                                            "definition": "Basic and primary health care programmes; paramedical and nursing care programmes; supply of drugs, medicines, and vaccines related to basic health care; and activities aimed at achieving universal health coverage."
+                                                        },
+                                                        {
+                                                            "ref": "CRSPurposeCode12110",
+                                                            "label": "health policy and administrative management",
+                                                            "definition": "Health sector policy, planning, and programmes; aid to health ministries and public health administration; institution capacity building and advice; medical insurance programmes; health system strengthening and health governance; and unspecified health activities."
+                                                        },
+                                                        {
+                                                            "ref": "CRSPurposeCode12250",
+                                                            "label": "infectious disease control",
+                                                            "definition": "Immunisation and prevention and control of infectious and parasitic diseases, including diarrhoeal diseases, vector-borne diseases, viral diseases, mycosis, helminthiasis, zoonosis, diseases caused by other bacteria and viruses, and pediculosis. Excludes malaria, tuberculosis, COVID-19, and HIV/AIDS and other sexually transmitted diseases."
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            "series": 3,
+                                            "period": {
+                                                "start": "2010",
+                                                "end": "2024",
+                                                "grain": "year"
+                                            }
+                                        },
+                                        "unit": {
+                                            "ref": "CurrencyUSD",
+                                            "label": "US dollars",
+                                            "prices": "current"
+                                        }
+                                    },
+                                    "sources": [
+                                        {
+                                            "ref": "provenance/OECDCreditorReportingSystem",
+                                            "label": "OECD Creditor Reporting System (CRS)",
+                                            "publisher": "OECD",
+                                            "licence": "OECD Terms and Conditions",
+                                            "series": 3,
+                                            "documentation": "/api/graph/documentation/provenance/OECDCreditorReportingSystem"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "latest_period": "2024",
+                                        "series_reaching_it": 2,
+                                        "estimated_values": null,
+                                        "provisional_values": null
+                                    },
+                                    "steps": [
+                                        {
+                                            "id": "s1",
+                                            "op": "select",
+                                            "input": {
+                                                "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                                "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c",
+                                                "label": "Gross disbursements to Nigeria for health",
+                                                "at_mint": true
+                                            },
+                                            "policy": "card_selection",
+                                            "params": {
+                                                "coordinates": {
+                                                    "crsPurpose": [
+                                                        "CRSPurposeCode12220",
+                                                        "CRSPurposeCode12110",
+                                                        "CRSPurposeCode12250"
+                                                    ]
+                                                },
+                                                "window": {
+                                                    "start": "2010",
+                                                    "end": "2024"
+                                                }
+                                            },
+                                            "kept": {
+                                                "series": 3
+                                            },
+                                            "text": "Drew 3 series of gross disbursements to Nigeria for health, 2010 to 2024."
+                                        }
+                                    ],
+                                    "caveats": [
+                                        {
+                                            "kind": "provisional",
+                                            "periods": ["2024"],
+                                            "series": [
+                                                {
+                                                    "ref": "CRSPurposeCode12250",
+                                                    "label": "infectious disease control"
+                                                }
+                                            ],
+                                            "text": "Values of infectious disease control in 2024 are provisional."
+                                        }
+                                    ],
+                                    "cite": {
+                                        "title": "Gross disbursements to Nigeria for health",
+                                        "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                        "component_id": "cmp_Ab3dE5gH7k",
+                                        "revision": 2,
+                                        "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                        "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c",
+                                        "retrieved": "2026-09-28",
+                                        "data": "/api/datasets/spec_91d7345eec81a029629938b3d0ffd775/cv_b785befb9f87471de96eb31cd7c56f5c"
+                                    },
+                                    "gaps": [
+                                        "about.measure.definition",
+                                        "freshness.estimated_values",
+                                        "freshness.provisional_values"
+                                    ],
+                                    "built_from": {
+                                        "facts_schema": 1,
+                                        "vocabulary": "voc_5e1d9a3c7b2f8e64"
+                                    }
+                                },
+                                "component": {
+                                    "type": "bar_chart",
+                                    "title": {
+                                        "text": "Gross ODA disbursements to Kenya for health by provider, 2024",
+                                        "authorship": "model"
+                                    },
+                                    "series": [
+                                        {
+                                            "id": "c5_united_states_of_america",
+                                            "label": "United States of America",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 412524857
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_global_fund",
+                                            "label": "Global Fund",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 166070111
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_gavi_the_vaccine_alliance",
+                                            "label": "Gavi, the Vaccine Alliance",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 77984586
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_international_development_association",
+                                            "label": "International Development Association",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 17257475
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_united_kingdom",
+                                            "label": "United Kingdom",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 16067297
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_canada",
+                                            "label": "Canada",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 6787344
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_japan",
+                                            "label": "Japan",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 4293472
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_finland",
+                                            "label": "Finland",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 4160094
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_germany",
+                                            "label": "Germany",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 3771773
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_united_nations_population_fund",
+                                            "label": "United Nations Population Fund",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 3031300
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_france",
+                                            "label": "France",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 3030676
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_african_development_fund",
+                                            "label": "African Development Fund",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 2884895
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_world_health_organization",
+                                            "label": "World Health Organization",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 2804200
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_joint_sdg_fund",
+                                            "label": "Joint SDG Fund",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 2772910
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_south_korea",
+                                            "label": "South Korea",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 2084527
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_australia",
+                                            "label": "Australia",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1821465
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_united_nations_children_s_fund",
+                                            "label": "United Nations Children's Fund",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1750000
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_european_union_institutions",
+                                            "label": "European Union institutions",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1687558
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_italy",
+                                            "label": "Italy",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1577556
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_switzerland",
+                                            "label": "Switzerland",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1173453
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_ireland",
+                                            "label": "Ireland",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1163237
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_sweden",
+                                            "label": "Sweden",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 1019089
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_saudi_arabia",
+                                            "label": "Saudi Arabia",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 838667
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c5_norway",
+                                            "label": "Norway",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2024",
+                                                    "value": 399657
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "category_axis": {
+                                        "mode": "entity",
+                                        "category_dimension": "provider",
+                                        "period": "2024"
+                                    },
+                                    "value_axis": {
+                                        "label": "Gross disbursements",
+                                        "scale": "linear",
+                                        "range": {
+                                            "min": null,
+                                            "max": null
+                                        }
+                                    }
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_five_c5",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2024",
+                                    "end": "2024"
+                                },
+                                "unit": {
+                                    "currency": "USD",
+                                    "magnitude": null,
+                                    "prices": "current",
+                                    "base_year": null
+                                },
+                                "series": [
+                                    {
+                                        "id": "c5_united_states_of_america",
+                                        "label": "United States of America",
+                                        "point_count": 1,
+                                        "first": 412524857,
+                                        "last": 412524857
+                                    },
+                                    {
+                                        "id": "c5_global_fund",
+                                        "label": "Global Fund",
+                                        "point_count": 1,
+                                        "first": 166070111,
+                                        "last": 166070111
+                                    },
+                                    {
+                                        "id": "c5_gavi_the_vaccine_alliance",
+                                        "label": "Gavi, the Vaccine Alliance",
+                                        "point_count": 1,
+                                        "first": 77984586,
+                                        "last": 77984586
+                                    },
+                                    {
+                                        "id": "c5_international_development_association",
+                                        "label": "International Development Association",
+                                        "point_count": 1,
+                                        "first": 17257475,
+                                        "last": 17257475
+                                    },
+                                    {
+                                        "id": "c5_united_kingdom",
+                                        "label": "United Kingdom",
+                                        "point_count": 1,
+                                        "first": 16067297,
+                                        "last": 16067297
+                                    },
+                                    {
+                                        "id": "c5_canada",
+                                        "label": "Canada",
+                                        "point_count": 1,
+                                        "first": 6787344,
+                                        "last": 6787344
+                                    },
+                                    {
+                                        "id": "c5_japan",
+                                        "label": "Japan",
+                                        "point_count": 1,
+                                        "first": 4293472,
+                                        "last": 4293472
+                                    },
+                                    {
+                                        "id": "c5_finland",
+                                        "label": "Finland",
+                                        "point_count": 1,
+                                        "first": 4160094,
+                                        "last": 4160094
+                                    },
+                                    {
+                                        "id": "c5_germany",
+                                        "label": "Germany",
+                                        "point_count": 1,
+                                        "first": 3771773,
+                                        "last": 3771773
+                                    },
+                                    {
+                                        "id": "c5_united_nations_population_fund",
+                                        "label": "United Nations Population Fund",
+                                        "point_count": 1,
+                                        "first": 3031300,
+                                        "last": 3031300
+                                    },
+                                    {
+                                        "id": "c5_france",
+                                        "label": "France",
+                                        "point_count": 1,
+                                        "first": 3030676,
+                                        "last": 3030676
+                                    },
+                                    {
+                                        "id": "c5_african_development_fund",
+                                        "label": "African Development Fund",
+                                        "point_count": 1,
+                                        "first": 2884895,
+                                        "last": 2884895
+                                    },
+                                    {
+                                        "id": "c5_world_health_organization",
+                                        "label": "World Health Organization",
+                                        "point_count": 1,
+                                        "first": 2804200,
+                                        "last": 2804200
+                                    },
+                                    {
+                                        "id": "c5_joint_sdg_fund",
+                                        "label": "Joint SDG Fund",
+                                        "point_count": 1,
+                                        "first": 2772910,
+                                        "last": 2772910
+                                    },
+                                    {
+                                        "id": "c5_south_korea",
+                                        "label": "South Korea",
+                                        "point_count": 1,
+                                        "first": 2084527,
+                                        "last": 2084527
+                                    },
+                                    {
+                                        "id": "c5_australia",
+                                        "label": "Australia",
+                                        "point_count": 1,
+                                        "first": 1821465,
+                                        "last": 1821465
+                                    },
+                                    {
+                                        "id": "c5_united_nations_children_s_fund",
+                                        "label": "United Nations Children's Fund",
+                                        "point_count": 1,
+                                        "first": 1750000,
+                                        "last": 1750000
+                                    },
+                                    {
+                                        "id": "c5_european_union_institutions",
+                                        "label": "European Union institutions",
+                                        "point_count": 1,
+                                        "first": 1687558,
+                                        "last": 1687558
+                                    },
+                                    {
+                                        "id": "c5_italy",
+                                        "label": "Italy",
+                                        "point_count": 1,
+                                        "first": 1577556,
+                                        "last": 1577556
+                                    },
+                                    {
+                                        "id": "c5_switzerland",
+                                        "label": "Switzerland",
+                                        "point_count": 1,
+                                        "first": 1173453,
+                                        "last": 1173453
+                                    },
+                                    {
+                                        "id": "c5_ireland",
+                                        "label": "Ireland",
+                                        "point_count": 1,
+                                        "first": 1163237,
+                                        "last": 1163237
+                                    },
+                                    {
+                                        "id": "c5_sweden",
+                                        "label": "Sweden",
+                                        "point_count": 1,
+                                        "first": 1019089,
+                                        "last": 1019089
+                                    },
+                                    {
+                                        "id": "c5_saudi_arabia",
+                                        "label": "Saudi Arabia",
+                                        "point_count": 1,
+                                        "first": 838667,
+                                        "last": 838667
+                                    },
+                                    {
+                                        "id": "c5_norway",
+                                        "label": "Norway",
+                                        "point_count": 1,
+                                        "first": 399657,
+                                        "last": 399657
+                                    }
+                                ],
+                                "countries": ["Kenya"],
+                                "attribution": {
+                                    "label": "OECD Creditor Reporting System (CRS) · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "spec_b0aaab8a459bac00041b9681016cdbdc",
+                                        "content_version": "cv_fbfa0a5af07af67aa2e3d31a0579423c"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_oecd_crs",
+                                        "name": "OECD Creditor Reporting System (CRS)",
+                                        "licence": "OECD Terms and Conditions",
+                                        "publisher": "Organisation for Economic Co-operation and Development (OECD)",
+                                        "url": null,
+                                        "retrieved": "2026-10-15"
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2024",
+                                    "last_refreshed": "2026-10-15",
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-10-15T10:00:00Z",
+                                "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s23",
+                                "message_seq": 0
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 55,
+                            "manifest": {
+                                "composition_id": "cps_replay_five",
+                                "revision": 5,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_five_c1",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Health expenditure per capita in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c2",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Domestic general government health expenditure share of general government expenditure in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c3",
+                                        "revision": 1,
+                                        "type": "bar_chart",
+                                        "title": "Current and out-of-pocket health expenditure shares in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c4",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "Health expenditure per capita in Kenya over time, 2010 to 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c5",
+                                        "revision": 1,
+                                        "type": "bar_chart",
+                                        "title": "Gross ODA disbursements to Kenya for health by provider, 2024",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 5,
+                                    "stats": 2,
+                                    "charts": 3,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 56,
+                            "text": "Data from the World "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 57,
+                            "text": "Health Organization (WHO) and "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 58,
+                            "text": "the World Bank's World "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 59,
+                            "text": "Development Indicators (WDI) provides "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 60,
+                            "text": "an overview of health "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 61,
+                            "text": "spending in Kenya through "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 62,
+                            "text": "2023:\n\n* **Per Capita "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 63,
+                            "text": "Spending**: According to the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 64,
+                            "text": "World Development Indicators, health "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 65,
+                            "text": "expenditure per capita in "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 66,
+                            "text": "Kenya was **274 international "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 67,
+                            "text": "dollars** in 2023, up "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 68,
+                            "text": "from **142 international dollars** "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 69,
+                            "text": "in 2010.\n* **Share "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 70,
+                            "text": "of GDP**: According to "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 71,
+                            "text": "the World Health Organization, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 72,
+                            "text": "current health expenditure accounted "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 73,
+                            "text": "for **4.35%** of Kenya's "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 74,
+                            "text": "gross domestic product (GDP) "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 75,
+                            "text": "in 2023.\n* **Government "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 76,
+                            "text": "Priority**: Domestic general government "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 77,
+                            "text": "health expenditure represented **8.65%** "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 78,
+                            "text": "of general government expenditure "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 79,
+                            "text": "in 2023.\n* **Household "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 80,
+                            "text": "Burden**: Out-of-pocket health expenditure "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 81,
+                            "text": "made up **24.2%** of "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 82,
+                            "text": "current health expenditure in "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 83,
+                            "text": "2023.\n* **Largest provider**: "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 84,
+                            "text": "Among the 36 providers "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 85,
+                            "text": "of health aid to "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 86,
+                            "text": "Kenya in 2024, the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 87,
+                            "text": "United States of America "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 88,
+                            "text": "gave the most, $412.5 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 89,
+                            "text": "million in gross ODA "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 90,
+                            "text": "disbursements, ahead of the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 91,
+                            "text": "Global Fund at $166.1 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 92,
+                            "text": "million (OECD Creditor Reporting "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 93,
+                            "text": "System (CRS)).\n\nThe closest "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 94,
+                            "text": "series to \"current health "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 95,
+                            "text": "expenditure as share of "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 96,
+                            "text": "GDP\" is a loose "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 97,
+                            "text": "match: Kenya's health expenditure "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 98,
+                            "text": "as a share of "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 99,
+                            "text": "a reference expenditure aggregate "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 100,
+                            "text": "for Current health expenditure "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 101,
+                            "text": "and Out-of-pocket health expenditure "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 102,
+                            "text": "in 2023 (World Health "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 103,
+                            "text": "Organization (WHO))."
+                        },
+                        {
+                            "event": "message.complete",
+                            "seq": 104,
+                            "text": "Data from the World Health Organization (WHO) and the World Bank's World Development Indicators (WDI) provides an overview of health spending in Kenya through 2023:\n\n* **Per Capita Spending**: According to the World Development Indicators, health expenditure per capita in Kenya was **274 international dollars** in 2023, up from **142 international dollars** in 2010.\n* **Share of GDP**: According to the World Health Organization, current health expenditure accounted for **4.35%** of Kenya's gross domestic product (GDP) in 2023.\n* **Government Priority**: Domestic general government health expenditure represented **8.65%** of general government expenditure in 2023.\n* **Household Burden**: Out-of-pocket health expenditure made up **24.2%** of current health expenditure in 2023.\n* **Largest provider**: Among the 36 providers of health aid to Kenya in 2024, the United States of America gave the most, $412.5 million in gross ODA disbursements, ahead of the Global Fund at $166.1 million (OECD Creditor Reporting System (CRS)).\n\nThe closest series to \"current health expenditure as share of GDP\" is a loose match: Kenya's health expenditure as a share of a reference expenditure aggregate for Current health expenditure and Out-of-pocket health expenditure in 2023 (World Health Organization (WHO))."
+                        },
+                        {
+                            "event": "suggestions",
+                            "seq": 105,
+                            "items": [
+                                {
+                                    "label": "Compare with Uganda and Tanzania",
+                                    "prompt": "Compare with Uganda and Tanzania"
+                                },
+                                {
+                                    "label": "Show aid to Kenya for health by year",
+                                    "prompt": "Show aid to Kenya for health by year"
+                                }
+                            ]
+                        },
+                        {
+                            "event": "done",
+                            "seq": 106,
+                            "trace_id": "tr_replay_five_1",
+                            "composition": {
+                                "composition_id": "cps_replay_five",
+                                "revision": 5,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_five_c1",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Health expenditure per capita in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c2",
+                                        "revision": 1,
+                                        "type": "stat_card",
+                                        "title": "Domestic general government health expenditure share of general government expenditure in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c3",
+                                        "revision": 1,
+                                        "type": "bar_chart",
+                                        "title": "Current and out-of-pocket health expenditure shares in Kenya, 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c4",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "Health expenditure per capita in Kenya over time, 2010 to 2023",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_five_c5",
+                                        "revision": 1,
+                                        "type": "bar_chart",
+                                        "title": "Gross ODA disbursements to Kenya for health by provider, 2024",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 5,
+                                    "stats": 2,
+                                    "charts": 3,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

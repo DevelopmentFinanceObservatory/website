@@ -2,7 +2,8 @@
 import type { CardLayout } from '../../../../lib/chat/history.ts';
 import type { Widget } from '../../../../lib/chat/widgets.ts';
 import { renameKey } from '../../../../lib/studio/cardReplace.ts';
-import { newcomerSpot, type Placement } from './blocks.ts';
+import { floorItems, newcomerSpot, type Placement, questionTurn } from './blocks.ts';
+import { type Ghosts, kindOf, placeholderOf } from './comingGhosts.ts';
 import {
     type CardView,
     clamp,
@@ -30,6 +31,9 @@ export type PlaceSlotsArgs = {
     replacedIds?: Record<string, string>;
     // The next stacking order, one per newcomer.
     nextZ: () => number;
+    // The placeholders standing. A newcomer that names one takes its place,
+    // and the rest keep clear of them.
+    ghosts?: Ghosts;
 };
 
 /**
@@ -49,6 +53,7 @@ export const placeSlots = (
         placement,
         replacedIds,
         nextZ,
+        ghosts = {},
     }: PlaceSlotsArgs,
 ): Slots => {
     const ids = new Set(widgets.map((widget) => widget.id));
@@ -107,35 +112,46 @@ export const placeSlots = (
     const settled: Rect[] = Object.entries(next)
         .filter(([id, slot]) => pinnedIds.includes(id) && !slot.leaving)
         .map(([, slot]) => slot);
-    // …and, for the newcomers only, every other live card too.
-    const occupied: Rect[] = Object.entries(next)
-        .filter(([, slot]) => !slot.leaving)
-        .map(([, slot]) => slot);
+    // …and, for the newcomers only, every other live card too, and the
+    // placeholders no newcomer names.
+    const named = new Set(newcomers.map(placeholderOf));
+    const occupied: Rect[] = [
+        ...Object.entries(next)
+            .filter(([, slot]) => !slot.leaving)
+            .map(([, slot]) => slot),
+        ...Object.values(ghosts).filter((ghost) => !ghost.leaving && !named.has(ghost.id)),
+    ];
 
     for (const widget of newcomers) {
         // A restored card keeps its saved rect, its width clamped
         // to the kind's range and its height to what its view
         // allows; fresh ones auto-place at their spawn footprint.
         // A derived height refits once the card mounts.
-        const saved = initialLayout?.[widget.id];
+        const claimed = ghosts[placeholderOf(widget) ?? ''];
+        const saved = claimed ?? initialLayout?.[widget.id];
         const resolved = resolveCardView(widget, views[widget.id]);
         const rows = heightRange(widget, resolved.view);
-        const { w, h } = saved
-            ? {
-                  w: clamp(saved.w, SPAN_MIN[widget.kind].w, SPAN_MAX[widget.kind].w),
-                  h: clamp(saved.h, rows.min, rows.max),
-              }
-            : spawnSpan(widget, resolved);
-        // A saved spot is honoured only while it's free — a card
-        // put back later (chat chip → Add) whose old place is now
-        // taken lands at the nearest free spot instead of on top.
+        // A card that takes a placeholder's place keeps its rect when it is
+        // the kind the placeholder held. Another kind takes its own size from
+        // the same corner.
+        const sameKind = claimed && claimed.type !== null && kindOf(claimed.type) === widget.kind;
+        const { w, h } =
+            saved && (!claimed || sameKind)
+                ? {
+                      w: clamp(saved.w, SPAN_MIN[widget.kind].w, SPAN_MAX[widget.kind].w),
+                      h: clamp(saved.h, rows.min, rows.max),
+                  }
+                : spawnSpan(widget, resolved);
+        // A saved spot is honoured only while it's free. A card put back
+        // later (chat chip → Add) whose old place is taken lands at the
+        // nearest free spot, not on top.
         const spot = newcomerSpot({
-            widget,
+            turn: questionTurn(widget),
             w,
             h,
             saved: saved ? { col: saved.col, row: saved.row } : null,
             occupied,
-            slots: next,
+            floor: floorItems(next),
             cols,
             placement,
             nearest: (from) => nearestSpot(from, w, h, occupied, MAX_COLS),

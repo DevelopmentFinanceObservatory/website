@@ -5,7 +5,15 @@ import { admitTurn, meterTurn, studioRoute } from '../spendPrompt.ts';
 import type { ToolError } from '../wire.ts';
 
 test('studioRoute passes only the routes the browser calls, by exact name', () => {
-    for (const route of ['turn', 'interrupt', 'cancel', 'composition', 'state', 'resume']) {
+    for (const route of [
+        'turn',
+        'interrupt',
+        'cancel',
+        'composition',
+        'state',
+        'places',
+        'resume',
+    ]) {
         assert.equal(studioRoute([route]), route);
     }
 

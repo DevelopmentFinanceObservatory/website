@@ -2,7 +2,8 @@
 
 import { type RefObject, useEffect, useRef } from 'react';
 
-import { scrollerOf } from './board';
+import { arrivalToShow } from './blocks';
+import { scrollerOf, scrollView } from './board';
 import type { Rect, Slot, Slots } from './layout';
 
 type UseArrivalsArgs = {
@@ -20,6 +21,9 @@ type UseArrivalsArgs = {
         fresh: ReadonlySet<string>,
         scroller: HTMLElement,
     ) => ScrollToOptions | null;
+    // A card that took its placeholder's place. The view already moved to the
+    // placeholder, so only the wave plays.
+    quiet?: (newest: Slot) => boolean;
 };
 
 /**
@@ -37,6 +41,7 @@ export const useArrivals = ({
     spawnWave,
     busy,
     placeView,
+    quiet,
 }: UseArrivalsArgs) => {
     const seenRef = useRef<Set<string>>(new Set());
 
@@ -59,15 +64,21 @@ export const useArrivals = ({
 
         const scroller = scrollerOf(boardRef);
 
-        if (!scroller || busy()) {
+        // The view moves to the newest card not seated in a placeholder.
+        const shown = arrivalToShow(
+            fresh.map(([, slot]) => slot),
+            quiet,
+        );
+
+        if (!scroller || busy() || !shown) {
             return;
         }
 
         if (placeView) {
-            const target = placeView(newest, new Set(fresh.map(([id]) => id)), scroller);
+            const target = placeView(shown, new Set(fresh.map(([id]) => id)), scroller);
 
             if (target) {
-                scroller.scrollTo(target);
+                scrollView(scroller, target);
             }
 
             return;

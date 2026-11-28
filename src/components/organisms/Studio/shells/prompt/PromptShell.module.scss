@@ -1,25 +1,40 @@
 @use "variables" as *;
 @use "mixins" as *;
-@use "breakpoints" as *;
+@use "textFloor" as *;
 
 // The Prompt layout's stage. Regions sit under the 60 high top bar and a
-// 10 gutter; the canvas frame runs from the left gutter to the panel (or
-// the right gutter), and every move rides the Studio's --ws-* clock.
+// 10 gutter inside the safe areas; the canvas frame runs from the left
+// gutter to the panel (or the right gutter), the prompt's frame sits
+// --dock-foot above its foot and --dock-gap under its top at most, and
+// every move rides the Studio's --ws-* clock.
 .shell {
     --pr-top: calc(#{rem(70)} + var(--ws-safe-top));
     --pr-gutter: #{rem(10)};
+    --pr-left: calc(var(--pr-gutter) + env(safe-area-inset-left, 0px));
+    --pr-right: calc(var(--pr-gutter) + env(safe-area-inset-right, 0px));
+    --pr-bottom: calc(var(--pr-gutter) + env(safe-area-inset-bottom, 0px));
     --pr-panel: #{rem(280)};
-    --panel-space: var(--pr-gutter);
+    --panel-space: var(--pr-right);
+    --dock-foot: #{rem(20)};
+    --dock-gap: #{rem(10)};
+
+    @media (max-height: 520px) {
+        // A short window (a phone held sideways, a zoomed page) gives the
+        // prompt's frame the canvas frame's whole height.
+
+        --dock-foot: 8px;
+        --dock-gap: 8px;
+    }
 }
 
 .shell[data-panel="open"]:not([data-overlay]) {
-    --panel-space: calc(var(--pr-panel) + 2 * var(--pr-gutter));
+    --panel-space: calc(var(--pr-panel) + var(--pr-gutter) + var(--pr-right));
 }
 
 // The landing's grid docks to the canvas frame. The selector outranks the
 // shared .canvas rule's inset.
 .shell .backdropDocked {
-    inset: var(--pr-top) var(--panel-space) var(--pr-gutter) var(--pr-gutter);
+    inset: var(--pr-top) var(--panel-space) var(--pr-bottom) var(--pr-left);
     border: 1px solid var(--color-net-mid);
     border-radius: rem(10);
     transition:
@@ -30,7 +45,7 @@
 
     > * {
         top: calc(var(--pr-top) * -1);
-        left: calc(var(--pr-gutter) * -1);
+        left: calc(var(--pr-left) * -1);
     }
 }
 
@@ -40,13 +55,13 @@
 .panel {
     position: absolute;
     top: var(--pr-top);
-    bottom: var(--pr-gutter);
+    bottom: var(--pr-bottom);
     z-index: 1;
 }
 
 .canvasRegion {
     right: var(--panel-space);
-    left: var(--pr-gutter);
+    left: var(--pr-left);
     transition: right var(--ws-dur) var(--ws-ease) var(--ws-delay);
 
     // The frame line draws over the content, so cards scroll under it.
@@ -87,13 +102,17 @@
     }
 }
 
-// The prompt's frame: centred on the canvas frame, 20 above its foot.
+// The prompt's frame: centred on the canvas frame, 20 above its foot, and
+// no taller than the canvas frame leaves it.
 .dockFrame {
     position: absolute;
-    bottom: rem(20);
+    bottom: var(--dock-foot);
     left: 50%;
     z-index: 4;
+    display: flex;
+    flex-direction: column;
     width: min(#{rem(600)}, 100% - #{rem(40)});
+    max-height: calc(100% - var(--dock-foot) - var(--dock-gap));
     translate: -50% 0;
 }
 
@@ -102,7 +121,12 @@
 }
 
 .panel {
-    right: var(--pr-gutter);
+    // The shared parts the panel draws (the plan page's ledger) floor their
+    // text at this size.
+
+    --text-floor: #{$text-floor};
+
+    right: var(--pr-right);
     width: var(--pr-panel);
     overflow: hidden;
     border: 1px solid var(--color-net-mid);
@@ -114,7 +138,7 @@
 }
 
 .shell[data-panel="closed"] .panel {
-    right: calc(-1 * (var(--pr-panel) + var(--pr-gutter)));
+    right: calc(-1 * (var(--pr-panel) + var(--pr-right)));
     visibility: hidden;
     opacity: 0;
 }
@@ -142,24 +166,46 @@
 // A narrow window: the panel lies over the canvas on the page colour.
 .shell[data-overlay] .panel {
     z-index: 5;
-    width: min(var(--pr-panel), 100% - 2 * var(--pr-gutter));
+    width: min(var(--pr-panel), 100% - var(--pr-left) - var(--pr-right));
     background-color: var(--color-bg);
     box-shadow: 0 rem(8) rem(28) rgb(47 47 43 / 16%);
 }
 
-// The feedback tab sits at the canvas frame's foot on the left, clear of
-// the centred dock and the panel at the right. Beside a full-width dock
-// (a phone) it rides above the dock's top edge, and it steps aside while
+// Under the desktop width the overlay would lie over the prompt, so its
+// foot stops 10 above the dock. The root font scales with the width inside
+// each band, so from 1024 px the two never meet and the panel keeps its
+// full height.
+
+@media (max-width: $size-desktop - 1px) {
+    .shell[data-overlay] .panel {
+        bottom: calc(
+            var(--pr-bottom) + var(--dock-foot) + var(--dock-current, #{rem(52)}) + #{rem(10)}
+        );
+    }
+}
+
+// The feedback tab sits inside the canvas frame at its foot on the left,
+// 10 above the frame's foot line, clear of the centred dock and the panel
+// at the right. Under the desktop width the dock reaches the tab's column,
+// so the tab rides just above the resting dock, its pills included, and
+// steps aside while the dock holds a sheet open. It also steps aside while
 // the panel overlays the canvas.
 .shell .feedback {
     right: auto;
-    left: calc(var(--pr-gutter) + env(safe-area-inset-left));
+    bottom: calc(var(--pr-bottom) + var(--pr-gutter));
+    left: calc(var(--pr-left) + var(--pr-gutter));
     align-items: flex-start;
 }
 
-@include breakpoint(phone) {
+@media (max-width: $size-desktop - 1px) {
     .shell .feedback {
-        bottom: calc(#{rem(30)} + var(--dock-current, #{rem(52)}) + #{rem(8)});
+        bottom: calc(
+            var(--pr-bottom) + var(--dock-foot) + var(--dock-rest, #{rem(52)}) + #{rem(8)}
+        );
+    }
+
+    .shell:has(.dockFrame [data-sheet]:not([data-sheet="none"])) .feedback {
+        visibility: hidden;
     }
 }
 
@@ -192,7 +238,7 @@
 .travelText {
     overflow: hidden;
     font-family: var(--font-outfit);
-    font-size: rem(14);
+    font-size: rem-floor(14);
     color: var(--color-charcoal);
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -212,7 +258,7 @@
     }
 }
 
-// The shell's one polite live region, out of sight.
+// The shell's live regions, out of sight.
 .live {
     position: absolute;
     width: 1px;

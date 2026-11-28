@@ -54,6 +54,7 @@
 .thanks {
     @include font-size(10px, 1.34);
 
+    font-size: max(var(--text-floor, 0px), #{rem(10)});
     font-family: var(--font-outfit);
     font-weight: 400;
     color: var(--color-charcoal);
@@ -71,6 +72,8 @@
 
 .reason {
     @include font-size(10px, 1);
+
+    font-size: max(var(--text-floor, 0px), #{rem(10)});
 
     // The design's rem(21) pill: the padding owns the height, so the text's
     // own line box doesn't push it taller.
@@ -111,6 +114,7 @@
 .note {
     @include font-size(12px, 1);
 
+    font-size: max(var(--text-floor, 0px), #{rem(12)});
     flex: 1;
     min-width: 0;
 

@@ -66,9 +66,10 @@ const DockPills = ({
             role="group"
             aria-label="Suggested next questions"
         >
-            {followups.map((followup) => (
+            {followups.map((followup, index) => (
                 <button
-                    key={followup}
+                    // Two suggestions can read alike.
+                    key={`${index}:${followup}`}
                     type="button"
                     className={styles.pill}
                     onClick={() => onFollowup(followup)}

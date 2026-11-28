@@ -131,7 +131,7 @@ type StudioUser = { id: string; email: string };
  * ownership check runs in forward()'s `admit` hook, after the rate limit, and on a turn around the prompt spend (checkStudioOwner). A
  * turn spends one prompt of the caller's daily allowance, and meterTurn
  * (src/lib/studio/spendPrompt) gives it back when the turn does not start.
- * Reading the state and resuming a turn spend none.
+ * Reading the state, reading a card's places and resuming a turn spend none.
  *
  * `getUser` reads the signed-in user, `ownersOf` and `claimOwner` the
  * account a harness conversation belongs to (src/lib/chat/conversationStore).

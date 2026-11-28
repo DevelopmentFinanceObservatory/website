@@ -6,7 +6,7 @@
 
 import type { ChatMessage, ChatState } from '@/components/organisms/Studio/hooks/useChat';
 
-import { withoutUnitChanges } from './cardUnit.ts';
+import { withoutCardOffers } from './cardUnit.ts';
 import { withoutChips } from './chips.ts';
 import { forkRecap, isPrompt, isRefundedPrompt, withSessionLeft } from './transcript.ts';
 
@@ -19,7 +19,7 @@ import { forkRecap, isPrompt, isRefundedPrompt, withSessionLeft } from './transc
 export const sessionLeftChat = (prev: ChatState, turn?: number): ChatState => ({
     ...prev,
     messages: withoutChips(withSessionLeft(prev.messages, turn)),
-    widgets: withoutUnitChanges(prev.widgets),
+    widgets: withoutCardOffers(prev.widgets),
     plan: null,
     clarify: null,
 });

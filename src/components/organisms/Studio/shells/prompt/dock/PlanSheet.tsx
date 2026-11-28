@@ -40,8 +40,9 @@ const useMoreBelow = (ref: RefObject<HTMLElement | null>, shown: boolean) => {
 
 /**
  * The waiting plan above the prompt: open, its eyebrow and fold chevron,
- * then the title, the summary, the ledger with its `Change` links, what to
- * keep in mind, and `View full plan`; folded, one row that opens it.
+ * then the title, the summary, the ledger with its `Change` links and what
+ * to keep in mind, which scroll, and `View full plan` below them; folded,
+ * one row that opens it.
  */
 const PlanSheet = ({
     plan,
@@ -79,7 +80,9 @@ const PlanSheet = ({
     }, [outcome, announce]);
 
     return (
-        <section className={styles.sheet} aria-label="Research plan">
+        // The open body is the `Research plan` region; a second landmark of
+        // that name around it would repeat it.
+        <section className={classNames(styles.sheet, styles.planSheet)}>
             {open ? (
                 <>
                     <div className={classNames(styles.sheetHead, styles.headRow)}>
@@ -109,9 +112,12 @@ const PlanSheet = ({
                             view={view}
                             plan={plan}
                             onSwitch={onSwitch}
+                            columns
                             className={styles.planLedger}
                         />
                         <PlanCaveats caveats={view.caveats} className={styles.planCaveats} />
+                    </div>
+                    <div className={styles.planFoot}>
                         <button
                             type="button"
                             className={styles.planFull}

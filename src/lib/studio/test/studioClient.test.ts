@@ -14,9 +14,12 @@ import {
     isStaleRevision,
     mutateComposition,
     readState,
+    runApplyChange,
     runApplyChoice,
     runApplyUnit,
     runInterrupt,
+    runPlaceOptions,
+    runResume,
     runTurn,
     STATE_READ_ATTEMPTS,
     stopAction,
@@ -28,7 +31,13 @@ import {
 } from '../studioClient.ts';
 import { cardUnitChange } from '../cardUnit.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { ApplyChoiceSuggestion, ComponentCreated, StudioFrame, TurnRequest } from '../wire.ts';
+import type {
+    ApplyChoiceSuggestion,
+    ComponentCreated,
+    PlacesOptions,
+    StudioFrame,
+    TurnRequest,
+} from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -905,4 +914,271 @@ test('mutateComposition: a refusal rejects with a CompositionRefusal, and says w
             assert.equal(isStaleRevision(refusal), stale);
         });
     }
+});
+
+test('runApplyChange: a years change posts the harness fixture request, with no message', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+    const request = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/request-22-turn-apply-change-window.json', import.meta.url),
+            'utf8',
+        ),
+    ) as TurnRequest;
+
+    assert.ok(request.apply_change);
+    await runApplyChange(request.conversation_id, request.apply_change, { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
+    assert.deepEqual(JSON.parse(init.body as string), {
+        ...request,
+        client_features: ['unit_question', 'multi_select'],
+    });
+});
+
+test('runPlaceOptions reads a card role’s places, and says which failures a retry can mend', async (t) => {
+    const problem = (status: number, body: Record<string, unknown>) =>
+        Response.json(body, { status });
+    const answers: [string, () => Response | Promise<Response>, unknown][] = [
+        [
+            'an answer, narrowed',
+            () =>
+                Response.json({
+                    component_id: 'cmp_1',
+                    role: 'destination',
+                    options: [
+                        { id: 'country/UGA', label: 'Uganda' },
+                        { id: '', label: 'No id' },
+                        { label: 'No id at all' },
+                    ],
+                    truncated: true,
+                }),
+            {
+                kind: 'options',
+                options: [{ id: 'country/UGA', label: 'Uganda' }],
+                truncated: true,
+            },
+        ],
+        [
+            'an answer about another role',
+            () =>
+                Response.json({
+                    component_id: 'cmp_1',
+                    role: 'origin',
+                    options: [],
+                    truncated: false,
+                }),
+            { kind: 'failed', status: 200, code: null, detail: null, retry: true },
+        ],
+        [
+            'the harness could not read the places',
+            () =>
+                problem(503, {
+                    error: 'transient_unavailable',
+                    retry: 'retry_after_delay',
+                    detail: 'The places could not be read.',
+                    constraint_id: 'place_options_unavailable',
+                }),
+            {
+                kind: 'failed',
+                status: 503,
+                code: 'place_options_unavailable',
+                detail: 'The places could not be read.',
+                retry: true,
+            },
+        ],
+        [
+            'a deployment that lists no places',
+            () =>
+                problem(503, {
+                    error: 'capability_unavailable',
+                    retry: 'do_not_retry',
+                    detail: "Changing a card's places is not enabled on this deployment.",
+                }),
+            {
+                kind: 'failed',
+                status: 503,
+                code: 'capability_unavailable',
+                detail: "Changing a card's places is not enabled on this deployment.",
+                retry: false,
+            },
+        ],
+        [
+            'a card off the canvas',
+            () =>
+                problem(422, {
+                    error: 'constraint_violation',
+                    retry: 'do_not_retry',
+                    detail: 'This card can no longer change.',
+                    constraint_id: 'scope_choice_stale',
+                    pointer: '/component_id',
+                }),
+            {
+                kind: 'failed',
+                status: 422,
+                code: 'scope_choice_stale',
+                detail: 'This card can no longer change.',
+                retry: false,
+            },
+        ],
+        [
+            'no answer',
+            () => Promise.reject(new TypeError('fetch failed')),
+            { kind: 'failed', status: null, code: null, detail: null, retry: true },
+        ],
+        [
+            'no answer before the timeout',
+            () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+            { kind: 'failed', status: null, code: null, detail: null, retry: true },
+        ],
+    ];
+
+    t.mock.method(console, 'warn', () => {});
+
+    for (const [name, answer, expected] of answers) {
+        const fetch = t.mock.method(globalThis, 'fetch', async () => answer());
+
+        assert.deepEqual(await runPlaceOptions('conv 1', 'cmp_1', 'destination'), expected, name);
+        assert.equal(
+            fetch.mock.calls[0]?.arguments[0],
+            '/api/studio/places?conversation_id=conv+1&component_id=cmp_1&role=destination',
+            name,
+        );
+        fetch.mock.restore();
+    }
+});
+
+test('runPlaceOptions rejects a read its caller aborted, also while the body is read', async (t) => {
+    const stop = new AbortController();
+
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ component_id: 'cmp_1', role: 'destination', options: [] }),
+    );
+    t.mock.method(Response.prototype, 'json', async () => {
+        throw new DOMException('The read was aborted.', 'AbortError');
+    });
+    stop.abort();
+
+    await assert.rejects(runPlaceOptions('conv', 'cmp_1', 'destination', stop.signal), {
+        name: 'AbortError',
+    });
+});
+
+test('runPlaceOptions reads the harness fixture answer as it stands', async (t) => {
+    const answer = JSON.parse(
+        readFileSync(
+            new URL('./fixtures/response-01-places-options.json', import.meta.url),
+            'utf8',
+        ),
+    ) as PlacesOptions;
+
+    t.mock.method(globalThis, 'fetch', async () => Response.json(answer));
+
+    assert.deepEqual(await runPlaceOptions('conv', answer.component_id, answer.role), {
+        kind: 'options',
+        options: answer.options,
+        truncated: answer.truncated,
+    });
+});
+
+test('a stream-starting request carries hold_removals only when asked, else the body production sends', async (t) => {
+    const bodies: unknown[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+
+        return new Response('data: {"event":"done","seq":1}\n\n');
+    });
+
+    const handlers = { onFrame: () => {} };
+    const unit = { currency: 'USD', prices: 'current' } as const;
+    const send = async (hold?: { holdRemovals: boolean }) => {
+        await runTurn('conv', 'hi', handlers, undefined, { after_turn: 2 }, hold);
+        await runApplyChoice(
+            'conv',
+            { choice_id: 'c', option_id: 'o', turn: 1, spec_id: 's' },
+            handlers,
+            undefined,
+            hold,
+        );
+        await runApplyUnit(
+            'conv',
+            { component_id: 'cmp', spec_id: 's', turn: 1, unit },
+            handlers,
+            undefined,
+            hold,
+        );
+        await runApplyChange(
+            'conv',
+            {
+                component_id: 'cmp',
+                spec_id: 's',
+                change: { kind: 'window', start_year: 2010, end_year: 2020 },
+            },
+            handlers,
+            undefined,
+            hold,
+        );
+        await runInterrupt('conv', 'i1', { decision: 'approve' }, handlers, undefined, hold);
+        await runResume('conv', 3, handlers, undefined, hold);
+    };
+    // The bodies a page sends without hold_removals, with the years change as
+    // the contract names it.
+    const features = ['unit_question', 'multi_select'];
+    const production = [
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            message: 'hi',
+            after_turn: 2,
+            client_features: features,
+        },
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            apply_choice: { choice_id: 'c', option_id: 'o', turn: 1, spec_id: 's' },
+            client_features: features,
+        },
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            apply_unit: { component_id: 'cmp', spec_id: 's', turn: 1, unit },
+            client_features: features,
+        },
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: 'conv',
+            apply_change: {
+                component_id: 'cmp',
+                spec_id: 's',
+                change: { kind: 'window', start_year: 2010, end_year: 2020 },
+            },
+            client_features: features,
+        },
+        {
+            kind: 'interrupt.response',
+            schema_version: 1,
+            conversation_id: 'conv',
+            interrupt_id: 'i1',
+            decision: 'approve',
+            client_features: features,
+        },
+        { kind: 'turn.resume', schema_version: 1, conversation_id: 'conv', turn_index: 3 },
+    ];
+
+    await send();
+    await send({ holdRemovals: false });
+    await send({ holdRemovals: true });
+
+    assert.deepEqual(bodies.slice(0, 6), production);
+    assert.deepEqual(bodies.slice(6, 12), production);
+    assert.deepEqual(
+        bodies.slice(12),
+        production.map((body) => ({ ...body, hold_removals: true })),
+    );
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { CanvasDocument } from './useCanvasDocument';
 import type { useChat } from './useChat';
@@ -9,6 +9,7 @@ import { widgetTitle } from '../canvas/layout';
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
 import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
+import { savedCards } from '@/lib/studio/comingCards';
 import { createSaveStamp, createSaveWaiters } from '@/lib/studio/saveWaiters';
 import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
 import { isPrompt } from '@/lib/studio/transcript';
@@ -44,7 +45,7 @@ export const useConversationSave = ({
     // it for newcomers it finds there.
     const [openedLayout, setOpenedLayout] = useState<CardLayout>(initialLayout ?? {});
     const saveTimer = useRef(0);
-    const { snapshot: takeChatSnapshot } = chat;
+    const { snapshot: takeChatSnapshot, withStreamedReply } = chat;
     // The latest saveable state, refreshed by effect (the save fires from a
     // timer, so it can't read render-time values).
     const snapshotRef = useRef<{
@@ -90,8 +91,8 @@ export const useConversationSave = ({
             title: (snap.doc.conversationTitle ?? firstUser.text).slice(0, 400),
             updatedAt: Date.now(),
             ...saveStamp(),
-            messages: snap.messages,
-            widgets: snap.widgets,
+            messages: withStreamedReply(snap.messages),
+            widgets: savedCards(snap.widgets),
             activity: snap.activity,
             pinnedIds: snap.doc.pinnedIds,
             removedIds: snap.doc.removedIds,
@@ -107,7 +108,7 @@ export const useConversationSave = ({
             notes: snap.doc.notes,
             shareMarks: snap.doc.shareMarks,
         };
-    }, [takeChatSnapshot, saveStamp]);
+    }, [takeChatSnapshot, withStreamedReply, saveStamp]);
 
     // Callers waiting on a conversation's next save (whenSaved).
     const [waiters] = useState(createSaveWaiters);
@@ -144,8 +145,11 @@ export const useConversationSave = ({
     const promptsRef = useRef(0);
 
     // Any change worth keeping (a message, a widget, a pin) refreshes the
-    // snapshot and queues a save.
-    useEffect(() => {
+    // snapshot and queues a save. A layout effect, so the snapshot takes a
+    // commit's transcript in the same commit phase as the reply store drops
+    // the text that transcript took (useChat's prune): no save timer runs
+    // between them, so a save holds that text once, in one of the two.
+    useLayoutEffect(() => {
         snapshotRef.current = {
             messages: chat.messages,
             widgets: chat.widgets,

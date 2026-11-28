@@ -1,0 +1,2333 @@
+{
+    "name": "plan",
+    "description": "Clarify, plan proposed and approved, steps under it, two charts, a reply.",
+    "turns": [
+        {
+            "question": "Compare Gates Foundation reproductive health funding over time with G7 aid.",
+            "segments": [
+                {
+                    "frames": [
+                        {
+                            "event": "activity.step",
+                            "seq": 0,
+                            "step_id": "s1",
+                            "label": "Searching for data",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "search",
+                            "duration_ms": null,
+                            "produced": null
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 1,
+                            "step_id": "s1",
+                            "label": "Searching for data",
+                            "status": "complete",
+                            "detail": "Looked up Gates Foundation funding and G7 aid for reproductive health",
+                            "tool": "search",
+                            "duration_ms": 1200,
+                            "produced": null
+                        },
+                        {
+                            "event": "elicitation.request",
+                            "seq": 2,
+                            "interrupt_id": "elc_replay_clarify_1",
+                            "questions": [
+                                {
+                                    "id": "q1",
+                                    "question": "Would you like to see funding and aid figures over time in current or constant prices?",
+                                    "input": "single_select",
+                                    "options": [
+                                        {
+                                            "id": "o1",
+                                            "label": "Current prices"
+                                        },
+                                        {
+                                            "id": "o2",
+                                            "label": "Constant prices"
+                                        }
+                                    ],
+                                    "allow_free_text": false,
+                                    "skippable": false
+                                }
+                            ],
+                            "skippable": false
+                        }
+                    ]
+                },
+                {
+                    "act": {
+                        "kind": "answer",
+                        "picks": {
+                            "q1": "Current prices"
+                        }
+                    },
+                    "expect": {
+                        "interrupt_id": "elc_replay_clarify_1",
+                        "decision": "answer"
+                    },
+                    "frames": [
+                        {
+                            "event": "elicitation.request",
+                            "seq": 3,
+                            "interrupt_id": "elc_replay_clarify_2",
+                            "questions": [
+                                {
+                                    "id": "q1",
+                                    "question": "For the G7 comparison, would you like to see G7 countries combined as a total, or each G7 member shown individually alongside the Gates Foundation?",
+                                    "input": "single_select",
+                                    "options": [
+                                        {
+                                            "id": "o1",
+                                            "label": "G7 members combined as a total"
+                                        },
+                                        {
+                                            "id": "o2",
+                                            "label": "Each G7 member individually"
+                                        }
+                                    ],
+                                    "allow_free_text": false,
+                                    "skippable": false
+                                }
+                            ],
+                            "skippable": false
+                        }
+                    ]
+                },
+                {
+                    "act": {
+                        "kind": "answer",
+                        "picks": {
+                            "q1": "Each G7 member individually"
+                        }
+                    },
+                    "expect": {
+                        "interrupt_id": "elc_replay_clarify_2",
+                        "decision": "answer"
+                    },
+                    "frames": [
+                        {
+                            "event": "message.delta",
+                            "seq": 4,
+                            "text": "Before we build, let's "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 5,
+                            "text": "start with a plan."
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 6,
+                            "step_id": "s2",
+                            "label": "Working on a plan",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "plan",
+                            "duration_ms": null,
+                            "produced": null
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 7,
+                            "step_id": "s2",
+                            "label": "Working on a plan",
+                            "status": "complete",
+                            "detail": "Passed the planner a brief: the Gates Foundation against each G7 member, in current US dollars",
+                            "tool": "plan",
+                            "duration_ms": 1200,
+                            "produced": null
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 8,
+                            "step_id": "s3",
+                            "label": "Proposing the plan",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "propose_plan",
+                            "duration_ms": null,
+                            "produced": null
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 9,
+                            "step_id": "s3",
+                            "label": "Proposing the plan",
+                            "status": "complete",
+                            "detail": "Proposed the plan for the Gates versus G7 comparison",
+                            "tool": "propose_plan",
+                            "duration_ms": 1200,
+                            "produced": null
+                        },
+                        {
+                            "event": "plan.proposed",
+                            "seq": 10,
+                            "interrupt_id": "approve",
+                            "plan_version_id": "plan_replay_gates_g7",
+                            "version": 1,
+                            "title": "Gates Foundation and G7 funding to reproductive health",
+                            "steps": [
+                                {
+                                    "id": "s1",
+                                    "label": "Confirm the Gates Foundation and G7 datasets",
+                                    "description": "The Gates dataset holds gross private philanthropy disbursements, 2009 to 2024. The G7 dataset holds gross ODA disbursements from the 7 members, 1984 to 2024. Both are in the OECD Creditor Reporting System (CRS).",
+                                    "gives_answer": null
+                                },
+                                {
+                                    "id": "s2",
+                                    "label": "Fetch both reproductive health frames",
+                                    "description": "Current US dollars, all recipients with data.",
+                                    "gives_answer": null
+                                },
+                                {
+                                    "id": "s3",
+                                    "label": "Total each frame by donor and year",
+                                    "description": null,
+                                    "gives_answer": null
+                                },
+                                {
+                                    "id": "s4",
+                                    "label": "Draw a Gates line chart and a line chart of the G7 members",
+                                    "description": null,
+                                    "gives_answer": true
+                                }
+                            ],
+                            "actions": ["approve", "amend", "reject", "switch"],
+                            "depth": "standard",
+                            "decisions": [
+                                {
+                                    "id": "d1",
+                                    "question": "Sector",
+                                    "chosen": "population policy, programme, and reproductive health, CRS 130 alone",
+                                    "reason": "The search's default for this question.",
+                                    "resolved_by": "default",
+                                    "alternatives": null,
+                                    "choice_id": "r1:sector",
+                                    "options": [
+                                        {
+                                            "option_id": "o1",
+                                            "label": "population policy, programme, and reproductive health, CRS 130 alone",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o2",
+                                            "label": "health and population policy together, CRS 120 and 130",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o3",
+                                            "label": "health, CRS 120 alone",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        }
+                                    ],
+                                    "active_option_id": "o1",
+                                    "unit": null,
+                                    "step_ids": ["s1", "s2", "s3", "s4"],
+                                    "kind": "sector"
+                                },
+                                {
+                                    "id": "d2",
+                                    "question": "Count by",
+                                    "chosen": "gross disbursements, current USD",
+                                    "reason": "The search's default for this question.",
+                                    "resolved_by": "default",
+                                    "alternatives": null,
+                                    "choice_id": "r1:count",
+                                    "options": [
+                                        {
+                                            "option_id": "o1",
+                                            "label": "gross disbursements, current USD",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o2",
+                                            "label": "net disbursements",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o3",
+                                            "label": "grant equivalents",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o4",
+                                            "label": "commitments",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        }
+                                    ],
+                                    "active_option_id": "o1",
+                                    "unit": null,
+                                    "step_ids": ["s2", "s3", "s4"],
+                                    "kind": "count"
+                                },
+                                {
+                                    "id": "d3",
+                                    "question": "Providers",
+                                    "chosen": "bilateral flows only",
+                                    "reason": "The search's default for this question.",
+                                    "resolved_by": "default",
+                                    "alternatives": null,
+                                    "choice_id": "r1:provider",
+                                    "options": [
+                                        {
+                                            "option_id": "o1",
+                                            "label": "bilateral flows only",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o2",
+                                            "label": "inclusive of multilateral flows",
+                                            "status": "available",
+                                            "reason": "G7 dataset only.",
+                                            "years": null
+                                        }
+                                    ],
+                                    "active_option_id": "o1",
+                                    "unit": null,
+                                    "step_ids": ["s4"],
+                                    "kind": "provider"
+                                },
+                                {
+                                    "id": "d4",
+                                    "question": "Prices",
+                                    "chosen": "Current prices",
+                                    "reason": "You picked current prices when asked.",
+                                    "resolved_by": "user",
+                                    "alternatives": null,
+                                    "choice_id": "decision/prices",
+                                    "options": [
+                                        {
+                                            "option_id": "o1",
+                                            "label": "Current prices",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o2",
+                                            "label": "Constant prices",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        }
+                                    ],
+                                    "active_option_id": "o1",
+                                    "unit": null,
+                                    "step_ids": ["s3", "s4"],
+                                    "kind": "unit"
+                                },
+                                {
+                                    "id": "d5",
+                                    "question": "G7 members",
+                                    "chosen": "Each G7 member individually",
+                                    "reason": "You picked each member when asked.",
+                                    "resolved_by": "user",
+                                    "alternatives": null,
+                                    "choice_id": "decision/g7",
+                                    "options": [
+                                        {
+                                            "option_id": "o1",
+                                            "label": "Each G7 member individually",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        },
+                                        {
+                                            "option_id": "o2",
+                                            "label": "G7 members combined as a total",
+                                            "status": "available",
+                                            "reason": null,
+                                            "years": null
+                                        }
+                                    ],
+                                    "active_option_id": "o1",
+                                    "unit": null,
+                                    "step_ids": ["s4"],
+                                    "kind": "places"
+                                }
+                            ],
+                            "revision": "r1",
+                            "requirements": null,
+                            "operations": null,
+                            "asks": [
+                                {
+                                    "ask": "Gates Foundation funding to reproductive health over time",
+                                    "answered_by": ["s1", "s2", "s3", "s4"]
+                                },
+                                {
+                                    "ask": "Aid to reproductive health from each G7 member over time",
+                                    "answered_by": ["s1", "s2", "s3", "s4"]
+                                },
+                                {
+                                    "ask": "A combined G7 total",
+                                    "answered_by": [],
+                                    "not_computed": "You asked for G7. This shows its members, each on its own."
+                                }
+                            ],
+                            "moved": null,
+                            "summary": "Compares the Gates Foundation's disbursements with gross ODA from each G7 member, in current US dollars, for every year with data.",
+                            "switch_failed": null,
+                            "caveats": [
+                                "No recipient was named, so the answer covers all 109 recipients with data from the Gates Foundation.",
+                                "No recipient was named, so the answer covers all 173 recipients with data from any of the 7 providers.",
+                                "No years were given, so the answer covers every year with data.",
+                                "You asked for G7. This shows its members, each on its own."
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "act": {
+                        "kind": "approve"
+                    },
+                    "expect": {
+                        "interrupt_id": "approve",
+                        "decision": "approve"
+                    },
+                    "frames": [
+                        {
+                            "event": "plan.approved",
+                            "seq": 11,
+                            "plan_version_id": "plan_replay_gates_g7",
+                            "version": 1,
+                            "revision": "r1",
+                            "title": "Gates Foundation and G7 funding to reproductive health",
+                            "summary": "Compares the Gates Foundation's disbursements with gross ODA from each G7 member, in current US dollars, for every year with data.",
+                            "steps": [
+                                {
+                                    "id": "s1",
+                                    "label": "Confirm the Gates Foundation and G7 datasets",
+                                    "gives_answer": null
+                                },
+                                {
+                                    "id": "s2",
+                                    "label": "Fetch both reproductive health frames",
+                                    "gives_answer": null
+                                },
+                                {
+                                    "id": "s3",
+                                    "label": "Total each frame by donor and year",
+                                    "gives_answer": null
+                                },
+                                {
+                                    "id": "s4",
+                                    "label": "Draw a Gates line chart and a line chart of the G7 members",
+                                    "gives_answer": true
+                                }
+                            ],
+                            "choices": [
+                                {
+                                    "choice_id": "r1:sector",
+                                    "question": "Sector",
+                                    "chosen": "population policy, programme, and reproductive health, CRS 130 alone",
+                                    "changed_from": null,
+                                    "step_ids": ["s1", "s2", "s3", "s4"],
+                                    "kind": "sector"
+                                },
+                                {
+                                    "choice_id": "r1:count",
+                                    "question": "Count by",
+                                    "chosen": "gross disbursements, current USD",
+                                    "changed_from": null,
+                                    "step_ids": ["s2", "s3", "s4"],
+                                    "kind": "count"
+                                },
+                                {
+                                    "choice_id": "r1:provider",
+                                    "question": "Providers",
+                                    "chosen": "bilateral flows only",
+                                    "changed_from": null,
+                                    "step_ids": ["s4"],
+                                    "kind": "provider"
+                                },
+                                {
+                                    "choice_id": "decision/prices",
+                                    "question": "Prices",
+                                    "chosen": "Current prices",
+                                    "changed_from": null,
+                                    "step_ids": ["s3", "s4"],
+                                    "kind": "unit"
+                                },
+                                {
+                                    "choice_id": "decision/g7",
+                                    "question": "G7 members",
+                                    "chosen": "Each G7 member individually",
+                                    "changed_from": null,
+                                    "step_ids": ["s4"],
+                                    "kind": "places"
+                                }
+                            ],
+                            "caveats": [
+                                "No recipient was named, so the answer covers all 109 recipients with data from the Gates Foundation.",
+                                "No recipient was named, so the answer covers all 173 recipients with data from any of the 7 providers.",
+                                "No years were given, so the answer covers every year with data.",
+                                "You asked for G7. This shows its members, each on its own."
+                            ]
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 12,
+                            "step_id": "s4",
+                            "label": "Confirming the Gates Foundation and G7 datasets",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "resolve_definition",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s1"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 13,
+                            "step_id": "s4",
+                            "label": "Confirming the Gates Foundation and G7 datasets",
+                            "status": "complete",
+                            "detail": "Confirmed the G7 bilateral and Gates reproductive health datasets",
+                            "tool": "resolve_definition",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s1"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 14,
+                            "step_id": "s5",
+                            "label": "Fetching reproductive health aid from the Gates Foundation and the G7",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "get_data",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s2"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 15,
+                            "step_id": "s5",
+                            "label": "Fetching reproductive health aid from the Gates Foundation and the G7",
+                            "status": "complete",
+                            "detail": "Fetched both reproductive health frames, G7 bilateral and Gates",
+                            "tool": "get_data",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s2"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 16,
+                            "step_id": "s6",
+                            "label": "Totalling each frame by donor and year",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "aggregate",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s3"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 17,
+                            "step_id": "s6",
+                            "label": "Totalling each frame by donor and year",
+                            "status": "complete",
+                            "detail": "Summed each frame by donor and year (112 rows G7, 16 rows Gates)",
+                            "tool": "aggregate",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s3"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 18,
+                            "step_id": "s7",
+                            "label": "Checking the totals",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "describe_frame",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s3"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 19,
+                            "step_id": "s7",
+                            "label": "Checking the totals",
+                            "status": "complete",
+                            "detail": "Checked donors and years in each summed frame",
+                            "tool": "describe_frame",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s3"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 20,
+                            "step_id": "s8",
+                            "label": "Making 2 charts",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "make_charts",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s4"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 21,
+                            "step_id": "s8",
+                            "label": "Making 2 charts",
+                            "status": "complete",
+                            "detail": "Drafted a Gates line chart and a G7 by-member line chart",
+                            "tool": "make_charts",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s4"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 22,
+                            "step_id": "s9",
+                            "label": "Making the Gates Foundation chart",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s3"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 23,
+                            "step_id": "s9",
+                            "label": "Making the Gates Foundation chart",
+                            "status": "complete",
+                            "detail": "Wrote the Gates line chart card",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s3"
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 24,
+                            "component_id": "cmp_replay_plan_c1",
+                            "revision": 1,
+                            "type": "line_chart",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_plan_c1",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "ops_588e468f6e72ad866d7db78e8fecae4d",
+                                            "content_version": "ocv_e36ab16d1b681762463928b7233bcbc5"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_oecd_crs",
+                                            "name": "OECD Creditor Reporting System (CRS)",
+                                            "licence": "OECD Terms and Conditions",
+                                            "publisher": "Organisation for Economic Co-operation and Development (OECD)",
+                                            "url": null,
+                                            "retrieved": "2026-10-15"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2024",
+                                        "last_refreshed": "2026-10-15",
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-10-15T10:00:00Z",
+                                    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "description": {
+                                    "describes": {
+                                        "kind": "card_revision",
+                                        "component_id": "cmp_replay_plan_c1",
+                                        "revision": 1
+                                    },
+                                    "title": "Gross disbursements to Nigeria for health, 2010 to 2024",
+                                    "about": {
+                                        "measure": {
+                                            "label": "gross disbursements",
+                                            "definition": "Funds released to a recipient, or spent on goods and services for it, counted in full before any repayments are deducted."
+                                        },
+                                        "fixed": [
+                                            {
+                                                "property": {
+                                                    "ref": "financingRecipient",
+                                                    "label": "recipient"
+                                                },
+                                                "value": {
+                                                    "ref": "country/NGA",
+                                                    "label": "Nigeria"
+                                                }
+                                            }
+                                        ],
+                                        "drawn": {
+                                            "dimensions": [
+                                                {
+                                                    "property": {
+                                                        "ref": "crsPurpose",
+                                                        "label": "sector"
+                                                    },
+                                                    "count": 3,
+                                                    "of": 19,
+                                                    "values": [
+                                                        {
+                                                            "ref": "CRSPurposeCode12220",
+                                                            "label": "basic health care",
+                                                            "definition": "Basic and primary health care programmes; paramedical and nursing care programmes; supply of drugs, medicines, and vaccines related to basic health care; and activities aimed at achieving universal health coverage."
+                                                        },
+                                                        {
+                                                            "ref": "CRSPurposeCode12110",
+                                                            "label": "health policy and administrative management",
+                                                            "definition": "Health sector policy, planning, and programmes; aid to health ministries and public health administration; institution capacity building and advice; medical insurance programmes; health system strengthening and health governance; and unspecified health activities."
+                                                        },
+                                                        {
+                                                            "ref": "CRSPurposeCode12250",
+                                                            "label": "infectious disease control",
+                                                            "definition": "Immunisation and prevention and control of infectious and parasitic diseases, including diarrhoeal diseases, vector-borne diseases, viral diseases, mycosis, helminthiasis, zoonosis, diseases caused by other bacteria and viruses, and pediculosis. Excludes malaria, tuberculosis, COVID-19, and HIV/AIDS and other sexually transmitted diseases."
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            "series": 3,
+                                            "period": {
+                                                "start": "2010",
+                                                "end": "2024",
+                                                "grain": "year"
+                                            }
+                                        },
+                                        "unit": {
+                                            "ref": "CurrencyUSD",
+                                            "label": "US dollars",
+                                            "prices": "current"
+                                        }
+                                    },
+                                    "sources": [
+                                        {
+                                            "ref": "provenance/OECDCreditorReportingSystem",
+                                            "label": "OECD Creditor Reporting System (CRS)",
+                                            "publisher": "OECD",
+                                            "licence": "OECD Terms and Conditions",
+                                            "series": 3,
+                                            "documentation": "/api/graph/documentation/provenance/OECDCreditorReportingSystem"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "latest_period": "2024",
+                                        "series_reaching_it": 2,
+                                        "estimated_values": null,
+                                        "provisional_values": null
+                                    },
+                                    "steps": [
+                                        {
+                                            "id": "s1",
+                                            "op": "select",
+                                            "input": {
+                                                "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                                "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c",
+                                                "label": "Gross disbursements to Nigeria for health",
+                                                "at_mint": true
+                                            },
+                                            "policy": "card_selection",
+                                            "params": {
+                                                "coordinates": {
+                                                    "crsPurpose": [
+                                                        "CRSPurposeCode12220",
+                                                        "CRSPurposeCode12110",
+                                                        "CRSPurposeCode12250"
+                                                    ]
+                                                },
+                                                "window": {
+                                                    "start": "2010",
+                                                    "end": "2024"
+                                                }
+                                            },
+                                            "kept": {
+                                                "series": 3
+                                            },
+                                            "text": "Drew 3 series of gross disbursements to Nigeria for health, 2010 to 2024."
+                                        }
+                                    ],
+                                    "caveats": [
+                                        {
+                                            "kind": "provisional",
+                                            "periods": ["2024"],
+                                            "series": [
+                                                {
+                                                    "ref": "CRSPurposeCode12250",
+                                                    "label": "infectious disease control"
+                                                }
+                                            ],
+                                            "text": "Values of infectious disease control in 2024 are provisional."
+                                        }
+                                    ],
+                                    "cite": {
+                                        "title": "Gross disbursements to Nigeria for health",
+                                        "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                        "component_id": "cmp_Ab3dE5gH7k",
+                                        "revision": 2,
+                                        "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                        "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c",
+                                        "retrieved": "2026-09-28",
+                                        "data": "/api/datasets/spec_91d7345eec81a029629938b3d0ffd775/cv_b785befb9f87471de96eb31cd7c56f5c"
+                                    },
+                                    "gaps": [
+                                        "freshness.estimated_values",
+                                        "freshness.provisional_values"
+                                    ],
+                                    "built_from": {
+                                        "facts_schema": 1,
+                                        "vocabulary": "voc_5e1d9a3c7b2f8e64"
+                                    },
+                                    "rendering": "live",
+                                    "frame": {
+                                        "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                        "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c"
+                                    }
+                                },
+                                "component": {
+                                    "type": "line_chart",
+                                    "title": {
+                                        "text": "Gates Foundation disbursements to reproductive health, 2009 to 2024",
+                                        "authorship": "model"
+                                    },
+                                    "series": [
+                                        {
+                                            "id": "c1_gates_foundation",
+                                            "label": "Gates Foundation",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 397693787
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 369080015
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 415543937
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 418859930
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 436276614
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 526201524
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 503211839
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 587457818
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 594725558
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 634455200
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 601623854
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 592375931
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 644703722
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 612989214
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 751281340
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 773535950
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "x_axis": {
+                                        "window": {
+                                            "start": "2009",
+                                            "end": "2024"
+                                        }
+                                    },
+                                    "y_axis": {
+                                        "label": "Gates Foundation",
+                                        "scale": "linear",
+                                        "range": {
+                                            "min": null,
+                                            "max": null
+                                        }
+                                    }
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_plan_c1",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2009",
+                                    "end": "2024"
+                                },
+                                "unit": {
+                                    "currency": "USD",
+                                    "magnitude": null,
+                                    "prices": "current",
+                                    "base_year": null
+                                },
+                                "series": [
+                                    {
+                                        "id": "c1_gates_foundation",
+                                        "label": "Gates Foundation",
+                                        "point_count": 16,
+                                        "first": 397693787,
+                                        "last": 773535950
+                                    }
+                                ],
+                                "countries": ["All recipients with data"],
+                                "attribution": {
+                                    "label": "OECD Creditor Reporting System (CRS) · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "ops_588e468f6e72ad866d7db78e8fecae4d",
+                                        "content_version": "ocv_e36ab16d1b681762463928b7233bcbc5"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_oecd_crs",
+                                        "name": "OECD Creditor Reporting System (CRS)",
+                                        "licence": "OECD Terms and Conditions",
+                                        "publisher": "Organisation for Economic Co-operation and Development (OECD)",
+                                        "url": null,
+                                        "retrieved": "2026-10-15"
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2024",
+                                    "last_refreshed": "2026-10-15",
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-10-15T10:00:00Z",
+                                "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s9",
+                                "message_seq": 0,
+                                "plan_version_id": "plan_replay_gates_g7",
+                                "plan_step_id": "s3"
+                            },
+                            "card_changes": {
+                                "spec_id": "ops_588e468f6e72ad866d7db78e8fecae4d",
+                                "window": {
+                                    "start_year": 2009,
+                                    "end_year": 2024,
+                                    "first_year": 1973,
+                                    "last_year": 2024
+                                }
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 25,
+                            "manifest": {
+                                "composition_id": "cps_replay_plan",
+                                "revision": 1,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_plan_c1",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "Gates Foundation disbursements to reproductive health, 2009 to 2024",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 1,
+                                    "stats": 0,
+                                    "charts": 1,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 26,
+                            "step_id": "s10",
+                            "label": "Making the G7 members chart",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "write_component",
+                            "duration_ms": null,
+                            "produced": null,
+                            "plan_step_id": "s4"
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 27,
+                            "step_id": "s10",
+                            "label": "Making the G7 members chart",
+                            "status": "complete",
+                            "detail": "Wrote the G7 members line chart card",
+                            "tool": "write_component",
+                            "duration_ms": 1200,
+                            "produced": null,
+                            "plan_step_id": "s4"
+                        },
+                        {
+                            "event": "component.created",
+                            "seq": 28,
+                            "component_id": "cmp_replay_plan_c2",
+                            "revision": 1,
+                            "type": "line_chart",
+                            "catalog_version": "2026.10.0",
+                            "min_catalog_version": "2026.10.0",
+                            "payload": {
+                                "schema_version": 1,
+                                "catalog_version": "2026.10.0",
+                                "component_id": "cmp_replay_plan_c2",
+                                "revision": 1,
+                                "provenance": {
+                                    "inputs": [
+                                        {
+                                            "spec_id": "ops_081e1e58b656791d7f3a5db44d40c6c5",
+                                            "content_version": "ocv_f9ebdf2cac3bdf3649ec0e0557886c0e"
+                                        }
+                                    ],
+                                    "execution_ref": null,
+                                    "sources": [
+                                        {
+                                            "id": "src_oecd_crs",
+                                            "name": "OECD Creditor Reporting System (CRS)",
+                                            "licence": "OECD Terms and Conditions",
+                                            "publisher": "Organisation for Economic Co-operation and Development (OECD)",
+                                            "url": null,
+                                            "retrieved": "2026-10-15"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "data_through": "2024",
+                                        "last_refreshed": "2026-10-15",
+                                        "next_expected": null,
+                                        "partial_period": false,
+                                        "held": []
+                                    },
+                                    "warnings": [],
+                                    "generated_at": "2026-10-15T10:00:00Z",
+                                    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                    "refreshed_from": null
+                                },
+                                "description": {
+                                    "describes": {
+                                        "kind": "card_revision",
+                                        "component_id": "cmp_replay_plan_c2",
+                                        "revision": 1
+                                    },
+                                    "title": "Gross disbursements to Nigeria for health, 2010 to 2024",
+                                    "about": {
+                                        "measure": {
+                                            "label": "gross disbursements",
+                                            "definition": null
+                                        },
+                                        "fixed": [
+                                            {
+                                                "property": {
+                                                    "ref": "financingRecipient",
+                                                    "label": "recipient"
+                                                },
+                                                "value": {
+                                                    "ref": "country/NGA",
+                                                    "label": "Nigeria"
+                                                }
+                                            }
+                                        ],
+                                        "drawn": {
+                                            "dimensions": [
+                                                {
+                                                    "property": {
+                                                        "ref": "crsPurpose",
+                                                        "label": "sector"
+                                                    },
+                                                    "count": 3,
+                                                    "of": 19,
+                                                    "values": [
+                                                        {
+                                                            "ref": "CRSPurposeCode12220",
+                                                            "label": "basic health care",
+                                                            "definition": "Basic and primary health care programmes; paramedical and nursing care programmes; supply of drugs, medicines, and vaccines related to basic health care; and activities aimed at achieving universal health coverage."
+                                                        },
+                                                        {
+                                                            "ref": "CRSPurposeCode12110",
+                                                            "label": "health policy and administrative management",
+                                                            "definition": "Health sector policy, planning, and programmes; aid to health ministries and public health administration; institution capacity building and advice; medical insurance programmes; health system strengthening and health governance; and unspecified health activities."
+                                                        },
+                                                        {
+                                                            "ref": "CRSPurposeCode12250",
+                                                            "label": "infectious disease control",
+                                                            "definition": "Immunisation and prevention and control of infectious and parasitic diseases, including diarrhoeal diseases, vector-borne diseases, viral diseases, mycosis, helminthiasis, zoonosis, diseases caused by other bacteria and viruses, and pediculosis. Excludes malaria, tuberculosis, COVID-19, and HIV/AIDS and other sexually transmitted diseases."
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            "series": 3,
+                                            "period": {
+                                                "start": "2010",
+                                                "end": "2024",
+                                                "grain": "year"
+                                            }
+                                        },
+                                        "unit": {
+                                            "ref": "CurrencyUSD",
+                                            "label": "US dollars",
+                                            "prices": "current"
+                                        }
+                                    },
+                                    "sources": [
+                                        {
+                                            "ref": "provenance/OECDCreditorReportingSystem",
+                                            "label": "OECD Creditor Reporting System (CRS)",
+                                            "publisher": "OECD",
+                                            "licence": "OECD Terms and Conditions",
+                                            "series": 3,
+                                            "documentation": "/api/graph/documentation/provenance/OECDCreditorReportingSystem"
+                                        }
+                                    ],
+                                    "freshness": {
+                                        "latest_period": "2024",
+                                        "series_reaching_it": 2,
+                                        "estimated_values": null,
+                                        "provisional_values": null
+                                    },
+                                    "steps": [
+                                        {
+                                            "id": "s1",
+                                            "op": "select",
+                                            "input": {
+                                                "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                                "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c",
+                                                "label": "Gross disbursements to Nigeria for health",
+                                                "at_mint": true
+                                            },
+                                            "policy": "card_selection",
+                                            "params": {
+                                                "coordinates": {
+                                                    "crsPurpose": [
+                                                        "CRSPurposeCode12220",
+                                                        "CRSPurposeCode12110",
+                                                        "CRSPurposeCode12250"
+                                                    ]
+                                                },
+                                                "window": {
+                                                    "start": "2010",
+                                                    "end": "2024"
+                                                }
+                                            },
+                                            "kept": {
+                                                "series": 3
+                                            },
+                                            "text": "Drew 3 series of gross disbursements to Nigeria for health, 2010 to 2024."
+                                        }
+                                    ],
+                                    "caveats": [
+                                        {
+                                            "kind": "provisional",
+                                            "periods": ["2024"],
+                                            "series": [
+                                                {
+                                                    "ref": "CRSPurposeCode12250",
+                                                    "label": "infectious disease control"
+                                                }
+                                            ],
+                                            "text": "Values of infectious disease control in 2024 are provisional."
+                                        }
+                                    ],
+                                    "cite": {
+                                        "title": "Gross disbursements to Nigeria for health",
+                                        "text": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                        "component_id": "cmp_Ab3dE5gH7k",
+                                        "revision": 2,
+                                        "id": "spec_91d7345eec81a029629938b3d0ffd775",
+                                        "content_version": "cv_b785befb9f87471de96eb31cd7c56f5c",
+                                        "retrieved": "2026-09-28",
+                                        "data": "/api/datasets/spec_91d7345eec81a029629938b3d0ffd775/cv_b785befb9f87471de96eb31cd7c56f5c"
+                                    },
+                                    "gaps": [
+                                        "about.measure.definition",
+                                        "freshness.estimated_values",
+                                        "freshness.provisional_values"
+                                    ],
+                                    "built_from": {
+                                        "facts_schema": 1,
+                                        "vocabulary": "voc_5e1d9a3c7b2f8e64"
+                                    }
+                                },
+                                "component": {
+                                    "type": "line_chart",
+                                    "title": {
+                                        "text": "G7 bilateral ODA disbursements to reproductive health by provider, 2009 to 2024",
+                                        "authorship": "model"
+                                    },
+                                    "series": [
+                                        {
+                                            "id": "c2_united_states_of_america",
+                                            "label": "United States of America",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 5091001768
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 5318292130
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 5912102770
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 5800340370
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 6104136470
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 5843437250
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 5525567938
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 5920603178
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 6989954380
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 6704836350
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 4628929160
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 5866686498
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 5551953830
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 7717430489
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 5347743944
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 9066974890
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c2_united_kingdom",
+                                            "label": "United Kingdom",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 474230600
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 515217878
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 634780938
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 674284242
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 512427233
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 791170249
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 567780917
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 456442379
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 472967635
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 493199027
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 553696913
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 391052036
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 275071399
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 273320083
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 296829110
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 319145357
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c2_canada",
+                                            "label": "Canada",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 69727313
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 49057757
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 87528321
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 87592483
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 101851577
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 122066393
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 69164678
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 61977947
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 139105242
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 207747741
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 220980909
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 204679455
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 257830686
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 229659147
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 217453964
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 318676412
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c2_germany",
+                                            "label": "Germany",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 193135698
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 157736408
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 166637895
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 168661460
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 156186196
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 160278514
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 142198281
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 175238990
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 149055882
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 149836151
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 134941272
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 157153223
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 176408784
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 177841400
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 150990271
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 110065956
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c2_france",
+                                            "label": "France",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 27998286
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 46247735
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 64729111
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 84180192
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 74048197
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 104417169
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 72023001
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 51303769
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 51395588
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 42707480
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 48482108
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 63830815
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 96356156
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 46028365
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 64363275
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 70451807
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c2_japan",
+                                            "label": "Japan",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 55377865
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 54461893
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 63852929
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 89064311
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 65695233
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 62632851
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 55813438
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 49126971
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 40754135
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 41985364
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 28744521
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 23637239
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 31468403
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 54569239
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 38523847
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 33282921
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "id": "c2_italy",
+                                            "label": "Italy",
+                                            "unit": {
+                                                "currency": "USD",
+                                                "magnitude": null,
+                                                "prices": "current",
+                                                "base_year": null
+                                            },
+                                            "source_ref": "src_oecd_crs",
+                                            "points": [
+                                                {
+                                                    "period": "2009",
+                                                    "value": 12724946
+                                                },
+                                                {
+                                                    "period": "2010",
+                                                    "value": 10472143
+                                                },
+                                                {
+                                                    "period": "2011",
+                                                    "value": 14411015
+                                                },
+                                                {
+                                                    "period": "2012",
+                                                    "value": 4760614
+                                                },
+                                                {
+                                                    "period": "2013",
+                                                    "value": 12265120
+                                                },
+                                                {
+                                                    "period": "2014",
+                                                    "value": 12575536
+                                                },
+                                                {
+                                                    "period": "2015",
+                                                    "value": 4604475
+                                                },
+                                                {
+                                                    "period": "2016",
+                                                    "value": 9147158
+                                                },
+                                                {
+                                                    "period": "2017",
+                                                    "value": 12215729
+                                                },
+                                                {
+                                                    "period": "2018",
+                                                    "value": 15075685
+                                                },
+                                                {
+                                                    "period": "2019",
+                                                    "value": 15573202
+                                                },
+                                                {
+                                                    "period": "2020",
+                                                    "value": 6341547
+                                                },
+                                                {
+                                                    "period": "2021",
+                                                    "value": 14364285
+                                                },
+                                                {
+                                                    "period": "2022",
+                                                    "value": 14854731
+                                                },
+                                                {
+                                                    "period": "2023",
+                                                    "value": 6782639
+                                                },
+                                                {
+                                                    "period": "2024",
+                                                    "value": 7112228
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "x_axis": {
+                                        "window": {
+                                            "start": "2009",
+                                            "end": "2024"
+                                        }
+                                    },
+                                    "y_axis": {
+                                        "label": null,
+                                        "scale": "linear",
+                                        "range": {
+                                            "min": null,
+                                            "max": null
+                                        }
+                                    }
+                                }
+                            },
+                            "fact_summary": {
+                                "component_id": "cmp_replay_plan_c2",
+                                "revision": 1,
+                                "window": {
+                                    "start": "2009",
+                                    "end": "2024"
+                                },
+                                "unit": {
+                                    "currency": "USD",
+                                    "magnitude": null,
+                                    "prices": "current",
+                                    "base_year": null
+                                },
+                                "series": [
+                                    {
+                                        "id": "c2_united_states_of_america",
+                                        "label": "United States of America",
+                                        "point_count": 16,
+                                        "first": 5091001768,
+                                        "last": 9066974890
+                                    },
+                                    {
+                                        "id": "c2_united_kingdom",
+                                        "label": "United Kingdom",
+                                        "point_count": 16,
+                                        "first": 474230600,
+                                        "last": 319145357
+                                    },
+                                    {
+                                        "id": "c2_canada",
+                                        "label": "Canada",
+                                        "point_count": 16,
+                                        "first": 69727313,
+                                        "last": 318676412
+                                    },
+                                    {
+                                        "id": "c2_germany",
+                                        "label": "Germany",
+                                        "point_count": 16,
+                                        "first": 193135698,
+                                        "last": 110065956
+                                    },
+                                    {
+                                        "id": "c2_france",
+                                        "label": "France",
+                                        "point_count": 16,
+                                        "first": 27998286,
+                                        "last": 70451807
+                                    },
+                                    {
+                                        "id": "c2_japan",
+                                        "label": "Japan",
+                                        "point_count": 16,
+                                        "first": 55377865,
+                                        "last": 33282921
+                                    },
+                                    {
+                                        "id": "c2_italy",
+                                        "label": "Italy",
+                                        "point_count": 16,
+                                        "first": 12724946,
+                                        "last": 7112228
+                                    }
+                                ],
+                                "countries": ["All recipients with data"],
+                                "attribution": {
+                                    "label": "OECD Creditor Reporting System (CRS) · 1 indicator",
+                                    "source_count": 1,
+                                    "indicator_count": 1
+                                }
+                            },
+                            "provenance": {
+                                "inputs": [
+                                    {
+                                        "spec_id": "ops_081e1e58b656791d7f3a5db44d40c6c5",
+                                        "content_version": "ocv_f9ebdf2cac3bdf3649ec0e0557886c0e"
+                                    }
+                                ],
+                                "execution_ref": null,
+                                "sources": [
+                                    {
+                                        "id": "src_oecd_crs",
+                                        "name": "OECD Creditor Reporting System (CRS)",
+                                        "licence": "OECD Terms and Conditions",
+                                        "publisher": "Organisation for Economic Co-operation and Development (OECD)",
+                                        "url": null,
+                                        "retrieved": "2026-10-15"
+                                    }
+                                ],
+                                "freshness": {
+                                    "data_through": "2024",
+                                    "last_refreshed": "2026-10-15",
+                                    "next_expected": null,
+                                    "partial_period": false,
+                                    "held": []
+                                },
+                                "warnings": [],
+                                "generated_at": "2026-10-15T10:00:00Z",
+                                "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+                                "refreshed_from": null
+                            },
+                            "created_from": {
+                                "step_id": "s10",
+                                "message_seq": 0,
+                                "plan_version_id": "plan_replay_gates_g7",
+                                "plan_step_id": "s4"
+                            },
+                            "card_changes": {
+                                "spec_id": "ops_081e1e58b656791d7f3a5db44d40c6c5",
+                                "window": {
+                                    "start_year": 2009,
+                                    "end_year": 2024,
+                                    "first_year": 1973,
+                                    "last_year": 2024
+                                },
+                                "places": [
+                                    {
+                                        "role": "origin",
+                                        "multiple": true,
+                                        "chosen": [
+                                            {
+                                                "id": "country/USA",
+                                                "label": "United States of America"
+                                            },
+                                            {
+                                                "id": "country/GBR",
+                                                "label": "United Kingdom"
+                                            },
+                                            {
+                                                "id": "country/CAN",
+                                                "label": "Canada"
+                                            },
+                                            {
+                                                "id": "country/DEU",
+                                                "label": "Germany"
+                                            },
+                                            {
+                                                "id": "country/FRA",
+                                                "label": "France"
+                                            },
+                                            {
+                                                "id": "country/JPN",
+                                                "label": "Japan"
+                                            },
+                                            {
+                                                "id": "country/ITA",
+                                                "label": "Italy"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "event": "composition.updated",
+                            "seq": 29,
+                            "manifest": {
+                                "composition_id": "cps_replay_plan",
+                                "revision": 2,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_plan_c1",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "Gates Foundation disbursements to reproductive health, 2009 to 2024",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_plan_c2",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "G7 bilateral ODA disbursements to reproductive health by provider, 2009 to 2024",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 2,
+                                    "stats": 0,
+                                    "charts": 2,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 30,
+                            "text": "From 2009 to 2024, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 31,
+                            "text": "funding to population policy, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 32,
+                            "text": "programmes, and reproductive health "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 33,
+                            "text": "(OECD CRS sector 130) "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 34,
+                            "text": "from the Bill & "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 35,
+                            "text": "Melinda Gates Foundation grew "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 36,
+                            "text": "substantially, positioning it above "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 37,
+                            "text": "nearly all individual G7 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 38,
+                            "text": "countries except the United "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 39,
+                            "text": "States. Data from the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 40,
+                            "text": "OECD Creditor Reporting System "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 41,
+                            "text": "(CRS) shows the following "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 42,
+                            "text": "trends in current US "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 43,
+                            "text": "dollars.\n\nBill & Melinda "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 44,
+                            "text": "Gates Foundation\n- 2009: "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 45,
+                            "text": "$398 million\n- 2024: "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 46,
+                            "text": "$774 million\n\nG7 bilateral "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 47,
+                            "text": "ODA disbursements (by member)\n"
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 48,
+                            "text": "- United States: $5.09 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 49,
+                            "text": "billion in 2009 to "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 50,
+                            "text": "$9.07 billion in 2024\n"
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 51,
+                            "text": "- United Kingdom: $474 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 52,
+                            "text": "million in 2009 to "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 53,
+                            "text": "$319 million in 2024\n"
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 54,
+                            "text": "- Canada: $69.7 million "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 55,
+                            "text": "in 2009 to $319 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 56,
+                            "text": "million in 2024\n- "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 57,
+                            "text": "Germany: $193 million in "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 58,
+                            "text": "2009 to $110 million "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 59,
+                            "text": "in 2024\n- France: "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 60,
+                            "text": "$28.0 million in 2009 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 61,
+                            "text": "to $70.5 million in "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 62,
+                            "text": "2024\n- Japan: $55.4 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 63,
+                            "text": "million in 2009 to "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 64,
+                            "text": "$33.3 million in 2024\n"
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 65,
+                            "text": "- Italy: $12.7 million "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 66,
+                            "text": "in 2009 to $7.11 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 67,
+                            "text": "million in 2024\n\nSummary: "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 68,
+                            "text": "While the United States "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 69,
+                            "text": "remains by far the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 70,
+                            "text": "largest provider of reproductive "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 71,
+                            "text": "health assistance, the Bill "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 72,
+                            "text": "& Melinda Gates Foundation's "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 73,
+                            "text": "disbursements reached $774 million "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 74,
+                            "text": "by 2024, surpassing the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 75,
+                            "text": "bilateral contributions of every "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 76,
+                            "text": "other G7 country individually "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 77,
+                            "text": "(the next highest being "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 78,
+                            "text": "the UK and Canada "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 79,
+                            "text": "at approximately $319 million "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 80,
+                            "text": "each).\n\nCounted as: population "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 81,
+                            "text": "policy, programme, and reproductive "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 82,
+                            "text": "health, CRS 130 alone "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 83,
+                            "text": "· gross disbursements, current "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 84,
+                            "text": "USD · bilateral flows "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 85,
+                            "text": "only."
+                        },
+                        {
+                            "event": "message.complete",
+                            "seq": 86,
+                            "text": "From 2009 to 2024, funding to population policy, programmes, and reproductive health (OECD CRS sector 130) from the Bill & Melinda Gates Foundation grew substantially, positioning it above nearly all individual G7 countries except the United States. Data from the OECD Creditor Reporting System (CRS) shows the following trends in current US dollars.\n\nBill & Melinda Gates Foundation\n- 2009: $398 million\n- 2024: $774 million\n\nG7 bilateral ODA disbursements (by member)\n- United States: $5.09 billion in 2009 to $9.07 billion in 2024\n- United Kingdom: $474 million in 2009 to $319 million in 2024\n- Canada: $69.7 million in 2009 to $319 million in 2024\n- Germany: $193 million in 2009 to $110 million in 2024\n- France: $28.0 million in 2009 to $70.5 million in 2024\n- Japan: $55.4 million in 2009 to $33.3 million in 2024\n- Italy: $12.7 million in 2009 to $7.11 million in 2024\n\nSummary: While the United States remains by far the largest provider of reproductive health assistance, the Bill & Melinda Gates Foundation's disbursements reached $774 million by 2024, surpassing the bilateral contributions of every other G7 country individually (the next highest being the UK and Canada at approximately $319 million each).\n\nCounted as: population policy, programme, and reproductive health, CRS 130 alone · gross disbursements, current USD · bilateral flows only."
+                        },
+                        {
+                            "event": "suggestions",
+                            "seq": 87,
+                            "items": [
+                                {
+                                    "kind": "apply_choice",
+                                    "label": "health and population policy together, CRS 120 and 130",
+                                    "choice_id": "r1:sector",
+                                    "option_id": "o2",
+                                    "spec_id": "ops_588e468f6e72ad866d7db78e8fecae4d",
+                                    "turn": 1
+                                },
+                                {
+                                    "kind": "apply_choice",
+                                    "label": "net disbursements",
+                                    "choice_id": "r1:count",
+                                    "option_id": "o2",
+                                    "spec_id": "ops_588e468f6e72ad866d7db78e8fecae4d",
+                                    "turn": 1
+                                },
+                                {
+                                    "label": "Show constant prices",
+                                    "prompt": "Show constant prices"
+                                },
+                                {
+                                    "label": "Combine the G7 members into one total",
+                                    "prompt": "Combine the G7 members into one total"
+                                }
+                            ]
+                        },
+                        {
+                            "event": "done",
+                            "seq": 88,
+                            "trace_id": "tr_replay_plan_1",
+                            "composition": {
+                                "composition_id": "cps_replay_plan",
+                                "revision": 2,
+                                "actor": "model",
+                                "blocks": [
+                                    {
+                                        "component_id": "cmp_replay_plan_c1",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "Gates Foundation disbursements to reproductive health, 2009 to 2024",
+                                        "pinned": false
+                                    },
+                                    {
+                                        "component_id": "cmp_replay_plan_c2",
+                                        "revision": 1,
+                                        "type": "line_chart",
+                                        "title": "G7 bilateral ODA disbursements to reproductive health by provider, 2009 to 2024",
+                                        "pinned": false
+                                    }
+                                ],
+                                "counts": {
+                                    "all": 2,
+                                    "stats": 0,
+                                    "charts": 2,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

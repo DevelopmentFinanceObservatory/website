@@ -1,6 +1,9 @@
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 import type { ShareMark } from '@/lib/chat/history';
 
+import { editOfMark } from './cardChange.ts';
+import type { CardChangeMark } from './wire.ts';
+
 /**
  * A user message that opens a turn. A user's answer to a paused turn (a
  * clarify choice, typed text, a plan amendment) continues that turn, so it
@@ -382,13 +385,15 @@ export const withHarnessTurn = (
  * already holds it, else with `userMessage` as the turn's prompt, stamped
  * page turn `turn`, and an empty reply, placed by index before the first
  * prompt of a later turn (one another tab's turn went ahead of), else after
- * the last message.
+ * the last message. A turn the record marks as a card change (`cardChange`)
+ * gets the prompt's `edit` mark, as the page that sent it wrote it.
  */
 export const ensureTurn = (
     messages: ChatMessage[],
     index: number,
     userMessage: string,
     turn: number,
+    cardChange?: CardChangeMark | null,
 ): ChatMessage[] => {
     const turns = [...promptTurns(messages)];
 
@@ -400,7 +405,13 @@ export const ensureTurn = (
 
     return [
         ...messages.slice(0, at),
-        { role: 'user', text: userMessage, harnessTurn: index, turn },
+        {
+            role: 'user',
+            text: userMessage,
+            harnessTurn: index,
+            turn,
+            ...(cardChange ? { edit: editOfMark(cardChange) } : {}),
+        },
         { role: 'bot', text: '' },
         ...messages.slice(at),
     ];
@@ -560,14 +571,16 @@ export const withReplyAt = (
 /**
  * The transcript with the user's answer to a paused turn. It goes before the
  * turn's reply, at `at` (pageTurnReplyAt) and by default the last message,
- * which the resumed stream goes on writing into.
+ * which the resumed stream goes on writing into. An answer to a clarifying
+ * question carries the question it answered (`asked`).
  */
 export const withAnswer = (
     messages: ChatMessage[],
     text: string,
     at: number = messages.length - 1,
+    asked?: string,
 ): ChatMessage[] => {
-    const answer: ChatMessage = { role: 'user', text, answer: true };
+    const answer: ChatMessage = { role: 'user', text, answer: true, ...(asked && { asked }) };
 
     return messages[at]?.role === 'bot'
         ? [...messages.slice(0, at), answer, ...messages.slice(at)]

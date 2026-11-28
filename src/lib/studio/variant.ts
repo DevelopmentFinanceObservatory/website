@@ -1,7 +1,7 @@
 // No path-alias or server-only imports, so src/proxy.ts, db/event-export.ts
 // and node --test import it directly.
 
-/** The Studio layouts: today's chat column (`classic`) and the prompt box
+/** The Studio layouts: the chat column (`classic`) and the prompt box
  *  over the canvas (`prompt`). */
 export const STUDIO_VARIANTS = ['classic', 'prompt'] as const;
 
@@ -19,9 +19,10 @@ export const variantOf = (value: string | undefined): StudioVariant =>
     value === 'prompt' ? 'prompt' : 'classic';
 
 /** Whether STUDIO_PROMPT_ENABLED (`value`) lets a page show the prompt
- *  variant. On unless set to `false`, `0`, `off` or `no`. */
+ *  variant. Off unless set to `true`, `1`, `on` or `yes`, since every prompt
+ *  request carries `hold_removals`, which a harness without it refuses. */
 export const promptEnabled = (value: string | undefined): boolean =>
-    !['false', '0', 'off', 'no'].includes(value?.trim().toLowerCase() ?? '');
+    ['true', '1', 'on', 'yes'].includes(value?.trim().toLowerCase() ?? '');
 
 /** The variant a Studio page draws from its `studio_variant` cookie, or
  *  `classic` whatever the cookie says while the switch is off. */

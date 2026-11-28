@@ -18,12 +18,11 @@ type PageShellProps = {
 
 /**
  * A page of the session panel: the back row pinned to the top of the
- * panel's scroller, the title, the meta line and the sections. The scroller
- * belongs to the panel, which sets `data-sp-scrolled` on it once the page
- * has scrolled; the back row then takes its hairline.
+ * panel's scroller, with a hairline under it, the title, the meta line and
+ * the sections.
  */
 export const PageShell = ({ kind, title, meta, children }: PageShellProps) => {
-    const { back, backLabel } = usePanelNav();
+    const { back, backLabel, topSpacer } = usePanelNav();
 
     return (
         <div className={styles.page} data-sp-page={kind}>
@@ -37,9 +36,10 @@ export const PageShell = ({ kind, title, meta, children }: PageShellProps) => {
                     onClick={back}
                 >
                     <Chevron direction="left" />
-                    <span className={styles.one}>{backLabel}</span>
+                    <span className={styles.backLabel}>{backLabel}</span>
                 </button>
             </div>
+            <div ref={topSpacer} className={styles.spacer} aria-hidden="true" data-end="top" />
             <h2 className={styles.title}>{title}</h2>
             {typeof meta === 'string' ? <p className={styles.meta}>{meta}</p> : meta}
             {children}
@@ -51,7 +51,13 @@ export const PageShell = ({ kind, title, meta, children }: PageShellProps) => {
 export const PageText = ({
     children,
     strong = false,
+    id,
 }: {
     children: ReactNode;
     strong?: boolean;
-}) => <p className={strong ? `${styles.text} ${styles.strong}` : styles.text}>{children}</p>;
+    id?: string;
+}) => (
+    <p id={id} className={strong ? `${styles.text} ${styles.strong}` : styles.text}>
+        {children}
+    </p>
+);

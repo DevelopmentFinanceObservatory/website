@@ -29,25 +29,34 @@ export const questionTurn = (widget: Widget): number | null =>
 
 const live = (slots: Slots) => Object.values(slots).filter((slot) => !slot.leaving);
 
+/** What the block floor reads of a card or a placeholder standing on the sheet. */
+export type FloorItem = { row: number; h: number; turn: number | null };
+
+/** The floor items of the live cards in `slots`. */
+export const floorItems = (slots: Slots): FloorItem[] =>
+    live(slots).map((slot) => ({ row: slot.row, h: slot.h, turn: questionTurn(slot.widget) }));
+
+const floorOf = (turn: number | null, items: readonly FloorItem[]): number => {
+    const own = turn === null ? [] : items.filter((item) => item.turn === turn);
+
+    if (own.length > 0) {
+        return Math.min(...own.map((item) => item.row));
+    }
+
+    if (items.length === 0) {
+        return BLOCK_INSET;
+    }
+
+    return Math.max(...items.map((item) => item.row + item.h)) + BLOCK_GAP;
+};
+
 /**
  * The first row a newcomer of `turn` may take: the top of its question's live
  * cards, or, when that question has none on the sheet, BLOCK_GAP cells below
  * every live card. An empty sheet starts BLOCK_INSET cells down.
  */
-export const blockFloor = (turn: number | null, slots: Slots): number => {
-    const cards = live(slots);
-    const own = turn === null ? [] : cards.filter((slot) => questionTurn(slot.widget) === turn);
-
-    if (own.length > 0) {
-        return Math.min(...own.map((slot) => slot.row));
-    }
-
-    if (cards.length === 0) {
-        return BLOCK_INSET;
-    }
-
-    return Math.max(...cards.map((slot) => slot.row + slot.h)) + BLOCK_GAP;
-};
+export const blockFloor = (turn: number | null, slots: Slots): number =>
+    floorOf(turn, floorItems(slots));
 
 /**
  * The columns a newcomer may reach in a view `width` px wide, of which the
@@ -65,23 +74,25 @@ export const blockCols = (width: number, reserveRight: number, cell: number): nu
  * floor inside the insets (`blocks`).
  */
 export const newcomerSpot = ({
-    widget,
+    turn,
     w,
     h,
     saved,
     occupied,
-    slots,
+    floor,
     cols,
     placement,
     nearest,
 }: {
-    widget: Widget;
+    // The question the newcomer answers (`questionTurn`).
+    turn: number | null;
     w: number;
     h: number;
     saved: Spot | null;
     occupied: Rect[];
-    // Every slot placed so far, this batch's newcomers included.
-    slots: Slots;
+    // Every card and placeholder placed so far, this batch's newcomers
+    // included (`floorItems`).
+    floor: readonly FloorItem[];
     cols: number;
     placement: Placement;
     nearest: (spot: Spot) => Spot | null;
@@ -90,7 +101,7 @@ export const newcomerSpot = ({
         placement === 'blocks'
             ? findSpot(w, h, occupied, cols, {
                   col: BLOCK_INSET,
-                  row: blockFloor(questionTurn(widget), slots),
+                  row: floorOf(turn, floor),
               })
             : findSpot(w, h, occupied, cols);
 
@@ -163,12 +174,25 @@ export const revealOffset = ({
 };
 
 /**
- * The view's foot that the floating prompt covers, in px: the 20 px gap under
- * the resting prompt, the resting prompt, and 20 px of air above it. `rest`
- * is `--dock-rest` as the dock writes it on the shell root.
+ * The top row of the block a finished turn changed: the highest block holding
+ * a card that landed during the turn (a live card whose id was not on the
+ * sheet when the turn began, a replacement included). Null when the turn
+ * landed no card.
  */
-export const promptFoot = (rest: string): number => {
-    const px = Number.parseFloat(rest);
+export const replyBlockTop = (slots: Slots, before: ReadonlySet<string>): number | null => {
+    const landed = Object.entries(slots).filter(([id, slot]) => !slot.leaving && !before.has(id));
 
-    return 20 + (Number.isFinite(px) ? px : 0) + 20;
+    if (landed.length === 0) {
+        return null;
+    }
+
+    return Math.min(...landed.map(([, slot]) => arrivalBlock(slot, slots, new Set()).top));
 };
+
+/**
+ * The card of a batch of arrivals the view moves to. It is the newest one
+ * that is not `quiet` (seated in a placeholder the view already went to), or
+ * null when every card of the batch is.
+ */
+export const arrivalToShow = <T>(fresh: readonly T[], quiet?: (card: T) => boolean): T | null =>
+    fresh.findLast((card) => !quiet?.(card)) ?? null;

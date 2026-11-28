@@ -1,17 +1,22 @@
+import classNames from 'classnames';
 import { useRef, useState } from 'react';
 
+import { useStudioModel } from '../../hooks/studioContext';
 import { usePromptShell } from './shellContext';
 import styles from './TopBar.module.scss';
-import { useStudioModel } from '../../hooks/studioContext';
 
 import Icon from '@/components/atoms/Icon/Icon';
+
+/** The id of the session panel's frame, which `Session panel` controls. */
+export const PANEL_ID = 'studio-session-panel';
 
 /**
  * The session title after `Studio` in the top bar, renamed in place: Enter
  * and blur commit, Escape cancels, and a blank name keeps the old one.
+ * `compact` (a phone) drops the slash and lets the title take two lines.
  */
-export const TopBarTitle = () => {
-    const { title, doc, readOnly } = useStudioModel();
+export const TopBarTitle = ({ compact = false }: { compact?: boolean }) => {
+    const { title, doc } = useStudioModel();
     const [draft, setDraft] = useState<string | null>(null);
     const pencil = useRef<HTMLButtonElement>(null);
     // Whether the open field has finished. Enter and Escape remove the
@@ -38,29 +43,29 @@ export const TopBarTitle = () => {
     };
 
     return (
-        <div className={styles.session}>
-            <span className={styles.slash} aria-hidden="true">
-                /
-            </span>
+        <div className={classNames(styles.session, compact && styles.compact)}>
+            {!compact && (
+                <span className={styles.slash} aria-hidden="true">
+                    /
+                </span>
+            )}
             {draft === null ? (
                 <>
                     <span className={styles.title} title={title}>
                         {title}
                     </span>
-                    {!readOnly && (
-                        <button
-                            ref={pencil}
-                            type="button"
-                            className={styles.rename}
-                            aria-label="Rename"
-                            onClick={() => {
-                                finished.current = false;
-                                setDraft(title);
-                            }}
-                        >
-                            <Icon name="edit-title" />
-                        </button>
-                    )}
+                    <button
+                        ref={pencil}
+                        type="button"
+                        className={styles.rename}
+                        aria-label="Rename"
+                        onClick={() => {
+                            finished.current = false;
+                            setDraft(title);
+                        }}
+                    >
+                        <Icon name="edit-title" />
+                    </button>
                 </>
             ) : (
                 <input
@@ -91,7 +96,7 @@ export const TopBarTitle = () => {
 
 /** `Focus canvas` and `Session panel`, then the rule before `New Session`. */
 export const TopBarTools = () => {
-    const { state, dispatch, panelOpen } = usePromptShell();
+    const { state, dispatch, panelOpen, overlay, report } = usePromptShell();
     const focusName = state.focus ? 'Exit focus' : 'Focus canvas';
 
     return (
@@ -102,7 +107,10 @@ export const TopBarTools = () => {
                 aria-pressed={state.focus}
                 aria-label={focusName}
                 title={focusName}
-                onClick={() => dispatch({ type: 'focus.set', on: !state.focus })}
+                onClick={() => {
+                    dispatch({ type: 'focus.set', on: !state.focus });
+                    report('studio.focus', { on: !state.focus, how: 'button' });
+                }}
             >
                 <Icon name={state.focus ? 'focus-contract' : 'focus-expand'} />
             </button>
@@ -111,9 +119,18 @@ export const TopBarTools = () => {
                 className={styles.icon}
                 aria-pressed={panelOpen}
                 aria-expanded={panelOpen}
+                aria-controls={PANEL_ID}
                 aria-label="Session panel"
                 title="Session panel"
-                onClick={() => dispatch({ type: 'panel.toggle', shown: panelOpen })}
+                onClick={() => {
+                    // Closing an overlay records no choice for wider windows.
+                    dispatch(
+                        overlay && panelOpen
+                            ? { type: 'panel.dismiss' }
+                            : { type: 'panel.toggle', shown: panelOpen },
+                    );
+                    report('studio.panel', { action: panelOpen ? 'close' : 'open', how: 'button' });
+                }}
             >
                 <Icon name="session-panel" />
             </button>

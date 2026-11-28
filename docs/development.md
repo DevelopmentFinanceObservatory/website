@@ -36,8 +36,13 @@ The Studio has two layouts: `classic`, with the chat column, and `prompt`,
 with the prompt box over the canvas. `/studio?studio=prompt` or
 `?studio=classic` sets the `studio_variant` session cookie that picks one,
 and a page with no cookie draws `classic`. Shares and gallery items always
-draw `classic`. Setting `STUDIO_PROMPT_ENABLED=false` draws `classic` on
-every page whatever the cookie says.
+draw `classic`. The cookie picks `prompt` only while `STUDIO_PROMPT_ENABLED`
+is `true`, `1`, `on` or `yes`. Unset or any other value draws `classic` on
+every page. Every `prompt` request carries `hold_removals`, which an older
+harness refuses, so turn the switch on after the harness that accepts
+`hold_removals` is deployed, and off before that harness is rolled back.
+A tab opened while the switch was on keeps sending `hold_removals` until it
+reloads.
 
 A live Studio share draws each card from dfo-apis' public slot card route
 (`GET /api/presentation/shares/{id}/slots/{n}`), which checks for newer data
@@ -119,15 +124,15 @@ wraps the pnpm scripts (listed under Scripts) plus the container and deploy
 workflows. `just` with no arguments lists everything. Install it with
 `brew install just` if you don't have it.
 
-| Section               | Recipes                                                 |
-| --------------------- | ------------------------------------------------------- |
-| Setup & Configuration | `setup`, `env`                                          |
-| Development           | `dev`, `stack`, `mail-cert`, `start`, `optimize-svg`    |
-| Database              | `db-up`, `db-migrate`, `db-reset`, `db-generate`        |
-| Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `check` |
-| Container             | `docker-build`, `run-local`, `clean`                    |
-| Diagnostics           | `status`, `doctor`, `logs`, `deployed`                  |
-| Deploy config         | `set-dev-deploy-vars`                                   |
+| Section               | Recipes                                                                  |
+| --------------------- | ------------------------------------------------------------------------ |
+| Setup & Configuration | `setup`, `env`                                                           |
+| Development           | `dev`, `stack`, `mail-cert`, `start`, `optimize-svg`                     |
+| Database              | `db-up`, `db-migrate`, `db-reset`, `db-generate`                         |
+| Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `studio-replay`, `check` |
+| Container             | `docker-build`, `run-local`, `clean`                                     |
+| Diagnostics           | `status`, `doctor`, `logs`, `deployed`                                   |
+| Deploy config         | `set-dev-deploy-vars`                                                    |
 
 Run `just <recipe>` to see what each one does, or `just --list` for the
 one-line descriptions.
@@ -299,20 +304,41 @@ Withdrawing an artifact (Delete in its Edit dialog) first takes its share down i
 
 ## Scripts
 
-| Script                  | What it does                                     |
-| ----------------------- | ------------------------------------------------ |
-| `pnpm dev`              | Dev server (Turbopack)                           |
-| `pnpm build`            | Production build (standalone output)             |
-| `pnpm start`            | Serve the production build                       |
-| `pnpm lint`             | ESLint                                           |
-| `pnpm typecheck`        | `tsc --noEmit`                                   |
-| `pnpm test`             | Migration integration tests (`just db-up` first) |
-| `pnpm lint:css`         | Stylelint (SCSS, BEM pattern)                    |
-| `pnpm lint:css:fix`     | Stylelint with autofix                           |
-| `pnpm format`           | Prettier over `src/`                             |
-| `pnpm optimize:svg`     | SVGO over `src/assets` (run after adding)        |
-| `pnpm db:generate`      | Generate a migration from `db/schema.ts`         |
-| `pnpm db:migrate:local` | Apply migrations to the local database           |
+| Script                    | What it does                                                       |
+| ------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                | Dev server (Turbopack)                                             |
+| `pnpm build`              | Production build (standalone output)                               |
+| `pnpm start`              | Serve the production build                                         |
+| `pnpm lint`               | ESLint                                                             |
+| `pnpm typecheck`          | `tsc --noEmit`                                                     |
+| `pnpm test`               | Migration integration tests (`just db-up` first)                   |
+| `pnpm test:studio-replay` | Recorded Studio conversations on both layouts (`pnpm build` first) |
+| `pnpm lint:css`           | Stylelint (SCSS, BEM pattern)                                      |
+| `pnpm lint:css:fix`       | Stylelint with autofix                                             |
+| `pnpm format`             | Prettier over `src/`                                               |
+| `pnpm optimize:svg`       | SVGO over `src/assets` (run after adding)                          |
+| `pnpm db:generate`        | Generate a migration from `db/schema.ts`                           |
+| `pnpm db:migrate:local`   | Apply migrations to the local database                             |
+
+## Studio replay test
+
+`pnpm test:studio-replay` plays every recorded Studio conversation in `e2e/studio-replay/fixtures/` to its end on both layouts, `?studio=classic` and `?studio=prompt`, against the production build. It starts the standalone server on a free localhost port with a made-up environment that reaches nothing, opens each conversation in headless Chromium, and answers every request the page makes from the recording, so no model, harness or search service runs. A run fails on a console error, a page error, a request no route answers, a request the recording did not expect, or a page that does not show what the recording says: the plan or question at each pause, and at the end as many cards as the last canvas holds and the start of the last reply. `pnpm test` leaves it out. CI runs it after `Build`.
+
+The same run plays the chart on the Prompt layout at a phone's width and with reduced motion, card changes through the page's own controls (`e2e/studio-replay/regressions.ts`), with the harness's answers built from the recorded cards (`changes.ts`), and placeholders for coming cards (`placeholders.ts`), from recordings with the contract's `coming` and `placeholder_id` members added (`coming.ts`). A reply shown twice, a placeholder left at the end of a turn, and a second turn or answer request while a stream is open also fail it. Two of them need a signed-in reader, since only an account's page saves its conversation and reads the harness's state. For those, `account.ts` creates a database of the run's own on the Postgres that `pnpm test` uses (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`), migrates it, adds a test account with one session, and drops it at the end. The account, its session token and the site's auth secret are made per run and appear in no output. Without a reachable Postgres those two fail and name the variables to set. With `STUDIO_REPLAY_NO_DB=1` they are reported as skipped instead.
+
+Run it locally after `pnpm build`, or with `just studio-replay`, which builds first, with the `PG*` variables you give `pnpm test`. It takes about three minutes. The first run needs the browser: `pnpm exec playwright-core install --only-shell chromium`.
+
+### Record or edit a scenario
+
+A fixture is one conversation: its name, a description, and its turns, each with the question the test types and the harness's stream in segments. The first segment answers the question's `POST /api/studio/turn`. Each later segment answers the `POST /api/studio/interrupt` the page sends at the pause the segment before it ended on, a plan (`plan.proposed`) or a clarifying question (`elicitation.request`), and carries `act`, how the test answers that pause (`{ "kind": "approve" }`, or `{ "kind": "answer", "picks": { "q1": "<option label>" } }`), and `expect`, the members the interrupt request must carry. Frames are the harness's `data:` frames in the order it sent them.
+
+To record one, run the stack (`just stack`), send the question from Studio, and save each response body of `/api/studio/turn` and `/api/studio/interrupt` from the browser's network panel or with `curl -N`. Then:
+
+```sh
+node e2e/studio-replay/fromStream.ts <name> "<question>" turn.sse [interrupt.sse ...] > e2e/studio-replay/fixtures/<name>.json
+```
+
+Add `act` and `expect` to each later segment, a `description`, further turns by hand, and the name to `SCENARIOS` in `e2e/studio-replay/scenario.ts`. The repository is public, so before committing a fixture, reword any question a person typed unless it is one of the landing page's examples (`src/lib/studio/examples.ts`), and search it for credentials, tokens, email addresses, internal hostnames and session links. Keep every value as the harness sent it.
 
 ## API client package
 

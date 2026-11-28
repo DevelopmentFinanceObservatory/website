@@ -6,6 +6,7 @@ import {
     EDGE_MS,
     FADE_OUT_MS,
     GROW_REST_MS,
+    grownWidth,
     holdRow,
     SHRINK_AFTER_MS,
     SPACER_EASE_MS,
@@ -21,7 +22,10 @@ const canHover = () => matchMedia('(hover: hover)').matches;
 /**
  * Grows the session panel from its rest width to the wide one while the
  * pointer rests in it, or keyboard focus is inside, on a page (never on the
- * overview, and never while the panel overlays a narrow canvas), and shrinks it once both have been gone SHRINK_AFTER_MS. The
+ * overview, never while the panel overlays a narrow canvas, and never over a
+ * card: the panel stays at its rest width while a card lies under the strip
+ * the wide panel adds), and shrinks it once both have been gone
+ * SHRINK_AFTER_MS. The
  * aside around the scroller carries the state the stylesheets read:
  * `data-sp-grow` (`open` or `closing`), `data-sp-wide` from the layout switch
  * at the start of a grow to the one at the end of a shrink, and
@@ -196,11 +200,52 @@ export const useGrow = (onPage: boolean) => {
         later('shrinkEnd', endShrink, EDGE_MS + 40);
     };
 
+    // Whether the strip the wide panel adds is empty canvas. Both edges come
+    // from the stylesheet, read off a hidden copy of the aside at its rest and
+    // grown states, so the panel itself, which may be mid-shrink, stays
+    // untouched.
+    const roomToGrow = () => {
+        const region = aside();
+        const parent = region?.parentElement;
+        const probe = region?.cloneNode(false);
+
+        if (!region || !parent || !(probe instanceof HTMLElement)) return false;
+
+        probe.removeAttribute('id');
+        probe.removeAttribute('data-sp-grow');
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.transition = 'none';
+        probe.style.visibility = 'hidden';
+        parent.appendChild(probe);
+
+        const rest = probe.getBoundingClientRect();
+
+        probe.setAttribute('data-sp-grow', 'open');
+
+        const wide = probe.getBoundingClientRect();
+
+        probe.remove();
+
+        const cards = [...document.querySelectorAll('[data-studio-canvas] [data-card-id]')].map(
+            (card) => card.getBoundingClientRect(),
+        );
+
+        return (
+            grownWidth({
+                restLeft: rest.left,
+                grownLeft: wide.left,
+                right: rest.right,
+                panel: rest,
+                cards,
+            }) > rest.width
+        );
+    };
+
     const sync = () => {
         const want =
             onPageRef.current && ((grow.current.inside && grow.current.rested) || keyboardInside());
 
-        if (want && grow.current.phase !== 'open') startGrow();
+        if (want && grow.current.phase !== 'open' && roomToGrow()) startGrow();
         if (!want && grow.current.phase === 'open') startShrink();
     };
 

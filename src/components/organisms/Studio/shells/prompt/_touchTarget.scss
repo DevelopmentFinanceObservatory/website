@@ -1,0 +1,37 @@
+// On a coarse pointer, a press area of at least 40 by 40 px centred on the
+// control. An empty ::after draws it, so the control looks the same at
+// rest; a control already 40 px across keeps its own edge.
+
+// The area reaches past the control by at most `--hit-room-y` above and
+// below and `--hit-room-x` either side (20 px unless set). Where controls
+// sit closer than 40 px, the layout sets the room to half the gap to the
+// nearest control, so two areas meet at most at the gap's middle and never
+// overlap.
+
+@function hit-inset() {
+    @return max(calc(-1 * var(--hit-room-y, 20px)), min(0px, calc(50% - 20px)))
+        max(calc(-1 * var(--hit-room-x, 20px)), min(0px, calc(50% - 20px)));
+}
+
+@mixin touch-target($room-x: null, $room-y: null) {
+    @media (pointer: coarse) {
+        position: relative;
+
+        @if $room-x {
+            --hit-room-x: #{$room-x};
+        }
+
+        @if $room-y {
+            --hit-room-y: #{$room-y};
+        }
+
+        // Above the scrolling bodies, which their masks lift into layers
+        // of their own.
+        &::after {
+            position: absolute;
+            inset: hit-inset();
+            z-index: 1;
+            content: "";
+        }
+    }
+}

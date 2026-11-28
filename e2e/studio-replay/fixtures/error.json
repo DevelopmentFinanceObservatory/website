@@ -1,0 +1,42 @@
+{
+    "name": "error",
+    "description": "A turn that fails with an error frame.",
+    "turns": [
+        {
+            "question": "Track the fall in health aid to Ethiopia since 2021.",
+            "segments": [
+                {
+                    "frames": [
+                        {
+                            "event": "activity.step",
+                            "seq": 0,
+                            "step_id": "s2",
+                            "label": "Fetching Ethiopia disbursements, 2016–2024",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "datasets.get",
+                            "duration_ms": null,
+                            "produced": null,
+                            "progress": {
+                                "completed": 2,
+                                "total": 3
+                            }
+                        },
+                        {
+                            "event": "error",
+                            "seq": 1,
+                            "error": {
+                                "error": "constraint_violation",
+                                "retry": "correct_and_retry",
+                                "constraint_id": "log_scale_requires_positive_values",
+                                "pointer": "/intent/scale",
+                                "detail": "A log axis cannot represent the 2018 value of 0.",
+                                "fix": "Use a linear scale, or exclude 2018 from the window."
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

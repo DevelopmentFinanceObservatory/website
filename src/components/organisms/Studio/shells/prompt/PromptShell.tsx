@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import {
     type CSSProperties,
+    useCallback,
     useLayoutEffect,
     useMemo,
     useRef,
@@ -8,27 +9,25 @@ import {
     useSyncExternalStore,
 } from 'react';
 
-import Whiteboard from '../../canvas/Whiteboard';
+import Whiteboard, { type PromptCanvas } from '../../canvas/Whiteboard';
 import GuestWall from '../../GuestWall';
 import { useStudioModel } from '../../hooks/studioContext';
 import StudioLanding from '../../landing/StudioLanding';
-import CardDownload from '../../modals/CardDownload';
 import StudioModals from '../../modals/StudioModals';
 import studioStyles from '../../Studio.module.scss';
+import CanvasBackdrop from '../CanvasBackdrop';
+import DownloadDataModal from '../DownloadDataModal';
 import { whiteboardProps } from '../whiteboardProps';
 import PromptDock from './dock/PromptDock';
 import SessionPanel from './panel/SessionPanel';
 import styles from './PromptShell.module.scss';
 import { PromptShellProvider, useEscape, usePromptShell } from './shellContext';
-import { TopBarTitle, TopBarTools } from './TopBar';
+import { PANEL_ID, TopBarTitle, TopBarTools } from './TopBar';
 
 import Button from '@/components/atoms/Button/Button';
-import GridPattern from '@/components/atoms/GridPattern/GridPattern';
-import Modal from '@/components/molecules/Modal/Modal';
 import FeedbackWidget from '@/components/organisms/FeedbackWidget/FeedbackWidget';
 import Header from '@/components/organisms/Header/Header';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
-import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import {
     dockArrival,
     ESCAPE_OVERLAY_PANEL,
@@ -104,9 +103,18 @@ const LandingTravel = ({ onDone }: { onDone: () => void }) => {
         void node.offsetWidth;
         node.dataset.moving = '';
 
+        // The copy stands in for the landing's prompt, which hides while
+        // the landing fades, so one prompt shows at a time.
+        const landing = inputRef.current?.closest('form');
+
+        landing?.style.setProperty('visibility', 'hidden');
+
         const timer = window.setTimeout(onDone, TRAVEL_MS);
 
-        return () => window.clearTimeout(timer);
+        return () => {
+            window.clearTimeout(timer);
+            landing?.style.removeProperty('visibility');
+        };
         // Measured once, on mount: the move starts from where the landing's
         // prompt stood when the question left it.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,9 +149,8 @@ const PromptStage = () => {
         modals,
         landingHistory,
         examples,
-        shared,
         mode: { current: mode, leaving, inWorkspace, begin, sendDraft, startNew },
-        stage: { sectionRef, gridCell, gridScale, fills, theme },
+        stage: { sectionRef, theme },
         drafts: {
             query,
             setQuery,
@@ -154,7 +161,7 @@ const PromptStage = () => {
             setEditTarget,
         },
         canvas,
-        panels: { downloadWidget, setDownloadCardId, shareData },
+        panels: { shareData },
         title,
         firstPrompt,
     } = model;
@@ -166,16 +173,91 @@ const PromptStage = () => {
         rootRef,
         panelRef,
         heldCard,
+        focusField,
         plans: links,
+        report,
     } = shell;
     const unit = useDesignUnit();
+    // A question's turn is running. A card change's turn (its prompt marked
+    // `edit`) redraws one card in place, so the canvas stays where it is.
+    const asked = model.chat.messages.findLast((message) => message.role === 'user');
+    const replying = model.chat.thinking && !(asked?.role === 'user' && asked.edit);
+    // The cards the running turn announced (useChat), drawn as placeholders.
+    const coming = model.chat.coming;
     const viewPlanIds = useMemo(() => new Set(links.plans.flatMap((plan) => plan.cards)), [links]);
+    const litIds = useMemo(
+        () => litCards({ state, panelOpen, planOf: links.planOf, plans: links.plans }),
+        [state, panelOpen, links],
+    );
     // Fresh cards are placed against the width they will have once the panel
     // opens by itself, on the first card.
     const reserveRight =
         !overlay && !state.focus && state.panelChoice === null && !panelOpen
             ? (PANEL_WIDTH + SHELL_GUTTER) * unit
             : 0;
+
+    // A card's `More info` or `View plan` opens its page, and the panel too
+    // when it was closed.
+    const reportCardOpens = useCallback(
+        (page: 'card' | 'plan') => {
+            if (!panelOpen) report('studio.panel', { action: 'open', how: 'card' });
+            report('studio.panel_page', { view: page, from: 'card' });
+        },
+        [panelOpen, report],
+    );
+    const planOf = links.planOf;
+    const { titleOf } = canvas;
+    const editId = editTarget?.id ?? null;
+    const selectCard = useCallback(
+        (id: string | null) => {
+            if (id === editId) return;
+
+            setEditTarget(id ? { id, title: titleOf(id) } : null);
+            report('studio.card_select', { selected: id !== null });
+        },
+        [editId, setEditTarget, titleOf, report],
+    );
+    const pointCard = useCallback(
+        (id: string | null) => dispatch({ type: 'point', card: id }),
+        [dispatch],
+    );
+    const showPlan = useCallback(
+        (id: string) => {
+            const plan = planOf(id);
+
+            if (plan) {
+                dispatch({ type: 'panel.show', page: { kind: 'plan', turn: plan.turn } });
+                reportCardOpens('plan');
+            }
+        },
+        [planOf, dispatch, reportCardOpens],
+    );
+    const promptCanvas = useMemo<PromptCanvas>(
+        () => ({
+            reserveRight,
+            selectedId: editId,
+            onSelect: selectCard,
+            heldId: heldCard,
+            litIds,
+            onPoint: pointCard,
+            viewPlanIds,
+            onViewPlan: showPlan,
+            replying,
+            coming,
+        }),
+        [
+            reserveRight,
+            editId,
+            selectCard,
+            heldCard,
+            litIds,
+            pointCard,
+            viewPlanIds,
+            showPlan,
+            replying,
+            coming,
+        ],
+    );
 
     // The landing's prompt travels into the dock from the moment the
     // landing starts to leave.
@@ -190,78 +272,67 @@ const PromptStage = () => {
         }
     }
 
-    useEscape(ESCAPE_OVERLAY_PANEL, () => {
-        if (!overlay || !panelOpen) return false;
+    useEscape(
+        ESCAPE_OVERLAY_PANEL,
+        () => {
+            // The closing panel turns inert and drops the focus it holds, so
+            // focus goes back to the toggle that opened it.
+            if (panelRef.current?.contains(document.activeElement)) {
+                document.querySelector<HTMLElement>(`[aria-controls="${PANEL_ID}"]`)?.focus();
+            }
 
-        dispatch({ type: 'panel.toggle', shown: true });
+            dispatch({ type: 'panel.dismiss' });
+            report('studio.panel', { action: 'close', how: 'keyboard' });
 
-        return true;
-    });
+            return true;
+        },
+        overlay && panelOpen,
+    );
+
+    const newSession = (how: 'button' | 'back') => {
+        report('studio.new_session', { how });
+        startNew();
+    };
 
     const docked = mode !== 'start';
+    // One callback for the life of the shell, so a re-render never detaches
+    // the root while children's layout effects read it.
+    const sectionNode = useCallback(
+        (node: HTMLElement | null) => {
+            sectionRef.current = node;
+            rootRef.current = node;
+        },
+        [sectionRef, rootRef],
+    );
 
     return (
         <section
-            ref={(node) => {
-                sectionRef.current = node;
-                rootRef.current = node;
-            }}
+            ref={sectionNode}
             className={classNames(studioStyles.section, styles.shell)}
             data-panel={panelOpen ? 'open' : 'closed'}
             data-overlay={overlay || undefined}
             data-focus={state.focus || undefined}
             data-transition={travelling || leaving || undefined}
         >
-            <div
-                className={classNames(studioStyles.canvas, docked && styles.backdropDocked)}
-                aria-hidden="true"
-            >
-                <div className={studioStyles.canvasInner}>
-                    <GridPattern variant="light" cell={gridCell} />
-                    {fills.map(({ id, x, y, w, h, shade, leaving: fillLeaving }) => (
-                        <span
-                            key={id}
-                            className={classNames(
-                                studioStyles.fill,
-                                fillLeaving && studioStyles.fillOut,
-                            )}
-                            style={{
-                                left: x * gridScale,
-                                top: y * gridScale,
-                                width: w * gridScale,
-                                height: h * gridScale,
-                                backgroundColor: shade,
-                            }}
-                        />
-                    ))}
-                </div>
-            </div>
+            <CanvasBackdrop className={docked ? styles.backdropDocked : undefined} />
 
             <Header
                 variant="studio"
-                onBack={mode === 'start' ? undefined : startNew}
-                // A phone has room for the session title alone, renamed
-                // through the dialog as in the classic layout.
-                title={inWorkspace && phone ? title : undefined}
-                titleEditable={inWorkspace && phone}
-                onEditTitle={modals.title.show}
-                titleAfter={inWorkspace && !phone ? <TopBarTitle /> : undefined}
-                tools={inWorkspace ? <TopBarTools /> : undefined}
+                onBack={mode === 'start' ? undefined : () => newSession('back')}
+                // A phone has room for the session title alone, in place of
+                // the bar's own `Studio`. The bar settles once, as the move
+                // into the workspace starts.
+                title={docked && phone ? '' : undefined}
+                titleAfter={docked ? <TopBarTitle compact={phone} /> : undefined}
+                tools={docked ? <TopBarTools /> : undefined}
             >
-                {inWorkspace && (
+                {docked && (
                     <>
-                        <Button
-                            variant="bordered"
-                            className={studioStyles.barExtra}
-                            style={{ '--i': 0 } as CSSProperties}
-                            onClick={startNew}
-                        >
+                        <Button variant="bordered" onClick={() => newSession('button')}>
                             New Session
                         </Button>
                         <Button
                             variant="bordered"
-                            className={studioStyles.barExtra}
-                            style={{ '--i': 1 } as CSSProperties}
                             onClick={() => modals.customize.setOpen((prev) => !prev)}
                         >
                             Customize
@@ -271,8 +342,6 @@ const PromptStage = () => {
                                 variant="dark"
                                 wide
                                 icon="arrow-up-right"
-                                className={studioStyles.barExtra}
-                                style={{ '--i': 2 } as CSSProperties}
                                 onClick={() => modals.share.show({ kind: 'whole' })}
                             >
                                 Share
@@ -302,39 +371,25 @@ const PromptStage = () => {
             {inWorkspace && (
                 <>
                     <div className={styles.canvasRegion} data-studio-canvas="">
-                        <div className={styles.board} style={themeVars(theme) as CSSProperties}>
+                        <div
+                            className={styles.board}
+                            style={themeVars(theme) as CSSProperties}
+                            // Its cards carry the focus stops; an empty board
+                            // is no stop of its own.
+                            tabIndex={-1}
+                        >
                             <Whiteboard
                                 {...whiteboardProps(model)}
                                 filter={undefined}
-                                onCardInfo={(id) =>
-                                    dispatch({ type: 'panel.show', page: { kind: 'card', id } })
-                                }
-                                placement="blocks"
-                                dockAware
-                                reserveRight={reserveRight}
-                                selectedId={editTarget?.id ?? null}
-                                onSelect={(id) =>
-                                    setEditTarget(id ? { id, title: canvas.titleOf(id) } : null)
-                                }
-                                heldId={heldCard}
-                                litIds={litCards({
-                                    state,
-                                    panelOpen,
-                                    planOf: links.planOf,
-                                    plans: links.plans,
-                                })}
-                                onPoint={(id) => dispatch({ type: 'point', card: id })}
-                                viewPlanIds={viewPlanIds}
-                                onViewPlan={(id) => {
-                                    const plan = links.planOf(id);
-
-                                    if (plan) {
-                                        dispatch({
-                                            type: 'panel.show',
-                                            page: { kind: 'plan', turn: plan.turn },
-                                        });
-                                    }
+                                onAskFollowUp={(id, cardTitle) => {
+                                    canvas.askFollowUp(id, cardTitle);
+                                    focusField();
                                 }}
+                                onCardInfo={(id) => {
+                                    dispatch({ type: 'panel.show', page: { kind: 'card', id } });
+                                    reportCardOpens('card');
+                                }}
+                                prompt={promptCanvas}
                             />
                         </div>
                         <div className={styles.dockFrame}>
@@ -343,6 +398,7 @@ const PromptStage = () => {
                     </div>
                     <aside
                         ref={panelRef}
+                        id={PANEL_ID}
                         className={styles.panel}
                         aria-label="This session"
                         // The closed panel keeps its place off the stage and
@@ -354,20 +410,7 @@ const PromptStage = () => {
                 </>
             )}
 
-            <Modal
-                open={downloadWidget !== null}
-                onOpenChange={(next) => !next && setDownloadCardId(null)}
-                title="Download Data"
-                fit
-            >
-                {downloadWidget && (
-                    <CardDownload
-                        widget={downloadWidget}
-                        details
-                        shared={sharedCardAddress(shared, downloadWidget.id)}
-                    />
-                )}
-            </Modal>
+            <DownloadDataModal />
 
             {inWorkspace && (
                 <StudioModals
@@ -391,8 +434,8 @@ const PromptStage = () => {
 
 /**
  * The Prompt layout: the canvas under the top bar, the prompt dock floating
- * over its foot and the session panel at the right. Never drawn for a share
- * or a gallery item (shellFor), so nothing here is read-only.
+ * over its foot and the session panel at the right. shellFor picks it
+ * for the prompt variant on an unshared page, so nothing here is read-only.
  */
 const PromptShell = () => (
     <PromptShellProvider>

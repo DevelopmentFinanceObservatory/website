@@ -1,0 +1,269 @@
+{
+    "name": "words",
+    "description": "One question, a streamed answer, no card.",
+    "turns": [
+        {
+            "question": "Which datasets does the observatory hold?",
+            "segments": [
+                {
+                    "frames": [
+                        {
+                            "event": "activity.step",
+                            "seq": 0,
+                            "step_id": "s1",
+                            "label": "Reading the catalogue",
+                            "status": "running",
+                            "detail": null,
+                            "tool": "sources",
+                            "duration_ms": null,
+                            "produced": null
+                        },
+                        {
+                            "event": "activity.step",
+                            "seq": 1,
+                            "step_id": "s1",
+                            "label": "Reading the catalogue",
+                            "status": "complete",
+                            "detail": "Listed the datasets and publishers Studio can use",
+                            "tool": "sources",
+                            "duration_ms": 1200,
+                            "produced": null
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 2,
+                            "text": "The Development Finance Observatory "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 3,
+                            "text": "(DFO) holds 202,216 indicators "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 4,
+                            "text": "across 95 datasets from "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 5,
+                            "text": "43 publishers, covering 246 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 6,
+                            "text": "countries. Aid data covers "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 7,
+                            "text": "172 donors and 235 "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 8,
+                            "text": "recipients from 1960 to "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 9,
+                            "text": "2025.\n\nIts core datasets "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 10,
+                            "text": "cover:\n\n* **Official Development "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 11,
+                            "text": "Assistance and Aid:** Detailed "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 12,
+                            "text": "aid activities from the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 13,
+                            "text": "OECD Creditor Reporting System "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 14,
+                            "text": "(CRS) by donor, recipient, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 15,
+                            "text": "sector, channel, and financing "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 16,
+                            "text": "type, as well as "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 17,
+                            "text": "ONE Imputed Multilateral Sectors "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 18,
+                            "text": "data.\n* **External Debt:** "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 19,
+                            "text": "Stocks, flows, and debt "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 20,
+                            "text": "service for low- and "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 21,
+                            "text": "middle-income countries from the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 22,
+                            "text": "World Bank's International Debt "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 23,
+                            "text": "Statistics (IDS).\n* **Macroeconomic "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 24,
+                            "text": "Indicators:** GDP, output gaps, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 25,
+                            "text": "savings, investment, and projections "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 26,
+                            "text": "from the IMF World "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 27,
+                            "text": "Economic Outlook (WEO).\n* "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 28,
+                            "text": "**Socio-economic, Health, and Development "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 29,
+                            "text": "Data:** Series from the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 30,
+                            "text": "World Bank's World Development "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 31,
+                            "text": "Indicators (WDI), the WHO "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 32,
+                            "text": "Global Health Observatory, the "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 33,
+                            "text": "UN SDG Indicators Database, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 34,
+                            "text": "and other regional and "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 35,
+                            "text": "national sources via Data "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 36,
+                            "text": "Commons.\n\nYou can ask "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 37,
+                            "text": "for specific figures, comparisons "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 38,
+                            "text": "across countries or donors, "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 39,
+                            "text": "sector breakdowns, or trends "
+                        },
+                        {
+                            "event": "message.delta",
+                            "seq": 40,
+                            "text": "over time."
+                        },
+                        {
+                            "event": "message.complete",
+                            "seq": 41,
+                            "text": "The Development Finance Observatory (DFO) holds 202,216 indicators across 95 datasets from 43 publishers, covering 246 countries. Aid data covers 172 donors and 235 recipients from 1960 to 2025.\n\nIts core datasets cover:\n\n* **Official Development Assistance and Aid:** Detailed aid activities from the OECD Creditor Reporting System (CRS) by donor, recipient, sector, channel, and financing type, as well as ONE Imputed Multilateral Sectors data.\n* **External Debt:** Stocks, flows, and debt service for low- and middle-income countries from the World Bank's International Debt Statistics (IDS).\n* **Macroeconomic Indicators:** GDP, output gaps, savings, investment, and projections from the IMF World Economic Outlook (WEO).\n* **Socio-economic, Health, and Development Data:** Series from the World Bank's World Development Indicators (WDI), the WHO Global Health Observatory, the UN SDG Indicators Database, and other regional and national sources via Data Commons.\n\nYou can ask for specific figures, comparisons across countries or donors, sector breakdowns, or trends over time."
+                        },
+                        {
+                            "event": "suggestions",
+                            "seq": 42,
+                            "items": [
+                                {
+                                    "label": "Show aid to Kenya over time",
+                                    "prompt": "Show aid to Kenya over time"
+                                },
+                                {
+                                    "label": "What debt data is there?",
+                                    "prompt": "What debt data is there?"
+                                }
+                            ]
+                        },
+                        {
+                            "event": "done",
+                            "seq": 43,
+                            "trace_id": "tr_replay_words_1",
+                            "composition": {
+                                "composition_id": "cps_replay_words",
+                                "revision": 0,
+                                "actor": "model",
+                                "blocks": [],
+                                "counts": {
+                                    "all": 0,
+                                    "stats": 0,
+                                    "charts": 0,
+                                    "tables": 0,
+                                    "notes": 0
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

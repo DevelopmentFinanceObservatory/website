@@ -27,6 +27,10 @@ export type ActivityTool = {
     durationMs?: number;
     // Set when the tool put a card on the canvas.
     widgetId?: string;
+    // The approved plan's step the line runs, and that plan's version, when
+    // the frame named them.
+    planStepId?: string;
+    planVersionId?: string;
     // The step's latest status.
     state: StepState;
     // Its place in the turn's arrival order when it started and when it
@@ -89,6 +93,12 @@ export const recordStep = (
         durationMs: frame.duration_ms ?? undefined,
         widgetId: frame.produced?.component_id,
         state: frame.status,
+        ...(typeof frame.plan_step_id === 'string' && frame.plan_step_id
+            ? { planStepId: frame.plan_step_id }
+            : {}),
+        ...(typeof frame.plan_version_id === 'string' && frame.plan_version_id
+            ? { planVersionId: frame.plan_version_id }
+            : {}),
     };
 
     if (!existing) {
@@ -150,6 +160,8 @@ export const restoreActivity = (saved: SavedActivityEntry[] | undefined): Activi
                     startedAt,
                     durationMs,
                     widgetId,
+                    planStepId,
+                    planVersionId,
                     state,
                     startOrder,
                     settleOrder,
@@ -161,6 +173,8 @@ export const restoreActivity = (saved: SavedActivityEntry[] | undefined): Activi
                     startedAt,
                     durationMs,
                     widgetId,
+                    planStepId,
+                    planVersionId,
                     state: state === undefined ? 'complete' : isOpen(state) ? 'skipped' : state,
                     startOrder,
                     settleOrder,

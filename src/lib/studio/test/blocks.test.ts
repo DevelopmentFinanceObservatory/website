@@ -5,7 +5,7 @@ import {
     arrivalBlock,
     blockCols,
     type Placement,
-    promptFoot,
+    replyBlockTop,
     revealOffset,
 } from '../../../components/organisms/Studio/canvas/blocks.ts';
 import type { Slots } from '../../../components/organisms/Studio/canvas/layout.ts';
@@ -191,9 +191,24 @@ describe('revealOffset', () => {
     });
 });
 
-describe('promptFoot', () => {
-    it('adds the gaps above and below the resting prompt', () => {
-        assert.equal(promptFoot('96px'), 136);
-        assert.equal(promptFoot(''), 40);
+describe('replyBlockTop', () => {
+    const first = place([stat('a1', 1), stat('a2', 1)], 'blocks');
+    const second = place([stat('a1', 1), stat('a2', 1), stat('b1', 2)], 'blocks', first);
+    const before = new Set(['a1', 'a2']);
+
+    it("finds the top of the block a turn's cards landed in", () => {
+        assert.equal(replyBlockTop(second, before), second.b1!.row);
+    });
+
+    it('finds the old block for a replacement, which keeps its slot and turn', () => {
+        const swapped = place([stat('a1-new', 1), stat('a2', 1), stat('b1', 2)], 'blocks', second, {
+            replacedIds: { 'a1-new': 'a1' },
+        });
+
+        assert.equal(replyBlockTop(swapped, new Set(['a1', 'a2', 'b1'])), 1);
+    });
+
+    it('is null for a turn that landed no card', () => {
+        assert.equal(replyBlockTop(second, new Set(['a1', 'a2', 'b1'])), null);
     });
 });

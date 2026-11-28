@@ -40,6 +40,7 @@ import planStyles from '@/components/organisms/Studio/workspace/PlanCard.module.
 import WorkspaceToolbar from '@/components/organisms/Studio/workspace/WorkspaceToolbar';
 import type { ChartWidget, Widget } from '@/lib/chat/widgets';
 import { cardRefOf } from '@/lib/studio/cardDownload';
+import { createReplyStore } from '@/lib/studio/replyStream';
 import { legendLabels } from '@/lib/studio/seriesLabels';
 import { DEFAULT_THEME, deriveTheme, type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import { isPrompt } from '@/lib/studio/transcript';
@@ -267,6 +268,7 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         messages: spec.messages,
         widgets: spec.cards.map(({ widget }) => ({ ...widget, turn })),
         queued: [],
+        dropped: [],
         activity: spec.activity ?? [],
         status: null,
         statusDetail: null,
@@ -275,12 +277,16 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         thinking: false,
         clarify: null,
         plan: spec.plan ?? null,
+        changesHeld: null,
+        coming: [],
         droppedRefunds: 0,
         localCards: { shown: [], hidden: [] },
         pins: null,
         syncCanvas: noop,
         canvas: null,
         pendingCards: new Map(),
+        replyStream: { store: createReplyStore(), at: 0 },
+        withStreamedReply: (messages) => messages,
         owedRemovals: [],
         send: noop,
         unqueue: noop,
@@ -289,7 +295,15 @@ const chatOf = (spec: DemoSpec): ReturnType<typeof useChat> => {
         respondPlan: noop,
         switchChoice: noop,
         applyChoice: noop,
-        applyUnit: noop,
+        applyUnit: () => false,
+        applyChange: () => false,
+        placeOptions: async () => ({
+            kind: 'failed',
+            status: null,
+            code: null,
+            detail: null,
+            retry: false,
+        }),
         stop: noop,
         reset: noop,
         hydrate: noop,

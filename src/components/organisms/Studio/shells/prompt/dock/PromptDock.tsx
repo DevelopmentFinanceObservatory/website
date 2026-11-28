@@ -26,6 +26,7 @@ import { type ChipActions, ReplySheet, ThreadSheet } from './DockSheets';
 import PlanSheet from './PlanSheet';
 import styles from './PromptDock.module.scss';
 import { useStudioModel } from '../../../hooks/studioContext';
+import { useStreamedWords } from '../../../hooks/useStreamedText';
 import GuestWall from '../../../GuestWall';
 import CharCount from '../../../prompt/CharCount';
 import ClarifyPicker from '../../../workspace/ClarifyPicker';
@@ -34,9 +35,20 @@ import { useEscape, usePromptShell } from '../shellContext';
 
 import Icon from '@/components/atoms/Icon/Icon';
 import { amendmentCount, followUpAction } from '@/lib/studio/composer';
-import { dockField, dockView, pendingItem, planKey, runningLabel } from '@/lib/studio/dockView';
+import {
+    dockField,
+    dockView,
+    fieldShown,
+    pendingItem,
+    planKey,
+    runningLabel,
+} from '@/lib/studio/dockView';
 import { type PlanState, planView } from '@/lib/studio/plan';
 import { ESCAPE_DOCK_SHEET, type Sheet } from '@/lib/studio/promptShell';
+import { questionsOf } from '@/lib/studio/questions';
+
+/** Markdown as a screen reader should hear it: the emphasis marks go. */
+const plainText = (markdown: string) => markdown.replace(/[_*`]+/g, '').trim();
 
 // The control that takes focus when the focused one leaves with a redraw.
 const COUNTERPART: Record<string, string> = {
@@ -47,6 +59,9 @@ const COUNTERPART: Record<string, string> = {
 };
 
 type Target = 'chart' | 'number' | 'table' | 'note';
+
+// What folded a sheet, for its usage event.
+type FoldHow = 'button' | 'keyboard' | 'canvas';
 
 const TARGET_OF: Record<string, Target> = {
     chart: 'chart',
@@ -73,13 +88,11 @@ const PromptDock = () => {
     const model = useStudioModel();
     const shell = usePromptShell();
     const { chat, drafts, canvas, doc, walled } = model;
-    const { state, dispatch, rootRef, dockBand, announce } = shell;
+    const { state, dispatch, rootRef, announce, registerField, report } = shell;
     const draft = drafts.followDraft;
     const setDraft = drafts.setFollowDraft;
     const editTarget = drafts.editTarget;
 
-    // The question the reader's sheet choice was made on.
-    const [sheetTurn, setSheetTurn] = useState<number | null>(null);
     // The plan the reader cancelled, kept so `View plan` can show it.
     const [setAside, setSetAside] = useState<{ turn: number; plan: PlanState } | null>(null);
     const [planFolded, setPlanFolded] = useState<string | null>(null);
@@ -89,6 +102,15 @@ const PromptDock = () => {
         ? (TARGET_OF[canvas.widgets.find((widget) => widget.id === editTarget.id)?.kind ?? ''] ??
           'chart')
         : null;
+
+    // The newest question's reply begins with the first words to stream in,
+    // which re-render the dock once. Its later words re-render the reply
+    // alone (ReplyText).
+    const newestTurn = useMemo(
+        () => questionsOf(chat.messages, chat.activity).at(-1)?.turn ?? null,
+        [chat.messages, chat.activity],
+    );
+    const streamed = useStreamedWords(chat.replyStream, newestTurn);
 
     const view = useMemo(
         () =>
@@ -104,8 +126,9 @@ const PromptDock = () => {
                 editTarget,
                 draft,
                 sheet: state.sheet,
-                sheetTurn,
+                sheetTurn: state.sheetTurn,
                 focus: state.focus,
+                streamed,
                 setAside: setAside?.turn ?? null,
                 planFolded,
             }),
@@ -121,8 +144,9 @@ const PromptDock = () => {
             editTarget,
             draft,
             state.sheet,
-            sheetTurn,
+            state.sheetTurn,
             state.focus,
+            streamed,
             setAside,
             planFolded,
         ],
@@ -137,12 +161,28 @@ const PromptDock = () => {
     const frameRef = useRef<HTMLDivElement>(null);
     const boxRef = useRef<HTMLDivElement>(null);
     const pillRef = useRef<HTMLButtonElement>(null);
+    // The control in the box that last took focus; when a redraw removes it,
+    // focus moves to its counterpart.
+    const lastFocus = useRef<HTMLElement | null>(null);
 
-    const choose = (sheet: Sheet) => {
-        setSheetTurn(question?.turn ?? null);
-        dispatch({ type: 'sheet.set', sheet });
+    // The reader's sheet choice holds for the question it was made on.
+    const choose = (sheet: Sheet) => dispatch({ type: 'sheet.set', sheet, turn: question?.turn });
+    const openSheet = (sheet: 'open' | 'thread') => {
+        choose(sheet);
+        report('studio.sheet', {
+            sheet: sheet === 'thread' ? 'conversation' : 'reply',
+            action: 'open',
+            how: 'button',
+        });
     };
-    const fold = () => choose('folded');
+    const fold = (how: FoldHow) => {
+        choose('folded');
+        report('studio.sheet', {
+            sheet: view.sheet === 'thread' ? 'conversation' : 'reply',
+            action: 'fold',
+            how,
+        });
+    };
 
     const send = () => {
         const action = followUpAction({ draft, plan: chat.plan, editTarget });
@@ -171,18 +211,11 @@ const PromptDock = () => {
         widgets: chat.widgets,
         onCanvas: canvas.isOnCanvas,
         onGo: canvas.flyTo,
-        onAdd: canvas.add,
-        onRemove: canvas.remove,
     };
 
     // --- Heights for the canvas foot ---------------------------------------
 
     const restBox = useRef(0);
-    const measured = useRef({ sheetNone: true, pills: false });
-
-    useEffect(() => {
-        measured.current = { sheetNone: view.sheet === 'none', pills: view.pills };
-    });
 
     useEffect(() => {
         const frame = frameRef.current;
@@ -191,20 +224,21 @@ const PromptDock = () => {
             return;
         }
 
+        // Read from the drawn frame, since the observer can fire before
+        // this render's effects run.
         const measure = () => {
             const box = boxRef.current;
             const root = rootRef.current;
             const current = frame.getBoundingClientRect().height;
             const boxHeight = box?.getBoundingClientRect().height ?? 0;
 
-            if (measured.current.sheetNone && boxHeight > 0) {
+            if (frame.dataset.sheet === 'none' && boxHeight > 0) {
                 restBox.current = boxHeight;
             }
 
-            const pillsRow = measured.current.pills ? current - boxHeight : 0;
+            const pillsRow = frame.querySelector(`.${styles.pills}`) ? current - boxHeight : 0;
             const rest = (restBox.current || boxHeight) + Math.max(0, pillsRow);
 
-            dockBand.current = { rest, current };
             root?.style.setProperty('--dock-rest', `${rest}px`);
             root?.style.setProperty('--dock-current', `${current}px`);
         };
@@ -217,7 +251,7 @@ const PromptDock = () => {
         }
 
         return () => observer.disconnect();
-    }, [rootRef, dockBand]);
+    }, [rootRef]);
 
     // --- Folding when the reader turns to the canvas ------------------------
 
@@ -232,8 +266,12 @@ const PromptDock = () => {
             return;
         }
 
+        // The press takes focus to the page, so a control this fold removes
+        // passes focus to nothing in the dock.
+        lastFocus.current = null;
+
         if ((view.sheet === 'reply' && !view.held) || view.sheet === 'thread') {
-            fold();
+            fold('canvas');
         }
     });
 
@@ -260,25 +298,16 @@ const PromptDock = () => {
 
     // --- Escape ----------------------------------------------------------
 
-    useEscape(ESCAPE_DOCK_SHEET, () => {
-        const active = document.activeElement;
-        const typing =
-            active instanceof HTMLElement &&
-            active.matches('input, textarea, [contenteditable="true"]') &&
-            !frameRef.current?.contains(active);
-
-        if (typing || document.querySelector('[role="dialog"][aria-modal="true"]')) {
-            return false;
-        }
-
-        if (view.sheet === 'reply' || view.sheet === 'thread') {
-            fold();
+    // Escape folds an open reply or closes the conversation sheet.
+    useEscape(
+        ESCAPE_DOCK_SHEET,
+        () => {
+            fold('keyboard');
 
             return true;
-        }
-
-        return false;
-    });
+        },
+        view.sheet === 'reply' || view.sheet === 'thread',
+    );
 
     // --- Focus mode ---------------------------------------------------------
 
@@ -304,22 +333,20 @@ const PromptDock = () => {
     }, [state.focus]);
 
     // A press on the focus pill leaves focus and puts the caret in the field.
-    const caretNext = useRef(false);
     const leaveFocus = () => {
-        dispatch({ type: 'focus.set', on: false });
-        caretNext.current = true;
+        shell.focusField();
+        report('studio.focus', { on: false, how: 'pill' });
     };
 
+    // The shell puts the caret in the field for the panel and the card page
+    // too. The field shows only while the mode is the input.
     useEffect(() => {
-        if (!state.focus && caretNext.current) {
-            caretNext.current = false;
-            fieldRef.current?.focus({ preventScroll: true });
-        }
-    }, [state.focus]);
+        registerField(fieldRef.current);
+
+        return () => registerField(null);
+    }, [registerField, view.mode]);
 
     // --- Focus when the box redraws ----------------------------------------
-
-    const lastFocus = useRef<HTMLElement | null>(null);
 
     useLayoutEffect(() => {
         const was = lastFocus.current;
@@ -335,12 +362,19 @@ const PromptDock = () => {
         }
 
         const name = was.dataset.dock ? COUNTERPART[was.dataset.dock] : undefined;
+        // The guest wall takes the field's place, and its `Sign in` takes
+        // the field's focus. Any other control that leaves hands focus to
+        // the box.
         const next = name
             ? boxRef.current?.querySelector<HTMLElement>(`[data-dock="${name}"]`)
-            : null;
+            : was.matches(`.${styles.field}`)
+              ? boxRef.current?.querySelector<HTMLElement>(`.${styles.wall} button`)
+              : null;
 
-        (next ?? boxRef.current)?.focus({ preventScroll: true });
+        // Cleared first: the focus below records the counterpart, which a
+        // later redraw may remove in turn.
         lastFocus.current = null;
+        (next ?? boxRef.current)?.focus({ preventScroll: true });
     });
 
     // --- Entering the workspace -------------------------------------------
@@ -360,7 +394,12 @@ const PromptDock = () => {
         const tryFocus = () => {
             const field = fieldRef.current;
 
-            if (field?.checkVisibility({ visibilityProperty: true })) {
+            if (
+                field &&
+                fieldShown(field, (shown) =>
+                    shown instanceof Element ? getComputedStyle(shown).visibility : 'hidden',
+                )
+            ) {
                 // The page is already placed, so focusing must not scroll it.
                 field.focus({ preventScroll: true });
 
@@ -382,9 +421,18 @@ const PromptDock = () => {
 
     // --- Announcements ------------------------------------------------------
 
-    const replyStarted = !!question?.reply.trim();
+    const replyStarted = !!question?.reply.trim() || streamed;
     const streaming = chat.thinking && !chat.plan && !chat.clarify && !view.running;
-    const said = useRef({ turn: -1, started: false, ready: false });
+    // The turn ended in an error, its reply the error's own words.
+    const failed =
+        !!question && !!chat.activity.find((entry) => entry.turn === question.turn)?.failed;
+    // `ready` records what was said when the turn ended, so a failure that
+    // lands after `Answer ready` is said too.
+    const said = useRef<{ turn: number; started: boolean; ready: false | 'ok' | 'failed' }>({
+        turn: -1,
+        started: false,
+        ready: false,
+    });
 
     useEffect(() => {
         if (!question) {
@@ -400,11 +448,39 @@ const PromptDock = () => {
             announce('Answer started');
         }
 
-        if (!chat.thinking && replyStarted && !said.current.ready) {
-            said.current.ready = true;
+        // A turn paused on a plan or a question has not answered yet. The
+        // pause says itself below.
+        if (chat.thinking || !replyStarted || pending || said.current.ready === 'failed') {
+            return;
+        }
+
+        if (failed) {
+            said.current.ready = 'failed';
+            announce(`The answer failed: ${plainText(question.reply)}`, 'error');
+        } else if (!said.current.ready) {
+            said.current.ready = 'ok';
             announce('Answer ready');
         }
-    }, [question, streaming, replyStarted, chat.thinking, announce]);
+    }, [question, streaming, replyStarted, failed, pending, chat.thinking, announce]);
+
+    // A waiting plan or question is said once, when it arrives.
+    const saidPending = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!pending || pending === saidPending.current) {
+            return;
+        }
+
+        saidPending.current = pending;
+
+        const asked = chat.clarify?.questions[0]?.question;
+
+        announce(
+            chat.plan?.live
+                ? 'A research plan is waiting for your approval'
+                : `A question is waiting for your answer${asked ? `: ${asked}` : ''}`,
+        );
+    }, [pending, chat.plan, chat.clarify, announce]);
 
     // --- Draw ------------------------------------------------------------
 
@@ -428,12 +504,13 @@ const PromptDock = () => {
     const plan = chat.plan;
     const planLive = plan?.live ?? false;
 
-    const respond = (decision: 'approve' | 'reject') => {
+    const respond = (decision: 'approve' | 'reject', from: 'dock' | 'full_plan') => {
         if (decision === 'reject' && chat.plan && question) {
             setSetAside({ turn: question.turn, plan: chat.plan });
         }
 
         chat.respondPlan(decision);
+        report('studio.plan', { decision: decision === 'reject' ? 'cancel' : 'approve', from });
     };
 
     const sheet = (() => {
@@ -455,6 +532,17 @@ const PromptDock = () => {
                                     <p className={styles.clarifyQuestion} title={question.text}>
                                         {question.text}
                                     </p>
+                                    {view.clarified.length > 0 && (
+                                        <dl className={styles.clarified}>
+                                            {view.clarified.map((item, index) => (
+                                                // Two clarifications can read alike.
+                                                <div key={index} className={styles.clarifiedRow}>
+                                                    <dt title={item.asked}>{item.asked}</dt>
+                                                    <dd>{item.answer}</dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    )}
                                 </div>
                             )}
                             <div className={classNames(styles.scroll, styles.clarify)}>
@@ -477,8 +565,8 @@ const PromptDock = () => {
                             onFold={() => setPlanFolded(planKey(question.turn, plan.version))}
                             onOpen={() => setPlanFolded(null)}
                             onSwitch={walled ? undefined : chat.switchChoice}
-                            onApprove={() => respond('approve')}
-                            onCancel={() => respond('reject')}
+                            onApprove={() => respond('approve', 'full_plan')}
+                            onCancel={() => respond('reject', 'full_plan')}
                             announce={announce}
                         />
                     )
@@ -489,10 +577,12 @@ const PromptDock = () => {
                         <ReplySheet
                             question={question}
                             count={view.questions.length}
+                            stream={chat.replyStream}
+                            failed={failed}
                             streaming={streaming}
                             chips={chips}
-                            onThread={() => choose('thread')}
-                            onFold={fold}
+                            onThread={() => openSheet('thread')}
+                            onFold={() => fold('button')}
                         />
                     )
                 );
@@ -500,9 +590,11 @@ const PromptDock = () => {
                 return (
                     <ThreadSheet
                         questions={view.questions}
+                        stream={chat.replyStream}
                         runningTurn={streaming ? (question?.turn ?? null) : null}
+                        focusTurn={view.threadTurn}
                         chips={chips}
-                        onClose={fold}
+                        onClose={() => fold('button')}
                     />
                 );
             case 'none':
@@ -525,8 +617,8 @@ const PromptDock = () => {
                 return (
                     <ApprovalRow
                         busy={!!chat.plan?.switching}
-                        onCancel={() => respond('reject')}
-                        onApprove={() => respond('approve')}
+                        onCancel={() => respond('reject', 'dock')}
+                        onApprove={() => respond('approve', 'dock')}
                     />
                 );
             case 'set_aside':
@@ -546,7 +638,7 @@ const PromptDock = () => {
                 return (
                     <FoldedRow
                         text={view.row.text}
-                        onOpen={view.row.openable ? () => choose('open') : null}
+                        onOpen={view.row.openable ? () => openSheet('open') : null}
                     />
                 );
             case undefined:
@@ -615,6 +707,19 @@ const PromptDock = () => {
                         lastFocus.current = event.target;
                     }
                 }}
+                // Focus that leaves the box for the page, a press on the
+                // canvas included, is the reader's move: nothing in the
+                // box takes it back when that control later redraws away.
+                // A control removed while focused stays recorded, since it
+                // is no longer connected when its blur arrives.
+                onBlur={(event) => {
+                    if (
+                        event.target.isConnected &&
+                        !boxRef.current?.contains(event.relatedTarget)
+                    ) {
+                        lastFocus.current = null;
+                    }
+                }}
             >
                 <div className={styles.upper}>
                     {head && <QuestionHead text={head.text} about={head.about} />}
@@ -624,12 +729,12 @@ const PromptDock = () => {
                         <QueuedRows queued={chat.queued} onRemove={chat.unqueue} />
                     )}
                 </div>
-                {walled ? (
+                {view.mode === 'wall' ? (
                     <div className={styles.wall}>
                         <GuestWall />
                     </div>
                 ) : (
-                    view.sheet !== 'clarify' && (
+                    view.mode === 'input' && (
                         <>
                             <DockField
                                 fieldRef={fieldRef}

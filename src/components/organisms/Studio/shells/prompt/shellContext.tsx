@@ -17,6 +17,8 @@ import { useStudioModel } from '../../hooks/studioContext';
 import styles from './PromptShell.module.scss';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { trackLayout } from '@/lib/events/client';
+import type { LayoutEventName, LayoutMembers } from '@/lib/events/studioLayoutEvents';
 import { type PlanLinks, planLinks } from '@/lib/studio/planLink';
 import {
     heldCard,
@@ -27,9 +29,6 @@ import {
     type ShellState,
     shellReducer,
 } from '@/lib/studio/promptShell';
-
-/** The dock's heights in px: at rest, and as drawn now (a sheet open). */
-export type DockBand = { rest: number; current: number };
 
 /** Returns true when it handled the key. */
 export type EscapeHandler = (event: KeyboardEvent) => boolean;
@@ -43,26 +42,31 @@ export type PromptShellValue = {
     panelOpen: boolean;
     /** The card whose page is on top of the panel's trail. */
     heldCard: string | null;
-    /** Written by the dock; the shell root carries the same numbers as
-     *  `--dock-rest` and `--dock-current`. */
-    dockBand: RefObject<DockBand>;
     /** Below PANEL_OVERLAY_BELOW: the panel overlays the canvas and opens
      *  only when asked. */
     overlay: boolean;
-    /** The shell's root element. */
+    /** The shell's root element. The dock writes its heights on it as
+     *  `--dock-rest` and `--dock-current` (px). */
     rootRef: RefObject<HTMLElement | null>;
     /** The session panel's frame (the shell's `aside`), where the panel
      *  sets its `data-sp-*` attributes. */
     panelRef: RefObject<HTMLElement | null>;
-    /** Registers an Escape handler while the calling component is mounted.
-     *  The shell calls the highest order first (the ESCAPE_* constants in
-     *  promptShell.ts) and stops at the first that returns true. */
-    useEscape: (order: number, handler: EscapeHandler) => void;
+    /** Puts the caret in the dock's field, leaving focus mode first. */
+    focusField: () => void;
+    /** The dock hands over its field (null when it unmounts). */
+    registerField: (field: HTMLElement | null) => void;
+    /** Puts focus on a card's selection toggle on the canvas; false when the
+     *  card is not on the canvas. */
+    focusCard: (id: string) => boolean;
     /** The approved plans and their cards on the canvas (planLinks), for
      *  the canvas, the panel and the card page. */
     plans: PlanLinks;
-    /** Speaks `text` through the shell's polite live region. */
-    announce: (text: string) => void;
+    /** Speaks `text` through the shell's polite live region, or through its
+     *  alert region for an `error`. */
+    announce: (text: string, kind?: 'error') => void;
+    /** Records a usage event for a reader's action on the layout's own
+     *  controls (STUDIO_LAYOUT_EVENTS), with the Studio's variant. */
+    report: <N extends LayoutEventName>(name: N, members: LayoutMembers<N>) => void;
 };
 
 const ShellContext = createContext<PromptShellValue | null>(null);
@@ -80,11 +84,12 @@ export const usePromptShell = (): PromptShellValue => {
 const EscapeContext = createContext<RefObject<Set<EscapeEntry>> | null>(null);
 
 /**
- * Registers an Escape handler while the calling component is mounted; also
- * returned by usePromptShell. The shell calls the highest order first and
- * stops at the first handler that returns true.
+ * Registers an Escape handler while `active` is true, which each caller
+ * sets to whether its region is on screen. The shell calls the highest
+ * order first (the ESCAPE_* constants in promptShell.ts) and stops at the
+ * first handler that returns true.
  */
-export const useEscape = (order: number, handler: EscapeHandler) => {
+export const useEscape = (order: number, handler: EscapeHandler, active = true) => {
     const entries = useContext(EscapeContext);
     const latest = useRef(handler);
 
@@ -97,6 +102,8 @@ export const useEscape = (order: number, handler: EscapeHandler) => {
     });
 
     useEffect(() => {
+        if (!active) return;
+
         const entry: EscapeEntry = { order, handler: latest };
         const all = entries.current;
 
@@ -105,22 +112,46 @@ export const useEscape = (order: number, handler: EscapeHandler) => {
         return () => {
             all.delete(entry);
         };
-    }, [entries, order]);
+    }, [entries, order, active]);
+};
+
+const TEXT_FIELD =
+    'input:not([type="button"], [type="checkbox"], [type="radio"]), textarea, select, [contenteditable="true"]';
+// Things that close themselves on Escape: an open menu, a modal dialog, the
+// feedback widget.
+const OWN_ESCAPE =
+    '[role="menu"], [role="dialog"][aria-modal="true"], dialog[open], [data-feedback-widget]';
+
+/**
+ * Whether an Escape aimed at `target` belongs to something outside the
+ * shell's order: a menu, a modal dialog, the feedback widget, or a text
+ * field outside the shell's regions (`regions`).
+ */
+const escapeElsewhere = (
+    target: EventTarget | null,
+    regions: readonly (Element | null)[],
+): boolean => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest(OWN_ESCAPE)) return true;
+
+    return (
+        target.matches(TEXT_FIELD) && !regions.some((region) => region?.contains(target) ?? false)
+    );
 };
 
 /**
  * The Prompt layout's shell state (promptShell.ts), the one Escape listener,
- * the one polite live region, and the dock's band. Shell state resets with
+ * the live regions (one polite, one for errors), and the plan links. Shell state resets with
  * the session: whenever the Studio returns to its landing.
  */
 export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
     const model = useStudioModel();
     const [state, dispatch] = useReducer(shellReducer, initialShell);
-    const dockBand = useRef<DockBand>({ rest: 0, current: 0 });
     const rootRef = useRef<HTMLElement | null>(null);
     const panelRef = useRef<HTMLElement | null>(null);
     const escapes = useRef(new Set<EscapeEntry>());
     const live = useRef<HTMLParagraphElement | null>(null);
+    const alert = useRef<HTMLParagraphElement | null>(null);
     const mode = model.mode.current;
     const [seenMode, setSeenMode] = useState(mode);
 
@@ -170,17 +201,44 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
     const onKey = useEffectEvent((event: KeyboardEvent) => {
         if (event.key !== 'Escape' || event.defaultPrevented) return;
 
+        const regions = [
+            rootRef.current?.querySelector('[data-studio-canvas]') ?? null,
+            panelRef.current,
+        ];
+
+        if (escapeElsewhere(event.target, regions)) return;
+
         const ordered = [...escapes.current].toSorted((a, b) => b.order - a.order);
 
         for (const entry of ordered) {
             if (entry.handler.current(event)) {
+                // Later listeners see the key as taken; it still propagates.
                 event.preventDefault();
-                event.stopPropagation();
 
                 return;
             }
         }
     });
+
+    const field = useRef<HTMLElement | null>(null);
+    const registerField = useCallback((node: HTMLElement | null) => {
+        field.current = node;
+    }, []);
+    const focusField = useCallback(() => {
+        dispatch({ type: 'focus.set', on: false });
+        // The dock's box is inert in focus mode, so the caret waits a frame
+        // for it to come back.
+        requestAnimationFrame(() => field.current?.focus({ preventScroll: true }));
+    }, []);
+    const focusCard = useCallback((id: string) => {
+        const toggle = rootRef.current?.querySelector<HTMLElement>(
+            `[data-studio-canvas] [data-card-id="${CSS.escape(id)}"] [data-card-select]`,
+        );
+
+        toggle?.focus({ preventScroll: true });
+
+        return toggle !== null && toggle !== undefined;
+    }, []);
 
     useEffect(() => {
         const listener = (event: KeyboardEvent) => onKey(event);
@@ -191,8 +249,8 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const frame = useRef(0);
-    const announce = useCallback((text: string) => {
-        const node = live.current;
+    const announce = useCallback((text: string, kind?: 'error') => {
+        const node = kind === 'error' ? alert.current : live.current;
 
         if (!node) return;
 
@@ -207,11 +265,19 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
+    const { variant } = model;
+    const report = useCallback(
+        <N extends LayoutEventName>(name: N, members: LayoutMembers<N>) =>
+            trackLayout(name, { ...members, variant }),
+        [variant],
+    );
+
     const { messages, widgets: turnWidgets, activity } = model.chat;
-    const onCanvas = model.canvas.widgets;
     const replaced = model.doc.replacedIds;
+    // The canvas's widget list is a new array each render; its ids are not.
+    const canvasKey = model.canvas.widgets.map((widget) => widget.id).join('\n');
     const plans = useMemo(() => {
-        const shown = new Set(onCanvas.map((widget) => widget.id));
+        const shown = new Set(canvasKey.split('\n'));
 
         return planLinks({
             messages,
@@ -220,7 +286,7 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
             replaced,
             visible: (id) => shown.has(id),
         });
-    }, [messages, turnWidgets, activity, replaced, onCanvas]);
+    }, [messages, turnWidgets, activity, replaced, canvasKey]);
 
     const cardCount = model.canvas.widgets.length;
     const value = useMemo<PromptShellValue>(
@@ -229,15 +295,17 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
             dispatch,
             panelOpen: panelShows(state, cardCount, overlay),
             heldCard: heldCard(state),
-            dockBand,
             overlay,
             rootRef,
             panelRef,
-            useEscape,
+            focusField,
+            registerField,
+            focusCard,
             plans,
             announce,
+            report,
         }),
-        [state, cardCount, overlay, plans, announce],
+        [state, cardCount, overlay, plans, focusField, registerField, focusCard, announce, report],
     );
 
     return (
@@ -245,6 +313,7 @@ export const PromptShellProvider = ({ children }: { children: ReactNode }) => {
             <ShellContext.Provider value={value}>
                 {children}
                 <p ref={live} className={styles.live} aria-live="polite" />
+                <p ref={alert} className={styles.live} role="alert" />
             </ShellContext.Provider>
         </EscapeContext.Provider>
     );

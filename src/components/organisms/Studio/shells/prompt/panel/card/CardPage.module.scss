@@ -1,4 +1,5 @@
 @use "mixins" as *;
+@use "../../textFloor" as *;
 
 // The card page of the session panel. It sits inside the panel's root, which
 // sets the type roles and the `--sp-*` colours.
@@ -9,7 +10,7 @@
 
 %mono {
     font-family: var(--font-dm-mono);
-    font-size: rem(11);
+    font-size: rem-floor(11);
     line-height: rem(16);
     letter-spacing: -0.02em;
 }
@@ -88,7 +89,7 @@
     box-sizing: border-box;
     min-height: rem(24);
     padding: 0 rem(8);
-    font-size: rem(12);
+    font-size: rem-floor(12);
     line-height: rem(16);
     border: 1px solid var(--color-charcoal);
     border-radius: rem(6);
@@ -143,8 +144,12 @@
     }
 }
 
+// An open picker is marked by its frame and by the link's `aria-expanded`;
+// the link keeps the closed colour, which passes 4.5:1 on every ground it
+// sits on, and takes the frame's colour in its underline.
 .changeOpen {
-    color: var(--sp-run);
+    text-decoration-color: var(--sp-run);
+    text-decoration-thickness: 2px;
 }
 
 .pending {
@@ -175,26 +180,42 @@
 }
 
 .refused {
-    font-size: rem(12);
+    font-size: rem-floor(12);
     line-height: rem(16);
     color: var(--color-red);
 }
 
 // ---- the picker
 
+// The frame never outgrows the visible panel, so `Apply` stays in view: the
+// choices scroll inside it (`.placeList`) and the foot stays put.
 .picker {
     display: flex;
     flex-direction: column;
     gap: rem(8);
+    box-sizing: border-box;
+    max-height: calc(100cqh - #{rem(96)});
     padding: rem(8);
     border: 1px solid var(--sp-run);
     border-radius: rem(6);
+
+    > :not(.pickerFoot) {
+        min-height: 0;
+    }
 }
 
 .pickerFoot {
     display: flex;
+    flex-shrink: 0;
     justify-content: flex-end;
     gap: rem(6);
+
+    // The shared Button's label follows the site's sizing; the panel's floor
+    // applies to it here.
+    > button,
+    > button * {
+        font-size: rem-floor(11);
+    }
 }
 
 .unitPick {
@@ -262,6 +283,74 @@
     }
 }
 
+// Two selects side by side: From and To.
+.yearsPick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: rem(8);
+}
+
+.pickNote {
+    grid-column: 1 / -1;
+    font-size: rem-floor(12);
+    line-height: rem(16);
+    color: var(--color-stone);
+}
+
+.placesPick {
+    display: flex;
+    flex-direction: column;
+    gap: rem(4);
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+
+    legend {
+        padding: 0;
+        margin-bottom: rem(4);
+    }
+}
+
+.filter {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: rem(24);
+    padding: rem(3) rem(6);
+    font: inherit;
+    color: var(--color-charcoal);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+}
+
+// About eight rows of 24 px show before the list scrolls, fewer where the
+// frame's own cap is lower.
+.placeList {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: rem(2);
+    min-height: 0;
+    max-height: rem(8 * 26);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.listNote {
+    padding: rem(3) rem(4);
+    font-size: rem-floor(12);
+    line-height: rem(16);
+    color: var(--color-stone);
+}
+
+.listFailed {
+    font-size: rem-floor(12);
+    line-height: rem(16);
+    color: var(--color-red);
+}
+
 // ---- notes, sources, cite, made
 
 .subLabel {
@@ -286,11 +375,10 @@
 .sources {
     display: flex;
     flex-direction: column;
-    gap: rem(8);
-    padding: 0 rem(8);
+    gap: rem(2);
 }
 
-.source {
+.sourceItem {
     display: flex;
     flex-direction: column;
 }
@@ -300,22 +388,6 @@
     text-decoration: underline;
     text-decoration-color: var(--color-sage);
     text-underline-offset: rem(2);
-
-    span & {
-        text-decoration: none;
-    }
-}
-
-.sourceIcon {
-    width: rem(10);
-    height: rem(10);
-    margin-left: rem(2);
-}
-
-.sourceMeta {
-    @extend %mono;
-
-    color: var(--color-stone);
 }
 
 .segment {
@@ -327,7 +399,7 @@
     button {
         padding: 0 rem(6);
         font-family: var(--font-dm-mono);
-        font-size: rem(11);
+        font-size: rem-floor(11);
         line-height: rem(18);
         letter-spacing: -0.02em;
         color: var(--color-stone);
@@ -369,6 +441,11 @@
     gap: rem(8);
 }
 
+// The fold's list shows only while the fold is open.
+.made[hidden] {
+    display: none;
+}
+
 .steps {
     display: flex;
     flex-direction: column;
@@ -407,6 +484,34 @@
     @extend %mono;
 
     color: var(--color-stone);
+}
+
+@media (pointer: coarse) {
+    // The picker's own controls reach 40 px. The shared Button clips its
+    // overflow, so `Cancel` and `Apply` grow to 40 px high themselves; the
+    // segment's buttons stand outside its clip and take the same layer as
+    // the panel's other controls.
+    .pickerFoot > button {
+        min-height: 40px;
+    }
+
+    .filter {
+        min-height: 40px;
+    }
+
+    .segment {
+        overflow: visible;
+
+        button:first-child {
+            border-start-start-radius: rem(4);
+            border-end-start-radius: rem(4);
+        }
+
+        button:last-child {
+            border-start-end-radius: rem(4);
+            border-end-end-radius: rem(4);
+        }
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,13 +1,10 @@
 import classNames from 'classnames';
-import { type ButtonHTMLAttributes, useEffect, useRef, useState } from 'react';
+import type { ButtonHTMLAttributes } from 'react';
 
-import { usePromptShell } from '../../shellContext';
 import styles from './parts.module.scss';
+import { useConfirm } from './useConfirm';
 
 import Icon, { type IconProps } from '@/components/atoms/Icon/Icon';
-
-/** How long a done state (the tick, `Copied`) shows, in ms. */
-export const CONFIRM_MS = 1600;
 
 type IconActionProps = {
     icon: IconProps['name'];
@@ -15,19 +12,21 @@ type IconActionProps = {
     label: string;
     /** What it acts on, such as the card's title; joins the accessible name. */
     subject?: string;
-    /** Runs the action. A result of `false`, or a rejection, shows no done
-     *  state. */
+    /** Runs the action. A result of `false`, or a rejection, is a failure. */
     onAction: () => unknown;
     /** The words of the done state, such as `Data downloaded`. Without them
-     *  the action shows none. */
+     *  a success shows nothing. */
     doneLabel?: string;
+    /** The words of the failed state; `<label> failed` without them. */
+    failLabel?: string;
     /** The wide form shows the label beside the icon. */
     wide?: boolean;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'children'>;
 
 /**
- * A 24 px icon button. After the action succeeds it shows a check and its
- * done words for CONFIRM_MS, and announces them.
+ * A 24 px icon button. When the action ends it shows a check and its done
+ * words, or a cross and its failure words, for CONFIRM_MS, and announces
+ * them.
  */
 export const IconAction = ({
     icon,
@@ -35,36 +34,15 @@ export const IconAction = ({
     subject,
     onAction,
     doneLabel,
+    failLabel,
     wide = false,
     className,
     ...rest
 }: IconActionProps) => {
-    const { announce } = usePromptShell();
-    const [done, setDone] = useState(false);
-    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-    useEffect(() => () => clearTimeout(timer.current), []);
-
-    const run = async () => {
-        let result: unknown;
-
-        try {
-            result = await onAction();
-        } catch (error) {
-            console.error(error);
-
-            return;
-        }
-
-        if (result === false || !doneLabel) return;
-
-        setDone(true);
-        announce(doneLabel);
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => setDone(false), CONFIRM_MS);
-    };
-
-    const words = done && doneLabel ? doneLabel : label;
+    const { outcome, run } = useConfirm();
+    const failed = failLabel ?? `${label} failed`;
+    const words =
+        outcome === 'failed' ? failed : outcome === 'done' && doneLabel ? doneLabel : label;
 
     return (
         <button
@@ -73,11 +51,12 @@ export const IconAction = ({
             className={classNames(styles.act, wide && styles.actWide, className)}
             aria-label={subject ? `${words}: ${subject}` : words}
             title={wide ? undefined : words}
-            data-done={done || undefined}
-            onClick={() => void run()}
+            data-done={outcome === 'done' || undefined}
+            data-failed={outcome === 'failed' || undefined}
+            onClick={() => void run(onAction, { done: doneLabel, failed })}
         >
-            <Icon name={done ? 'check' : icon} />
-            {wide && <span>{label}</span>}
+            <Icon name={outcome === 'done' ? 'check' : outcome === 'failed' ? 'closer' : icon} />
+            {wide && <span>{outcome === 'failed' ? failed : label}</span>}
         </button>
     );
 };

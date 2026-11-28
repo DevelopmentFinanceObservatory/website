@@ -1,13 +1,13 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 
 import { useStudioModel } from '../../../hooks/studioContext';
 import { usePromptShell } from '../shellContext';
 import { usePanelNav } from './panelNav';
 import { CardChip, Chips, CountChip } from './parts/CardChip';
 import { Fold } from './parts/Fold';
-import { CONFIRM_MS } from './parts/IconAction';
 import { Section } from './parts/Section';
 import { TextButton } from './parts/TextButton';
+import { useConfirm } from './parts/useConfirm';
 import { CardRowItem, ChangedLines, PlanLineButton, SourceRowButton, StageList } from './Rows';
 import styles from './SessionPanel.module.scss';
 
@@ -67,6 +67,18 @@ const GroupBlock = ({ group, links }: { group: Group; links: PlanLinks }) => {
                     <CardRowItem key={row.id} row={row} pointed={row.id === pointed} />
                 ))}
                 <ChangedLines lines={group.changed} />
+                {group.gone && (
+                    <li className={styles.did}>
+                        <button
+                            type="button"
+                            className={styles.words}
+                            data-sp-gone={group.turn}
+                            onClick={open}
+                        >
+                            {group.gone}
+                        </button>
+                    </li>
+                )}
                 {group.quiet && (
                     <li className={styles.did}>
                         <button type="button" className={styles.words} onClick={open}>
@@ -118,29 +130,27 @@ const CardsSection = ({ view, links, folds, setFolds }: OverviewProps) => {
                     >
                         {view.removed.length} removed
                     </Fold>
-                    {folds.removed && (
-                        <ul id={removedId} className={styles.gones}>
-                            {view.removed.map((row) => (
-                                <li key={row.id} className={styles.gone}>
-                                    <span className={styles.glyph} aria-hidden="true">
-                                        <Icon name={row.glyph} />
-                                    </span>
-                                    <span className={styles.goneTitle} title={row.title}>
-                                        {row.title}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        className={styles.restore}
-                                        aria-label={`Restore ${row.title} to the canvas`}
-                                        data-sp-restore={row.id}
-                                        onClick={() => canvas.add(row.id)}
-                                    >
-                                        Restore
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    <ul id={removedId} className={styles.gones} hidden={!folds.removed}>
+                        {view.removed.map((row) => (
+                            <li key={row.id} className={styles.gone}>
+                                <span className={styles.glyph} aria-hidden="true">
+                                    <Icon name={row.glyph} />
+                                </span>
+                                <span className={styles.goneTitle} title={row.title}>
+                                    {row.title}
+                                </span>
+                                <button
+                                    type="button"
+                                    className={styles.restore}
+                                    aria-label={`Restore ${row.title} to the canvas`}
+                                    data-sp-restore={row.id}
+                                    onClick={() => canvas.add(row.id)}
+                                >
+                                    Restore
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
                 </>
             )}
         </Section>
@@ -162,12 +172,12 @@ const KeepSection = ({ view, folds, setFolds }: OverviewProps) => {
                     controls={keepsId}
                     className={styles.keepFold}
                     data-sp-fold="keep"
+                    count={view.keep.length}
                     onToggle={() => setFolds({ ...folds, keep: !open })}
                 >
                     Keep in mind
                 </Fold>
             }
-            count={view.keep.length}
         >
             {open && (
                 <ul id={keepsId} className={styles.keeps}>
@@ -198,28 +208,15 @@ const KeepSection = ({ view, folds, setFolds }: OverviewProps) => {
 };
 
 const SourcesSection = ({ view }: { view: OverviewView }) => {
-    const { announce } = usePromptShell();
-    const [copied, setCopied] = useState(false);
-    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-    useEffect(() => () => clearTimeout(timer.current), []);
+    const { outcome, run } = useConfirm();
 
     if (view.sources.length === 0) return null;
 
-    const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(view.citations.join('\n\n'));
-        } catch (error) {
-            console.error(error);
-
-            return;
-        }
-
-        setCopied(true);
-        announce('Citations copied');
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => setCopied(false), CONFIRM_MS);
-    };
+    const copy = () =>
+        run(() => navigator.clipboard.writeText(view.citations.join('\n\n')), {
+            done: 'Citations copied',
+            failed: 'Citations not copied',
+        });
 
     return (
         <Section
@@ -227,8 +224,17 @@ const SourcesSection = ({ view }: { view: OverviewView }) => {
             count={view.sources.length}
             action={
                 view.citations.length > 0 && (
-                    <TextButton data-sp-cite data-sp-key="cite" onClick={() => void copy()}>
-                        {copied ? 'Copied' : 'Copy citations'}
+                    <TextButton
+                        data-sp-cite
+                        data-sp-key="cite"
+                        data-failed={outcome === 'failed' || undefined}
+                        onClick={() => void copy()}
+                    >
+                        {outcome === 'done'
+                            ? 'Copied'
+                            : outcome === 'failed'
+                              ? 'Not copied'
+                              : 'Copy citations'}
                     </TextButton>
                 )
             }

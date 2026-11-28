@@ -1,0 +1,17 @@
+{
+    "event": "activity.step",
+    "seq": 3,
+    "step_id": "s2",
+    "label": "Fetching Ethiopia disbursements, 2016\u20132024",
+    "status": "running",
+    "detail": null,
+    "tool": "datasets.get",
+    "duration_ms": null,
+    "produced": null,
+    "progress": {
+        "completed": 2,
+        "total": 3
+    },
+    "plan_version_id": "plan_01j9ze2k7c",
+    "plan_step_id": "s2"
+}

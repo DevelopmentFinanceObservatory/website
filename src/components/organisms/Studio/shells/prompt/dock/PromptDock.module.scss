@@ -1,25 +1,37 @@
 @use "variables" as *;
 @use "mixins" as *;
+@use "../textFloor" as *;
+@use "../touchTarget" as *;
 
 // The dock fills its frame's width and grows upwards from the frame's foot:
-// pills, then the box, whose rows and sheets stack above the input row.
+// pills, then the box, whose rows and sheets stack above the input row. The
+// frame caps its height at the canvas frame's; past that an open sheet's
+// body gives way and scrolls, so the caps below hold on tall windows only.
 .dock {
-    // The regions sit 70 under the page top and 10 above its foot, so the
-    // canvas region is the viewport less 80.
+    // The shared parts drawn in the dock (the plan's ledger, the clarifying
+    // picker, the card chips) floor their text at this size.
 
-    --dock-region: calc(100dvh - #{rem(80)});
-    --dock-cap-normal: min(calc(var(--dock-region) * 0.4), #{rem(280)});
-    --dock-cap-words: min(calc(var(--dock-region) * 0.6), #{rem(440)});
-    --dock-plan-cap: min(calc(var(--dock-region) * 0.5), #{rem(440)});
+    --text-floor: #{$text-floor};
+    --dock-cap-normal: #{rem(280)};
+    --dock-cap-words: #{rem(440)};
+    --dock-plan-cap: #{rem(440)};
+
+    // A press area (../_touchTarget.scss) reaches at most half the gap the
+    // shell leaves between the dock and the panel above it, the least room
+    // between two of the dock's rows.
+
+    --hit-room-y: calc(var(--dock-gap, #{rem(10)}) / 2);
     --dock-ease: var(--ws-ease, cubic-bezier(0.22, 1, 0.36, 1));
     --dock-shadow-rest: 0 8px 28px rgb(47 47 43 / 16%), 0 1px 3px rgb(47 47 43 / 10%);
     --dock-shadow-open: 0 -2px 12px rgb(72 72 66 / 10%), 0 1px 2px rgb(72 72 66 / 6%);
 
     position: relative;
     display: flex;
+    flex: 0 1 auto;
     flex-direction: column;
     align-items: stretch;
     width: 100%;
+    min-height: 0;
     pointer-events: none;
 }
 
@@ -27,6 +39,7 @@
 
 .pills {
     display: flex;
+    flex: none;
     gap: rem(6);
     max-width: 100%;
 
@@ -40,6 +53,12 @@
 
     &::-webkit-scrollbar {
         display: none;
+    }
+
+    @media (pointer: coarse) {
+        // Room for the pills' press areas, which the scroller would clip.
+        margin-block: -8px calc(#{rem(8)} - 8px);
+        padding-block: 8px;
     }
 }
 
@@ -62,7 +81,7 @@
 }
 
 .pill {
-    @include font-size(13px, 1);
+    @include font-size-floor(13px, 1);
 
     flex: 0 0 auto;
     height: rem(26);
@@ -78,6 +97,9 @@
     border-radius: rem(28);
     box-shadow: 0 2px 8px rgb(47 47 43 / 12%);
     transition: background-color 0.2s ease;
+
+    // Pills stand rem(6) apart (.pills).
+    @include touch-target($room-x: rem(3), $room-y: rem(3));
 
     @media (hover: hover) {
         &:hover {
@@ -97,7 +119,7 @@
 // Out of the flow until focus mode, then the box leaves the flow and the
 // pill takes its place, the two cross-fading.
 .focusPill {
-    @include font-size(14px, 1);
+    @include font-size-floor(14px, 1);
 
     position: absolute;
     bottom: 0;
@@ -166,8 +188,10 @@
 .box {
     position: relative;
     display: flex;
+    flex: 0 1 auto;
     flex-direction: column;
     width: 100%;
+    min-height: 0;
     pointer-events: auto;
     background-color: var(--color-white);
     border: 1px solid var(--color-sage-light);
@@ -180,8 +204,15 @@
         opacity 0.2s var(--dock-ease),
         scale 0.2s var(--dock-ease);
 
-    &:has(.field:focus) {
-        border-color: var(--color-sage-dark);
+    // The field's focus indicator, in the colour of every other control's.
+    &:has(.field:focus-visible) {
+        border-color: var(--color-charcoal);
+    }
+
+    // Focus lands on the box itself when the control that held it leaves.
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
     }
 
     .dock:not([data-sheet="none"]) & {
@@ -201,10 +232,18 @@
 // and its body scrolls.
 .upper {
     display: flex;
+    flex: 0 1 auto;
     flex-direction: column;
+    min-height: 0;
     max-height: var(--dock-cap);
     overflow: hidden;
     border-radius: rem(10) rem(10) 0 0;
+
+    @media (pointer: coarse) {
+        // The press areas of the controls at its edges reach past it. Nothing
+        // else overflows: the open sheet gives way to fit.
+        overflow: visible;
+    }
 
     > * {
         flex: 0 0 auto;
@@ -220,10 +259,26 @@
 }
 
 .wall {
+    flex: none;
     padding: rem(10);
+
+    // The dock's box is the frame; the wall draws none of its own. The
+    // attribute outranks the component's own one-class rule.
+    > [class] {
+        max-width: none;
+        border: 0;
+        border-radius: 0;
+    }
+
+    // The wall's buttons (the Button atom's label, rem(11)) keep the text
+    // floor.
+    :is(button, a[href]) > span {
+        font-size: rem-floor(11);
+    }
 }
 
 .count {
+    flex: none;
     padding: 0 rem(10) rem(8);
 
     p {
@@ -235,6 +290,7 @@
 
 .input {
     display: flex;
+    flex: none;
     align-items: flex-end;
     gap: rem(10);
     min-height: rem(46);
@@ -243,7 +299,7 @@
 
 .field {
     --dock-field-pad: #{outfit-overhang()};
-    @include font-size(14px, 1.1);
+    @include font-size-floor(14px, 1.1);
 
     flex-grow: 1;
     min-width: 0;
@@ -262,13 +318,33 @@
     outline: none;
 
     &::placeholder {
-        color: var(--color-gray-1400);
+        color: var(--color-stone-hover);
         opacity: 1;
     }
 
     &:placeholder-shown {
         max-height: calc(1lh + 2 * var(--dock-field-pad));
         overflow-y: hidden;
+    }
+
+    @media (pointer: coarse) {
+        // A 40 px press area: the padding grows and the margin gives it back.
+
+        --dock-field-touch: 10px;
+
+        align-self: center;
+        max-height: calc(5lh + 2 * var(--dock-field-pad) + 2 * var(--dock-field-touch));
+        margin-block: calc(-1 * var(--dock-field-touch));
+        padding-block: calc(var(--dock-field-pad) + var(--dock-field-touch));
+
+        &:placeholder-shown {
+            max-height: calc(1lh + 2 * var(--dock-field-pad) + 2 * var(--dock-field-touch));
+        }
+    }
+
+    @media (pointer: coarse) and (max-width: 767px) {
+        // iOS zooms the page into a field set under 16 px.
+        font-size: max(16px, #{rem(14)});
     }
 }
 
@@ -285,6 +361,9 @@
     border: 1px solid var(--color-charcoal);
     border-radius: rem(6);
     transition: background-color 0.25s ease;
+
+    // The field stands rem(10) from Send (.input).
+    @include touch-target($room-x: rem(5));
 
     @media (hover: hover) {
         &:hover {
@@ -320,7 +399,7 @@
 // --- Rows --------------------------------------------------------------------
 
 .row {
-    @include font-size(13px, 1.2);
+    @include font-size-floor(13px, 1.2);
 
     display: flex;
     align-items: center;
@@ -348,7 +427,7 @@
 }
 
 .rowMeta {
-    @include font-size(11px, 1.45);
+    @include font-size-floor(11px, 1.45);
 
     flex: 0 0 auto;
     font-family: var(--font-dm-mono);
@@ -362,7 +441,7 @@
 }
 
 .btn {
-    @include font-size(12px, 1);
+    @include font-size-floor(12px, 1);
 
     height: rem(24);
     padding: 0 rem(9);
@@ -373,6 +452,10 @@
     border: 1px solid var(--color-sage-light);
     border-radius: rem(6);
     transition: background-color 0.2s ease;
+
+    // Row actions stand rem(6) apart (.rowActions), and above the field's
+    // own press area.
+    @include touch-target($room-x: rem(3), $room-y: rem(3));
 
     @media (hover: hover) {
         &:hover {
@@ -404,7 +487,7 @@
 }
 
 .textBtn {
-    @include font-size(12px, 1);
+    @include font-size-floor(12px, 1);
 
     flex: 0 0 auto;
     min-height: rem(24);
@@ -416,6 +499,9 @@
     background: none;
     border: 0;
     border-radius: rem(4);
+
+    // A head row's controls stand rem(4) apart (.headRow).
+    @include touch-target($room-x: rem(2));
 
     @media (hover: hover) {
         &:hover {
@@ -451,6 +537,9 @@
         width: rem(16);
         height: rem(16);
     }
+
+    // A head row's controls stand rem(4) apart (.headRow).
+    @include touch-target($room-x: rem(2));
 
     @media (hover: hover) {
         &:hover {
@@ -490,7 +579,7 @@
 }
 
 .chipTitle {
-    @include font-size(11px, 2);
+    @include font-size-floor(11px, 2);
 
     max-width: rem(420);
     padding: 0;
@@ -502,6 +591,9 @@
     cursor: pointer;
     background: none;
     border: 0;
+
+    // The clear button's margin leaves rem(2) between it and the title.
+    @include touch-target($room-x: rem(1));
 
     &:focus-visible {
         outline: 1px solid var(--color-charcoal);
@@ -529,6 +621,9 @@
         width: rem(12);
         height: rem(12);
     }
+
+    // The clear button's margin leaves rem(2) between it and the title.
+    @include touch-target($room-x: rem(1));
 
     @media (hover: hover) {
         &:hover {
@@ -574,7 +669,7 @@
 .questionText,
 .headQuestion,
 .threadQuestion {
-    @include font-size(13px, 1.45);
+    @include font-size-floor(13px, 1.45);
 
     min-width: 0;
     margin: 0;
@@ -587,7 +682,7 @@
 }
 
 .aboutLine {
-    @include font-size(11px, 1.45);
+    @include font-size-floor(11px, 1.45);
 
     margin: 0;
     overflow: hidden;
@@ -627,6 +722,10 @@
     align-items: center;
     gap: rem(4);
     min-height: rem(36);
+
+    @media (max-height: 520px) {
+        min-height: rem(28);
+    }
 }
 
 .headQuestion {
@@ -634,7 +733,7 @@
 }
 
 .headLabel {
-    @include font-size(11px, 1.45);
+    @include font-size-floor(11px, 1.45);
 
     flex: 1 1 auto;
     min-width: 0;
@@ -647,7 +746,7 @@
 }
 
 .link {
-    @include font-size(11px, 1);
+    @include font-size-floor(11px, 1);
 
     flex: 0 0 auto;
     height: rem(24);
@@ -659,6 +758,9 @@
     background: none;
     border: 0;
     border-radius: rem(6);
+
+    // A head row's controls stand rem(4) apart (.headRow).
+    @include touch-target($room-x: rem(2));
 
     @media (hover: hover) {
         &:hover {
@@ -690,8 +792,59 @@
     }
 }
 
+// A reply, a conversation or a short window's plan with more below its foot
+// fades out there, so a line the foot cuts reads as more to scroll. The fade
+// runs out as the body reaches its end; a body that does not scroll has no
+// timeline and no fade. On a short window the whole plan sheet scrolls
+// (.planSheet below).
+
+$dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), transparent);
+
+@property --dock-fade {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0;
+}
+
+@keyframes dock-fade-foot {
+    from {
+        --dock-fade: #{rem(24)};
+    }
+
+    to {
+        --dock-fade: 0px;
+    }
+}
+
+@supports (animation-timeline: scroll()) {
+    .sheet .scroll:not(.planBody, .clarify) {
+        mask-image: $dock-fade-mask;
+        animation: dock-fade-foot linear both;
+        animation-timeline: scroll(self);
+        animation-range: calc(100% - #{rem(24)}) 100%;
+
+        // The focus ring (.scroll, 2 px inside the edge) stays whole because two
+        // more layers keep the sides and the foot opaque under the fade.
+        &:focus-visible {
+            mask-image:
+                $dock-fade-mask,
+                linear-gradient(to right, #000 2px, transparent 2px calc(100% - 2px), #000 0),
+                linear-gradient(to top, #000 2px, transparent 0);
+        }
+    }
+
+    @media (max-height: 520px) {
+        .planSheet {
+            mask-image: $dock-fade-mask;
+            animation: dock-fade-foot linear both;
+            animation-timeline: scroll(self);
+            animation-range: calc(100% - #{rem(24)}) 100%;
+        }
+    }
+}
+
 .replyText {
-    @include font-size(14px, 1.5);
+    @include font-size-floor(14px, 1.5);
 
     font-family: var(--font-outfit);
     color: var(--color-charcoal);
@@ -711,7 +864,7 @@
     h2,
     h3,
     h4 {
-        @include font-size(14px, 1.5);
+        @include font-size-floor(14px, 1.5);
 
         font-weight: 600;
     }
@@ -736,13 +889,13 @@
     }
 
     code {
-        @include font-size(12px, 1.5);
+        @include font-size-floor(12px, 1.5);
 
         font-family: var(--font-dm-mono);
     }
 
     table {
-        @include font-size(12px, 1.4);
+        @include font-size-floor(12px, 1.4);
 
         border-collapse: collapse;
         overflow-wrap: normal;
@@ -761,6 +914,16 @@
     }
 }
 
+// What the reply's cards show since a card change redrew them: a note about
+// the reply in the dock's secondary voice, as the `About` line reads.
+.changeNote {
+    @include font-size-floor(11px, 1.45);
+
+    margin: rem(8) 0 0;
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+}
+
 // A wide table scrolls sideways inside the reply.
 .wide {
     max-width: 100%;
@@ -769,6 +932,17 @@
 
 .thread {
     padding: rem(8) rem(16) rem(14);
+}
+
+.threadItem {
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
 }
 
 .threadItem + .threadItem {
@@ -792,7 +966,7 @@
 }
 
 .clarifyQuestion {
-    @include font-size(11px, 1.45);
+    @include font-size-floor(11px, 1.45);
 
     margin: 0;
     overflow: hidden;
@@ -802,15 +976,82 @@
     white-space: nowrap;
 }
 
+// The clarifications already answered: the question at left, the answer
+// at right.
+.clarified {
+    margin: rem(6) 0 0;
+}
+
+.clarifiedRow {
+    @include font-size-floor(12px, 1.4);
+
+    display: flex;
+    gap: rem(12);
+    justify-content: space-between;
+    font-family: var(--font-outfit);
+
+    dt {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--color-stone);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    dd {
+        flex-shrink: 0;
+        max-width: 50%;
+        margin: 0;
+        font-weight: 500;
+        color: var(--color-charcoal);
+        text-align: right;
+    }
+}
+
 .clarify {
     padding: rem(16) rem(16) rem(14);
+
+    // The dock's box is the frame; the picker draws none of its own. The
+    // attribute outranks the component's own one-class rule.
+    > [class] {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+    }
+
+    // The question takes the box's width; the picker caps it for a narrow
+    // chat column.
+    [class] > p[class]:first-child {
+        max-width: none;
+    }
+
+    // The picker spaces its parts with bottom margins; the box's padding
+    // ends it here.
+    > [class] > :last-child {
+        margin-bottom: 0;
+    }
 }
 
 // --- Plan --------------------------------------------------------------------
 
+// A short window leaves the plan's body too little room of its own, so the
+// whole sheet scrolls, its head and `View full plan` with it.
+.planSheet {
+    @media (max-height: 520px) {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+
+        > .planBody {
+            flex: none;
+            max-height: none;
+            overflow: visible;
+        }
+    }
+}
+
 .planBody {
     max-height: var(--dock-plan-cap);
-    padding: 0 rem(16) rem(12);
+    padding: 0 rem(16) rem(4);
 
     &[data-more-below] {
         mask-image: linear-gradient(to bottom, #000 calc(100% - #{rem(24)}), transparent);
@@ -818,7 +1059,7 @@
 }
 
 .planTitle {
-    @include font-size(15px, 1.33);
+    @include font-size-floor(15px, 1.33);
 
     margin: 0;
     font-family: var(--font-outfit);
@@ -827,7 +1068,7 @@
 }
 
 .planSummary {
-    @include font-size(13px, 1.46);
+    @include font-size-floor(13px, 1.46);
 
     margin: rem(4) 0 0;
     font-family: var(--font-outfit);
@@ -835,17 +1076,53 @@
 }
 
 .planLedger {
+    --ledger-inset: 0;
+
+    // Nothing in the ledger reaches past its own box unless it opts in
+    // below, so a control the ledger adds inherits the zero.
+
+    --hit-room-x: 0px;
+    --hit-room-y: 0px;
+
     margin-top: rem(10);
+
+    // The ledger's `Change` and `Done` links and an open choice's options.
+    button {
+        @include touch-target;
+
+        &:focus-visible {
+            outline: 1px solid var(--color-charcoal);
+            outline-offset: 2px;
+        }
+    }
+
+    // A row's link stands rem(10) from the row's value (.row column-gap),
+    // and the rows below it at least the dock's gap away.
+    button[aria-expanded] {
+        --hit-room-x: #{rem(5)};
+        --hit-room-y: calc(var(--dock-gap, #{rem(10)}) / 2);
+    }
+
+    // An open choice's options stand rem(2) apart (PlanLedger .options).
+    [role="group"] > button {
+        --hit-room-y: #{rem(1)};
+    }
 }
 
 .planCaveats {
     margin-top: rem(12);
 }
 
-.planFull {
-    @include font-size(13px, 1.38);
+// `View full plan`, under the scrolling body so it shows whatever the
+// body's length.
+.planFoot {
+    flex: none;
+    padding: rem(4) rem(16) rem(12);
+}
 
-    margin-top: rem(12);
+.planFull {
+    @include font-size-floor(13px, 1.38);
+
     padding: 0;
     font-family: var(--font-outfit);
     color: var(--color-charcoal);
@@ -854,6 +1131,8 @@
     cursor: pointer;
     background: none;
     border: 0;
+
+    @include touch-target;
 
     &:focus-visible {
         outline: 2px solid var(--color-charcoal);
@@ -873,6 +1152,8 @@
     background: none;
     border: 0;
     transition: background-color 0.2s ease;
+
+    @include touch-target;
 
     .headLabel {
         flex: 0 1 auto;
@@ -899,7 +1180,7 @@
 }
 
 .planFoldedTitle {
-    @include font-size(13px, 1.2);
+    @include font-size-floor(13px, 1.2);
 
     flex: 1 1 auto;
     min-width: 0;

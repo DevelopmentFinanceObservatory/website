@@ -9,7 +9,16 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { canvasWidgetsOf } from '../../chat/canvas.ts';
-import { placeCard, renameId, renameKey, takenOver, withReplacedCard } from '../cardReplace.ts';
+import { replacementsOf, standingFor } from '../cardIdentity.ts';
+import {
+    placeCard,
+    renameId,
+    renameKey,
+    replacedChain,
+    standingTarget,
+    takenOver,
+    withReplacedCard,
+} from '../cardReplace.ts';
 import { widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated } from '../wire.ts';
 
@@ -178,4 +187,79 @@ test('withReplacedCard: before the next manifest, the canvas shows the replaceme
     // The next manifest is still taken: the revision is the held one.
     assert.equal(canvas?.revision, 3);
     assert.equal(withReplacedCard(held, 'cmp_elsewhere', 'cmp_new'), held);
+});
+
+test('a replaced card is followed forward to the card standing in its place, and back along its chain', () => {
+    const replaced = { c2: 'c1', c3: 'c2' };
+
+    assert.equal(standingFor('c1', new Set(['c3']), replaced), 'c3');
+    assert.equal(standingFor('c1', new Set(['c1']), replaced), 'c1');
+    assert.equal(standingFor('c1', new Set(['x']), replaced), null);
+    assert.equal(standingFor('a', new Set(['x']), { a: 'b', b: 'a' }), null);
+    assert.deepEqual(replacedChain('c3', replaced), ['c3', 'c2', 'c1']);
+    assert.deepEqual(replacedChain('a', { a: 'b', b: 'a' }), ['a', 'b']);
+});
+
+test('placeCard records the question that made a chain’s first card, its ids and the card changes that drew it, through every replacement', () => {
+    // b is a question's redraw of a; c and d are card changes (turns 5 and 7).
+    const first = placeCard([{ id: 'a', turn: 1 }], { id: 'b', turn: 3 }, { replaces: 'a' });
+    const second = placeCard(first, { id: 'c', turn: 5 }, { replaces: 'b', keepTurn: true });
+    const third = placeCard(second, { id: 'd', turn: 7 }, { replaces: 'c', keepTurn: true });
+    // A card a later question redraws under its own id keeps its chain. Its
+    // changes belong to the reply it left.
+    const updated = placeCard(third, { id: 'd', turn: 8 }, {});
+
+    assert.deepEqual(first, [{ id: 'b', turn: 3, madeIn: 1, replaced: ['a'] }]);
+    assert.deepEqual(second, [
+        { id: 'c', turn: 3, madeIn: 1, replaced: ['b', 'a'], changedIn: [5] },
+    ]);
+    assert.deepEqual(third, [
+        { id: 'd', turn: 3, madeIn: 1, replaced: ['c', 'b', 'a'], changedIn: [5, 7] },
+    ]);
+    assert.deepEqual(updated, [{ id: 'd', turn: 8, madeIn: 1, replaced: ['c', 'b', 'a'] }]);
+    assert.deepEqual(replacementsOf(updated), { d: 'c', c: 'b', b: 'a' });
+});
+
+test('a follow-up target follows its card to the replacement, and goes when none stands', () => {
+    const target = { id: 'c1', title: 'Aid' };
+    const replaced = { c2: 'c1' };
+    const titles: Record<string, string> = { c1: 'Aid', c2: 'Aid, 2015 to 2020' };
+    const titleOf = (id: string) => titles[id] ?? 'Card';
+
+    assert.equal(standingTarget(target, new Set(['c1']), replaced, titleOf), target);
+    assert.deepEqual(standingTarget(target, new Set(['c2']), replaced, titleOf), {
+        id: 'c2',
+        title: 'Aid, 2015 to 2020',
+    });
+    assert.deepEqual(
+        standingTarget(target, new Set(['c1']), replaced, () => 'Renamed'),
+        {
+            id: 'c1',
+            title: 'Renamed',
+        },
+    );
+    assert.equal(standingTarget(target, new Set(['x']), replaced, titleOf), null);
+    assert.equal(standingTarget(null, new Set(['c1']), replaced, titleOf), null);
+});
+
+test('a card a question draws in a changed card’s place starts its history afresh', () => {
+    const changed = placeCard(
+        [{ id: 'a', turn: 1 }],
+        { id: 'b', turn: 2 },
+        { replaces: 'a', keepTurn: true, values: (card) => ({ years: card.id }) },
+    );
+    const asked = placeCard(changed, { id: 'c', turn: 3 }, { replaces: 'b' });
+
+    assert.deepEqual(changed, [
+        {
+            id: 'b',
+            turn: 1,
+            madeIn: 1,
+            replaced: ['a'],
+            changedIn: [2],
+            before: { years: 'a' },
+            after: { years: 'b' },
+        },
+    ]);
+    assert.deepEqual(asked, [{ id: 'c', turn: 3, madeIn: 1, replaced: ['b', 'a'] }]);
 });

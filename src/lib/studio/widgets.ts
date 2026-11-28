@@ -52,7 +52,14 @@ import {
     unitWords,
     type StatValue,
 } from './statFace.ts';
-import type { ComponentCreated, ComponentRevised, FactSummary } from './wire';
+import type {
+    ComponentCreated,
+    ComponentRevised,
+    CreatedFrom,
+    FactSummary,
+    PlanStepLink,
+} from './wire';
+import { cardChangesOf } from './studioClient.ts';
 import { readHeld } from './wire.ts';
 
 const structuredUnitText = (unit: StructuredUnit): string => {
@@ -581,10 +588,25 @@ const componentWidget = (
     }
 };
 
+/** The plan step a frame's `created_from`, or a stored card, names, when it
+ *  names both ids as non-empty strings. */
+export const planStepOf = (
+    from: Pick<CreatedFrom, 'plan_version_id' | 'plan_step_id'> | null | undefined,
+): PlanStepLink | null => {
+    const version: unknown = from?.plan_version_id;
+    const step: unknown = from?.plan_step_id;
+
+    return typeof version === 'string' && version && typeof step === 'string' && step
+        ? { plan_version_id: version, plan_step_id: step }
+        : null;
+};
+
 /** One created component → one canvas widget. */
 export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
     const description = describedBy(payloadDescription(frame.payload));
     const widget = componentWidget(frame, description);
+    const planStep = planStepOf(frame.created_from);
+    const cardChanges = cardChangesOf(frame.card_changes);
 
     if (!widget || widget.kind === 'text') {
         // A note carries no data of its own, so it gets no info panel.
@@ -596,6 +618,8 @@ export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
         frame: payloadFrameRef(frame.payload) ?? frame.provenance.inputs[0],
         info: infoOf(frame.fact_summary, provenanceOf(frame), description),
         ...(frame.unit_change && { unitChange: frame.unit_change }),
+        ...(cardChanges && { cardChanges }),
+        ...(planStep && { planStep }),
     };
 };
 
@@ -689,6 +713,21 @@ export const reviseWidget = (
     // goes when it reads another, whose units the offer does not describe.
     if (redrawn.unitChange && drawnFrom?.spec_id !== redrawn.unitChange.spec_id) {
         delete redrawn.unitChange;
+    }
+
+    // A frame's `card_changes`, narrowed as the created frame's is, sets
+    // the years and places offer, and `null` removes it. Without the member
+    // the offer holds by the unit offer's rule.
+    const cardChanges =
+        frame.card_changes === undefined ? undefined : cardChangesOf(frame.card_changes);
+
+    if (cardChanges) {
+        redrawn.cardChanges = cardChanges;
+    } else if (
+        cardChanges === null ||
+        (redrawn.cardChanges && drawnFrom?.spec_id !== redrawn.cardChanges.spec_id)
+    ) {
+        delete redrawn.cardChanges;
     }
 
     return {

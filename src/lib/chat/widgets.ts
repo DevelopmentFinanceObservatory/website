@@ -12,7 +12,7 @@ import {
     percentNumber,
     type StatValue,
 } from '../studio/statFace.ts';
-import type { HeldPeriod, UnitChange } from '../studio/wire.ts';
+import type { CardChanges, HeldPeriod, PlanStepLink, UnitChange } from '../studio/wire.ts';
 
 /** One source a card cites, as the platform names it. */
 export type CardSource = {
@@ -107,6 +107,11 @@ export type KeyNumberWidget = {
     // The units the card can move to, from its `component.created` frame;
     // absent when its readings are not one convertible spec.
     unitChange?: UnitChange;
+    // The years and places the card can change to, from its frame; absent
+    // when it does not draw one retrieval's own frame.
+    cardChanges?: CardChanges;
+    // The plan step whose result the card draws, as its frame named it.
+    planStep?: PlanStepLink;
 };
 
 export type ChartWidget = {
@@ -128,6 +133,11 @@ export type ChartWidget = {
     // The units the card can move to, from its `component.created` frame;
     // absent when its readings are not one convertible spec.
     unitChange?: UnitChange;
+    // The years and places the card can change to, from its frame; absent
+    // when it does not draw one retrieval's own frame.
+    cardChanges?: CardChanges;
+    // The plan step whose result the card draws, as its frame named it.
+    planStep?: PlanStepLink;
 };
 
 export type TableWidget = {
@@ -153,6 +163,11 @@ export type TableWidget = {
     // The units the card can move to, from its `component.created` frame;
     // absent when its readings are not one convertible spec.
     unitChange?: UnitChange;
+    // The years and places the card can change to, from its frame; absent
+    // when it does not draw one retrieval's own frame.
+    cardChanges?: CardChanges;
+    // The plan step whose result the card draws, as its frame named it.
+    planStep?: PlanStepLink;
 };
 
 // A user-authored note on the canvas (Add Text Card) — local only, never

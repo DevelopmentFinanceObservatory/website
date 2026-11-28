@@ -1,23 +1,33 @@
 'use client';
 
 import classNames from 'classnames';
-import { type MutableRefObject, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import {
+    type MutableRefObject,
+    useEffect,
+    useEffectEvent,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import BeaconLayer from './BeaconLayer';
 import { computeBeacons } from './beacons';
 import {
     arrivalBlock,
+    questionTurn,
     BLOCK_INSET,
     blockCols,
     type Placement,
-    promptFoot,
+    replyBlockTop,
     revealOffset,
 } from './blocks';
-import { scrollerOf } from './board';
+import { scrollerOf, scrollView } from './board';
 import { DRAG_THRESHOLD, selectionAfter, type SelectTarget, selectTarget } from './cardPress';
 import CardBody from './cards/CardBody';
 import type { CardExtras } from './cards/types';
+import { type Coming, comingNotice, ghostLabel, RESEAT_MS, titledGhosts } from './comingGhosts';
 import {
     type CardView,
     effectiveKind,
@@ -58,8 +68,47 @@ import type { UnitChoice } from '@/lib/studio/wire';
 // change has settled the canvas's width.
 const HELD_SETTLE_MS = 320;
 
+// The pause between emptying the status and filling it, so the same words
+// twice are announced twice.
+const NOTICE_GAP_MS = 60;
+
 const scrollBehavior = (): ScrollBehavior =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+/**
+ * What the Prompt layout adds to the canvas. Its presence puts each
+ * question's cards in a block of their own below the earlier ones
+ * (`placement: 'blocks'`, blocks.ts) and makes the canvas dock-aware: a
+ * prompt floats over the canvas's foot, so the sheet runs on below its last
+ * row by the prompt's height (--dock-rest, --dock-current on an ancestor),
+ * and the bottom beacons and the arrival scroll keep clear of it.
+ */
+export type PromptCanvas = {
+    // Px the session panel is about to take at the right. Fresh cards are
+    // placed against the narrower width. 0 while the panel is open already.
+    reserveRight: number;
+    // The selected card, whose value the parent owns. With `onSelect` each
+    // card is a toggle: a press on it away from its controls, or Enter or
+    // Space, selects or clears it, and a press on the empty sheet clears.
+    selectedId: string | null;
+    onSelect: (id: string | null) => void;
+    // The card the session panel shows, outlined and brought into view.
+    heldId: string | null;
+    // Cards outlined faintly as the same plan's cards.
+    litIds: readonly string[];
+    // The card the pointer or keyboard focus rests on, after POINT_REST_MS.
+    // Null at once when it leaves. Silent while a card menu is open.
+    onPoint: (id: string | null) => void;
+    // Cards a research plan made, whose menu opens with View Research Plan.
+    viewPlanIds: ReadonlySet<string>;
+    onViewPlan: (id: string) => void;
+    // A question's turn is running. When it ends, the view brings the block
+    // its cards landed in to one cell under the top.
+    replying: boolean;
+    // The cards the running turn has announced, drawn as placeholders where
+    // they will land (comingGhosts.ts).
+    coming: readonly Coming[];
+};
 
 export type WhiteboardProps = {
     widgets: Widget[];
@@ -71,6 +120,9 @@ export type WhiteboardProps = {
     // Card menu → Change unit → Send, on a card whose frame offers other
     // units. Absent on a sheet where no turn can run.
     onChangeUnit?: (id: string, unit: UnitChoice) => void;
+    // Why card changes wait (changesHeld), which the Change unit row shows
+    // in place of opening its panel. Null or absent when they can go.
+    changesHeld?: string | null;
     // Opens one card's More Info panel.
     onCardInfo: (id: string) => void;
     // The card whose panel is open: it floats centred over the dimmed page.
@@ -127,35 +179,8 @@ export type WhiteboardProps = {
     // card with the share's id and creation time. Absent for a snapshot and
     // in the owner's Studio.
     live?: LiveCanvas;
-    // The Prompt layout's canvas. Every prop below is absent in the classic
-    // layout, which then behaves as it always has.
-    //
-    // Where a fresh card lands: `blocks` puts each question's cards in a
-    // block of their own below the earlier ones (blocks.ts).
-    placement?: Placement;
-    // A prompt floats over the canvas's foot: the sheet runs on below its
-    // last row by the prompt's height (--dock-rest, --dock-current on an
-    // ancestor), and the bottom beacons and the arrival scroll keep clear of
-    // it.
-    dockAware?: boolean;
-    // Px the session panel is about to take at the right: fresh cards are
-    // placed against the narrower width. 0 while the panel is open already.
-    reserveRight?: number;
-    // The selected card, whose value the parent owns. With `onSelect` each
-    // card is a toggle: a press on it away from its controls, or Enter or
-    // Space, selects or clears it, and a press on the empty sheet clears.
-    selectedId?: string | null;
-    onSelect?: (id: string | null) => void;
-    // The card the session panel shows: outlined, and brought into view.
-    heldId?: string | null;
-    // Cards outlined faintly as the same plan's cards.
-    litIds?: readonly string[];
-    // The card the pointer or keyboard focus rests on, after POINT_REST_MS;
-    // null at once when it leaves. Silent while a card menu is open.
-    onPoint?: (id: string | null) => void;
-    // Cards a research plan made, whose menu opens with View Research Plan.
-    viewPlanIds?: ReadonlySet<string>;
-    onViewPlan?: (id: string) => void;
+    // The Prompt layout's canvas. Absent in the classic layout.
+    prompt?: PromptCanvas;
 };
 
 /**
@@ -173,6 +198,7 @@ const Whiteboard = ({
     onRemove,
     onAskFollowUp,
     onChangeUnit,
+    changesHeld = null,
     onCardInfo,
     focusedId,
     onEditText,
@@ -196,31 +222,36 @@ const Whiteboard = ({
     resizable = false,
     centerSingle = false,
     live,
-    placement = 'pack',
-    dockAware = false,
-    reserveRight = 0,
-    selectedId = null,
-    onSelect,
-    heldId = null,
-    litIds,
-    onPoint,
-    viewPlanIds,
-    onViewPlan,
+    prompt,
 }: WhiteboardProps) => {
     // Fluid cell: GRID_CELL scaled by the live root font-size. All cell↔px
     // math uses it; `f` scales the raw-px interaction constants (scroll
     // zones, beacon spacing, chart fonts) by the same factor.
+    const dockAware = !!prompt;
+    const placement: Placement = prompt ? 'blocks' : 'pack';
+    const reserveRight = prompt?.reserveRight ?? 0;
+    const selectedId = prompt?.selectedId ?? null;
+    const onSelect = prompt?.onSelect;
+    const heldId = prompt?.heldId ?? null;
+    const litIds = prompt?.litIds;
+    const onPoint = prompt?.onPoint;
+    const viewPlanIds = prompt?.viewPlanIds;
+    const onViewPlan = prompt?.onViewPlan;
+    const replying = prompt?.replying;
+    const coming = prompt?.coming;
     const CELL = useGridCell();
     const f = CELL / GRID_CELL;
     const boardRef = useRef<HTMLDivElement>(null);
     // On a phone the panel covers the sheet anyway, so the card stays put.
     const isPhone = useIsPhone();
-    const { view, origin, viewCols } = useBoardView(boardRef, CELL);
+    // Block placement measures its insets from the sheet's own frame, so its
+    // grid starts at the frame's corner.
+    const { view, origin, viewCols } = useBoardView(boardRef, CELL, placement !== 'blocks');
     // The layout is in cells, so it's the SAME arrangement on every screen —
     // on a phone the cells are just smaller (useGridCell fits them to the
     // width) and the sheet pans.
     const blocks = placement === 'blocks';
-    const { slots, setSlots, fitRows, raise } = useSlots({
+    const { slots, setSlots, ghosts, claimed, fitRows, raise } = useSlots({
         widgets,
         pinnedIds,
         views,
@@ -229,6 +260,7 @@ const Whiteboard = ({
         placement,
         onLayoutChange,
         replacedIds,
+        coming,
     });
     const widgetIds = useMemo(() => new Set(widgets.map((widget) => widget.id)), [widgets]);
     // Download Image. The card is found in the document rather than held in
@@ -244,8 +276,19 @@ const Whiteboard = ({
 
         void downloadCardImage(node, cardImageName(title));
     };
-    const dragging = useCardDrag({ boardRef, CELL, f, slots, setSlots, raise, widgetIds });
-    const pan = usePan(boardRef);
+    // The Prompt layout's canvas on a phone is one column that scrolls.
+    const column = blocks && isPhone;
+    const dragging = useCardDrag({
+        boardRef,
+        CELL,
+        f,
+        slots,
+        setSlots,
+        raise,
+        widgetIds,
+        column,
+    });
+    const pan = usePan(boardRef, column);
     const { canvasRef: fxCanvasRef, spawnWave } = useShockwave({
         boardRef,
         CELL,
@@ -266,12 +309,14 @@ const Whiteboard = ({
     const bottomRow = Math.max(
         0,
         ...Object.values(slots).map((slot) => slot.row + slot.h),
+        ...Object.values(ghosts).map((ghost) => ghost.row + ghost.h),
         landing && dragged ? landing.row + dragged.h : 0,
         swap && swapPartner ? swap.theirRow + swapPartner.h : 0,
     );
     const rightCol = Math.max(
         0,
         ...Object.values(slots).map((slot) => slot.col + slot.w),
+        ...Object.values(ghosts).map((ghost) => ghost.col + ghost.w),
         landing && dragged ? landing.col + dragged.w : 0,
         swap && swapPartner ? swap.theirCol + swapPartner.w : 0,
     );
@@ -286,9 +331,13 @@ const Whiteboard = ({
         extent: { rightCol, bottomRow },
     });
 
-    // The px of the view's foot the floating prompt covers (blocks.ts).
+    // The px of the view's foot the floating prompt covers: the height of
+    // the sheet's foot probe, which the stylesheet sizes to --board-foot.
     const promptCover = (scroller: HTMLElement) =>
-        dockAware ? promptFoot(getComputedStyle(scroller).getPropertyValue('--dock-rest')) : 0;
+        dockAware
+            ? (scroller.querySelector<HTMLElement>('[data-board-foot]')?.getBoundingClientRect()
+                  .height ?? 0)
+            : 0;
 
     // The scroll that shows a card whole, above the prompt; or its top, one
     // cell in, when it is taller than the room. `top` overrides the vertical.
@@ -335,6 +384,9 @@ const Whiteboard = ({
         CELL,
         spawnWave,
         busy: () => dragging.isDragging() || pan.isPanning(),
+        // On the Prompt canvas, a card seated in a placeholder's rect moves the
+        // view no further, since it went to the placeholder.
+        quiet: prompt ? (newest) => claimed.has(newest.widget.id) : undefined,
         // A new block comes up to one cell under the top; a card joining a
         // block is revealed just enough to show above the prompt.
         placeView: blocks
@@ -352,6 +404,174 @@ const Whiteboard = ({
             : undefined,
     });
 
+    // Placeholders that appear are announced once as a batch, and the view
+    // goes to the first of them as it goes to a block's first card, once
+    // their places have settled (comingGhosts.ts RESEAT_MS). The cards that
+    // later take their places move nothing.
+    const seenGhosts = useRef<Set<string>>(new Set());
+    const showTimer = useRef(0);
+    const noticeTimer = useRef(0);
+    const waitingGhosts = useRef<Set<string>>(new Set());
+    const [notice, setNotice] = useState('');
+    const showGhosts = useEffectEvent(() => {
+        const ids = waitingGhosts.current;
+        const scroller = scrollerOf(boardRef);
+        const fresh = Object.values(ghosts).filter((ghost) => ids.has(ghost.id) && !ghost.leaving);
+        const first = fresh.toSorted((a, b) => a.row - b.row || a.col - b.col)[0];
+
+        showTimer.current = 0;
+        ids.clear();
+
+        if (!blocks || !scroller || !first || dragging.isDragging() || pan.isPanning()) {
+            return;
+        }
+
+        const own = Object.values(slots).some(
+            (slot) => !slot.leaving && questionTurn(slot.widget) === first.turn,
+        );
+        const top = Math.min(...fresh.filter((g) => g.turn === first.turn).map((g) => g.row));
+        const target = revealRect(
+            first,
+            scroller,
+            own ? undefined : Math.max(0, origin.y + (top - BLOCK_INSET) * CELL),
+        );
+
+        if (target) {
+            scrollView(scroller, target);
+        }
+    });
+
+    useEffect(() => {
+        const fresh = Object.values(ghosts).filter(
+            (ghost) => !ghost.leaving && !seenGhosts.current.has(ghost.id),
+        );
+
+        for (const ghost of fresh) {
+            seenGhosts.current.add(ghost.id);
+            waitingGhosts.current.add(ghost.id);
+        }
+
+        if (fresh.length > 0) {
+            // Emptied first, so a batch that reads like the last is heard again.
+            const words = comingNotice(fresh);
+
+            setNotice('');
+            window.clearTimeout(noticeTimer.current);
+            noticeTimer.current = window.setTimeout(() => setNotice(words), NOTICE_GAP_MS);
+            window.clearTimeout(showTimer.current);
+            showTimer.current = window.setTimeout(showGhosts, RESEAT_MS + 20);
+        }
+    }, [ghosts]);
+
+    useEffect(
+        () => () => {
+            window.clearTimeout(showTimer.current);
+            window.clearTimeout(noticeTimer.current);
+        },
+        [],
+    );
+
+    // The sheet's foot never shortens: the prompt's height falls as its reply
+    // sheet folds, and a shorter sheet would clamp a scroll that has already
+    // come to rest back by the difference. A new question and a resized window
+    // start the hold again.
+    const heldSheet = useRef(0);
+    const footHold = useRef(0);
+    const holdFoot = useEffectEvent((restart = false) => {
+        const board = boardRef.current;
+        const probe = board?.querySelector<HTMLElement>('[data-board-foot]');
+
+        if (!board || !probe) {
+            return;
+        }
+
+        const height = probe.getBoundingClientRect().height;
+
+        footHold.current = restart ? height : Math.max(footHold.current, height);
+        board.style.setProperty('--board-foot-held', `${footHold.current}px`);
+    });
+
+    useEffect(() => {
+        const probe = boardRef.current?.querySelector<HTMLElement>('[data-board-foot]');
+
+        if (!dockAware || !probe) {
+            return undefined;
+        }
+
+        holdFoot();
+
+        const watch = new ResizeObserver(() => holdFoot());
+        // A window of another size starts the hold again.
+        const resized = () => holdFoot(true);
+
+        watch.observe(probe);
+        window.addEventListener('resize', resized);
+
+        return () => {
+            watch.disconnect();
+            window.removeEventListener('resize', resized);
+        };
+    }, [dockAware]);
+
+    // The live cards when the running turn began, to tell which landed in it.
+    const turnStart = useRef<ReadonlySet<string> | null>(null);
+    const markTurn = useEffectEvent(() => {
+        heldSheet.current = 0;
+        holdFoot(true);
+        turnStart.current = new Set(
+            Object.entries(slots)
+                .filter(([, slot]) => !slot.leaving)
+                .map(([id]) => id),
+        );
+    });
+    const showReply = useEffectEvent(() => {
+        const before = turnStart.current;
+        const scroller = scrollerOf(boardRef);
+
+        turnStart.current = null;
+
+        if (!before || !scroller || dragging.isDragging() || pan.isPanning()) {
+            return;
+        }
+
+        const top = replyBlockTop(slots, before);
+
+        if (top === null) {
+            return;
+        }
+
+        pan.stopGlide();
+        scrollView(scroller, {
+            left: scroller.scrollLeft,
+            top: Math.max(0, origin.y + (top - BLOCK_INSET) * CELL),
+            behavior: scrollBehavior(),
+        });
+    });
+
+    // The turn's last cards are placed a frame after they arrive (useSlots),
+    // so the view moves two frames after the turn ends.
+    useEffect(() => {
+        if (replying === undefined) {
+            return undefined;
+        }
+
+        if (replying) {
+            markTurn();
+
+            return undefined;
+        }
+
+        let inner = 0;
+        const outer = requestAnimationFrame(() => {
+            inner = requestAnimationFrame(() => showReply());
+        });
+
+        return () => {
+            cancelAnimationFrame(outer);
+            cancelAnimationFrame(inner);
+        };
+    }, [replying]);
+
     // The held card comes into view when it changes, and again once the
     // panel that holds it has changed the canvas's width.
     const revealHeld = useEffectEvent(() => {
@@ -365,7 +585,7 @@ const Whiteboard = ({
         const target = revealRect(slot, scroller);
 
         if (target) {
-            scroller.scrollTo(target);
+            scrollView(scroller, target);
         }
     });
 
@@ -380,7 +600,8 @@ const Whiteboard = ({
         return () => window.clearTimeout(timer);
     }, [heldId]);
 
-    const { pointLater, unpoint, menuOpenChange, menuOpen, pointedId } = usePointing(onPoint);
+    const { pointLater, unpoint, menuOpenChange, menuOpen, pointedId, forgetGone } =
+        usePointing(onPoint);
 
     // The press a click finishes, for selection.
     const pressRef = useRef<{
@@ -390,14 +611,18 @@ const Whiteboard = ({
         closedMenu: boolean;
     } | null>(null);
 
-    // A pointed card that leaves the sheet is pointed at no longer.
+    // A card that leaves the sheet stops being pointed at, and its menu,
+    // which unmounts with it, stops counting as open.
     useEffect(() => {
+        const isLive = (id: string) => !!slots[id] && !slots[id].leaving;
         const id = pointedId();
 
-        if (id !== null && (!slots[id] || slots[id].leaving)) {
+        if (id !== null && !isLive(id)) {
             unpoint(id);
         }
-    }, [slots, pointedId, unpoint]);
+
+        forgetGone(isLive);
+    }, [slots, pointedId, unpoint, forgetGone]);
 
     useFilterFly({ boardRef, filter, slots, views, origin, view, CELL, stopGlide: pan.stopGlide });
 
@@ -432,9 +657,24 @@ const Whiteboard = ({
     const dimKind = filter ? FILTER_KIND[filter] : undefined;
     const beacons = computeBeacons({ slots, view, origin, CELL, f, dimKind, views, titleOf });
     const liveCount = Object.values(slots).filter((other) => !other.leaving).length;
+    const titledIds = titledGhosts(Object.values(ghosts).filter((ghost) => !ghost.leaving));
     const sheetHeight =
         origin.y +
         Math.max(bottomRow + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.rows ?? 0) * CELL;
+
+    // From one question to the next the sheet keeps the tallest height it
+    // reached. A card that lands a few rows shorter than its placeholder, or
+    // an old card that leaves, would otherwise clamp a scroll that has come
+    // to rest back by the difference. Set before the browser lays the change
+    // out.
+    useLayoutEffect(() => {
+        if (!dockAware) {
+            return;
+        }
+
+        heldSheet.current = Math.max(heldSheet.current, sheetHeight);
+        boardRef.current?.style.setProperty('--sheet-held', `${heldSheet.current}px`);
+    });
 
     return (
         <div
@@ -449,7 +689,9 @@ const Whiteboard = ({
                     origin.x +
                     Math.max(rightCol + GAP + (drag ? DRAG_SLACK : 0), resizing.floor?.cols ?? 0) *
                         CELL,
-                height: dockAware ? `calc(${sheetHeight}px + var(--board-foot))` : sheetHeight,
+                height: dockAware
+                    ? `calc(max(${sheetHeight}px, var(--sheet-held, 0px)) + max(var(--board-foot), var(--board-foot-held, 0px)))`
+                    : sheetHeight,
             }}
             {...(onSelect && {
                 // Pointer capture can retarget the click that ends a press
@@ -520,6 +762,10 @@ const Whiteboard = ({
         >
             <BeaconLayer beacons={beacons} onFly={flyTo} clearPrompt={dockAware} />
 
+            {dockAware && (
+                <span className={styles.footProbe} data-board-foot="" aria-hidden="true" />
+            )}
+
             <div
                 className={styles.gridLayer}
                 style={{ top: origin.y - CELL, left: origin.x - CELL }}
@@ -564,6 +810,37 @@ const Whiteboard = ({
                         height: dragged.h * CELL,
                     }}
                 />
+            )}
+
+            {/* The cards a running turn announced stand as dashed outlines at the
+                place and size their cards will take. They take no focus, open
+                no menu and cannot be selected, and the status below announces
+                each batch once. */}
+            {Object.values(ghosts).map((ghost) => (
+                <div
+                    key={ghost.id}
+                    className={classNames(styles.coming, ghost.leaving && styles.comingLeaving)}
+                    style={{
+                        left: origin.x + ghost.col * CELL,
+                        top: origin.y + ghost.row * CELL,
+                        width: ghost.w * CELL,
+                        height: ghost.h * CELL,
+                    }}
+                    aria-hidden="true"
+                    data-coming={ghost.id}
+                >
+                    <p className={styles.comingLabel}>
+                        <span className={styles.comingKind}>{ghostLabel(ghost.type)}</span>
+                        {ghost.title && titledIds.has(ghost.id) && (
+                            <span className={styles.comingTitle}>{ghost.title}</span>
+                        )}
+                    </p>
+                </div>
+            ))}
+            {prompt && (
+                <span role="status" className={styles.comingStatus}>
+                    {Object.values(ghosts).some((ghost) => !ghost.leaving) ? notice : ''}
+                </span>
             )}
 
             {/* Slot-driven (not props-driven) so a replaced card keeps its DOM
@@ -623,6 +900,7 @@ const Whiteboard = ({
                     unitOffer,
                     onChangeUnit:
                         unitOffer && onChangeUnit ? (unit) => onChangeUnit(widget.id, unit) : null,
+                    unitHeld: unitOffer ? changesHeld : null,
                     onInfo: isText ? null : () => onCardInfo(widget.id),
                     onDownload:
                         onDownload && cardRefOf(widget) ? () => onDownload(widget.id) : null,
@@ -750,6 +1028,8 @@ const Whiteboard = ({
                                 <button
                                     type="button"
                                     className={styles.selectToggle}
+                                    // The shell focuses a card by this hook.
+                                    data-card-select=""
                                     aria-pressed={selected}
                                     aria-label={title}
                                     data-no-export=""

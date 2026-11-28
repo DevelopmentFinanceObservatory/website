@@ -25,7 +25,7 @@ import {
     type EditTarget,
     followUpAction,
 } from '@/lib/studio/composer';
-import { shareMarkAfter } from '@/lib/studio/transcript';
+import { pageTurnReplyAt, shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
 
@@ -117,6 +117,30 @@ const ChatPanel = ({
         }
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
+    // The view follows the streaming reply's words as they arrive. They
+    // re-render only the reply's own message (useStreamedText), so the scroll
+    // runs a frame later, after it has.
+    const { store: replyStore } = chat.replyStream;
+
+    useEffect(() => {
+        let frame = 0;
+        const unsubscribe = replyStore.subscribe(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => {
+                const el = scrollRef.current;
+
+                if (el) {
+                    el.scrollTop = el.scrollHeight;
+                }
+            });
+        });
+
+        return () => {
+            unsubscribe();
+            cancelAnimationFrame(frame);
+        };
+    }, [replyStore]);
+
     // The rules live in src/lib/studio/composer.ts.
     const amendmentCount = countAmendment(follow, chat.plan);
     const mode = composerMode({ walled: !!wall, plan: chat.plan, clarify: !!chat.clarify });
@@ -155,6 +179,12 @@ const ChatPanel = ({
     const turns = messageTurns(chat.messages, chat.activity);
     const plans = plansByTurn(chat.messages, turns);
 
+    // Each turn's reply, which a stream writes into (pageTurnReplyAt), adds
+    // the words streamed in since the transcript's last commit.
+    const isReply = (index: number) =>
+        chat.messages[index]?.role === 'bot' &&
+        pageTurnReplyAt(chat.messages, turns[index]) === index;
+
     // A Chat + Canvas share point sits after message `index`?
     const sharedAfter = (index: number) =>
         !readOnly && shareMarks.some((mark) => shareMarkAfter(chat.messages, mark) === index);
@@ -180,6 +210,7 @@ const ChatPanel = ({
                                 <Fragment key={index}>
                                     <ChatMessage
                                         message={message}
+                                        stream={isReply(index) ? chat.replyStream : undefined}
                                         isLast={index === chat.messages.length - 1}
                                         turnWidgets={chat.widgets.filter(
                                             (widget) => widget.turn === turn,

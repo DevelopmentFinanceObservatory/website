@@ -4,14 +4,16 @@ import { getSession } from '@/lib/auth/session';
 import { boundedLookup } from '@/lib/events/boundedLookup';
 import { fitsProps, MAX_PROPS_BYTES } from '@/lib/events/limits';
 import { isBrowserEventName } from '@/lib/events/browserEvents';
+import { isLayoutEventName, layoutEventProblem } from '@/lib/events/studioLayoutEvents';
 import { track, userWho } from '@/lib/events/track';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 
 /**
  * Usage-event intake (POST /api/events) for the browser side of
  * src/lib/events. Body: `{ name, props?, visitorId?, page? }`. The name must
- * be one the site's pages send (BROWSER_EVENT_NAMES); props are capped so a stray payload can't bloat
- * the table. Answers 204 for an event taken, and a problem document
+ * be one the site's pages send (BROWSER_EVENT_NAMES); the Prompt layout's
+ * events take only their listed members (STUDIO_LAYOUT_EVENTS); props are
+ * capped so a stray payload can't bloat the table. Answers 204 for an event taken, and a problem document
  * (`request_invalid`, `payload_too_large`) for one refused; the page never
  * waits on either, and the route answers once the event is written.
  */
@@ -33,6 +35,16 @@ export const POST = async (request: Request) => {
         body?.props && typeof body.props === 'object' && !Array.isArray(body.props)
             ? (body.props as Record<string, unknown>)
             : {};
+
+    // The Prompt layout's events take their listed members and nothing else.
+    const off = isLayoutEventName(name) ? layoutEventProblem(name, props) : null;
+
+    if (off !== null) {
+        return requestInvalidProblem(
+            'The event props are not the ones this event takes.',
+            `/props${off}`,
+        );
+    }
 
     if (!fitsProps(props)) {
         return problem({

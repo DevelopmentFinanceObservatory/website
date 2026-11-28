@@ -8,7 +8,7 @@
 
 import type { Widget } from '../chat/widgets.ts';
 import type { StreamRefusal } from './studioClient.ts';
-import { unitText } from './unitChoice.ts';
+import { servesUnit, unitText } from './unitChoice.ts';
 import type { ApplyUnit, UnitChoice, UnitOffer } from './wire.ts';
 
 /** A pick in a card's Change unit panel, ready to send: the card's title as
@@ -48,6 +48,19 @@ export const cardUnitChange = (
     };
 };
 
+/** `change`, built when another card stood in its place, rebuilt for
+ *  `widget`, the card standing there now. Null when its offer does not take
+ *  the unit. */
+export const retargetUnitChange = (
+    change: CardUnitChange,
+    widget: Widget & { turn: number },
+): CardUnitChange | null => {
+    const offer = cardUnitOffer(widget);
+    const { unit } = change.request;
+
+    return offer && servesUnit(offer, unit) ? cardUnitChange(widget, change.title, unit) : null;
+};
+
 /** The change in words: "Constant 2023 US dollars". */
 export const changeUnitText = ({ offer, request }: CardUnitChange): string =>
     unitText(offer, request.unit);
@@ -68,9 +81,12 @@ export const unitRefusalDetail = (refusal: StreamRefusal): string | null =>
         ? refusal.error.detail
         : null;
 
-/** The widgets without their unit offers, for a conversation reopened
- *  without its harness session, which holds none of the cards they move. */
-export const withoutUnitChanges = <TWidget extends Widget>(widgets: TWidget[]): TWidget[] =>
+/** The widgets without their unit offers and their offers of years and
+ *  places, for a conversation reopened without its harness session, which
+ *  holds none of the cards they move. */
+export const withoutCardOffers = <TWidget extends Widget>(widgets: TWidget[]): TWidget[] =>
     widgets.map((widget) =>
-        widget.kind !== 'text' && widget.unitChange ? { ...widget, unitChange: undefined } : widget,
+        widget.kind !== 'text' && (widget.unitChange || widget.cardChanges)
+            ? { ...widget, unitChange: undefined, cardChanges: undefined }
+            : widget,
     );

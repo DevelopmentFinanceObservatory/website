@@ -12,14 +12,14 @@ import styles from './SessionPanel.module.scss';
 import { useGrow } from './useGrow';
 import { useSession } from './useSession';
 
-import { ESCAPE_PANEL_PAGE, type PanelPage } from '@/lib/studio/promptShell';
+import { standingFor } from '@/lib/studio/cardIdentity';
+import { ESCAPE_PANEL_PAGE, type PanelPage, samePage } from '@/lib/studio/promptShell';
 import {
     datasetsOf,
     pageTitleOf,
     planPageOf,
     type SessionInput,
     sourcePageOf,
-    standingFor,
     turnPageOf,
 } from '@/lib/studio/sessionView';
 
@@ -70,6 +70,26 @@ const PageView = ({
 const cardStands = (id: string, input: SessionInput) =>
     standingFor(id, new Set(input.canvasIds), input.replaced ?? {}) !== null;
 
+/** A panel control's `data-sp-key`, or the card on the canvas a page was
+ *  opened from with the control pressed on it (a menu's trigger for a menu
+ *  item). */
+type CardOpener = { card: string; control: Element | null };
+type Opener = string | CardOpener | null;
+
+/**
+ * The panel control `opener` names, while it is in the panel. A card row's
+ * control of a card since replaced resolves to the same control of the card
+ * standing for it.
+ */
+const openerIn = (box: HTMLElement, opener: string, input: SessionInput): Element | null => {
+    const find = (key: string) => box.querySelector(`[data-sp-key="${CSS.escape(key)}"]`);
+    const card = opener.match(/^(more|fly|text|image|data):(.+)$/);
+    const standing =
+        card?.[2] && standingFor(card[2], new Set(input.canvasIds), input.replaced ?? {});
+
+    return find(opener) ?? (card && standing ? find(`${card[1]}:${standing}`) : null);
+};
+
 // Whether a page's subject still stands.
 const resolves = (page: PanelPage, input: SessionInput): boolean => {
     switch (page.kind) {
@@ -95,7 +115,7 @@ const resolves = (page: PanelPage, input: SessionInput): boolean => {
  */
 const SessionPanel = () => {
     const { canvas } = useStudioModel();
-    const { state, dispatch, panelOpen, plans: links } = usePromptShell();
+    const { state, dispatch, panelOpen, focusCard, plans: links, report } = usePromptShell();
     const { input, overview } = useSession();
     const { trail } = state;
     const top = trail.at(-1) ?? null;
@@ -103,59 +123,150 @@ const SessionPanel = () => {
     const { scroller, top: topSpacer, foot: footSpacer } = useGrow(shown !== null);
     const [folds, setFolds] = useState<Folds>({ earlier: false, removed: false, keep: null });
 
-    // The control that opened each page, by the page's place in the trail,
-    // which takes focus when the reader comes back to it.
-    const openers = useRef<(string | null)[]>([]);
-    const backTo = useRef<string | null>(null);
+    // What opened each page, by the page's place in the trail, which takes
+    // focus when the reader comes back to it: a panel control's
+    // `data-sp-key`, or the card on the canvas and its control (a menu's
+    // trigger for a menu item) the reader last pressed or focused outside
+    // the panel (`outside`). `pending` holds the opener of the page nav.show
+    // asked for until the trail takes it.
+    const openers = useRef<Opener[]>([]);
+    const pending = useRef<{ page: PanelPage; opener: string | null } | null>(null);
+    const trailBefore = useRef<readonly PanelPage[]>([]);
+    const outside = useRef<CardOpener | null>(null);
+    const backTo = useRef<Opener>(null);
     const overviewTop = useRef<number | null>(null);
 
     const newestTurn = overview.groups.at(-1)?.turn ?? null;
     const behind = trail.at(-2);
     const backLabel = behind ? (pageTitleOf(input, behind) ?? 'Back') : 'Session';
 
+    // The model rebuilds `canvas.flyTo` on every render, so nav reads it
+    // through a ref and its consumers render only when the trail changes.
+    const flyTo = useRef(canvas.flyTo);
+
+    useEffect(() => {
+        flyTo.current = canvas.flyTo;
+    });
+
     const nav = useMemo<PanelNav>(
         () => ({
             show: (page, opener) => {
-                openers.current[trail.length] = opener ?? null;
+                pending.current = { page, opener: opener ?? null };
                 dispatch({ type: 'panel.show', page });
+                report('studio.panel_page', { view: page.kind, from: 'panel' });
             },
             back: () => {
                 backTo.current = openers.current[trail.length - 1] ?? null;
                 dispatch({ type: 'panel.back' });
+                report('studio.panel_page', { view: behind?.kind ?? 'overview', from: 'panel' });
             },
             backLabel,
-            fly: (id) => canvas.flyTo(id),
+            fly: (id) => flyTo.current(id),
+            topSpacer,
         }),
-        [trail.length, backLabel, dispatch, canvas],
+        [trail.length, backLabel, behind?.kind, dispatch, report, topSpacer],
     );
 
-    useEscape(ESCAPE_PANEL_PAGE, () => {
-        if (trail.length === 0) return false;
+    useEffect(() => {
+        const box = scroller.current;
+        const note = (event: Event) => {
+            const target = event.target instanceof Element ? event.target : null;
 
-        nav.back();
+            if (!target || box?.contains(target)) return;
 
-        return true;
-    });
+            const menu = target.closest('[role="menu"]');
+            const trigger = menu?.id
+                ? document.querySelector(`[aria-controls="${CSS.escape(menu.id)}"]`)
+                : null;
+
+            const pressed = trigger ?? target;
+            const id = pressed
+                .closest('[data-studio-canvas] [data-card-id]')
+                ?.getAttribute('data-card-id');
+            const control = pressed.closest('button, a, [tabindex]');
+
+            // Focus landing outside any card (a menu's focus guard, the
+            // dock) leaves the card in place; a press elsewhere clears it.
+            if (id || event.type === 'pointerdown') {
+                outside.current = id ? { card: id, control } : null;
+            }
+        };
+
+        document.addEventListener('focusin', note, true);
+        document.addEventListener('pointerdown', note, true);
+
+        return () => {
+            document.removeEventListener('focusin', note, true);
+            document.removeEventListener('pointerdown', note, true);
+        };
+    }, [scroller]);
+
+    // The openers follow the trail: a page keeps its opener while it stays
+    // at its place, a page replaced in place keeps the one it took over, and
+    // a page that joined the trail takes nav.show's opener when it is the
+    // page nav.show asked for, else the card it was opened from.
+    useLayoutEffect(() => {
+        const before = trailBefore.current;
+        const asked = pending.current;
+
+        openers.current = trail.map((page, at) => {
+            const kept =
+                before[at] === page || (at === before.length - 1 && at === trail.length - 1);
+
+            if (kept) return openers.current[at] ?? null;
+
+            if (at !== trail.length - 1) return null;
+
+            return asked && samePage(asked.page, page) ? asked.opener : outside.current;
+        });
+        trailBefore.current = trail;
+        pending.current = null;
+    }, [trail]);
+
+    useEscape(
+        ESCAPE_PANEL_PAGE,
+        () => {
+            if (trail.length === 0) return false;
+
+            nav.back();
+
+            return true;
+        },
+        panelOpen,
+    );
 
     // A page whose subject is gone (a card page follows its card through
-    // replacements first) leaves the trail. Focus that was in the panel, or
-    // fell to the body with the page, goes to the Cards heading.
+    // replacements first) leaves the trail with every page above the
+    // deepest one that still stands. Focus that was in the panel, or fell to
+    // the body with the page, goes to the control on that page that opened
+    // the next one, or to the Cards heading on the overview.
     const gone = top !== null && shown === null;
 
     useEffect(() => {
         if (!gone) return;
 
-        dispatch({ type: 'panel.home' });
-
+        const stands = trail.findLastIndex((page) => resolves(page, input));
         const box = scroller.current;
-        const heading = box?.querySelector<HTMLElement>('[data-sp-cards] h3');
         const active = document.activeElement;
+        const free = !active || active === document.body || !!box?.contains(active);
 
-        if (heading && (!active || active === document.body || box?.contains(active))) {
-            heading.tabIndex = -1;
-            heading.focus({ preventScroll: true });
+        if (stands === -1) {
+            dispatch({ type: 'panel.home' });
+
+            const heading = box?.querySelector<HTMLElement>('[data-sp-cards] h3');
+
+            if (heading && free) {
+                heading.tabIndex = -1;
+                heading.focus({ preventScroll: true });
+            }
+
+            return;
         }
-    }, [gone, dispatch, scroller]);
+
+        if (free) backTo.current = openers.current[stands + 1] ?? null;
+
+        for (let at = trail.length - 1; at > stands; at -= 1) dispatch({ type: 'panel.back' });
+    }, [gone, trail, input, dispatch, scroller]);
 
     // Scroll and focus follow the trail: a page opens at its top with focus
     // on its back button (when focus is in the panel, on the body, or on the
@@ -164,6 +275,12 @@ const SessionPanel = () => {
     const shownKey = shown ? pageKey(shown) : null;
     const depth = useRef(trail.length);
     const depthNow = trail.length;
+    // The input as of this render, read when the trail moves.
+    const inputNow = useRef(input);
+
+    useLayoutEffect(() => {
+        inputNow.current = input;
+    });
 
     useLayoutEffect(() => {
         const box = scroller.current;
@@ -186,17 +303,48 @@ const SessionPanel = () => {
             !active ||
             active === document.body ||
             box.contains(active) ||
-            !!active.closest('[data-studio-canvas]');
+            !!active.closest('[data-studio-canvas], [role="menu"]');
 
         if (shownKey !== null && deeper && free) {
             box.querySelector<HTMLElement>('[data-sp-back]')?.focus({ preventScroll: true });
         } else if (backTo.current) {
-            box.querySelector<HTMLElement>(`[data-sp-key="${CSS.escape(backTo.current)}"]`)?.focus({
-                preventScroll: true,
-            });
+            const opener = backTo.current;
+            const now = inputNow.current;
+
             backTo.current = null;
+
+            // A page opened from a card goes back to the control pressed on
+            // it, else to the selection toggle of the card standing for it.
+            if (opener !== null && typeof opener !== 'string') {
+                if (opener.control instanceof HTMLElement && opener.control.isConnected) {
+                    opener.control.focus({ preventScroll: true });
+
+                    return;
+                }
+
+                const standing = standingFor(
+                    opener.card,
+                    new Set(now.canvasIds),
+                    now.replaced ?? {},
+                );
+
+                if (standing && focusCard(standing)) return;
+            }
+
+            // A control that is gone hands focus to the page's back button,
+            // or on the overview to the Cards heading.
+            const target =
+                (typeof opener === 'string' ? openerIn(box, opener, now) : null) ??
+                box.querySelector<HTMLElement>(
+                    shownKey !== null ? '[data-sp-back]' : '[data-sp-cards] h3',
+                );
+
+            if (!(target instanceof HTMLElement)) return;
+
+            if (shownKey === null && target.tagName === 'H3') target.tabIndex = -1;
+            target.focus({ preventScroll: true });
         }
-    }, [shownKey, depthNow, scroller]);
+    }, [shownKey, depthNow, scroller, focusCard]);
 
     // The overview opens scrolled so the newest question shows, and follows
     // each new question as it arrives. Only the panel's own scroller moves:
@@ -234,7 +382,14 @@ const SessionPanel = () => {
                     updateFades(box);
                 }}
             >
-                <div ref={topSpacer} className={styles.spacer} aria-hidden="true" data-end="top" />
+                {!shown && (
+                    <div
+                        ref={topSpacer}
+                        className={partStyles.spacer}
+                        aria-hidden="true"
+                        data-end="top"
+                    />
+                )}
                 {!overview.empty &&
                     (shown ? (
                         <PageView page={shown} input={input} newestTurn={newestTurn} />
@@ -243,7 +398,7 @@ const SessionPanel = () => {
                     ))}
                 <div
                     ref={footSpacer}
-                    className={styles.spacer}
+                    className={partStyles.spacer}
                     aria-hidden="true"
                     data-end="foot"
                 />
@@ -268,10 +423,8 @@ const scrollTo = (box: HTMLElement, top: number) => {
     box.scrollTop = top;
 };
 
-// The foot fade while content lies below, and the back row's hairline once
-// a page has scrolled.
+// The foot fade while content lies below.
 const updateFades = (box: HTMLElement) => {
-    box.toggleAttribute('data-sp-scrolled', box.scrollTop > 0);
     box.toggleAttribute('data-more-below', box.scrollTop + box.clientHeight < box.scrollHeight - 1);
 };
 

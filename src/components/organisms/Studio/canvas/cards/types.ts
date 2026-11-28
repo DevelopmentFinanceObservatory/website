@@ -21,6 +21,9 @@ export type CardExtras = {
     // on a sheet where no turn can run, and the row is hidden.
     unitOffer?: UnitOffer | null;
     onChangeUnit?: ((unit: UnitChoice) => void) | null;
+    // Why the card's changes wait (changesHeld), or null when they can go.
+    // While set, the menu's Change unit row says why and opens nothing.
+    unitHeld?: string | null;
     // Opens the Download Data dialog; null when the card has no rows to
     // give (a text card), and the download menu offers the image alone.
     onDownload: (() => void) | null;

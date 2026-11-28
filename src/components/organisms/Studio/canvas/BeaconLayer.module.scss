@@ -17,9 +17,10 @@
 }
 
 // The floating prompt covers the view's foot: the bottom beacons rise above
-// it, by the 20 px gap under the prompt and its resting height.
+// it, by the gap under the prompt and its resting height (--prompt-gap from
+// .boardPrompt in Whiteboard.module.scss).
 .beaconLayerPrompt .beaconBottom {
-    margin-top: calc(-1 * (#{rem(20)} + var(--dock-rest, 0px)));
+    margin-top: calc(-1 * (var(--prompt-gap, 0px) + var(--dock-rest, 0px)));
 }
 
 // A beacon anchors its edge (not centre) to the view boundary — the inline

@@ -1,4 +1,6 @@
 @use "mixins" as *;
+@use "textFloor" as *;
+@use "touchTarget" as *;
 
 // The session title takes what the bar has left and shrinks first.
 .session {
@@ -10,10 +12,25 @@
     margin-left: rem(10);
 }
 
+// A phone: the title alone, up to two whole lines.
+.compact {
+    margin-left: 0;
+
+    .title {
+        display: -webkit-box;
+        overflow: hidden;
+        line-height: 1.25;
+        white-space: normal;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
+}
+
 .slash {
     flex-shrink: 0;
     font-family: var(--font-outfit);
-    font-size: rem(16);
+    font-size: rem-floor(16);
     color: var(--color-stone-light);
 }
 
@@ -21,7 +38,7 @@
     min-width: 0;
     overflow: hidden;
     font-family: var(--font-outfit);
-    font-size: rem(16);
+    font-size: rem-floor(16);
     font-weight: 500;
     line-height: rem(20);
     white-space: nowrap;
@@ -43,6 +60,8 @@
     border: 0;
     border-radius: rem(4);
     transition: opacity 0.25s ease;
+
+    @include touch-target;
 
     svg {
         width: rem(20);
@@ -68,7 +87,7 @@
     height: rem(26);
     padding: 0 rem(6);
     font-family: var(--font-outfit);
-    font-size: rem(16);
+    font-size: rem-floor(16);
     font-weight: 500;
     color: var(--color-charcoal);
     background-color: var(--color-white);
@@ -97,6 +116,8 @@
         background-color 0.25s ease,
         color 0.25s ease;
 
+    @include touch-target;
+
     svg {
         width: rem(18);
         height: rem(18);
@@ -117,6 +138,17 @@
         color: var(--color-charcoal);
         background-color: var(--color-sage-light);
     }
+
+    // Forced colours drop the fill, so the pressed state takes the system's
+    // highlight pair.
+
+    @media (forced-colors: active) {
+        &[aria-pressed="true"] {
+            color: highlighttext;
+            background-color: highlight;
+            forced-color-adjust: none;
+        }
+    }
 }
 
 .rule {
@@ -125,4 +157,11 @@
     height: rem(28);
     margin-inline: rem(6);
     background-color: var(--color-yellow-800);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rename,
+    .icon {
+        transition: none;
+    }
 }

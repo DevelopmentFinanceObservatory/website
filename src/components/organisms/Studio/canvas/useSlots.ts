@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Placement } from './blocks';
 import {
@@ -12,10 +12,13 @@ import {
     settleAround,
     type Slots,
 } from './layout';
-import { placeSlots } from './placeSlots';
+import type { Coming } from './comingGhosts';
+import { type Board, EMPTY_BOARD, placeBoard, pruneBoard, updateSlots } from './slotsBoard';
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
+
+const NONE: readonly Coming[] = [];
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -36,6 +39,9 @@ type UseSlotsArgs = {
     // Cards that replaced another in its slot, new id → old id: the new
     // card takes the old one's slot, place and size.
     replacedIds?: Record<string, string>;
+    // The cards a running turn has announced, which stand as placeholders
+    // until their cards land (comingGhosts.ts).
+    coming?: readonly Coming[];
 };
 
 /**
@@ -56,8 +62,17 @@ export const useSlots = ({
     placement = 'pack',
     onLayoutChange,
     replacedIds,
+    coming = NONE,
 }: UseSlotsArgs) => {
-    const [slots, setSlots] = useState<Slots>({});
+    // One state for the cards and the placeholders (slotsBoard.ts). Every
+    // change is a functional update of it, so a fit that commits between two
+    // placements survives.
+    const [board, setBoard] = useState<Board>(EMPTY_BOARD);
+    const { slots, ghosts, claimed } = board;
+    const setSlots = useCallback(
+        (update: SetStateAction<Slots>) => setBoard((prev) => updateSlots(prev, update)),
+        [],
+    );
     const zRef = useRef(1);
     const leaveTimersRef = useRef<number[]>([]);
 
@@ -73,8 +88,10 @@ export const useSlots = ({
         }
 
         const frame = requestAnimationFrame(() => {
-            setSlots((current) =>
-                placeSlots(current, {
+            const now = Date.now();
+
+            setBoard((prev) =>
+                placeBoard(prev, {
                     widgets,
                     pinnedIds,
                     views,
@@ -83,24 +100,17 @@ export const useSlots = ({
                     placement,
                     replacedIds,
                     nextZ: () => zRef.current++,
+                    coming,
+                    now,
                 }),
             );
 
             // Prune whatever finished fading — a no-op when nothing left.
-            const timer = window.setTimeout(() => {
-                setSlots((prev) => {
-                    const entries = Object.entries(prev);
-                    const kept = entries.filter(([, slot]) => !slot.leaving);
-
-                    return kept.length === entries.length ? prev : Object.fromEntries(kept);
-                });
-            }, LEAVE_MS);
-
-            leaveTimersRef.current.push(timer);
+            leaveTimersRef.current.push(window.setTimeout(() => setBoard(pruneBoard), LEAVE_MS));
         });
 
         return () => cancelAnimationFrame(frame);
-    }, [widgets, pinnedIds, views, viewCols, placement, initialLayout, replacedIds]);
+    }, [widgets, pinnedIds, views, viewCols, placement, initialLayout, replacedIds, coming]);
 
     // Every settle (placement, drop, swap, resize) reports the live layout —
     // the parent persists it with the conversation.
@@ -164,15 +174,18 @@ export const useSlots = ({
                 return h === slot.h ? next : settleAround(next, [id], pinnedIds, true);
             });
         },
-        [pinnedIds, views],
+        [pinnedIds, views, setSlots],
     );
 
     // Lift a card above everything else (a grab): it stays there.
-    const raise = useCallback((id: string) => {
-        setSlots((prev) =>
-            prev[id] ? { ...prev, [id]: { ...prev[id], z: zRef.current++ } } : prev,
-        );
-    }, []);
+    const raise = useCallback(
+        (id: string) => {
+            setSlots((prev) =>
+                prev[id] ? { ...prev, [id]: { ...prev[id], z: zRef.current++ } } : prev,
+            );
+        },
+        [setSlots],
+    );
 
-    return { slots, setSlots, fitRows, raise };
+    return { slots, setSlots, ghosts, claimed, fitRows, raise };
 };

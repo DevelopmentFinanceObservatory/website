@@ -11,6 +11,7 @@ import type { ShareCopied } from '../src/lib/events/shareCopy.ts';
 import type { DataViewVia } from '../src/lib/events/dataView.ts';
 import type { ShareViewer } from '../src/lib/events/shareView.ts';
 import type { StudioDownloadSource } from '../src/lib/events/studioDownload.ts';
+import { type LayoutMember, STUDIO_LAYOUT_EVENTS } from '../src/lib/events/studioLayoutEvents.ts';
 import type { EventName } from '../src/lib/events/track.ts';
 import { exportDigest } from '../src/lib/proxy/account.ts';
 import type { DatasetFormat } from '../src/lib/search/searchClient.ts';
@@ -137,13 +138,16 @@ const SHARE_KINDS = every<ShareKind>()(['conversation', 'canvas', 'card', 'searc
 // share.create, share.copy and share.open send Studio's ShareMode, search.action the search's.
 const SHARE_MODES = every<SearchShareMode | ShareMode>()(['live', 'snapshot']);
 // A prompt with no card target is `new` on the first turn; a chip pick is
-// `apply_choice` and a card's Change unit `apply_unit`.
+// `apply_choice`, a card's Change unit `apply_unit`, and a card page's change
+// of years or places `apply_years` or `apply_places`.
 const PROMPT_INTENTS = every<PromptIntent>()([
     'new',
     'follow_up',
     'edit',
     'apply_choice',
     'apply_unit',
+    'apply_years',
+    'apply_places',
 ]);
 // A typed prompt has no `source`.
 const PROMPT_SOURCES = every<PromptSource>()(['example', 'availability', 'search_example']);
@@ -196,6 +200,19 @@ const ANSWER: Record<string, PropRule> = {
 // Set by track() on every event, true when the signed-in user's email is on
 // INTERNAL_ENG_EMAILS (src/lib/events/internalEng.ts).
 const EVERY_EVENT: Record<string, PropRule> = { internal_eng: 'boolean' };
+
+// A Prompt layout event keeps every member it takes (STUDIO_LAYOUT_EVENTS in
+// src/lib/events/studioLayoutEvents.ts), each a fixed list or a boolean.
+const layoutRules = (members: Record<string, LayoutMember>): Record<string, PropRule> => ({
+    ...EVERY_EVENT,
+    ...Object.fromEntries(
+        Object.entries(members).map(([key, member]) => [
+            key,
+            typeof member === 'object' && 'optional' in member ? member.optional : member,
+        ]),
+    ),
+    variant: STUDIO_VARIANTS,
+});
 
 /** The props each event keeps, from its emit sites (docs/analytics.md). */
 export const PROP_RULES = {
@@ -301,6 +318,14 @@ export const PROP_RULES = {
     },
     // A page shown (PageView in src/components/atoms/PageView), whose path is `page`.
     'page.view': { ...EVERY_EVENT },
+    'studio.panel': layoutRules(STUDIO_LAYOUT_EVENTS['studio.panel']),
+    'studio.panel_page': layoutRules(STUDIO_LAYOUT_EVENTS['studio.panel_page']),
+    'studio.card_select': layoutRules(STUDIO_LAYOUT_EVENTS['studio.card_select']),
+    'studio.focus': layoutRules(STUDIO_LAYOUT_EVENTS['studio.focus']),
+    'studio.change': layoutRules(STUDIO_LAYOUT_EVENTS['studio.change']),
+    'studio.sheet': layoutRules(STUDIO_LAYOUT_EVENTS['studio.sheet']),
+    'studio.plan': layoutRules(STUDIO_LAYOUT_EVENTS['studio.plan']),
+    'studio.new_session': layoutRules(STUDIO_LAYOUT_EVENTS['studio.new_session']),
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest (or exportDigest), passes, exportProps, exportPage or

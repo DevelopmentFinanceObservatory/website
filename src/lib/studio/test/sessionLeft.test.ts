@@ -37,6 +37,7 @@ test('sessionLeftChat: the plan and question cards go with the session, and the 
         messages: transcript,
         widgets: [],
         queued: [],
+        dropped: [],
         activity: [],
         status: null,
         statusDetail: null,

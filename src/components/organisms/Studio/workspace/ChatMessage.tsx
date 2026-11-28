@@ -9,12 +9,17 @@ import styles from './ChatPanel.module.scss';
 import MessageFeedback from './MessageFeedback';
 import WidgetChips from './WidgetChips';
 import type { ChatMessage as ChatMessageData, TurnWidget } from '../hooks/useChat';
+import { useStreamedText } from '../hooks/useStreamedText';
 import type { CardView } from '../canvas/layout';
 import { chipAction, chipKey } from '@/lib/studio/chips';
+import type { ReplyStream } from '@/lib/studio/replyStream';
 import type { ApplyChoiceSuggestion } from '@/lib/studio/wire';
 
 type ChatMessageProps = {
     message: ChatMessageData;
+    // Set on the reply a stream writes into. Carries the words streamed in
+    // since the transcript's last commit.
+    stream?: ReplyStream;
     // Is this the transcript's last entry (follow-ups show there only).
     isLast: boolean;
     // The bot turn's cards (already filtered to this turn).
@@ -50,6 +55,7 @@ const markdownComponents: Components = {
  */
 const ChatMessage = ({
     message,
+    stream,
     isLast,
     turnWidgets,
     turn,
@@ -63,6 +69,8 @@ const ChatMessage = ({
     onApplyChoice,
     readOnly,
 }: ChatMessageProps) => {
+    const text = useStreamedText(stream, turn, message.text);
+
     if (message.role === 'user') {
         return (
             <p className={styles.chatBubble}>
@@ -80,22 +88,22 @@ const ChatMessage = ({
     const followups = message.followups ?? [];
     const chips = message.chips ?? [];
 
-    if (!message.text && followups.length === 0 && chips.length === 0 && !message.plan) {
+    if (!text && followups.length === 0 && chips.length === 0 && !message.plan) {
         return null;
     }
 
     return (
         <div className={styles.botTurn}>
-            {message.text && (
+            {text && (
                 <div className={styles.botText}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                        {message.text}
+                        {text}
                     </ReactMarkdown>
                 </div>
             )}
             {/* Rate the answer (and copy it): a shared sheet is somebody
                 else's conversation, so it reads without the actions. */}
-            {message.text && !readOnly && <MessageFeedback text={message.text} id={String(turn)} />}
+            {text && !readOnly && <MessageFeedback text={text} id={String(turn)} />}
             {/* The cards this turn put on the whiteboard, with their on-canvas
                 state (a share lists them without the actions). */}
             <WidgetChips

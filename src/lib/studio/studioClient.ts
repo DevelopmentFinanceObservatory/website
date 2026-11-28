@@ -10,6 +10,7 @@
  */
 
 import type {
+    ApplyChange,
     ApplyChoice,
     ApplyUnit,
     CancelRequest,
@@ -19,11 +20,17 @@ import type {
     ConversationRead,
     InterruptResponse,
     MutationOperation,
+    CardChanges,
+    PlaceOption,
+    PlacesLabel,
+    PlacesOffer,
+    PlacesOptions,
     PlanRevisionStaleError,
     ResumeRequest,
     StudioFrame,
     ToolError,
     TurnRequest,
+    WindowOffer,
 } from './wire';
 
 import { asRecord } from '../asRecord.ts';
@@ -256,6 +263,14 @@ const streamStudio = async (
 /** The question forms the Studio renders, sent on every turn and answer. */
 export const CLIENT_FEATURES: ClientFeature[] = ['unit_question', 'multi_select'];
 
+/** What a page asks of every stream it starts. `holdRemovals` asks the
+ *  harness to hold a removal's `composition.updated` until after the turn's
+ *  next drawing line. A page that leaves it out sends the body without the
+ *  member. */
+export type StreamAsk = { holdRemovals?: boolean };
+
+const askOf = ({ holdRemovals }: StreamAsk = {}) => (holdRemovals ? { hold_removals: true } : {});
+
 /** Start (or continue) a turn. */
 export const runTurn = (
     conversationId: string,
@@ -268,6 +283,7 @@ export const runTurn = (
             'component_ref' | 'auto_add' | 'surface' | 'seed_spec' | 'after_turn' | 'prompt_source'
         >
     >,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -278,6 +294,7 @@ export const runTurn = (
             message,
             ...extras,
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -290,6 +307,7 @@ export const runApplyChoice = (
     { choice_id, option_id, turn, spec_id }: ApplyChoice,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -299,6 +317,7 @@ export const runApplyChoice = (
             conversation_id: conversationId,
             apply_choice: { choice_id, option_id, turn, spec_id },
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -311,6 +330,7 @@ export const runApplyUnit = (
     { component_id, spec_id, turn, unit }: ApplyUnit,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'turn',
@@ -320,6 +340,30 @@ export const runApplyUnit = (
             conversation_id: conversationId,
             apply_unit: { component_id, spec_id, turn, unit },
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
+        },
+        handlers,
+        signal,
+    );
+
+/** Run a turn that changes a card's years or places: the card, the reading
+ *  its offer names and the change, and no message. */
+export const runApplyChange = (
+    conversationId: string,
+    { component_id, spec_id, change }: ApplyChange,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+    ask?: StreamAsk,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_change: { component_id, spec_id, change },
+            client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -335,6 +379,7 @@ export const runInterrupt = (
     >,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'interrupt',
@@ -345,6 +390,7 @@ export const runInterrupt = (
             interrupt_id: interruptId,
             ...reply,
             client_features: CLIENT_FEATURES,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -357,6 +403,7 @@ export const runResume = (
     turnIndex: number,
     handlers: StreamHandlers,
     signal?: AbortSignal,
+    ask?: StreamAsk,
 ): Promise<void> =>
     streamStudio(
         'resume',
@@ -365,6 +412,7 @@ export const runResume = (
             schema_version: 1,
             conversation_id: conversationId,
             turn_index: turnIndex,
+            ...askOf(ask),
         },
         handlers,
         signal,
@@ -685,6 +733,242 @@ export const readState = async (
 
         await sleep(Math.max(1, seconds) * 1000, signal);
     }
+};
+
+/** The places a card's role can change to (`options`), or why they could not
+ *  be read: `retry` says a later read may succeed (the harness or the proxy
+ *  was unavailable, or no answer came), and `detail` is the harness's words
+ *  for a refusal it gave. */
+export type PlaceOptionsRead =
+    | { kind: 'options'; options: PlaceOption[]; truncated: boolean }
+    | {
+          kind: 'failed';
+          status: number | null;
+          code: string | null;
+          detail: string | null;
+          retry: boolean;
+      };
+
+/** The places answer of GET /api/studio/places for `componentId` and `role`,
+ *  narrowed: its options with a non-empty id and a label, and whether the
+ *  list is cut. Null for an answer about another card or role, or without an
+ *  options list. */
+export const placesOptionsOf = (
+    body: unknown,
+    componentId: string,
+    role: string,
+): PlacesOptions | null => {
+    const record = asRecord(body);
+    const options = record?.['options'];
+
+    if (
+        !record ||
+        record['component_id'] !== componentId ||
+        record['role'] !== role ||
+        !Array.isArray(options)
+    ) {
+        return null;
+    }
+
+    return {
+        component_id: componentId,
+        role,
+        options: options.flatMap((entry: unknown): PlaceOption[] => {
+            const option = asRecord(entry);
+            const id = option?.['id'];
+            const label = option?.['label'];
+
+            return typeof id === 'string' && id !== '' && typeof label === 'string'
+                ? [{ id, label }]
+                : [];
+        }),
+        truncated: record['truncated'] === true,
+    };
+};
+
+// The span a years offer may cover. A year outside it is a fault in the
+// frame, and a wider span would make the years picker list thousands of years.
+const FIRST_OFFER_YEAR = 1900;
+const LAST_OFFER_YEAR = 2200;
+
+const isWhole = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value);
+
+const isYear = (value: unknown): value is number =>
+    isWhole(value) && value >= FIRST_OFFER_YEAR && value <= LAST_OFFER_YEAR;
+
+const windowOfferOf = (value: unknown): WindowOffer | null => {
+    const record = asRecord(value);
+    const start = record?.['start_year'];
+    const end = record?.['end_year'];
+    const first = record?.['first_year'];
+    const last = record?.['last_year'];
+    const missing: unknown = record?.['missing_years'] ?? [];
+    const missingYears = Array.isArray(missing) ? missing.filter(isWhole) : [];
+
+    if (
+        !isYear(start) ||
+        !isYear(end) ||
+        !isYear(first) ||
+        !isYear(last) ||
+        first > last ||
+        start < first ||
+        end > last ||
+        start > end ||
+        (record?.['single'] === true && start !== end) ||
+        !Array.isArray(missing) ||
+        missingYears.length !== missing.length
+    ) {
+        return null;
+    }
+
+    return {
+        start_year: start,
+        end_year: end,
+        first_year: first,
+        last_year: last,
+        ...(missingYears.length > 0 && { missing_years: missingYears }),
+        ...(record?.['single'] === true && { single: true }),
+    };
+};
+
+const placesOfferOf = (value: unknown): PlacesOffer[] => {
+    const record = asRecord(value);
+    const role = record?.['role'];
+    const multiple = record?.['multiple'];
+    const chosen = record?.['chosen'];
+
+    if (typeof role !== 'string' || typeof multiple !== 'boolean' || !Array.isArray(chosen)) {
+        return [];
+    }
+
+    const places = chosen.flatMap((entry: unknown): PlaceOption[] => {
+        const place = asRecord(entry);
+        const id = place?.['id'];
+        const label = place?.['label'];
+
+        return typeof id === 'string' && typeof label === 'string' ? [{ id, label }] : [];
+    });
+
+    if (places.length !== chosen.length) return [];
+
+    const max = record?.['max'];
+    const label = asRecord(record?.['label']);
+    const word = (form: keyof PlacesLabel): string | undefined => {
+        const value = label?.[form];
+
+        return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+    };
+    const singular = word('singular');
+    const plural = word('plural');
+
+    return [
+        {
+            role,
+            multiple,
+            chosen: places,
+            ...(typeof max === 'number' && Number.isInteger(max) && max >= 1 && { max }),
+            ...((singular || plural) && {
+                label: { ...(singular && { singular }), ...(plural && { plural }) },
+            }),
+        },
+    ];
+};
+
+/** A frame's or stored card's `card_changes`, narrowed: a `window` with whole
+ *  years inside 1900 to 2200, the drawn range inside the data's, one year
+ *  when `single`, and `missing_years` whole years; each `places` entry with a
+ *  string `role`, a boolean `multiple` and `chosen` places of string `id` and
+ *  `label`, keeping a whole `max` of 1 or more and the non-blank forms of
+ *  `label`. A part that fails is dropped and the others stand. Null without a
+ *  `spec_id`. */
+export const cardChangesOf = (value: unknown): CardChanges | null => {
+    const record = asRecord(value);
+    const specId = record?.['spec_id'];
+
+    if (!record || typeof specId !== 'string' || specId === '') return null;
+
+    const window = record['window'] == null ? null : windowOfferOf(record['window']);
+    const places = Array.isArray(record['places']) ? record['places'].flatMap(placesOfferOf) : [];
+
+    return {
+        spec_id: specId,
+        ...(window && { window }),
+        ...(places.length > 0 && { places }),
+    };
+};
+
+// A read the caller aborted, which ends in silence. A timeout aborts with a
+// TimeoutError, which reads as no answer.
+const isAbort = (error: unknown): boolean => error instanceof Error && error.name === 'AbortError';
+
+/**
+ * Read the places role `role` of card `componentId` can change to. The read
+ * spends no prompt. A 5xx, a 429 or no answer may succeed later, unless the
+ * refusal says `do_not_retry` (`capability_unavailable` from a deployment
+ * that lists no places); the harness's 4xx refusals (`scope_choice_stale`
+ * for a card off the canvas, `change_not_offered` for a role it does not
+ * offer, `not_found` for the conversation) will not.
+ */
+export const runPlaceOptions = async (
+    conversationId: string,
+    componentId: string,
+    role: string,
+    signal?: AbortSignal,
+): Promise<PlaceOptionsRead> => {
+    const query = new URLSearchParams({
+        conversation_id: conversationId,
+        component_id: componentId,
+        role,
+    });
+    let res: Response;
+
+    try {
+        res = await fetch(`/api/studio/places?${query}`, { signal });
+    } catch (error) {
+        if (isAbort(error)) throw error;
+
+        // No answer, or none before the signal's timeout.
+        console.warn('places read failed', { componentId, role, error });
+
+        return { kind: 'failed', status: null, code: null, detail: null, retry: true };
+    }
+
+    if (res.ok) {
+        let body: unknown;
+
+        try {
+            body = await res.json();
+        } catch (error) {
+            if (isAbort(error)) throw error;
+
+            body = null;
+        }
+
+        const read = placesOptionsOf(body, componentId, role);
+
+        if (!read) {
+            console.warn('places read answered outside the contract', {
+                componentId,
+                role,
+                members: Object.keys(asRecord(body) ?? {}),
+            });
+        }
+
+        return read
+            ? { kind: 'options', options: read.options, truncated: read.truncated }
+            : { kind: 'failed', status: res.status, code: null, detail: null, retry: true };
+    }
+
+    const { error, proxy } = await readRefusal(res);
+
+    return {
+        kind: 'failed',
+        status: res.status,
+        code: error?.constraint_id ?? error?.error ?? proxy?.code ?? null,
+        detail: error?.detail ?? null,
+        retry: error?.retry !== 'do_not_retry' && (res.status >= 500 || res.status === 429),
+    };
 };
 
 /** A canvas edit the harness or the proxy refused: the response's status,

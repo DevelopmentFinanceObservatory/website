@@ -1,3 +1,6 @@
+import classNames from 'classnames';
+import { useEffect, useRef } from 'react';
+
 import { useStudioModel } from '../../../hooks/studioContext';
 import { usePromptShell } from '../shellContext';
 import { usePanelNav } from './panelNav';
@@ -8,27 +11,18 @@ import partStyles from './parts/parts.module.scss';
 import styles from './SessionPanel.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
-import { cardNode } from '@/lib/studio/cardImage';
+import { cardImageBlob, cardNode } from '@/lib/studio/cardImage';
 import { stepCount } from '@/lib/studio/plan';
 import type { CardRow, ChangedLine, PlanLine, SourceRow, StageRow } from '@/lib/studio/sessionView';
 
 /**
  * Puts the card as it stands on the canvas on the clipboard as a PNG, drawn
- * as Download Image draws it (cardImage.ts): twice the screen's scale, on
- * the card's own face, without the controls marked `data-no-export`.
+ * as Download Image draws it (cardImageBlob). The write starts in the click
+ * with the image still to come, since Safari refuses a clipboard write made
+ * after an await.
  */
-const copyCardImage = async (node: HTMLElement): Promise<void> => {
-    const { toBlob } = await import('html-to-image');
-    const blob = await toBlob(node, {
-        pixelRatio: 2,
-        backgroundColor: getComputedStyle(node).backgroundColor,
-        filter: (child) => !(child instanceof HTMLElement) || !child.hasAttribute('data-no-export'),
-    });
-
-    if (!blob) throw new Error('The image could not be written.');
-
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-};
+const copyCardImage = (node: HTMLElement): Promise<void> =>
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': cardImageBlob(node) })]);
 
 /** A card's row: glyph and title fly to the card, two actions, and the
  *  chevron that opens its page. */
@@ -69,6 +63,7 @@ export const CardRowItem = ({ row, pointed = false }: { row: CardRow; pointed?: 
                         icon="copy"
                         label="Copy text"
                         doneLabel="Text copied"
+                        failLabel="Text not copied"
                         subject={row.title}
                         data-sp-act="text"
                         data-sp-key={`text:${row.id}`}
@@ -95,22 +90,21 @@ export const CardRowItem = ({ row, pointed = false }: { row: CardRow; pointed?: 
                             icon="copy"
                             label="Copy image"
                             doneLabel="Image copied"
+                            failLabel="Image not copied"
                             subject={row.title}
                             data-sp-act="image"
                             data-sp-key={`image:${row.id}`}
-                            onAction={async () => {
+                            onAction={() => {
                                 const node = cardNode(row.id);
 
-                                if (!node) return false;
-
-                                await copyCardImage(node);
+                                return node ? copyCardImage(node) : false;
                             }}
                         />
                     </>
                 )}
             </span>
             {row.change && (
-                <p className={styles.change} data-state={row.change.state} role="status">
+                <p className={styles.change} data-state={row.change.state}>
                     {row.change.state === 'running' ? 'Changing…' : row.change.text}
                 </p>
             )}
@@ -176,10 +170,25 @@ export const PlanLineButton = ({
     plan: PlanLine;
     pointed?: boolean;
 }) => {
-    const { dispatch } = usePromptShell();
+    const { state, dispatch } = usePromptShell();
     const { show } = usePanelNav();
     const key = `plan:${plan.turn}`;
     const light = (on: boolean) => dispatch({ type: 'plan.light', turn: on ? plan.turn : null });
+    const lit = state.litPlan === plan.turn;
+    const litNow = useRef(lit);
+
+    useEffect(() => {
+        litNow.current = lit;
+    });
+
+    // A line that leaves while its plan is lit fires no pointer leave or
+    // blur, so it puts the light out as it goes.
+    useEffect(
+        () => () => {
+            if (litNow.current) dispatch({ type: 'plan.light', turn: null });
+        },
+        [dispatch],
+    );
 
     return (
         <button
@@ -210,9 +219,14 @@ export const PlanLineButton = ({
     );
 };
 
-/** A source as a row: its name, then how far its data runs; opens the
- *  source's page. */
-export const SourceRowButton = ({ source }: { source: SourceRow }) => {
+/** A source as a row: its name, then how far its data runs and its
+ *  licence; opens the source's page, which resolves while a card on the
+ *  canvas uses the source (sourcePageOf). */
+export const SourceRowButton = ({
+    source,
+}: {
+    source: Pick<SourceRow, 'key' | 'name' | 'meta'>;
+}) => {
     const { show } = usePanelNav();
     const key = `src:${source.key}`;
 
@@ -228,7 +242,11 @@ export const SourceRowButton = ({ source }: { source: SourceRow }) => {
                 <span className={styles.sourceName}>{source.name}</span>
                 <Chevron direction="right" />
             </span>
-            {source.through && <span className={partStyles.mono}>{source.through}</span>}
+            {source.meta && (
+                <span className={classNames(partStyles.mono, partStyles.one)} title={source.meta}>
+                    {source.meta}
+                </span>
+            )}
         </button>
     );
 };
