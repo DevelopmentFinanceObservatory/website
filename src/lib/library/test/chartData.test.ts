@@ -6,7 +6,13 @@ import { nextCache } from '../../test/nextCacheStub.ts';
 import { SharesError, type SharesBackend } from '../../chat/apisShares.ts';
 import { DATASET_FRAME, MOVED_FRAME, slotRead } from '../../studio/test/fixtures/component-read.ts';
 import describedChart from '../../studio/test/fixtures/descriptions/envelope-line-chart-described.json' with { type: 'json' };
-import { libraryChartData, libraryCsvResponse, readFailureResponse } from '../chartData.ts';
+import {
+    libraryChartData,
+    libraryCsvResponse,
+    readFailureResponse,
+    recentRows,
+    withRowBudget,
+} from '../chartData.ts';
 
 const artifact = {
     slug: 'health-expenditure',
@@ -274,7 +280,7 @@ test('a pinned country chart publishes only its plotted year, exact values and i
     assert.deepEqual(data.dataset.distribution, {
         '@type': 'DataDownload',
         encodingFormat: 'text/csv',
-        contentUrl: `${ORIGIN}${CSV}`,
+        contentUrl: `${ORIGIN}${pinned(DATASET_FRAME)}`,
     });
     assert.equal(data.label, null);
 });
@@ -362,7 +368,7 @@ test('the pinned CSV serves the frame the page showed from any server after the 
 
     assert.ok(page);
     assert.equal(page.csvHref, pinned(DATASET_FRAME));
-    assert.equal(page.dataset.distribution.contentUrl, `${ORIGIN}${CSV}`);
+    assert.equal(page.dataset.distribution.contentUrl, `${ORIGIN}${page.csvHref}`);
     assert.equal(page.dataset.dateModified, undefined);
 
     // Another server, whose cache holds nothing, after the slot moved on.
@@ -670,7 +676,7 @@ test("a canvas of one chart keeps the chart's own name and card address", async 
     assert.deepEqual(rest, []);
     assert.deepEqual(
         [data?.label, data?.dataset.name, data?.dataset.distribution.contentUrl],
-        [null, 'Spending as a chart', `${ORIGIN}${CSV}?card=spend`],
+        [null, 'Spending as a chart', `${ORIGIN}${pinned(DATASET_FRAME, { card: 'spend' })}`],
     );
 });
 
@@ -889,3 +895,126 @@ for (const [label, description, check] of [
         check(data.dataset.description);
     });
 }
+
+// Rows for `series` in each of `periods`, in that order.
+const rowsOf = (periods: readonly string[], series: number) =>
+    periods.flatMap((period) =>
+        Array.from({ length: series }, (_, n) => ({
+            series: `S${n}`,
+            period,
+            value: n,
+            unit: null,
+        })),
+    );
+const years = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, n) => String(from + n));
+const periodsOf = (rows: readonly { period: string }[]) => [
+    ...new Set(rows.map(({ period }) => period)),
+];
+
+test('a table over its limit keeps the newest whole periods in their own order', () => {
+    // 2000-2023 at 100 series is 2,400 rows; two whole years fit in 250.
+    assert.deepEqual(periodsOf(recentRows(rowsOf(years(2000, 2023), 100), 250)), ['2022', '2023']);
+    // Rows newest first stay in that order.
+    assert.deepEqual(periodsOf(recentRows(rowsOf(years(2000, 2023).toReversed(), 100), 250)), [
+        '2023',
+        '2022',
+    ]);
+    // An interval ending last counts as the newest period.
+    assert.deepEqual(periodsOf(recentRows(rowsOf(['2021', '2015/2023', '2022'], 2), 4)), [
+        '2015/2023',
+        '2022',
+    ]);
+    // A newest period over the limit gives its first rows.
+    assert.deepEqual(
+        recentRows(rowsOf(['2022', '2023'], 300), 250).map(({ series, period }) => [
+            series,
+            period,
+        ]),
+        rowsOf(['2023'], 250).map(({ series, period }) => [series, period]),
+    );
+    assert.equal(recentRows(rowsOf(['2023'], 5), 0).length, 0);
+});
+
+test('the page spends its row budget across cards in page order', async () => {
+    const [data] = await libraryChartData(
+        backend('snapshot', () => Response.json(slotBody('2023', 'unknown'))),
+        artifact,
+        ORIGIN,
+    );
+
+    assert.ok(data);
+
+    const card = (id: string, rows: ReturnType<typeof rowsOf>) => ({
+        ...data,
+        id,
+        rows,
+        totalRows: rows.length,
+    });
+    const charts = [
+        card('big', rowsOf(years(2016, 2023), 250)),
+        card('small', rowsOf(['2023'], 40)),
+        ...Array.from({ length: 22 }, (_, n) => card(`c${n}`, rowsOf(years(2000, 2023), 84))),
+    ];
+    const shown = withRowBudget(charts);
+    const total = shown.reduce((sum, { rows }) => sum + rows.length, 0);
+
+    assert.deepEqual(
+        shown
+            .slice(0, 3)
+            .map(({ rows, totalRows, shownWindow }) => [rows.length, totalRows, shownWindow]),
+        [
+            [250, 2_000, { start: '2023', end: '2023' }],
+            [40, 40, { start: '2023', end: '2023' }],
+            [168, 2_016, { start: '2022', end: '2023' }],
+        ],
+    );
+    assert.ok(total <= 1_500, `${total} rows`);
+    // A card the budget has run out for shows no rows.
+    assert.deepEqual(shown.at(-1)?.rows, []);
+    assert.equal(shown.at(-1)?.shownWindow, null);
+    assert.equal(shown.at(-1)?.totalRows, 2_016);
+    // The Dataset block still covers the whole frame.
+    assert.equal(shown[0].dataset, data.dataset);
+
+    // The largest page: 24 cards of 2,000 rows.
+    const largest = withRowBudget(
+        Array.from({ length: 24 }, (_, n) => card(`l${n}`, rowsOf(years(2004, 2023), 100))),
+    );
+
+    assert.equal(
+        largest.reduce((sum, { rows }) => sum + rows.length, 0),
+        1_500,
+    );
+});
+
+test('a page cuts a large table to its newest periods and links the whole frame', async () => {
+    // 30 countries over 2014-2023: 300 rows, of which eight whole years fit.
+    const table = {
+        ...countryTable('2023'),
+        rows: years(2014, 2023).flatMap((period) =>
+            Array.from({ length: 30 }, (_, n) => ({
+                series_id: 's_health',
+                dimensions: { country: `Country ${n}` },
+                period,
+                unit: 'USD',
+                value: n,
+            })),
+        ),
+    };
+    const [data] = await libraryChartData(
+        backend('snapshot', () => Response.json(slotBody('2023', 'unknown', table)), {
+            kind: 'table',
+        }),
+        artifact,
+        ORIGIN,
+    );
+
+    assert.ok(data);
+    assert.deepEqual(
+        [data.rows.length, data.totalRows, data.shownWindow, data.window],
+        [240, 300, { start: '2016', end: '2023' }, { start: '2014', end: '2023' }],
+    );
+    assert.equal(data.dataset.temporalCoverage, '2014/2023');
+    assert.equal(data.dataset.distribution.contentUrl, `${ORIGIN}${pinned(DATASET_FRAME)}`);
+});

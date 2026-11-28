@@ -15,8 +15,8 @@ export const dynamic = 'force-dynamic';
 // only or first chart without `card`, as `libraryCsvResponse` serves it. With
 // `spec_id` and `content_version`, which the page's link names, the file is
 // on that frame. Without them it is on the frame the page draws the chart
-// on. The page's Dataset blocks name the address without a frame, and
-// robots.txt leaves it open while it closes /api/. The route answers when
+// on. The page's link and its Dataset blocks name the address with a frame,
+// and robots.txt leaves the route open while it closes /api/. The route answers when
 // the page does (`libraryView`) and is 404 for any other artifact. One of
 // `spec_id` and `content_version` without the other is 400
 // `request_invalid`, as dfo-apis refuses it.

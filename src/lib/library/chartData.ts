@@ -184,13 +184,18 @@ export type LibraryChartData = {
     // The chart's name, which the page shows beside its table when it shows
     // more than one; null otherwise.
     label: string | null;
+    // The rows the page's table shows, within `ROWS_PER_CARD` and the
+    // page's `ROWS_PER_PAGE` (`withRowBudget`), and how many rows the frame
+    // holds, all of which the CSV and the Dataset block cover.
     rows: Row[];
+    totalRows: number;
+    // The periods `rows` span, null when the table shows none.
+    shownWindow: { start: string; end: string } | null;
     seriesHeading: SlotChart['seriesHeading'];
     periodHeading: 'Year' | 'Period';
     window: { start: string; end: string };
-    // The page's download link, pinned to the frame the rows are drawn on.
-    // The Dataset block names the unpinned address, since a live share's
-    // older frames go.
+    // The download link of the page and of the Dataset block, pinned to the
+    // frame the rows are drawn on.
     csvHref: string;
     dataset: Dataset;
 };
@@ -229,6 +234,85 @@ const windowOf = (first: Row, rest: readonly Row[]): LibraryChartData['window'] 
 
 const periodHeadingOf = (rows: readonly Row[]): LibraryChartData['periodHeading'] =>
     rows.every(({ period }) => /^\d{4}$/.test(period)) ? 'Year' : 'Period';
+
+// The rows one card's table shows, and the rows the page's tables show in
+// all, so a canvas of many large cards renders at most 1,500 rows of HTML.
+const ROWS_PER_CARD = 250;
+const ROWS_PER_PAGE = 1_500;
+
+/**
+ * The rows of `rows` a table of at most `limit` rows shows: the most recent
+ * periods that fit whole, newest first by their end and then their start, in
+ * `rows`' own order. When the newest period alone holds more than `limit`,
+ * its first `limit` rows.
+ */
+export const recentRows = (rows: readonly Row[], limit: number): Row[] => {
+    if (rows.length <= limit) {
+        return [...rows];
+    }
+
+    const counts = new Map<string, number>();
+
+    for (const { period } of rows) {
+        counts.set(period, (counts.get(period) ?? 0) + 1);
+    }
+
+    const bounds = (period: string) => {
+        const [from, to = from] = period.split('/');
+
+        return { from, to };
+    };
+    const newestFirst = [...counts.keys()].toSorted((a, b) => {
+        const [x, y] = [bounds(a), bounds(b)];
+
+        return x.to === y.to ? y.from.localeCompare(x.from) : y.to.localeCompare(x.to);
+    });
+    const kept = new Set<string>();
+    let taken = 0;
+
+    for (const period of newestFirst) {
+        const count = counts.get(period) ?? 0;
+
+        if (taken + count > limit) {
+            break;
+        }
+
+        kept.add(period);
+        taken += count;
+    }
+
+    if (kept.size === 0) {
+        const [newest] = newestFirst;
+
+        return rows.filter(({ period }) => period === newest).slice(0, limit);
+    }
+
+    return rows.filter(({ period }) => kept.has(period));
+};
+
+/**
+ * `charts` with each table cut to the rows `recentRows` keeps within
+ * `perCard` rows and what is left of `perPage`, which the cards spend in page
+ * order. A card the page has no rows left for shows none.
+ */
+export const withRowBudget = (
+    charts: readonly LibraryChartData[],
+    {
+        perCard = ROWS_PER_CARD,
+        perPage = ROWS_PER_PAGE,
+    }: { perCard?: number; perPage?: number } = {},
+): LibraryChartData[] => {
+    let left = perPage;
+
+    return charts.map((chart) => {
+        const rows = recentRows(chart.rows, Math.min(perCard, left));
+        const [first, ...rest] = rows;
+
+        left -= rows.length;
+
+        return { ...chart, rows, shownWindow: first ? windowOf(first, rest) : null };
+    });
+};
 
 // Quarter and half-year labels become ISO 8601 month bounds in the metadata.
 const monthBound = (period: string, end: boolean): string => {
@@ -652,24 +736,19 @@ const frameKey = ({ spec_id, content_version }: FrameRef): string =>
     `${spec_id}@${content_version}`;
 
 /**
- * The CSV route's address for `chart`: the bare `data.csv` for an artifact of
- * one chart, and `data.csv?card=<id>` for each chart of an artifact with
- * more. With `pinned`, it also names the frame the rows are drawn on, in
- * `spec_id` and `content_version`, as dfo-apis' slot routes name it.
+ * The CSV route's address for `chart`, pinned to the frame the rows are drawn
+ * on: `data.csv` for an artifact of one chart, and `data.csv?card=<id>` for
+ * each chart of an artifact with more, with the frame in `spec_id` and
+ * `content_version`, as dfo-apis' slot routes name it.
  */
-const csvHrefOf = (
-    slug: string,
-    chart: SlotChart,
-    { single, pinned }: { single: boolean; pinned: boolean },
-): string => {
+const csvHrefOf = (slug: string, chart: SlotChart, { single }: { single: boolean }): string => {
     const query = new URLSearchParams({
         ...(single ? {} : { card: chart.id }),
-        ...(pinned
-            ? { spec_id: chart.frame.spec_id, content_version: chart.frame.content_version }
-            : {}),
+        spec_id: chart.frame.spec_id,
+        content_version: chart.frame.content_version,
     });
 
-    return `${artifactPath(slug)}/data.csv${query.size ? `?${query}` : ''}`;
+    return `${artifactPath(slug)}/data.csv?${query}`;
 };
 
 /**
@@ -696,8 +775,7 @@ export const chartDataOf = (
     const window = windowOf(first, rest);
     const start = monthBound(window.start, false);
     const end = monthBound(window.end, true);
-    const csvHref = csvHrefOf(artifact.slug, chart, { single, pinned: true });
-    const datasetCsv = csvHrefOf(artifact.slug, chart, { single, pinned: false });
+    const csvHref = csvHrefOf(artifact.slug, chart, { single });
     const storedSources = new Map(artifact.sources.map(({ name, url }) => [name, url]));
     const sources: Source[] = (
         chart.sources.length
@@ -726,6 +804,8 @@ export const chartDataOf = (
         id: chart.id,
         label: labelled ? name : null,
         rows,
+        totalRows: rows.length,
+        shownWindow: window,
         seriesHeading: chart.seriesHeading,
         periodHeading,
         window,
@@ -752,7 +832,7 @@ export const chartDataOf = (
             distribution: {
                 '@type': 'DataDownload',
                 encodingFormat: 'text/csv',
-                contentUrl: new URL(datasetCsv, origin).href,
+                contentUrl: new URL(csvHref, origin).href,
             },
         },
     };
@@ -760,11 +840,12 @@ export const chartDataOf = (
 
 /**
  * The table and Dataset block of each chart a Library artifact shows, on the
- * frames its public slots serve, in page order: none when no card draws
- * rows, the share's read fails, or it is not done in `deadlineMs`, and none
- * for a card whose own read fails or is not done by then. A read that
- * misses the deadline goes on to fill the cache, and `waitUntil` receives it
- * so the server keeps running it after the response.
+ * frames its public slots serve, in page order. Each table is cut to the
+ * rows `withRowBudget` keeps. The result is empty when no card draws rows,
+ * the share's read fails, or it is not done in `deadlineMs`, and leaves out
+ * a card whose own read fails or is not done by then. A read that misses the
+ * deadline goes on to fill the cache, and `waitUntil` receives it so the
+ * server keeps running it after the response.
  */
 export const libraryChartData = async (
     backend: SharesBackend,
@@ -840,9 +921,12 @@ export const libraryChartData = async (
         // leaves the others' names in place.
         const labelled = share.cards.length > 1;
 
-        return shown.flatMap(
-            (chart) =>
-                chartDataOf(shownChart(chart, share), artifact, origin, { single, labelled }) ?? [],
+        return withRowBudget(
+            shown.flatMap(
+                (chart) =>
+                    chartDataOf(shownChart(chart, share), artifact, origin, { single, labelled }) ??
+                    [],
+            ),
         );
     } catch (error) {
         if (!isReadFailure(error)) {
