@@ -40,3 +40,17 @@ export const componentRead = (componentId: string, revision: number, frame: Fram
 
     return body;
 };
+
+/** dfo-apis' share slot card read: `componentRead` with the frame the card
+ *  is drawn on, `drawnOn`, as the top-level `frame` the share's history
+ *  lists, and the slot's `freshness`. */
+export const slotRead = (
+    componentId: string,
+    revision: number,
+    frame: Frame | null,
+    drawnOn: Frame | null = frame,
+) =>
+    Object.assign(componentRead(componentId, revision, frame), {
+        frame: drawnOn,
+        freshness: 'current',
+    });

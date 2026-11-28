@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { after } from 'next/server';
 
 import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
 import WithdrawnArtifact from '@/components/organisms/Library/WithdrawnArtifact';
+import { sharesBackendFor } from '@/lib/chat/shareStore';
 import { libraryAdmin, libraryView } from '@/lib/library/admin';
 import { artifactPath } from '@/lib/library/artifact';
+import { libraryChartData } from '@/lib/library/chartData';
 import { artifactBySlug, replacementChoices } from '@/lib/library/store';
 import { NOT_FOUND_METADATA, pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
@@ -86,10 +90,20 @@ const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPage
         );
     }
 
+    // The cards whose saved view draws rows (`readCurrentSlot`), each with
+    // its table, Dataset block and ./data.csv address.
+    const chartData = await libraryChartData(
+        sharesBackendFor(await headers()),
+        found.artifact,
+        SITE_ORIGIN,
+        { waitUntil: after },
+    );
+
     return (
         <main>
             <LibraryArtifact
                 artifact={found.artifact}
+                chartData={chartData}
                 origin={SITE_ORIGIN}
                 accessed={new Date()}
                 replacements={replacements}

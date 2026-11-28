@@ -8,6 +8,7 @@ import {
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
+import { type CanvasCard, type CanvasState, savedCanvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { StudioShareKind } from '../chat/shareMode.ts';
 import type { CardRef, FrameRef, Widget } from '../chat/widgets.ts';
@@ -198,16 +199,41 @@ const pageCardOf = (record: ShareRecord, widget: PayloadWidget): PageCard | null
 export const pageCards = (record: ShareRecord): PageCard[] =>
     pageWidgets(record).flatMap((widget) => pageCardOf(record, widget) ?? []);
 
+/** The cards of `pageCards` the share's page shows, in the order its canvas
+ *  shows them (`savedCanvasWidgetsOf`, as the embed reads the saved canvas).
+ *  A card share shows the first card its canvas shows, and none when that
+ *  card is a note. */
+export const shownPageCards = (record: ShareRecord): PageCard[] => {
+    const held = new Map(pageCards(record).map((card) => [card.id, card]));
+    const shown = savedCanvasWidgetsOf(
+        savedOf(
+            record,
+            pageWidgets(record).map(({ id, turn }) => ({
+                id,
+                turn: typeof turn === 'number' ? turn : 0,
+            })),
+        ),
+    );
+
+    return (record.kind === 'card' ? shown.slice(0, 1) : shown).flatMap(
+        ({ id }) => held.get(id) ?? [],
+    );
+};
+
 /** `held` drawn from a slot card read's body, as the page draws it, or null
  *  when the body's card resolves nothing to draw. A body outside dfo-apis'
  *  component read shape throws `backend_invalid`. */
 export const drawSlotCard = (held: Widget, body: Record<string, unknown>): Widget | null =>
     widgetFromLiveCard(held, componentReadOf(body).card);
 
-// The canvas a share's payload holds, with `widgets` in place of its own.
-// Fields a payload leaves out, as an SDK share's leaves them all, read as an
-// empty canvas named by the share's title.
-const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): SavedConversation =>
+// The canvas a share's payload holds, with `widgets`, cards of any shape the
+// canvas rules read, in place of its own. Fields a payload leaves out, as an
+// SDK share's leaves them all, read as an empty canvas named by the share's
+// title.
+const savedOf = <Card extends CanvasCard>(
+    record: ShareRecord,
+    widgets: Card[],
+): Omit<SavedConversation, 'widgets'> & CanvasState<Card> =>
     ({
         id: record.id,
         sessionId: null,
@@ -220,7 +246,7 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
         layout: {},
         ...asRecord(record.payload),
         widgets,
-    }) as SavedConversation;
+    }) as Omit<SavedConversation, 'widgets'> & CanvasState<Card>;
 
 // When each slot of a snapshot began to show the frame it serves, by slot:
 // the newest entry of the share's history with that slot and frame. The
@@ -435,7 +461,7 @@ export const slotRefreshResponse = async (
     }
 
     try {
-        const served = await readSlotCard(shares, shareId, slot, ifNoneMatch);
+        const served = await readSlotCard(shares, shareId, slot, { ifNoneMatch });
         const headers = new Headers({ 'Cache-Control': served.cacheControl ?? 'no-cache' });
 
         if (served.etag) {
@@ -459,7 +485,7 @@ const EXPORT_HEADERS = ['content-type', 'content-disposition', 'content-length']
 
 // The statuses with which dfo-apis refuses an export request itself: a
 // format it cannot write, or rows that are gone.
-const REQUEST_REFUSALS = [400, 404, 422] as const satisfies readonly ProblemStatus[];
+export const REQUEST_REFUSALS = [400, 404, 422] as const satisfies readonly ProblemStatus[];
 
 const noFile = (
     { code, retryable }: { code: string; retryable?: boolean },

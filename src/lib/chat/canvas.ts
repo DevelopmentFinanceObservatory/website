@@ -1,11 +1,16 @@
 import { owedIds, owedRemovalsOf } from '../studio/owedRemovals.ts';
 import type { SavedConversation } from './history.ts';
-import type { Widget } from './widgets.ts';
+import type { CardRef, TextWidget } from './widgets.ts';
 
-/** The part of a conversation that decides which cards its canvas shows. */
-export type CanvasState = Pick<
+/** What the canvas rules read of a card: its id, its turn and its revision. */
+export type CanvasCard = { id: string; turn: number; ref?: CardRef };
+
+/** The part of a conversation that decides which cards its canvas shows,
+ *  with cards of type `Card`, by default the conversation's own. */
+export type CanvasState<Card extends CanvasCard = SavedConversation['widgets'][number]> = {
+    widgets: Card[];
+} & Pick<
     SavedConversation,
-    | 'widgets'
     | 'pinnedIds'
     | 'removedIds'
     | 'graceIds'
@@ -21,12 +26,12 @@ export type CanvasState = Pick<
  * the latest turn's widgets plus every widget pinned or on grace. A grace set
  * stamped with an older turn is one the latest turn replaced.
  */
-export const legacyCanvasWidgetsOf = ({
+export const legacyCanvasWidgetsOf = <Card extends CanvasCard>({
     widgets,
     pinnedIds,
     graceIds = [],
     graceTurn = 0,
-}: Pick<CanvasState, 'widgets' | 'pinnedIds' | 'graceIds' | 'graceTurn'>): Widget[] => {
+}: Pick<CanvasState<Card>, 'widgets' | 'pinnedIds' | 'graceIds' | 'graceTurn'>): Card[] => {
     const latestTurn = widgets.reduce((max, widget) => Math.max(max, widget.turn), 0);
     const grace = graceTurn === latestTurn ? graceIds : [];
 
@@ -53,10 +58,12 @@ export const legacyCanvasWidgetsOf = ({
  * owner's Studio, a share viewer, an embed, a share's slots and the
  * live-share checks all read the canvas through this function.
  */
-export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
+export const canvasWidgetsOf = <Card extends CanvasCard>(
+    state: CanvasState<Card>,
+): (Card | TextWidget)[] => {
     const { widgets, removedIds, textCards = [], canvas, localIds = [] } = state;
     const removed = new Set(removedIds);
-    const shown = (widget: Widget) => !removed.has(widget.id);
+    const shown = (widget: { id: string }) => !removed.has(widget.id);
     const local = new Set(localIds);
     const held = new Set(canvas?.ids ?? []);
     const owed = owedIds(owedRemovalsOf(state));
@@ -87,7 +94,9 @@ export const canvasWidgetsOf = (state: CanvasState): Widget[] => {
  * slots (savedCanvasWidgetsOf) all read a stored conversation through it,
  * so each shows the cards the page that saved it showed.
  */
-export const withUnheldShownCards = <State extends CanvasState>(saved: State): State => {
+export const withUnheldShownCards = <State extends CanvasState<CanvasCard>>(
+    saved: State,
+): State => {
     const { canvas } = saved;
 
     if (!canvas || canvas.compositionId === null || canvas.pinned) {
@@ -107,8 +116,9 @@ export const withUnheldShownCards = <State extends CanvasState>(saved: State): S
 /** The cards a stored conversation's canvas shows (canvasWidgetsOf), with
  *  the cards its page showed that its harness never held kept
  *  (withUnheldShownCards). */
-export const savedCanvasWidgetsOf = (saved: CanvasState): Widget[] =>
-    canvasWidgetsOf(withUnheldShownCards(saved));
+export const savedCanvasWidgetsOf = <Card extends CanvasCard>(
+    saved: CanvasState<Card>,
+): (Card | TextWidget)[] => canvasWidgetsOf(withUnheldShownCards(saved));
 
 /**
  * Whether the harness holds card `id`, so its canvas edits go to the

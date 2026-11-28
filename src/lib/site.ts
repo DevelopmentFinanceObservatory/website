@@ -12,6 +12,14 @@ export const NOT_FOUND_METADATA: Metadata = { title: 'Page not found — DFO' };
 
 export const SITE_NAME = 'Development Finance Observatory';
 
+/** The Observatory as a schema.org `Organization`, the creator and publisher
+ *  of the data the site's structured data describes. */
+export const DFO_ORGANIZATION = {
+    '@type': 'Organization',
+    name: SITE_NAME,
+    url: SITE_ORIGIN,
+} as const;
+
 // The website leaves NEXT_PUBLIC_SITE_LINK_ORIGIN unset. The prototypes app
 // (prototypes/next.config.ts) sets it to the production origin, because
 // next/link and the router would prefix its basePath, /prototypes, to a
