@@ -269,7 +269,7 @@ test('Set by the plan lists the choices of the card’s step, less those a card 
             widget: card(info(DESCRIBED)),
             plan: { link: { turn: 1, title: approved.title, cards: ['c1'], stepId }, approved },
             offers,
-        })?.plan?.rows.map((row) => row.label);
+        })?.plan?.rows.map((row) => row.label) ?? null;
     const withKinds: ApprovedPlan = {
         ...approvedFixture,
         choices: approvedFixture.choices.map((choice) => ({
@@ -318,12 +318,13 @@ test('Set by the plan lists the choices of the card’s step, less those a card 
         ['no steps on the choices', unnamed, 's1', [], ['Basis', 'Prices']],
         // The card's Unit row shows the unit choice already.
         ['unit kind', withKinds, 's3', [], ['Basis']],
-        // The card's Years row shows the window choice already.
-        ['window kind', window, 's1', [], []],
+        // The card's Years row shows the window choice already, and a plan
+        // with nothing left to list has no section.
+        ['window kind', window, 's1', [], null],
         // How the flows are counted is the measure line the page shows.
-        ['count kind', counted, 's1', [], []],
+        ['count kind', counted, 's1', [], null],
         // A places choice drops beside a places row, and only beside one.
-        ['places kind with a places row', places, 's1', [shows], []],
+        ['places kind with a places row', places, 's1', [shows], null],
         ['places kind without one', places, 's1', [], ['Recipients']],
     ] as const) {
         assert.deepEqual(rows(approved, stepId, [...offers]), expected, name);

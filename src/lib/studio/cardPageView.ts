@@ -366,7 +366,8 @@ const rowKind = (entry: MeasureRow): DecisionKind | null => {
  * already, matched on the choice's `kind`: a row's kind (`rowKind`), and
  * `count`, how the flows are counted, while the page shows the measure line.
  * A card linked to its plan by turn, or a plan whose choices name no steps,
- * lists every choice.
+ * lists every choice. A plan that leaves no choice to list and drew no other
+ * card has no section.
  */
 const planSection = (
     plan: CardPageInput['plan'],
@@ -382,21 +383,20 @@ const planSection = (
         ...(measureShown ? ['count' as const] : []),
     ]);
     const choices = plan.approved.choices ?? [];
+    const listed = approvedView(plan.approved).choices.flatMap((view, index) => {
+        const choice = choices[index];
+        const offStep = !!stepId && !!choice?.step_ids && !choice.step_ids.includes(stepId);
+        const shown = !!choice?.kind && kinds.has(choice.kind);
 
-    return {
-        turn: plan.link.turn,
-        title: plan.link.title,
-        rows: approvedView(plan.approved).choices.flatMap((view, index) => {
-            const choice = choices[index];
-            const offStep = !!stepId && !!choice?.step_ids && !choice.step_ids.includes(stepId);
-            const shown = !!choice?.kind && kinds.has(choice.kind);
+        return offStep || shown
+            ? []
+            : [{ key: `plan:${view.key}`, label: view.name, value: view.value }];
+    });
+    const others = plan.link.cards.filter((id) => id !== cardId);
 
-            return offStep || shown
-                ? []
-                : [{ key: `plan:${view.key}`, label: view.name, value: view.value }];
-        }),
-        others: plan.link.cards.filter((id) => id !== cardId),
-    };
+    return listed.length > 0 || others.length > 0
+        ? { turn: plan.link.turn, title: plan.link.title, rows: listed, others }
+        : null;
 };
 
 // The card's sources as the session's source rows read them (`cardSources`),
