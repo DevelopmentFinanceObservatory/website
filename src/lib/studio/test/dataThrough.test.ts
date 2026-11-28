@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { CardInfo, Widget } from '../../chat/widgets.ts';
+import type { LibraryCardDates } from '../../../../db/schema.ts';
+import type { CardInfo, TableWidget, TextWidget } from '../../chat/widgets.ts';
 import { cardDataDates, dataThroughText, liveDataThrough } from '../dataThrough.ts';
 import type { LiveCanvas, LiveCardState } from '../liveCards.ts';
 
@@ -63,20 +64,42 @@ test('the cards read as one period, or as the earliest and latest by the day eac
     }
 });
 
-// A data card through `period` (null: none named) and a text card.
-const card = (id: string, period: string | null): Widget =>
-    ({
-        kind: 'table',
-        id,
-        turn: 1,
-        title: '',
-        columns: [],
-        rows: [],
-        info: info({ dataThrough: period }),
-    }) as Widget;
-const text = { kind: 'text', id: 'n1', title: 'Mine', body: 'Words' } as Widget;
+test("a Library snapshot's Data through fact names a period only when every data card names one", () => {
+    const dates = (...periods: (string | null)[]): LibraryCardDates[] =>
+        periods.map((dataThrough) => ({ dataThrough, lastRefreshed: null }));
+    const cases: [string, LibraryCardDates[], string | null][] = [
+        ['one card names none', dates('2024', null), null],
+        ['all known and equal', dates('2024', '2024'), '2024'],
+        ['known and different', dates('2024', '2022'), '2022–2024'],
+    ];
 
-const READY = { status: 'ready', outcome: 'current' } as LiveCardState;
+    // As LibraryArtifact reads a snapshot's cardDates.
+    for (const [name, cardDates, expected] of cases) {
+        assert.equal(dataThroughText(cardDates.map((date) => date.dataThrough)), expected, name);
+    }
+});
+
+// A data card through `period` (null: none named) and a text card.
+const card = (id: string, period: string | null): TableWidget => ({
+    kind: 'table',
+    id,
+    title: '',
+    columns: [],
+    rows: [],
+    info: info({ dataThrough: period }),
+});
+const text: TextWidget = { kind: 'text', id: 'n1', title: 'Mine', body: 'Words' };
+
+const READY: LiveCardState = {
+    status: 'ready',
+    outcome: 'current',
+    card: {
+        component_id: 'cmp_a',
+        revision: 1,
+        payload: {},
+        fact_summary: { series: [], series_cut: 0, window: null, unit: null },
+    },
+};
 const LOADING: LiveCardState = { status: 'loading' };
 const FAILED: LiveCardState = { status: 'error', code: 'backend_timeout' };
 
