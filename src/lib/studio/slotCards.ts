@@ -161,6 +161,49 @@ const slotWidgets = (record: ShareRecord): PayloadWidget[] =>
         card ? [{ kind: 'table', id: `slot-${slot}`, turn: 1, slot: slot - 1 }] : [],
     );
 
+// The widgets a share's page draws: its payload's, or one per filled slot
+// for a payload with none.
+const pageWidgets = (record: ShareRecord): PayloadWidget[] => {
+    const payloadWidgets = widgetsOf(record.payload);
+
+    return payloadWidgets.length ? payloadWidgets : slotWidgets(record);
+};
+
+/** A card a share's page draws from a slot: its payload widget's `id`, the
+ *  1-based slot the widget names (null when it names none), that slot's card
+ *  (`ref`, null when the slot is empty or named none), and the card `held`
+ *  until the slot's card fills it. */
+export type PageCard = { id: string; slot: number | null; ref: CardRef | null; held: Widget };
+
+// A payload widget the page holds for a slot's card, or null for one it
+// draws as saved.
+const pageCardOf = (record: ShareRecord, widget: PayloadWidget): PageCard | null => {
+    if (!isHeld(record, widget)) {
+        return null;
+    }
+
+    const index = widget['slot'];
+    const slotted = slotCardOf(record, widget);
+
+    return {
+        id: widget.id,
+        slot: Number.isSafeInteger(index) ? (index as number) + 1 : null,
+        ref: slotted?.ref ?? null,
+        held: heldWidget(widget, slotted?.ref),
+    };
+};
+
+/** The cards a share's page draws from its slots, in page order
+ *  (`sharedViewOfRecord`). */
+export const pageCards = (record: ShareRecord): PageCard[] =>
+    pageWidgets(record).flatMap((widget) => pageCardOf(record, widget) ?? []);
+
+/** `held` drawn from a slot card read's body, as the page draws it, or null
+ *  when the body's card resolves nothing to draw. A body outside dfo-apis'
+ *  component read shape throws `backend_invalid`. */
+export const drawSlotCard = (held: Widget, body: Record<string, unknown>): Widget | null =>
+    widgetFromLiveCard(held, componentReadOf(body).card);
+
 // The canvas a share's payload holds, with `widgets` in place of its own.
 // Fields a payload leaves out, as an SDK share's leaves them all, read as an
 // empty canvas named by the share's title.
@@ -257,7 +300,6 @@ export const sharedViewOfRecord = async (
     const gate = gateOf(READ_CONCURRENCY);
     const undrawn: string[] = [];
     const slots: Record<string, number> = {};
-    const payloadWidgets = widgetsOf(record.payload);
 
     // Read beside the cards, within the same deadline.
     const firstServed = live
@@ -267,28 +309,30 @@ export const sharedViewOfRecord = async (
     const drawn = async (held: Widget, slot: number): Promise<Widget | null> => {
         const { body } = await gate(() => readSlotCard(shares, record.id, slot));
 
-        return body && widgetFromLiveCard(held, componentReadOf(body).card);
+        return body && drawSlotCard(held, body);
     };
 
     const widgets = await Promise.all(
-        (payloadWidgets.length ? payloadWidgets : slotWidgets(record)).map(async (widget) => {
-            if (!isHeld(record, widget)) {
+        pageWidgets(record).map(async (widget) => {
+            const page = pageCardOf(record, widget);
+
+            if (!page) {
                 return widget as unknown as Widget;
             }
 
-            const slotted = slotCardOf(record, widget);
-            const held = heldWidget(widget, slotted?.ref);
+            const { held } = page;
+            const slot = page.ref ? page.slot : null;
 
-            if (slotted) {
-                slots[widget.id] = slotted.slot;
+            if (slot !== null) {
+                slots[widget.id] = slot;
             }
 
-            if (live || !slotted) {
+            if (live || slot === null) {
                 return held;
             }
 
             try {
-                const card = await drawn(held, slotted.slot);
+                const card = await drawn(held, slot);
 
                 if (card) {
                     return card;
@@ -296,7 +340,7 @@ export const sharedViewOfRecord = async (
             } catch (error) {
                 console.error('share: a snapshot card could not be read', {
                     share: record.id,
-                    slot: slotted.slot,
+                    slot,
                     error:
                         error instanceof BackendError || error instanceof SharesError
                             ? error.code

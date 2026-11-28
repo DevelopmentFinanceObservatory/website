@@ -181,3 +181,30 @@ jobs:
                     exit 1
                     ;;
                   esac
+
+            - name: Build Library share check bundle
+              run: pnpm build:check-library-shares
+
+            # The same check for the Library share check Job's bundle.
+            - name: Smoke test Library share check bundle
+              run: |
+                  set +e
+                  stderr_output=$(node dist/check-library-shares.cjs 2>&1 >/dev/null)
+                  status=$?
+                  set -e
+
+                  echo "$stderr_output"
+
+                  if [ "$status" -eq 0 ]; then
+                    echo "::error::Library share check bundle exited 0 with no environment configured; expected it to fail naming the missing SEARCH_API_BASE env var."
+                    exit 1
+                  fi
+
+                  case "$stderr_output" in
+                  *"missing required environment variable SEARCH_API_BASE"*)
+                    ;;
+                  *)
+                    echo "::error::Library share check bundle's stderr did not mention the missing SEARCH_API_BASE env var -- it may have failed to load at all rather than failing its env check."
+                    exit 1
+                    ;;
+                  esac

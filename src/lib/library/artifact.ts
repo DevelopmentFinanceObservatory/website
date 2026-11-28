@@ -10,9 +10,9 @@
  * text and, for each filter with values picked, one of them.
  */
 
-import type { LibrarySource, LibraryStep } from '../../../db/schema.ts';
+import type { LibraryCardDates, LibrarySource, LibraryStep } from '../../../db/schema.ts';
 
-export type { LibrarySource, LibraryStep };
+export type { LibraryCardDates, LibrarySource, LibraryStep };
 
 /** The kinds an artifact can have. The check constraint on
  *  `library_artifact.kind` holds the same values. */
@@ -38,19 +38,41 @@ export type LibraryArtifact = {
     sources: LibrarySource[];
     steps: LibraryStep[];
     topics: string[];
+    /** Each published card's data dates as they were at publish, in card
+     *  order. */
+    cardDates: LibraryCardDates[];
     /** ISO 8601. */
     publishedAt: string;
+    /** ISO 8601. The last change to the text or topics, or `publishedAt`
+     *  when there was none. */
+    updatedAt: string;
+    /** The edit the text and topics are at, which an edit sends back. */
+    revision: number;
 };
+
+/** An artifact a withdrawn one's address links to. */
+export type Replacement = { slug: string; title: string };
 
 /** What the address of a withdrawn artifact shows. */
 export type WithdrawnArtifact = {
+    /** For an admin's replacement picker alone. */
+    id: string;
     slug: string;
     kind: ArtifactKind;
     /** ISO 8601. */
     publishedAt: string;
     /** ISO 8601. */
     withdrawnAt: string;
+    /** The artifact it names as its replacement, for an admin's picker. */
+    replacedBy: string | null;
+    /** The first published artifact down its chain of replacements, or null
+     *  when none was named or none in the chain is published. */
+    replacement: Replacement | null;
 };
+
+/** A published artifact an admin can name as a withdrawn one's
+ *  replacement. */
+export type ReplacementChoice = { id: string; title: string };
 
 /** Each kind's name, in the order the type filter lists them. */
 export const KIND_LABELS: Record<ArtifactKind, string> = {
@@ -213,6 +235,9 @@ export const serializeList = (values: readonly string[]): string | null =>
 /** The artifact's page, the citable URL. */
 export const artifactPath = (slug: string): string => `/library/${slug}`;
 
+/** The author every Library page and citation names. */
+export const LIBRARY_AUTHOR = 'Development Finance Observatory';
+
 const DATE = new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'long',
@@ -220,15 +245,12 @@ const DATE = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'UTC',
 });
 
-const US_DATE = new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-});
+/** A moment as the Library prints it, as a UTC day: "12 December 2026". */
+export const libraryDate = (moment: string | Date): string => DATE.format(new Date(moment));
 
-/** The publication date as the page shows it: "December 12, 2026". */
-export const publishedDate = (iso: string): string => US_DATE.format(new Date(iso));
+/** Whether the text was changed after publication. */
+export const textUpdated = (artifact: Pick<LibraryArtifact, 'publishedAt' | 'updatedAt'>) =>
+    new Date(artifact.updatedAt).getTime() > new Date(artifact.publishedAt).getTime();
 
 /**
  * The reference a reader copies: "Development Finance Observatory (2026).
@@ -240,8 +262,8 @@ export const citation = (artifact: LibraryArtifact, origin: string, accessed: Da
     const data = artifact.sources.map((source) => source.name).join(', ');
 
     return [
-        `Development Finance Observatory (${year}). ${artifact.title} [${kindLabel(artifact.kind)}]. DFO Library.`,
+        `${LIBRARY_AUTHOR} (${year}). ${artifact.title} [${kindLabel(artifact.kind)}]. DFO Library.`,
         `${origin}${artifactPath(artifact.slug)}`,
-        `(Accessed: ${DATE.format(accessed)}).${data ? ` Data: ${data}.` : ''}`,
+        `(Accessed: ${libraryDate(accessed)}).${data ? ` Data: ${data}.` : ''}`,
     ].join(' ');
 };

@@ -18,11 +18,161 @@ import { savedCanvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { liveDataThrough } from '@/lib/studio/dataThrough';
+import {
+    embedHeightMessage,
+    embedHeightToSend,
+    isEmbedHeightRequest,
+    naturalEmbedHeight,
+} from '@/lib/studio/embedHeight';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
 
 const noop = () => undefined;
+
+// The bottom edge of the root's content, read with nothing stretching it to
+// the frame. Each child's min-height is lifted (the whiteboard and a text
+// card fill the frame otherwise), and with `liftHeight` its height too, for
+// a table card, which fills its frame and scrolls the rows it cannot show. A
+// chart or key number card draws to the frame it gets and has no height of
+// its own, so its height stays. The styles are put back before the browser
+// paints. The root is each child's offset parent. A fixed child (the live
+// strip) sits outside the scroll and is left out.
+const contentBottom = (root: HTMLElement, liftHeight: boolean): number => {
+    let bottom = 0;
+
+    for (const child of root.children) {
+        if (!(child instanceof HTMLElement) || getComputedStyle(child).position === 'fixed') {
+            continue;
+        }
+
+        const { minHeight, height } = child.style;
+
+        child.style.minHeight = '0px';
+
+        if (liftHeight) {
+            child.style.height = 'auto';
+        }
+
+        // Layout sizes, since a card's entry animation moves and scales its
+        // box: its used height, fractional where offsetHeight rounds.
+        bottom = Math.max(
+            bottom,
+            child.offsetTop + (parseFloat(getComputedStyle(child).height) || 0),
+        );
+        child.style.minHeight = minHeight;
+        child.style.height = height;
+    }
+
+    return bottom;
+};
+
+// Inside a frame, tells the host page the height the content takes
+// (lib/studio/embedHeight): when the frame or what it holds changes size, and
+// when the host asks. The message carries one number and goes to any origin,
+// since any site may frame a share and the height says nothing private.
+const useReportHeight = (rootRef: React.RefObject<HTMLDivElement | null>, liftHeight: boolean) => {
+    useEffect(() => {
+        const root = rootRef.current;
+
+        if (!root || window.parent === window) {
+            return undefined;
+        }
+
+        let sent: number | null = null;
+        const post = (height: number) => {
+            sent = height;
+            window.parent.postMessage(embedHeightMessage(height), '*');
+        };
+        const report = () => {
+            const height = embedHeightToSend({
+                natural: naturalEmbedHeight({
+                    contentBottom: contentBottom(root, liftHeight),
+                    clientHeight: root.clientHeight,
+                    viewportHeight: window.innerHeight,
+                }),
+                viewportHeight: window.innerHeight,
+                sent,
+            });
+
+            // The measure's own style writes are not changes to measure.
+            changed.takeRecords();
+
+            if (height !== null) {
+                post(height);
+            }
+        };
+        // A host that mounts after the embed has posted asks again.
+        const onRequest = (event: MessageEvent) => {
+            if (event.source !== window.parent || !isEmbedHeightRequest(event.data)) {
+                return;
+            }
+
+            if (sent === null) {
+                report();
+            } else {
+                post(sent);
+            }
+        };
+        // One measure a frame, after whatever changed has laid out.
+        let frame = 0;
+        const schedule = () => {
+            frame ||= requestAnimationFrame(() => {
+                frame = 0;
+                report();
+            });
+        };
+        const resized = new ResizeObserver(schedule);
+        const observeAll = () => {
+            resized.disconnect();
+            resized.observe(root);
+
+            for (const child of root.children) {
+                resized.observe(child);
+            }
+        };
+        // The card or the sheet can mount after the frame does. A child held
+        // at the frame's height by its min-height keeps its box when its
+        // content shrinks, so an inline style change on a root child (the
+        // whiteboard's height) also measures. Style changes deeper down, such
+        // as chart tooltips and animations, cannot move a root child's bottom
+        // and are ignored.
+        const changed = new MutationObserver((records) => {
+            const relevant = records.filter(
+                (record) =>
+                    record.type === 'childList' ||
+                    (record.target instanceof Element && record.target.parentElement === root),
+            );
+
+            if (relevant.length === 0) {
+                return;
+            }
+
+            if (relevant.some((record) => record.type === 'childList' && record.target === root)) {
+                observeAll();
+            }
+
+            schedule();
+        });
+
+        observeAll();
+        changed.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style'],
+        });
+        window.addEventListener('message', onRequest);
+
+        return () => {
+            resized.disconnect();
+            changed.disconnect();
+            cancelAnimationFrame(frame);
+            window.removeEventListener('message', onRequest);
+        };
+    }, [rootRef, liftHeight]);
+};
 
 // A one-card share: the card alone, filling the iframe. Read-only — no pin,
 // no menu; the legend, tooltips and the source line still work.
@@ -90,8 +240,10 @@ const SingleCard = ({
  * tooltips work; nothing can be changed). Either way a card's
  * source line opens its More Info panel. A live share's data cards arrive
  * held and are filled here from the refresh route (see useLiveCards), and
- * the frame says once that its data is live and when its text was written,
- * on a strip under the sheet or the one card.
+ * the frame says once that its data is live, the period it runs through and
+ * when its text was written, on a strip under the sheet or the one card. The
+ * period is read from the cards filled so far, one for a card and the
+ * earliest and latest for a canvas.
  */
 const EmbedView = ({ shared }: { shared: SharedView }) => {
     const { kind, saved } = shared;
@@ -107,9 +259,14 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
     const infoWidget = widgets.find((widget) => widget.id === infoCardId) ?? null;
     const single = kind === 'card' ? widgets[0] : undefined;
     const noted = isLiveCanvas(live);
+    const dataThrough = noted ? liveDataThrough(widgets, live) : null;
+    const rootRef = useRef<HTMLDivElement>(null);
+
+    useReportHeight(rootRef, single?.kind === 'table');
 
     return (
         <div
+            ref={rootRef}
             className={classNames(
                 kind === 'card' ? styles.single : styles.sheet,
                 kind === 'card' && single?.kind === 'text' && styles.singleText,
@@ -154,7 +311,9 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 />
             )}
 
-            {noted && <LiveNote live={live} className={styles.noteStrip} />}
+            {noted && (
+                <LiveNote live={live} dataThrough={dataThrough} className={styles.noteStrip} />
+            )}
 
             <CardInfoPanel
                 info={infoWidget?.info ?? null}

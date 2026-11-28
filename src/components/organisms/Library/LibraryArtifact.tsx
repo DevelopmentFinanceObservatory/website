@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 
 import ArtifactToc from './ArtifactToc';
 import EditArtifact from './EditArtifact';
+import EmbedFrame from './EmbedFrame';
 import styles from './LibraryArtifact.module.scss';
 import { KIND_ICONS, StatusBadge, TopicTags } from './parts';
 import ShareButton from './ShareButton';
@@ -17,10 +18,14 @@ import {
     artifactPath,
     citation,
     KIND_LABELS,
+    LIBRARY_AUTHOR,
     type LibraryArtifact as Artifact,
-    publishedDate,
+    libraryDate,
+    type ReplacementChoice,
+    textUpdated,
 } from '@/lib/library/artifact';
 import { parseProse } from '@/lib/library/prose';
+import { dataThroughText } from '@/lib/studio/dataThrough';
 
 const pad = (index: number) => String(index + 1).padStart(2, '0');
 
@@ -57,21 +62,32 @@ const Prose = ({ text }: { text: string }) => (
  * artifact's type, status, publication and topics; on the left, the page's
  * sections. A phone stacks the artifact, the details, then the sections.
  *
+ * A live artifact's data follows its source. The embed of a live chart,
+ * table, key number or canvas says how recent it is, and a data artifact's
+ * page names no period. A snapshot's details say how recent its data was
+ * when published, one period for a card and the earliest and latest for a
+ * canvas.
+ *
  * `origin` is the site's own, for the citation. `accessed` is the day the
- * page was rendered, which the citation names. `canEdit` gives an admin the
- * Edit button under the two actions.
+ * page was rendered, which the citation names. `replacements` gives an admin
+ * the Edit button under the two actions, with the artifacts on show its
+ * Delete can name as the replacement.
  */
 const LibraryArtifact = ({
     artifact,
     origin,
     accessed,
-    canEdit = false,
+    replacements,
 }: {
     artifact: Artifact;
     origin: string;
     accessed: Date;
-    canEdit?: boolean;
+    replacements?: readonly ReplacementChoice[];
 }) => {
+    const dataThrough =
+        artifact.mode === 'snapshot'
+            ? dataThroughText(artifact.cardDates.map((dates) => dates.dataThrough))
+            : null;
     const studioHref =
         artifact.kind === 'data' ? `/data?share=${artifact.shareId}` : `/s/${artifact.shareId}`;
     const sections = [
@@ -111,14 +127,13 @@ const LibraryArtifact = ({
                             </Button>
                         </div>
                     ) : (
-                        <iframe
+                        <EmbedFrame
                             className={classNames(
                                 styles.frame,
                                 artifact.kind === 'canvas' && styles.frameCanvas,
                             )}
                             src={`/embed/${artifact.shareId}`}
                             title={artifact.title}
-                            loading="lazy"
                         />
                     )}
                 </div>
@@ -135,7 +150,9 @@ const LibraryArtifact = ({
                         >
                             Open in Studio
                         </Button>
-                        {canEdit && <EditArtifact artifact={artifact} />}
+                        {replacements && (
+                            <EditArtifact artifact={artifact} replacements={replacements} />
+                        )}
                     </div>
                     <dl className={styles.facts}>
                         <div className={styles.fact}>
@@ -152,14 +169,28 @@ const LibraryArtifact = ({
                             </dt>
                             <dd>
                                 {artifact.mode === 'live'
-                                    ? 'Showing latest data available from source'
-                                    : `Showing data as published on ${publishedDate(artifact.publishedAt)}`}
+                                    ? 'Live: follows the source'
+                                    : `Pinned: shows the data as published on ${libraryDate(artifact.publishedAt)}`}
                             </dd>
                         </div>
+                        {dataThrough && (
+                            <div className={styles.fact}>
+                                <dt>Data through</dt>
+                                <dd>{dataThrough}</dd>
+                            </div>
+                        )}
                         <div className={styles.fact}>
                             <dt>Published</dt>
-                            <dd>{publishedDate(artifact.publishedAt)} by DFO Data</dd>
+                            <dd>
+                                {libraryDate(artifact.publishedAt)} by {LIBRARY_AUTHOR}
+                            </dd>
                         </div>
+                        {textUpdated(artifact) && (
+                            <div className={styles.fact}>
+                                <dt>Text updated</dt>
+                                <dd>{libraryDate(artifact.updatedAt)}</dd>
+                            </div>
+                        )}
                         {artifact.topics.length > 0 && (
                             <div className={styles.fact}>
                                 <dt>Topics</dt>

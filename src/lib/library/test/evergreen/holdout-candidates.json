@@ -1,0 +1,212 @@
+[
+    {
+        "id": "h01",
+        "title": "Grant element of loans, by lender",
+        "description": "How concessional each lender's loans are, as the grant element of each loan.",
+        "contentTitle": "Terms used",
+        "content": "- Grant element: the share of a loan's face value that is a gift, once repayments are discounted.\n- Concessional: a loan with a grant element of at least 35%.\n- Tenor: the years until the last repayment falls due."
+    },
+    {
+        "id": "h02",
+        "title": "Who the largest recipients were",
+        "description": "The recipients that took the most bilateral aid in one year.",
+        "contentTitle": "The top five",
+        "content": "The largest recipients in 2022 were:\n- Ukraine\n- Türkiye\n- Afghanistan\n- Syria\n- Ethiopia"
+    },
+    {
+        "id": "h03",
+        "title": "Emergency relief spending, 2012 to 2022",
+        "description": "Each line traces one donor's humanitarian spending across the years shown.",
+        "contentTitle": "Using the lines",
+        "content": "Hover over a line to see the donor and the amount for each year."
+    },
+    {
+        "id": "h04",
+        "title": "Bilateral giving by member, 2023",
+        "description": "Official development assistance from each DAC member in a single year.",
+        "contentTitle": "Members",
+        "content": "Each bar is one member of the Development Assistance Committee."
+    },
+    {
+        "id": "h05",
+        "title": "Most recent figures",
+        "description": "The most recent year each country has reported to the creditor reporting system.",
+        "contentTitle": "Coverage",
+        "content": "The table covers three kinds of flow:\n- grants\n- loans\n- equity investments"
+    },
+    {
+        "id": "h06",
+        "title": "Top 10 countries for health aid",
+        "description": "The ten countries that receive the most aid for health in the year you pick.",
+        "contentTitle": "Ordering",
+        "content": "Bars run from the largest recipient at the top to the smallest at the bottom."
+    },
+    {
+        "id": "h07",
+        "title": "Debt service as a share of exports",
+        "description": "Payments on external debt divided by the money each country earns from exports.",
+        "contentTitle": "Where it stands",
+        "content": "Zambia spends more than a third of its export earnings on debt service, the highest share in the region."
+    },
+    {
+        "id": "h08",
+        "title": "Climate finance between 2016 and 2021",
+        "description": "Finance that donors report as aimed at mitigation or adaptation.",
+        "contentTitle": "Reporting",
+        "content": "Donors mark each project with the Rio markers, which score how central the climate aim is."
+    },
+    {
+        "id": "h09",
+        "title": "Spending on schooling, by stage",
+        "description": "Spending on primary, secondary and higher education, split by donor.",
+        "contentTitle": "Levels",
+        "content": "Basic education covers:\n- early childhood\n- primary schooling\n- skills for young people and adults"
+    },
+    {
+        "id": "h10",
+        "title": "Trend in aid to agriculture",
+        "description": "How each donor's spending on farming, forestry and fishing moves from year to year.",
+        "contentTitle": "What changed",
+        "content": "Aid to agriculture fell by a fifth after 2020 as donors shifted money to the pandemic response."
+    },
+    {
+        "id": "h11",
+        "title": "Private money brought in by official finance",
+        "description": "Money from private investors that official guarantees, loans and equity bring in.",
+        "contentTitle": "Counting rules",
+        "content": "1. Guarantees: the share of private lending a guarantee covers.\n2. Syndicated loans: the share the official lender arranges.\n3. Direct investment: the private equity raised beside the official stake."
+    },
+    {
+        "id": "h12",
+        "title": "Country programmable aid",
+        "description": "The part of aid that a recipient country can plan for, which leaves out costs such as debt relief and student costs.",
+        "contentTitle": "In numbers",
+        "content": "Programmable aid made up 54% of bilateral aid in the latest year, its lowest share in a decade."
+    },
+    {
+        "id": "h13",
+        "title": "Recipients by income group",
+        "description": "Aid to each recipient, grouped by the World Bank income classification.",
+        "contentTitle": "Groups",
+        "content": "The chart uses four income groups:\n- low income\n- lower-middle income\n- upper-middle income\n- high income"
+    },
+    {
+        "id": "h14",
+        "title": "Net financial flows into African economies",
+        "description": "Money arriving in the region minus repayments flowing out, from official and private lenders.",
+        "contentTitle": "Key point",
+        "content": "Net flows turned negative in 2023 for the first time since records began."
+    },
+    {
+        "id": "h15",
+        "title": "Donor rankings",
+        "description": "Each donor's place by total aid, with the option to rank by share of income instead.",
+        "contentTitle": "Most generous donors",
+        "content": "Sweden, Norway and Luxembourg give the largest share of their income in aid."
+    },
+    {
+        "id": "h16",
+        "title": "Multilateral contributions, 2000–2023",
+        "description": "Core funding from each donor to the multilateral system, by agency.",
+        "contentTitle": "Agencies",
+        "content": "Pick an agency to see the donors that fund it."
+    },
+    {
+        "id": "h17",
+        "title": "How disbursements differ from commitments",
+        "description": "A commitment is a promise to spend; a disbursement is money paid out.",
+        "contentTitle": "The space between the lines",
+        "content": "The gap between the two lines is money promised but not yet paid."
+    },
+    {
+        "id": "h18",
+        "title": "Gender equality in aid",
+        "description": "Aid screened against the gender equality policy marker.",
+        "contentTitle": "Marker scores",
+        "content": "- Principal: gender equality is the main aim of the project\n- Significant: it is an important aim but not the main one\n- Not targeted: the project was screened and does not aim at it"
+    },
+    {
+        "id": "h19",
+        "title": "The latest year",
+        "description": "What donors spent in the most recent year of reporting.",
+        "contentTitle": "Totals",
+        "content": "Donors disbursed USD 16 billion to fragile states in the latest year."
+    },
+    {
+        "id": "h20",
+        "title": "Chinese lending to Africa",
+        "description": "Loans from Chinese state lenders to African governments and state firms.",
+        "contentTitle": "Sources",
+        "content": "Loan records come from public contracts, government budgets and lender reports."
+    },
+    {
+        "id": "h21",
+        "title": "Aid per person, by recipient",
+        "description": "Aid to each country divided by its population.",
+        "contentTitle": "Highest",
+        "content": "Small island states receive the most aid per person."
+    },
+    {
+        "id": "h22",
+        "title": "Refugee costs from 2015 through 2022",
+        "description": "Spending by donors on refugees in their own countries, counted as aid.",
+        "contentTitle": "Rules",
+        "content": "Donors may count the first twelve months of costs for each refugee."
+    },
+    {
+        "id": "h23",
+        "title": "Untied aid",
+        "description": "The share of aid that recipients may spend on goods and services from any country.",
+        "contentTitle": "Tied, partly tied and untied",
+        "content": "Aid is tied when the donor limits the purchase to its own firms.\nPartly tied aid allows purchases from the donor and from developing countries."
+    },
+    {
+        "id": "h24",
+        "title": "Aid to Ukraine",
+        "description": "Bilateral aid from DAC members to Ukraine.",
+        "contentTitle": "Scale",
+        "content": "Ukraine became the largest single recipient of aid in 2022:\n- the United States gave the most\n- Germany came second"
+    },
+    {
+        "id": "h25",
+        "title": "Health aid by disease",
+        "description": "Spending on HIV, malaria, tuberculosis and other diseases.",
+        "contentTitle": "Diseases covered",
+        "content": "Use the legend to show or hide each disease."
+    },
+    {
+        "id": "h26",
+        "title": "Top donors to the Global Fund",
+        "description": "Pledges to each replenishment of the Global Fund, by donor.",
+        "contentTitle": "Biggest pledges",
+        "content": "The United States pledged a third of the total at the last replenishment."
+    },
+    {
+        "id": "h27",
+        "title": "Budget support",
+        "description": "Aid paid into a recipient's budget to fund its own spending plans.",
+        "contentTitle": "Types",
+        "content": "General budget support funds the whole budget.\nSector budget support goes to one sector, such as health."
+    },
+    {
+        "id": "h28",
+        "title": "LDC aid in 2021",
+        "description": "Aid to the countries the UN lists as least developed.",
+        "contentTitle": "What donors pledged",
+        "content": "Donors agreed to give between 0.15% and 0.20% of their income to these countries."
+    },
+    {
+        "id": "h29",
+        "title": "How the data are cleaned",
+        "description": "Steps applied to the raw records before they reach the chart.",
+        "contentTitle": "Steps",
+        "content": "The pipeline runs four steps:\n1. drop duplicate records\n2. convert to constant prices\n3. map recipients to regions\n4. sum by year"
+    },
+    {
+        "id": "h30",
+        "title": "Arrears to official creditors",
+        "description": "Payments that borrowers missed on loans from governments and multilateral lenders.",
+        "contentTitle": "Recent rise",
+        "content": "Arrears have doubled since 2019 and now exceed USD 10 billion."
+    }
+]

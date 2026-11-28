@@ -1,24 +1,11 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { ImageResponse } from 'next/og';
 
+import { cardFonts } from '@/lib/cardFonts';
 import { CARD_SIZE, CARD_TYPE, SITE_CARD } from '@/lib/site';
 
 export const alt = SITE_CARD.alt;
 export const size = CARD_SIZE;
 export const contentType = CARD_TYPE;
-
-// Outfit, the site's typeface, from the @fontsource package the layout
-// already loads. The image has no request-time input, so it renders once at
-// build and the font read never runs in the server.
-const outfit = (weight: number) =>
-    readFile(
-        join(
-            process.cwd(),
-            `node_modules/@fontsource/outfit/files/outfit-latin-${weight}-normal.woff`,
-        ),
-    );
 
 /**
  * The card every page without its own shows when its link is pasted: the
@@ -27,8 +14,6 @@ const outfit = (weight: number) =>
  * so everything sits centred inside that square.
  */
 const OpenGraphImage = async () => {
-    const [regular, medium] = await Promise.all([outfit(400), outfit(500)]);
-
     return new ImageResponse(
         <div
             style={{
@@ -68,13 +53,7 @@ const OpenGraphImage = async () => {
                 Development Finance Data. Simplified.
             </div>
         </div>,
-        {
-            ...size,
-            fonts: [
-                { name: 'Outfit', data: regular, weight: 400, style: 'normal' },
-                { name: 'Outfit', data: medium, weight: 500, style: 'normal' },
-            ],
-        },
+        { ...size, fonts: await cardFonts() },
     );
 };
 
