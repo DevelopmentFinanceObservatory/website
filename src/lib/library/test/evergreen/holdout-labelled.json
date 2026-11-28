@@ -1,0 +1,1048 @@
+[
+    {
+        "id": "h01",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 33,
+                "text": "Grant element of loans, by lender",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 76,
+                "text": "How concessional each lender's loans are, as the grant element of each loan.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "Terms used",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 97,
+                "text": "Grant element: the share of a loan's face value that is a gift, once repayments are discounted.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 100,
+                "end": 158,
+                "text": "Concessional: a loan with a grant element of at least 35%.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 161,
+                "end": 213,
+                "text": "Tenor: the years until the last repayment falls due.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h02",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 31,
+                "text": "Who the largest recipients were",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 60,
+                "text": "The recipients that took the most bilateral aid in one year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 12,
+                "text": "The top five",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 89,
+                "text": "The largest recipients in 2022 were:\n- Ukraine\n- Türkiye\n- Afghanistan\n- Syria\n- Ethiopia",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h03",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 39,
+                "text": "Emergency relief spending, 2012 to 2022",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 74,
+                "text": "Each line traces one donor's humanitarian spending across the years shown.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 15,
+                "text": "Using the lines",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 64,
+                "text": "Hover over a line to see the donor and the amount for each year.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h04",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 32,
+                "text": "Bilateral giving by member, 2023",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 70,
+                "text": "Official development assistance from each DAC member in a single year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Members",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 63,
+                "text": "Each bar is one member of the Development Assistance Committee.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h05",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 19,
+                "text": "Most recent figures",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 80,
+                "text": "The most recent year each country has reported to the creditor reporting system.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 8,
+                "text": "Coverage",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 75,
+                "text": "The table covers three kinds of flow:\n- grants\n- loans\n- equity investments",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h06",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 31,
+                "text": "Top 10 countries for health aid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 76,
+                "text": "The ten countries that receive the most aid for health in the year you pick.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 8,
+                "text": "Ordering",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 77,
+                "text": "Bars run from the largest recipient at the top to the smallest at the bottom.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h07",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 34,
+                "text": "Debt service as a share of exports",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 79,
+                "text": "Payments on external debt divided by the money each country earns from exports.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 15,
+                "text": "Where it stands",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 104,
+                "text": "Zambia spends more than a third of its export earnings on debt service, the highest share in the region.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h08",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 37,
+                "text": "Climate finance between 2016 and 2021",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 64,
+                "text": "Finance that donors report as aimed at mitigation or adaptation.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 9,
+                "text": "Reporting",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 90,
+                "text": "Donors mark each project with the Rio markers, which score how central the climate aim is.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h09",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 31,
+                "text": "Spending on schooling, by stage",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 68,
+                "text": "Spending on primary, secondary and higher education, split by donor.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Levels",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 98,
+                "text": "Basic education covers:\n- early childhood\n- primary schooling\n- skills for young people and adults",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h10",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 27,
+                "text": "Trend in aid to agriculture",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 83,
+                "text": "How each donor's spending on farming, forestry and fishing moves from year to year.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 12,
+                "text": "What changed",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 95,
+                "text": "Aid to agriculture fell by a fifth after 2020 as donors shifted money to the pandemic response.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h11",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 44,
+                "text": "Private money brought in by official finance",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 81,
+                "text": "Money from private investors that official guarantees, loans and equity bring in.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 14,
+                "text": "Counting rules",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 3,
+                "end": 63,
+                "text": "Guarantees: the share of private lending a guarantee covers.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 67,
+                "end": 124,
+                "text": "Syndicated loans: the share the official lender arranges.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 128,
+                "end": 199,
+                "text": "Direct investment: the private equity raised beside the official stake.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h12",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 24,
+                "text": "Country programmable aid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 116,
+                "text": "The part of aid that a recipient country can plan for, which leaves out costs such as debt relief and student costs.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 10,
+                "text": "In numbers",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 95,
+                "text": "Programmable aid made up 54% of bilateral aid in the latest year, its lowest share in a decade.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h13",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 26,
+                "text": "Recipients by income group",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 71,
+                "text": "Aid to each recipient, grouped by the World Bank income classification.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Groups",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 105,
+                "text": "The chart uses four income groups:\n- low income\n- lower-middle income\n- upper-middle income\n- high income",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h14",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 42,
+                "text": "Net financial flows into African economies",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 93,
+                "text": "Money arriving in the region minus repayments flowing out, from official and private lenders.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 9,
+                "text": "Key point",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 73,
+                "text": "Net flows turned negative in 2023 for the first time since records began.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h15",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 14,
+                "text": "Donor rankings",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 84,
+                "text": "Each donor's place by total aid, with the option to rank by share of income instead.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 20,
+                "text": "Most generous donors",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 76,
+                "text": "Sweden, Norway and Luxembourg give the largest share of their income in aid.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h16",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 37,
+                "text": "Multilateral contributions, 2000–2023",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 67,
+                "text": "Core funding from each donor to the multilateral system, by agency.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 8,
+                "text": "Agencies",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 46,
+                "text": "Pick an agency to see the donors that fund it.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h17",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 41,
+                "text": "How disbursements differ from commitments",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 69,
+                "text": "A commitment is a promise to spend; a disbursement is money paid out.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 27,
+                "text": "The space between the lines",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 65,
+                "text": "The gap between the two lines is money promised but not yet paid.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h18",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 22,
+                "text": "Gender equality in aid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 55,
+                "text": "Aid screened against the gender equality policy marker.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 13,
+                "text": "Marker scores",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 2,
+                "end": 59,
+                "text": "Principal: gender equality is the main aim of the project",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 62,
+                "end": 118,
+                "text": "Significant: it is an important aim but not the main one",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 121,
+                "end": 182,
+                "text": "Not targeted: the project was screened and does not aim at it",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h19",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 15,
+                "text": "The latest year",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 55,
+                "text": "What donors spent in the most recent year of reporting.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 6,
+                "text": "Totals",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 69,
+                "text": "Donors disbursed USD 16 billion to fragile states in the latest year.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h20",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 25,
+                "text": "Chinese lending to Africa",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 72,
+                "text": "Loans from Chinese state lenders to African governments and state firms.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Sources",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 79,
+                "text": "Loan records come from public contracts, government budgets and lender reports.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h21",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 28,
+                "text": "Aid per person, by recipient",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 46,
+                "text": "Aid to each country divided by its population.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 7,
+                "text": "Highest",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 52,
+                "text": "Small island states receive the most aid per person.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h22",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 36,
+                "text": "Refugee costs from 2015 through 2022",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 70,
+                "text": "Spending by donors on refugees in their own countries, counted as aid.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Rules",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 67,
+                "text": "Donors may count the first twelve months of costs for each refugee.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h23",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 10,
+                "text": "Untied aid",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 82,
+                "text": "The share of aid that recipients may spend on goods and services from any country.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 28,
+                "text": "Tied, partly tied and untied",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 64,
+                "text": "Aid is tied when the donor limits the purchase to its own firms.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 65,
+                "end": 143,
+                "text": "Partly tied aid allows purchases from the donor and from developing countries.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h24",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 14,
+                "text": "Aid to Ukraine",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 42,
+                "text": "Bilateral aid from DAC members to Ukraine.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Scale",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 115,
+                "text": "Ukraine became the largest single recipient of aid in 2022:\n- the United States gave the most\n- Germany came second",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h25",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 21,
+                "text": "Health aid by disease",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 58,
+                "text": "Spending on HIV, malaria, tuberculosis and other diseases.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 16,
+                "text": "Diseases covered",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 44,
+                "text": "Use the legend to show or hide each disease.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h26",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 29,
+                "text": "Top donors to the Global Fund",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 59,
+                "text": "Pledges to each replenishment of the Global Fund, by donor.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 15,
+                "text": "Biggest pledges",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 73,
+                "text": "The United States pledged a third of the total at the last replenishment.",
+                "label": "not_evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h27",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 14,
+                "text": "Budget support",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 66,
+                "text": "Aid paid into a recipient's budget to fund its own spending plans.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Types",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 46,
+                "text": "General budget support funds the whole budget.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 47,
+                "end": 104,
+                "text": "Sector budget support goes to one sector, such as health.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h28",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 15,
+                "text": "LDC aid in 2021",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 53,
+                "text": "Aid to the countries the UN lists as least developed.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 19,
+                "text": "What donors pledged",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 81,
+                "text": "Donors agreed to give between 0.15% and 0.20% of their income to these countries.",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h29",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 24,
+                "text": "How the data are cleaned",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 61,
+                "text": "Steps applied to the raw records before they reach the chart.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 5,
+                "text": "Steps",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 129,
+                "text": "The pipeline runs four steps:\n1. drop duplicate records\n2. convert to constant prices\n3. map recipients to regions\n4. sum by year",
+                "label": "evergreen"
+            }
+        ]
+    },
+    {
+        "id": "h30",
+        "sentences": [
+            {
+                "pointer": "/title",
+                "start": 0,
+                "end": 29,
+                "text": "Arrears to official creditors",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/description",
+                "start": 0,
+                "end": 82,
+                "text": "Payments that borrowers missed on loans from governments and multilateral lenders.",
+                "label": "evergreen"
+            },
+            {
+                "pointer": "/contentTitle",
+                "start": 0,
+                "end": 11,
+                "text": "Recent rise",
+                "label": "not_evergreen"
+            },
+            {
+                "pointer": "/content",
+                "start": 0,
+                "end": 62,
+                "text": "Arrears have doubled since 2019 and now exceed USD 10 billion.",
+                "label": "not_evergreen"
+            }
+        ]
+    }
+]
