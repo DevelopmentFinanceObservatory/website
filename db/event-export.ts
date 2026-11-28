@@ -113,6 +113,7 @@ const SEARCH_SOURCES = every<SearchSource>()([
     'share',
     'version_link',
     'route_back',
+    'move_back',
     'route_stay',
     'routing_off',
 ]);
@@ -162,7 +163,7 @@ const DATA_VIEW_VIA = every<DataViewVia>()(['share']);
 const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 const SHARE_COPIED = every<ShareCopied>()(['link', 'embed_code', 'download_link', 'query_link']);
 const DOWNLOAD_SOURCES = every<StudioDownloadSource>()(['card', 'share_dialog']);
-const HANDOFF_TRIGGERS = every<HandoffTrigger>()(['auto', 'offer', 'button']);
+const HANDOFF_TRIGGERS = every<HandoffTrigger>()(['auto', 'offer', 'out_of_prompts', 'button']);
 const ROUTE_STAY_TRIGGERS = every<RouteStayTrigger>()(['button', 'escape', 'out_of_prompts']);
 
 // The fields every search post's events carry (searchPostTracker in

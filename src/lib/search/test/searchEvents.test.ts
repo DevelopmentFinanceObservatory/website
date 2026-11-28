@@ -10,6 +10,7 @@ import {
     handoffArrival,
     handoffHref,
     handoffSource,
+    moveBackHref,
     routeBackHref,
     routingOffFor,
     searchEventProps,
@@ -701,7 +702,7 @@ test('a homepage handoff carries typed or example; any other value is a permalin
     }
 });
 
-test("a routing=off URL searches its question without the Studio router, as route_back from Studio's way back", () => {
+test("a routing=off URL searches its question without the Studio router, as route_back from Studio's way back and move_back from a move's entry", () => {
     const arrive = (href: string) => {
         const params = new URL(href, 'https://example.org').searchParams;
         const body = buildRequest({ kind: 'raw_text', query: 'aid & debt' }, true, {
@@ -714,6 +715,7 @@ test("a routing=off URL searches its question without the Studio router, as rout
     assert.deepEqual(
         [
             routeBackHref('aid & debt'),
+            moveBackHref('aid & debt'),
             dataSearchHref({ query: 'aid & debt', routingOff: true }),
             `${handoffHref('aid & debt', 'typed')}&routing=off`,
             handoffHref('aid & debt', 'typed'),
@@ -721,6 +723,7 @@ test("a routing=off URL searches its question without the Studio router, as rout
         ].map(arrive),
         [
             { source: 'route_back', href: '/data?q=aid+%26+debt&routing=off', routed: false },
+            { source: 'move_back', href: '/data?q=aid+%26+debt&routing=off', routed: false },
             { source: 'routing_off', href: null, routed: false },
             { source: 'routing_off', href: '/data?q=aid+%26+debt&routing=off', routed: false },
             { source: 'typed', href: '/data?q=aid+%26+debt', routed: true },

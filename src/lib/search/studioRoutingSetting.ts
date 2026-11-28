@@ -10,7 +10,8 @@ export const studioRoutingEnabled = (): boolean =>
         process.env.STUDIO_ROUTING_ENABLED?.trim().toLowerCase() ?? '',
     );
 
-/** Whether a raw-text run sends `studio_routing`: the setting is on and the URL does not hold `routing=off`. */
+/** Whether a raw-text run sends `studio_routing`: the setting is on and the
+ *  URL does not hold `routing=off`. */
 export const optsIntoStudioRouting = ({
     enabled,
     routingOff,

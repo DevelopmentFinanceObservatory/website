@@ -76,6 +76,7 @@ import {
     dataSearchHref,
     HANDOFF_ROUTING_PARAM,
     handoffArrival,
+    moveBackHref,
     routingOffFor,
     searchEventProps,
     startSearchAction,
@@ -357,10 +358,12 @@ const DataSearch = ({
         link: VersionLink;
         result: Exclude<VersionLinkResult, { kind: 'opened' }>;
     } | null>(null);
-    // The route of a move the reader stayed out of during its pause, kept as
-    // an offer while the page searches the same question as data. Only that
-    // search shows it. Every other search, Start New and an opened share or
-    // link drop it.
+    // The route of a move the reader stayed out of during its pause (Escape
+    // or the callout's button), kept as an offer while the page searches the
+    // same question as data. Only that search shows it. The out-of-prompts
+    // card's data action keeps none, since its Studio card would lead a
+    // guest with no free prompt left to Studio's refusal. Every other
+    // search, Start New and an opened share or link drop it.
     const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
     const leaveShare = useCallback(() => {
         openedShareRef.current = null;
@@ -376,10 +379,11 @@ const DataSearch = ({
         openShareRef.current(shared, source);
     }, []);
 
-    // The page opened on a data search with the Studio router off
-    // (`routing=off`: Studio's way back, or Back after a move), whose
-    // heading is in place as the page arrives, with no rise. The reader's
-    // next search rises as any other.
+    // The page opened on a URL with the Studio router off (`routing=off`:
+    // Studio's way back, Back to the entry a move leaves, a reload or a
+    // copied link), whose heading is in place as the page arrives, with no
+    // rise. The reader's next search rises as any other. A URL write on the
+    // mounted page changes nothing here.
     const [arrivedRouteOff, setArrivedRouteOff] = useState(
         () => searchParams.get(HANDOFF_ROUTING_PARAM) === 'off',
     );
@@ -428,9 +432,15 @@ const DataSearch = ({
     // or the move the reader stayed out of.
     const offerRoute = move === 'offer' || move === 'out_of_prompts' ? route : stayedRoute;
     // The Studio card stands in for every other Studio action on the
-    // answer, from the route's early frame on, a requires_analysis
-    // decline's "Ask in Studio" included.
+    // answer, from the route's early frame on.
     const studioOffered = offerRoute !== null;
+    // A requires_analysis decline under the run's own Studio card shows one
+    // callout, the decline's, which carries the card's actions.
+    const declineOffers =
+        studioOffered &&
+        !stayedRoute &&
+        answer?.kind === 'declined' &&
+        answer.reason === 'requires_analysis';
 
     // Every Studio action (a declined answer's, an operation_not_applied
     // departure's, the side panel's, a no_data part's callout, the route's
@@ -507,10 +517,13 @@ const DataSearch = ({
         [studioHandoff],
     );
     // A click on a Studio action. While the route's offer is on screen, the
-    // click is the offer's.
+    // click is the offer's, or the out-of-prompts card's.
     const studioClick = useCallback(
-        () => (offerRoute ? openStudio('offer', offerRoute) : openStudio('button')),
-        [openStudio, offerRoute],
+        () =>
+            offerRoute
+                ? openStudio(move === 'out_of_prompts' ? 'out_of_prompts' : 'offer', offerRoute)
+                : openStudio('button'),
+        [openStudio, offerRoute, move],
     );
 
     // False until the page's first deferred render commits. React gives
@@ -526,8 +539,10 @@ const DataSearch = ({
     // The automatic move, once per search, after the run's `done` so the
     // search settles (its usage event, the API's cached answer) first. It
     // runs in two commits. The first rewrites this history entry to the
-    // question's `routing=off` URL, so Back lands on the data search of the
-    // question, run once without the router. The second, once
+    // question's `routing=off` URL marked `via=move_back` (moveBackHref), so
+    // Back lands on the data search of the question, run once without the
+    // router, as source `move_back`. The rewrite keeps the run's `q`, so the
+    // permalink effect reads no arrival in it. The second, once
     // `searchParams` shows the rewrite, holds the callout for MOVE_PAUSE_MS
     // and then opens Studio. By then the App Router has stored its own
     // state for the rewritten entry, which Back needs to restore it in
@@ -555,9 +570,10 @@ const DataSearch = ({
     const readyMove = useEffectEvent(() => studioHandoff('auto', route));
     // Keeps the reader on the data search of a question the router sent to
     // Studio: the move's pause, or the out-of-prompts card's data action.
-    // It records `search.route_stay`, turns the callout or card into the
-    // Studio card, writes the question's `routing=off` URL when the entry
-    // lacks it, and searches the question as data (`route_stay`). The event
+    // It records `search.route_stay`, turns the move's callout into the
+    // Studio card (the out-of-prompts card leaves none), writes the
+    // question's `routing=off` URL with no `via`, and searches the question
+    // as data (`route_stay`). The event
     // names the trigger, so each way of staying counts apart from Studio's
     // way back (`studio.route_back`).
     const stayOnData = (trigger: RouteStayTrigger) => {
@@ -567,17 +583,23 @@ const DataSearch = ({
 
         track('search.route_stay', { traceId, trigger });
 
-        if (route) {
+        if (route && trigger !== 'out_of_prompts') {
             setStayed({ query, route: { ...route, traceId } });
         }
 
-        if (!routingOffHere(query)) {
-            window.history.replaceState(null, '', dataSearchHref({ query, routingOff: true }));
-        }
+        // Drops the move's `via=move_back` too, so a reload of the data
+        // search records `routing_off`.
+        window.history.replaceState(null, '', dataSearchHref({ query, routingOff: true }));
 
         runQuery(query, 'route_stay');
     };
+    // Once the move has started (or a link click has stopped it), a stay
+    // comes too late and does nothing.
     const stay = useEffectEvent((searchId: string, trigger: RouteStayTrigger) => {
+        if (movedSearchRef.current === searchId) {
+            return;
+        }
+
         movedSearchRef.current = searchId;
         stayOnData(trigger);
     });
@@ -593,7 +615,7 @@ const DataSearch = ({
         }
 
         if (!routingOffFor(searchParams, query)) {
-            window.history.replaceState(null, '', dataSearchHref({ query, routingOff: true }));
+            window.history.replaceState(null, '', moveBackHref(query));
 
             return;
         }
@@ -1290,9 +1312,16 @@ const DataSearch = ({
                                     onShowCatalogue={() =>
                                         submitQuery(STARTING_POINT_QUERY, 'catalogue')
                                     }
-                                    onStudio={studioOffered ? undefined : studioClick}
+                                    onStudio={
+                                        studioOffered && !declineOffers ? undefined : studioClick
+                                    }
+                                    onData={
+                                        declineOffers && move === 'out_of_prompts'
+                                            ? () => stayOnData('out_of_prompts')
+                                            : undefined
+                                    }
                                 />
-                                {studioOffered && !stayedRoute && (
+                                {studioOffered && !stayedRoute && !declineOffers && (
                                     <StudioOffer
                                         onStudio={studioClick}
                                         onData={

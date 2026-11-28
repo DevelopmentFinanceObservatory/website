@@ -193,6 +193,7 @@ test('handoffVia names a routed handoff by its route, and a click by its example
     const cases: [Parameters<typeof handoffVia>[0], ReturnType<typeof handoffVia>][] = [
         [{ trigger: 'auto', fromExample: true }, 'route_auto'],
         [{ trigger: 'offer', fromExample: false }, 'route_offer'],
+        [{ trigger: 'out_of_prompts', fromExample: false }, 'route_offer'],
         [{ trigger: 'button', fromExample: true }, 'example'],
         [{ trigger: 'button', fromExample: false }, null],
     ];

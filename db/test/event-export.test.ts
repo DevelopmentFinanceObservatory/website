@@ -433,6 +433,16 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
         name: 'search.query',
         props: { source: 'routing_off', post: 0 },
     }),
+    sourceEvent({
+        id: 19,
+        name: 'search.query',
+        props: { source: 'move_back', post: 0 },
+    }),
+    sourceEvent({
+        id: 20,
+        name: 'search.studio_handoff',
+        props: { trigger: 'out_of_prompts', probability: 0.9 },
+    }),
 ];
 
 // A row as versions 1 to 3 wrote it, before `day_visitor`.
@@ -625,9 +635,9 @@ const VERSION_4_ROWS: ExportRow[] = [
     },
 ];
 
-// Version 5 keeps the router's `probability` on `search.studio_handoff`,
-// the `route_back`, `route_stay` and `routing_off` search sources, and the
-// `search.route_stay` event.
+// Version 5 keeps the router's `probability` on `search.studio_handoff` and
+// its `out_of_prompts` trigger, the `route_back`, `move_back`, `route_stay`
+// and `routing_off` search sources, and the `search.route_stay` event.
 const VERSION_5_ROWS: ExportRow[] = [
     ...VERSION_4_ROWS,
     {
@@ -701,6 +711,30 @@ const VERSION_5_ROWS: ExportRow[] = [
         visitor_hash: null,
         user_hash: null,
         props: { source: 'routing_off', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 19,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.query',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { source: 'move_back', post: 0 },
+        export_rules: 'r',
+        day_visitor: null,
+    },
+    {
+        id: 20,
+        created_at: '2026-10-20T13:04:05.123456Z',
+        name: 'search.studio_handoff',
+        page: null,
+        signed_in: false,
+        visitor_hash: null,
+        user_hash: null,
+        props: { trigger: 'out_of_prompts', probability: 0.9 },
         export_rules: 'r',
         day_visitor: null,
     },

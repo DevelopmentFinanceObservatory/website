@@ -47,8 +47,9 @@ const usePlaceCatalogue = (place: string | null) => {
     return { placeCatalogue: current?.catalogue ?? null, pending: !!place && !current };
 };
 
-/** The answer's actions row: an optional lead action, Start New, then a
- *  quiet arrow that runs the catalogue query or links to the source list. */
+/** The answer's actions row: an optional lead action, Start New, then an
+ *  optional quiet arrow that runs the catalogue query or links to the
+ *  source list. */
 const AnswerActions = ({
     lead,
     onStartNew,
@@ -56,14 +57,14 @@ const AnswerActions = ({
 }: {
     lead?: React.ReactNode;
     onStartNew: () => void;
-    away: { label: string } & ({ run: () => void } | { href: string });
+    away?: { label: string } & ({ run: () => void } | { href: string });
 }) => (
     <div className={styles.actions}>
         {lead}
         <Button variant="outline" onClick={onStartNew}>
             Start New
         </Button>
-        {'href' in away ? (
+        {away === undefined ? null : 'href' in away ? (
             <Button variant="plain" icon="arrow" className={styles.quietAction} href={away.href}>
                 {away.label}
             </Button>
@@ -169,13 +170,17 @@ const OutOfScope = ({
 
 /** requires_analysis: search holds no data to show, so Studio takes it.
  *  With no `onStudio`, the route's Studio card beside it is the answer's
- *  one way to Studio. */
+ *  one way to Studio. `onData` adds "Search the data instead", which
+ *  searches the question as data and takes the catalogue link's place, so
+ *  the row fits the callout's width on one line. */
 const RequiresAnalysis = ({
     onStudio,
+    onData,
     onStartNew,
     onShowCatalogue,
 }: {
     onStudio?: () => void;
+    onData?: () => void;
     onStartNew: () => void;
     onShowCatalogue: () => void;
 }) => (
@@ -187,14 +192,21 @@ const RequiresAnalysis = ({
         </p>
         <AnswerActions
             lead={
-                onStudio && (
-                    <Button icon="arrow" onClick={onStudio}>
-                        Ask in Studio
-                    </Button>
-                )
+                <>
+                    {onStudio && (
+                        <Button icon="arrow" onClick={onStudio}>
+                            Ask in Studio
+                        </Button>
+                    )}
+                    {onData && (
+                        <Button variant="outline" onClick={onData}>
+                            Search the data instead
+                        </Button>
+                    )}
+                </>
             }
             onStartNew={onStartNew}
-            away={{ label: 'See what data DFO holds', run: onShowCatalogue }}
+            away={onData ? undefined : { label: 'See what data DFO holds', run: onShowCatalogue }}
         />
     </div>
 );
@@ -213,6 +225,7 @@ const SearchAnswer = ({
     onStartNew,
     onShowCatalogue,
     onStudio,
+    onData,
 }: {
     answer: PartlessAnswer;
     catalogue: SearchCatalogue | null;
@@ -225,6 +238,8 @@ const SearchAnswer = ({
     // Hands the question to Studio. Absent while the route's Studio card
     // stands in for it.
     onStudio?: () => void;
+    // Searches a requires_analysis question as data, beside its Studio action.
+    onData?: () => void;
 }) => {
     const place = answer.scope.place ?? null;
 
@@ -243,6 +258,7 @@ const SearchAnswer = ({
         return (
             <RequiresAnalysis
                 onStudio={onStudio}
+                onData={onData}
                 onStartNew={onStartNew}
                 onShowCatalogue={onShowCatalogue}
             />

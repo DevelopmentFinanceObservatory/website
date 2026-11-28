@@ -55,10 +55,10 @@ type Rung = 'full' | 'sampled' | 'minimal' | 'floor';
 /** Where a search's text came from: the prompt, an example sentence, the
  *  starting point's catalogue, a refine of the heading, a retry, a `?q=`
  *  permalink, a share link, a dataset version link (`?spec=`), Studio's way
- *  back after a routed move (`route_back`), the reader staying on the data
- *  search of a question the router sent to Studio (`route_stay`), or any
- *  other `routing=off` URL (`routing_off`: Back to the entry an automatic
- *  move leaves, a reload, a copied link). */
+ *  back after a routed move (`route_back`), Back to the entry an automatic
+ *  move leaves (`move_back`), the reader staying on the data search of a
+ *  question the router sent to Studio (`route_stay`), or any other
+ *  `routing=off` URL (`routing_off`: a reload, a copied link). */
 export type SearchSource =
     | 'typed'
     | 'example'
@@ -69,12 +69,14 @@ export type SearchSource =
     | 'share'
     | 'version_link'
     | 'route_back'
+    | 'move_back'
     | 'route_stay'
     | 'routing_off';
 
 /** The `/data` query param that carries a search's source from another
- *  page: a prompt's `typed` or `example`, or Studio's way back
- *  (`route_back`). `/data` reads it once and strips it from the URL before
+ *  page or history entry: a prompt's `typed` or `example`, Studio's way
+ *  back (`route_back`), or the entry an automatic move leaves
+ *  (`move_back`). `/data` reads it once and strips it from the URL before
  *  the search settles, so a copied link holds `?q=` alone and records
  *  `permalink`, or `routing_off` with `routing=off`. */
 export const HANDOFF_SOURCE_PARAM = 'via';
@@ -122,10 +124,20 @@ export const dataSearchHref = ({
 export const routeBackHref = (query: string): string =>
     `${dataSearchHref({ query, routingOff: true })}&${HANDOFF_SOURCE_PARAM}=route_back`;
 
+/** The URL an automatic move writes into the history entry it leaves: the
+ *  `/data` URL that searches `query` as data, with no Studio router,
+ *  marked `via=move_back` so Back to it records that source. */
+export const moveBackHref = (query: string): string =>
+    `${dataSearchHref({ query, routingOff: true })}&${HANDOFF_SOURCE_PARAM}=move_back`;
+
+const routingOffSource = (via: string | null): SearchSource =>
+    via === 'route_back' || via === 'move_back' ? via : 'routing_off';
+
 /** What a `/data` arrival's handoff params ask for: the search's source,
  *  and the URL with `via` stripped (null when the URL holds none).
  *  `routing=off` stays in the URL. With it the source is `route_back` for
- *  Studio's way back (routeBackHref) and `routing_off` for any other
+ *  Studio's way back (routeBackHref), `move_back` for Back to the entry an
+ *  automatic move leaves (moveBackHref), and `routing_off` for any other
  *  arrival. */
 export const handoffArrival = (
     params: URLSearchParams,
@@ -138,9 +150,7 @@ export const handoffArrival = (
         source:
             params.get(HANDOFF_ROUTING_PARAM) !== 'off'
                 ? handoffSource(params.get(HANDOFF_SOURCE_PARAM))
-                : params.get(HANDOFF_SOURCE_PARAM) === 'route_back'
-                  ? 'route_back'
-                  : 'routing_off',
+                : routingOffSource(params.get(HANDOFF_SOURCE_PARAM)),
         href: rest.toString() === params.toString() ? null : `/data?${rest}`,
     };
 };

@@ -128,9 +128,10 @@ export function handoffFromExample({
 }
 
 /** What started a Studio handoff: the search API's automatic move (`auto`),
- *  a click on its Studio offer (`offer`), or a click on any other Studio
- *  action (`button`). */
-export type HandoffTrigger = 'auto' | 'offer' | 'button';
+ *  a click on its Studio offer (`offer`), a click on the Studio card a
+ *  guest with no free prompt left gets in place of the move
+ *  (`out_of_prompts`), or a click on any other Studio action (`button`). */
+export type HandoffTrigger = 'auto' | 'offer' | 'out_of_prompts' | 'button';
 
 /** How a handed-over question came from search, as Studio's `via` param. */
 export type HandoffVia = 'example' | 'route_auto' | 'route_offer';
@@ -145,7 +146,7 @@ export function handoffVia({
     fromExample: boolean;
 }): HandoffVia | null {
     if (trigger === 'auto') return 'route_auto';
-    if (trigger === 'offer') return 'route_offer';
+    if (trigger === 'offer' || trigger === 'out_of_prompts') return 'route_offer';
     return fromExample ? 'example' : null;
 }
 
