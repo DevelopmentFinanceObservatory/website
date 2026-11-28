@@ -649,12 +649,7 @@ const PromptDock = () => {
                     )
                 );
             case 'folded':
-                return (
-                    <FoldedRow
-                        text={view.row.text}
-                        onOpen={view.row.openable ? () => openSheet('open') : null}
-                    />
-                );
+                return <FoldedRow row={view.row} onOpen={() => openSheet('open')} />;
             case undefined:
                 return null;
         }

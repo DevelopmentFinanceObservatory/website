@@ -12,7 +12,13 @@
  */
 import { OPENING, WORKING } from './chatLine.ts';
 import { type ComposerMode, type ComposerPlan, composerMode } from './composer.ts';
-import { firstSentence, promptsOf, type Question } from './questions.ts';
+import {
+    firstSentence,
+    promptsOf,
+    type Question,
+    type ReplyPart,
+    replyPreview,
+} from './questions.ts';
 import { isPrompt } from './transcript.ts';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
@@ -27,8 +33,11 @@ export type DockRow =
     | { kind: 'plan' }
     | { kind: 'set_aside' }
     | { kind: 'about'; title: string }
-    /** `openable` is false for a refused card change, which has no sheet. */
-    | { kind: 'folded'; text: string; openable: boolean };
+    /** A refused card change, which has no sheet: its first sentence. */
+    | { kind: 'folded'; openable: false; text: string }
+    /** A folded reply: its opening (replyPreview), and whether the reply
+     *  holds more. */
+    | { kind: 'folded'; openable: true; parts: ReplyPart[]; more: boolean };
 
 export type DockSheet = 'none' | 'reply' | 'thread' | 'plan' | 'clarify';
 
@@ -210,7 +219,7 @@ export const dockView = (input: DockInput): DockView => {
 
         return {
             ...view,
-            row: { kind: 'folded', text: firstSentence(failure), openable: false },
+            row: { kind: 'folded', openable: false, text: firstSentence(failure) },
             sheet,
             pills: view.pills && sheet === 'none',
             cap: 'normal',
@@ -282,7 +291,7 @@ const questionView = (
     } else if (input.editTarget && mode !== 'clarify') {
         row = { kind: 'about', title: input.editTarget.title };
     } else if (answered && hasText && sheet === 'none') {
-        row = { kind: 'folded', text: firstSentence(question.reply), openable: true };
+        row = { kind: 'folded', openable: true, ...replyPreview(question.reply) };
     }
 
     const suggestions = (question?.followups.length ?? 0) + (question?.chips.length ?? 0);

@@ -116,8 +116,28 @@ test('each row of the context table, in its order of precedence', () => {
     }
 });
 
-test('the folded row reads the reply first sentence and opens', () => {
-    assert.deepEqual(dockView(charted).row, { kind: 'folded', text: 'Aid rose.', openable: true });
+test('the folded row opens on the reply as prose, and says when the reply holds more', () => {
+    const folded = (text: string) =>
+        dockView({
+            ...charted,
+            messages: [ask('Aid to Kenya', 1), reply(text, { followups: ['And Ghana?'] })],
+        }).row;
+
+    assert.deepEqual(folded('**Aid** rose. It doubled.'), {
+        kind: 'folded',
+        openable: true,
+        parts: [
+            { text: 'Aid', strong: true },
+            { text: ' rose. It doubled.', strong: false },
+        ],
+        more: false,
+    });
+    assert.deepEqual(folded('Aid rose.\n\n| Year | Aid |'), {
+        kind: 'folded',
+        openable: true,
+        parts: [{ text: 'Aid rose.', strong: false }],
+        more: true,
+    });
 });
 
 test('a reply that placed cards arrives folded, one that placed none arrives open', () => {

@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 import type { ApprovedPlan } from '../plan.ts';
-import { firstSentence, promptsOf, questionsOf } from '../questions.ts';
+import { firstSentence, promptsOf, questionsOf, replyPreview } from '../questions.ts';
 
 const ask = (text: string, turn: number, extra: Partial<ChatMessage> = {}): ChatMessage =>
     ({ role: 'user', text, turn, ...extra }) as ChatMessage;
@@ -100,4 +100,47 @@ test('a first sentence is plain text cut at the end of its sentence', () => {
     ]) {
         assert.equal(firstSentence(text), sentence);
     }
+});
+
+test('a reply preview runs on as prose, keeps bold spans, and says when the reply holds more', () => {
+    const plain = (text: string) => ({ text, strong: false });
+    const strong = (text: string) => ({ text, strong: true });
+    const long = `${'Aid rose again. '.repeat(25)}End.`;
+    const cases: [string, string, ReturnType<typeof replyPreview>][] = [
+        ['a short reply', '_Aid rose._', { parts: [plain('Aid rose.')], more: false }],
+        [
+            'paragraphs run on, with link targets and emphasis dropped',
+            '## Kenya\n\nAid rose [3.5%](https://example.org).\n\n> It fell _later_.',
+            { parts: [plain('Kenya Aid rose 3.5%. It fell later.')], more: false },
+        ],
+        [
+            'bold spans',
+            '**Kenya** received **US$2bn** in 2022.',
+            {
+                parts: [strong('Kenya'), plain(' received '), strong('US$2bn'), plain(' in 2022.')],
+                more: false,
+            },
+        ],
+        [
+            'a list ends it',
+            'Aid rose.\n\n- Kenya\n- Chad',
+            { parts: [plain('Aid rose.')], more: true },
+        ],
+        [
+            'a table ends it',
+            'Aid by year:\n| Year | Aid |\n| --- | --- |',
+            { parts: [plain('Aid by year:')], more: true },
+        ],
+    ];
+
+    for (const [name, text, preview] of cases) {
+        assert.deepEqual(replyPreview(text), preview, name);
+    }
+
+    const cut = replyPreview(long);
+    const excerpt = cut.parts.map((part) => part.text).join('');
+
+    assert.equal(cut.more, true);
+    assert.ok(long.startsWith(excerpt) && long[excerpt.length] === ' ', 'cut at a word boundary');
+    assert.ok(excerpt.length > 300 && excerpt.length <= 320, 'cut near the cap');
 });

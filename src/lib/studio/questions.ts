@@ -116,3 +116,47 @@ export const firstSentence = (text: string): string => {
 
     return end === -1 ? plain : plain.slice(0, end + 1);
 };
+
+/** A run of a reply excerpt's text, bold where the reply set it in `**`. */
+export type ReplyPart = { text: string; strong: boolean };
+
+// A reply excerpt's length, about two lines of the dock at its widest.
+const PREVIEW_CAP = 320;
+
+// Stands for `**` while emphasis is dropped, so a bold span's stars are
+// not read as emphasis.
+const BOLD = '\u0000';
+
+// A line that opens a list item, a table row or a code fence.
+const STRUCTURED_LINE = /^\s*([-*+]\s|\d+[.)]\s|\||```|~~~)/;
+
+/**
+ * The opening of a reply as prose, for the folded row. Its lines run on
+ * across paragraphs, with heading and quote markers, link targets, code
+ * ticks and emphasis dropped and its `**` spans kept as strong parts. The
+ * first list item, table row or code fence ends it, and it is cut at a word
+ * boundary near PREVIEW_CAP characters. `more` is true when the reply holds
+ * anything beyond the excerpt.
+ */
+export const replyPreview = (text: string): { parts: ReplyPart[]; more: boolean } => {
+    const lines = plainTextFromNote(text.trim()).split('\n');
+    const stop = lines.findIndex((line) => STRUCTURED_LINE.test(line));
+    const prose = (stop === -1 ? lines : lines.slice(0, stop))
+        .map((line) => line.trim().replace(/^(#{1,6}\s+|>\s*)/, ''))
+        .join(' ')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/`/g, '')
+        .replaceAll('**', BOLD)
+        .replace(/(^|\W)[_*]([^_*]+)[_*](?=\W|$)/g, '$1$2')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const cut = prose.length > PREVIEW_CAP;
+    const space = prose.lastIndexOf(' ', PREVIEW_CAP);
+    const kept = cut ? prose.slice(0, space > 0 ? space : PREVIEW_CAP).trimEnd() : prose;
+    const parts = kept
+        .split(BOLD)
+        .map((run, at) => ({ text: run, strong: at % 2 === 1 }))
+        .filter((part) => part.text);
+
+    return { parts, more: cut || stop !== -1 };
+};
