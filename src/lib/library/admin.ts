@@ -420,6 +420,23 @@ const artifactChanged = (latest: ArtifactText & { revision: number }): Response 
     });
 
 /**
+ * GET /api/library/artifacts/<id> → { title, description, contentTitle,
+ * content, topics, revision }, the stored text an edit starts from, for an
+ * edit whose 409 carried none it could read.
+ */
+export const stored = async (request: Request, id: string): Promise<Response> => {
+    const { refusal } = await gate(request, false);
+
+    if (refusal) {
+        return refusal;
+    }
+
+    const latest = await artifactText(id);
+
+    return latest ? Response.json(latest, { headers: NO_STORE }) : notFound();
+};
+
+/**
  * PATCH /api/library/artifacts/<id> (ArtifactEdit: the text and the
  * `revision` it was loaded at) → { slug, revision, warnings }. An edit from a revision
  * the artifact has moved on from answers 409 `artifact_changed` with the

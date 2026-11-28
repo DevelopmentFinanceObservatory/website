@@ -16,6 +16,8 @@ import {
     differingFields,
     editArtifact,
     type EvergreenWarning,
+    isArtifactChangedRefusal,
+    loadStored,
     readEvergreenWarnings,
     readLatest,
     readRevision,
@@ -35,9 +37,9 @@ import type { ArtifactText } from '@/lib/library/publish';
  *
  * An edit someone else's save overtook keeps the draft, names the fields
  * where the latest version differs, and saves the draft over it or takes it.
- * A save that answers after the dialog was closed leaves the dialog shut and
- * says how it went under the Edit button; a draft it did not save is there
- * when the dialog opens again.
+ * Closing the dialog keeps an unsaved draft for the next opening, and Cancel
+ * discards it. A save that answers after the dialog was closed leaves the
+ * dialog shut and says how it went under the Edit button.
  */
 
 const FIELD_LABEL: Record<keyof ArtifactText, string> = {
@@ -81,46 +83,70 @@ const EditArtifact = ({
     // The latest stored text this dialog knows of, from its own save or a
     // refusal of one, for a reopening before the page's refresh lands.
     const [saved, setSaved] = useState<StoredText | null>(null);
-    const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
+    // The stored text the draft started from, which tells an unsaved draft.
+    const [draftFrom, setDraftFrom] = useState(() => textOf(artifact));
+    const [busy, setBusy] = useState<'save' | 'load' | 'delete' | null>(null);
     const [confirming, setConfirming] = useState(false);
     const [replacedBy, setReplacedBy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [refusals, setRefusals] = useState<Refusals | null>(null);
     // The latest version, when the edit answered that someone else saved the
-    // artifact first.
-    const [conflict, setConflict] = useState<StoredText | null>(null);
+    // artifact first, or `unknown` when the answer carried none that reads.
+    const [conflict, setConflict] = useState<StoredText | 'unknown' | null>(null);
     // The sentences a saved edit flagged, shown until the dialog is closed.
     const [warnings, setWarnings] = useState<EvergreenWarning[] | null>(null);
     const [notice, setNotice] = useState<Notice | null>(null);
 
-    const show = (next: boolean) => {
+    const place = (next: boolean) => {
         openRef.current = next;
+        setOpen(next);
+    };
 
-        // A save still out, or one that answered while the dialog was shut
-        // without saving, leaves the draft and its messages as they are.
-        const keep = busy === 'save' || (notice !== null && !notice.saved);
+    // The newest stored text known: this dialog's own, or the page's once
+    // its refresh lands.
+    const newest = (): StoredText =>
+        saved && saved.revision > artifact.revision
+            ? saved
+            : { text: textOf(artifact), revision: artifact.revision };
 
+    const startFrom = (base: StoredText) => {
+        setText(base.text);
+        setDraftFrom(base.text);
+        setRevision(base.revision);
+        setError(null);
+        setRefusals(null);
+        setConflict(null);
+    };
+
+    const show = (next: boolean) => {
         if (next) {
+            const unsaved =
+                busy === 'save' ||
+                conflict !== null ||
+                error !== null ||
+                refusals !== null ||
+                differingFields(text, draftFrom).length > 0;
+
+            // An unsaved draft, a save still out and their messages stay.
+            if (!unsaved) {
+                startFrom(newest());
+            }
+
             setNotice(null);
-        }
-
-        if (next && !keep) {
-            const base =
-                saved && saved.revision > artifact.revision
-                    ? saved
-                    : { text: textOf(artifact), revision: artifact.revision };
-
-            setText(base.text);
-            setRevision(base.revision);
             setConfirming(false);
             setReplacedBy(null);
-            setError(null);
-            setRefusals(null);
-            setConflict(null);
             setWarnings(null);
         }
 
-        setOpen(next);
+        place(next);
+    };
+
+    // Cancel: the draft goes, and the next opening starts from the stored text.
+    const discard = () => {
+        startFrom(newest());
+        setConfirming(false);
+        setReplacedBy(null);
+        place(false);
     };
 
     const submit = async (from: number) => {
@@ -144,6 +170,7 @@ const EditArtifact = ({
             const next = readRevision(answer.value);
 
             setConflict(null);
+            setDraftFrom(text);
 
             if (next !== null) {
                 setRevision(next);
@@ -155,7 +182,7 @@ const EditArtifact = ({
             router.refresh();
 
             if (shown) {
-                setOpen(flagged.length > 0);
+                place(flagged.length > 0);
                 setWarnings(flagged.length > 0 ? flagged : null);
             } else {
                 setNotice({ saved: true, warnings: flagged });
@@ -164,13 +191,18 @@ const EditArtifact = ({
             return;
         }
 
+        const changed = isArtifactChangedRefusal(answer.problem);
         const latest = readLatest(answer.problem);
 
-        setConflict(latest);
-
-        if (latest) {
-            setSaved((known) => (known && known.revision >= latest.revision ? known : latest));
+        if (changed) {
+            // Save stays shut until the draft is compared with the latest
+            // version, so a stale revision is never sent again.
+            setConflict(latest ?? 'unknown');
             router.refresh();
+
+            if (latest) {
+                learn(latest);
+            }
         } else {
             const outcome = evergreenOutcome(answer.problem, answer.detail, text);
 
@@ -179,7 +211,27 @@ const EditArtifact = ({
         }
 
         if (!shown) {
-            setNotice({ saved: false, changed: latest !== null });
+            setNotice({ saved: false, changed });
+        }
+    };
+
+    const learn = (latest: StoredText) =>
+        setSaved((known) => (known && known.revision >= latest.revision ? known : latest));
+
+    // The latest version, for a conflict whose answer carried none.
+    const loadLatest = async () => {
+        setBusy('load');
+        setError(null);
+
+        const answer = await loadStored(artifact.id);
+
+        setBusy(null);
+
+        if (answer.ok) {
+            setConflict(answer.value);
+            learn(answer.value);
+        } else {
+            setError(answer.detail);
         }
     };
 
@@ -196,15 +248,12 @@ const EditArtifact = ({
 
     // The draft gives way to the latest version, which the next save starts from.
     const takeLatest = (latest: StoredText) => {
-        setText(latest.text);
-        setRevision(latest.revision);
-        setConflict(null);
-        setRefusals(null);
-        setError(null);
+        startFrom(latest);
         queueMicrotask(() => formRef.current?.querySelector('input')?.focus());
     };
 
-    const differing = conflict ? differingFields(text, conflict.text) : [];
+    const differing =
+        conflict && conflict !== 'unknown' ? differingFields(text, conflict.text) : [];
 
     const remove = async () => {
         setBusy('delete');
@@ -228,27 +277,29 @@ const EditArtifact = ({
 
     return (
         <>
-            <Button variant="bordered" full icon="edit" onClick={() => show(true)}>
-                Edit
-            </Button>
-            {/* In the page from the start, so a save that answers after the
-                dialog was closed is announced. */}
-            <div className={styles.notice} role="status">
-                {notice?.saved && (
-                    <>
-                        <p>The changes were saved.</p>
-                        {notice.warnings.length > 0 && (
-                            <EvergreenWarnings warnings={notice.warnings} />
-                        )}
-                    </>
-                )}
-                {notice && !notice.saved && (
-                    <p className={styles.error}>
-                        {notice.changed
-                            ? 'The changes were not saved: someone else changed this artifact. Open Edit to compare your draft with their version.'
-                            : 'The changes were not saved. Open Edit to see why.'}
-                    </p>
-                )}
+            <div className={styles.edit}>
+                <Button variant="bordered" full icon="edit" onClick={() => show(true)}>
+                    Edit
+                </Button>
+                {/* In the page from the start, so a save that answers after the
+                    dialog was closed is announced. */}
+                <div className={styles.notice} role="status">
+                    {notice?.saved && (
+                        <>
+                            <p>The changes were saved.</p>
+                            {notice.warnings.length > 0 && (
+                                <EvergreenWarnings warnings={notice.warnings} />
+                            )}
+                        </>
+                    )}
+                    {notice && !notice.saved && (
+                        <p className={styles.error}>
+                            {notice.changed
+                                ? 'The changes were not saved: someone else changed this artifact. Open Edit to compare your draft with their version.'
+                                : 'The changes were not saved. Open Edit to see why.'}
+                        </p>
+                    )}
+                </div>
             </div>
             <Modal open={open} onOpenChange={show} title="Edit" fit initialFocus="form input">
                 {/* Mounted in both views, so the saved message is announced as
@@ -271,7 +322,23 @@ const EditArtifact = ({
                 ) : (
                     <form ref={formRef} className={styles.form} onSubmit={save}>
                         <ArtifactFields value={text} onChange={setText} refusals={refusals} />
-                        {conflict && (
+                        {conflict === 'unknown' && (
+                            <div className={styles.conflict} role="alert">
+                                <p>
+                                    Someone else saved this artifact while you were editing it. Load
+                                    their version to compare it with your draft.
+                                </p>
+                                <Button
+                                    variant="bordered"
+                                    full
+                                    onClick={() => void loadLatest()}
+                                    disabled={busy !== null}
+                                >
+                                    {busy === 'load' ? 'Loading…' : 'Load Their Version'}
+                                </Button>
+                            </div>
+                        )}
+                        {conflict && conflict !== 'unknown' && (
                             <div className={styles.conflict} role="alert">
                                 <p>
                                     Someone else saved this artifact while you were editing it.{' '}
@@ -311,6 +378,14 @@ const EditArtifact = ({
                                 disabled={busy !== null || conflict !== null || !isComplete(text)}
                             >
                                 {busy === 'save' ? 'Saving…' : 'Save Changes'}
+                            </Button>
+                            <Button
+                                variant="bordered"
+                                full
+                                onClick={discard}
+                                disabled={busy !== null}
+                            >
+                                Cancel
                             </Button>
                             {confirming ? (
                                 <>

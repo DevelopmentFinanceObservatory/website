@@ -79,7 +79,14 @@
     border-radius: rem(6);
 }
 
-// How a save that answered after the dialog was closed went, under Edit.
+// The Edit button and, under it, how a save that answered after the dialog
+// was closed went.
+.edit {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+}
+
 .notice {
     @include flex(column, flex-start, stretch);
     @include font-size(13px, 1.35);
@@ -95,12 +102,14 @@
 
 // Tap targets of 44 px, as on the artifact page: the padding grows each
 // button's box, the negative margin keeps the layout, and the gaps of 8 px
-// keep neighbouring boxes from overlapping.
+// keep neighbouring boxes from overlapping. The artifact page grows `.edit`
+// itself, which leaves its layout as it is, so Edit grows here.
 @include breakpoint(phone) {
     .actions {
         gap: rem(8);
     }
 
+    .edit > button,
     .form > button,
     .actions > button,
     .conflict > button,
