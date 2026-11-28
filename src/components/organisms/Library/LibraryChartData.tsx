@@ -12,7 +12,7 @@ export const LibraryChartData = ({ data }: { data: ChartData }): React.JSX.Eleme
             }}
         />
         <details className={styles.chartData}>
-            <summary>Chart data ({formatWindow(data.window)})</summary>
+            <summary>Data ({formatWindow(data.window)})</summary>
             <a href={data.csvHref}>Download CSV</a>
             <table>
                 <caption>{data.dataset.variableMeasured}</caption>

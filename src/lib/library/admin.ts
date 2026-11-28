@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { after } from 'next/server';
 
 import { refuseCrossOrigin } from '@/lib/apiKeys/sameOrigin';
@@ -20,6 +20,7 @@ import { cardDataDates } from '@/lib/studio/dataThrough';
 import { panelViewOf } from '@/lib/studio/infoPanel';
 
 import { artifactPath } from './artifact';
+import { libraryShareTag } from './chartData';
 import { libraryEnabled } from './enabled';
 import { evergreenCheck } from './evergreen';
 import { changedText } from './evergreenRule';
@@ -200,8 +201,16 @@ const artifactWithdrawn = (): Response =>
 // Takes down a share no artifact on show holds, in dfo-apis, or else
 // records it in `share_cleanup` for an operator, with the alerted
 // `share_cleanup_recorded` line (./withdraw.ts, `settleShare`).
+// The share's cached rows (./chartData.ts) are expired at once, so a page
+// or CSV served after the take-down reads dfo-apis again.
 const settling = (headers: Headers): ShareSettling => ({
-    takeDown: (share) => takeDownTokenShare(headers, share),
+    takeDown: async (share) => {
+        const outcome = await takeDownTokenShare(headers, share);
+
+        revalidateTag(libraryShareTag(share.shareId), { expire: 0 });
+
+        return outcome;
+    },
     keepForCleanup: keepShareForCleanup,
 });
 

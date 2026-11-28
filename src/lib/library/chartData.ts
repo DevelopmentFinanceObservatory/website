@@ -3,13 +3,10 @@
  * HTML (a table and a schema.org `Dataset` block) and its CSV route
  * (`/library/<slug>/data.csv`).
  *
- * The share's record and slot are read once per share and cached for
- * `REVALIDATE_SECONDS`, the lifetime of the link-preview image, so the table
- * can lag the drawn chart by up to five minutes. A failed read throws inside
- * the cache, which then stores nothing. The page waits `PAGE_DEADLINE_MS`
- * for the read and renders without the table after that, while the read
- * runs on for up to `FILL_DEADLINE_MS` to fill the cache for the next
- * request.
+ * The share's record and slot are read once per share and cached
+ * (`cachedSlotChart`). The page waits `PAGE_DEADLINE_MS` for the read and
+ * renders without the table after that, while the read runs on for up to
+ * `FILL_DEADLINE_MS` to fill the cache for the next request.
  *
  * Server-only, without a `server-only` import so `node --test` can load it.
  */
@@ -27,7 +24,8 @@ import type { CardData } from '../chat/widgets.ts';
 import { cardDescription } from '../studio/infoPanel.ts';
 import { BackendError } from '../studio/liveBackend.ts';
 import { formatPeriod } from '../studio/period.ts';
-import { drawSlotCard, pageCards } from '../studio/slotCards.ts';
+import { problem } from '../proxy/problem.ts';
+import { drawSlotCard, pageCards, REQUEST_REFUSALS } from '../studio/slotCards.ts';
 import { artifactPath, type LibraryArtifact } from './artifact.ts';
 
 const REVALIDATE_SECONDS = 300;
@@ -44,6 +42,10 @@ const FILL_DEADLINE_MS = 10_000;
 // Google reads a Dataset description of 50 to 5,000 characters.
 const DESCRIPTION_MIN = 50;
 const DESCRIPTION_MAX = 5_000;
+
+// dfo-apis statuses that say the share or its slot is gone or cannot be
+// drawn, which a later read will not change.
+const PERMANENT_STATUSES = new Set([404, 410, 422]);
 
 // Names a built description lists before it counts the rest.
 const NAMES_LISTED = 8;
@@ -150,6 +152,13 @@ const savedView = (payload: unknown, id: string): CardView | undefined => {
     return CARD_VIEWS.find((known) => known === view);
 };
 
+// The title the card was renamed to in the share, which the embed shows.
+const savedTitle = (payload: unknown, id: string): string | undefined => {
+    const title = asRecord(asRecord(payload)?.['titles'])?.[id];
+
+    return typeof title === 'string' && title.trim() ? title : undefined;
+};
+
 const VALUE_KEYS = new Set(['value', 'unit', 'period']);
 
 /**
@@ -195,13 +204,35 @@ const rowsOf = ({ columns, rows }: CardData): Row[] => {
  * share is not a one-card share, the view the embed shows (`resolveCardView`
  * with the view the share saved) draws no rows, as a key number's does not,
  * or the card holds no value. A chart, a table, and either one saved in the
- * other's view all draw rows. A failed read throws its `SharesError` or
- * `BackendError`.
+ * other's view all draw rows. A refusal a later read will not change (the
+ * share or slot gone, a card dfo-apis cannot draw, an answer outside its
+ * shape) also reads as null, so the cache keeps it. Any other failed read
+ * throws its `SharesError` or `BackendError`.
  */
 export const readSlotChart = async (
     shares: SharesBackend,
     shareId: string,
 ): Promise<SlotChart | null> => {
+    try {
+        return await slotChartOf(shares, shareId);
+    } catch (error) {
+        if (isReadFailure(error) && isPermanent(error)) {
+            return null;
+        }
+
+        throw error;
+    }
+};
+
+/** Whether `error` is a failed dfo-apis read, which `code` names. */
+export const isReadFailure = (error: unknown): error is SharesError | BackendError =>
+    error instanceof SharesError || error instanceof BackendError;
+
+const isPermanent = (error: SharesError | BackendError): boolean =>
+    error.code === 'backend_invalid' ||
+    (error.status !== undefined && PERMANENT_STATUSES.has(error.status));
+
+const slotChartOf = async (shares: SharesBackend, shareId: string): Promise<SlotChart | null> => {
     const share = await readShare(shares, shareId);
 
     if (share?.kind !== 'card') {
@@ -245,7 +276,7 @@ export const readSlotChart = async (
 
     return {
         slot: page.slot,
-        title: widgetTitle(widget),
+        title: savedTitle(share.payload, page.id) ?? widgetTitle(widget),
         measure: description?.about.measure?.label ?? null,
         rows,
         seriesHeading: rows.every(({ series }) => countries.has(series.toLowerCase()))
@@ -259,12 +290,19 @@ export const readSlotChart = async (
     };
 };
 
+/** The cache tag of a share's entry, which a take-down revalidates. */
+export const libraryShareTag = (shareId: string): string => `library-share:${shareId}`;
+
 /**
- * `readSlotChart`, cached per share for `REVALIDATE_SECONDS`. A Library
- * artifact keeps its share for life, and the share's slot names the card's
- * revision, so a new revision or newer data shows once the entry is five
- * minutes old. The reads name the caller of the request that fills the
- * entry.
+ * `readSlotChart`, cached per share under `libraryShareTag` for
+ * `REVALIDATE_SECONDS`, the lifetime of the link-preview image. The cache is
+ * stale-while-revalidate: the first request after an entry expires is
+ * served the old entry and starts a read, and later requests get that
+ * read's answer, so a change shows after five minutes and one more view. A
+ * failed read throws, stores nothing and leaves the old entry in place, so
+ * a transient fault keeps the last good rows; a refusal that will not change
+ * stores null (`readSlotChart`). Taking the share down revalidates the tag.
+ * The reads name the caller of the request that fills the entry.
  */
 export const cachedSlotChart = (
     backend: SharesBackend,
@@ -274,12 +312,8 @@ export const cachedSlotChart = (
         (id: string) =>
             readSlotChart({ ...backend, signal: AbortSignal.timeout(FILL_DEADLINE_MS) }, id),
         ['library-slot-chart'],
-        { revalidate: REVALIDATE_SECONDS },
+        { revalidate: REVALIDATE_SECONDS, tags: [libraryShareTag(shareId)] },
     )(shareId);
-
-/** Whether `error` is a failed dfo-apis read, which `code` names. */
-export const isReadFailure = (error: unknown): error is SharesError | BackendError =>
-    error instanceof SharesError || error instanceof BackendError;
 
 // At most `max` characters, cut at a word break when one is near.
 const clip = (text: string, max: number): string => {
@@ -373,7 +407,7 @@ export const chartDataOf = (
         };
     });
     const [source] = sources;
-    const measure = chart.measure ?? chart.title;
+    const measure = chart.measure?.trim() || chart.title;
 
     return {
         rows,
@@ -422,6 +456,7 @@ export const libraryChartData = async (
         return null;
     };
     const read = cachedSlotChart(backend, artifact.shareId);
+    const settled = read.catch(() => null);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const late = new Promise<'late'>((resolve) => {
         timer = setTimeout(resolve, deadlineMs, 'late');
@@ -431,7 +466,7 @@ export const libraryChartData = async (
         const chart = await Promise.race([read, late]);
 
         if (chart === 'late') {
-            waitUntil?.(read.catch(() => null));
+            waitUntil?.(settled);
 
             return unavailable('page_deadline');
         }
@@ -446,4 +481,30 @@ export const libraryChartData = async (
     } finally {
         clearTimeout(timer);
     }
+};
+
+/**
+ * The CSV route's answer to a failed read: a refusal dfo-apis made of the
+ * request itself (`REQUEST_REFUSALS`, as the share download maps them) under
+ * its own status, a 429 with its `Retry-After`, and 502 for any other fault.
+ */
+export const readFailureResponse = (error: SharesError | BackendError): Response => {
+    const retryAfterS = error instanceof SharesError ? error.retryAfterS : undefined;
+    const status =
+        error.status === 429
+            ? 429
+            : (REQUEST_REFUSALS.find((code) => code === error.status) ?? 502);
+
+    return problem({
+        status,
+        code: error.code,
+        detail: 'The card has no data file to serve.',
+        retryable: error.retryable,
+        headers: {
+            'Cache-Control': 'no-store',
+            ...(status === 429 && retryAfterS !== undefined
+                ? { 'Retry-After': String(retryAfterS) }
+                : {}),
+        },
+    });
 };

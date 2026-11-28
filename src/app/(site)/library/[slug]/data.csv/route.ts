@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 
 import { slotDepsFor } from '@/lib/chat/shareStore';
 import { libraryView } from '@/lib/library/admin';
-import { cachedSlotChart, isReadFailure } from '@/lib/library/chartData';
+import { cachedSlotChart, isReadFailure, readFailureResponse } from '@/lib/library/chartData';
 import { artifactBySlug } from '@/lib/library/store';
 import { missingProblem, problem } from '@/lib/proxy/problem';
 import { slotDataResponse } from '@/lib/studio/slotCards';
@@ -30,8 +30,9 @@ const noData = (): Response =>
 // as the bare CSV of the share's slot data route (src/lib/studio/slotCards).
 // The page's Dataset block names this address, which robots.txt leaves open,
 // unlike /api/. It answers when the page does (`libraryView`), for a
-// published artifact whose card draws data rows (`readSlotChart`), and 404
-// otherwise. An open Library's file is cached publicly for five minutes; an
+// published artifact whose card draws data rows (`readSlotChart`, the rule
+// the page uses too), and 404 otherwise. A failed read answers as
+// `readFailureResponse` maps it. An open Library's file is cached publicly for five minutes; an
 // admin's preview is not stored.
 export const GET = async (request: NextRequest, { params }: Context) => {
     const view = await libraryView();
@@ -52,13 +53,7 @@ export const GET = async (request: NextRequest, { params }: Context) => {
             throw error;
         }
 
-        return problem({
-            status: 502,
-            code: error.code,
-            detail: 'The card has no data file to serve.',
-            retryable: error.retryable,
-            headers: NO_STORE,
-        });
+        return readFailureResponse(error);
     }
 
     if (chart === null) {

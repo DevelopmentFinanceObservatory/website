@@ -459,7 +459,7 @@ const EXPORT_HEADERS = ['content-type', 'content-disposition', 'content-length']
 
 // The statuses with which dfo-apis refuses an export request itself: a
 // format it cannot write, or rows that are gone.
-const REQUEST_REFUSALS = [400, 404, 422] as const satisfies readonly ProblemStatus[];
+export const REQUEST_REFUSALS = [400, 404, 422] as const satisfies readonly ProblemStatus[];
 
 const noFile = (
     { code, retryable }: { code: string; retryable?: boolean },

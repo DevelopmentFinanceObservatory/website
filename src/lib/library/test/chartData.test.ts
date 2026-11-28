@@ -3,10 +3,10 @@ import test, { beforeEach } from 'node:test';
 
 // Before chartData.ts, which loads next/cache.
 import { nextCache } from '../../test/nextCacheStub.ts';
-import type { SharesBackend } from '../../chat/apisShares.ts';
+import { SharesError, type SharesBackend } from '../../chat/apisShares.ts';
 import { componentRead, DATASET_FRAME } from '../../studio/test/fixtures/component-read.ts';
 import describedChart from '../../studio/test/fixtures/descriptions/envelope-line-chart-described.json' with { type: 'json' };
-import { libraryChartData } from '../chartData.ts';
+import { libraryChartData, readFailureResponse } from '../chartData.ts';
 
 const artifact = {
     slug: 'health-expenditure',
@@ -189,14 +189,46 @@ test('a live chart reports the served period and leaves an unknown licence out',
     assert.equal(data.dataset.isBasedOn?.[0].license, undefined);
 });
 
-test('an unreadable slot does not replace a Library page with an error', async () => {
-    const data = await libraryChartData(
-        backend('live', () => Response.json({ code: 'not_found' }, { status: 404 })),
-        artifact,
-        ORIGIN,
-    );
+for (const [label, answer, readsAfterTwo] of [
+    ['a slot dfo-apis no longer has is kept as no data', 404, 1],
+    ['a slot dfo-apis cannot serve for now is read again', 503, 2],
+] as const) {
+    test(label, async () => {
+        let reads = 0;
+        const shares = backend('live', () => {
+            reads += 1;
 
-    assert.equal(data, null);
+            return Response.json({ code: 'refused' }, { status: answer });
+        });
+
+        assert.equal(await libraryChartData(shares, artifact, ORIGIN), null);
+        assert.equal(await libraryChartData(shares, artifact, ORIGIN), null);
+        assert.equal(reads, readsAfterTwo);
+    });
+}
+
+test('the CSV route answers a failed read under the status it calls for', () => {
+    const answers = [
+        new SharesError('not_found', { status: 404 }),
+        new SharesError('request_invalid', { status: 400 }),
+        new SharesError('unprocessable', { status: 422 }),
+        new SharesError('rate_limited', { status: 429, retryable: true, retryAfterS: 30 }),
+        new SharesError('upstream_error', { status: 500 }),
+        new SharesError('backend_unreachable', { retryable: true }),
+    ].map((error) => {
+        const response = readFailureResponse(error);
+
+        return [response.status, response.headers.get('retry-after')];
+    });
+
+    assert.deepEqual(answers, [
+        [404, null],
+        [400, null],
+        [422, null],
+        [429, '30'],
+        [502, null],
+        [502, null],
+    ]);
 });
 
 const plotted = countries.map(({ label, value }) => ({
@@ -262,10 +294,6 @@ test('a slow slot read leaves the page without the table, then fills the cache',
 
     assert.deepEqual(cached?.rows, plotted);
     assert.equal(reads, 1);
-    assert.deepEqual(
-        [...nextCache.stored.values()].map((entry) => entry.revalidate),
-        [300],
-    );
 });
 
 for (const [label, description, check] of [

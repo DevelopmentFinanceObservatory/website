@@ -90,19 +90,14 @@ const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPage
         );
     }
 
-    // A chart or a table in any of its views draws rows, which the card's
-    // saved view decides (`readSlotChart`).
-    const chartData =
-        found.artifact.kind === 'chart' || found.artifact.kind === 'table'
-            ? await libraryChartData(
-                  sharesBackendFor(await headers()),
-                  found.artifact,
-                  SITE_ORIGIN,
-                  {
-                      waitUntil: after,
-                  },
-              )
-            : null;
+    // `readSlotChart` decides whether the artifact has rows to serve, as it
+    // does for ./data.csv: a one-card share whose saved view draws data.
+    const chartData = await libraryChartData(
+        sharesBackendFor(await headers()),
+        found.artifact,
+        SITE_ORIGIN,
+        { waitUntil: after },
+    );
 
     return (
         <main>
