@@ -2332,12 +2332,14 @@ span.slotMarked {
     height: 100%;
     background-color: var(--color-yellow-hover);
     transform-origin: left;
-    transition: background-color 150ms ease;
+    transition: opacity 150ms ease;
     scale: 0 1;
 }
 
+// A paused clock keeps its colour and dims, so the line shows how far the
+// hold had run.
 .studioMove[data-held] .moveFill {
-    background-color: var(--color-media-bg);
+    opacity: 0.5;
 }
 
 // The loading view's live region for the move (DataSearch's moveNote),
