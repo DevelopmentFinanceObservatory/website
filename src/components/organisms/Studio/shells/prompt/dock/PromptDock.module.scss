@@ -31,18 +31,15 @@
     --dock-fold: 220ms;
 
     // The box and the pill are one material: the canvas shows through it,
-    // blurred, and the rows above the field take the page's tint over it.
+    // blurred.
 
     --dock-surface: var(--color-white);
-    --dock-band: var(--color-grid-bg-light);
     --dock-material: none;
 
-    // Three layers in the text colour, each falling below the box more than
+    // Two layers in the text colour, each falling below the box more than
     // around it.
 
-    --dock-shadow-rest:
-        0 1px 2px rgb(72 72 66 / 6%), 0 4px 10px -2px rgb(72 72 66 / 8%),
-        0 14px 32px -10px rgb(72 72 66 / 20%);
+    --dock-shadow-rest: 0 2px 6px -1px rgb(72 72 66 / 10%), 0 14px 32px -10px rgb(72 72 66 / 20%);
     --dock-shadow-open: 0 -2px 12px rgb(72 72 66 / 10%), 0 1px 2px rgb(72 72 66 / 6%);
 
     position: relative;
@@ -56,13 +53,11 @@
 
     @supports (backdrop-filter: blur(1px)) {
         --dock-surface: color-mix(in sRGB, var(--color-white) 82%, transparent);
-        --dock-band: color-mix(in sRGB, var(--color-bg) 62%, transparent);
         --dock-material: blur(16px) saturate(1.4);
     }
 
     @media (prefers-reduced-transparency: reduce) {
         --dock-surface: var(--color-white);
-        --dock-band: var(--color-grid-bg-light);
         --dock-material: none;
     }
 }
@@ -290,9 +285,9 @@
     }
 }
 
-// Everything above the input row, on the page's tint, which sets it apart
-// from the field with no rule between them. Rows keep their height; a sheet
-// gives way and its body scrolls.
+// Everything above the input row. Rows keep their height and stand over the
+// field with no rule between them; a sheet gives way and its body scrolls,
+// and one rule marks where it meets the field.
 .upper {
     display: flex;
     flex: 0 1 auto;
@@ -312,8 +307,8 @@
         flex: 0 0 auto;
     }
 
-    &:not(:empty) {
-        background-color: var(--dock-band);
+    .dock:not([data-sheet="none"]) &:not(:empty) {
+        border-bottom: 1px solid var(--color-net-light);
     }
 }
 
