@@ -637,9 +637,13 @@ const CardPage = ({ id }: { id: string }) => {
                         >
                             Ask about this card
                         </button>
+                    </div>
+                    <div className={styles.actionRow}>
                         <IconAction
-                            wide
                             icon="download"
+                            wide
+                            text="Data"
+                            className={styles.share}
                             label="Download data"
                             subject={title}
                             data-sp-act="data"
@@ -650,8 +654,10 @@ const CardPage = ({ id }: { id: string }) => {
                         />
                         {imageable && (
                             <IconAction
-                                wide
                                 icon="download"
+                                wide
+                                text="Image"
+                                className={styles.share}
                                 label="Download image"
                                 doneLabel="Image downloaded"
                                 subject={title}
@@ -667,13 +673,22 @@ const CardPage = ({ id }: { id: string }) => {
                             />
                         )}
                         <IconAction
-                            wide
                             icon="embed"
+                            wide
+                            text="Embed"
+                            className={styles.share}
                             label="Embed"
                             subject={title}
                             data-sp-act="embed"
                             data-sp-key="act:embed"
-                            onAction={() => modals.share.show({ kind: 'card', id: current, title })}
+                            onAction={() =>
+                                modals.share.show({
+                                    kind: 'card',
+                                    id: current,
+                                    title,
+                                    tab: 'embed',
+                                })
+                            }
                         />
                     </div>
                     {downloadOpen && (

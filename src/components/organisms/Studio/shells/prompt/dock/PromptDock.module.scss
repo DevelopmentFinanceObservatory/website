@@ -22,7 +22,24 @@
 
     --hit-room-y: calc(var(--dock-gap, #{rem(10)}) / 2);
     --dock-ease: var(--ws-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    --dock-shadow-rest: 0 8px 28px rgb(47 47 43 / 16%), 0 1px 3px rgb(47 47 43 / 10%);
+
+    // Focus mode folds the box onto the pill in this time. The box scales
+    // about its foot to the pill's size (--dock-fold-x and --dock-fold-y,
+    // which PromptDock.tsx measures), so one surface changes size and the two
+    // contents swap inside it.
+
+    --dock-fold: 220ms;
+
+    // The box and the pill are one material: the canvas shows through it,
+    // blurred.
+
+    --dock-surface: var(--color-white);
+    --dock-material: none;
+
+    // Two layers in the text colour, each falling below the box more than
+    // around it.
+
+    --dock-shadow-rest: 0 2px 6px -1px rgb(72 72 66 / 10%), 0 14px 32px -10px rgb(72 72 66 / 20%);
     --dock-shadow-open: 0 -2px 12px rgb(72 72 66 / 10%), 0 1px 2px rgb(72 72 66 / 6%);
 
     position: relative;
@@ -33,6 +50,16 @@
     width: 100%;
     min-height: 0;
     pointer-events: none;
+
+    @supports (backdrop-filter: blur(1px)) {
+        --dock-surface: color-mix(in sRGB, var(--color-white) 82%, transparent);
+        --dock-material: blur(16px) saturate(1.4);
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+        --dock-surface: var(--color-white);
+        --dock-material: none;
+    }
 }
 
 // --- Pills -----------------------------------------------------------------
@@ -117,7 +144,8 @@
 // --- Focus pill ------------------------------------------------------------
 
 // Out of the flow until focus mode, then the box leaves the flow and the
-// pill takes its place, the two cross-fading.
+// pill takes its place. The pill stands where the folded box ends, and only
+// fades: in once the box has reached its size, out before the box opens.
 .focusPill {
     @include font-size-floor(14px, 1);
 
@@ -135,16 +163,14 @@
     color: var(--color-stone);
     cursor: pointer;
     opacity: 0;
-    background-color: var(--color-white);
+    background-color: var(--dock-surface);
     border: 1px solid var(--color-sage-light);
     border-radius: rem(10);
     box-shadow: var(--dock-shadow-rest);
+    backdrop-filter: var(--dock-material);
     transform: translateX(-50%);
-    transform-origin: 50% 100%;
-    scale: 1.6 1;
     transition:
-        opacity 0.2s var(--dock-ease),
-        scale 0.2s var(--dock-ease),
+        opacity 80ms ease,
         border-color 0.2s ease;
 
     @media (hover: hover) {
@@ -166,7 +192,9 @@
         pointer-events: auto;
         opacity: 1;
         transform: none;
-        scale: 1 1;
+        transition:
+            opacity 100ms ease 120ms,
+            border-color 0.2s ease;
     }
 }
 
@@ -193,20 +221,38 @@
     width: 100%;
     min-height: 0;
     pointer-events: auto;
-    background-color: var(--color-white);
+    background-color: var(--dock-surface);
     border: 1px solid var(--color-sage-light);
     border-radius: rem(10);
     outline: none;
     box-shadow: var(--dock-shadow-rest);
+    backdrop-filter: var(--dock-material);
     transform-origin: 50% 100%;
+
+    // Leaving focus mode: the surface shows at once at the pill's size and
+    // opens, and its content follows (::after).
     transition:
         border-color 0.2s ease,
-        opacity 0.2s var(--dock-ease),
-        scale 0.2s var(--dock-ease);
+        opacity 60ms linear,
+        scale var(--dock-fold) var(--dock-ease);
 
-    // The field's focus indicator, in the colour of every other control's.
+    // The surface's colour over the box's content, which hides the content
+    // while the box is near the pill's size.
+    &::after {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        content: "";
+        opacity: 0;
+        background-color: var(--color-white);
+        border-radius: inherit;
+        transition: opacity 130ms ease 70ms;
+    }
+
+    // The caret marks the field's focus; the border deepens one step with it.
     &:has(.field:focus-visible) {
-        border-color: var(--color-charcoal);
+        border-color: var(--color-sage-dark);
     }
 
     // Focus lands on the box itself when the control that held it leaves.
@@ -219,17 +265,29 @@
         box-shadow: var(--dock-shadow-open);
     }
 
+    // Entering focus mode: the content goes first, the surface closes on the
+    // pill's place, and it fades there as the pill arrives.
     .dock[data-focus] & {
         position: absolute;
         bottom: 0;
         pointer-events: none;
         opacity: 0;
-        scale: 0.5 1;
+        scale: var(--dock-fold-x, 0.96) var(--dock-fold-y, 0.96);
+        transition:
+            border-color 0.2s ease,
+            opacity 100ms linear 120ms,
+            scale var(--dock-fold) var(--dock-ease);
+
+        &::after {
+            opacity: 1;
+            transition: opacity 80ms ease;
+        }
     }
 }
 
-// Everything above the input row. Rows keep their height; a sheet gives way
-// and its body scrolls.
+// Everything above the input row. Rows keep their height and stand over the
+// field with no rule between them; a sheet gives way and its body scrolls,
+// and one rule marks where it meets the field.
 .upper {
     display: flex;
     flex: 0 1 auto;
@@ -249,12 +307,19 @@
         flex: 0 0 auto;
     }
 
-    > * + * {
-        border-top: 1px solid var(--color-net-light);
+    .dock:not([data-sheet="none"]) &:not(:empty) {
+        border-bottom: 1px solid var(--color-net-light);
     }
 
-    &:not(:empty) {
-        border-bottom: 1px solid var(--color-net-light);
+    // While its height tweens to a new sheet's (useSheetTween.ts), the
+    // region's children keep their final heights against its foot, and the
+    // region clips them. Clip makes no scroll container, so focus moving in
+    // scrolls nothing.
+    &[data-tween] {
+        position: relative;
+        justify-content: flex-end;
+        max-height: none;
+        overflow: clip;
     }
 }
 
@@ -295,6 +360,27 @@
     gap: rem(10);
     min-height: rem(46);
     padding: rem(9) rem(10);
+}
+
+// The chip and the typing area. The chip stands on the field's first line,
+// whatever the field's height; under 768 px it takes its own line above.
+// The field's touch padding is 0 here, and .field sets it for a coarse
+// pointer.
+.compose {
+    --dock-field-touch: 0px;
+
+    display: flex;
+    flex-grow: 1;
+    align-items: flex-start;
+    gap: rem(8);
+    min-width: 0;
+    margin-block: auto;
+
+    // The chip takes a line of its own above the typing area.
+    &[data-chip] {
+        flex-wrap: wrap;
+        row-gap: rem(6);
+    }
 }
 
 .field {
@@ -345,6 +431,17 @@
     @media (pointer: coarse) and (max-width: 767px) {
         // iOS zooms the page into a field set under 16 px.
         font-size: max(16px, #{rem(14)});
+    }
+
+    // Under the chip the field takes the whole line, and its touch padding
+    // reaches up into the row gap below the chip (.compose), short of the
+    // chip itself.
+    .compose[data-chip] & {
+        --dock-field-top: calc(-1 * min(var(--dock-field-touch), #{rem(6)}));
+
+        flex-basis: 100%;
+        align-self: flex-start;
+        margin-block: var(--dock-field-top) calc(-1 * var(--dock-field-touch));
     }
 }
 
@@ -560,31 +657,133 @@
     rotate: 180deg;
 }
 
-// The card chip of the `About` row.
+// The folded reply: up to two lines of its opening, with the control placed
+// over the end of the last line. The text runs the row's full width, and a
+// spacer after it keeps the control's room free on its last line, so the
+// text never runs under the control and the control's own width never
+// changes where the text wraps.
+.rowFold {
+    --fold-room: #{rem(34)};
+
+    position: relative;
+    align-items: flex-start;
+    padding-block: rem(7) rem(6);
+
+    // `Read answer` is 11 characters of DM Mono, then the chevron.
+    &[data-cue] {
+        --fold-room: calc(11ch + #{rem(28)});
+    }
+
+    @media (hover: hover) {
+        &:hover .foldCue {
+            color: var(--color-charcoal);
+            background-color: var(--color-net-light);
+        }
+    }
+}
+
+.foldText {
+    @include font-size-floor(13px, 1.45);
+
+    flex: 1 1 auto;
+    min-width: 0;
+    max-height: 2lh;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+
+    strong {
+        font-weight: 600;
+    }
+
+    &::after {
+        @include font-size-floor(12px, 1);
+
+        content: "";
+        display: inline-block;
+        width: var(--fold-room);
+        font-family: var(--font-dm-mono);
+    }
+
+    // Line one stays whole; line two fades out before the control, and the
+    // text under the control is cleared, since the dock's surface shows
+    // through it.
+    .rowFold[data-fade] & {
+        mask-image:
+            linear-gradient(#000, #000),
+            linear-gradient(
+                to right,
+                #000 calc(100% - #{rem(116)} - min(#{rem(116)}, 22%)),
+                transparent calc(100% - #{rem(116)})
+            );
+        mask-position: top, bottom;
+        mask-repeat: no-repeat;
+        mask-size: 100% 1lh;
+    }
+}
+
+.foldCue {
+    position: absolute;
+    right: rem(10);
+    bottom: rem(4);
+
+    &.textBtn {
+        display: inline-flex;
+        gap: rem(2);
+        align-items: center;
+        right: rem(6);
+
+        svg {
+            width: rem(16);
+            height: rem(16);
+        }
+    }
+}
+
+// The selected card on a line of its own above the typing area: the word
+// `About`, then the card's chip. The word tells the chip from the row an open
+// answer draws for the same card just above it.
+.about {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: rem(8);
+    min-width: 0;
+    max-width: 100%;
+}
+
+// The chip is short: the card's whole title is in its tooltip. Its hairline
+// box sets it apart from the answer's text above it; it has no fill and
+// takes the field's typeface, so the follow-up pills are the dock's only
+// filled shapes.
 .chip {
     display: flex;
+    flex: 0 1 auto;
     align-items: center;
     gap: rem(6);
+    box-sizing: border-box;
     min-width: 0;
-    height: rem(22);
-    padding: 0 rem(4) 0 rem(8);
-    background-color: var(--color-popup);
+    max-width: min(100%, #{rem(220)});
+    height: rem(24);
+    padding: 0 rem(8);
+    border: 1px solid var(--color-sage-light);
     border-radius: rem(6);
 }
 
 .chipIcon {
     flex: 0 0 auto;
-    width: rem(12);
-    height: rem(12);
+    width: rem(14);
+    height: rem(14);
+    color: var(--color-stone);
 }
 
 .chipTitle {
-    @include font-size-floor(11px, 2);
+    @include font-size-floor(12px, 1.6);
 
-    max-width: rem(420);
+    flex: 0 1 auto;
+    min-width: 0;
     padding: 0;
     overflow: hidden;
-    font-family: var(--font-dm-mono);
+    font-family: var(--font-outfit);
     color: var(--color-charcoal);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -592,12 +791,20 @@
     background: none;
     border: 0;
 
+    @media (hover: hover) {
+        &:hover {
+            text-decoration: underline;
+            text-decoration-color: var(--color-sage-dark);
+            text-underline-offset: rem(3);
+        }
+    }
+
     // The clear button's margin leaves rem(2) between it and the title.
     @include touch-target($room-x: rem(1));
 
     &:focus-visible {
-        outline: 1px solid var(--color-charcoal);
-        outline-offset: 2px;
+        outline: 2px solid var(--color-sage-dark);
+        outline-offset: 1px;
     }
 }
 
@@ -609,7 +816,7 @@
     flex: 0 0 auto;
     width: rem(24);
     height: rem(24);
-    margin: 0 rem(-4);
+    margin: 0 rem(-6);
     padding: 0;
     color: var(--color-stone);
     cursor: pointer;
@@ -634,7 +841,7 @@
 
     &:focus-visible {
         color: var(--color-charcoal);
-        outline: 1px solid var(--color-charcoal);
+        outline: 2px solid var(--color-sage-dark);
     }
 }
 
@@ -1195,8 +1402,22 @@ $dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), 
 // --- Reduced motion ----------------------------------------------------------
 
 @media (prefers-reduced-motion: reduce) {
+    // Focus mode swaps the box and the pill by a short fade alone, at rest
+    // size in both states.
     .box,
     .focusPill,
+    .dock[data-focus] .box,
+    .dock[data-focus] .focusPill {
+        scale: 1;
+        transition: opacity 120ms ease;
+    }
+
+    .box::after,
+    .dock[data-focus] .box::after {
+        opacity: 0;
+        transition: none;
+    }
+
     .pill {
         transition: none;
     }

@@ -57,6 +57,7 @@ import {
     createStepLine,
     createWorkingGrace,
     IDLE,
+    OPENING,
     preambleLine,
     stoppedReply,
     WORKING,
@@ -2331,7 +2332,7 @@ export const useChat = (
                     ...(card?.title && { card: { title: card.title } }),
                     ...(fromNewQuestion !== undefined && { fromNewQuestion }),
                 },
-                'Resolving the question',
+                OPENING,
             );
             const recap = recapRef.current;
 

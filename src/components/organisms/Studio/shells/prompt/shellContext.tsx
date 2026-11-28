@@ -48,8 +48,7 @@ export type PromptShellValue = {
     /** The shell's root element. The dock writes its heights on it as
      *  `--dock-rest` and `--dock-current` (px). */
     rootRef: RefObject<HTMLElement | null>;
-    /** The session panel's frame (the shell's `aside`), where the panel
-     *  sets its `data-sp-*` attributes. */
+    /** The session panel's frame (the shell's `aside`). */
     panelRef: RefObject<HTMLElement | null>;
     /** Puts the caret in the dock's field, leaving focus mode first. */
     focusField: () => void;

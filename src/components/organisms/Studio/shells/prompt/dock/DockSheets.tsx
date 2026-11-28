@@ -82,19 +82,24 @@ const ReplyText = ({
 };
 
 /** A reply as the chat draws one: Markdown, the feedback controls, the
- *  approved plan's pill and the question's card chips. */
+ *  approved plan's pill and the question's card chips. `named` is a card
+ *  the dock names already, just below the reply (the selected card's chip
+ *  in the input row): a reply whose only card it is draws no chip for it.
+ *  A reply with several cards lists them all, so its count holds. */
 const ReplyContent = ({
     question,
     stream,
     streaming,
     feedback,
     chips,
+    named = null,
 }: {
     question: Question;
     stream: ReplyStream;
     streaming: boolean;
     feedback: boolean;
     chips: ChipActions;
+    named?: string | null;
 }) => {
     const widgets = chips.widgets.filter((widget) => widget.turn === question.turn);
     // What the reply's cards show since a card change redrew them.
@@ -114,7 +119,7 @@ const ReplyContent = ({
             )}
             {question.plan && <ApprovedPlanPill plan={question.plan} />}
             <WidgetChips
-                widgets={widgets}
+                widgets={widgets.length === 1 && widgets[0].id === named ? [] : widgets}
                 titles={chips.titles}
                 views={chips.views}
                 onCanvas={chips.onCanvas}
@@ -139,6 +144,7 @@ export const ReplySheet = ({
     failed,
     streaming,
     chips,
+    named,
     onThread,
     onFold,
 }: {
@@ -151,6 +157,8 @@ export const ReplySheet = ({
     failed: boolean;
     streaming: boolean;
     chips: ChipActions;
+    /** The selected card, when the input row shows its chip. */
+    named: string | null;
     onThread: () => void;
     onFold: () => void;
 }) => (
@@ -198,6 +206,7 @@ export const ReplySheet = ({
                 streaming={streaming}
                 feedback={!failed}
                 chips={chips}
+                named={named}
             />
         </div>
     </section>

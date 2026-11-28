@@ -9,7 +9,6 @@ import { DataUsedPage, PlanPage, QuestionPage, SourcePage } from './Pages';
 import { type PanelNav, PanelNavContext } from './panelNav';
 import partStyles from './parts/parts.module.scss';
 import styles from './SessionPanel.module.scss';
-import { useGrow } from './useGrow';
 import { useSession } from './useSession';
 
 import { standingFor } from '@/lib/studio/cardIdentity';
@@ -22,6 +21,10 @@ import {
     sourcePageOf,
     turnPageOf,
 } from '@/lib/studio/sessionView';
+
+/** The pages that show the panel wide, over the canvas. Every other page and
+ *  the overview show it at its rest width. */
+const WIDE_PAGES: ReadonlySet<PanelPage['kind']> = new Set(['plan', 'stage']);
 
 const pageKey = (page: PanelPage) =>
     'id' in page ? `${page.kind}:${page.id}` : `${page.kind}:${page.turn}`;
@@ -115,12 +118,20 @@ const resolves = (page: PanelPage, input: SessionInput): boolean => {
  */
 const SessionPanel = () => {
     const { canvas } = useStudioModel();
-    const { state, dispatch, panelOpen, focusCard, plans: links, report } = usePromptShell();
+    const {
+        state,
+        dispatch,
+        panelOpen,
+        focusCard,
+        overlay,
+        plans: links,
+        report,
+    } = usePromptShell();
     const { input, overview } = useSession();
     const { trail } = state;
     const top = trail.at(-1) ?? null;
     const shown = top && resolves(top, input) ? top : null;
-    const { scroller, top: topSpacer, foot: footSpacer } = useGrow(shown !== null);
+    const scroller = useRef<HTMLDivElement | null>(null);
     const [folds, setFolds] = useState<Folds>({ earlier: false, removed: false, keep: null });
 
     // What opened each page, by the page's place in the trail, which takes
@@ -162,9 +173,8 @@ const SessionPanel = () => {
             },
             backLabel,
             fly: (id) => flyTo.current(id),
-            topSpacer,
         }),
-        [trail.length, backLabel, behind?.kind, dispatch, report, topSpacer],
+        [trail.length, backLabel, behind?.kind, dispatch, report],
     );
 
     useEffect(() => {
@@ -273,6 +283,14 @@ const SessionPanel = () => {
     // canvas); going back restores the control that opened the page; the
     // overview keeps its own scroll position.
     const shownKey = shown ? pageKey(shown) : null;
+    const wide = shown !== null && WIDE_PAGES.has(shown.kind);
+    // A wide page that replaces a rest-width one fades in while the panel's
+    // edge opens over its left side. The flag holds until the next page.
+    const [widthAt, setWidthAt] = useState({ key: shownKey, wide, opening: false });
+
+    if (widthAt.key !== shownKey) {
+        setWidthAt({ key: shownKey, wide, opening: wide && !widthAt.wide && !overlay });
+    }
     const depth = useRef(trail.length);
     const depthNow = trail.length;
     // The input as of this render, read when the trail moves.
@@ -374,6 +392,8 @@ const SessionPanel = () => {
                 ref={scroller}
                 className={classNames(partStyles.root, styles.scroller)}
                 data-sp-scroll
+                data-sp-width={wide ? 'wide' : 'rest'}
+                data-sp-opening={widthAt.opening || undefined}
                 onScroll={(event) => {
                     const box = event.currentTarget;
 
@@ -382,26 +402,12 @@ const SessionPanel = () => {
                     updateFades(box);
                 }}
             >
-                {!shown && (
-                    <div
-                        ref={topSpacer}
-                        className={partStyles.spacer}
-                        aria-hidden="true"
-                        data-end="top"
-                    />
-                )}
                 {!overview.empty &&
                     (shown ? (
                         <PageView page={shown} input={input} newestTurn={newestTurn} />
                     ) : (
                         <Overview view={overview} links={links} folds={folds} setFolds={setFolds} />
                     ))}
-                <div
-                    ref={footSpacer}
-                    className={partStyles.spacer}
-                    aria-hidden="true"
-                    data-end="foot"
-                />
             </div>
         </PanelNavContext.Provider>
     );

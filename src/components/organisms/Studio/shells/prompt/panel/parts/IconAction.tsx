@@ -21,6 +21,9 @@ type IconActionProps = {
     failLabel?: string;
     /** The wide form shows the label beside the icon. */
     wide?: boolean;
+    /** A shorter word the wide form shows in place of the label, such as
+     *  `Data`. The label stays the accessible name. */
+    text?: string;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'children'>;
 
 /**
@@ -36,6 +39,7 @@ export const IconAction = ({
     doneLabel,
     failLabel,
     wide = false,
+    text,
     className,
     ...rest
 }: IconActionProps) => {
@@ -56,7 +60,9 @@ export const IconAction = ({
             onClick={() => void run(onAction, { done: doneLabel, failed })}
         >
             <Icon name={outcome === 'done' ? 'check' : outcome === 'failed' ? 'closer' : icon} />
-            {wide && <span>{outcome === 'failed' ? failed : label}</span>}
+            {wide && (
+                <span>{outcome === 'failed' ? (text ? 'Failed' : failed) : (text ?? label)}</span>
+            )}
         </button>
     );
 };

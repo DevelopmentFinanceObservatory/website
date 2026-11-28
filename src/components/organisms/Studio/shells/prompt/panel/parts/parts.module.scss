@@ -44,7 +44,7 @@
     }
 
     :where(button, a, pre):focus-visible {
-        outline: 1px solid var(--color-charcoal);
+        outline: 2px solid var(--color-sage-dark);
         outline-offset: rem(2);
     }
 }
@@ -63,15 +63,6 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-}
-
-// Space the panel's growth holds so a row keeps its place (useGrow.ts).
-.spacer {
-    flex-shrink: 0;
-
-    &[data-easing] {
-        transition: height 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    }
 }
 
 .one {
@@ -257,7 +248,7 @@
         inset: rem(2);
         background-color: var(--sp-run);
         border-radius: 50%;
-        animation: pulse 1s ease-in-out infinite;
+        animation: pulse 1.8s ease-in-out infinite;
     }
 }
 
@@ -289,8 +280,7 @@
 
 @keyframes pulse {
     50% {
-        opacity: 0.25;
-        scale: 0.7;
+        opacity: 0.4;
     }
 }
 
@@ -563,7 +553,6 @@
     }
 
     .chev,
-    .spacer[data-easing],
     .act,
     .chip {
         transition: none;

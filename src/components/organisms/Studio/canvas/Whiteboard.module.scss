@@ -253,6 +253,10 @@
     }
 }
 
+// The clock a card on the Prompt canvas fades in on, and the outline of the
+// placeholder it lands in fades out on.
+$prompt-arrive: 240ms;
+
 // A card the running turn has announced stands as a dashed outline with no
 // fill, at the place and size its card will take, so the card lands with
 // nothing moving. Its radius is the card's own. The border is the scrollbar
@@ -264,19 +268,25 @@
     pointer-events: none;
     border: 1px dashed var(--color-scrollbar);
     border-radius: rem(6);
-    transition: opacity 0.3s ease;
-    animation: coming-in 0.3s ease both;
+
+    // A transition, so an outline that leaves while it fades in turns back
+    // from the opacity it has reached.
+    transition: opacity 200ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
 }
 
 .comingLeaving {
     opacity: 0;
-    animation: none;
+    transition-duration: $prompt-arrive;
 }
 
-@keyframes coming-in {
-    from {
-        opacity: 0;
-    }
+// The card's own title takes the label's line, so a leaving placeholder's
+// label goes at once while its outline fades.
+.comingLeaving .comingLabel {
+    visibility: hidden;
 }
 
 .comingLabel {
@@ -315,15 +325,31 @@
     white-space: nowrap;
 }
 
+// A card on the Prompt canvas fades in place, with no rise. The fade sits on
+// the card's box, which mounts once per card, so a change of view that
+// remounts the card's content does not replay it.
+.boardPrompt .cardBox {
+    animation: prompt-card-in $prompt-arrive $ease-out both;
+}
+
+.boardPrompt .cardBox > article {
+    animation: none;
+}
+
+@keyframes prompt-card-in {
+    from {
+        opacity: 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     // A card on the Prompt canvas appears at once.
-    .boardPrompt article {
+    .boardPrompt .cardBox {
         animation: none;
     }
 
     .coming {
         transition: none;
-        animation: none;
     }
 }
 
@@ -375,15 +401,17 @@
 // session panel holds.
 .cardBox[data-lit] {
     border-radius: rem(8);
-    outline: 2px solid color-mix(in sRGB, var(--color-select) 45%, transparent);
-    outline-offset: 2px;
+    outline: 2px solid color-mix(in sRGB, var(--color-sage-dark) 55%, transparent);
+    outline-offset: 3px;
 }
 
+// In the sage of the site's borders, a tone no chart series takes, so the
+// outline reads as the page's mark on the card and not as part of its data.
 .cardBox[data-selected],
 .cardBox[data-held] {
     border-radius: rem(8);
-    outline: 2px solid var(--color-select);
-    outline-offset: 2px;
+    outline: 2px solid var(--color-sage-dark);
+    outline-offset: 3px;
 }
 
 // Keyboard focus on the card's toggle rings the whole card, outside any

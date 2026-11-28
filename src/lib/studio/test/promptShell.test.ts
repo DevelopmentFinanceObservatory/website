@@ -1,12 +1,14 @@
 /**
  * `promptShell.ts`: the Prompt layout's shell reducer, when the session
- * panel shows, and where the prompt box lands from the landing.
+ * panel shows, where the prompt box lands from the landing, and where the
+ * canvas's view flies to.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
     dockArrival,
+    flyTarget,
     heldCard,
     initialShell,
     litCards,
@@ -14,6 +16,7 @@ import {
     type ShellAction,
     type ShellState,
     shellReducer,
+    sheetTweenDuration,
 } from '../promptShell.ts';
 
 const run = (actions: ShellAction[], from: ShellState = initialShell): ShellState =>
@@ -100,6 +103,42 @@ test('a page pushes once, opens the panel, leaves focus, and back and home walk 
     assert.deepEqual(run([{ type: 'panel.back' }, { type: 'panel.back' }], back).trail, []);
     // Nothing to replace on the overview.
     assert.deepEqual(run([{ type: 'panel.replace', page: card }]).trail, []);
+});
+
+test('a card selected on the canvas shows its page in a panel that shows', () => {
+    const a = { kind: 'card', id: 'a' } as const;
+    const b = { kind: 'card', id: 'b' } as const;
+    const plan = { kind: 'plan', turn: 2 } as const;
+    const select = (id: string | null, was: string | null, shown = true): ShellAction => ({
+        type: 'card.select',
+        id,
+        was,
+        shown,
+    });
+
+    for (const [name, actions, trail] of [
+        ['from the overview', [select('a', null)], [a]],
+        ['a closed panel keeps its trail', [select('a', null, false)], []],
+        ['another card takes the page', [select('a', null), select('b', 'a')], [b]],
+        ['over another page', [{ type: 'panel.show', page: plan }, select('a', null)], [plan, a]],
+        ['cleared', [select('a', null), select(null, 'a')], []],
+        // The reader moved on to another card's page; clearing leaves it.
+        [
+            'cleared under another card',
+            [select('a', null), select('b', 'a'), select(null, 'a')],
+            [b],
+        ],
+        [
+            'cleared under another page',
+            [select('a', null), { type: 'panel.show', page: plan }, select(null, 'a')],
+            [a, plan],
+        ],
+    ] as [string, ShellAction[], unknown[]][]) {
+        assert.deepEqual(run(actions).trail, trail, name);
+    }
+
+    // Selecting leaves the reader's choice of panel and focus mode alone.
+    assert.equal(run([select('a', null)]).panelChoice, initialShell.panelChoice);
 });
 
 test('a sheet choice keeps the turn it was made for until another turn replaces it', () => {
@@ -201,4 +240,29 @@ test("lit cards: the pointed card's siblings, and the panel's plan while the pan
         ),
         ['a', 'b', 'c', 'y'],
     );
+});
+
+test('a fly to a point near an edge of the sheet stops at that edge', () => {
+    const view = { width: 1000, height: 600 };
+    const max = { left: 2000, top: 3000 };
+
+    assert.deepEqual(flyTarget({ cx: 200, cy: 100, view, max }), { left: 0, top: 0 });
+    assert.deepEqual(flyTarget({ cx: 2900, cy: 3500, view, max }), { left: 2000, top: 3000 });
+    assert.deepEqual(flyTarget({ cx: 1500, cy: 1300, view, max }), { left: 1000, top: 1000 });
+});
+
+test('a sheet change tweens the dock by its size, within the bounds of its direction', () => {
+    for (const [from, to, ms] of [
+        // 24 px or less: no tween.
+        [110, 134, 0],
+        [134, 110, 0],
+        [110, 136, 150],
+        [110, 210, 200],
+        [110, 370, 270],
+        [370, 110, 190],
+        [230, 100, 182],
+        [140, 110, 140],
+    ] as const) {
+        assert.equal(sheetTweenDuration(from, to), ms, `${from} to ${to}`);
+    }
 });

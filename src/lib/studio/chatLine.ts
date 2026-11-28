@@ -15,6 +15,10 @@ export type StepLineUpdate = ChatLine | typeof IDLE | null;
 // What the line says while a turn works and no step is running.
 export const WORKING = 'Working';
 
+// What the line says from the moment a question is sent until the harness
+// reports its first step.
+export const OPENING = 'Resolving the question';
+
 // How long no step may be running before the line falls back to
 // {@link WORKING}. A step that ends often hands over to the next one within
 // about 10 ms, and the line keeps its label across that gap.

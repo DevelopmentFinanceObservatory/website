@@ -22,12 +22,14 @@ type UseArrivalsArgs = {
         scroller: HTMLElement,
     ) => ScrollToOptions | null;
     // A card that took its placeholder's place. The view already moved to the
-    // placeholder, so only the wave plays.
+    // placeholder, and the placeholder marked the place, so neither the view
+    // nor the wave moves.
     quiet?: (newest: Slot) => boolean;
 };
 
 /**
- * Every freshly placed card announces itself: the surrounding grid cells
+ * Every freshly placed card, except one seated in its placeholder
+ * (`quiet`), announces itself: the surrounding grid cells
  * flare in a sweep, and the view scrolls (smoothly, minimally) until the
  * card sits comfortably inside — unless the user is busy dragging or
  * panning right now. Runs post-commit, so the sheet has already grown and
@@ -60,15 +62,18 @@ export const useArrivals = ({
             return;
         }
 
-        spawnWave(newest.col + newest.w / 2, newest.row + newest.h / 2, newest);
-
-        const scroller = scrollerOf(boardRef);
-
-        // The view moves to the newest card not seated in a placeholder.
+        // The wave and the view go to the newest card not seated in a
+        // placeholder, which marked its place before it came.
         const shown = arrivalToShow(
             fresh.map(([, slot]) => slot),
             quiet,
         );
+
+        if (shown) {
+            spawnWave(shown.col + shown.w / 2, shown.row + shown.h / 2, shown);
+        }
+
+        const scroller = scrollerOf(boardRef);
 
         if (!scroller || busy() || !shown) {
             return;

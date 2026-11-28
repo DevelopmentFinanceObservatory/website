@@ -22,7 +22,7 @@ type PageShellProps = {
  * the sections.
  */
 export const PageShell = ({ kind, title, meta, children }: PageShellProps) => {
-    const { back, backLabel, topSpacer } = usePanelNav();
+    const { back, backLabel } = usePanelNav();
 
     return (
         <div className={styles.page} data-sp-page={kind}>
@@ -39,7 +39,6 @@ export const PageShell = ({ kind, title, meta, children }: PageShellProps) => {
                     <span className={styles.backLabel}>{backLabel}</span>
                 </button>
             </div>
-            <div ref={topSpacer} className={styles.spacer} aria-hidden="true" data-end="top" />
             <h2 className={styles.title}>{title}</h2>
             {typeof meta === 'string' ? <p className={styles.meta}>{meta}</p> : meta}
             {children}

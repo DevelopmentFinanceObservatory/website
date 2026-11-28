@@ -10,9 +10,15 @@
  * its failure, or its refusal, shows as the folded row. A refused question
  * stays the dock's question, with its refusal as the reply.
  */
-import { WORKING } from './chatLine.ts';
+import { OPENING, WORKING } from './chatLine.ts';
 import { type ComposerMode, type ComposerPlan, composerMode } from './composer.ts';
-import { firstSentence, promptsOf, type Question } from './questions.ts';
+import {
+    firstSentence,
+    promptsOf,
+    type Question,
+    type ReplyPart,
+    replyPreview,
+} from './questions.ts';
 import { isPrompt } from './transcript.ts';
 
 import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
@@ -26,9 +32,11 @@ export type DockRow =
     | { kind: 'status'; stepOf: { step: number; of: number } | null }
     | { kind: 'plan' }
     | { kind: 'set_aside' }
-    | { kind: 'about'; title: string }
-    /** `openable` is false for a refused card change, which has no sheet. */
-    | { kind: 'folded'; text: string; openable: boolean };
+    /** A refused card change, which has no sheet: its first sentence. */
+    | { kind: 'folded'; openable: false; text: string }
+    /** A folded reply: its opening (replyPreview), and whether the reply
+     *  holds more. */
+    | { kind: 'folded'; openable: true; parts: ReplyPart[]; more: boolean };
 
 export type DockSheet = 'none' | 'reply' | 'thread' | 'plan' | 'clarify';
 
@@ -39,7 +47,7 @@ export type DockInput = {
     messages: readonly ChatMessage[];
     activity: readonly ActivityEntry[];
     /** The conversation's cards, each with the turn that drew it. */
-    widgets: readonly { turn: number }[];
+    widgets: readonly { id: string; turn: number }[];
     /** The cards on the canvas now. */
     canvasCards: number;
     thinking: boolean;
@@ -72,6 +80,11 @@ export type DockView = {
     /** The running card change, shown in place of `question` in the head. */
     running: Question | null;
     row: DockRow | null;
+    /** The selected card the next question is about, shown as a chip in the
+     *  input row: null with no card selected, and while the field is away
+     *  (the guest wall, a clarifying question) or a waiting plan takes what
+     *  the field sends. */
+    about: { title: string } | null;
     sheet: DockSheet;
     /** The plan sheet shows open (false: folded to its one row). */
     planOpen: boolean;
@@ -110,9 +123,17 @@ export const clarifiedOf = (messages: readonly ChatMessage[]): Clarified[] =>
  *  so a new version opens again. */
 export const planKey = (turn: number, version: number): string => `${turn}:${version}`;
 
-/** The running label without trailing dots or an ellipsis. */
-export const runningLabel = (status: string | null): string =>
-    status?.replace(/(\.|…)+\s*$/, '').trim() || WORKING;
+// The harness's first step. The dock opens a turn on it, so the label holds
+// when that step arrives.
+const FIRST_STEP = 'Reading your question';
+
+/** The running label without trailing dots or an ellipsis. A turn's opening
+ *  label reads as the harness's first step. */
+export const runningLabel = (status: string | null): string => {
+    const label = status?.replace(/(\.|…)+\s*$/, '').trim() || WORKING;
+
+    return label === OPENING ? FIRST_STEP : label;
+};
 
 // The position (from 1) among the approved steps of the step the turn's
 // newest running line runs, else of the newest line's step, reading only
@@ -165,21 +186,46 @@ export const planStep = (
 };
 
 /**
+ * The question that drew a card: the one whose turn the card carries. A
+ * card a card change drew belongs to the question before that change, as the
+ * dock shows that question once the change ends. Null for a card no question
+ * of the transcript drew.
+ */
+const drawnBy = (
+    all: readonly Question[],
+    widgets: DockInput['widgets'],
+    id: string,
+): Question | null => {
+    const turn = widgets.find((widget) => widget.id === id)?.turn;
+    const at = all.findIndex((question) => question.turn === turn);
+
+    return at === -1 ? null : (all.slice(0, at + 1).findLast((question) => !question.edit) ?? null);
+};
+
+/**
  * The dock's view. One context row shows at a time, the first that applies
- * in this order: status, plan, set aside, about, folded.
+ * in this order: status, plan, set aside, folded.
+ *
+ * The newest question is the dock's subject. A selected card makes the
+ * question that drew it the subject while nothing runs or waits and no card
+ * change failed, when that question has a reply to show.
  */
 export const dockView = (input: DockInput): DockView => {
     const all = promptsOf(input.messages, input.activity);
     const questions = all.filter((question) => !question.edit);
     const newest = all.at(-1);
-    const view = questionView(input, questions.at(-1) ?? null, questions);
+    const editLast = newest?.edit ? newest : null;
+    const failure = editLast && !input.thinking ? editLast.reply.trim() : '';
+    const drawn = input.editTarget ? drawnBy(all, input.widgets, input.editTarget.id) : null;
+    const subject =
+        drawn?.reply.trim() && !input.thinking && !input.plan && !input.clarify && !failure
+            ? drawn
+            : (questions.at(-1) ?? null);
+    const view = questionView(input, subject, questions, drawn);
 
     if (input.plan || input.clarify) {
         return view;
     }
-
-    const editLast = newest?.edit ? newest : null;
-    const failure = editLast && !input.thinking ? editLast.reply.trim() : '';
 
     // A card change running: the status row alone.
     if (editLast && input.thinking && !editLast.refused) {
@@ -197,12 +243,12 @@ export const dockView = (input: DockInput): DockView => {
 
     // A card change refused or failed: the refusal is the folded row, in
     // place of the question's reply. The answer's pills stay.
-    if (failure && view.row?.kind !== 'about') {
+    if (failure) {
         const sheet = view.sheet === 'thread' ? 'thread' : 'none';
 
         return {
             ...view,
-            row: { kind: 'folded', text: firstSentence(failure), openable: false },
+            row: { kind: 'folded', openable: false, text: firstSentence(failure) },
             sheet,
             pills: view.pills && sheet === 'none',
             cap: 'normal',
@@ -213,12 +259,16 @@ export const dockView = (input: DockInput): DockView => {
     return view;
 };
 
+// The view for `question`, the dock's subject. `drawn` is the question that
+// drew the selected card.
 const questionView = (
     input: DockInput,
     question: Question | null,
     questions: Question[],
+    drawn: Question | null,
 ): DockView => {
     const { plan, clarify, thinking } = input;
+    const newest = questions.at(-1) ?? null;
     // The guest wall, then a waiting plan, then a clarifying question, then
     // the field: a plan holds the sheet while a question also waits, and
     // the wall takes the question's place.
@@ -231,8 +281,14 @@ const questionView = (
         input.sheet === 'thread' || (question && input.sheetTurn === question.turn)
             ? input.sheet
             : 'auto';
-    const placed = !!question && input.widgets.some((widget) => widget.turn === question.turn);
-    const hasText = !!question && (!!question.reply.trim() || input.streamed);
+    // The question that drew the selected card placed a card, whatever turn
+    // a card change left on it.
+    const placed =
+        !!question &&
+        (question === drawn || input.widgets.some((widget) => widget.turn === question.turn));
+    // Streamed words belong to the newest question.
+    const hasText =
+        !!question && (!!question.reply.trim() || (input.streamed && question === newest));
     const running = !!question && thinking && !plan && !clarify;
     const answered = !!question && !thinking && (hasText || placed || !!question.plan);
     // An answer in words on an empty canvas stays open until the reader
@@ -271,13 +327,14 @@ const questionView = (
         row = { kind: 'plan' };
     } else if (setAside) {
         row = { kind: 'set_aside' };
-    } else if (input.editTarget && mode !== 'clarify') {
-        row = { kind: 'about', title: input.editTarget.title };
     } else if (answered && hasText && sheet === 'none') {
-        row = { kind: 'folded', text: firstSentence(question.reply), openable: true };
+        row = { kind: 'folded', openable: true, ...replyPreview(question.reply) };
     }
 
     const suggestions = (question?.followups.length ?? 0) + (question?.chips.length ?? 0);
+    // The pills speak for the newest question, so they stay beside a selected
+    // card that question drew and leave beside any other card.
+    const own = !input.editTarget || (!!drawn && drawn === newest);
     const pills =
         !input.focus &&
         !input.walled &&
@@ -285,6 +342,7 @@ const questionView = (
         !clarify &&
         suggestions > 0 &&
         (row === null || row.kind === 'folded') &&
+        own &&
         sheet === 'none';
 
     return {
@@ -292,6 +350,10 @@ const questionView = (
         question,
         running: null,
         row,
+        about:
+            input.editTarget && mode === 'input' && !plan?.live
+                ? { title: input.editTarget.title }
+                : null,
         sheet,
         planOpen:
             sheet === 'plan' &&
@@ -305,7 +367,7 @@ const questionView = (
         questions,
         threadTurn:
             sheet === 'thread' &&
-            input.sheetTurn !== question?.turn &&
+            input.sheetTurn !== newest?.turn &&
             questions.some((candidate) => candidate.turn === input.sheetTurn)
                 ? input.sheetTurn
                 : null,

@@ -1,17 +1,19 @@
 /**
  * `useSlots`, driven through hookRuntime.ts: a card's fitted height and a
- * placement that start in the same task both survive. The hook is bundled
- * with `react` aliased to hookRuntime.ts and `@` to `src`.
+ * placement that start in the same task both survive, and the hook holds
+ * only the prune timers that have not fired. The hook is bundled with
+ * `react` aliased to hookRuntime.ts and `@` to `src`.
  */
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { after, before, test } from 'node:test';
+import { after, before, type TestContext, test } from 'node:test';
 
 import { build } from 'esbuild';
 
+import { LEAVE_MS } from '../../../components/organisms/Studio/canvas/layout.ts';
 import type { useSlots as UseSlots } from '../../../components/organisms/Studio/canvas/useSlots.ts';
 import type { Widget } from '../../chat/widgets.ts';
 import type { renderHook as RenderHook, useState as UseState } from './hookRuntime.ts';
@@ -103,4 +105,87 @@ test('a card fit and a placement that start in one task both survive', async () 
     assert.equal(slots['a']?.h, spawned + 3);
     assert.ok(slots['b']);
     hook.unmount();
+});
+
+// The timers the hook has set and not yet fired or cleared, and the ids it
+// passes to clearTimeout, on mocked time.
+const timersOf = (t: TestContext) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+
+    const pending = new Set<unknown>();
+    const cleared: unknown[] = [];
+    const set = globalThis.setTimeout;
+    const clear = globalThis.clearTimeout;
+
+    t.mock.method(globalThis, 'setTimeout', (run: () => void, ms?: number) => {
+        const id: unknown = set(() => {
+            pending.delete(id);
+            run();
+        }, ms);
+
+        pending.add(id);
+
+        return id;
+    });
+    t.mock.method(globalThis, 'clearTimeout', (id: Parameters<typeof clear>[0]) => {
+        pending.delete(id);
+        cleared.push(id);
+        clear(id);
+    });
+
+    return { pending, cleared };
+};
+
+const board = (props: { widgets: Widget[] }) => {
+    const pinnedIds: string[] = [];
+    const views = {};
+
+    return renderHook(() => {
+        const [, bump] = useState(0);
+
+        return {
+            bump,
+            slots: useSlots({
+                widgets: props.widgets,
+                pinnedIds,
+                views,
+                viewCols: 60,
+                placement: 'blocks',
+            }),
+        };
+    });
+};
+
+test('the prune timers that fired are let go, and unmount clears only the pending ones', async (t) => {
+    const { pending, cleared } = timersOf(t);
+    const props = { widgets: [stat('a'), stat('b')] };
+    const hook = board(props);
+
+    await hook.settle();
+
+    // Card b comes off the canvas and is pruned once its pass's timer fires.
+    props.widgets = [stat('a')];
+    hook.result().bump(1);
+    await hook.settle();
+    assert.equal(hook.result().slots.slots['b']?.leaving, true);
+
+    t.mock.timers.tick(LEAVE_MS);
+    await hook.settle();
+    assert.deepEqual(Object.keys(hook.result().slots.slots), ['a']);
+    assert.equal(pending.size, 0);
+
+    hook.unmount();
+    assert.deepEqual(cleared, []);
+
+    // A timer still pending at unmount is cleared there.
+    const other = board({ widgets: [stat('c')] });
+
+    await other.settle();
+
+    const waiting = [...pending];
+
+    assert.ok(waiting.length > 0);
+    other.unmount();
+    assert.deepEqual(cleared, waiting);
+    assert.equal(pending.size, 0);
 });

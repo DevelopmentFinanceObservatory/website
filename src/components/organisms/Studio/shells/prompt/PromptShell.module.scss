@@ -18,6 +18,11 @@
     --dock-foot: #{rem(20)};
     --dock-gap: #{rem(10)};
 
+    // The panel's open and close, and the canvas edge beside it, once the
+    // move into the workspace has landed.
+
+    --pr-panel-dur: 280ms;
+
     @media (max-height: 520px) {
         // A short window (a phone held sideways, a zoomed page) gives the
         // prompt's frame the canvas frame's whole height.
@@ -76,6 +81,12 @@
     }
 }
 
+// While the landing leaves, the region holds the dock alone, out of sight, so
+// the landing's travelling prompt knows the dock's box from its first frame.
+.canvasRegion[data-early] {
+    visibility: hidden;
+}
+
 // The scroller under the cards. It pans by drag and hides its bars, as in
 // the classic layout.
 .board {
@@ -126,6 +137,10 @@
 
     --text-floor: #{$text-floor};
 
+    // The edge's move between the rest and the wide width.
+
+    --sp-edge-dur: 220ms;
+
     right: var(--pr-right);
     width: var(--pr-panel);
     overflow: hidden;
@@ -143,24 +158,71 @@
     opacity: 0;
 }
 
-// The panel grows left over the canvas while a row is hovered (SessionPanel
-// sets data-sp-grow on this aside).
-.panel[data-sp-grow] {
-    --sp-edge: 320ms cubic-bezier(0.45, 0, 0.25, 1);
-
+// A wide page (SessionPanel marks its scroller data-sp-width="wide") shows
+// the panel wide, over the canvas.
+.shell[data-panel="open"]:not([data-overlay]) .panel:has(> [data-sp-width="wide"]) {
     z-index: 30;
+    width: min(#{rem(400)}, 100% - #{rem(120)});
     background-color: var(--color-bg);
-    transition:
-        right var(--ws-dur) var(--ws-ease) var(--ws-delay),
-        width var(--sp-edge),
-        box-shadow var(--sp-edge),
-        opacity 0.4s ease var(--ws-delay),
-        visibility 0s linear var(--ws-delay);
+    box-shadow: rem(-6) 0 rem(16) rgb(72 72 66 / 8%);
 }
 
-.shell[data-panel="open"] .panel[data-sp-grow="open"] {
-    width: min(#{rem(400)}, 100% - #{rem(120)});
-    box-shadow: rem(-6) 0 rem(16) rgb(72 72 66 / 8%);
+// After entry the panel, the canvas region and the backdrop's right edge
+// move together on the panel's clock with no delay, and a closing panel
+// stays visible until its slide ends. The entry itself, while the shell
+// carries data-transition, keeps the Studio's clock.
+.shell:not([data-transition]) .backdropDocked {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        border-color var(--ws-dur) ease var(--ws-delay),
+        border-radius var(--ws-dur) ease var(--ws-delay);
+}
+
+.shell:not([data-transition]) .canvasRegion {
+    transition: right var(--pr-panel-dur) var(--ws-ease);
+}
+
+.shell:not([data-transition]) .panel {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
+.shell[data-panel="open"]:not([data-transition], [data-overlay]) .panel {
+    // A narrowing panel keeps its layer and its fill until the edge lands.
+    // z-index moves from 30 to auto, a discrete step.
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        width var(--sp-edge-dur) var(--ws-ease),
+        box-shadow var(--sp-edge-dur) var(--ws-ease),
+        z-index 0s linear var(--sp-edge-dur) allow-discrete,
+        background-color 0s linear var(--sp-edge-dur),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
+// Ahead of the closing panel's rule, which takes over as the panel closes.
+.shell:not([data-transition], [data-overlay]) .panel:has(> [data-sp-width="wide"]) {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        width var(--sp-edge-dur) var(--ws-ease),
+        box-shadow var(--sp-edge-dur) var(--ws-ease),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
+// A closing panel. A wide panel narrows as it slides, on the same clock,
+// and keeps its layer and its fill until it is gone.
+.shell[data-panel="closed"]:not([data-transition]) .panel {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        width var(--pr-panel-dur) var(--ws-ease),
+        box-shadow var(--pr-panel-dur) var(--ws-ease),
+        z-index 0s linear var(--pr-panel-dur) allow-discrete,
+        background-color 0s linear var(--pr-panel-dur),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear var(--pr-panel-dur);
 }
 
 // A narrow window: the panel lies over the canvas on the page colour.
@@ -187,8 +249,10 @@
 // The feedback tab sits inside the canvas frame at its foot on the left,
 // 10 above the frame's foot line, clear of the centred dock and the panel
 // at the right. Under the desktop width the dock reaches the tab's column,
-// so the tab rides just above the resting dock, its pills included, and
-// steps aside while the dock holds a sheet open. It also steps aside while
+// so the tab rides just above the resting dock, its pills included, in line
+// with the text of a dock that spans the frame. There it steps aside while
+// the dock holds a sheet open and while focus mode folds the dock to its
+// pill, which leaves the tab nothing to stand on. It also steps aside while
 // the panel overlays the canvas.
 .shell .feedback {
     right: auto;
@@ -202,8 +266,10 @@
         bottom: calc(
             var(--pr-bottom) + var(--dock-foot) + var(--dock-rest, #{rem(52)}) + #{rem(8)}
         );
+        left: calc(var(--pr-left) + #{rem(31)});
     }
 
+    .shell[data-focus] .feedback,
     .shell:has(.dockFrame [data-sheet]:not([data-sheet="none"])) .feedback {
         visibility: hidden;
     }
@@ -213,13 +279,12 @@
     visibility: hidden;
 }
 
-// The landing's prompt on its way into the dock.
+// The landing's prompt on its way into the dock. It lands on the dock's box,
+// with the question where the dock's head row draws it (PromptShell.tsx
+// LandingTravel).
 .travel {
     position: fixed;
     z-index: 4;
-    display: flex;
-    align-items: center;
-    padding: 0 rem(16);
     overflow: hidden;
     pointer-events: none;
     background-color: var(--color-white);
@@ -231,14 +296,38 @@
             left var(--ws-dur) var(--ws-ease) var(--ws-delay),
             top var(--ws-dur) var(--ws-ease) var(--ws-delay),
             width var(--ws-dur) var(--ws-ease) var(--ws-delay),
-            height var(--ws-dur) var(--ws-ease) var(--ws-delay);
+            height var(--ws-dur) var(--ws-ease) var(--ws-delay),
+            box-shadow var(--ws-dur) var(--ws-ease) var(--ws-delay);
+
+        .travelText {
+            transition:
+                transform var(--ws-dur) var(--ws-ease) var(--ws-delay),
+                opacity var(--ws-dur) var(--ws-ease) var(--ws-delay);
+        }
+    }
+
+    // Landed on the shown dock, the copy fades away, so the dock's rows under
+    // the question come in by a short fade while its box holds still.
+    &[data-fading] {
+        opacity: 0;
+        transition: opacity 120ms $ease-out;
     }
 }
 
+// The question in the dock's type, 10 in from the box's left edge. The first
+// copy takes the landing field's type and place from LandingTravel.
 .travelText {
+    @include font-size-floor(13px, 1.45);
+
+    position: absolute;
+    top: 0;
+    right: rem(10);
+    left: rem(10);
     overflow: hidden;
+    transform-origin: 0 50%;
     font-family: var(--font-outfit);
-    font-size: rem-floor(14);
+    font-weight: 500;
+    line-height: rem(32);
     color: var(--color-charcoal);
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -248,13 +337,37 @@
     .shell .backdropDocked,
     .shell .backdropDocked > *,
     .canvasRegion,
-    .panel,
-    .panel[data-sp-grow] {
+    .panel {
         transition: none;
     }
 
     .board {
         animation: none;
+    }
+
+    .shell:not([data-transition]) .backdropDocked,
+    .shell:not([data-transition]) .canvasRegion {
+        transition: none;
+    }
+
+    // The panel appears and leaves in place, with a short fade.
+    .shell:not([data-transition]) .panel,
+    .shell[data-panel="open"]:not([data-transition], [data-overlay]) .panel,
+    .shell:not([data-transition], [data-overlay]) .panel:has(> [data-sp-width="wide"]) {
+        transition:
+            opacity 150ms ease,
+            visibility 0s linear 0s;
+    }
+
+    // A closing panel stays where it stands while it fades.
+    .shell[data-panel="closed"] .panel {
+        right: var(--pr-right);
+    }
+
+    .shell[data-panel="closed"]:not([data-transition]) .panel {
+        transition:
+            opacity 150ms ease,
+            visibility 0s linear 150ms;
     }
 }
 

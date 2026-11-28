@@ -44,6 +44,9 @@ export type ShellAction =
     | { type: 'panel.replace'; page: PanelPage }
     | { type: 'panel.back' }
     | { type: 'panel.home' }
+    /** The canvas selection moved from the card `was` to the card `id`
+     *  (null: none). `shown` is whether the panel shows now. */
+    | { type: 'card.select'; id: string | null; was: string | null; shown: boolean }
     | { type: 'focus.set'; on: boolean }
     | { type: 'point'; card: string | null }
     | { type: 'plan.light'; turn: number | null }
@@ -111,6 +114,27 @@ export const shellReducer = (state: ShellState, action: ShellAction): ShellState
             return { ...state, trail: state.trail.slice(0, -1) };
         case 'panel.home':
             return state.trail.length === 0 ? state : { ...state, trail: [] };
+        case 'card.select': {
+            // A panel that is closed stays closed, with its trail as it was.
+            if (!action.shown) return state;
+
+            const top = state.trail.at(-1);
+
+            // The selection cleared: the page of the card it held gives way.
+            if (action.id === null) {
+                return top?.kind === 'card' && top.id === action.was
+                    ? { ...state, trail: state.trail.slice(0, -1) }
+                    : state;
+            }
+
+            if (top?.kind === 'card' && top.id === action.id) return state;
+
+            // A card's page takes the place of another card's, and joins the
+            // trail over any other page.
+            const under = top?.kind === 'card' ? state.trail.slice(0, -1) : state.trail;
+
+            return { ...state, trail: [...under, { kind: 'card', id: action.id }] };
+        }
         case 'focus.set':
             return state.focus === action.on ? state : { ...state, focus: action.on };
         case 'point':
@@ -152,6 +176,26 @@ export const heldCard = (state: ShellState): string | null => {
     const top = state.trail.at(-1);
 
     return top?.kind === 'card' ? top.id : null;
+};
+
+/**
+ * How long, in ms, the dock's region above the field takes to change height
+ * from `from` to `to` px when its sheet changes: 2 ms per px growing, between
+ * 150 and 270 ms, and 1.4 ms per px shrinking, between 140 and 190 ms. A
+ * change of 24 px or less takes no tween, and gives 0.
+ */
+export const sheetTweenDuration = (from: number, to: number): number => {
+    const change = to - from;
+
+    if (Math.abs(change) <= 24) {
+        return 0;
+    }
+
+    return Math.round(
+        change > 0
+            ? Math.min(270, Math.max(150, 2 * change))
+            : Math.min(190, Math.max(140, -1.4 * change)),
+    );
 };
 
 export type Box = { left: number; top: number; width: number; height: number };
@@ -224,3 +268,24 @@ export const litCards = ({
 
     return [...lit];
 };
+
+/**
+ * Where the Prompt canvas's view goes to centre board point (`cx`, `cy`) in a
+ * view of `view`'s size, held inside the scroll range (`max`, the largest
+ * scroll position on each axis) so a glide sent towards an edge eases all
+ * the way to it.
+ */
+export const flyTarget = ({
+    cx,
+    cy,
+    view,
+    max,
+}: {
+    cx: number;
+    cy: number;
+    view: { width: number; height: number };
+    max: { left: number; top: number };
+}): { left: number; top: number } => ({
+    left: Math.max(0, Math.min(cx - view.width / 2, max.left)),
+    top: Math.max(0, Math.min(cy - view.height / 2, max.top)),
+});

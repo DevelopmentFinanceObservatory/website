@@ -13,7 +13,7 @@ import {
 import DockField from './DockField';
 import DockPills from './DockPills';
 import {
-    AboutRow,
+    AboutChip,
     ApprovalRow,
     FoldedRow,
     QuestionHead,
@@ -25,6 +25,7 @@ import {
 import { type ChipActions, ReplySheet, ThreadSheet } from './DockSheets';
 import PlanSheet from './PlanSheet';
 import styles from './PromptDock.module.scss';
+import { useSheetTween } from './useSheetTween';
 import { useStudioModel } from '../../../hooks/studioContext';
 import { useStreamedWords } from '../../../hooks/useStreamedText';
 import GuestWall from '../../../GuestWall';
@@ -216,6 +217,17 @@ const PromptDock = () => {
     // --- Heights for the canvas foot ---------------------------------------
 
     const restBox = useRef(0);
+    const upperRef = useRef<HTMLDivElement>(null);
+    const measureRef = useRef(() => {});
+    const tween = useSheetTween({
+        sheet: view.sheet,
+        frameRef,
+        upperRef,
+        rootRef,
+        focus: state.focus,
+        onSettle: () => measureRef.current(),
+    });
+    const tweenHeld = tween.held;
 
     useEffect(() => {
         const frame = frameRef.current;
@@ -227,10 +239,17 @@ const PromptDock = () => {
         // Read from the drawn frame, since the observer can fire before
         // this render's effects run.
         const measure = () => {
+            if (tweenHeld()) {
+                return;
+            }
+
             const box = boxRef.current;
+            const pill = pillRef.current;
             const root = rootRef.current;
             const current = frame.getBoundingClientRect().height;
-            const boxHeight = box?.getBoundingClientRect().height ?? 0;
+            // The box's layout height. Focus mode scales the box, and its
+            // drawn rect with it.
+            const boxHeight = box?.offsetHeight ?? 0;
 
             if (frame.dataset.sheet === 'none' && boxHeight > 0) {
                 restBox.current = boxHeight;
@@ -241,7 +260,16 @@ const PromptDock = () => {
 
             root?.style.setProperty('--dock-rest', `${rest}px`);
             root?.style.setProperty('--dock-current', `${current}px`);
+
+            // The pill's share of the box, which the box scales to as focus
+            // mode folds it onto the pill (PromptDock.module.scss).
+            if (box && pill && box.offsetWidth > 0 && boxHeight > 0) {
+                frame.style.setProperty('--dock-fold-x', `${pill.offsetWidth / box.offsetWidth}`);
+                frame.style.setProperty('--dock-fold-y', `${pill.offsetHeight / boxHeight}`);
+            }
         };
+        measureRef.current = measure;
+
         const observer = new ResizeObserver(measure);
 
         observer.observe(frame);
@@ -250,8 +278,12 @@ const PromptDock = () => {
             observer.observe(boxRef.current);
         }
 
+        if (pillRef.current) {
+            observer.observe(pillRef.current);
+        }
+
         return () => observer.disconnect();
-    }, [rootRef]);
+    }, [rootRef, tweenHeld]);
 
     // --- Folding when the reader turns to the canvas ------------------------
 
@@ -421,11 +453,16 @@ const PromptDock = () => {
 
     // --- Announcements ------------------------------------------------------
 
-    const replyStarted = !!question?.reply.trim() || streamed;
+    // The announcements follow the newest question, whichever question a
+    // selected card makes the dock's subject.
+    const newest = view.questions.at(-1) ?? null;
+    const replyStarted = !!newest?.reply.trim() || streamed;
     const streaming = chat.thinking && !chat.plan && !chat.clarify && !view.running;
     // The turn ended in an error, its reply the error's own words.
-    const failed =
-        !!question && !!chat.activity.find((entry) => entry.turn === question.turn)?.failed;
+    const failedOf = (turn: number | undefined) =>
+        turn !== undefined && !!chat.activity.find((entry) => entry.turn === turn)?.failed;
+    const failed = failedOf(question?.turn);
+    const newestFailed = failedOf(newest?.turn);
     // `ready` records what was said when the turn ended, so a failure that
     // lands after `Answer ready` is said too.
     const said = useRef<{ turn: number; started: boolean; ready: false | 'ok' | 'failed' }>({
@@ -435,12 +472,12 @@ const PromptDock = () => {
     });
 
     useEffect(() => {
-        if (!question) {
+        if (!newest) {
             return;
         }
 
-        if (said.current.turn !== question.turn) {
-            said.current = { turn: question.turn, started: false, ready: false };
+        if (said.current.turn !== newest.turn) {
+            said.current = { turn: newest.turn, started: false, ready: false };
         }
 
         if (streaming && replyStarted && !said.current.started) {
@@ -454,14 +491,14 @@ const PromptDock = () => {
             return;
         }
 
-        if (failed) {
+        if (newestFailed) {
             said.current.ready = 'failed';
-            announce(`The answer failed: ${plainText(question.reply)}`, 'error');
+            announce(`The answer failed: ${plainText(newest.reply)}`, 'error');
         } else if (!said.current.ready) {
             said.current.ready = 'ok';
             announce('Answer ready');
         }
-    }, [question, streaming, replyStarted, failed, pending, chat.thinking, announce]);
+    }, [newest, streaming, replyStarted, newestFailed, pending, chat.thinking, announce]);
 
     // A waiting plan or question is said once, when it arrives.
     const saidPending = useRef<string | null>(null);
@@ -581,6 +618,7 @@ const PromptDock = () => {
                             failed={failed}
                             streaming={streaming}
                             chips={chips}
+                            named={view.about && editTarget ? editTarget.id : null}
                             onThread={() => openSheet('thread')}
                             onFold={() => fold('button')}
                         />
@@ -623,34 +661,14 @@ const PromptDock = () => {
                 );
             case 'set_aside':
                 return <SetAsideRow onView={setAside ? () => setSetAsideOpen(true) : null} />;
-            case 'about':
-                return (
-                    editTarget && (
-                        <AboutRow
-                            title={view.row.title}
-                            icon={ICON_OF[target ?? 'chart']}
-                            onGo={() => canvas.flyTo(editTarget.id)}
-                            onClear={() => drafts.setEditTarget(null)}
-                        />
-                    )
-                );
             case 'folded':
-                return (
-                    <FoldedRow
-                        text={view.row.text}
-                        onOpen={view.row.openable ? () => openSheet('open') : null}
-                    />
-                );
+                return <FoldedRow row={view.row} onOpen={() => openSheet('open')} />;
             case undefined:
                 return null;
         }
     })();
 
     const pillShows = state.focus;
-
-    if (!inWorkspace) {
-        return null;
-    }
 
     return (
         <div
@@ -660,6 +678,7 @@ const PromptDock = () => {
             data-sheet={view.sheet}
             data-focus={state.focus || undefined}
         >
+            {tween.snapshot}
             {view.pills && question && (
                 <DockPills
                     followups={question.followups}
@@ -697,6 +716,8 @@ const PromptDock = () => {
             <div
                 ref={boxRef}
                 className={styles.box}
+                // The landing's travelling prompt lands on this box (PromptShell.tsx).
+                data-dock-box=""
                 // Focus falls back here when the control that held it
                 // leaves with a redraw, so the arrow keys and Escape still
                 // reach the page.
@@ -721,7 +742,7 @@ const PromptDock = () => {
                     }
                 }}
             >
-                <div className={styles.upper}>
+                <div ref={upperRef} className={styles.upper}>
                     {head && <QuestionHead text={head.text} about={head.about} />}
                     {sheet}
                     {row}
@@ -746,6 +767,17 @@ const PromptDock = () => {
                                 quiet={view.quietSend}
                                 invalid={count.over}
                                 describedBy={planLive ? countId : undefined}
+                                chip={
+                                    view.about &&
+                                    editTarget && (
+                                        <AboutChip
+                                            title={view.about.title}
+                                            icon={ICON_OF[target ?? 'chart']}
+                                            onGo={() => canvas.flyTo(editTarget.id)}
+                                            onClear={() => drafts.setEditTarget(null)}
+                                        />
+                                    )
+                                }
                             />
                             {planLive && (
                                 <div className={styles.count}>

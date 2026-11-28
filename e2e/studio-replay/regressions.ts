@@ -578,7 +578,7 @@ export const REGRESSIONS: Regression[] = [
             await changeYears(page, 2015, 2024);
             await within('the change turns', ended);
             await settle(page);
-            await page.getByRole('button', { name: 'Open the reply' }).click();
+            await page.locator('[data-dock="open"]').click();
             await visible(page, note).waitFor({ timeout: SHOW_MS });
             await page.getByRole('button', { name: 'Fold the reply' }).click();
 
@@ -586,7 +586,7 @@ export const REGRESSIONS: Regression[] = [
             await changeYears(page, 2010, 2024);
             await within('the change turns', ended);
             await settle(page);
-            await page.getByRole('button', { name: 'Open the reply' }).click();
+            await page.locator('[data-dock="open"]').click();
             await settle(page);
             assert.equal(await page.getByText(note).filter({ visible: true }).count(), 0);
             clean(session);

@@ -54,6 +54,7 @@ import styles from './Whiteboard.module.scss';
 
 import GridPattern, { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import { useGridCell } from '@/hooks/useGridCell';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
@@ -61,11 +62,13 @@ import { cardRefOf } from '@/lib/studio/cardDownload';
 import { cardImageName, cardNode, downloadCardImage } from '@/lib/studio/cardImage';
 import { cardUnitOffer } from '@/lib/studio/cardUnit';
 import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
+import { flyTarget } from '@/lib/studio/promptShell';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
 import type { UnitChoice } from '@/lib/studio/wire';
 
 // The held card is brought into view again once the session panel's width
-// change has settled the canvas's width.
+// change has settled the canvas's width: the panel moves over --pr-panel-dur
+// (280 ms, PromptShell.module.scss), and this waits a little longer.
 const HELD_SETTLE_MS = 320;
 
 // The pause between emptying the status and filling it, so the same words
@@ -228,6 +231,7 @@ const Whiteboard = ({
     // math uses it; `f` scales the raw-px interaction constants (scroll
     // zones, beacon spacing, chart fonts) by the same factor.
     const dockAware = !!prompt;
+    const reducedMotion = usePrefersReducedMotion();
     const placement: Placement = prompt ? 'blocks' : 'pack';
     const reserveRight = prompt?.reserveRight ?? 0;
     const selectedId = prompt?.selectedId ?? null;
@@ -296,7 +300,8 @@ const Whiteboard = ({
         origin,
         view,
         theme,
-        enabled: !centerSingle,
+        // The Prompt canvas draws no wave under reduced motion.
+        enabled: !centerSingle && !(dockAware && reducedMotion),
     });
 
     const { drag, grab, dragged, swap, landing } = dragging;
@@ -406,9 +411,16 @@ const Whiteboard = ({
 
     // Placeholders that appear are announced once as a batch, and the view
     // goes to the first of them as it goes to a block's first card, once
-    // their places have settled (comingGhosts.ts RESEAT_MS). The cards that
-    // later take their places move nothing.
+    // their places have settled (comingGhosts.ts RESEAT_MS), unless the reader
+    // has pressed, scrolled or typed on the canvas since they appeared. The
+    // view then stays with what the reader is using, as a running glide
+    // yields to the same input. The cards that later take their places move
+    // nothing.
     const seenGhosts = useRef<Set<string>>(new Set());
+    // When the waiting batch appeared, and the reader's latest input on the
+    // canvas (performance.now()).
+    const ghostsSince = useRef(0);
+    const readerAt = useRef(-Infinity);
     const showTimer = useRef(0);
     const noticeTimer = useRef(0);
     const waitingGhosts = useRef<Set<string>>(new Set());
@@ -422,7 +434,14 @@ const Whiteboard = ({
         showTimer.current = 0;
         ids.clear();
 
-        if (!blocks || !scroller || !first || dragging.isDragging() || pan.isPanning()) {
+        if (
+            !blocks ||
+            !scroller ||
+            !first ||
+            dragging.isDragging() ||
+            pan.isPanning() ||
+            (dockAware && readerAt.current >= ghostsSince.current)
+        ) {
             return;
         }
 
@@ -445,6 +464,10 @@ const Whiteboard = ({
         const fresh = Object.values(ghosts).filter(
             (ghost) => !ghost.leaving && !seenGhosts.current.has(ghost.id),
         );
+
+        if (fresh.length > 0 && waitingGhosts.current.size === 0) {
+            ghostsSince.current = performance.now();
+        }
 
         for (const ghost of fresh) {
             seenGhosts.current.add(ghost.id);
@@ -470,6 +493,26 @@ const Whiteboard = ({
         },
         [],
     );
+
+    useEffect(() => {
+        const scroller = scrollerOf(boardRef);
+
+        if (!dockAware || !scroller) {
+            return undefined;
+        }
+
+        const mark = () => {
+            readerAt.current = performance.now();
+        };
+        const events = ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const;
+
+        events.forEach((name) =>
+            scroller.addEventListener(name, mark, { capture: true, passive: true }),
+        );
+
+        return () =>
+            events.forEach((name) => scroller.removeEventListener(name, mark, { capture: true }));
+    }, [dockAware]);
 
     // The sheet's foot never shortens: the prompt's height falls as its reply
     // sheet folds, and a shorter sheet would clamp a scroll that has already
@@ -594,8 +637,16 @@ const Whiteboard = ({
             return undefined;
         }
 
+        // The width before the panel moves. A second move is due only when
+        // the panel's slide changed it.
+        const width = scrollerOf(boardRef)?.clientWidth ?? 0;
+
         revealHeld();
-        const timer = window.setTimeout(revealHeld, HELD_SETTLE_MS);
+        const timer = window.setTimeout(() => {
+            if ((scrollerOf(boardRef)?.clientWidth ?? 0) !== width) {
+                revealHeld();
+            }
+        }, HELD_SETTLE_MS);
 
         return () => window.clearTimeout(timer);
     }, [heldId]);
@@ -626,7 +677,31 @@ const Whiteboard = ({
 
     useFilterFly({ boardRef, filter, slots, views, origin, view, CELL, stopGlide: pan.stopGlide });
 
-    const flyTo = (cx: number, cy: number) => pan.flyTo(cx, cy, view.width, view.height);
+    const flyTo = (cx: number, cy: number) => {
+        const scroller = scrollerOf(boardRef);
+
+        // The Prompt canvas moves on its one glide, which also honours
+        // reduced motion.
+        if (dockAware && scroller) {
+            pan.stopGlide();
+            scrollView(scroller, {
+                ...flyTarget({
+                    cx,
+                    cy,
+                    view,
+                    max: {
+                        left: scroller.scrollWidth - scroller.clientWidth,
+                        top: scroller.scrollHeight - scroller.clientHeight,
+                    },
+                }),
+                behavior: scrollBehavior(),
+            });
+
+            return;
+        }
+
+        pan.flyTo(cx, cy, view.width, view.height);
+    };
 
     // Fly to a card by id (Activity's "View on whiteboard", the chat chips),
     // published to the parent through the ref.
@@ -716,9 +791,9 @@ const Whiteboard = ({
             onPointerMove={pan.movePan}
             onPointerUp={pan.endPan}
             onPointerCancel={pan.endPan}
-            // Test rig for the arrival shockwave: a plain click on the empty
-            // sheet (no pan, no card, no interactive target) ripples from
-            // wherever you clicked.
+            // Test rig for the arrival shockwave: on the classic canvas a plain
+            // click on the empty sheet (no pan, no card, no interactive
+            // target) ripples from wherever you clicked.
             onClick={(event) => {
                 const press = pressRef.current;
 
@@ -749,6 +824,12 @@ const Whiteboard = ({
                         'article, button, a, input, textarea, select, [data-beacon], [data-nowave]',
                     )
                 ) {
+                    return;
+                }
+
+                // On the Prompt canvas a press on the empty sheet clears the
+                // selection, and draws no ripple.
+                if (dockAware) {
                     return;
                 }
 
