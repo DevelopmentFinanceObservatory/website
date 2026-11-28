@@ -573,9 +573,8 @@ const DataSearch = ({
     // It records `search.route_stay`, turns the move's callout into the
     // Studio card (the out-of-prompts card leaves none), writes the
     // question's `routing=off` URL with no `via`, and searches the question
-    // as data (`route_stay`). The event
-    // names the trigger, so each way of staying counts apart from Studio's
-    // way back (`studio.route_back`).
+    // as data (`route_stay`). The event names the trigger, so each way of
+    // staying counts apart from Studio's way back (`studio.route_back`).
     const stayOnData = (trigger: RouteStayTrigger) => {
         // The card and the event carry the routed search's trace id, which
         // the search about to run replaces.

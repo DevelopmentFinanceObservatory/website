@@ -119,14 +119,15 @@ export const dataSearchHref = ({
         routingOff ? `&${HANDOFF_ROUTING_PARAM}=off` : ''
     }`;
 
-/** Studio's way back: the `/data` URL that searches `query` as data, with
- *  no Studio router, marked `via=route_back` so the search records it. */
+/** The `/data` URL of Studio's way back. It searches `query` as data, with
+ *  no Studio router, and carries `via=route_back` so the search records
+ *  it. */
 export const routeBackHref = (query: string): string =>
     `${dataSearchHref({ query, routingOff: true })}&${HANDOFF_SOURCE_PARAM}=route_back`;
 
-/** The URL an automatic move writes into the history entry it leaves: the
- *  `/data` URL that searches `query` as data, with no Studio router,
- *  marked `via=move_back` so Back to it records that source. */
+/** The `/data` URL an automatic move writes into the history entry it
+ *  leaves. It searches `query` as data, with no Studio router, and carries
+ *  `via=move_back` so Back to it records that source. */
 export const moveBackHref = (query: string): string =>
     `${dataSearchHref({ query, routingOff: true })}&${HANDOFF_SOURCE_PARAM}=move_back`;
 

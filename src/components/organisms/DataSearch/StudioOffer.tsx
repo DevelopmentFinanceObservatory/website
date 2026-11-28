@@ -14,11 +14,12 @@ import Button from '@/components/atoms/Button/Button';
  *  with the trace id the route's frame carried, or the answer's once it has
  *  landed (DataSearch's openStudio). The page shows no other Studio action
  *  meanwhile. A requires_analysis decline shows none: its own callout
- *  carries the card's actions (DataSearch's declineOffers). `inPlace` is the card that takes over the move's callout in
- *  its slot: the text swaps where it stands, and only the button fades in.
- *  `onData`, given for a move a guest with no free prompt left would make,
- *  adds "Search the data instead", which searches the question as data as
- *  staying out of the move does. */
+ *  carries the card's actions (DataSearch's declineOffers). `inPlace` is
+ *  the card that takes over the move's callout in its slot. The text swaps
+ *  where it stands, and only the button fades in. `onData`, given for a
+ *  move a guest with no free prompt left would make, adds "Search the data
+ *  instead", which searches the question as data, as staying out of the
+ *  move does. */
 const StudioOffer = ({
     onStudio,
     onData,
