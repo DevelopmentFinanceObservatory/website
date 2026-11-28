@@ -228,11 +228,15 @@ const LandingTravel = ({ onLanded, onDone }: { onLanded: () => void; onDone: () 
             width: `${field.clientWidth}px`,
         });
 
-        const start = landingType.getBoundingClientRect();
-        const end = dockType.getBoundingClientRect();
+        // The lines' layout offsets, which no transform moves: a transition
+        // from an earlier run of this effect may still hold one line over
+        // the other.
         const scale = parseFloat(getComputedStyle(dockType).fontSize) / parseFloat(look.fontSize);
-        const dx = end.left - start.left;
-        const dy = end.top + end.height / 2 - (start.top + start.height / 2);
+        const dx = dockType.offsetLeft - landingType.offsetLeft;
+        const dy =
+            dockType.offsetTop +
+            dockType.offsetHeight / 2 -
+            (landingType.offsetTop + landingType.offsetHeight / 2);
 
         dockType.style.transform = `translate(${-dx}px, ${-dy}px) scale(${1 / scale})`;
         dockType.style.opacity = '0';

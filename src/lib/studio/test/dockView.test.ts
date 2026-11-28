@@ -18,7 +18,7 @@ import {
     runningLabel,
     streamBlocks,
 } from '../dockView.ts';
-import { WORKING } from '../chatLine.ts';
+import { OPENING, WORKING } from '../chatLine.ts';
 import type { ApprovedPlan } from '../plan.ts';
 
 const ask = (text: string, turn: number, extra: object = {}): ChatMessage => ({
@@ -515,6 +515,8 @@ test('the running label drops trailing dots and ellipses and falls back to the w
     assert.equal(runningLabel('Searching datasets...'), runningLabel('Searching datasets'));
     assert.equal(runningLabel('Reading…'), runningLabel('Reading'));
     assert.equal(runningLabel(null), WORKING);
+    // A turn opens on the harness's first step, so the label holds when it arrives.
+    assert.equal(runningLabel(OPENING), runningLabel('Reading your question'));
 });
 
 test('the field copy: a live plan beats a selected card, which beats the follow-up and first-question copy', () => {

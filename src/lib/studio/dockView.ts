@@ -10,7 +10,7 @@
  * its failure, or its refusal, shows as the folded row. A refused question
  * stays the dock's question, with its refusal as the reply.
  */
-import { WORKING } from './chatLine.ts';
+import { OPENING, WORKING } from './chatLine.ts';
 import { type ComposerMode, type ComposerPlan, composerMode } from './composer.ts';
 import { firstSentence, promptsOf, type Question } from './questions.ts';
 import { isPrompt } from './transcript.ts';
@@ -110,9 +110,17 @@ export const clarifiedOf = (messages: readonly ChatMessage[]): Clarified[] =>
  *  so a new version opens again. */
 export const planKey = (turn: number, version: number): string => `${turn}:${version}`;
 
-/** The running label without trailing dots or an ellipsis. */
-export const runningLabel = (status: string | null): string =>
-    status?.replace(/(\.|…)+\s*$/, '').trim() || WORKING;
+// The harness's first step. The dock opens a turn on it, so the label holds
+// when that step arrives.
+const FIRST_STEP = 'Reading your question';
+
+/** The running label without trailing dots or an ellipsis. A turn's opening
+ *  label reads as the harness's first step. */
+export const runningLabel = (status: string | null): string => {
+    const label = status?.replace(/(\.|…)+\s*$/, '').trim() || WORKING;
+
+    return label === OPENING ? FIRST_STEP : label;
+};
 
 // The position (from 1) among the approved steps of the step the turn's
 // newest running line runs, else of the newest line's step, reading only
