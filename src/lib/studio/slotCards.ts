@@ -8,6 +8,7 @@ import {
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
+import { savedCanvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { StudioShareKind } from '../chat/shareMode.ts';
 import type { CardRef, FrameRef, Widget } from '../chat/widgets.ts';
@@ -197,6 +198,21 @@ const pageCardOf = (record: ShareRecord, widget: PayloadWidget): PageCard | null
  *  (`sharedViewOfRecord`). */
 export const pageCards = (record: ShareRecord): PageCard[] =>
     pageWidgets(record).flatMap((widget) => pageCardOf(record, widget) ?? []);
+
+/** The cards of `pageCards` the share's page shows, in the order its canvas
+ *  shows them (`savedCanvasWidgetsOf`, as the embed reads the saved canvas).
+ *  A card share shows the first card its canvas shows, and none when that
+ *  card is a note. */
+export const shownPageCards = (record: ShareRecord): PageCard[] => {
+    const held = new Map(pageCards(record).map((card) => [card.id, card]));
+    const shown = savedCanvasWidgetsOf(
+        savedOf(record, pageWidgets(record) as unknown as SavedConversation['widgets']),
+    );
+
+    return (record.kind === 'card' ? shown.slice(0, 1) : shown).flatMap(
+        ({ id }) => held.get(id) ?? [],
+    );
+};
 
 /** `held` drawn from a slot card read's body, as the page draws it, or null
  *  when the body's card resolves nothing to draw. A body outside dfo-apis'

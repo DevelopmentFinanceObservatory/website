@@ -90,8 +90,8 @@ const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPage
         );
     }
 
-    // `readSlotChart` decides whether the artifact has rows to serve, as it
-    // does for ./data.csv: a one-card share whose saved view draws data.
+    // The cards whose saved view draws rows (`readSlotCharts`), each with
+    // its table, Dataset block and ./data.csv address.
     const chartData = await libraryChartData(
         sharesBackendFor(await headers()),
         found.artifact,

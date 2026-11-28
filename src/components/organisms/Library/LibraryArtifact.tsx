@@ -83,7 +83,7 @@ const LibraryArtifact = ({
     replacements,
 }: {
     artifact: Artifact;
-    chartData: ChartData | null;
+    chartData: readonly ChartData[];
     origin: string;
     accessed: Date;
     replacements?: readonly ReplacementChoice[];
@@ -140,7 +140,9 @@ const LibraryArtifact = ({
                             title={artifact.title}
                         />
                     )}
-                    {chartData && <LibraryChartData data={chartData} />}
+                    {chartData.map((data) => (
+                        <LibraryChartData key={data.id} data={data} />
+                    ))}
                 </div>
 
                 <aside className={styles.aside}>

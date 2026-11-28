@@ -9,7 +9,8 @@
  * Outside a render, `unstable_cache` reads an entry, runs the function when
  * there is none, and stores what the function returns. A function that throws
  * stores nothing. `stored` maps each key to its entry, revalidate period
- * included.
+ * included. `expire` marks every stored entry stale, as its revalidate
+ * period running out does, until the entry is stored again.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -17,6 +18,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 type Entry = { kind: string; data: { body: string }; revalidate: number };
 
 const stored = new Map<string, Entry>();
+const stale = new Set<string>();
 
 Object.assign(globalThis, {
     AsyncLocalStorage,
@@ -26,12 +28,24 @@ Object.assign(globalThis, {
         get: async (key: string) => {
             const value = stored.get(key);
 
-            return value ? { value, isStale: false } : null;
+            return value ? { value, isStale: stale.has(key) } : null;
         },
         set: async (key: string, value: Entry) => {
             stored.set(key, value);
+            stale.delete(key);
         },
     },
 });
 
-export const nextCache = { stored, clear: () => stored.clear() };
+export const nextCache = {
+    stored,
+    clear: () => {
+        stored.clear();
+        stale.clear();
+    },
+    expire: () => {
+        for (const key of stored.keys()) {
+            stale.add(key);
+        }
+    },
+};
