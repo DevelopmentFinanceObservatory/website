@@ -739,10 +739,22 @@
     }
 }
 
-// The selected card's chip, on a line of its own above the typing area, at
-// its own width up to the line's. Its hairline box sets it apart from the
-// answer's text above it; it has no fill and takes the field's typeface, so
-// the follow-up pills are the dock's only filled shapes.
+// The selected card on a line of its own above the typing area: the word
+// `About`, then the card's chip. The word tells the chip from the row an open
+// answer draws for the same card just above it.
+.about {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: rem(8);
+    min-width: 0;
+    max-width: 100%;
+}
+
+// The chip is short: the card's whole title is in its tooltip. Its hairline
+// box sets it apart from the answer's text above it; it has no fill and
+// takes the field's typeface, so the follow-up pills are the dock's only
+// filled shapes.
 .chip {
     display: flex;
     flex: 0 1 auto;
@@ -750,7 +762,7 @@
     gap: rem(6);
     box-sizing: border-box;
     min-width: 0;
-    max-width: min(100%, #{rem(420)});
+    max-width: min(100%, #{rem(220)});
     height: rem(24);
     padding: 0 rem(8);
     border: 1px solid var(--color-sage-light);

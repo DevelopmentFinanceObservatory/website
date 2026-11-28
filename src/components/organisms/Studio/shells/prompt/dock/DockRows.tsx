@@ -148,9 +148,9 @@ export const FoldedRow = ({
     );
 };
 
-/** The card the next question is about, as a chip in the input row: its
- *  kind icon, its title (which flies the canvas to it) and the clear
- *  button. The group's name says `About` for the word the chip leaves out. */
+/** The card the next question is about, in the input row: the word
+ *  `About`, then a chip with its kind icon, its title (which flies the
+ *  canvas to it) and the clear button. The group's name carries the word. */
 export const AboutChip = ({
     title,
     icon,
@@ -162,19 +162,24 @@ export const AboutChip = ({
     onGo: () => void;
     onClear: () => void;
 }) => (
-    <span className={styles.chip} role="group" aria-label={`About ${title}`}>
-        <Icon name={icon} className={styles.chipIcon} />
-        <button type="button" className={styles.chipTitle} title={title} onClick={onGo}>
-            {title}
-        </button>
-        <button
-            type="button"
-            className={styles.chipClear}
-            aria-label={`Stop asking about ${title}`}
-            onClick={onClear}
-        >
-            <Icon name="closer" />
-        </button>
+    <span className={styles.about} role="group" aria-label={`About ${title}`}>
+        <span className={styles.rowMeta} aria-hidden="true">
+            About
+        </span>
+        <span className={styles.chip}>
+            <Icon name={icon} className={styles.chipIcon} />
+            <button type="button" className={styles.chipTitle} title={title} onClick={onGo}>
+                {title}
+            </button>
+            <button
+                type="button"
+                className={styles.chipClear}
+                aria-label={`Stop asking about ${title}`}
+                onClick={onClear}
+            >
+                <Icon name="closer" />
+            </button>
+        </span>
     </span>
 );
 
