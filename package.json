@@ -23,7 +23,8 @@
     "db:migrate:local": "node db/migrate-local.ts",
     "build:migrate": "esbuild db/migrate.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/migrate.cjs --external:pg-native",
     "build:export-events": "esbuild db/export-events.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/export-events.cjs --external:pg-native",
-    "build:migrate-shares": "esbuild db/migrate-shares.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/migrate-shares.cjs --external:pg-native"
+    "build:migrate-shares": "esbuild db/migrate-shares.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/migrate-shares.cjs --external:pg-native",
+    "build:check-library-shares": "esbuild db/check-library-shares.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/check-library-shares.cjs --external:pg-native"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "3.1150.0",
