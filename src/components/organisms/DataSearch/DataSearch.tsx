@@ -164,10 +164,10 @@ const subscribeStorage = (listener: () => void) => {
     return () => window.removeEventListener('storage', listener);
 };
 
-// How long the automatic move holds its callout before Studio opens: the
-// time to read it, and the window in which the reader can stay. It starts
-// again in full when the pointer or focus leaves the callout.
-const MOVE_PAUSE_MS = 600;
+// What the loading view's live region says as the automatic move's hold
+// starts, and when the reader stays out of the move.
+const HOLD_NOTE = 'Taking this to Studio. Press Escape to stay.';
+const STAY_NOTE = 'Staying on Get Data. Searching the data.';
 
 // Whether the address bar keeps the Studio router off for `query`.
 const routingOffHere = (query: string): boolean =>
@@ -358,7 +358,7 @@ const DataSearch = ({
         link: VersionLink;
         result: Exclude<VersionLinkResult, { kind: 'opened' }>;
     } | null>(null);
-    // The route of a move the reader stayed out of during its pause (Escape
+    // The route of a move the reader stayed out of during its hold (Escape
     // or the callout's button), kept as an offer while the page searches the
     // same question as data. Only that search shows it. The out-of-prompts
     // card's data action keeps none, since its Studio card would lead a
@@ -543,33 +543,40 @@ const DataSearch = ({
     // Back lands on the data search of the question, run once without the
     // router, as source `move_back`. The rewrite keeps the run's `q`, so the
     // permalink effect reads no arrival in it. The second, once
-    // `searchParams` shows the rewrite, holds the callout for MOVE_PAUSE_MS
-    // and then opens Studio. By then the App Router has stored its own
-    // state for the rewritten entry, which Back needs to restore it in
-    // place, and the rewrite's commit cannot take the move's transition
-    // type. The pause also fetches Studio's page in full, which loads its
-    // client code. A navigation whose page code is still loading commits
-    // twice, the router state and then the page, and the first commit takes
-    // the transition type, so the page would swap with no slide.
+    // `searchParams` shows the rewrite, arms the hold (`moveArmed`). By then
+    // the App Router has stored its own state for the rewritten entry, which
+    // Back needs to restore it in place, and the rewrite's commit cannot
+    // take the move's transition type. The hold also fetches Studio's page
+    // in full, which loads its client code. A navigation whose page code is
+    // still loading commits twice, the router state and then the page, and
+    // the first commit takes the transition type, so the page would swap
+    // with no slide.
     //
-    // During the pause, Escape or the callout's "Search the data instead"
-    // keeps the reader here (stayOnData). The pause holds while the pointer
-    // is over the callout or focus is inside it, and starts again in full
-    // on leaving. A plain click on a link to another page (clickLeavesPage)
-    // stops the move with no search and no event, so the link's navigation
-    // wins. A new search ends the pause too, before any navigation.
+    // StudioMove runs the hold's clock, MOVE_HOLD_MS from the end of its
+    // entrance, and pauses it while the pointer is over the callout, focus
+    // is inside it or the tab is hidden. The clock's start runs
+    // onHoldStart, and its end onHoldEnd, which opens Studio. During the
+    // hold, Escape or the callout's "Stay on Get Data" keeps the reader here
+    // (stayOnData). A plain click on a link to another page
+    // (clickLeavesPage) stops the move with no search and no event, so the
+    // link's navigation wins. A new search ends the hold too, before any
+    // navigation.
     const movedSearchRef = useRef<string | null>(null);
-    // Whether the pointer or focus is on the callout, and the pause's own
-    // handlers for the callout while the pause runs.
-    const moveHeldRef = useRef(false);
-    const movePauseRef = useRef<{ restart: () => void; stay: () => void } | null>(null);
-    const holdMove = (held: boolean) => {
-        moveHeldRef.current = held;
-        movePauseRef.current?.restart();
+    // The hold's handlers for the callout, set while the move's effect runs.
+    const moveHoldRef = useRef<{ go: () => void; stay: () => void } | null>(null);
+    const moveArmed =
+        move === 'auto' && phase === 'done' && pageSettled && routingOffFor(searchParams, query);
+    // What the loading view's live region says about the move. Each note
+    // mounts a new node, so a note the same as the last is announced again.
+    const [moveNote, setMoveNote] = useState({ text: '', id: 0 });
+    const noteMove = (text: string) => setMoveNote(({ id }) => ({ text, id: id + 1 }));
+    const onHoldStart = () => {
+        noteMove(HOLD_NOTE);
     };
+    const onHoldEnd = () => moveHoldRef.current?.go();
     const readyMove = useEffectEvent(() => studioHandoff('auto', route));
     // Keeps the reader on the data search of a question the router sent to
-    // Studio: the move's pause, or the out-of-prompts card's data action.
+    // Studio: the move's hold, or the out-of-prompts card's data action.
     // It records `search.route_stay`, turns the move's callout into the
     // Studio card (the out-of-prompts card leaves none), writes the
     // question's `routing=off` URL with no `via`, and searches the question
@@ -600,6 +607,7 @@ const DataSearch = ({
         }
 
         movedSearchRef.current = searchId;
+        noteMove(STAY_NOTE);
         stayOnData(trigger);
     });
     useEffect(() => {
@@ -623,20 +631,14 @@ const DataSearch = ({
 
         router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
 
-        let timer = 0;
-        // Clears the timer, and starts it again in full unless the callout
-        // holds the pause or the move has stopped.
-        const restart = () => {
-            window.clearTimeout(timer);
-
-            if (moveHeldRef.current || movedSearchRef.current === searchId) {
+        // Opens Studio unless the move has stopped.
+        const go = () => {
+            if (movedSearchRef.current === searchId) {
                 return;
             }
 
-            timer = window.setTimeout(() => {
-                movedSearchRef.current = searchId;
-                handoff.go();
-            }, MOVE_PAUSE_MS);
+            movedSearchRef.current = searchId;
+            handoff.go();
         };
         const onKey = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
@@ -655,19 +657,16 @@ const DataSearch = ({
                     window.location.href,
                 )
             ) {
-                window.clearTimeout(timer);
                 movedSearchRef.current = searchId;
             }
         };
 
-        restart();
-        movePauseRef.current = { restart, stay: () => stay(searchId, 'button') };
+        moveHoldRef.current = { go, stay: () => stay(searchId, 'button') };
         document.addEventListener('keydown', onKey, true);
         document.addEventListener('click', onClick, true);
 
         return () => {
-            window.clearTimeout(timer);
-            movePauseRef.current = null;
+            moveHoldRef.current = null;
             document.removeEventListener('keydown', onKey, true);
             document.removeEventListener('click', onClick, true);
         };
@@ -1237,6 +1236,12 @@ const DataSearch = ({
 
             {(phase === 'loading' || phase === 'done') && (
                 <div className={styles.result}>
+                    {/* Mounted before the move's hold starts and kept through
+                        a stay's search, since a live region that mounts
+                        with its text is announced unreliably. */}
+                    <p className={styles.moveNote} aria-live="polite">
+                        <span key={moveNote.id}>{moveNote.text}</span>
+                    </p>
                     {phase === 'done' && move !== 'auto' && (
                         <div className={styles.resultToolbar}>
                             {/* Only while the view is still the link's own: an
@@ -1400,9 +1405,10 @@ const DataSearch = ({
                                     Studio card there. */}
                                 {move === 'auto' ? (
                                     <StudioMove
-                                        onStay={() => movePauseRef.current?.stay()}
-                                        onHold={() => holdMove(true)}
-                                        onRelease={() => holdMove(false)}
+                                        armed={moveArmed}
+                                        onStart={onHoldStart}
+                                        onElapsed={onHoldEnd}
+                                        onStay={() => moveHoldRef.current?.stay()}
                                     />
                                 ) : (
                                     stayedRoute &&

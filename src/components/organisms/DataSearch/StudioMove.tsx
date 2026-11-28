@@ -1,48 +1,139 @@
 'use client';
 
 import classNames from 'classnames';
-import { type FocusEvent, useEffect, useEffectEvent, useState } from 'react';
+import {
+    type AnimationEvent,
+    type FocusEvent,
+    useEffect,
+    useEffectEvent,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 
 import styles from './DataSearch.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+
+/** How long the automatic move holds its callout before Studio opens: the
+ *  time to see the move coming, and the window in which the reader can
+ *  stay. The line under the callout's title fills over it. */
+export const MOVE_HOLD_MS = 1200;
+
+const subscribeVisibility = (listener: () => void) => {
+    document.addEventListener('visibilitychange', listener);
+
+    return () => document.removeEventListener('visibilitychange', listener);
+};
 
 /** What a search shows while the search API's router moves the question to
  *  Studio (a route in `auto` mode). The loading view stays, with this in
  *  its status line's place, from the declined answer until Studio's sheet
  *  covers the page. Its button keeps the reader on the data search
- *  (`onStay`). The callout holds the move (`onHold`) while the pointer is
- *  over it or focus is inside it, and lets it go (`onRelease`) once both
- *  have left or the callout unmounts. */
+ *  (`onStay`).
+ *
+ *  The line under the title is the hold's clock. Once `armed` and the
+ *  callout's entrance has ended, one linear animation fills it over
+ *  MOVE_HOLD_MS (under reduced motion it sits full and its opacity ramps
+ *  instead). `onStart` runs once as it starts, and `onElapsed` once it ends.
+ *  The pointer over the callout, focus inside it or a hidden tab pauses it
+ *  in place, and it resumes with the time it had left. */
 const StudioMove = ({
+    armed,
+    onStart,
+    onElapsed,
     onStay,
-    onHold,
-    onRelease,
 }: {
+    armed: boolean;
+    onStart: () => void;
+    onElapsed: () => void;
     onStay: () => void;
-    onHold: () => void;
-    onRelease: () => void;
 }) => {
+    const [entered, setEntered] = useState(false);
     const [pointerIn, setPointerIn] = useState(false);
     const [focusIn, setFocusIn] = useState(false);
+    const hidden = useSyncExternalStore(
+        subscribeVisibility,
+        () => document.hidden,
+        () => false,
+    );
+    const reducedMotion = usePrefersReducedMotion();
     const held = pointerIn || focusIn;
-    const hold = useEffectEvent(onHold);
-    const release = useEffectEvent(onRelease);
+    const fill = useRef<HTMLDivElement>(null);
+    const clock = useRef<Animation | null>(null);
+    // Strict Mode runs the clock's effect twice on one mount, and onStart
+    // runs once.
+    const started = useRef(false);
+    const paused = useEffectEvent(() => held || hidden);
+    // Read as the clock starts, so a change of setting mid-hold leaves the
+    // running clock alone.
+    const keyframes = useEffectEvent((): Keyframe[] =>
+        reducedMotion ? [{ opacity: 0.2 }, { opacity: 1 }] : [{ scale: '0 1' }, { scale: '1 1' }],
+    );
+    const start = useEffectEvent(onStart);
+    const elapse = useEffectEvent(onElapsed);
 
     useEffect(() => {
-        if (!held) {
+        const line = fill.current;
+
+        if (!armed || !entered || !line) {
             return;
         }
 
-        hold();
+        const animation = line.animate(keyframes(), {
+            duration: MOVE_HOLD_MS,
+            easing: 'linear',
+            fill: 'forwards',
+        });
 
-        return () => release();
-    }, [held]);
+        clock.current = animation;
+
+        if (paused()) {
+            animation.pause();
+        }
+
+        if (!started.current) {
+            started.current = true;
+            start();
+        }
+
+        animation.finished.then(
+            () => elapse(),
+            // cancel() rejects `finished`: the clock stopped mid-hold.
+            () => {},
+        );
+
+        return () => {
+            clock.current = null;
+            animation.cancel();
+        };
+    }, [armed, entered]);
+
+    useEffect(() => {
+        const animation = clock.current;
+
+        if (!animation) {
+            return;
+        }
+
+        if (held || hidden) {
+            animation.pause();
+        } else if (animation.playState === 'paused') {
+            // play() on a finished animation would start it again from empty.
+            animation.play();
+        }
+    }, [held, hidden]);
 
     return (
         <div
             className={classNames(styles.callout, styles.studioMove)}
-            role="status"
+            data-held={held || undefined}
+            onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
+                if (event.target === event.currentTarget) {
+                    setEntered(true);
+                }
+            }}
             onPointerEnter={() => setPointerIn(true)}
             onPointerLeave={() => setPointerIn(false)}
             onFocus={() => setFocusIn(true)}
@@ -52,12 +143,15 @@ const StudioMove = ({
                 }
             }}
         >
-            <p className={styles.calloutTitle}>Opening this question in Studio.</p>
+            <p className={styles.calloutTitle}>Taking this to Studio.</p>
+            <div className={styles.moveTrack} aria-hidden="true">
+                <div ref={fill} className={styles.moveFill} />
+            </div>
             <p className={styles.calloutText}>
-                It needs analysis. Studio can plan the analysis, run it and show its working.
+                It needs analysis. Studio plans it, runs it and shows the working.
             </p>
             <Button variant="outline" onClick={onStay}>
-                Search the data instead
+                Stay on Get Data
             </Button>
         </div>
     );
