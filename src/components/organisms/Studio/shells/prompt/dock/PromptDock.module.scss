@@ -22,7 +22,27 @@
 
     --hit-room-y: calc(var(--dock-gap, #{rem(10)}) / 2);
     --dock-ease: var(--ws-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    --dock-shadow-rest: 0 8px 28px rgb(47 47 43 / 16%), 0 1px 3px rgb(47 47 43 / 10%);
+
+    // Focus mode folds the box onto the pill in this time. The box scales
+    // about its foot to the pill's size (--dock-fold-x and --dock-fold-y,
+    // which PromptDock.tsx measures), so one surface changes size and the two
+    // contents swap inside it.
+
+    --dock-fold: 220ms;
+
+    // The box and the pill are one material: the canvas shows through it,
+    // blurred, and the rows above the field take the page's tint over it.
+
+    --dock-surface: var(--color-white);
+    --dock-band: var(--color-grid-bg-light);
+    --dock-material: none;
+
+    // Three layers in the text colour, each falling below the box more than
+    // around it.
+
+    --dock-shadow-rest:
+        0 1px 2px rgb(72 72 66 / 6%), 0 4px 10px -2px rgb(72 72 66 / 8%),
+        0 14px 32px -10px rgb(72 72 66 / 20%);
     --dock-shadow-open: 0 -2px 12px rgb(72 72 66 / 10%), 0 1px 2px rgb(72 72 66 / 6%);
 
     position: relative;
@@ -33,6 +53,18 @@
     width: 100%;
     min-height: 0;
     pointer-events: none;
+
+    @supports (backdrop-filter: blur(1px)) {
+        --dock-surface: color-mix(in sRGB, var(--color-white) 82%, transparent);
+        --dock-band: color-mix(in sRGB, var(--color-bg) 62%, transparent);
+        --dock-material: blur(16px) saturate(1.4);
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+        --dock-surface: var(--color-white);
+        --dock-band: var(--color-grid-bg-light);
+        --dock-material: none;
+    }
 }
 
 // --- Pills -----------------------------------------------------------------
@@ -117,7 +149,8 @@
 // --- Focus pill ------------------------------------------------------------
 
 // Out of the flow until focus mode, then the box leaves the flow and the
-// pill takes its place, the two cross-fading.
+// pill takes its place. The pill stands where the folded box ends, and only
+// fades: in once the box has reached its size, out before the box opens.
 .focusPill {
     @include font-size-floor(14px, 1);
 
@@ -135,16 +168,14 @@
     color: var(--color-stone);
     cursor: pointer;
     opacity: 0;
-    background-color: var(--color-white);
+    background-color: var(--dock-surface);
     border: 1px solid var(--color-sage-light);
     border-radius: rem(10);
     box-shadow: var(--dock-shadow-rest);
+    backdrop-filter: var(--dock-material);
     transform: translateX(-50%);
-    transform-origin: 50% 100%;
-    scale: 0.96;
     transition:
-        opacity 160ms var(--dock-ease),
-        scale 160ms var(--dock-ease),
+        opacity 80ms ease,
         border-color 0.2s ease;
 
     @media (hover: hover) {
@@ -166,7 +197,9 @@
         pointer-events: auto;
         opacity: 1;
         transform: none;
-        scale: 1;
+        transition:
+            opacity 100ms ease 120ms,
+            border-color 0.2s ease;
     }
 }
 
@@ -193,20 +226,38 @@
     width: 100%;
     min-height: 0;
     pointer-events: auto;
-    background-color: var(--color-white);
+    background-color: var(--dock-surface);
     border: 1px solid var(--color-sage-light);
     border-radius: rem(10);
     outline: none;
     box-shadow: var(--dock-shadow-rest);
+    backdrop-filter: var(--dock-material);
     transform-origin: 50% 100%;
+
+    // Leaving focus mode: the surface shows at once at the pill's size and
+    // opens, and its content follows (::after).
     transition:
         border-color 0.2s ease,
-        opacity 160ms var(--dock-ease),
-        scale 160ms var(--dock-ease);
+        opacity 60ms linear,
+        scale var(--dock-fold) var(--dock-ease);
 
-    // The field's focus indicator, in the colour of every other control's.
+    // The surface's colour over the box's content, which hides the content
+    // while the box is near the pill's size.
+    &::after {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        content: "";
+        opacity: 0;
+        background-color: var(--color-white);
+        border-radius: inherit;
+        transition: opacity 130ms ease 70ms;
+    }
+
+    // The caret marks the field's focus; the border deepens one step with it.
     &:has(.field:focus-visible) {
-        border-color: var(--color-charcoal);
+        border-color: var(--color-sage-dark);
     }
 
     // Focus lands on the box itself when the control that held it leaves.
@@ -219,17 +270,29 @@
         box-shadow: var(--dock-shadow-open);
     }
 
+    // Entering focus mode: the content goes first, the surface closes on the
+    // pill's place, and it fades there as the pill arrives.
     .dock[data-focus] & {
         position: absolute;
         bottom: 0;
         pointer-events: none;
         opacity: 0;
-        scale: 0.96;
+        scale: var(--dock-fold-x, 0.96) var(--dock-fold-y, 0.96);
+        transition:
+            border-color 0.2s ease,
+            opacity 100ms linear 120ms,
+            scale var(--dock-fold) var(--dock-ease);
+
+        &::after {
+            opacity: 1;
+            transition: opacity 80ms ease;
+        }
     }
 }
 
-// Everything above the input row. Rows keep their height; a sheet gives way
-// and its body scrolls.
+// Everything above the input row, on the page's tint, which sets it apart
+// from the field with no rule between them. Rows keep their height; a sheet
+// gives way and its body scrolls.
 .upper {
     display: flex;
     flex: 0 1 auto;
@@ -249,12 +312,8 @@
         flex: 0 0 auto;
     }
 
-    > * + * {
-        border-top: 1px solid var(--color-net-light);
-    }
-
     &:not(:empty) {
-        border-bottom: 1px solid var(--color-net-light);
+        background-color: var(--dock-band);
     }
 }
 
@@ -1203,6 +1262,12 @@ $dock-fade-mask: linear-gradient(to bottom, #000 calc(100% - var(--dock-fade)), 
     .dock[data-focus] .focusPill {
         scale: 1;
         transition: opacity 120ms ease;
+    }
+
+    .box::after,
+    .dock[data-focus] .box::after {
+        opacity: 0;
+        transition: none;
     }
 
     .pill {

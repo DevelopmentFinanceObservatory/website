@@ -401,15 +401,17 @@ $prompt-arrive: 240ms;
 // session panel holds.
 .cardBox[data-lit] {
     border-radius: rem(8);
-    outline: 2px solid color-mix(in sRGB, var(--color-select) 45%, transparent);
-    outline-offset: 2px;
+    outline: 2px solid color-mix(in sRGB, var(--color-sage-dark) 55%, transparent);
+    outline-offset: 3px;
 }
 
+// In the sage of the site's borders, a tone no chart series takes, so the
+// outline reads as the page's mark on the card and not as part of its data.
 .cardBox[data-selected],
 .cardBox[data-held] {
     border-radius: rem(8);
-    outline: 2px solid var(--color-select);
-    outline-offset: 2px;
+    outline: 2px solid var(--color-sage-dark);
+    outline-offset: 3px;
 }
 
 // Keyboard focus on the card's toggle rings the whole card, outside any

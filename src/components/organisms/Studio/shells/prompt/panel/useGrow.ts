@@ -27,8 +27,10 @@ const canHover = () => matchMedia('(hover: hover)').matches;
  * the wide panel adds), and shrinks it once both have been gone
  * SHRINK_AFTER_MS. The aside around the scroller carries the state the
  * stylesheets read: `data-sp-grow` (`open` or `closing`), `data-sp-wide` from
- * the layout switch at the start of a grow to the one at the end of a shrink,
- * and `data-sp-fade` for the dissolve across each switch. A grow begun from
+ * the layout switch at the start of a grow to the one at the start of a
+ * shrink, and `data-sp-fade` for the dissolve across each switch. Both
+ * switches come as the edge starts to move, so the text settles in its
+ * column while the edge travels and nothing changes once the edge stops. A grow begun from
  * keyboard focus carries `data-sp-snap` and switches at once, with no
  * dissolve and no edge move. Across a switch the row under the pointer, or
  * the focused control, keeps its place, with spacers where the scroll range
@@ -142,16 +144,21 @@ export const useGrow = (onPage: boolean) => {
 
         if (!region) return;
 
-        cancel('shrinkFade', 'shrinkEnd', 'release');
+        cancel('shrinkEnd', 'release');
         grow.current.phase = 'open';
         region.setAttribute('data-sp-grow', 'open');
         // From the keyboard the edge moves at once (data-sp-snap), and so does
         // its shrink.
         region.toggleAttribute('data-sp-snap', keyboardInside());
 
-        // A re-entry mid-shrink that kept the wide layout reverses the edge
-        // with no dissolve.
-        if (!grow.current.wide) dissolveTo(true);
+        if (grow.current.wide) {
+            // A re-entry before a shrink's switch keeps the wide layout: the
+            // shrink's dissolve is called off and the edge reverses.
+            cancel('fade');
+            region.removeAttribute('data-sp-fade');
+        } else {
+            dissolveTo(true);
+        }
     };
 
     const release = () => {
@@ -163,11 +170,12 @@ export const useGrow = (onPage: boolean) => {
     const endShrink = () => {
         const region = aside();
 
-        cancel('shrinkFade', 'shrinkEnd');
+        cancel('shrinkEnd');
 
         if (grow.current.phase !== 'closing' || !region) return;
 
         if (grow.current.wide) {
+            cancel('fade');
             switchLayout(false);
         }
 
@@ -201,7 +209,10 @@ export const useGrow = (onPage: boolean) => {
             return;
         }
 
-        later('shrinkFade', () => region.setAttribute('data-sp-fade', ''), EDGE_MS - FADE_OUT_MS);
+        // The content takes its rest width as the edge starts to move: the
+        // narrow column stands in its final place, clear of the edge, while
+        // the edge closes on it.
+        dissolveTo(false);
         later('shrinkEnd', endShrink, EDGE_MS + 40);
     };
 

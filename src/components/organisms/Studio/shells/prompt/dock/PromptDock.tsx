@@ -228,9 +228,12 @@ const PromptDock = () => {
         // this render's effects run.
         const measure = () => {
             const box = boxRef.current;
+            const pill = pillRef.current;
             const root = rootRef.current;
             const current = frame.getBoundingClientRect().height;
-            const boxHeight = box?.getBoundingClientRect().height ?? 0;
+            // The box's layout height. Focus mode scales the box, and its
+            // drawn rect with it.
+            const boxHeight = box?.offsetHeight ?? 0;
 
             if (frame.dataset.sheet === 'none' && boxHeight > 0) {
                 restBox.current = boxHeight;
@@ -241,6 +244,13 @@ const PromptDock = () => {
 
             root?.style.setProperty('--dock-rest', `${rest}px`);
             root?.style.setProperty('--dock-current', `${current}px`);
+
+            // The pill's share of the box, which the box scales to as focus
+            // mode folds it onto the pill (PromptDock.module.scss).
+            if (box && pill && box.offsetWidth > 0 && boxHeight > 0) {
+                frame.style.setProperty('--dock-fold-x', `${pill.offsetWidth / box.offsetWidth}`);
+                frame.style.setProperty('--dock-fold-y', `${pill.offsetHeight / boxHeight}`);
+            }
         };
         const observer = new ResizeObserver(measure);
 
@@ -248,6 +258,10 @@ const PromptDock = () => {
 
         if (boxRef.current) {
             observer.observe(boxRef.current);
+        }
+
+        if (pillRef.current) {
+            observer.observe(pillRef.current);
         }
 
         return () => observer.disconnect();
