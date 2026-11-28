@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import LibraryArtifact from '@/components/organisms/Library/LibraryArtifact';
 import WithdrawnArtifact from '@/components/organisms/Library/WithdrawnArtifact';
 import { libraryAdmin, libraryView } from '@/lib/library/admin';
+import { artifactPath } from '@/lib/library/artifact';
 import { artifactBySlug, replacementChoices } from '@/lib/library/store';
 import { NOT_FOUND_METADATA, pageOpenGraph, SITE_ORIGIN } from '@/lib/site';
 
@@ -39,11 +40,16 @@ export const generateMetadata = async ({ params }: LibraryArtifactPageProps): Pr
     const { artifact } = found;
 
     // While LIBRARY_ENABLED is off, admins see each artifact under its own
-    // title, unindexed.
+    // title, unindexed. The card is ./opengraph-image.tsx.
     return {
         title: `${artifact.title} — DFO Library`,
         description: artifact.description,
-        openGraph: pageOpenGraph({ title: artifact.title, description: artifact.description }),
+        alternates: { canonical: artifactPath(artifact.slug) },
+        openGraph: pageOpenGraph({
+            title: artifact.title,
+            description: artifact.description,
+            image: null,
+        }),
         ...(view === 'preview' ? { robots: { index: false, follow: false } } : {}),
     };
 };

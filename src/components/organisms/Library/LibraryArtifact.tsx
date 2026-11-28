@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 
 import ArtifactToc from './ArtifactToc';
 import EditArtifact from './EditArtifact';
+import EmbedFrame from './EmbedFrame';
 import styles from './LibraryArtifact.module.scss';
 import { KIND_ICONS, StatusBadge, TopicTags } from './parts';
 import ShareButton from './ShareButton';
@@ -126,14 +127,13 @@ const LibraryArtifact = ({
                             </Button>
                         </div>
                     ) : (
-                        <iframe
+                        <EmbedFrame
                             className={classNames(
                                 styles.frame,
                                 artifact.kind === 'canvas' && styles.frameCanvas,
                             )}
                             src={`/embed/${artifact.shareId}`}
                             title={artifact.title}
-                            loading="lazy"
                         />
                     )}
                 </div>
