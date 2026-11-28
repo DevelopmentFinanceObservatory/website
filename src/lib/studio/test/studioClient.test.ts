@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 
 import {
     cancelTurn,
@@ -18,17 +18,28 @@ import {
     runApplyUnit,
     runInterrupt,
     runTurn,
+    heldTurnListener,
+    startHeldTurn,
     STATE_READ_ATTEMPTS,
+    takeHeldTurn,
     stopAction,
     watchAdmission,
     type CancelAnswer,
     type StopAction,
     whileBusy,
     type StreamRefusal,
+    handoffExtras,
+    type TurnExtras,
 } from '../studioClient.ts';
 import { cardUnitChange } from '../cardUnit.ts';
 import { widgetFromComponent } from '../widgets.ts';
-import type { ApplyChoiceSuggestion, ComponentCreated, StudioFrame, TurnRequest } from '../wire.ts';
+import type {
+    ApplyChoiceSuggestion,
+    ComponentCreated,
+    Seed,
+    StudioFrame,
+    TurnRequest,
+} from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -905,4 +916,306 @@ test('mutateComposition: a refusal rejects with a CompositionRefusal, and says w
             assert.equal(isStaleRevision(refusal), stale);
         });
     }
+});
+
+// A turn route whose stream the test writes: `write` sends a frame, `end`
+// closes the stream. The response names turn `turnIndex`.
+const heldHarness = (t: TestContext, { turnIndex = 3 } = {}) => {
+    const encoder = new TextEncoder();
+    let stream: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const fetch = t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        if (String(input) === '/api/studio/cancel') {
+            return new Response(null, { status: 204 });
+        }
+
+        return new Response(
+            new ReadableStream<Uint8Array>({
+                start(controller) {
+                    stream = controller;
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': String(turnIndex) } },
+        );
+    });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+    return {
+        fetch,
+        settle,
+        write: async (frame: object) => {
+            stream?.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+            await settle();
+        },
+        end: () => stream?.close(),
+    };
+};
+
+test('takeHeldTurn: a held turn is taken once, then answers adopted; an unknown or cancelled one is null', async (t) => {
+    heldHarness(t);
+
+    const { token } = startHeldTurn({ message: 'Aid to Ghana' });
+    const taken = takeHeldTurn(token);
+
+    assert.equal(taken !== null && taken !== 'adopted' && taken.message, 'Aid to Ghana');
+    assert.equal(takeHeldTurn(token), 'adopted');
+    assert.equal(takeHeldTurn('never-started'), null);
+
+    const cancelled = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await cancelled.cancel();
+    assert.equal(takeHeldTurn(cancelled.token), null);
+});
+
+test('takeHeldTurn: an adopted turn replays what it heard, hears the rest live, and is let go once it settles', async (t) => {
+    const harness = heldHarness(t, { turnIndex: 3 });
+    const { token } = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await harness.write({ event: 'turn.started', seq: 1 });
+
+    const taken = takeHeldTurn(token);
+
+    assert.ok(taken && taken !== 'adopted');
+
+    const heard: string[] = [];
+    const run = taken.run(
+        {
+            onTurnIndex: (index) => heard.push(`turn ${index}`),
+            onFrame: (frame) => heard.push(`${frame.event} ${frame.seq}`),
+        },
+        new AbortController().signal,
+    );
+
+    assert.deepEqual(heard, ['turn 3', 'turn.started 1']);
+    assert.notEqual(heldTurnListener(token), null);
+
+    await harness.write({ event: 'done', seq: 2 });
+    harness.end();
+    await run;
+
+    assert.deepEqual(heard, ['turn 3', 'turn.started 1', 'done 2']);
+    assert.equal(heldTurnListener(token), null);
+    assert.equal(takeHeldTurn(token), 'adopted');
+});
+
+test('takeHeldTurn: a refusal heard before adoption reaches the adopting onRefusal, and no error frame', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ code: 'rate_limited', upstream_status: null }, { status: 429 }),
+    );
+
+    const { token } = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const taken = takeHeldTurn(token);
+    const refusals: number[] = [];
+    const frames: string[] = [];
+
+    assert.ok(taken && taken !== 'adopted');
+    await taken.run(
+        {
+            onFrame: (frame) => frames.push(frame.event),
+            onRefusal: (refusal) => refusals.push(refusal.status) > 0,
+        },
+        new AbortController().signal,
+    );
+
+    assert.deepEqual(refusals, [429]);
+    assert.deepEqual(frames, []);
+});
+
+// Studio's arrival and Get Data's held turn both send these members.
+test('handoffExtras carries the seeds and the prompt source a handover has, and nothing it lacks', () => {
+    const seeds = [{ spec: { kind: 'stand-in' } }] as unknown as Seed[];
+
+    assert.deepEqual(handoffExtras(seeds, 'search_example'), {
+        seed_spec: seeds,
+        prompt_source: 'search_example',
+    });
+    assert.deepEqual(handoffExtras(null, undefined), {});
+});
+
+test('startHeldTurn posts the request runTurn posts for the same members', async (t) => {
+    const { fetch } = heldHarness(t);
+    const extras: TurnExtras = { prompt_source: 'search_example', surface: 'studio' };
+
+    const { token } = startHeldTurn({ message: 'Aid to Ghana', extras });
+    const taken = takeHeldTurn(token, { source: 'search_example' });
+
+    assert.ok(taken && taken !== 'adopted');
+    void runTurn(taken.conversationId, 'Aid to Ghana', { onFrame: () => {} }, undefined, extras);
+
+    const [held, own] = fetch.mock.calls.map((call) => call.arguments[1] as RequestInit);
+
+    assert.deepEqual(JSON.parse(held?.body as string), JSON.parse(own?.body as string));
+    assert.deepEqual(held?.headers, own?.headers);
+});
+
+test('startHeldTurn: a cancel before the harness names the turn waits for it and names it', async (t) => {
+    const harness = heldHarness(t, { turnIndex: 4 });
+    const { cancel } = startHeldTurn({ message: 'Aid to Ghana' });
+
+    await cancel();
+
+    const sent = harness.fetch.mock.calls
+        .filter((call) => call.arguments[0] === '/api/studio/cancel')
+        .map((call) => JSON.parse((call.arguments[1] as RequestInit).body as string));
+
+    assert.deepEqual(
+        sent.map((body) => body.turn_index),
+        [4],
+    );
+});
+
+// The conversation of each turn `fetch` posted and of each cancel it sent,
+// in order, and whether each cancel was keepalive.
+const heldPosts = (fetch: ReturnType<typeof heldHarness>['fetch']) => {
+    const posts = fetch.mock.calls.map((call) => {
+        const init = call.arguments[1] as RequestInit;
+        const body = JSON.parse(init.body as string) as { conversation_id: string };
+
+        return { route: call.arguments[0], conversation: body.conversation_id, init };
+    });
+
+    return {
+        turns: posts
+            .filter((post) => post.route === '/api/studio/turn')
+            .map((post) => post.conversation),
+        cancels: posts
+            .filter((post) => post.route === '/api/studio/cancel')
+            .map((post) => ({
+                conversation: post.conversation,
+                keepalive: post.init.keepalive === true,
+            })),
+    };
+};
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('startHeldTurn: a moved turn Studio has not run in adoptLimitMs cancels itself, taken or not', async (t) => {
+    const harness = heldHarness(t);
+    const untaken = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+    const reserved = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+    const adopted = startHeldTurn({ message: 'Aid to Ghana', adoptLimitMs: 20 });
+
+    untaken.moved();
+    reserved.moved();
+    adopted.moved();
+    await harness.settle();
+    assert.notEqual(takeHeldTurn(reserved.token), null);
+
+    const taken = takeHeldTurn(adopted.token);
+
+    assert.ok(taken && taken !== 'adopted');
+    void taken.run({ onFrame: () => {} }, new AbortController().signal);
+    await wait(80);
+
+    const { turns, cancels } = heldPosts(harness.fetch);
+
+    assert.deepEqual(
+        cancels.toSorted((a, b) => turns.indexOf(a.conversation) - turns.indexOf(b.conversation)),
+        [
+            { conversation: turns[0], keepalive: false },
+            { conversation: turns[1], keepalive: false },
+        ],
+    );
+    assert.equal(takeHeldTurn(untaken.token), null);
+    harness.end();
+});
+
+test('startHeldTurn: onSpent runs once for a turn cancelled before Studio runs it, and never for one it runs', async (t) => {
+    const harness = heldHarness(t);
+    let spent = 0;
+    const onSpent = () => {
+        spent += 1;
+    };
+
+    // Cancelled twice: counted once, at the first cancel.
+    const stayed = startHeldTurn({ message: 'Aid to Ghana', onSpent });
+    const first = stayed.cancel();
+
+    assert.equal(spent, 1);
+    await Promise.all([first, stayed.cancel({ keepalive: true })]);
+    assert.equal(spent, 1);
+
+    // Taken and then cancelled by Studio (its gate declined it).
+    const declined = takeHeldTurn(startHeldTurn({ message: 'Aid to Ghana', onSpent }).token);
+
+    assert.ok(declined && declined !== 'adopted');
+    await declined.cancel();
+    assert.equal(spent, 2);
+
+    // Run: a later cancel does nothing.
+    const held = startHeldTurn({ message: 'Aid to Ghana', onSpent });
+    const ran = takeHeldTurn(held.token);
+
+    assert.ok(ran && ran !== 'adopted');
+    void ran.run({ onFrame: () => {} }, new AbortController().signal);
+    await Promise.all([ran.cancel(), held.cancel()]);
+    assert.equal(spent, 2);
+    assert.deepEqual(
+        heldPosts(harness.fetch).cancels.map(({ conversation }) => conversation),
+        heldPosts(harness.fetch).turns.slice(0, 2),
+    );
+    harness.end();
+});
+
+test('takeHeldTurn: a turn started for another seed token or prompt source is cancelled and answers null', async (t) => {
+    const harness = heldHarness(t);
+    let spent = 0;
+    const onSpent = () => {
+        spent += 1;
+    };
+    const extras: TurnExtras = { prompt_source: 'search_example' };
+    const seeds = startHeldTurn({ message: 'Aid to Ghana', extras, seedToken: 's1', onSpent });
+    const source = startHeldTurn({ message: 'Aid to Ghana', extras, seedToken: 's1', onSpent });
+    const match = startHeldTurn({ message: 'Aid to Ghana', extras, seedToken: 's1', onSpent });
+
+    assert.equal(takeHeldTurn(seeds.token, { seedToken: 's2', source: 'search_example' }), null);
+    assert.equal(takeHeldTurn(source.token, { seedToken: 's1' }), null);
+    assert.equal(spent, 2);
+    assert.notEqual(takeHeldTurn(match.token, { seedToken: 's1', source: 'search_example' }), null);
+    await harness.settle();
+    assert.equal(heldPosts(harness.fetch).cancels.length, 2);
+    assert.equal(spent, 2);
+});
+
+// The registry listens on the first window it sees, so one test covers
+// every pagehide case.
+test('startHeldTurn: pagehide cancels every turn Studio has not run, with keepalive, and a cancel waiting on the turn index goes with keepalive too', async (t) => {
+    const harness = heldHarness(t);
+    const page = new EventTarget();
+
+    Object.defineProperty(globalThis, 'window', { value: page, configurable: true });
+    t.after(() => Reflect.deleteProperty(globalThis, 'window'));
+
+    const untaken = startHeldTurn({ message: 'Aid to Ghana' });
+    const taken = startHeldTurn({ message: 'Aid to Ghana' });
+    const waiting = startHeldTurn({ message: 'Aid to Ghana' });
+    const adopted = takeHeldTurn(taken.token);
+
+    assert.ok(adopted && adopted !== 'adopted');
+    void adopted.run({ onFrame: () => {} }, new AbortController().signal);
+
+    // Cancelled before the harness names the turn, then the page goes.
+    const cancelled = waiting.cancel();
+
+    page.dispatchEvent(new Event('pagehide'));
+    await cancelled;
+    await harness.settle();
+
+    const { turns, cancels } = heldPosts(harness.fetch);
+
+    // Earlier tests leave turns in the registry, which the pagehide cancels
+    // too.
+    assert.deepEqual(
+        cancels
+            .filter(({ conversation }) => turns.includes(conversation))
+            .toSorted((a, b) => turns.indexOf(a.conversation) - turns.indexOf(b.conversation)),
+        [
+            { conversation: turns[0], keepalive: true },
+            { conversation: turns[2], keepalive: true },
+        ],
+    );
+    assert.equal(takeHeldTurn(untaken.token), null);
+    assert.equal(takeHeldTurn(waiting.token), null);
 });

@@ -156,6 +156,7 @@ import {
 import {
     cancelTurn,
     CompositionRefusal,
+    handoffExtras,
     fetchComponentRevision,
     isNoBlock,
     isSessionGone,
@@ -171,6 +172,7 @@ import {
     SWITCH_STOP_GRACE_MS,
     watchAdmission,
     whileBusy,
+    type HeldTurn,
     type StopAction,
     type StreamHandlers,
     type StreamRefusal,
@@ -1082,7 +1084,8 @@ export const useChat = (
     // the frames after Stop, for up to SWITCH_STOP_GRACE_MS, with the chat
     // line on "Stopping". `onSettled` runs once, right after that end on
     // screen, unless reset or hydrate has walked away from the stream.
-    // `metered` marks a POST turn, whose prompt the site's meter gives back
+    // `onUnsent` runs once the queue skips `start`, when reset, hydrate or
+    // Stop came first. `metered` marks a POST turn, whose prompt the site's meter gives back
     // when the response is a refusal (meterTurn), so a refusal marks the
     // turn's prompt refunded. `carries` is the harness turn a stream carries
     // on, which the harness admitted already (a reopened page's). Leaving
@@ -1102,6 +1105,7 @@ export const useChat = (
                 onUnreachable,
                 onEnd,
                 onSettled,
+                onUnsent,
                 metered = false,
                 carries = null,
             }: {
@@ -1109,6 +1113,7 @@ export const useChat = (
                 onUnreachable?: () => boolean;
                 onEnd?: (ending: StreamEnding) => void;
                 onSettled?: () => void;
+                onUnsent?: () => void;
                 metered?: boolean;
                 carries?: number | null;
             } = {},
@@ -1831,6 +1836,10 @@ export const useChat = (
 
                     release();
 
+                    if (!sent) {
+                        onUnsent?.();
+                    }
+
                     if (generationRef.current !== generation) {
                         return;
                     }
@@ -1955,7 +1964,10 @@ export const useChat = (
     // follows, so a turn another page began first refuses it `turn_moved`.
     // A send the harness never admits (refused, never reached, or stopped)
     // is offered on that turn's reply for the user to send, and not sent
-    // again on its own (offerNewQuestion).
+    // again on its own (offerNewQuestion). `held` is a turn Get Data started
+    // for this question (takeHeldTurn): the send adopts it in place of its
+    // own request, under its conversation id, when it opens the
+    // conversation with the same text, and cancels it otherwise.
     const send = useCallback(
         (
             message: string,
@@ -1963,6 +1975,7 @@ export const useChat = (
             seeds?: Seed[],
             asked?: number,
             source?: PromptSource,
+            held?: HeldTurn,
         ) => {
             const text = message.trim();
             const fromNewQuestion =
@@ -1970,7 +1983,25 @@ export const useChat = (
                 (card || seeds ? undefined : offeredQuestionTurn(messagesRef.current, text));
 
             if (!text || holdTurn({ text, card, seeds, fromNewQuestion, source })) {
+                void held?.cancel();
+
                 return;
+            }
+
+            const adopted =
+                held &&
+                held.message === text &&
+                sessionRef.current === null &&
+                recapRef.current === null &&
+                fromNewQuestion === undefined &&
+                !card
+                    ? held
+                    : null;
+
+            if (adopted) {
+                sessionRef.current = adopted.conversationId;
+            } else {
+                void held?.cancel();
             }
 
             const { turn, conversation } = startTurn(
@@ -2008,9 +2039,8 @@ export const useChat = (
             const run = (handlers: StreamHandlers, signal: AbortSignal, afterTurn?: number) =>
                 runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
                     ...(componentRef && { component_ref: componentRef }),
-                    ...(seeds && { seed_spec: seeds }),
+                    ...handoffExtras(seeds, source),
                     ...(afterTurn !== undefined && { after_turn: afterTurn }),
-                    ...(source && { prompt_source: source }),
                 });
 
             const generation = generationRef.current;
@@ -2022,6 +2052,10 @@ export const useChat = (
             stream(
                 turn,
                 (handlers, signal) => {
+                    if (adopted) {
+                        return adopted.run(handlers, signal);
+                    }
+
                     if (fromNewQuestion === undefined) {
                         return whileBusy((busy) => run(busy, signal), handlers, signal);
                     }
@@ -2048,6 +2082,8 @@ export const useChat = (
                 },
                 {
                     metered: true,
+                    // A held turn the queue never runs is cancelled.
+                    ...(adopted && { onUnsent: () => void adopted.cancel() }),
                     // Sent once and never admitted: offered, not sent again.
                     ...(fromNewQuestion !== undefined && {
                         onSettled: () => {

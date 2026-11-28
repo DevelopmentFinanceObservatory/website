@@ -428,3 +428,122 @@ test('a picked example names its source on its own turn request alone, queued or
     );
     page.unmount();
 });
+
+test('a send handed a held turn adopts it, posting no turn of its own, and one for another question posts its own and cancels it', async (t) => {
+    const { startHeldTurn, takeHeldTurn } = await import('../studioClient.ts');
+    const encoder = new TextEncoder();
+    const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const posts: string[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        posts.push(
+            url === '/api/studio/turn'
+                ? `turn ${JSON.parse(String(init?.body))['conversation_id']}`
+                : url,
+        );
+
+        if (url !== '/api/studio/turn') {
+            return new Response(null, { status: 204 });
+        }
+
+        return new Response(
+            new ReadableStream<Uint8Array>({
+                start(controller) {
+                    streams.push(controller);
+                },
+            }),
+            { headers: { 'x-dfo-turn-index': '1' } },
+        );
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    const write = (at: number, frame: object) =>
+        streams[at]?.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+    const take = (message: string) => {
+        const taken = takeHeldTurn(startHeldTurn({ message }).token);
+
+        assert.ok(taken && taken !== 'adopted');
+
+        return taken;
+    };
+
+    const held = take('Aid to Ghana');
+    const page = renderHook(() => useChat());
+
+    await page.settle();
+    write(0, { event: 'message.complete', seq: 1, text: 'Ghana received' });
+    await page.settle();
+    page.result().send('Aid to Ghana', undefined, undefined, undefined, undefined, held);
+    await page.settle();
+    write(0, { event: 'message.complete', seq: 2, text: 'Ghana received $1bn' });
+    write(0, { event: 'done', seq: 3, trace_id: 't' });
+    streams[0]?.close();
+    await page.settle(60);
+
+    assert.deepEqual(posts, [`turn ${held.conversationId}`]);
+    assert.equal(page.result().messages.at(-1)?.text, 'Ghana received $1bn');
+    page.unmount();
+
+    posts.length = 0;
+
+    const other = take('Aid to Ghana');
+    const second = renderHook(() => useChat());
+
+    second.result().send('Aid to Kenya', undefined, undefined, undefined, undefined, other);
+    await second.settle(60);
+
+    const heldPost = `turn ${other.conversationId}`;
+
+    assert.deepEqual(
+        posts
+            .map((post) => (post === heldPost ? 'held' : post.startsWith('turn ') ? 'own' : post))
+            .sort(),
+        ['/api/studio/cancel', 'held', 'own'],
+    );
+
+    for (const stream of streams.slice(1)) {
+        write(streams.indexOf(stream), { event: 'done', seq: 1, trace_id: 't' });
+        stream.close();
+    }
+
+    await second.settle(60);
+    second.unmount();
+});
+
+test('a held turn whose send New Chat overtakes before it runs is cancelled, and counted spent once', async (t) => {
+    const { startHeldTurn, takeHeldTurn } = await import('../studioClient.ts');
+    const routes: string[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+        routes.push(String(input));
+
+        return String(input) === '/api/studio/turn'
+            ? new Response(new ReadableStream(), { headers: { 'x-dfo-turn-index': '1' } })
+            : new Response(null, { status: 204 });
+    });
+    t.mock.method(console, 'warn', () => {});
+
+    let spent = 0;
+    const held = takeHeldTurn(
+        startHeldTurn({
+            message: 'Aid to Ghana',
+            onSpent: () => {
+                spent += 1;
+            },
+        }).token,
+    );
+
+    assert.ok(held && held !== 'adopted');
+
+    const page = renderHook(() => useChat());
+
+    page.result().send('Aid to Ghana', undefined, undefined, undefined, undefined, held);
+    page.result().reset();
+    await page.settle(60);
+
+    assert.equal(spent, 1);
+    assert.deepEqual(routes, ['/api/studio/turn', '/api/studio/cancel']);
+    page.unmount();
+});

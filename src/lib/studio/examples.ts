@@ -71,6 +71,13 @@ export const routedArrival = (
         : null;
 };
 
+/** The `/studio` query param that carries the token of a turn Get Data
+ *  started during the move's hold (startHeldTurn in studioClient.ts), for
+ *  the arrival to adopt (takeHeldTurn). The arrival's URL replacement drops
+ *  it, for an account's conversation URL or a guest's draft
+ *  (arrivalDraftHref). */
+export const HANDOFF_HOLD_PARAM = 'hold';
+
 /** The `/studio` query param (`example=1`) that marks a question moved or
  *  offered by the search API's router (`route_auto`, `route_offer`) as a
  *  Data search example's text, which `via=example` marks on a click. */

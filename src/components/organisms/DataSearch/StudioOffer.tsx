@@ -16,7 +16,8 @@ import Button from '@/components/atoms/Button/Button';
  *  meanwhile. A requires_analysis decline shows none: its own callout
  *  carries the card's actions (DataSearch's declineOffers). `inPlace` is
  *  the card that takes over the move's callout in its slot. The text swaps
- *  where it stands, and only the button fades in. `onData`, given for a
+ *  where it stands, and only the button fades in. `focusOnMount` moves
+ *  focus to its button as it mounts, when nothing else holds focus. `onData`, given for a
  *  move a guest with no free prompt left would make, adds "Search the data
  *  instead", which searches the question as data, as staying out of the
  *  move does. */
@@ -24,21 +25,24 @@ const StudioOffer = ({
     onStudio,
     onData,
     inPlace = false,
+    focusOnMount = false,
 }: {
     onStudio: () => void;
     onData?: () => void;
     inPlace?: boolean;
+    focusOnMount?: boolean;
 }) => {
     const button = useRef<HTMLElement>(null);
 
-    // The in-place card replaces the callout whose "Search the data instead"
-    // button had focus, so focus would fall to the body. It lands on this
-    // card's button instead.
+    // The in-place card replaces the callout whose "Stay on Get Data" button
+    // had focus, so focus would fall to the body. It lands on this card's
+    // button instead, also when the card moves as the stay's search ends.
+    // After Escape, focus stays where it was.
     useEffect(() => {
-        if (inPlace && (!document.activeElement || document.activeElement === document.body)) {
+        if (focusOnMount && (!document.activeElement || document.activeElement === document.body)) {
             button.current?.focus();
         }
-    }, [inPlace]);
+    }, [focusOnMount]);
 
     return (
         <div className={classNames(styles.callout, inPlace && styles.calloutInPlace)}>
