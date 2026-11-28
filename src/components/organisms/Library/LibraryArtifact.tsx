@@ -6,6 +6,7 @@ import ArtifactToc from './ArtifactToc';
 import EditArtifact from './EditArtifact';
 import EmbedFrame from './EmbedFrame';
 import styles from './LibraryArtifact.module.scss';
+import { LibraryChartData } from './LibraryChartData';
 import { KIND_ICONS, StatusBadge, TopicTags } from './parts';
 import ShareButton from './ShareButton';
 
@@ -24,6 +25,7 @@ import {
     type ReplacementChoice,
     textUpdated,
 } from '@/lib/library/artifact';
+import type { LibraryChartData as ChartData } from '@/lib/library/chartData';
 import { parseProse } from '@/lib/library/prose';
 import { dataThroughText } from '@/lib/studio/dataThrough';
 
@@ -75,11 +77,13 @@ const Prose = ({ text }: { text: string }) => (
  */
 const LibraryArtifact = ({
     artifact,
+    chartData,
     origin,
     accessed,
     replacements,
 }: {
     artifact: Artifact;
+    chartData: readonly ChartData[];
     origin: string;
     accessed: Date;
     replacements?: readonly ReplacementChoice[];
@@ -136,6 +140,9 @@ const LibraryArtifact = ({
                             title={artifact.title}
                         />
                     )}
+                    {chartData.map((data) => (
+                        <LibraryChartData key={data.id} data={data} />
+                    ))}
                 </div>
 
                 <aside className={styles.aside}>

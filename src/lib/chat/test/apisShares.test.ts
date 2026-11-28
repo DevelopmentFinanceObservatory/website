@@ -317,7 +317,8 @@ test('no share is null: a 404, and an id not in dfo-apis form without a request'
     assert.equal(calls.length, 1);
 });
 
-test('a slot card read passes If-None-Match on and gives the body, ETag and caching', async () => {
+test('a slot card read passes If-None-Match on and gives the body, frame, ETag and caching', async () => {
+    const frame = { spec_id: 'spec_aid', content_version: 'cv_1' };
     const { backend, calls } = backendOf((call) =>
         call.headers.get('if-none-match') === '"e1"'
             ? new Response(null, {
@@ -325,22 +326,32 @@ test('a slot card read passes If-None-Match on and gives the body, ETag and cach
                   headers: { etag: '"e1"', 'cache-control': 'no-cache' },
               })
             : Response.json(
-                  { component_id: 'cmp_a', freshness: 'current' },
+                  { component_id: 'cmp_a', frame, freshness: 'current' },
                   { headers: { etag: '"e1"', 'cache-control': 'no-cache' } },
               ),
     );
 
     assert.deepEqual(await readSlotCard(backend, 'Ab3dEf7h', 1), {
-        body: { component_id: 'cmp_a', freshness: 'current' },
+        body: { component_id: 'cmp_a', frame, freshness: 'current' },
+        frame,
         etag: '"e1"',
         cacheControl: 'no-cache',
     });
-    assert.deepEqual(await readSlotCard(backend, 'Ab3dEf7h', 1, '"e1"'), {
+    assert.deepEqual(await readSlotCard(backend, 'Ab3dEf7h', 1, { ifNoneMatch: '"e1"' }), {
         body: null,
+        frame: null,
         etag: '"e1"',
         cacheControl: 'no-cache',
     });
-    assert.equal(calls[0]?.url, `${APIS}/api/presentation/shares/Ab3dEf7h/slots/1`);
+    await readSlotCard(backend, 'Ab3dEf7h', 1, { frame });
+    assert.deepEqual(
+        calls.map(({ url }) => url),
+        [
+            `${APIS}/api/presentation/shares/Ab3dEf7h/slots/1`,
+            `${APIS}/api/presentation/shares/Ab3dEf7h/slots/1`,
+            `${APIS}/api/presentation/shares/Ab3dEf7h/slots/1?spec_id=spec_aid&content_version=cv_1`,
+        ],
+    );
     assert.equal(calls[0]?.headers.get('if-none-match'), null);
 });
 
@@ -354,11 +365,17 @@ test("a slot file read asks dfo-apis' slot data route for the format and bundle 
         'year,value\n',
     );
     await readSlotFile(backend, 'Ab3dEf7h', 2, { format: 'xlsx', bundle: 'false' });
+    await readSlotFile(backend, 'Ab3dEf7h', 2, {
+        format: 'csv',
+        bundle: 'false',
+        frame: { spec_id: 'spec_aid', content_version: 'cv_1' },
+    });
     assert.deepEqual(
         calls.map(({ url }) => url),
         [
             `${APIS}/api/presentation/shares/Ab3dEf7h/slots/2/data?format=csv&bundle=true`,
             `${APIS}/api/presentation/shares/Ab3dEf7h/slots/2/data?format=xlsx&bundle=false`,
+            `${APIS}/api/presentation/shares/Ab3dEf7h/slots/2/data?format=csv&bundle=false&spec_id=spec_aid&content_version=cv_1`,
         ],
     );
 });
