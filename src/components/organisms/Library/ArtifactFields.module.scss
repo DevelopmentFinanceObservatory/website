@@ -136,6 +136,16 @@ legend.label {
     color: var(--color-red);
 }
 
+// Where a field shows, under its input.
+.hint {
+    @include font-size(11px, 1.35);
+
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+}
+
 .rule {
     @include font-size(12px, 1.35);
 

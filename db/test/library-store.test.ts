@@ -70,6 +70,7 @@ test('library store', async (t) => {
             sources: [],
             steps: [],
             cardDates: [],
+            cardCites: [],
         };
     };
 
@@ -340,6 +341,7 @@ test('library store', async (t) => {
             content: 'Text.',
             sources: [{ name: 'OECD', url: null }],
             steps: [{ title: 'Step', detail: null }],
+            cardCites: [{ text: 'OECD (2026)', title: 'Creditor Reporting System' }],
         };
 
         await store.insertArtifact(published, 'admin');
@@ -366,13 +368,14 @@ test('library store', async (t) => {
         await database.runtimePool().query(
             `insert into library_artifact
                  (id, slug, publish_key, share_id, kind, mode, title, description,
-                  content_title, content, sources, steps, withdrawn_at)
+                  content_title, content, sources, steps, card_cites, withdrawn_at)
              values ('born-withdrawn', 'born-withdrawn', 'key-p', 'SharePPP', 'chart', 'live',
-                     'T', 'D', 'CT', 'C', '[{"name":"x","url":null}]', '[{"title":"s","detail":null}]', now())`,
+                     'T', 'D', 'CT', 'C', '[{"name":"x","url":null}]', '[{"title":"s","detail":null}]',
+                     '[{"text":"x","title":"y"}]', now())`,
         );
 
         const { rows } = await admin.query<Record<string, unknown>>(
-            `select id, title, description, content_title, content, sources, steps, slug,
+            `select id, title, description, content_title, content, sources, steps, card_cites, slug,
                     share_id, publish_key, share_write_token, published_by,
                     (select count(*)::int from library_artifact_topic where artifact_id = a.id) as topics
                from library_artifact a where id in ($1, 'born-withdrawn') order by id`,
@@ -390,9 +393,10 @@ test('library store', async (t) => {
                     row.content,
                     row.sources,
                     row.steps,
+                    row.card_cites,
                     row.topics,
                 ],
-                ['', '', null, null, [], [], 0],
+                ['', '', null, null, [], [], [], 0],
             );
         }
 
@@ -411,33 +415,45 @@ test('library store', async (t) => {
             ])
         ).rows[0].id;
 
-    await t.test("an artifact keeps its cards' data dates, withdrawn or not", async () => {
-        const cardDates = [
-            { dataThrough: '2024', lastRefreshed: '2026-11-01' },
-            { dataThrough: null, lastRefreshed: null },
-        ];
+    await t.test(
+        "an artifact keeps its cards' data dates, withdrawn or not, and their citations",
+        async () => {
+            const cardDates = [
+                { dataThrough: '2024', lastRefreshed: '2026-11-01' },
+                { dataThrough: null, lastRefreshed: null },
+            ];
 
-        await store.insertArtifact({ ...input('key-q', 'Dated chart'), cardDates }, 'admin');
+            const cardCites = [
+                { text: 'World Bank (2026)', title: 'World Development Indicators' },
+                null,
+            ];
 
-        const id = await idOf('dated-chart');
-        const read = await store.artifactBySlug('dated-chart');
+            await store.insertArtifact(
+                { ...input('key-q', 'Dated chart'), cardDates, cardCites },
+                'admin',
+            );
 
-        assert.equal(read?.status, 'published');
-        assert.ok(read?.status === 'published');
-        assert.deepEqual(read.artifact.cardDates, cardDates);
-        assert.equal(read.artifact.updatedAt, read.artifact.publishedAt);
+            const id = await idOf('dated-chart');
+            const read = await store.artifactBySlug('dated-chart');
 
-        await store.withdrawArtifact(id);
+            assert.equal(read?.status, 'published');
+            assert.ok(read?.status === 'published');
+            assert.deepEqual(read.artifact.cardDates, cardDates);
+            assert.deepEqual(read.artifact.cardCites, cardCites);
+            assert.equal(read.artifact.updatedAt, read.artifact.publishedAt);
 
-        const [row] = (
-            await admin.query<{ card_dates: unknown }>(
-                'select card_dates from library_artifact where id = $1',
-                [id],
-            )
-        ).rows;
+            await store.withdrawArtifact(id);
 
-        assert.deepEqual(row.card_dates, cardDates);
-    });
+            const [row] = (
+                await admin.query<{ card_dates: unknown }>(
+                    'select card_dates from library_artifact where id = $1',
+                    [id],
+                )
+            ).rows;
+
+            assert.deepEqual(row.card_dates, cardDates);
+        },
+    );
 
     await t.test('an edit dates the text only when the text changes', async () => {
         await store.insertArtifact(input('key-t', 'Edited chart'), 'admin');

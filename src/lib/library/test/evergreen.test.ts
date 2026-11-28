@@ -153,7 +153,7 @@ test('a sentence that states what the data shows now is refused at its field and
     const { calls, client } = standIn({
         verdicts: { 'Norway gives the most.': [0.96, 'ranking'] },
     });
-    const { response, document } = await refusalOf(await evergreenCheck(TEXT, SUBJECT, client));
+    const { response, document } = await refusalOf(await evergreenCheck(TEXT, SUBJECT, { client }));
     const start = CONTENT.indexOf('Norway');
 
     assert.equal(response.status, 400);
@@ -197,7 +197,7 @@ test('a sentence that states what the data shows now is refused at its field and
 
 test('a doubtful sentence passes with a warning, logged without its text', async () => {
     const { client } = standIn({ verdicts: { 'Norway gives the most.': [0.5, 'period'] } });
-    const checked = await evergreenCheck(TEXT, SUBJECT, client);
+    const checked = await evergreenCheck(TEXT, SUBJECT, { client });
     const start = CONTENT.indexOf('Norway');
 
     assert.deepEqual(checked, {
@@ -245,7 +245,7 @@ test(
 
             const { calls, client } = standIn(...args);
             const { response, document } = await refusalOf(
-                await evergreenCheck(ONE, SUBJECT, client),
+                await evergreenCheck(ONE, SUBJECT, { client }),
             );
 
             assert.equal(response.status, 503, name);
@@ -285,7 +285,7 @@ test('a check past its deadline answers 503 even when a request answers after it
     ).join('\n');
     const deaf = () => new Deaf(config);
     const { response, document } = await refusalOf(
-        await evergreenCheck({ content }, SUBJECT, deaf, 0),
+        await evergreenCheck({ content }, SUBJECT, { client: deaf, deadline: 0 }),
     );
 
     assert.equal(response.status, 503);
@@ -299,7 +299,7 @@ test('a request TypeSafe refuses for its content answers 502 with no retry', asy
 
         const { calls, client } = standIn({ status });
         const { response, document } = await refusalOf(
-            await evergreenCheck(ONE, { artifact: 'a1' }, client),
+            await evergreenCheck(ONE, { artifact: 'a1' }, { client }),
         );
 
         assert.equal(response.status, 502, String(status));
@@ -323,7 +323,7 @@ test('a text near the length limit is asked about one sentence per request, in p
     const content = lines.join('\n');
     const last = lines.at(-1) ?? '';
     const { calls, flight, client } = standIn({ verdicts: { [last]: [0.9, 'value'] } });
-    const { document } = await refusalOf(await evergreenCheck({ content }, SUBJECT, client));
+    const { document } = await refusalOf(await evergreenCheck({ content }, SUBJECT, { client }));
 
     assert.ok(content.length > LIMITS.content - 100 && content.length <= LIMITS.content);
     assert.equal(calls.length, candidatesOf({ content }).length);
@@ -348,10 +348,15 @@ test('without an API key the check answers 503 and logs the missing key', async 
     );
 });
 
-test('no text skips the call', async () => {
+test("no text and a snapshot's text skip the call", async () => {
     const { calls, client } = standIn({ status: 500 });
 
-    assert.deepEqual(await evergreenCheck({ content: null }, SUBJECT, client), { warnings: [] });
+    assert.deepEqual(await evergreenCheck({ content: null }, SUBJECT, { client }), {
+        warnings: [],
+    });
+    assert.deepEqual(await evergreenCheck(TEXT, SUBJECT, { client, mode: 'snapshot' }), {
+        warnings: [],
+    });
     assert.equal(calls.length, 0);
     assert.equal(logged.length, 0);
 });
@@ -364,14 +369,18 @@ test('a text of more than MAX_CANDIDATES sentences is refused at its field befor
 
     // The title is one sentence, so the content holds the rest.
     assert.deepEqual(
-        await evergreenCheck({ title, content: lines(MAX_CANDIDATES - 1) }, SUBJECT, within.client),
+        await evergreenCheck({ title, content: lines(MAX_CANDIDATES - 1) }, SUBJECT, {
+            client: within.client,
+        }),
         { warnings: [] },
     );
     assert.equal(within.calls.length, MAX_CANDIDATES);
 
     const over = standIn({});
     const { response, document } = await refusalOf(
-        await evergreenCheck({ title, content: lines(MAX_CANDIDATES) }, SUBJECT, over.client),
+        await evergreenCheck({ title, content: lines(MAX_CANDIDATES) }, SUBJECT, {
+            client: over.client,
+        }),
     );
 
     assert.equal(response.status, 400);
@@ -380,4 +389,65 @@ test('a text of more than MAX_CANDIDATES sentences is refused at its field befor
         ['evergreen_too_long', '/content', MAX_CANDIDATES],
     );
     assert.equal(over.calls.length, 0);
+});
+
+test('the year rules spare a title only when every data card is known to draw fixed periods', async () => {
+    const title = 'Health expenditure per capita in Kenya, Liberia, and Niger, 2023';
+    const never = new Promise<boolean>(() => {});
+    const cases: [
+        string,
+        ((signal: AbortSignal) => Promise<boolean>) | undefined,
+        string | null,
+    ][] = [
+        ['fixed', async () => true, null],
+        ['rolling', async () => false, 'not_evergreen'],
+        ['no lookup', undefined, 'not_evergreen'],
+        ['a failed read', () => Promise.reject(new Error('down')), 'not_evergreen'],
+        ['a read past its deadline', () => never, 'not_evergreen'],
+    ];
+
+    for (const [name, periods, code] of cases) {
+        logged = [];
+
+        const { client } = standIn({});
+        const checked = await evergreenCheck({ title }, SUBJECT, {
+            client,
+            deadline: 50,
+            periods,
+        });
+
+        if (code === null) {
+            assert.deepEqual(checked, { warnings: [] }, name);
+            continue;
+        }
+
+        const { document } = await refusalOf(checked);
+
+        assert.deepEqual([document.code, document.pointer], [code, '/title'], name);
+    }
+
+    assert.equal(JSON.parse(logged[0]).message, 'library_period_mode_unknown');
+    assert.equal(JSON.parse(logged[0]).cause, 'timeout');
+});
+
+test('fixed periods leave the per-sentence judgment in place, and a text naming no year skips the lookup', async () => {
+    const title = 'Health expenditure per capita in Kenya, 2023';
+    const { client } = standIn({ verdicts: { [title]: [0.95, 'value'] } });
+    const { document } = await refusalOf(
+        await evergreenCheck({ title }, SUBJECT, { client, periods: async () => true }),
+    );
+
+    assert.deepEqual([document.code, document.pointer], ['not_evergreen', '/title']);
+
+    let asked = 0;
+
+    await evergreenCheck(TEXT, SUBJECT, {
+        client: standIn({}).client,
+        periods: async () => {
+            asked += 1;
+
+            return true;
+        },
+    });
+    assert.equal(asked, 0);
 });

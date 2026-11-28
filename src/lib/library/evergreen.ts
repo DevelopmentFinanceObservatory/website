@@ -9,12 +9,15 @@ import {
     type TypeSafeClientConfig,
 } from '@typesafe-ai/sdk';
 
+import { SharesError } from '@/lib/chat/apisShares';
 import { problem } from '@/lib/proxy/problem';
+import { BackendError } from '@/lib/studio/liveBackend';
 
 import {
     CHECK_DEADLINE_MS,
     type Candidate,
     EVERGREEN_FIX,
+    type EvergreenDecision,
     type EvergreenRefusal,
     type EvergreenText,
     type EvergreenWarning,
@@ -24,8 +27,10 @@ import {
     candidatesOf,
     decide,
     evergreenRequest,
+    namesYear,
     overBudget,
 } from './evergreenRule';
+import { PERIOD_DEADLINE_MS } from './periods';
 
 export { MODEL, T_HIGH, T_KIND, T_LOW } from './evergreenRule';
 
@@ -151,7 +156,7 @@ const unavailable = (error: unknown, subject: EvergreenSubject): Response => {
           });
 };
 
-// Asks about one sentence, and decides it.
+// Asks about one sentence, and answers what TypeSafe said.
 const judge = async (client: TypeSafeClient, candidate: Candidate, signal: AbortSignal) => {
     const { model, answers } = await client.systemOne(
         { ...evergreenRequest(candidate), model: MODEL },
@@ -162,13 +167,53 @@ const judge = async (client: TypeSafeClient, candidate: Candidate, signal: Abort
         throw new CheckFailure('model');
     }
 
-    const decision = decide(candidate, answers);
+    return answers;
+};
 
-    if (decision.outcome === 'unanswered') {
-        throw new CheckFailure('unanswered');
+/** Whether every data card the artifact shows draws fixed periods
+ *  (./periods.ts), asked only when a title or heading names a year. It ends
+ *  when `signal` does. */
+export type PeriodLookup = (signal: AbortSignal) => Promise<boolean>;
+
+// What the lookup came to, false when it failed or ran past its deadline,
+// since a card whose periods are not known to be fixed may roll. The failure
+// is logged by its machine-readable code alone.
+const periodsFixed = async (
+    lookup: PeriodLookup,
+    deadline: number,
+    subject: EvergreenSubject,
+): Promise<boolean> => {
+    const signal = AbortSignal.timeout(deadline);
+    const expired = new Promise<never>((_, reject) =>
+        signal.addEventListener('abort', () => reject(new CheckFailure('timeout')), {
+            once: true,
+        }),
+    );
+
+    try {
+        return await Promise.race([lookup(signal), expired]);
+    } catch (error) {
+        const cause =
+            error instanceof CheckFailure
+                ? error.reason
+                : error instanceof BackendError || error instanceof SharesError
+                  ? error.code
+                  : 'client';
+
+        warn('library_period_mode_unknown', { ...subject, cause });
+
+        return false;
     }
+};
 
-    return decision;
+/** How `evergreenCheck` runs: the artifact's `mode`, the TypeSafe client,
+ *  the whole check's deadline in milliseconds, and the live artifact's
+ *  `periods` lookup. */
+export type CheckOptions = {
+    mode?: 'live' | 'snapshot';
+    client?: () => TypeSafeClient;
+    deadline?: number;
+    periods?: PeriodLookup;
 };
 
 // Runs `work` on every candidate, `REQUEST_CONCURRENCY` at a time, in order.
@@ -232,28 +277,38 @@ const notices = (warnings: readonly EvergreenWarning[]): EvergreenNotice[] =>
  * Checks `text` against the evergreen rule, one request per sentence, up to
  * `REQUEST_CONCURRENCY` at once. When nothing is refused the result is the
  * warnings, one per sentence `decide` passed with a warning, and none when
- * there is no text to check. Otherwise
- * it is the refusal to send. That is 400 `evergreen_too_long` at the field
- * that takes the text past `MAX_CANDIDATES` sentences, with `limit`, before
- * any call. It is 400 `not_evergreen` with one entry in `errors` per refused
- * sentence, `pointer` naming the first one's field and the `warnings`, or
- * 503 `evergreen_check_unavailable` with Retry-After when TypeSafe cannot
- * answer (no key, a timeout, a 5xx, a 4xx other than 400 or 413, an
- * unanswered question or another model), or 502 `evergreen_check_refused`
- * when TypeSafe refuses the text with a 400 or a 413. The whole check
- * stops after `deadline`. `subject` names the artifact in the log lines. `library_evergreen_not_evergreen` logs each refused sentence
- * and `library_evergreen_doubt` each warned one, with its field, offsets,
- * kind and all five Nouls, and without its text.
+ * there is no text to check or the artifact is a snapshot, whose text is not
+ * checked. Otherwise it is the refusal to send. That is 400
+ * `evergreen_too_long` at the field that takes the text past
+ * `MAX_CANDIDATES` sentences, with `limit`, before any call. It is 400
+ * `not_evergreen` with one entry in `errors` per refused sentence, `pointer`
+ * naming the first one's field and the `warnings`, or 503
+ * `evergreen_check_unavailable` with Retry-After when TypeSafe cannot answer
+ * (no key, a timeout, a 5xx, a 4xx other than 400 or 413, an unanswered
+ * question or another model), or 502 `evergreen_check_refused` when TypeSafe
+ * refuses the text with a 400 or a 413. The whole check stops after
+ * `deadline`. When a title or heading names a year and `periods` says every
+ * data card is fixed, the year rules spare it and the answers decide it
+ * (`decide`). The lookup runs beside the requests, for at most
+ * `PERIOD_DEADLINE_MS`, and a failure counts as rolling. `subject` names the
+ * artifact in the log lines. `library_evergreen_not_evergreen` logs each
+ * refused sentence and `library_evergreen_doubt` each warned one, with its
+ * field, offsets, kind and all five Nouls, and without its text.
  */
 export const evergreenCheck = async (
     text: EvergreenText,
     subject: EvergreenSubject,
-    client: () => TypeSafeClient = sharedClient,
-    deadline: number = CHECK_DEADLINE_MS,
+    {
+        mode = 'live',
+        client = sharedClient,
+        deadline = CHECK_DEADLINE_MS,
+        periods,
+    }: CheckOptions = {},
 ): Promise<EvergreenCheck> => {
     const candidates = candidatesOf(text);
 
-    if (candidates.length === 0) {
+    // A snapshot's data stays as published, so its text cannot go stale.
+    if (mode === 'snapshot' || candidates.length === 0) {
         return { warnings: [] };
     }
 
@@ -276,16 +331,28 @@ export const evergreenCheck = async (
         };
     }
 
-    let decisions: Awaited<ReturnType<typeof judge>>[];
+    const fixedPeriods =
+        periods && candidates.some(namesYear)
+            ? periodsFixed(periods, Math.min(PERIOD_DEADLINE_MS, deadline), subject)
+            : Promise.resolve(false);
+    let decisions: EvergreenDecision[];
 
     try {
         const typesafe = client();
-
-        decisions = await everyCandidate(
+        const answers = await everyCandidate(
             candidates,
             (candidate, signal) => judge(typesafe, candidate, signal),
             deadline,
         );
+        const context = { fixedPeriods: await fixedPeriods };
+
+        decisions = candidates.map((candidate, at) =>
+            decide(candidate, answers[at], undefined, context),
+        );
+
+        if (decisions.some((decision) => decision.outcome === 'unanswered')) {
+            throw new CheckFailure('unanswered');
+        }
     } catch (error) {
         return { refusal: unavailable(error, subject) };
     }

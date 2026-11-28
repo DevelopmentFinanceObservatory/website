@@ -16,7 +16,7 @@ import type {
     WithdrawnArtifact,
 } from './artifact.ts';
 import { type ArtifactText, freeSlug, slugOf } from './publish.ts';
-import type { LibraryCardDates } from '../../../db/schema.ts';
+import type { LibraryCardCite, LibraryCardDates } from '../../../db/schema.ts';
 
 import { db } from '@/lib/db';
 import { uuid } from '@/lib/uuid';
@@ -66,6 +66,7 @@ const ARTIFACT_COLUMNS = {
     sources: libraryArtifact.sources,
     steps: libraryArtifact.steps,
     cardDates: libraryArtifact.cardDates,
+    cardCites: libraryArtifact.cardCites,
     publishedAt: libraryArtifact.publishedAt,
     updatedAt: libraryArtifact.updatedAt,
     revision: libraryArtifact.revision,
@@ -92,6 +93,7 @@ const toArtifact = (row: ArtifactRow, topics: string[]): LibraryArtifact => ({
     steps: row.steps,
     topics,
     cardDates: row.cardDates,
+    cardCites: row.cardCites,
     publishedAt: row.publishedAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     revision: row.revision,
@@ -389,6 +391,7 @@ export type ArtifactInsert = ArtifactText & {
     sources: LibrarySource[];
     steps: LibraryStep[];
     cardDates: LibraryCardDates[];
+    cardCites: LibraryCardCite[];
 };
 
 type Inserted =
@@ -554,11 +557,15 @@ export const updateArtifact = (
         }),
     );
 
-/** The text fields and revision of artifact `id` while it is on show, else
- *  null. The edit route checks the fields an edit changes against them. */
+/** The text fields, revision, mode and share of artifact `id` while it is
+ *  on show, else null. The edit route checks the fields an edit changes
+ *  against them, and a live artifact's cards through its share. */
 export const artifactText = async (
     id: string,
-): Promise<(Omit<ArtifactText, 'topics'> & { revision: number }) | null> => {
+): Promise<
+    | (Omit<ArtifactText, 'topics'> & { revision: number; mode: ArtifactMode; shareId: string })
+    | null
+> => {
     const [row] = await db
         .select({
             title: libraryArtifact.title,
@@ -566,11 +573,14 @@ export const artifactText = async (
             contentTitle: libraryArtifact.contentTitle,
             content: libraryArtifact.content,
             revision: libraryArtifact.revision,
+            mode: libraryArtifact.mode,
+            shareId: libraryArtifact.shareId,
         })
         .from(libraryArtifact)
         .where(and(eq(libraryArtifact.id, id), live));
 
-    return row ?? null;
+    // The check constraint on `mode` holds it to ArtifactMode.
+    return row ? { ...row, mode: row.mode as ArtifactMode } : null;
 };
 
 /** An artifact's slug and the share the Library made for it, with that

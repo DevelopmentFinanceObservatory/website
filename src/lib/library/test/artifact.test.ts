@@ -27,6 +27,7 @@ const artifact = (slug: string, partial: Partial<LibraryArtifact> = {}): Library
     steps: [],
     topics: [],
     cardDates: [],
+    cardCites: [],
     publishedAt: '2026-12-12T10:00:00.000Z',
     updatedAt: '2026-12-12T10:00:00.000Z',
     revision: 0,
@@ -139,17 +140,34 @@ test('a list param keeps names with commas, each once', () => {
     assert.equal(serializeList([]), null);
 });
 
-test('the citation names the year, type, URL, access date and sources', () => {
+test("the citation gives one line per card's own citation, merged when alike, from the page", () => {
+    const wdi = { text: 'World Bank (2026)', title: 'World Development Indicators' };
+    const crs = { text: 'OECD (2026)', title: 'Creditor Reporting System' };
+    const accessed = new Date('2027-01-27T09:00:00Z');
+    const from =
+        'Retrieved 27 January 2027 from https://developmentfinance.org/library/eth-health-oda.';
+    const cite = (cardCites: LibraryArtifact['cardCites']) =>
+        citation({ ...ethiopia, cardCites }, 'https://developmentfinance.org', accessed).split(
+            '\n',
+        );
+
+    assert.deepEqual(cite([wdi, crs, wdi]), [
+        `World Bank (2026). "World Development Indicators" [dataset]. ${from}`,
+        `OECD (2026). "Creditor Reporting System" [dataset]. ${from}`,
+    ]);
+
+    // A card without a citation, and an artifact that holds none, name the
+    // artifact's sources and title.
+    const fallback = `OECD CRS, World Bank IDS, 2024. "Health ODA to Ethiopia, 2016–2024". ${from}`;
+
+    assert.deepEqual(cite([wdi, null, null]), [
+        `World Bank (2026). "World Development Indicators" [dataset]. ${from}`,
+        fallback,
+    ]);
+    assert.deepEqual(cite([]), [fallback]);
     assert.equal(
-        citation(ethiopia, 'https://developmentfinance.org', new Date('2027-01-27T09:00:00Z')),
-        'Development Finance Observatory (2026). Health ODA to Ethiopia, 2016–2024 [Chart]. ' +
-            'DFO Library. https://developmentfinance.org/library/eth-health-oda ' +
-            '(Accessed: 27 January 2027). Data: OECD CRS, World Bank IDS, 2024.',
-    );
-    assert.match(citation(climate, '', new Date()), /\)\.$/);
-    assert.match(
-        citation({ ...ethiopia, kind: 'key_number' }, '', new Date()),
-        / \[Key number\]\. /,
+        citation(climate, '', accessed),
+        `"climate-finance". Retrieved 27 January 2027 from /library/climate-finance.`,
     );
 });
 

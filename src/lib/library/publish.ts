@@ -405,7 +405,8 @@ const clip = (text: string, max: number): string =>
 /**
  * What the Library copies from the cards an artifact of `kind` shows, which
  * is every source they credit, each once by name, and, for an artifact of
- * one card, the steps it was made by. A canvas has no steps of its own.
+ * one card, the steps it was made by, each with its verb and object as
+ * the card's info panel names them and their joined `title`. A canvas has no steps of its own.
  * Each value is cut to the Library's limits, and a source page that is
  * neither https nor a source page of this site is left out.
  */
@@ -438,6 +439,8 @@ export const publishedFacts = (
         steps: (made?.steps ?? [])
             .map((step) => ({
                 title: clip(step.verb ? `${step.verb} ${step.object}` : step.object, LIMITS.line),
+                verb: step.verb ? clip(step.verb, LIMITS.line) || null : null,
+                object: clip(step.object, LIMITS.line),
                 detail: step.detail ? clip(step.detail, LIMITS.line * 4) || null : null,
             }))
             .filter((step) => step.title)

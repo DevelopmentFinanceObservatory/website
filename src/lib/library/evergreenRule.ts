@@ -598,10 +598,20 @@ export type RefusalRule = 'year_range' | 'data_year' | 'nouls';
 /** The thresholds `decide` applies, which the fit sweeps. */
 export type Thresholds = { stale: number; kind: number };
 
+/** What else `decide` knows of the artifact. `fixedPeriods` says every data
+ *  card it shows draws periods that a data update leaves as they are. */
+export type DecideContext = { fixedPeriods?: boolean };
+
+/** Whether `candidate` trips a year rule (`namesYearRange`, `namesDataYear`),
+ *  the one case where `decide` reads `DecideContext.fixedPeriods`. */
+export const namesYear = (candidate: Candidate): boolean =>
+    namesYearRange(candidate) || namesDataYear(candidate);
+
 /**
  * What the answers to `evergreenRequest(candidate)` call for. A title or
  * section heading that names a year range (`namesYearRange`) or the year the
- * data covers (`namesDataYear`) is refused. Any
+ * data covers (`namesDataYear`) is refused, unless `context.fixedPeriods`
+ * holds, when the answers decide it as they decide any sentence. Any
  * other sentence is refused when its refresh Noul is at least
  * `thresholds.stale` and its highest kind Noul at least `thresholds.kind`.
  * It passes with a warning when the refresh Noul is that high but no kind
@@ -613,6 +623,7 @@ export const decide = (
     candidate: Candidate,
     answers: Record<string, unknown>,
     thresholds: Thresholds = { stale: T_HIGH, kind: T_KIND },
+    context: DecideContext = {},
 ): EvergreenDecision => {
     const score = scoreOf(answers);
 
@@ -627,7 +638,9 @@ export const decide = (
         quote: candidate.text,
     };
 
-    if (namesYearRange(candidate)) {
+    const yearRules = !context.fixedPeriods;
+
+    if (yearRules && namesYearRange(candidate)) {
         return {
             outcome: 'refused',
             refusal: { ...at, kind: 'recency', reason: YEAR_RANGE_REASON },
@@ -636,7 +649,7 @@ export const decide = (
         };
     }
 
-    if (namesDataYear(candidate)) {
+    if (yearRules && namesDataYear(candidate)) {
         return {
             outcome: 'refused',
             refusal: { ...at, kind: 'recency', reason: DATA_YEAR_REASON },

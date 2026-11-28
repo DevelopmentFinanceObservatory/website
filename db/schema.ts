@@ -317,14 +317,26 @@ export const webmailDomain = pgTable('webmail_domain', {
 export type LibrarySource = { name: string; url: string | null };
 
 /** One step of how a Library artifact was built: what was done, and the
- *  detail of it when there is more to say. */
-export type LibraryStep = { title: string; detail: string | null };
+ *  detail of it when there is more to say. `verb` and `object` are the two
+ *  halves of `title` as the card's info panel shows them ("Get", "Gross
+ *  national income"); a row that lacks them shows `title` alone. */
+export type LibraryStep = {
+    title: string;
+    detail: string | null;
+    verb?: string | null;
+    object?: string;
+};
 
 /** How recent one published card's data was when it was published, as the
  *  platform wrote it: `dataThrough` is the latest period the data holds
  *  ("2024", "2025-Q2"), and `lastRefreshed` the day its source was last
  *  read. Either is null when the card did not say. */
 export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: string | null };
+
+/** How one published card's data source asks to be cited, from the card's
+ *  description (`cite.text`, the source's own attribution, and `cite.title`,
+ *  the dataset's title). Null for a card whose description gave none. */
+export type LibraryCardCite = { text: string; title: string } | null;
 
 /**
  * The Library: Studio and search outputs that DFO staff publish under a
@@ -336,18 +348,20 @@ export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: stri
  * sends with every try of one publish, so a retry finds the artifact the
  * first try made. `content_title` and `content` are the optional text
  * section the publisher writes. `sources` and `steps` are copied from the
- * published cards' descriptions, and `card_dates` holds each published
- * card's data dates in card order, so the Library's list, filters and pages
+ * published cards' descriptions, `card_dates` holds each published
+ * card's data dates in card order, and `card_cites` each card's citation
+ * (`LibraryCardCite`) in the same order, so the Library's list, filters and pages
  * read this table alone. `published_by` is null once the publisher's account
  * is deleted, and the artifact stays.
  *
  * A withdrawn artifact keeps its row, so its slug stays taken and its URL
  * shows a withdrawn notice. `withdrawn_at` marks it, and the share is taken
  * down in dfo-apis. The `library_artifact_erase_withdrawn` trigger
- * (migration 0033) erases the publisher's text from any row written with
- * `withdrawn_at` set: `title` and `description` become the empty string,
- * `content_title` and `content` null, `sources` and `steps` empty, and the
- * topic links are deleted. The slug, kind, mode, dates, `published_by`,
+ * (migrations 0033 and 0035) erases the publisher's text from any row
+ * written with `withdrawn_at` set: `title` and `description` become the
+ * empty string, `content_title` and `content` null, `sources`, `steps` and
+ * `card_cites` empty, and the topic links are deleted. The slug, kind,
+ * mode, dates, `published_by`,
  * `share_id`, `publish_key`, `card_dates` and `replaced_by` stay. An
  * artifact is withdrawn only once its share is gone from dfo-apis or
  * recorded in `share_cleanup`, and the same write clears
@@ -387,6 +401,10 @@ export const libraryArtifact = pgTable(
             .default(sql`'[]'::jsonb`),
         cardDates: jsonb('card_dates')
             .$type<LibraryCardDates[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
+        cardCites: jsonb('card_cites')
+            .$type<LibraryCardCite[]>()
             .notNull()
             .default(sql`'[]'::jsonb`),
         publishedBy: text('published_by').references(() => user.id, { onDelete: 'set null' }),

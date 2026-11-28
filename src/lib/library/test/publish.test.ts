@@ -166,8 +166,8 @@ test('a card gives its sources and steps, and a canvas each source once and no s
     assert.deepEqual(publishedFacts('chart', [one]), {
         sources: [{ name: 'A', url: '/data/sources/oecd/crs' }],
         steps: [
-            { title: 'Get thing 0', detail: null },
-            { title: 'thing 1', detail: null },
+            { title: 'Get thing 0', verb: 'Get', object: 'thing 0', detail: null },
+            { title: 'thing 1', verb: null, object: 'thing 1', detail: null },
         ],
     });
     assert.deepEqual(publishedFacts('canvas', [one]).steps, []);

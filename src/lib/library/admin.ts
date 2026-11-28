@@ -6,23 +6,29 @@ import { after } from 'next/server';
 import { refuseCrossOrigin } from '@/lib/apiKeys/sameOrigin';
 import { adminFrom } from '@/lib/apiKeys/settings';
 import { getUser } from '@/lib/auth/session';
-import { SharesError } from '@/lib/chat/apisShares';
+import { readShare, SharesError } from '@/lib/chat/apisShares';
 import { savedCanvasWidgetsOf } from '@/lib/chat/canvas';
 import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
 import { pruneForShare } from '@/lib/chat/sharePrune';
 import { sharesRefusal } from '@/lib/chat/shareRefusal';
-import { keepShareForCleanup, makeTokenShare, takeDownTokenShare } from '@/lib/chat/shareStore';
+import {
+    keepShareForCleanup,
+    makeTokenShare,
+    sharesBackendFor,
+    takeDownTokenShare,
+} from '@/lib/chat/shareStore';
 import { buildStudioShare, readShareJson } from '@/lib/chat/studioShare';
 import { anonymousWho } from '@/lib/events/internalEng';
 import { track } from '@/lib/events/track';
 import { problem, requestInvalidProblem, unreachableProblem } from '@/lib/proxy/problem';
 import { cardDataDates } from '@/lib/studio/dataThrough';
-import { panelViewOf } from '@/lib/studio/infoPanel';
+import { cardDescription, panelViewOf } from '@/lib/studio/infoPanel';
 
-import { artifactPath } from './artifact';
+import { artifactPath, type LibraryCardCite } from './artifact';
 import { libraryEnabled } from './enabled';
-import { evergreenCheck } from './evergreen';
+import { evergreenCheck, type PeriodLookup } from './evergreen';
 import { changedText } from './evergreenRule';
+import { allPeriodsFixed, type CardRefs } from './periods';
 import { type LibraryView, libraryViewOf } from './switch';
 import {
     publishedFacts,
@@ -217,6 +223,26 @@ const dropShare = async (
     await settleShare(settling(headers), share, adminId);
 };
 
+// The lookup of a live artifact's period modes, through the site's own
+// dfo-apis client: the component reads of the cards `refs` names.
+const periodLookup =
+    (headers: Headers, refs: (signal: AbortSignal) => Promise<CardRefs>): PeriodLookup =>
+    async (signal) => {
+        const shares = sharesBackendFor(headers);
+
+        return allPeriodsFixed(
+            { apisBase: shares.base, fetch: shares.fetch, signal },
+            await refs(signal),
+        );
+    };
+
+// How a card's source asks to be cited, from its description, or null.
+const citeOf = (info: Parameters<typeof cardDescription>[0] | undefined): LibraryCardCite => {
+    const cite = info && cardDescription(info)?.cite;
+
+    return cite ? { text: cite.text, title: cite.title } : null;
+};
+
 const WITHDRAWAL_RETRY = {
     unsettled:
         'Its chart could not be taken down or queued for removal, so it is still published. Try again.',
@@ -233,12 +259,14 @@ const WITHDRAWAL_RETRY = {
  * included. Without one, the slug is made from the title, with a number
  * after it when that is taken.
  *
- * Before the share is made, the text is held to the evergreen rule
- * (./evergreen.ts). A 400 `not_evergreen` names each sentence that states
- * what the data shows now, a 503 `evergreen_check_unavailable` says the
- * check could not run, and a 502 `evergreen_check_refused` says TypeSafe
- * refused the request. A 201 or 200 after the check carries `warnings`, the
- * sentences that passed with a doubt (`EvergreenNotice`).
+ * Before the share is made, a live artifact's text is held to the evergreen
+ * rule (./evergreen.ts), with the year rules spared when every data card's
+ * periods are fixed (./periods.ts). A snapshot's text is not checked. A 400
+ * `not_evergreen` names each sentence that states what the data shows now, a
+ * 503 `evergreen_check_unavailable` says the check could not run, and a 502
+ * `evergreen_check_refused` says TypeSafe refused the request. A 201 or 200
+ * after the check carries `warnings`, the sentences that passed with a doubt
+ * (`EvergreenNotice`).
  *
  * The share is made here, exactly as `POST /api/share` makes one
  * (src/lib/chat/studioShare.ts) and with its refusals, under a write token
@@ -310,7 +338,17 @@ export const publish = async (request: Request): Promise<Response> => {
         );
     }
 
-    const checked = await evergreenCheck(text, { publishKey });
+    const mode = shareRequest.mode;
+    const checked = await evergreenCheck(
+        text,
+        { publishKey },
+        {
+            mode,
+            periods: periodLookup(request.headers, async () =>
+                shown.flatMap((card) => (card.kind === 'text' ? [] : [card.ref ?? null])),
+            ),
+        },
+    );
 
     if ('refusal' in checked) {
         return checked.refusal;
@@ -336,7 +374,6 @@ export const publish = async (request: Request): Promise<Response> => {
         throw error;
     }
 
-    const mode = share.latest ? 'live' : 'snapshot';
     const today = new Date().toISOString().slice(0, 10);
     const views = shown.flatMap((card) =>
         card.info ? [panelViewOf(card.info, { retrievedOn: today })] : [],
@@ -357,6 +394,9 @@ export const publish = async (request: Request): Promise<Response> => {
                 ...publishedFacts(kind, views),
                 cardDates: shown.flatMap((card) =>
                     card.kind === 'text' ? [] : [cardDataDates(card.info)],
+                ),
+                cardCites: shown.flatMap((card) =>
+                    card.kind === 'text' ? [] : [citeOf(card.info)],
                 ),
             },
             admin.id,
@@ -423,7 +463,9 @@ const artifactChanged = (): Response =>
  * revision. So the text the evergreen rule passed is the text that
  * goes live, however long the check takes. The text fields the edit changes
  * are held to the evergreen rule first, outside any transaction, with the
- * publish's 400, 502 and 503 answers. `warnings` lists the sentences that
+ * publish's 400, 502 and 503 answers, as the publish holds them: a
+ * snapshot's text is not checked, and a live artifact's cards are read from
+ * its share for their period modes. `warnings` lists the sentences that
  * passed with a doubt (./evergreen.ts, `EvergreenNotice`).
  */
 export const edit = async (request: Request, id: string): Promise<Response> => {
@@ -450,7 +492,27 @@ export const edit = async (request: Request, id: string): Promise<Response> => {
         return artifactChanged();
     }
 
-    const checked = await evergreenCheck(changedText(stored, text), { artifact: id });
+    const checked = await evergreenCheck(
+        changedText(stored, text),
+        { artifact: id },
+        {
+            mode: stored.mode,
+            periods: periodLookup(request.headers, async (signal) => {
+                const share = await readShare(
+                    { ...sharesBackendFor(request.headers), signal },
+                    stored.shareId,
+                );
+
+                if (!share) {
+                    throw new SharesError('not_found', { status: 404 });
+                }
+
+                return share.slots.map(({ card }) =>
+                    card ? { component_id: card.component_id, revision: card.revision } : null,
+                );
+            }),
+        },
+    );
 
     if ('refusal' in checked) {
         return checked.refusal;

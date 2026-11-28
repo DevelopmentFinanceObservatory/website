@@ -197,6 +197,14 @@ export const evergreenOutcome = (
     };
 };
 
+// Where each field shows, under its input.
+const HINTS: Record<EvergreenField, string> = {
+    title: 'Heads the page, the Library list and link previews.',
+    description: 'Shown under the title, in the Library list and in link previews.',
+    contentTitle: 'Heads the text section below the artifact. Left empty, it reads “Key Findings”.',
+    content: 'The text section below the artifact, under the content title.',
+};
+
 const RULE =
     'Say what the data measures and how to read it. Leave the numbers to the chart, which refreshes after publication.';
 const FIELD_ORDER: readonly EvergreenField[] = ['title', 'description', 'contentTitle', 'content'];
@@ -307,11 +315,17 @@ const ArtifactFields = ({
         const invalid = errors.length > 0 || limits.length > 0;
         const shown = invalid || warnings.length > 0;
         const id = `${ids}-${field}-refused`;
+        const hintId = `${ids}-${field}-hint`;
 
         return {
+            hint: (
+                <p className={styles.hint} id={hintId}>
+                    {HINTS[field]}
+                </p>
+            ),
             input: {
                 ...(invalid ? { 'aria-invalid': true } : {}),
-                ...(shown ? { 'aria-describedby': id } : {}),
+                'aria-describedby': shown ? `${hintId} ${id}` : hintId,
             },
             list:
                 refusals && shown ? (
@@ -357,6 +371,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ title: event.target.value })}
                     />
                 </label>
+                {title.hint}
                 {title.list}
             </div>
             {address}
@@ -374,6 +389,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ description: event.target.value })}
                     />
                 </label>
+                {description.hint}
                 {description.list}
             </div>
             <fieldset className={styles.field}>
@@ -425,6 +441,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ contentTitle: event.target.value || null })}
                     />
                 </label>
+                {contentTitle.hint}
                 {contentTitle.list}
             </div>
             <div className={styles.group}>
@@ -440,6 +457,7 @@ const ArtifactFields = ({
                         onChange={(event) => set({ content: event.target.value || null })}
                     />
                 </label>
+                {content.hint}
                 {content.list}
             </div>
         </>
