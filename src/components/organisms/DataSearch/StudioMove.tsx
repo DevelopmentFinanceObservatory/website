@@ -42,8 +42,10 @@ const subscribeVisibility = (listener: () => void) => {
  *  MOVE_HOLD_MS (under reduced motion it sits full and its opacity ramps
  *  instead). `onStart` runs once, when the fill first plays, and
  *  `onElapsed` once it ends.
- *  The pointer over the callout, focus inside it or a hidden tab pauses it
- *  in place, and it resumes with the time it had left. Once it has ended,
+ *  Focus inside the callout or a hidden tab pauses it in place, and it
+ *  resumes with the time it had left. The pointer leaves it running, since
+ *  the callout spans the page and appears under a resting pointer, where a
+ *  hover would hold the move with no sign of why. Once it has ended,
  *  nothing pauses or replays it. */
 const StudioMove = ({
     armed,
@@ -57,7 +59,6 @@ const StudioMove = ({
     onStay: () => void;
 }) => {
     const [entered, setEntered] = useState(false);
-    const [pointerIn, setPointerIn] = useState(false);
     const [focusIn, setFocusIn] = useState(false);
     const hidden = useSyncExternalStore(
         subscribeVisibility,
@@ -67,12 +68,12 @@ const StudioMove = ({
     const reducedMotion = usePrefersReducedMotion();
     // Set once the clock ends, which leaves the line full.
     const [elapsed, setElapsed] = useState(false);
-    const held = (pointerIn || focusIn) && !elapsed;
+    const held = focusIn && !elapsed;
     const root = useRef<HTMLDivElement>(null);
     const fill = useRef<HTMLDivElement>(null);
     const clock = useRef<Animation | null>(null);
     // onStart runs once per mount, on the fill's first frame of play, so a
-    // clock that arms paused (a hidden tab, the pointer on the callout)
+    // clock that arms paused (a hidden tab, focus on the callout)
     // waits for its release. Strict Mode's second run of the clock's effect
     // cancels the first clock, whose `ready` then rejects.
     const started = useRef(false);
@@ -173,8 +174,6 @@ const StudioMove = ({
             className={classNames(styles.callout, styles.studioMove)}
             data-held={held || undefined}
             ref={root}
-            onPointerEnter={() => setPointerIn(true)}
-            onPointerLeave={() => setPointerIn(false)}
             onFocus={() => setFocusIn(true)}
             onBlur={(event: FocusEvent<HTMLDivElement>) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
