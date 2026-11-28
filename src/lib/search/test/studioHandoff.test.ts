@@ -166,6 +166,10 @@ test('studioHref carries the question, and the token when there is one', () => {
         studioHref('Why is aid falling?', null, { via: 'route_auto', traceId: 't-1' }),
         '/studio?q=Why+is+aid+falling%3F&via=route_auto&trace=t-1',
     );
+    assert.equal(
+        studioHref('Why is aid falling?', 'abc-123', { via: 'route_auto', holdToken: 'h-1' }),
+        '/studio?q=Why+is+aid+falling%3F&seed=abc-123&via=route_auto&hold=h-1',
+    );
 });
 
 // A routed question keeps its example source beside the route's `via`; a

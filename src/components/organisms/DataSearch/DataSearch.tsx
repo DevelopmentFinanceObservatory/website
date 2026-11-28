@@ -103,8 +103,15 @@ import {
 import { hasDefiniteSpec, isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
-import { guestOutOfPrompts } from '@/lib/studio/promptAllowance';
+import { handoffPromptSource } from '@/lib/studio/examples';
+import {
+    addGuestPrompts,
+    GUEST_PROMPTS_KEY,
+    guestOutOfPrompts,
+} from '@/lib/studio/promptAllowance';
 import { writeSeeds } from '@/lib/studio/seedStore';
+import { handoffExtras, type HeldTurnStart, startHeldTurn } from '@/lib/studio/studioClient';
+import { uuid } from '@/lib/uuid';
 
 /** The early, pre-response heading's own tokens, read-only (see
  *  lib/search/sentencePlan.ts's earlySentenceTokens): the heading segment
@@ -164,10 +171,19 @@ const subscribeStorage = (listener: () => void) => {
     return () => window.removeEventListener('storage', listener);
 };
 
-// How long the automatic move holds its callout before Studio opens: the
-// time to read it, and the window in which the reader can stay. It starts
-// again in full when the pointer or focus leaves the callout.
-const MOVE_PAUSE_MS = 600;
+// Adds the prompt of a turn the move started (startHeldTurn) that Studio
+// did not adopt to the guest count, since the proxy spent it and no
+// transcript counts it. The `storage` event lets this tab's readers
+// (subscribeStorage) see it.
+const countSpentHold = () => {
+    addGuestPrompts(() => window.localStorage, 1);
+    window.dispatchEvent(new StorageEvent('storage', { key: GUEST_PROMPTS_KEY }));
+};
+
+// What the loading view's live region says as the automatic move's hold
+// starts, and when the reader stays out of the move.
+const HOLD_NOTE = 'Taking this to Studio. Press Escape to stay.';
+const STAY_NOTE = 'Staying on Get Data. Searching the data.';
 
 // Whether the address bar keeps the Studio router off for `query`.
 const routingOffHere = (query: string): boolean =>
@@ -358,13 +374,18 @@ const DataSearch = ({
         link: VersionLink;
         result: Exclude<VersionLinkResult, { kind: 'opened' }>;
     } | null>(null);
-    // The route of a move the reader stayed out of during its pause (Escape
+    // The route of a move the reader stayed out of during its hold (Escape
     // or the callout's button), kept as an offer while the page searches the
     // same question as data. Only that search shows it. The out-of-prompts
     // card's data action keeps none, since its Studio card would lead a
     // guest with no free prompt left to Studio's refusal. Every other
-    // search, Start New and an opened share or link drop it.
-    const [stayed, setStayed] = useState<{ query: string; route: RunRoute } | null>(null);
+    // search, Start New and an opened share or link drop it. `trigger` is
+    // how the reader stayed.
+    const [stayed, setStayed] = useState<{
+        query: string;
+        route: RunRoute;
+        trigger: RouteStayTrigger;
+    } | null>(null);
     const leaveShare = useCallback(() => {
         openedShareRef.current = null;
         setOpenedShare(null);
@@ -422,12 +443,15 @@ const DataSearch = ({
         () => guestPromptsSeen({ guest, storage: () => window.localStorage }),
         () => 0,
     );
+    const guestOut = guestOutOfPrompts({ guest, used: guestUsed });
     const move = routeMove({
         route,
         kind: answer?.kind ?? (response ? 'resolution' : null),
-        guestOutOfPrompts: guestOutOfPrompts({ guest, used: guestUsed }),
+        guestOutOfPrompts: guestOut,
     });
-    const stayedRoute = stayed?.query === query ? stayed.route : null;
+    // A guest the stay's spent prompt left with none gets no stayed card,
+    // which would lead to Studio's wall.
+    const stayedRoute = stayed?.query === query && !guestOut ? stayed.route : null;
     // The route a click on the Studio card hands over: the run's own offer,
     // or the move the reader stayed out of.
     const offerRoute = move === 'offer' || move === 'out_of_prompts' ? route : stayedRoute;
@@ -447,15 +471,14 @@ const DataSearch = ({
     // offer card, the route's automatic move) opens Studio on the question,
     // with a seed for each definite part, stored in this tab's
     // sessionStorage. When the seeds cannot be stored, Studio opens on the
-    // question alone. `studioHandoff` stores the seeds and makes Studio's
-    // URL, and its `go` records the handoff and opens Studio as a new
-    // history entry with the route-to-studio transition type, so Studio
-    // slides in over the page. The automatic move opens it once the entry
-    // it leaves holds the question's `routing=off` URL (the move's effect
-    // below). A routed handoff carries the trace id of the route's early
-    // frame, or of the answer when the frame carried none.
-    const studioHandoff = useCallback(
-        (trigger: HandoffTrigger, routed: RunRoute | null = null) => {
+    // question alone. `handoffTarget` stores the seeds and makes Studio's
+    // URL, with the question and members Studio's arrival sends (`message`,
+    // `extras`). `holdToken` is the token of the turn the automatic move
+    // starts during its hold (HANDOFF_HOLD_PARAM), which carries the same
+    // question and members. A routed handoff carries the trace id of the
+    // route's early frame, or of the answer when the frame carried none.
+    const handoffTarget = useCallback(
+        (trigger: HandoffTrigger, routed: RunRoute | null = null, holdToken?: string) => {
             const edited = handoffEdited({
                 editCount: edits.length,
                 fromShare: openedShare !== null,
@@ -466,50 +489,68 @@ const DataSearch = ({
                 sentence: sentenceHeadingText(response),
             });
             const seeds = handoffSeeds(parts);
-            const token = writeSeeds(() => window.sessionStorage, seeds);
+            const seedToken = writeSeeds(() => window.sessionStorage, seeds);
             const ids = searchIds();
-            const { searchId } = ids;
             const traceId = routed?.traceId ?? ids.traceId;
             const fromExample = handoffFromExample({ fromExample: searchIsExample(), edited });
-            const href = studioHref(question, token, {
+            const href = studioHref(question, seedToken, {
                 via: handoffVia({ trigger, fromExample }),
                 traceId,
                 fromExample,
+                holdToken,
             });
 
             return {
                 href,
-                go: () => {
-                    track(
-                        'search.studio_handoff',
-                        searchEventProps({
-                            query,
-                            edited,
-                            kind: answerKind,
-                            reason: answerReason,
-                            parts,
-                            seeds: token ? seeds.length : 0,
-                            trigger,
-                            ...(routed && { probability: routed.probability }),
-                            run: { ...(searchId && { searchId }), traceId },
-                        }),
-                    );
-                    router.push(href, { transitionTypes: [ROUTE_TO_STUDIO] });
-                },
+                edited,
+                seedToken,
+                seedCount: seedToken ? seeds.length : 0,
+                searchId: ids.searchId,
+                traceId,
+                message: question.trim(),
+                // What Studio's arrival reads from `href` and the seeds
+                // stored under `seedToken`.
+                extras: handoffExtras(
+                    seedToken ? seeds : null,
+                    handoffPromptSource(new URL(href, window.location.origin).searchParams),
+                ),
             };
         },
-        [
-            router,
-            query,
-            edits.length,
-            openedShare,
-            response,
-            parts,
-            answerKind,
-            answerReason,
-            searchIds,
-            searchIsExample,
-        ],
+        [query, edits.length, openedShare, response, parts, searchIds, searchIsExample],
+    );
+    // A handoff to `target`: its `go` records the handoff and opens Studio
+    // as a new history entry with the route-to-studio transition type, so
+    // Studio slides in over the page. The automatic move opens it once the
+    // entry it leaves holds the question's `routing=off` URL (the move's
+    // effect below), at the target its hold started with.
+    const studioHandoff = useCallback(
+        (
+            trigger: HandoffTrigger,
+            routed: RunRoute | null = null,
+            target: ReturnType<typeof handoffTarget> = handoffTarget(trigger, routed),
+        ) => ({
+            href: target.href,
+            go: () => {
+                const { searchId, traceId } = target;
+
+                track(
+                    'search.studio_handoff',
+                    searchEventProps({
+                        query,
+                        edited: target.edited,
+                        kind: answerKind,
+                        reason: answerReason,
+                        parts,
+                        seeds: target.seedCount,
+                        trigger,
+                        ...(routed && { probability: routed.probability }),
+                        run: { ...(searchId && { searchId }), traceId },
+                    }),
+                );
+                router.push(target.href, { transitionTypes: [ROUTE_TO_STUDIO] });
+            },
+        }),
+        [handoffTarget, router, query, parts, answerKind, answerReason],
     );
     const openStudio = useCallback(
         (trigger: HandoffTrigger, routed: RunRoute | null = null) =>
@@ -543,33 +584,104 @@ const DataSearch = ({
     // Back lands on the data search of the question, run once without the
     // router, as source `move_back`. The rewrite keeps the run's `q`, so the
     // permalink effect reads no arrival in it. The second, once
-    // `searchParams` shows the rewrite, holds the callout for MOVE_PAUSE_MS
-    // and then opens Studio. By then the App Router has stored its own
-    // state for the rewritten entry, which Back needs to restore it in
-    // place, and the rewrite's commit cannot take the move's transition
-    // type. The pause also fetches Studio's page in full, which loads its
-    // client code. A navigation whose page code is still loading commits
-    // twice, the router state and then the page, and the first commit takes
-    // the transition type, so the page would swap with no slide.
+    // `searchParams` shows the rewrite, arms the hold (`moveArmed`). By then
+    // the App Router has stored its own state for the rewritten entry, which
+    // Back needs to restore it in place, and the rewrite's commit cannot
+    // take the move's transition type. The hold also fetches Studio's page
+    // in full, which loads its client code. A navigation whose page code is
+    // still loading commits twice, the router state and then the page, and
+    // the first commit takes the transition type, so the page would swap
+    // with no slide.
     //
-    // During the pause, Escape or the callout's "Search the data instead"
-    // keeps the reader here (stayOnData). The pause holds while the pointer
-    // is over the callout or focus is inside it, and starts again in full
-    // on leaving. A plain click on a link to another page (clickLeavesPage)
-    // stops the move with no search and no event, so the link's navigation
-    // wins. A new search ends the pause too, before any navigation.
+    // StudioMove runs the hold's clock, MOVE_HOLD_MS from the end of its
+    // entrance, and pauses it while the pointer is over the callout, focus
+    // is inside it or the tab is hidden. The clock's start runs
+    // onHoldStart, and its end onHoldEnd, which opens Studio. During the
+    // hold, Escape or the callout's "Stay on Get Data" keeps the reader here
+    // (stayOnData). A plain click on a link to another page
+    // (clickLeavesPage) stops the move with no search and no event, so the
+    // link's navigation wins. A new search ends the hold too, before any
+    // navigation.
+    //
+    // Studio's turn (startHeldTurn) starts as soon as the run's route makes
+    // the move `auto`, before the callout's entrance and whether or not the
+    // tab shows, so Studio opens with the answer under way: the turn
+    // Studio's arrival would send, under a token the move's URL carries
+    // (HANDOFF_HOLD_PARAM). It starts once per search, with the handoff
+    // target the move opens Studio at, so Studio's seeds are the turn's.
+    // Its prompt is spent as it starts. A paused hold leaves the turn
+    // running, and the move hands it over with all it has streamed. Every
+    // other end of the move cancels it so it stops working: a stay, a link
+    // click, a new search, the page unmounting. The registry cancels it too
+    // when Studio does not take it and when the page goes. Studio counts a
+    // turn it adopts as its own prompt, and the registry's `onSpent` adds
+    // any other to a guest's count (countSpentHold).
     const movedSearchRef = useRef<string | null>(null);
-    // Whether the pointer or focus is on the callout, and the pause's own
-    // handlers for the callout while the pause runs.
-    const moveHeldRef = useRef(false);
-    const movePauseRef = useRef<{ restart: () => void; stay: () => void } | null>(null);
-    const holdMove = (held: boolean) => {
-        moveHeldRef.current = held;
-        movePauseRef.current?.restart();
+    // The hold's handlers for the callout, set while the move's effect runs.
+    const moveHoldRef = useRef<{ go: () => void; stay: () => void } | null>(null);
+    // The turn the move started, until the move hands it over or ends
+    // without it.
+    const heldRef = useRef<HeldTurnStart | null>(null);
+    const cancelHeld = (options?: { keepalive?: boolean }) => {
+        void heldRef.current?.cancel(options);
+        heldRef.current = null;
     };
-    const readyMove = useEffectEvent(() => studioHandoff('auto', route));
+    // The handoff target of the last search's held turn, set once per
+    // search when the turn starts, so every run of the move's effect opens
+    // the same Studio URL.
+    const holdTargetRef = useRef<{
+        searchId: string;
+        target: ReturnType<typeof handoffTarget>;
+    } | null>(null);
+    const moveArmed =
+        move === 'auto' && phase === 'done' && pageSettled && routingOffFor(searchParams, query);
+    const moving = move === 'auto';
+    // What the loading view's live region says about the move. Each note
+    // mounts a new node, so a note the same as the last is announced again.
+    const [moveNote, setMoveNote] = useState({ text: '', id: 0 });
+    const noteMove = (text: string) => setMoveNote(({ id }) => ({ text, id: id + 1 }));
+    // The search whose hold has started. onHoldStart runs once per search,
+    // from the fill's first play.
+    const holdStartedRef = useRef<string | null>(null);
+    const onHoldStart = () => {
+        const { searchId } = searchIds();
+
+        if (!searchId || holdStartedRef.current === searchId) {
+            return;
+        }
+
+        holdStartedRef.current = searchId;
+        noteMove(HOLD_NOTE);
+    };
+    // Starts Studio's turn for search `searchId`, once, unless the reader
+    // has stayed or the move has gone.
+    const startHold = useEffectEvent((searchId: string) => {
+        if (holdTargetRef.current?.searchId === searchId || movedSearchRef.current === searchId) {
+            return;
+        }
+
+        const token = uuid();
+        const target = handoffTarget('auto', route, token);
+
+        holdTargetRef.current = { searchId, target };
+        heldRef.current = startHeldTurn({
+            token,
+            message: target.message,
+            extras: target.extras,
+            seedToken: target.seedToken,
+            ...(guest && { onSpent: countSpentHold }),
+        });
+    });
+    const onHoldEnd = () => moveHoldRef.current?.go();
+    const readyMove = useEffectEvent((searchId: string) => {
+        const held = holdTargetRef.current;
+
+        return held?.searchId === searchId
+            ? studioHandoff('auto', route, held.target)
+            : studioHandoff('auto', route);
+    });
     // Keeps the reader on the data search of a question the router sent to
-    // Studio: the move's pause, or the out-of-prompts card's data action.
+    // Studio: the move's hold, or the out-of-prompts card's data action.
     // It records `search.route_stay`, turns the move's callout into the
     // Studio card (the out-of-prompts card leaves none), writes the
     // question's `routing=off` URL with no `via`, and searches the question
@@ -583,7 +695,7 @@ const DataSearch = ({
         track('search.route_stay', { traceId, trigger });
 
         if (route && trigger !== 'out_of_prompts') {
-            setStayed({ query, route: { ...route, traceId } });
+            setStayed({ query, route: { ...route, traceId }, trigger });
         }
 
         // Drops the move's `via=move_back` too, so a reload of the data
@@ -600,8 +712,34 @@ const DataSearch = ({
         }
 
         movedSearchRef.current = searchId;
+        cancelHeld();
+        noteMove(STAY_NOTE);
         stayOnData(trigger);
     });
+    // An unmount or a new search ends the move, which cancels the turn it
+    // started. Strict Mode's rehearsal of the unmount mounts the page again
+    // at once, which clears the timer.
+    const holdEndRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    useEffect(() => {
+        if (!moving) {
+            return;
+        }
+
+        clearTimeout(holdEndRef.current);
+
+        return () => {
+            holdEndRef.current = setTimeout(() => cancelHeld(), 0);
+        };
+    }, [moving]);
+    // The move's turn starts once the route makes the move `auto`, for a
+    // search with an id.
+    useEffect(() => {
+        const { searchId } = searchIds();
+
+        if (moving && searchId) {
+            startHold(searchId);
+        }
+    }, [moving, phase, searchIds]);
     useEffect(() => {
         if (move !== 'auto' || phase !== 'done' || !pageSettled) {
             return;
@@ -619,24 +757,20 @@ const DataSearch = ({
             return;
         }
 
-        const handoff = readyMove();
+        const handoff = readyMove(searchId);
 
         router.prefetch(handoff.href, { kind: PrefetchKind.FULL });
 
-        let timer = 0;
-        // Clears the timer, and starts it again in full unless the callout
-        // holds the pause or the move has stopped.
-        const restart = () => {
-            window.clearTimeout(timer);
-
-            if (moveHeldRef.current || movedSearchRef.current === searchId) {
+        // Opens Studio, with its turn, unless the move has stopped.
+        const go = () => {
+            if (movedSearchRef.current === searchId) {
                 return;
             }
 
-            timer = window.setTimeout(() => {
-                movedSearchRef.current = searchId;
-                handoff.go();
-            }, MOVE_PAUSE_MS);
+            movedSearchRef.current = searchId;
+            heldRef.current?.moved();
+            heldRef.current = null;
+            handoff.go();
         };
         const onKey = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
@@ -655,19 +789,19 @@ const DataSearch = ({
                     window.location.href,
                 )
             ) {
-                window.clearTimeout(timer);
                 movedSearchRef.current = searchId;
+                // The link's navigation may unload the page before the
+                // cancel answers.
+                cancelHeld({ keepalive: true });
             }
         };
 
-        restart();
-        movePauseRef.current = { restart, stay: () => stay(searchId, 'button') };
+        moveHoldRef.current = { go, stay: () => stay(searchId, 'button') };
         document.addEventListener('keydown', onKey, true);
         document.addEventListener('click', onClick, true);
 
         return () => {
-            window.clearTimeout(timer);
-            movePauseRef.current = null;
+            moveHoldRef.current = null;
             document.removeEventListener('keydown', onKey, true);
             document.removeEventListener('click', onClick, true);
         };
@@ -1237,6 +1371,12 @@ const DataSearch = ({
 
             {(phase === 'loading' || phase === 'done') && (
                 <div className={styles.result}>
+                    {/* Mounted before the move's hold starts and kept through
+                        a stay's search, since a live region that mounts
+                        with its text is announced unreliably. */}
+                    <p className={styles.moveNote} aria-live="polite">
+                        <span key={moveNote.id}>{moveNote.text}</span>
+                    </p>
                     {phase === 'done' && move !== 'auto' && (
                         <div className={styles.resultToolbar}>
                             {/* Only while the view is still the link's own: an
@@ -1301,7 +1441,11 @@ const DataSearch = ({
                                 <p className={styles.eyebrow}>Your Query</p>
                                 <h1 className={styles.query}>{query}</h1>
                                 {stayedRoute && studioOffered && (
-                                    <StudioOffer onStudio={studioClick} inPlace />
+                                    <StudioOffer
+                                        onStudio={studioClick}
+                                        inPlace
+                                        focusOnMount={stayed?.trigger === 'button'}
+                                    />
                                 )}
                                 <SearchAnswer
                                     answer={answer}
@@ -1400,13 +1544,20 @@ const DataSearch = ({
                                     Studio card there. */}
                                 {move === 'auto' ? (
                                     <StudioMove
-                                        onStay={() => movePauseRef.current?.stay()}
-                                        onHold={() => holdMove(true)}
-                                        onRelease={() => holdMove(false)}
+                                        armed={moveArmed}
+                                        onStart={onHoldStart}
+                                        onElapsed={onHoldEnd}
+                                        onStay={() => moveHoldRef.current?.stay()}
                                     />
                                 ) : (
                                     stayedRoute &&
-                                    studioOffered && <StudioOffer onStudio={studioClick} inPlace />
+                                    studioOffered && (
+                                        <StudioOffer
+                                            onStudio={studioClick}
+                                            inPlace
+                                            focusOnMount={stayed?.trigger === 'button'}
+                                        />
+                                    )
                                 )}
 
                                 {move === 'auto' ? null : !response ? (

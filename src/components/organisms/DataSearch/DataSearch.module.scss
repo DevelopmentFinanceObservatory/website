@@ -2317,6 +2317,51 @@ span.slotMarked {
     }
 }
 
+// The hold's clock (StudioMove): a 2 px line rem(12) under the title, across
+// the callout, which fills from the left as the hold runs. It turns the
+// callout's text colour while the hold is paused.
+.moveTrack {
+    align-self: stretch;
+    height: 2px;
+    margin-top: rem(-18);
+    overflow: hidden;
+    background-color: color-mix(in sRGB, var(--color-media-bg) 25%, transparent);
+}
+
+.moveFill {
+    height: 100%;
+    background-color: var(--color-yellow-hover);
+    transform-origin: left;
+    transition: background-color 150ms ease;
+    scale: 0 1;
+}
+
+.studioMove[data-held] .moveFill {
+    background-color: var(--color-media-bg);
+}
+
+// The loading view's live region for the move (DataSearch's moveNote),
+// heard and not seen.
+.moveNote {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip-path: inset(50%);
+}
+
+// Below the desktop breakpoint the reason line goes, so the title, the line
+// and the button fit the first viewport under the heading.
+@include breakpoint(not-desktop) {
+    .studioMove .calloutText {
+        display: none;
+    }
+}
+
 // The Studio card that takes over StudioMove's slot when the reader stays:
 // the text swaps in place, and only the button fades in.
 .calloutInPlace {
@@ -2328,9 +2373,15 @@ span.slotMarked {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    // StudioMove fades in without the rise.
+    // StudioMove fades in without the rise, and its line sits full while
+    // its opacity ramps.
     .studioMove {
         animation-name: token-fade-in;
+    }
+
+    .moveFill {
+        opacity: 0.2;
+        scale: none;
     }
 }
 

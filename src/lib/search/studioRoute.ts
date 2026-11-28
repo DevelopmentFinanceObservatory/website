@@ -42,8 +42,8 @@ export function studioRoute(value: unknown): StudioRoute | null {
 export type RouteMove = 'auto' | 'offer' | 'out_of_prompts';
 
 /** What kept the reader on the data search of a question the router sent
- *  to Studio: the move's "Search the data instead" button, Escape during
- *  the move's pause, or the out-of-prompts card's data action. */
+ *  to Studio: the move's "Stay on Get Data" button, Escape during the
+ *  move's hold, or the out-of-prompts card's data action. */
 export type RouteStayTrigger = 'button' | 'escape' | 'out_of_prompts';
 
 /**

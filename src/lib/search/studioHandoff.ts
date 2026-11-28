@@ -8,6 +8,7 @@
 
 import {
     HANDOFF_EXAMPLE_PARAM,
+    HANDOFF_HOLD_PARAM,
     HANDOFF_TRACE_PARAM,
     HANDOFF_VIA_PARAM,
 } from '../studio/examples.ts';
@@ -160,8 +161,10 @@ export const ROUTE_TO_DATA = 'route-to-data';
 
 /** Studio's URL for a handoff: the question, the token the seeds are
  *  stored under when there are any, how the question came (`via`), the
- *  search's trace id for a routed one, and `example=1` for a routed
- *  question that is a Data search example's text (handoffFromExample). */
+ *  search's trace id for a routed one, `example=1` for a routed question
+ *  that is a Data search example's text (handoffFromExample), and the token
+ *  of the turn the automatic move started for Studio to adopt
+ *  (`holdToken`, HANDOFF_HOLD_PARAM). */
 export function studioHref(
     question: string,
     token: string | null,
@@ -169,7 +172,13 @@ export function studioHref(
         via = null,
         traceId = null,
         fromExample = false,
-    }: { via?: HandoffVia | null; traceId?: string | null; fromExample?: boolean } = {},
+        holdToken = null,
+    }: {
+        via?: HandoffVia | null;
+        traceId?: string | null;
+        fromExample?: boolean;
+        holdToken?: string | null;
+    } = {},
 ): string {
     const params = new URLSearchParams({ q: question });
 
@@ -189,6 +198,10 @@ export function studioHref(
         if (fromExample) {
             params.set(HANDOFF_EXAMPLE_PARAM, '1');
         }
+    }
+
+    if (holdToken) {
+        params.set(HANDOFF_HOLD_PARAM, holdToken);
     }
 
     return `/studio?${params}`;
