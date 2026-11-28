@@ -156,7 +156,7 @@ export const REPLACEMENT_HOPS = 5;
 
 /**
  * The artifact withdrawn artifact `id`'s address links to: down the chain of
- * `replaced_by`, the first one still published, within `REPLACEMENT_HOPS`
+ * `replaced_by`, the first published one, within `REPLACEMENT_HOPS`
  * steps. Null when none is named or none in reach is published. Read on each
  * request, so a replacement withdrawn later hands on to its own.
  */
@@ -500,7 +500,7 @@ const insertOnce = (input: ArtifactInsert, publishedBy: string): Promise<Inserte
 
 /**
  * Changes an artifact's text and topics, while the row is at `revision`, and
- * moves it to the next one. Its slug stays, since the URL is what readers
+ * moves it to the next one, which it answers with. Its slug stays, since the URL is what readers
  * cite. `updated_at` moves to the database's clock only when a text field
  * changes, so the page's "Text updated" means the text changed; a change of
  * topics alone leaves it. Answers `artifact_changed` when another edit moved
@@ -511,7 +511,9 @@ export const updateArtifact = (
     id: string,
     { topics, ...fields }: ArtifactText,
     revision: number,
-): Promise<{ slug: string } | 'not_found' | 'artifact_changed' | 'unknown_topic'> =>
+): Promise<
+    { slug: string; revision: number } | 'not_found' | 'artifact_changed' | 'unknown_topic'
+> =>
     orUnknownTopic(
         db.transaction(async (tx) => {
             const [row] = await tx
@@ -533,7 +535,7 @@ export const updateArtifact = (
                 .where(
                     and(eq(libraryArtifact.id, id), live, eq(libraryArtifact.revision, revision)),
                 )
-                .returning({ slug: libraryArtifact.slug });
+                .returning({ slug: libraryArtifact.slug, revision: libraryArtifact.revision });
 
             if (!row) {
                 const [held] = await tx
@@ -630,7 +632,7 @@ export const isArtifactWithdrawn = async (id: string): Promise<boolean> =>
  *
  * Answers the slug and `replacement`, or `not_found` for an id no artifact
  * has and for one whose token is gone, a withdrawn one included. A
- * withdrawn row that still holds a token keeps its first withdrawal date.
+ * withdrawn row that holds a token keeps its first withdrawal date.
  */
 export const withdrawArtifact = (
     id: string,

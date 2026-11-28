@@ -354,14 +354,14 @@ export type LibraryCardDates = { dataThrough: string | null; lastRefreshed: stri
  * `share_write_token`.
  *
  * `revision` counts the edits to the text and topics. An edit names the
- * revision it was made from and applies only while the row is still at it,
+ * revision it was made from and applies only while the row is at that revision,
  * so an edit from an older read cannot overwrite a newer one.
  *
  * `replaced_by` names the artifact a withdrawn one's address points readers
  * to. Only a withdrawn row holds one, it names another row, and it is null
  * once the replacement's row is deleted. The replacement was published when the
  * pointer was written, and the page follows the chain of replacements to
- * the first one still published.
+ * the first published one.
  */
 export const libraryArtifact = pgTable(
     'library_artifact',

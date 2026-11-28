@@ -66,7 +66,7 @@ export type WithdrawnArtifact = {
     /** The artifact it names as its replacement, for an admin's picker. */
     replacedBy: string | null;
     /** The first published artifact down its chain of replacements, or null
-     *  when none was named or none in the chain is still published. */
+     *  when none was named or none in the chain is published. */
     replacement: Replacement | null;
 };
 
