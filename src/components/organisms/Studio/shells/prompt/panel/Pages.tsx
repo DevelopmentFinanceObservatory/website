@@ -196,7 +196,7 @@ export const PlanPage = ({ page }: { page: PlanPageView }) => {
     );
 };
 
-/** A source the canvas's cards use: its licence and freshness, the cards
+/** A source the canvas's cards use: its coverage, licence and freshness, the cards
  *  that use it, its page on this site and its citation. */
 export const SourcePage = ({ source }: { source: SourceRow }) => {
     const { outcome, run } = useConfirm();
@@ -209,6 +209,7 @@ export const SourcePage = ({ source }: { source: SourceRow }) => {
         });
 
     const rows = [
+        { key: 'through', label: 'Data through', value: source.coverage },
         { key: 'licence', label: 'Licence', value: source.licence },
         { key: 'refreshed', label: 'Last refreshed', value: source.lastRefreshed },
     ];

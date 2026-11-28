@@ -537,19 +537,44 @@ test('a described card gives the caveats, sources and dataset; a card without a 
     assert.equal(sourcePageOf(single, 'dcid:IMF')?.licence, 'Open');
 
     // Cards of one source in either canvas order give the same row. A shared
-    // coverage shows, differing ones leave it off, and refresh dates span.
+    // coverage shows, differing ones leave the row's line off and give the
+    // source's page their span, and refresh dates span.
     const imf = (id: string, dataThrough: string, lastRefreshed: string | null) =>
         chart(id, 1, { sourceId: 'dcid:IMF', sourceName: 'IMF', dataThrough, lastRefreshed });
-    const cases: [string, ReturnType<typeof imf>[], [string | null, string | null]][] = [
+    const cases: [string, ReturnType<typeof imf>[], (string | null)[]][] = [
         [
             'agree',
             [imf('x', '2024', '2026-08-29'), imf('y', '2024', null)],
-            ['data through 2024', '2026-08-29'],
+            ['data through 2024', '2024', '2026-08-29'],
         ],
         [
             'differ',
-            [imf('x', '2021', '2026-11-20'), imf('y', '2024', '2026-08-29')],
-            [null, '2026-08-29 to 2026-11-20'],
+            [imf('x', '2024', '2026-11-20'), imf('y', '2021', '2026-08-29')],
+            [null, '2021 to 2024, by card', '2026-08-29 to 2026-11-20'],
+        ],
+        [
+            'projections on one',
+            [
+                imf('x', '2024', null),
+                chart('y', 1, {
+                    sourceId: 'dcid:IMF',
+                    sourceName: 'IMF',
+                    dataThrough: '2024',
+                    held: [
+                        {
+                            status: 'projected',
+                            start: '2023',
+                            end: '2024',
+                            served: true,
+                            source_name: null,
+                            share: null,
+                            basis: null,
+                            against: null,
+                        },
+                    ],
+                }),
+            ],
+            [null, '2024, with projections on some cards', null],
         ],
     ];
 
@@ -560,7 +585,7 @@ test('a described card gives the caveats, sources and dataset; a card without a 
         ].map((canvasIds) => {
             const [row] = overviewOf(input({ widgets, canvasIds })).sources;
 
-            return [row?.through, row?.lastRefreshed];
+            return [row?.through, row?.coverage, row?.lastRefreshed];
         });
 
         assert.deepEqual(rows, [expected, expected], name);

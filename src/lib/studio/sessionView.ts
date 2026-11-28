@@ -129,6 +129,8 @@ export type SourceRow = {
     through: string | null;
     /** The line under the row's name (`sourceMeta`). */
     meta: string | null;
+    /** The `Data through` value on the source's page (`pageCoverage`). */
+    coverage: string | null;
     lastRefreshed: string | null;
     citations: string[];
     cards: { id: string; title: string }[];
@@ -454,14 +456,18 @@ const cardRows = (input: SessionInput, turns: Turn[]) => {
     };
 };
 
-/** How far a card's data runs, as a source row's meta line: `data through
- *  <year>`, with projections when a served year is projected. The
- *  freshness's `data_through` is the last year the card was served, so a
- *  card drawn to end before its data does (its window's `end_year` before
- *  `last_year`, the last year its data holds) reads `last_year`. A card
- *  changed by a card change with no window to read shows no year, since its
- *  served year may stop short of its data. */
-export const throughOf = (info: CardInfo, card?: Widget & CardHistory): string | null => {
+/** The last year a card's data holds, and whether a served year is projected. */
+type Coverage = { year: string; projected: boolean };
+
+const coverageText = ({ year, projected }: Coverage): string =>
+    projected ? `${year}, with projections` : year;
+
+/** How far a card's data runs. The freshness's `data_through` is the last
+ *  year the card was served, so a card drawn to end before its data does
+ *  (its window's `end_year` before `last_year`, the last year its data
+ *  holds) reads `last_year`. A card changed by a card change with no window
+ *  to read gives no year, since its served year may stop short of its data. */
+const coverageOf = (info: CardInfo, card?: Widget & CardHistory): Coverage | null => {
     const window = card && card.kind !== 'text' ? card.cardChanges?.window : undefined;
     const served = info.dataThrough?.match(/\d{4}/)?.[0];
     const year = window
@@ -478,7 +484,15 @@ export const throughOf = (info: CardInfo, card?: Widget & CardHistory): string |
         (entry) => entry.served && entry.status === 'projected',
     );
 
-    return projected ? `data through ${year}, with projections` : `data through ${year}`;
+    return { year, projected };
+};
+
+/** A card's coverage as a source row's meta line: `data through <year>`,
+ *  with projections when a served year is projected. */
+export const throughOf = (info: CardInfo, card?: Widget & CardHistory): string | null => {
+    const coverage = coverageOf(info, card);
+
+    return coverage ? `data through ${coverageText(coverage)}` : null;
 };
 
 const citationOf = (info: CardInfo): string | null =>
@@ -548,6 +562,23 @@ const dateSpan = (dates: readonly string[]): string | null => {
     return earliest === latest ? earliest : `${earliest} to ${latest}`;
 };
 
+/** The `Data through` value of a source's page: the coverage its cards
+ *  share, else the span of their years (`<earliest> to <latest>, by card`),
+ *  or the one year they share when only some of them hold projections. */
+const pageCoverage = (found: readonly Coverage[]): string | null => {
+    const one = shared(found.map(coverageText));
+
+    if (one || found.length === 0) return one;
+
+    const years = found.map((coverage) => coverage.year).toSorted();
+    const [earliest] = years;
+    const latest = years.at(-1);
+
+    return earliest === latest
+        ? `${earliest}, with projections on some cards`
+        : `${earliest} to ${latest}, by card`;
+};
+
 /** The sources of the cards on the canvas, each once, in the order the
  *  canvas first uses them. A row's coverage (`through`) shows when every
  *  card of the source that gives one gives the same, and its refresh date
@@ -556,9 +587,9 @@ const dateSpan = (dates: readonly string[]): string | null => {
 const sourcesOf = (input: SessionInput): SourceRow[] => {
     const byId = new Map(input.widgets.map((widget) => [widget.id, widget]));
     const rows = new Map<string, SourceRow>();
-    const throughs = new Map<string, string[]>();
+    const coverages = new Map<string, Coverage[]>();
     const refreshes = new Map<string, string[]>();
-    const add = (values: Map<string, string[]>, key: string, value: string | null) => {
+    const add = <Value>(values: Map<string, Value[]>, key: string, value: Value | null) => {
         if (value) values.set(key, [...(values.get(key) ?? []), value]);
     };
 
@@ -580,13 +611,14 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
                 licence: source.licence,
                 through: null,
                 meta: null,
+                coverage: null,
                 lastRefreshed: null,
                 citations: [],
                 cards: [],
             };
             const citation = citationOf(info);
 
-            add(throughs, key, throughOf(info, widget));
+            add(coverages, key, coverageOf(info, widget));
             add(refreshes, key, info.lastRefreshed);
 
             if (citation && !row.citations.includes(citation)) row.citations.push(citation);
@@ -599,11 +631,14 @@ const sourcesOf = (input: SessionInput): SourceRow[] => {
     }
 
     return [...rows.values()].map((row) => {
-        const through = shared(throughs.get(row.key) ?? []);
+        const found = coverages.get(row.key) ?? [];
+        const text = shared(found.map(coverageText));
+        const through = text ? `data through ${text}` : null;
 
         return {
             ...row,
             through,
+            coverage: pageCoverage(found),
             lastRefreshed: dateSpan(refreshes.get(row.key) ?? []),
             meta: sourceMeta({ through, licence: row.licence }),
         };
