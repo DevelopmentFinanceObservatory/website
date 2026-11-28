@@ -225,6 +225,16 @@ const LandingTravel = ({ onLanded, onDone }: { onLanded: () => void; onDone: () 
             window.clearTimeout(gone);
             node.removeEventListener('transitionend', finish);
             landing?.style.removeProperty('visibility');
+
+            // React runs this effect twice in development. The second run
+            // measures from the landing's field again, so the first leaves
+            // no move, target or text transform behind.
+            delete node.dataset.moving;
+            target.current = null;
+            node.style.removeProperty('transition-delay');
+            node.style.removeProperty('transition-duration');
+            landingType.style.removeProperty('transform');
+            landingType.style.removeProperty('opacity');
         };
         // Measured once, on mount: the move starts from where the landing's
         // prompt stood when the question left it.
