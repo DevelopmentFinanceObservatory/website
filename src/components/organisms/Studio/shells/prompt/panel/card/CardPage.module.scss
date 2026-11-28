@@ -79,13 +79,21 @@
 
 .actionRow {
     display: flex;
-    flex-wrap: wrap;
     gap: rem(4);
+}
+
+// Three buttons share the row in equal parts, whatever their labels.
+.share {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
 }
 
 .ask {
     display: inline-flex;
+    flex: 1 1 auto;
     align-items: center;
+    justify-content: center;
     box-sizing: border-box;
     min-height: rem(24);
     padding: 0 rem(8);

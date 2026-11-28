@@ -2,24 +2,26 @@
 @use "../textFloor" as *;
 @use "../touchTarget" as *;
 
-// The scroller fills the aside the shell draws (its 1 px hairline, radius
-// and clip). While the panel grows the scroller keeps one width, anchored to
-// the right, so text never rewraps while the edge moves: the rest width less
-// the borders until the layout switches, the wide width after.
+// The scroller lies in the aside the shell draws (its 1 px hairline, radius
+// and clip), anchored to its right. Beside the canvas it takes the column of
+// the page it shows (data-sp-width), the rest width less the borders or the
+// wide one, so a page is laid out at its own width from its first frame and
+// no text rewraps while the panel's edge moves. Over a narrow canvas it
+// fills the aside.
 .scroller {
     position: absolute;
-    inset: 0;
+    inset: 0 0 0 auto;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
+    width: calc(var(--pr-panel) - 2px);
     padding: rem(14) rem(14) rem(48);
     overflow: hidden auto;
     scrollbar-width: thin;
 
-    // The panel holds the row under the pointer in place itself across a
-    // layout switch; the browser's anchoring would move it a second time.
+    // The panel and the card page's change picker set the scroll position
+    // themselves; the browser's anchoring would move it a second time.
     overflow-anchor: none;
-    transition: opacity 160ms ease;
 
     // Paint stays inside the scroller's own box at every scroll position.
     contain: paint;
@@ -31,19 +33,24 @@
         mask-image: linear-gradient(to bottom, #000 calc(100% - #{rem(40)}), transparent);
     }
 
-    :global([data-sp-grow]) > & {
-        left: auto;
-        width: rem(278);
-    }
-
-    :global([data-sp-wide]) > & {
-        left: auto;
+    &[data-sp-width="wide"] {
         width: rem(398);
     }
 
-    :global([data-sp-fade]) > & {
-        opacity: 0;
-        transition: opacity 80ms ease;
+    // After the wide width rule, which it overrides.
+    :global([data-overlay]) & {
+        width: auto;
+        inset: 0;
+    }
+
+    // A wide page that follows a rest-width one fades in while the edge
+    // opens over its left side (SessionPanel sets data-sp-opening).
+    &[data-sp-opening] > :global([data-sp-page]) {
+        transition: opacity 150ms var(--ws-ease);
+
+        @starting-style {
+            opacity: 0;
+        }
     }
 }
 
@@ -597,8 +604,7 @@ button.didTitle {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .scroller,
-    :global([data-sp-fade]) > .scroller,
+    .scroller[data-sp-opening] > :global([data-sp-page]),
     .card,
     .question,
     .planLine,

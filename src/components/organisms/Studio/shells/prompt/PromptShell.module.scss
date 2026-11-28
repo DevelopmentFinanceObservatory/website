@@ -137,6 +137,10 @@
 
     --text-floor: #{$text-floor};
 
+    // The edge's move between the rest and the wide width.
+
+    --sp-edge-dur: 220ms;
+
     right: var(--pr-right);
     width: var(--pr-panel);
     overflow: hidden;
@@ -154,23 +158,12 @@
     opacity: 0;
 }
 
-// The panel grows left over the canvas while a row is hovered (SessionPanel
-// sets data-sp-grow on this aside).
-.panel[data-sp-grow] {
-    --sp-edge: 320ms cubic-bezier(0.45, 0, 0.25, 1);
-
+// A wide page (SessionPanel marks its scroller data-sp-width="wide") shows
+// the panel wide, over the canvas.
+.shell[data-panel="open"]:not([data-overlay]) .panel:has(> [data-sp-width="wide"]) {
     z-index: 30;
-    background-color: var(--color-bg);
-    transition:
-        right var(--ws-dur) var(--ws-ease) var(--ws-delay),
-        width var(--sp-edge),
-        box-shadow var(--sp-edge),
-        opacity 0.4s ease var(--ws-delay),
-        visibility 0s linear var(--ws-delay);
-}
-
-.shell[data-panel="open"] .panel[data-sp-grow="open"] {
     width: min(#{rem(400)}, 100% - #{rem(120)});
+    background-color: var(--color-bg);
     box-shadow: rem(-6) 0 rem(16) rgb(72 72 66 / 8%);
 }
 
@@ -196,33 +189,40 @@
         visibility 0s linear 0s;
 }
 
-.shell:not([data-transition]) .panel[data-sp-grow] {
+.shell[data-panel="open"]:not([data-transition], [data-overlay]) .panel {
+    // A narrowing panel keeps its layer and its fill until the edge lands.
+    // z-index moves from 30 to auto, a discrete step.
     transition:
         right var(--pr-panel-dur) var(--ws-ease),
-        width var(--sp-edge),
-        box-shadow var(--sp-edge),
+        width var(--sp-edge-dur) var(--ws-ease),
+        box-shadow var(--sp-edge-dur) var(--ws-ease),
+        z-index 0s linear var(--sp-edge-dur) allow-discrete,
+        background-color 0s linear var(--sp-edge-dur),
         opacity var(--pr-panel-dur) var(--ws-ease),
         visibility 0s linear 0s;
 }
 
-// Last of the panel rules: a closing panel outranks the grow rule. A wide
-// panel narrows as it slides, on the same clock.
+// Ahead of the closing panel's rule, which takes over as the panel closes.
+.shell:not([data-transition], [data-overlay]) .panel:has(> [data-sp-width="wide"]) {
+    transition:
+        right var(--pr-panel-dur) var(--ws-ease),
+        width var(--sp-edge-dur) var(--ws-ease),
+        box-shadow var(--sp-edge-dur) var(--ws-ease),
+        opacity var(--pr-panel-dur) var(--ws-ease),
+        visibility 0s linear 0s;
+}
+
+// A closing panel. A wide panel narrows as it slides, on the same clock,
+// and keeps its layer and its fill until it is gone.
 .shell[data-panel="closed"]:not([data-transition]) .panel {
     transition:
         right var(--pr-panel-dur) var(--ws-ease),
         width var(--pr-panel-dur) var(--ws-ease),
         box-shadow var(--pr-panel-dur) var(--ws-ease),
+        z-index 0s linear var(--pr-panel-dur) allow-discrete,
+        background-color 0s linear var(--pr-panel-dur),
         opacity var(--pr-panel-dur) var(--ws-ease),
         visibility 0s linear var(--pr-panel-dur);
-}
-
-// A grow begun from the keyboard moves its edge at once (useGrow.ts). It
-// holds only while the panel is open, so a closing panel keeps its exit.
-.shell[data-panel="open"]:not([data-transition]) .panel[data-sp-grow][data-sp-snap] {
-    transition:
-        right var(--pr-panel-dur) var(--ws-ease),
-        opacity var(--pr-panel-dur) var(--ws-ease),
-        visibility 0s linear 0s;
 }
 
 // A narrow window: the panel lies over the canvas on the page colour.
@@ -333,8 +333,7 @@
     .shell .backdropDocked,
     .shell .backdropDocked > *,
     .canvasRegion,
-    .panel,
-    .panel[data-sp-grow] {
+    .panel {
         transition: none;
     }
 
@@ -349,8 +348,8 @@
 
     // The panel appears and leaves in place, with a short fade.
     .shell:not([data-transition]) .panel,
-    .shell:not([data-transition]) .panel[data-sp-grow],
-    .shell[data-panel="open"]:not([data-transition]) .panel[data-sp-grow][data-sp-snap] {
+    .shell[data-panel="open"]:not([data-transition], [data-overlay]) .panel,
+    .shell:not([data-transition], [data-overlay]) .panel:has(> [data-sp-width="wide"]) {
         transition:
             opacity 150ms ease,
             visibility 0s linear 0s;
