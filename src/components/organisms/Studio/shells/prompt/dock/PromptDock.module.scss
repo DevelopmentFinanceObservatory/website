@@ -376,7 +376,8 @@
     min-width: 0;
     margin-block: auto;
 
-    @media (max-width: 767px) {
+    // The chip takes a line of its own above the typing area.
+    &[data-chip] {
         flex-wrap: wrap;
         row-gap: rem(6);
     }
@@ -432,22 +433,15 @@
         font-size: max(16px, #{rem(14)});
     }
 
-    // Beside the chip the field's first line centres on the chip: the field
-    // drops by the half chip its padding and half line fall short of. On its
-    // own line under 768 px, its touch padding reaches up into the row gap
-    // below the chip (.compose), short of the chip itself.
+    // Under the chip the field takes the whole line, and its touch padding
+    // reaches up into the row gap below the chip (.compose), short of the
+    // chip itself.
     .compose[data-chip] & {
-        --dock-field-lift: max(0px, calc(#{rem(11)} - var(--dock-field-pad) - 0.5lh));
-        --dock-field-top: calc(var(--dock-field-lift) - var(--dock-field-touch));
+        --dock-field-top: calc(-1 * min(var(--dock-field-touch), #{rem(6)}));
 
+        flex-basis: 100%;
         align-self: flex-start;
         margin-block: var(--dock-field-top) calc(-1 * var(--dock-field-touch));
-
-        @media (max-width: 767px) {
-            --dock-field-top: calc(-1 * min(var(--dock-field-touch), #{rem(6)}));
-
-            flex-basis: 100%;
-        }
     }
 }
 
@@ -745,36 +739,22 @@
     }
 }
 
-// The selected card's chip in the input row: at most 40% of the row's
-// width on a wide screen, its own width up to the row's on a narrow one.
-// It has no fill and takes the field's typeface, so the follow-up pills are
-// the dock's only filled shapes; a short rule parts it from the typing area
-// beside it.
+// The selected card's chip, on a line of its own above the typing area, at
+// its own width up to the line's. Its hairline box sets it apart from the
+// answer's text above it; it has no fill and takes the field's typeface, so
+// the follow-up pills are the dock's only filled shapes.
 .chip {
     display: flex;
     flex: 0 1 auto;
     align-items: center;
     gap: rem(6);
+    box-sizing: border-box;
     min-width: 0;
-    max-width: 40%;
-    height: rem(22);
-
-    &::after {
-        content: "";
-        flex: 0 0 auto;
-        width: 1px;
-        height: rem(14);
-        margin-left: rem(4);
-        background-color: var(--color-sage-light);
-    }
-
-    @media (max-width: 767px) {
-        max-width: 100%;
-
-        &::after {
-            content: none;
-        }
-    }
+    max-width: min(100%, #{rem(420)});
+    height: rem(24);
+    padding: 0 rem(8);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
 }
 
 .chipIcon {
@@ -785,7 +765,7 @@
 }
 
 .chipTitle {
-    @include font-size-floor(13px, 1.6);
+    @include font-size-floor(12px, 1.6);
 
     flex: 0 1 auto;
     min-width: 0;
