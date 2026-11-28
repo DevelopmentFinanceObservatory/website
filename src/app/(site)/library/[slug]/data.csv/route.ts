@@ -4,7 +4,7 @@ import { sharesBackendFor } from '@/lib/chat/shareStore';
 import { libraryView } from '@/lib/library/admin';
 import { libraryCsvResponse } from '@/lib/library/chartData';
 import { artifactBySlug } from '@/lib/library/store';
-import { missingProblem, problem } from '@/lib/proxy/problem';
+import { missingProblem, requestInvalidProblem } from '@/lib/proxy/problem';
 
 type Context = { params: Promise<{ slug: string }> };
 
@@ -32,12 +32,9 @@ export const GET = async (request: NextRequest, { params }: Context) => {
     const contentVersion = query.get('content_version');
 
     if ((specId === null) !== (contentVersion === null)) {
-        return problem({
-            status: 400,
-            code: 'request_invalid',
-            detail: 'Name a frame with both spec_id and content_version, or with neither.',
-            retryable: false,
-        });
+        return requestInvalidProblem(
+            'Name a frame with both spec_id and content_version, or with neither.',
+        );
     }
 
     return libraryCsvResponse(sharesBackendFor(request.headers), found.artifact, {

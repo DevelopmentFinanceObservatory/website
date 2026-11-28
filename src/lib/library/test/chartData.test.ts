@@ -77,7 +77,7 @@ const slotBody = (
     period: string,
     licence: string,
     component: Record<string, unknown> = barChart(period),
-    frame: Frame = DATASET_FRAME,
+    frame: Frame | null = DATASET_FRAME,
 ) => {
     const body = slotRead('cmp_test', 2, DATASET_FRAME, frame);
 
@@ -395,13 +395,10 @@ test('the pinned CSV serves the frame the page showed from any server after the 
     await (await csv(page.csvHref)).text();
     assert.deepEqual(reads, [DATASET_FRAME]);
 
-    // The unpinned address serves the frame the page shows now.
+    // The unpinned address reads the file on the frame the slot serves now.
     const current = await csv(CSV);
 
-    assert.equal(
-        await current.text(),
-        `slot 2 on ${MOVED_FRAME.spec_id}@${MOVED_FRAME.content_version}\r\n`,
-    );
+    assert.equal(await current.text(), 'slot 2 on none\r\n');
 });
 
 for (const [label, refusal, expected] of [
@@ -483,6 +480,20 @@ for (const [label, slot, file, expected] of [
         csvFile,
         () => Response.json({ code: 'constraint_violation' }, { status: 422 }),
         { status: 422, code: 'constraint_violation', retryAfter: null, reads: 1 },
+    ],
+    [
+        'an export cut off before its end answers 502',
+        csvFile,
+        () =>
+            new Response(
+                new ReadableStream({
+                    start: (controller) => {
+                        controller.enqueue(new TextEncoder().encode('Country,Year\r\n'));
+                        controller.error(new Error('connection reset'));
+                    },
+                }),
+            ),
+        { status: 502, code: 'backend_unreachable', retryAfter: null, reads: 1 },
     ],
 ] as const) {
     test(`the CSV route: ${label}`, async () => {
@@ -604,6 +615,7 @@ test('a canvas card whose read fails leaves the other cards their tables', async
                 { id: 'spend', kind: 'chart', turn: 1, slot: 0 },
                 { id: 'rows', kind: 'table', turn: 1, slot: 1 },
             ],
+            extra: { titles: { rows: 'Spending by country' } },
         },
         (n) =>
             n === 1 && failing
@@ -618,9 +630,18 @@ test('a canvas card whose read fails leaves the other cards their tables', async
     );
 
     assert.deepEqual(
-        (await libraryChartData(shares, artifact, ORIGIN)).map(({ id }) => id),
-        ['rows'],
+        (await libraryChartData(shares, artifact, ORIGIN)).map(({ id, label }) => [id, label]),
+        [['rows', 'Spending by country']],
     );
+
+    // A CSV that names no card passes over the failing card.
+    const first = await libraryCsvResponse(shares, artifact, {
+        card: null,
+        frame: null,
+        open: true,
+    });
+
+    assert.deepEqual([first.status, await first.text()], [200, 'slot 2 on none\r\n']);
 
     failing = false;
 
@@ -716,6 +737,89 @@ for (const [label, component, card, rows] of [
         assert.deepEqual(data?.rows ?? null, rows);
     });
 }
+
+test('the page shows the wording of its current read on an unmoved frame', async () => {
+    let measure = 'current health expenditure per capita';
+    const shares = backend('live', () => {
+        const body = slotBody('2023', 'unknown');
+
+        body.resolved_payload.description.about.measure.label = measure;
+
+        return Response.json(body);
+    });
+
+    await libraryChartData(shares, artifact, ORIGIN);
+
+    // The current read's entry runs out while the frame's entry is kept.
+    for (const key of nextCache.stored.keys()) {
+        if (key.includes('library-slot-current')) {
+            nextCache.stored.delete(key);
+        }
+    }
+
+    measure = 'health expenditure per person';
+
+    const [data] = await libraryChartData(shares, artifact, ORIGIN);
+
+    assert.equal(data?.dataset.variableMeasured, 'health expenditure per person');
+});
+
+test('a pinned read dfo-apis answers on another frame is refused and not kept', async () => {
+    let reads = 0;
+    const shares = backend('live', (frame) => {
+        reads += frame ? 1 : 0;
+
+        return Response.json(slotBody('2024', 'unknown', barChart('2024'), MOVED_FRAME));
+    });
+    const csv = () =>
+        libraryCsvResponse(shares, artifact, { card: null, frame: DATASET_FRAME, open: true });
+    const response = await csv();
+
+    await csv();
+    assert.deepEqual(
+        [response.status, (await response.json()).code, reads],
+        [502, 'backend_invalid', 2],
+    );
+    assert.ok(![...nextCache.stored.keys()].some((key) => key.includes('library-slot-frame')));
+});
+
+test('a chart whose slot read names no frame draws no table and says so', async (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    const shares = backend('live', () =>
+        Response.json(slotBody('2023', 'unknown', barChart('2023'), null)),
+    );
+
+    assert.deepEqual(await libraryChartData(shares, artifact, ORIGIN), []);
+    assert.deepEqual(
+        warn.mock.calls.map(({ arguments: args }) => args),
+        [['library_slot_unframed', { share: artifact.shareId, slot: 2 }]],
+    );
+});
+
+test('a slot read that fails after the page gave up is logged', async (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    let pending: Promise<unknown> | undefined;
+    const slow = backend('snapshot', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+
+        return Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 });
+    });
+
+    await libraryChartData(slow, artifact, ORIGIN, {
+        deadlineMs: 5,
+        waitUntil: (read) => {
+            pending = read;
+        },
+    });
+    await pending;
+    assert.deepEqual(
+        warn.mock.calls.map(({ arguments: [, fields] }) => fields),
+        [
+            { share: artifact.shareId, card: 'health', code: 'page_deadline' },
+            { share: artifact.shareId, card: 'health', code: 'service_unavailable' },
+        ],
+    );
+});
 
 test('a slow slot read leaves the page without the table, then fills the cache', async () => {
     let reads = 0;

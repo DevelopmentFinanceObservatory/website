@@ -222,16 +222,23 @@ const send = async (
 const timedOut = (error: unknown): boolean =>
     error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
 
-/** The text of an answer's body. A body that stops arriving, at the call's
- *  deadline or when the connection drops, is `backend_timeout` or
- *  `backend_unreachable`, as a call with no answer is. */
-export const bodyText = async (res: Response): Promise<string> => {
+// An answer's body as `read` gives it. A body that stops arriving, at the
+// call's deadline or when the connection drops, is `backend_timeout` or
+// `backend_unreachable`, as a call with no answer is.
+const drained = async <T>(read: () => Promise<T>): Promise<T> => {
     try {
-        return await res.text();
+        return await read();
     } catch (error) {
         throw new SharesError(timedOut(error) ? 'backend_timeout' : 'backend_unreachable');
     }
 };
+
+/** The text of an answer's body, which fails as a call with no answer does
+ *  when the body stops arriving. */
+export const bodyText = (res: Response): Promise<string> => drained(() => res.text());
+
+/** The bytes of an answer's body, which fail as `bodyText` does. */
+export const bodyBytes = (res: Response): Promise<ArrayBuffer> => drained(() => res.arrayBuffer());
 
 const json = async (res: Response): Promise<Record<string, unknown>> => {
     const text = await bodyText(res);
