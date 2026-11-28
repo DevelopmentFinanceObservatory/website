@@ -13,7 +13,7 @@ import {
 import DockField from './DockField';
 import DockPills from './DockPills';
 import {
-    AboutRow,
+    AboutChip,
     ApprovalRow,
     FoldedRow,
     QuestionHead,
@@ -453,11 +453,16 @@ const PromptDock = () => {
 
     // --- Announcements ------------------------------------------------------
 
-    const replyStarted = !!question?.reply.trim() || streamed;
+    // The announcements follow the newest question, whichever question a
+    // selected card makes the dock's subject.
+    const newest = view.questions.at(-1) ?? null;
+    const replyStarted = !!newest?.reply.trim() || streamed;
     const streaming = chat.thinking && !chat.plan && !chat.clarify && !view.running;
     // The turn ended in an error, its reply the error's own words.
-    const failed =
-        !!question && !!chat.activity.find((entry) => entry.turn === question.turn)?.failed;
+    const failedOf = (turn: number | undefined) =>
+        turn !== undefined && !!chat.activity.find((entry) => entry.turn === turn)?.failed;
+    const failed = failedOf(question?.turn);
+    const newestFailed = failedOf(newest?.turn);
     // `ready` records what was said when the turn ended, so a failure that
     // lands after `Answer ready` is said too.
     const said = useRef<{ turn: number; started: boolean; ready: false | 'ok' | 'failed' }>({
@@ -467,12 +472,12 @@ const PromptDock = () => {
     });
 
     useEffect(() => {
-        if (!question) {
+        if (!newest) {
             return;
         }
 
-        if (said.current.turn !== question.turn) {
-            said.current = { turn: question.turn, started: false, ready: false };
+        if (said.current.turn !== newest.turn) {
+            said.current = { turn: newest.turn, started: false, ready: false };
         }
 
         if (streaming && replyStarted && !said.current.started) {
@@ -486,14 +491,14 @@ const PromptDock = () => {
             return;
         }
 
-        if (failed) {
+        if (newestFailed) {
             said.current.ready = 'failed';
-            announce(`The answer failed: ${plainText(question.reply)}`, 'error');
+            announce(`The answer failed: ${plainText(newest.reply)}`, 'error');
         } else if (!said.current.ready) {
             said.current.ready = 'ok';
             announce('Answer ready');
         }
-    }, [question, streaming, replyStarted, failed, pending, chat.thinking, announce]);
+    }, [newest, streaming, replyStarted, newestFailed, pending, chat.thinking, announce]);
 
     // A waiting plan or question is said once, when it arrives.
     const saidPending = useRef<string | null>(null);
@@ -655,17 +660,6 @@ const PromptDock = () => {
                 );
             case 'set_aside':
                 return <SetAsideRow onView={setAside ? () => setSetAsideOpen(true) : null} />;
-            case 'about':
-                return (
-                    editTarget && (
-                        <AboutRow
-                            title={view.row.title}
-                            icon={ICON_OF[target ?? 'chart']}
-                            onGo={() => canvas.flyTo(editTarget.id)}
-                            onClear={() => drafts.setEditTarget(null)}
-                        />
-                    )
-                );
             case 'folded':
                 return <FoldedRow row={view.row} onOpen={() => openSheet('open')} />;
             case undefined:
@@ -772,6 +766,17 @@ const PromptDock = () => {
                                 quiet={view.quietSend}
                                 invalid={count.over}
                                 describedBy={planLive ? countId : undefined}
+                                chip={
+                                    view.about &&
+                                    editTarget && (
+                                        <AboutChip
+                                            title={view.about.title}
+                                            icon={ICON_OF[target ?? 'chart']}
+                                            onGo={() => canvas.flyTo(editTarget.id)}
+                                            onClear={() => drafts.setEditTarget(null)}
+                                        />
+                                    )
+                                }
                             />
                             {planLive && (
                                 <div className={styles.count}>

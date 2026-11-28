@@ -98,7 +98,7 @@ test('each row of the context table, in its order of precedence', () => {
             { messages: [ask('Q', 1), reply(''), ask('R', 2), reply('')], setAside: 1 },
             null,
         ],
-        ['card selected', { ...charted, editTarget: { id: 'c', title: 'Aid chart' } }, 'about'],
+        ['card selected', { ...charted, editTarget: { id: 'c', title: 'Aid chart' } }, 'folded'],
         [
             'card selected while working: status first',
             {
@@ -138,6 +138,104 @@ test('the folded row opens on the reply as prose, and says when the reply holds 
         parts: [{ text: 'Aid rose.', strong: false }],
         more: true,
     });
+});
+
+test('a selected card makes the question that drew it the subject, and shows as the chip', () => {
+    const target = { id: 'c', title: 'Aid chart' };
+    const edit = ask('Current euros', 2, { edit: { card: 'c', row: 'unit' } });
+    const two = input({
+        messages: [ask('Q1', 1), reply('One.'), ask('Q2', 2), reply('Two.', { followups: ['A'] })],
+        widgets: [
+            { id: 'c', turn: 1 },
+            { id: 'd', turn: 2 },
+        ],
+        canvasCards: 2,
+    });
+    const excerpt = (text: string) => ({
+        kind: 'folded',
+        openable: true,
+        parts: [{ text, strong: false }],
+        more: false,
+    });
+    const chip = { title: target.title };
+    const cases: [string, Partial<DockInput>, unknown[]][] = [
+        [
+            'an older question: its excerpt, no pills',
+            { editTarget: target },
+            [1, excerpt('One.'), chip, false],
+        ],
+        [
+            'the newest question: its excerpt and pills',
+            { editTarget: { id: 'd', title: 'D' } },
+            [2, excerpt('Two.'), { title: 'D' }, true],
+        ],
+        [
+            'an older question with no reply text: the newest question',
+            {
+                editTarget: target,
+                messages: [ask('Q1', 1), reply(''), ask('Q2', 2), reply('Two.')],
+            },
+            [2, excerpt('Two.'), chip, false],
+        ],
+        [
+            'a card a card change redrew: the question before the change',
+            {
+                editTarget: { id: 'e', title: 'E' },
+                messages: [
+                    ask('Q1', 1),
+                    reply('One.'),
+                    edit,
+                    reply(''),
+                    ask('Q3', 3),
+                    reply('Three.'),
+                ],
+                widgets: [
+                    { id: 'e', turn: 2 },
+                    { id: 'd', turn: 3 },
+                ],
+            },
+            [1, excerpt('One.'), { title: 'E' }, false],
+        ],
+        [
+            'a card no question drew: the newest question, no pills',
+            { editTarget: { id: 'x', title: 'X' } },
+            [2, excerpt('Two.'), { title: 'X' }, false],
+        ],
+        [
+            'while a question runs: the newest question, and the chip',
+            { editTarget: target, thinking: true },
+            [2, { kind: 'status', stepOf: null }, chip, false],
+        ],
+        [
+            'a live plan takes what the field sends: no chip',
+            { editTarget: target, plan: { live: true, version: 1, switching: null } },
+            [2, { kind: 'plan' }, null, false],
+        ],
+        [
+            'a clarifying question: no chip',
+            { editTarget: target, clarify: true },
+            [2, null, null, false],
+        ],
+        [
+            'the guest wall: no chip',
+            { editTarget: target, walled: true },
+            [1, excerpt('One.'), null, false],
+        ],
+    ];
+
+    for (const [name, over, expected] of cases) {
+        const view = dockView({ ...two, ...over });
+
+        assert.deepEqual([view.question?.turn, view.row, view.about, view.pills], expected, name);
+    }
+
+    // Read answer on the older question opens that question's reply.
+    assert.deepEqual(
+        (({ question, sheet }) => [question?.turn, sheet])(
+            dockView({ ...two, editTarget: target, sheet: 'open', sheetTurn: 1 }),
+        ),
+        [1, 'reply'],
+    );
 });
 
 test('a reply that placed cards arrives folded, one that placed none arrives open', () => {
@@ -317,26 +415,30 @@ test('a card change is silent: status while it runs, the earlier view after, its
     // Refused before its turn ran (the prompt is refunded), or failed in its
     // stream: either way the failure is the row, with no sheet, and the
     // answer's pills stay.
+    // A selected card leaves the failure in place.
     for (const prompt of [{ ...edit, refunded: true as const }, edit]) {
-        const refused = dockView({
-            ...running,
-            thinking: false,
-            messages: [
-                ...charted.messages,
-                prompt,
-                reply('That unit is not offered. Try another.'),
-            ],
-        });
+        for (const editTarget of [null, { id: 'c', title: 'Aid chart' }]) {
+            const refused = dockView({
+                ...running,
+                thinking: false,
+                editTarget,
+                messages: [
+                    ...charted.messages,
+                    prompt,
+                    reply('That unit is not offered. Try another.'),
+                ],
+            });
 
-        assert.deepEqual(
-            [refused.row, refused.sheet, refused.pills, refused.questions.length],
-            [
-                { kind: 'folded', text: 'That unit is not offered.', openable: false },
-                'none',
-                true,
-                1,
-            ],
-        );
+            assert.deepEqual(
+                [refused.row, refused.sheet, refused.pills, refused.questions.length],
+                [
+                    { kind: 'folded', text: 'That unit is not offered.', openable: false },
+                    'none',
+                    true,
+                    1,
+                ],
+            );
+        }
     }
 });
 

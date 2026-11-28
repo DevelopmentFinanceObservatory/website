@@ -148,9 +148,10 @@ export const FoldedRow = ({
     );
 };
 
-/** The card the next question is about, with its kind icon, its title
- *  (which flies the canvas to it) and the clear button. */
-export const AboutRow = ({
+/** The card the next question is about, as a chip in the input row: its
+ *  kind icon, its title (which flies the canvas to it) and the clear
+ *  button. The group's name says `About` for the word the chip leaves out. */
+export const AboutChip = ({
     title,
     icon,
     onGo,
@@ -161,23 +162,20 @@ export const AboutRow = ({
     onGo: () => void;
     onClear: () => void;
 }) => (
-    <div className={styles.row}>
-        <span className={styles.rowMeta}>About</span>
-        <span className={styles.chip}>
-            <Icon name={icon} className={styles.chipIcon} />
-            <button type="button" className={styles.chipTitle} title={title} onClick={onGo}>
-                {title}
-            </button>
-            <button
-                type="button"
-                className={styles.chipClear}
-                aria-label={`Stop asking about ${title}`}
-                onClick={onClear}
-            >
-                <Icon name="closer" />
-            </button>
-        </span>
-    </div>
+    <span className={styles.chip} role="group" aria-label={`About ${title}`}>
+        <Icon name={icon} className={styles.chipIcon} />
+        <button type="button" className={styles.chipTitle} title={title} onClick={onGo}>
+            {title}
+        </button>
+        <button
+            type="button"
+            className={styles.chipClear}
+            aria-label={`Stop asking about ${title}`}
+            onClick={onClear}
+        >
+            <Icon name="closer" />
+        </button>
+    </span>
 );
 
 /** The waiting plan's approval row. While a switch is in flight both
