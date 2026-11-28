@@ -123,17 +123,19 @@
 }
 
 // The share's embed: a card fills its frame, and a canvas scrolls in it.
+// --embed-fit is the height the embed's content asks for (EmbedFrame); each
+// height below is the frame's floor.
 .frame {
     display: block;
     width: 100%;
-    height: rem(440);
+    height: max(rem(440), var(--embed-fit, 0px));
     background-color: var(--color-white);
     border: 1px solid var(--color-net-light);
     border-radius: rem(6);
 }
 
 .frameCanvas {
-    height: rem(620);
+    height: max(rem(620), var(--embed-fit, 0px));
 }
 
 .dataBox {
@@ -395,11 +397,11 @@
     }
 
     .frame {
-        height: rem(340);
+        height: max(rem(340), var(--embed-fit, 0px));
     }
 
     .frameCanvas {
-        height: rem(480);
+        height: max(rem(480), var(--embed-fit, 0px));
     }
 
     .paragraph,
