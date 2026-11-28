@@ -1,5 +1,6 @@
 @use "variables" as *;
 @use "mixins" as *;
+@use "breakpoints" as *;
 
 // The chip: FilterChips' face (mono label on the light ground), with a
 // chevron, and the count of picks as the tiny dark square on its corner.
@@ -20,12 +21,17 @@
     background-color: var(--color-media-bg);
     border: 0;
     border-radius: rem(4);
-    opacity: 0.8;
-    transition: opacity 0.25s ease;
+    transition: background-color 0.25s ease;
 
-    &:hover,
     &[data-state="open"] {
-        opacity: 1;
+        background-color: var(--color-bg);
+    }
+
+    // The global `*:focus { outline: none }` (styles/main.scss) hides the
+    // ring. A page on a dark ground sets --filter-ring to a light colour.
+    &:focus-visible {
+        outline: 2px solid var(--filter-ring, var(--color-stone));
+        outline-offset: 2px;
     }
 
     &:disabled {
@@ -34,8 +40,18 @@
     }
 }
 
+// A chip with picks takes the lighter fill the hover gives.
 .triggerOn {
-    opacity: 1;
+    background-color: var(--color-bg);
+}
+
+// Hover fills only where hover exists, as the Button atom does, so a tapped
+// chip does not stay lit.
+
+@media (hover: hover) {
+    .trigger:hover:not(:disabled) {
+        background-color: var(--color-bg);
+    }
 }
 
 .chevron {
@@ -100,6 +116,13 @@
     &[data-highlighted] {
         background-color: var(--color-gray-2700);
     }
+
+    // Radix highlights an option on pointer hover too; only keyboard focus
+    // gets the outline.
+    &[data-highlighted]:focus-visible {
+        outline: 1px solid var(--color-stone-light);
+        outline-offset: -1px;
+    }
 }
 
 .clear {
@@ -130,4 +153,17 @@
 .optionCount {
     flex-shrink: 0;
     color: var(--color-text-faded);
+}
+
+// A phone's tap target is 44 px tall.
+@include breakpoint(phone) {
+    .trigger {
+        min-height: rem(44);
+    }
+
+    .option,
+    .clear {
+        min-height: rem(44);
+        align-items: center;
+    }
 }

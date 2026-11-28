@@ -11,9 +11,12 @@ import type {
     LibraryArtifact,
     LibrarySource,
     LibraryStep,
+    Replacement,
+    ReplacementChoice,
     WithdrawnArtifact,
 } from './artifact.ts';
 import { type ArtifactText, freeSlug, slugOf } from './publish.ts';
+import type { LibraryCardDates } from '../../../db/schema.ts';
 
 import { db } from '@/lib/db';
 import { uuid } from '@/lib/uuid';
@@ -62,8 +65,12 @@ const ARTIFACT_COLUMNS = {
     content: libraryArtifact.content,
     sources: libraryArtifact.sources,
     steps: libraryArtifact.steps,
+    cardDates: libraryArtifact.cardDates,
     publishedAt: libraryArtifact.publishedAt,
+    updatedAt: libraryArtifact.updatedAt,
+    revision: libraryArtifact.revision,
     withdrawnAt: libraryArtifact.withdrawnAt,
+    replacedBy: libraryArtifact.replacedBy,
 };
 
 const selectArtifacts = () => db.select(ARTIFACT_COLUMNS).from(libraryArtifact);
@@ -84,7 +91,10 @@ const toArtifact = (row: ArtifactRow, topics: string[]): LibraryArtifact => ({
     sources: row.sources,
     steps: row.steps,
     topics,
+    cardDates: row.cardDates,
     publishedAt: row.publishedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    revision: row.revision,
 });
 
 const live = isNull(libraryArtifact.withdrawnAt);
@@ -122,10 +132,13 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
         return {
             status: 'withdrawn',
             artifact: {
+                id: row.id,
                 slug: row.slug,
                 kind: row.kind as ArtifactKind,
                 publishedAt: row.publishedAt.toISOString(),
                 withdrawnAt: row.withdrawnAt.toISOString(),
+                replacedBy: row.replacedBy,
+                replacement: await replacementOf(row.id),
             },
         };
     }
@@ -135,6 +148,115 @@ export const artifactBySlug = cache(async (slug: string): Promise<ArtifactAtSlug
         artifact: toArtifact(row, (await topicsOf([row.id])).get(row.id) ?? []),
     };
 });
+
+/** How many replacements a withdrawn artifact's address follows to reach a
+ *  published one. A longer chain, or a loop of withdrawn artifacts, links
+ *  nowhere. */
+export const REPLACEMENT_HOPS = 5;
+
+/**
+ * The artifact withdrawn artifact `id`'s address links to: down the chain of
+ * `replaced_by`, the first published one, within `REPLACEMENT_HOPS`
+ * steps. Null when none is named or none in reach is published. Read on each
+ * request, so a replacement withdrawn later hands on to its own.
+ */
+export const replacementOf = async (id: string): Promise<Replacement | null> => {
+    const { rows } = await db.execute<Replacement>(sql`
+        with recursive chain (id, replaced_by, withdrawn_at, slug, title, hops) as (
+            select dst.id, dst.replaced_by, dst.withdrawn_at, dst.slug, dst.title, 1
+              from ${libraryArtifact} src
+              join ${libraryArtifact} dst on dst.id = src.replaced_by
+             where src.id = ${id}
+            union all
+            select dst.id, dst.replaced_by, dst.withdrawn_at, dst.slug, dst.title,
+                   chain.hops + 1
+              from chain
+              join ${libraryArtifact} dst on dst.id = chain.replaced_by
+             where chain.withdrawn_at is not null and chain.hops < ${REPLACEMENT_HOPS}
+        )
+        select slug, title from chain where withdrawn_at is null order by hops limit 1
+    `);
+
+    return rows[0] ?? null;
+};
+
+/** The artifacts on show, by title, for an admin naming a replacement. */
+export const replacementChoices = async (): Promise<ReplacementChoice[]> =>
+    db
+        .select({ id: libraryArtifact.id, title: libraryArtifact.title })
+        .from(libraryArtifact)
+        .where(live)
+        .orderBy(asc(libraryArtifact.title));
+
+/** Whether artifact `id` is on show. */
+export const isArtifactPublished = async (id: string): Promise<boolean> =>
+    (
+        await db
+            .select({ id: libraryArtifact.id })
+            .from(libraryArtifact)
+            .where(and(eq(libraryArtifact.id, id), live))
+    ).length > 0;
+
+// Locks the rows of `id` and of `replacedBy` until the transaction ends, in
+// id order so two writers lock them in the same order, and answers whether
+// `replacedBy` is another artifact on show. A row on show holds no
+// replacement (the `library_artifact_replaced_by_withdrawn` check), and a
+// pointer is written only to a row on show under this lock, so no chain of
+// replacements comes back to where it started. Two withdrawals naming each
+// other at once wait in turn, and the second meets the first's artifact
+// withdrawn.
+const lockReplacement = async (
+    tx: Tx,
+    id: string,
+    replacedBy: string,
+): Promise<{ self: { withdrawn: boolean } | null; available: boolean }> => {
+    const rows = await tx
+        .select({ id: libraryArtifact.id, withdrawnAt: libraryArtifact.withdrawnAt })
+        .from(libraryArtifact)
+        .where(inArray(libraryArtifact.id, [id, replacedBy]))
+        .orderBy(asc(libraryArtifact.id))
+        .for('update');
+    const self = rows.find((row) => row.id === id);
+    const target = rows.find((row) => row.id === replacedBy);
+
+    return {
+        self: self ? { withdrawn: self.withdrawnAt !== null } : null,
+        available: replacedBy !== id && target !== undefined && target.withdrawnAt === null,
+    };
+};
+
+/**
+ * Points withdrawn artifact `id`'s address at `replacedBy`, or at nothing
+ * with null. `replacedBy` must be another artifact on show when the write
+ * commits, which the write checks under a lock on both rows
+ * (`lockReplacement`). Answers the slug, `not_found` for an id no withdrawn
+ * artifact has, or `replacement_unavailable`.
+ */
+export const setReplacement = (
+    id: string,
+    replacedBy: string | null,
+): Promise<{ slug: string } | 'not_found' | 'replacement_unavailable'> =>
+    db.transaction(async (tx) => {
+        if (replacedBy !== null) {
+            const { self, available } = await lockReplacement(tx, id, replacedBy);
+
+            if (!self?.withdrawn) {
+                return 'not_found' as const;
+            }
+
+            if (!available) {
+                return 'replacement_unavailable' as const;
+            }
+        }
+
+        const [row] = await tx
+            .update(libraryArtifact)
+            .set({ replacedBy })
+            .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.withdrawnAt)))
+            .returning({ slug: libraryArtifact.slug });
+
+        return row ?? ('not_found' as const);
+    });
 
 /** What a publish with `publishKey`, and with `slug` when the publisher
  *  chose one, meets before it makes a share. */
@@ -266,6 +388,7 @@ export type ArtifactInsert = ArtifactText & {
     mode: ArtifactMode;
     sources: LibrarySource[];
     steps: LibraryStep[];
+    cardDates: LibraryCardDates[];
 };
 
 type Inserted =
@@ -376,23 +499,51 @@ const insertOnce = (input: ArtifactInsert, publishedBy: string): Promise<Inserte
     );
 
 /**
- * Changes an artifact's text and topics. Its slug stays, since the URL is
- * what readers cite. Answers `not_found` for an id no artifact on show has.
+ * Changes an artifact's text and topics, while the row is at `revision`, and
+ * moves it to the next one, which it answers with. Its slug stays, since the URL is what readers
+ * cite. `updated_at` moves to the database's clock only when a text field
+ * changes, so the page's "Text updated" means the text changed; a change of
+ * topics alone leaves it. Answers `artifact_changed` when another edit moved
+ * the row on since `revision` was read, and `not_found` for an id no
+ * artifact on show has.
  */
 export const updateArtifact = (
     id: string,
     { topics, ...fields }: ArtifactText,
-): Promise<{ slug: string } | 'not_found' | 'unknown_topic'> =>
+    revision: number,
+): Promise<
+    { slug: string; revision: number } | 'not_found' | 'artifact_changed' | 'unknown_topic'
+> =>
     orUnknownTopic(
         db.transaction(async (tx) => {
             const [row] = await tx
                 .update(libraryArtifact)
-                .set({ ...fields, updatedAt: new Date() })
-                .where(and(eq(libraryArtifact.id, id), live))
-                .returning({ slug: libraryArtifact.slug });
+                .set({
+                    ...fields,
+                    // The right side reads the row as it was before this update.
+                    updatedAt: sql`case
+                        when (${libraryArtifact.title}, ${libraryArtifact.description},
+                              ${libraryArtifact.contentTitle}, ${libraryArtifact.content})
+                             is distinct from
+                             (${fields.title}::text, ${fields.description}::text,
+                              ${fields.contentTitle}::text, ${fields.content}::text)
+                        then now()
+                        else ${libraryArtifact.updatedAt}
+                    end`,
+                    revision: sql`${libraryArtifact.revision} + 1`,
+                })
+                .where(
+                    and(eq(libraryArtifact.id, id), live, eq(libraryArtifact.revision, revision)),
+                )
+                .returning({ slug: libraryArtifact.slug, revision: libraryArtifact.revision });
 
             if (!row) {
-                return 'not_found' as const;
+                const [held] = await tx
+                    .select({ id: libraryArtifact.id })
+                    .from(libraryArtifact)
+                    .where(and(eq(libraryArtifact.id, id), live));
+
+                return held ? ('artifact_changed' as const) : ('not_found' as const);
             }
 
             if (!(await setTopics(tx, id, topics))) {
@@ -402,6 +553,25 @@ export const updateArtifact = (
             return row;
         }),
     );
+
+/** The text fields and revision of artifact `id` while it is on show, else
+ *  null. The edit route checks the fields an edit changes against them. */
+export const artifactText = async (
+    id: string,
+): Promise<(Omit<ArtifactText, 'topics'> & { revision: number }) | null> => {
+    const [row] = await db
+        .select({
+            title: libraryArtifact.title,
+            description: libraryArtifact.description,
+            contentTitle: libraryArtifact.contentTitle,
+            content: libraryArtifact.content,
+            revision: libraryArtifact.revision,
+        })
+        .from(libraryArtifact)
+        .where(and(eq(libraryArtifact.id, id), live));
+
+    return row ?? null;
+};
 
 /** An artifact's slug and the share the Library made for it, with that
  *  share's owner token. */
@@ -452,19 +622,41 @@ export const isArtifactWithdrawn = async (id: string): Promise<boolean> =>
  * the share an operator looks up. Lists, the sitemap and edits leave the row
  * out.
  *
- * Answers the slug, or `not_found` for an id no artifact has and for one
- * whose token is gone, a withdrawn one included. A withdrawn row that still
- * holds a token keeps its first withdrawal date.
+ * `replacedBy` names the artifact its address then links to. It must be
+ * another artifact on show when the withdrawal commits, which the
+ * withdrawal checks under a lock on both rows (`lockReplacement`). The
+ * share is settled by then, so a replacement that fails the check is left
+ * out and the withdrawal goes ahead: `replacement` is `refused`, and an
+ * admin names another from the withdrawn page (`setReplacement`). It is
+ * `set` when the pointer was stored and `none` when none was named.
+ *
+ * Answers the slug and `replacement`, or `not_found` for an id no artifact
+ * has and for one whose token is gone, a withdrawn one included. A
+ * withdrawn row that holds a token keeps its first withdrawal date.
  */
-export const withdrawArtifact = async (id: string): Promise<{ slug: string } | 'not_found'> => {
-    const [row] = await db
-        .update(libraryArtifact)
-        .set({
-            withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())`,
-            shareWriteToken: null,
-        })
-        .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
-        .returning({ slug: libraryArtifact.slug });
+export const withdrawArtifact = (
+    id: string,
+    replacedBy: string | null = null,
+): Promise<{ slug: string; replacement: 'set' | 'none' | 'refused' } | 'not_found'> =>
+    db.transaction(async (tx) => {
+        const available =
+            replacedBy !== null && (await lockReplacement(tx, id, replacedBy)).available;
+        const [row] = await tx
+            .update(libraryArtifact)
+            .set({
+                withdrawnAt: sql`coalesce(${libraryArtifact.withdrawnAt}, now())`,
+                shareWriteToken: null,
+                replacedBy: available ? replacedBy : null,
+            })
+            .where(and(eq(libraryArtifact.id, id), isNotNull(libraryArtifact.shareWriteToken)))
+            .returning({ slug: libraryArtifact.slug });
 
-    return row ?? 'not_found';
-};
+        if (!row) {
+            return 'not_found' as const;
+        }
+
+        return {
+            slug: row.slug,
+            replacement: replacedBy === null ? 'none' : available ? 'set' : 'refused',
+        } as const;
+    });

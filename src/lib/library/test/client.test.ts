@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isSlugTakenRefusal, isWithdrawnRefusal, publishRefusalText } from '../client.ts';
+import {
+    evergreenFailureText,
+    isArtifactChangedRefusal,
+    isSlugTakenRefusal,
+    isWithdrawnRefusal,
+    publishRefusalText,
+    readEvergreenAnswer,
+    readEvergreenWarnings,
+    readRevision,
+    sameField,
+} from '../client.ts';
 
 const CARDS = [
     { id: 'w1', title: 'Health ODA' },
@@ -62,4 +72,126 @@ test('publishRefusalText shows the route detail for any other refusal', () => {
     ]) {
         assert.equal(publishRefusalText(problem, DETAIL, CARDS, false), DETAIL);
     }
+});
+
+test('readEvergreenAnswer narrows a not_evergreen refusal and drops unreadable entries', () => {
+    const entry = {
+        pointer: '/content',
+        start: 3,
+        end: 20,
+        quote: 'Aid fell 4%.',
+        kind: 'trend',
+        reason: 'A refresh could change it.',
+    };
+    const answer = readEvergreenAnswer(
+        refusal('not_evergreen', {
+            pointer: '/content',
+            errors: [entry, { ...entry, pointer: '/slug' }, { ...entry, start: '3' }, null],
+        }),
+    );
+
+    assert.deepEqual(answer, {
+        code: 'not_evergreen',
+        fix: DETAIL,
+        warnings: [],
+        errors: [
+            {
+                field: 'content',
+                start: 3,
+                end: 20,
+                quote: entry.quote,
+                kind: 'trend',
+                reason: entry.reason,
+            },
+        ],
+    });
+    assert.equal(readEvergreenAnswer(refusal('not_evergreen', { errors: [] })), null);
+    assert.deepEqual(
+        readEvergreenAnswer(
+            refusal('not_evergreen', {
+                errors: [entry],
+                warnings: [{ ...entry, pointer: '/title', kind: 'change' }, 7],
+            }),
+        ),
+        {
+            code: 'not_evergreen',
+            fix: DETAIL,
+            errors: [
+                {
+                    field: 'content',
+                    start: 3,
+                    end: 20,
+                    quote: entry.quote,
+                    kind: 'trend',
+                    reason: entry.reason,
+                },
+            ],
+            warnings: [{ field: 'title', start: 3, end: 20, quote: entry.quote, kind: 'change' }],
+        },
+    );
+    assert.equal(readEvergreenAnswer(refusal('slug_taken')), null);
+    assert.equal(readEvergreenAnswer(null), null);
+});
+
+test('evergreen check failures read apart from each other and from a refusal', () => {
+    const unavailable = readEvergreenAnswer(refusal('evergreen_check_unavailable'));
+    const refused = readEvergreenAnswer(refusal('evergreen_check_refused'));
+
+    assert.equal(unavailable?.code, 'evergreen_check_unavailable');
+    assert.equal(refused?.code, 'evergreen_check_refused');
+    assert.ok(unavailable && refused);
+    assert.notEqual(evergreenFailureText(unavailable), evergreenFailureText(refused));
+    assert.ok(evergreenFailureText(unavailable));
+});
+
+test('evergreen_too_long reads from the pointer and detail alone', () => {
+    assert.deepEqual(readEvergreenAnswer(refusal('evergreen_too_long', { pointer: '/content' })), {
+        code: 'evergreen_too_long',
+        field: 'content',
+        detail: DETAIL,
+    });
+    assert.equal(readEvergreenAnswer(refusal('evergreen_too_long', { pointer: '/slug' })), null);
+    assert.equal(readEvergreenAnswer(refusal('evergreen_too_long')), null);
+});
+
+test('a refusal applies to a field only while it holds the submitted value', () => {
+    const sent = {
+        title: 'Aid doubled.',
+        description: 'd',
+        contentTitle: null,
+        content: null,
+        topics: [],
+    };
+
+    assert.equal(sameField(sent, { ...sent }, 'title'), true);
+    assert.equal(sameField(sent, { ...sent, title: 'Aid, by year' }, 'title'), false);
+    assert.equal(sameField(sent, { ...sent, title: 'Aid, by year' }, 'description'), true);
+    assert.equal(sameField(sent, { ...sent, content: '' }, 'content'), true);
+});
+
+test('isArtifactChangedRefusal reads the 409 code', () => {
+    assert.equal(isArtifactChangedRefusal(refusal('artifact_changed')), true);
+    assert.equal(isArtifactChangedRefusal(refusal('slug_taken')), false);
+    assert.equal(isArtifactChangedRefusal(null), false);
+});
+
+test('readEvergreenWarnings narrows the flagged sentences and drops unreadable ones', () => {
+    const entry = { pointer: '/description', start: 0, end: 9, quote: 'Aid rose.', kind: 'change' };
+
+    assert.deepEqual(
+        readEvergreenWarnings({
+            slug: 'a',
+            warnings: [entry, { ...entry, pointer: '/slug' }, { ...entry, quote: 4 }, 'x'],
+        }),
+        [{ field: 'description', start: 0, end: 9, quote: 'Aid rose.', kind: 'change' }],
+    );
+    assert.deepEqual(readEvergreenWarnings({ slug: 'a' }), []);
+    assert.deepEqual(readEvergreenWarnings(null), []);
+});
+
+test('readRevision reads the revision an edit wrote and nothing else', () => {
+    assert.equal(readRevision({ slug: 'a', revision: 3, warnings: [] }), 3);
+    assert.equal(readRevision({ slug: 'a', revision: '3' }), null);
+    assert.equal(readRevision({ slug: 'a' }), null);
+    assert.equal(readRevision(null), null);
 });

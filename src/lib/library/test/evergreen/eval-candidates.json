@@ -1,0 +1,212 @@
+[
+    {
+        "id": "a01",
+        "title": "ODA as a share of gross national income, by DAC donor",
+        "description": "Each bar is one donor's official development assistance divided by its gross national income.",
+        "contentTitle": "How to read it",
+        "content": "The dotted line marks the UN target of 0.7%.\n- Hover over a bar to see the donor's value.\n- Select a year to compare donors in that year."
+    },
+    {
+        "id": "a02",
+        "title": "Norway gives the most aid as a share of income",
+        "description": "ODA as a share of gross national income for each DAC member.",
+        "contentTitle": "About the data",
+        "content": "Values come from the OECD's DAC1 table. Norway, Luxembourg and Sweden are above the 0.7% target."
+    },
+    {
+        "id": "a03",
+        "title": "Debt service by creditor type",
+        "description": "Principal and interest paid on external public debt, split into bilateral, multilateral and private creditors.",
+        "contentTitle": "Reading the chart",
+        "content": "Each column is one year. The segments add up to total debt service.\nAmounts are in current US dollars."
+    },
+    {
+        "id": "a04",
+        "title": "Debt service of low-income countries",
+        "description": "Debt service has more than doubled since 2012. Payments to private creditors make up the fastest-growing part.",
+        "contentTitle": null,
+        "content": null
+    },
+    {
+        "id": "a05",
+        "title": "Climate finance from developed countries",
+        "description": "Climate finance provided and mobilised, as reported to the OECD, by type of finance.",
+        "contentTitle": "Key figures",
+        "content": "Total climate finance reached USD 115.9 billion in 2022.\n- Public bilateral: 41.0\n- Multilateral: 50.6\n- Private mobilised: 21.9"
+    },
+    {
+        "id": "a06",
+        "title": "Climate finance by purpose",
+        "description": "Mitigation, adaptation and cross-cutting finance, as donors report it.",
+        "contentTitle": "Method",
+        "content": "Donors mark each project as mitigation, adaptation or both. A project that serves both appears as cross-cutting, so the three parts do not overlap."
+    },
+    {
+        "id": "a07",
+        "title": "Total ODA in 2023",
+        "description": "The key number is total net ODA from DAC members in the year shown, in current US dollars.",
+        "contentTitle": null,
+        "content": "Net ODA from DAC members, in current US dollars:\n$223,300,000,000"
+    },
+    {
+        "id": "a08",
+        "title": "Total ODA",
+        "description": "This key number follows the latest year the OECD reports, so it changes when new figures are published.",
+        "contentTitle": "Definition",
+        "content": "Net ODA counts grants in full and loans at their grant equivalent, so repayments are not subtracted."
+    },
+    {
+        "id": "a09",
+        "title": "Top recipients of bilateral ODA",
+        "description": "The table lists recipients by the bilateral ODA they received, largest first.",
+        "contentTitle": "Notes",
+        "content": "Ukraine heads the list, ahead of Türkiye and Ethiopia.\nRegional and unspecified amounts are left out of the ranking."
+    },
+    {
+        "id": "a10",
+        "title": "Bilateral ODA by recipient",
+        "description": "A table of bilateral ODA by recipient country, which you can sort by any column.",
+        "contentTitle": "Columns",
+        "content": "- Recipient: the country that received the aid.\n- Gross disbursements: what donors paid out in the year.\n- Share: the recipient's share of all bilateral ODA."
+    },
+    {
+        "id": "a11",
+        "title": "Snapshot: ODA to sub-Saharan Africa",
+        "description": "This snapshot keeps the data as it stood when it was published.",
+        "contentTitle": "What it shows",
+        "content": "In this snapshot, sub-Saharan Africa received about a third of bilateral ODA. The share has fallen since 2010."
+    },
+    {
+        "id": "a12",
+        "title": "ODA to sub-Saharan Africa over time",
+        "description": "A line for each year's share of bilateral ODA that went to sub-Saharan Africa.",
+        "contentTitle": "Reading the chart",
+        "content": "The line follows the latest data from the source. A dashed segment marks preliminary figures, which the source revises."
+    },
+    {
+        "id": "a13",
+        "title": "The UK has cut aid to 0.5% of national income",
+        "description": "UK ODA as a share of gross national income, with the 0.7% target.",
+        "contentTitle": null,
+        "content": "The target line is the UN's 0.7% of gross national income."
+    },
+    {
+        "id": "a14",
+        "title": "UK ODA as a share of national income",
+        "description": "The United Kingdom's ODA divided by its gross national income, year by year.",
+        "contentTitle": "Context",
+        "content": "The UK wrote the 0.7% target into law in 2015. The International Development Act sets out when the government may fall short of it."
+    },
+    {
+        "id": "a15",
+        "title": "Interest paid on external debt",
+        "description": "Interest payments are at a record high. This chart shows interest on long-term external debt.",
+        "contentTitle": "Data",
+        "content": "Figures come from the World Bank's International Debt Statistics."
+    },
+    {
+        "id": "a16",
+        "title": "Interest paid on external debt, by income group",
+        "description": "Interest on long-term external debt for low-income and lower-middle-income countries.",
+        "contentTitle": "Data",
+        "content": "The World Bank's International Debt Statistics records each loan a country reports, so the totals cover public and publicly guaranteed debt."
+    },
+    {
+        "id": "a17",
+        "title": "Health ODA",
+        "description": "ODA to the health sector, by donor.",
+        "contentTitle": "Highlights",
+        "content": "- The United States gives the most.\n- Health aid rose 12% in 2021.\n- Amounts are in constant 2022 dollars."
+    },
+    {
+        "id": "a18",
+        "title": "Health ODA by donor",
+        "description": "ODA to the health sector, by donor, in constant 2022 US dollars.",
+        "contentTitle": "How to read it",
+        "content": "- Each bar is one donor.\n- Select a sector above the chart to switch from health.\n- Constant dollars remove the effect of inflation, so years compare by volume."
+    },
+    {
+        "id": "a19",
+        "title": "Countries in debt distress",
+        "description": "Countries the IMF and World Bank rate as in debt distress or at high risk of it.",
+        "contentTitle": "Status",
+        "content": "As of 2024, 34 countries are in distress or at high risk. Ratings come from the joint debt sustainability framework for low-income countries."
+    },
+    {
+        "id": "a20",
+        "title": "Debt distress ratings",
+        "description": "The IMF and World Bank rating of each low-income country's risk of debt distress.",
+        "contentTitle": "Ratings",
+        "content": "- Low: the country can meet its debts under most shocks.\n- Moderate: it can meet them unless a large shock hits.\n- High: it is likely to struggle to meet them.\n- In distress: it already cannot meet them without restructuring."
+    },
+    {
+        "id": "a21",
+        "title": "Private finance mobilised",
+        "description": "Private money that official finance brings into projects, as donors report it.",
+        "contentTitle": "Live data",
+        "content": "This chart follows the source, so its values change when the OECD publishes new figures. Mobilised private finance remains below USD 20 billion a year."
+    },
+    {
+        "id": "a22",
+        "title": "Private finance mobilised by instrument",
+        "description": "Private finance mobilised by guarantees, syndicated loans, credit lines and direct investment.",
+        "contentTitle": "Method",
+        "content": "The OECD counts private finance as mobilised when an official intervention causes it. Each instrument has its own counting rule, so totals are not comparable with flows of other kinds."
+    },
+    {
+        "id": "a23",
+        "title": "Humanitarian aid",
+        "description": "Humanitarian ODA by donor.",
+        "contentTitle": null,
+        "content": "Humanitarian aid accounts for one in every seven dollars of ODA.\nGermany and the United States give over half of it."
+    },
+    {
+        "id": "a24",
+        "title": "Humanitarian aid, by donor",
+        "description": "Humanitarian ODA from each DAC member, in current US dollars.",
+        "contentTitle": "Scope",
+        "content": "Humanitarian aid covers emergency response, reconstruction and disaster prevention. It does not include development projects in the same countries."
+    },
+    {
+        "id": "a25",
+        "title": "The 0.7% target",
+        "description": "Which donors meet the UN target for ODA as a share of gross national income.",
+        "contentTitle": "Who meets it",
+        "content": "Only five donors met the target in 2023:\n- Norway\n- Luxembourg\n- Sweden\n- Germany\n- Denmark"
+    },
+    {
+        "id": "a26",
+        "title": "The 0.7% target and who meets it",
+        "description": "Each donor's ODA as a share of gross national income, against the UN target.",
+        "contentTitle": "Reading it",
+        "content": "A donor above the line meets the target in the year selected. Move the year slider to see other years."
+    },
+    {
+        "id": "a27",
+        "title": "Net flows on debt to Africa",
+        "description": "Net flows are new loans disbursed minus principal repaid.",
+        "contentTitle": "Trend",
+        "content": "Net flows to Africa turned negative in 2023. A negative value means a country repaid more than it borrowed."
+    },
+    {
+        "id": "a28",
+        "title": "Net flows on external debt",
+        "description": "New disbursements minus principal repayments, by region.",
+        "contentTitle": "Reading the chart",
+        "content": "Bars above zero mean a region borrowed more than it repaid. Bars below zero mean it repaid more."
+    },
+    {
+        "id": "a29",
+        "title": "Education ODA, 2015 to 2023",
+        "description": "ODA to education by year, in constant dollars.",
+        "contentTitle": "Summary",
+        "content": "Education aid has stagnated since 2019, at about USD 16 billion a year. Basic education gets less than a third."
+    },
+    {
+        "id": "a30",
+        "title": "Education ODA by level",
+        "description": "ODA to education, split into basic, secondary and post-secondary.",
+        "contentTitle": "Definitions",
+        "content": "Basic education covers primary schooling and early childhood. Post-secondary includes scholarships and imputed student costs, which some donors count in their own country."
+    }
+]

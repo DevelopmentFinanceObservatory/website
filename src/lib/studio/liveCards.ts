@@ -4,6 +4,7 @@ import type { SavedConversation } from '../chat/history.ts';
 import { isLiveStudioShare, type StudioShareKind } from '../chat/shareMode.ts';
 import type { CardInfo, Widget } from '../chat/widgets.ts';
 import { shortDateText } from '../sources/updateDates.ts';
+import type { LatestPeriod } from './dataThrough.ts';
 import type { LiveCard } from './liveBackend.ts';
 import type { Description } from './description.ts';
 import { gateOf } from './gate.ts';
@@ -174,16 +175,23 @@ export const isLiveCanvas = (canvas: LiveCanvas | undefined): canvas is LiveCanv
     canvas !== undefined && !canvas.snapshot && Object.keys(canvas.states).length > 0;
 
 /**
- * The line a live canvas shows once. It says its data is current and its
- * titles and notes are as old as the share. The date is the UTC day of `createdAt`,
- * so the server's render and the browser's agree.
+ * The line a live canvas shows once. It says its data is current, how recent
+ * it is when `latest` is given: the period every card reaches, or the
+ * latest one shown when the cards reach different ones; and that its titles
+ * and notes are as old as the share. The date is the UTC day of
+ * `createdAt`, so the server's render and the browser's agree.
  */
-export const liveNote = (createdAt: string | undefined): string => {
+export const liveNote = (createdAt: string | undefined, latest?: LatestPeriod | null): string => {
     const written = createdAt ? new Date(createdAt) : null;
+    const data = !latest
+        ? 'Live data'
+        : latest.shared
+          ? `Live data through ${latest.period}`
+          : `Live data · latest period shown ${latest.period}`;
 
     return written && !Number.isNaN(written.getTime())
-        ? `Live data · titles and notes written ${shortDateText(written)}`
-        : 'Live data';
+        ? `${data} · titles and notes written ${shortDateText(written)}`
+        : data;
 };
 
 /** The error codes the browser sets itself. Every other code is the refresh

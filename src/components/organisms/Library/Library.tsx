@@ -17,6 +17,7 @@ import {
     filterOptions,
     KIND_LABELS,
     type LibraryArtifact,
+    libraryDate,
     parseList,
     serializeList,
 } from '@/lib/library/artifact';
@@ -127,7 +128,7 @@ const Library = ({ artifacts }: { artifacts: LibraryArtifact[] }) => {
                                     href={artifactPath(artifact.slug)}
                                     prefetch={false}
                                     className={styles.rowLink}
-                                    aria-label={`${artifact.title}, ${KIND_LABELS[artifact.kind]}`}
+                                    aria-label={`${artifact.title}, ${KIND_LABELS[artifact.kind]}, published ${libraryDate(artifact.publishedAt)}`}
                                 />
                                 <span className={styles.kind} title={KIND_LABELS[artifact.kind]}>
                                     <Icon name={KIND_ICONS[artifact.kind]} />
