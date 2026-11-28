@@ -56,12 +56,15 @@
     gap: rem(12);
 }
 
+// The card's title, in the card's own ink, so it reads as the card's name
+// above the body. tableFit.ts estimates a table card's head from these
+// figures (TITLE_WEIGHT, TITLE_TYPE, TITLE_LINE).
 .cardTitle {
-    @include font-size(12px, 1.1);
+    @include font-size(14px, 1.2);
 
     font-family: var(--font-outfit);
-    font-weight: 300;
-    color: var(--th-muted, var(--color-stone));
+    font-weight: 500;
+    color: var(--th-text, var(--color-charcoal));
     letter-spacing: -0.01em;
 }
 
@@ -109,13 +112,9 @@
     letter-spacing: -0.01em;
 }
 
-// The user note: title (Outfit 500 12) over free text (Outfit 300 12). The
+// The user note: title (Outfit 500 14) over free text (Outfit 300 12). The
 // inner stack is content-sized (the card's own height follows it, cell by
 // cell, via TextCard's measurement) — nothing scrolls or clips.
-.cardText .cardTitle {
-    font-weight: 500;
-}
-
 .textInner {
     @include flex(column, flex-start, stretch);
 

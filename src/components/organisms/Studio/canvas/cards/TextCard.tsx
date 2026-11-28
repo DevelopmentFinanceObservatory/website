@@ -1,6 +1,5 @@
 'use client';
 
-import classNames from 'classnames';
 import { useCallback, useRef } from 'react';
 
 import styles from './Card.module.scss';
@@ -53,7 +52,7 @@ const TextCard = ({
     });
 
     return (
-        <article ref={cardRef} className={classNames(styles.card, styles.cardText)}>
+        <article ref={cardRef} className={styles.card}>
             {/* data-card-frame: a press in the gaps between head and body moves the card (cardPress.ts). */}
             <div ref={innerRef} className={styles.textInner} data-card-frame="">
                 <CardHead {...extras} />

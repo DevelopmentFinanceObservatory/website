@@ -77,7 +77,7 @@ const recipients = (count: number, unit: string | null = null): Fixture =>
     });
 
 test('the committed advances are the ones the Outfit files carry', () => {
-    for (const weight of [300, 400, 700] as const) {
+    for (const weight of [300, 400, 500, 700] as const) {
         const metrics = readMetrics(`${FONTS}/outfit-latin-${weight}-normal.woff`);
         const read = [...OUTFIT_CHARS].map((char) => metrics.advance(char.codePointAt(0)!));
 
@@ -254,6 +254,17 @@ test('the estimated height runs 28 px a row, and stops at the collapsed rows', (
     assert.equal(rows(TABLE_ROWS_COLLAPSED + 1), rows(40));
     assert.ok(rows(TABLE_ROWS_COLLAPSED + 1) >= rows(TABLE_ROWS_COLLAPSED));
     assert.ok(rows(40, true) > rows(40));
+});
+
+test('a title that wraps in the card title type adds the row its second line takes', () => {
+    // 61 characters fit one line at 12 px / 300 and wrap at 14 px / 500.
+    const body = recipients(2);
+    const rows = (title: string) => tableRows({ widget: { ...body, title }, widthCells: 22 });
+
+    assert.equal(
+        rows('Health aid per person in the lowest income countries over the') - rows('Health aid'),
+        1,
+    );
 });
 
 test('a table wider than its card makes room for the scrollbar', () => {
