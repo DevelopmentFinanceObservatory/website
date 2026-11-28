@@ -5,19 +5,13 @@ import classNames from 'classnames';
 import styles from './DataSearch.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
+import { entityChoiceGroups, entityChoicePart } from '@/lib/search/parsedEdit';
 import {
-    entityChoiceGroups,
-    entityChoicePart,
-    offersAmbiguousPicker,
-} from '@/lib/search/parsedEdit';
-import {
-    cardText,
     coverageSummary,
     noDataCallout,
     noDataText,
     primaryStatVarLabel,
     shapeOrigin,
-    specOrigin,
     statVarsUnreadable,
 } from '@/lib/search/view';
 import { knownPart, type ParsedPart, type Part, type PartSpec } from '@/lib/search/types';
@@ -35,15 +29,13 @@ const CardMeta = ({ spec, origin }: { spec: PartSpec; origin: string | null }) =
     );
 };
 
-// Non-definite outcomes shown outside the sentence itself: the idle prompt's
-// background suggestion preview (a definite or candidates part, each card
-// handing its text back to the prompt), and a no_data part's nearest
-// subsets / Studio handoff. Not rendered for a part whose slot token already
-// offers its own picker (entity_ambiguous with a marked token), which would
-// duplicate it. A single-part plan has no slot token, so this is its only
-// picker. A candidates part of an answer draws ReadingCards instead.
-// Takes one part. The caller (DataSearch for a no_data part, or the idle
-// prompt's suggestion preview reading parts[0]) already knows which.
+// The outcomes of a no_data part, shown outside the sentence itself: its
+// nearest subsets, a flagged or alternate-variable callout, or the Studio
+// handoff. Any other part, an unsupported one included, renders nothing. A part whose slot token already offers its own picker
+// (entity_ambiguous with a marked token) renders nothing here, since a second
+// picker would duplicate it. A single-part plan has no slot token, so this is
+// its only picker. A candidates part of an answer draws ReadingCards instead.
+// Takes one part, which DataSearch picks out of the response.
 const SearchCards = ({
     part: givenPart,
     partIndex,
@@ -53,75 +45,28 @@ const SearchCards = ({
     question,
 }: {
     part: Part | null;
-    // Omitted for the idle prompt's suggestion preview, which has no part to
-    // edit back into.
-    partIndex?: number;
+    partIndex: number;
     onPick: (text?: string) => void;
     // Posts an entity_ambiguous pick as a parsed entry, the single-part
     // plan's escape hatch when there's no slot token to hang a picker off.
-    onEditParsed?: (partIndex: number, editedPart: ParsedPart) => void;
+    onEditParsed: (partIndex: number, editedPart: ParsedPart) => void;
     // Hands the question and the datasets on screen to Studio (DataSearch's
-    // openStudio); the no_data Studio callout's button is hidden without it.
-    onStudio?: () => void;
+    // openStudio), shown by the no_data Studio callout's button.
+    onStudio: () => void;
     // The user's own question, read by noDataCallout and re-run by an
     // unreadable subset's retry.
-    question?: string;
+    question: string;
 }) => {
     const part = knownPart(givenPart);
-
-    // A definite background suggestion renders as a single pickable card.
-    if (part?.status === 'definite' && part.spec) {
-        const spec = part.spec;
-        const text = cardText(spec, part.variable_text);
-
-        return (
-            <div className={styles.cardsBlock}>
-                <p className={styles.cardsTitle}>Looks like a match…</p>
-                <div className={styles.cards}>
-                    <button type="button" className={styles.card} onClick={() => onPick(text)}>
-                        <span className={styles.cardTitle}>{text}</span>
-                        <CardMeta spec={spec} origin={specOrigin(spec)} />
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    if (part?.status === 'candidates') {
-        const specs = part.candidates?.specs ?? [];
-
-        return (
-            <div className={styles.cardsBlock}>
-                <p className={styles.cardsTitle}>
-                    Multiple possible interpretations found. Select the best fit…
-                </p>
-                <div className={styles.cards}>
-                    {specs.map((spec, index) => (
-                        <button
-                            key={spec.spec_id}
-                            type="button"
-                            className={styles.card}
-                            style={{ '--i': index } as React.CSSProperties}
-                            onClick={() => onPick(cardText(spec, part.variable_text))}
-                        >
-                            <span className={styles.cardTitle}>
-                                {cardText(spec, part.variable_text)}
-                            </span>
-                            <CardMeta spec={spec} origin={specOrigin(spec)} />
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
 
     if (part?.status === 'no_data') {
         // The entity_ambiguous picker of a part with no slot token to hang
         // it off. A pick posts the refusal's option for it unchanged as a
-        // parsed entry (entityChoicePart).
-        if (offersAmbiguousPicker(part) && onEditParsed && partIndex !== undefined) {
-            const groups = entityChoiceGroups(part.no_data);
+        // parsed entry (entityChoicePart). The same test as
+        // offersAmbiguousPicker, on a part already known to be no_data.
+        const groups = entityChoiceGroups(part.no_data);
 
+        if (groups.length > 0) {
             return (
                 <div className={styles.cardsBlock}>
                     <p className={styles.cardsTitle}>Choose a Match</p>
@@ -192,11 +137,9 @@ const SearchCards = ({
                         This question involves multiple datasets and some reasoning to get right.
                         Open it in Studio and an agent will plan and run the analysis for you.
                     </p>
-                    {onStudio && (
-                        <Button icon="arrow" wide onClick={onStudio}>
-                            Open Studio
-                        </Button>
-                    )}
+                    <Button icon="arrow" wide onClick={onStudio}>
+                        Open Studio
+                    </Button>
                 </div>
             );
         }

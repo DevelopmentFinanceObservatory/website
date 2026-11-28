@@ -212,7 +212,7 @@ The types are `PageSpec`, `PageHook` and `PageStep` in `motion-kit/spec.ts`, and
 
 A spec with no `capture` step captures once at the end, as `page`. Step selectors are Playwright selectors, so `text=Rows in your data` and `a:has-text("(IDS)")` work, and a click fails when its selector finds more than one element. Hook selectors are plain CSS. A hook may be absent from some states (a search's answer is absent before the search), but the capture fails when its selector finds two elements in any state or nothing in every state.
 
-`motion-kit/pages/kenya-debt-search.json` captures the data search empty, with "External debt of Kenya" typed and its candidate shown, and with the answer. `motion-kit/pages/ids-source.json` opens that answer's "About this answer" panel, follows its link to the World Bank International Debt Statistics source page, and captures the page at the top and scrolled by 700 px.
+`motion-kit/pages/kenya-debt-search.json` captures the data search empty, with "External debt of Kenya" typed, and with the answer. `motion-kit/pages/ids-source.json` opens that answer's "About this answer" panel, follows its link to the World Bank International Debt Statistics source page, and captures the page at the top and scrolled by 700 px.
 
 ### What a capture holds
 

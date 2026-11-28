@@ -106,24 +106,6 @@ $table-head-cover: rem(48);
         visibility 0.3s;
 }
 
-// Suggestions take over the boxes' slot — full width, cards flush to the top.
-// Sticky: with a wrapped (2-line) prompt the column can outgrow the viewport,
-// and the cards must stay fully in view instead of sliding below the fold.
-.idleBottomTyping {
-    display: block;
-    position: sticky;
-    bottom: rem(30);
-    padding-top: rem(40);
-
-    .cardsBlock {
-        margin-top: rem(32);
-    }
-
-    .stepsLine {
-        animation: rise-in 0.4s $ease-out both;
-    }
-}
-
 .buildBox {
     display: flex;
     flex-direction: column;
