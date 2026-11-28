@@ -4,11 +4,7 @@ import test, { beforeEach } from 'node:test';
 // Before chartData.ts, which loads next/cache.
 import { nextCache } from '../../test/nextCacheStub.ts';
 import { SharesError, type SharesBackend } from '../../chat/apisShares.ts';
-import {
-    componentRead,
-    DATASET_FRAME,
-    MOVED_FRAME,
-} from '../../studio/test/fixtures/component-read.ts';
+import { DATASET_FRAME, MOVED_FRAME, slotRead } from '../../studio/test/fixtures/component-read.ts';
 import describedChart from '../../studio/test/fixtures/descriptions/envelope-line-chart-described.json' with { type: 'json' };
 import { libraryChartData, libraryCsvResponse, readFailureResponse } from '../chartData.ts';
 
@@ -21,12 +17,24 @@ const artifact = {
 };
 const ORIGIN = 'https://developmentfinance.org';
 const CSV = '/library/health-expenditure/data.csv';
+type Frame = { spec_id: string; content_version: string };
+
 // The page's CSV link, pinned to the frame its rows are drawn on.
-const pinned = (
-    frame: { spec_id: string; content_version: string },
-    query: Record<string, string> = {},
-) =>
-    `${CSV}?${new URLSearchParams({ ...query, frame: `${frame.spec_id}@${frame.content_version}` })}`;
+const pinned = (frame: Frame, query: Record<string, string> = {}) =>
+    `${CSV}?${new URLSearchParams({ ...query, ...frame })}`;
+
+// The CSV route's arguments for a link of the page.
+const csvQuery = (href: string) => {
+    const query = new URL(href, ORIGIN).searchParams;
+    const specId = query.get('spec_id');
+    const contentVersion = query.get('content_version');
+
+    return {
+        card: query.get('card'),
+        frame:
+            specId && contentVersion ? { spec_id: specId, content_version: contentVersion } : null,
+    };
+};
 const countries = [
     { ref: 'country/KEN', label: 'Kenya', value: 91.127 },
     { ref: 'country/LBR', label: 'Liberia', value: 0 },
@@ -69,9 +77,9 @@ const slotBody = (
     period: string,
     licence: string,
     component: Record<string, unknown> = barChart(period),
-    frame = DATASET_FRAME,
+    frame: Frame = DATASET_FRAME,
 ) => {
-    const body = componentRead('cmp_test', 2, frame);
+    const body = slotRead('cmp_test', 2, DATASET_FRAME, frame);
 
     return {
         ...body,
@@ -114,16 +122,36 @@ type Shape = {
     extra?: Record<string, unknown>;
 };
 
-// A share of `shape` whose slot `n` answers `slot(n)`.
+// The frame a slot route's query names, or null.
+const frameOfQuery = (query: URLSearchParams): Frame | null => {
+    const specId = query.get('spec_id');
+    const contentVersion = query.get('content_version');
+
+    return specId && contentVersion ? { spec_id: specId, content_version: contentVersion } : null;
+};
+
+// What the slot data route exports: the slot and frame it was asked for.
+const exported = (n: number, frame: Frame | null) =>
+    new Response(
+        `slot ${n} on ${frame ? `${frame.spec_id}@${frame.content_version}` : 'none'}\r\n`,
+        {
+            headers: { 'content-type': 'text/csv' },
+        },
+    );
+
+// A share of `shape` whose slot `n` answers `slot(n, frame)`, `frame` the
+// one a read names, and whose slot data route answers `file(n, frame)`.
 const shareBackend = (
     mode: 'live' | 'snapshot',
     { kind, slots, widgets, extra = {} }: Shape,
-    slot: (n: number) => Response | Promise<Response>,
+    slot: (n: number, frame: Frame | null) => Response | Promise<Response>,
+    file: (n: number, frame: Frame | null) => Response = exported,
 ): SharesBackend => ({
     base: 'https://apis.example',
     nameCaller: () => {},
     fetch: async (input) => {
-        const path = new URL(String(input)).pathname;
+        const url = new URL(String(input));
+        const path = url.pathname;
 
         if (path === '/api/presentation/shares/Ab3dEf7h') {
             return Response.json({
@@ -140,19 +168,30 @@ const shareBackend = (
             });
         }
 
-        const n = /^\/api\/presentation\/shares\/Ab3dEf7h\/slots\/(\d+)$/.exec(path)?.[1];
+        const [, n, data] =
+            /^\/api\/presentation\/shares\/Ab3dEf7h\/slots\/(\d+)(\/data)?$/.exec(path) ?? [];
 
         assert.ok(n, path);
 
-        return slot(Number(n));
+        if (data) {
+            assert.deepEqual(
+                [url.searchParams.get('format'), url.searchParams.get('bundle')],
+                ['csv', 'false'],
+            );
+
+            return file(Number(n), frameOfQuery(url.searchParams));
+        }
+
+        return slot(Number(n), frameOfQuery(url.searchParams));
     },
 });
 
 // A card share whose one card reads slot 2.
 const backend = (
     mode: 'live' | 'snapshot',
-    slot: () => Response | Promise<Response>,
+    slot: (frame: Frame | null) => Response | Promise<Response>,
     card: Card = { kind: 'chart' },
+    file?: (n: number, frame: Frame | null) => Response,
 ): SharesBackend =>
     shareBackend(
         mode,
@@ -162,7 +201,8 @@ const backend = (
             widgets: [{ id: 'health', kind: card.kind, turn: 1, slot: 1 }],
             extra: card.view ? { views: { health: card.view } } : {},
         },
-        slot,
+        (_n, frame) => slot(frame),
+        file,
     );
 
 beforeEach(nextCache.clear);
@@ -285,9 +325,10 @@ test('a retryable refusal leaves the last good rows in the cache', async () => {
 
     assert.deepEqual(await libraryChartData(shares, artifact, ORIGIN), []);
 
-    const [entry] = nextCache.stored.values();
+    const current = [...nextCache.stored].filter(([key]) => key.includes('library-slot-current'));
 
-    assert.deepEqual(JSON.parse(entry.data.body).charts[0].rows, plotted);
+    assert.equal(current.length, 1);
+    assert.deepEqual(JSON.parse(current[0][1].data.body).chart.rows, plotted);
 
     answer = () => Response.json(slotBody('2024', 'unknown'));
 
@@ -299,68 +340,100 @@ test('a retryable refusal leaves the last good rows in the cache', async () => {
     );
 });
 
-test('the CSV holds the rows the page showed after the slot moves on', async () => {
+test('the pinned CSV serves the frame the page showed from any server after the slot moves on', async () => {
     let moved = false;
-    const shares = backend('live', () =>
-        Response.json(
+    const reads: (Frame | null)[] = [];
+    const shares = backend('live', (frame) => {
+        reads.push(frame);
+
+        if (frame) {
+            return Response.json(slotBody('2023', 'unknown', barChart('2023'), frame));
+        }
+
+        return Response.json(
             moved
                 ? slotBody('2024', 'unknown', barChart('2024'), MOVED_FRAME)
                 : slotBody('2023', 'unknown'),
-        ),
-    );
+        );
+    });
     const [page] = await libraryChartData(shares, artifact, ORIGIN);
-    const csv = async (href: string) => {
-        const frame = new URL(href, ORIGIN).searchParams.get('frame');
-        const response = await libraryCsvResponse(shares, artifact, {
-            card: null,
-            frame,
-            open: true,
-        });
-
-        return response;
-    };
+    const csv = (href: string) =>
+        libraryCsvResponse(shares, artifact, { ...csvQuery(href), open: true });
 
     assert.ok(page);
     assert.equal(page.csvHref, pinned(DATASET_FRAME));
     assert.equal(page.dataset.distribution.contentUrl, `${ORIGIN}${CSV}`);
     assert.equal(page.dataset.dateModified, undefined);
 
+    // Another server, whose cache holds nothing, after the slot moved on.
     moved = true;
+    nextCache.clear();
+    reads.length = 0;
 
     const response = await csv(page.csvHref);
 
     assert.equal(response.status, 200);
     assert.deepEqual(
-        [response.headers.get('cache-control'), response.headers.get('link')],
         [
+            response.headers.get('content-type'),
+            response.headers.get('cache-control'),
+            response.headers.get('link'),
+        ],
+        [
+            'text/csv; charset=utf-8',
             'public, max-age=300, must-revalidate',
             `<${ORIGIN}/library/health-expenditure>; rel="cite-as"`,
         ],
     );
     assert.equal(
         await response.text(),
-        [
-            'Country,Year,Value,Unit',
-            ...page.rows.map(({ series, period, value, unit }) =>
-                [series, period, value, unit].join(','),
-            ),
-            '',
-        ].join('\r\n'),
+        `slot 2 on ${DATASET_FRAME.spec_id}@${DATASET_FRAME.content_version}\r\n`,
     );
+    assert.deepEqual(reads, [DATASET_FRAME]);
 
-    // Once the entry moves to the new frame, the old page's link refuses
-    // and the unpinned address serves the new rows.
-    nextCache.expire();
-    await libraryChartData(shares, artifact, ORIGIN);
+    // The frame entry the pinned read filled serves the next request.
+    await (await csv(page.csvHref)).text();
+    assert.deepEqual(reads, [DATASET_FRAME]);
 
-    const stale = await csv(page.csvHref);
+    // The unpinned address serves the frame the page shows now.
     const current = await csv(CSV);
 
-    assert.deepEqual([stale.status, (await stale.json()).code], [409, 'frame_changed']);
-    assert.equal((await current.text()).split('\r\n')[1], 'Kenya,2024,91.127,USD');
+    assert.equal(
+        await current.text(),
+        `slot 2 on ${MOVED_FRAME.spec_id}@${MOVED_FRAME.content_version}\r\n`,
+    );
 });
 
-for (const [label, slot, expected] of [
+for (const [label, refusal, expected] of [
+    ['a frame the slot never served answers 404', 404, 'frame_not_served'],
+    ['a frame DFO no longer holds answers 410', 410, 'frame_expired'],
+] as const) {
+    test(`the pinned CSV: ${label}`, async () => {
+        let refused = 0;
+        const shares = backend('live', (frame) => {
+            if (frame) {
+                refused += 1;
+
+                return Response.json({ code: expected, retryable: false }, { status: refusal });
+            }
+
+            return Response.json(slotBody('2024', 'unknown', barChart('2024'), MOVED_FRAME));
+        });
+        const csv = () =>
+            libraryCsvResponse(shares, artifact, { card: null, frame: DATASET_FRAME, open: true });
+        const response = await csv();
+
+        await csv();
+        assert.deepEqual(
+            [response.status, (await response.json()).code, refused],
+            [refusal, expected, 2],
+        );
+    });
+}
+
+const csvFile = () => Response.json(slotBody('2023', 'unknown'));
+
+for (const [label, slot, file, expected] of [
     [
         'a rate-limited card read answers 429 with its wait, and is read again',
         () =>
@@ -368,36 +441,62 @@ for (const [label, slot, expected] of [
                 status: 429,
                 headers: { 'retry-after': '30' },
             }),
+        exported,
         { status: 429, code: 'rate_limited', retryAfter: '30', reads: 2 },
     ],
     [
         'a card dfo-apis cannot draw answers 422, and is kept',
         () => Response.json({ code: 'constraint_violation' }, { status: 422 }),
+        exported,
         { status: 422, code: 'constraint_violation', retryAfter: null, reads: 1 },
     ],
     [
         'a slot dfo-apis has taken away answers 410, and is kept',
         () => Response.json({ code: 'gone' }, { status: 410 }),
+        exported,
         { status: 410, code: 'gone', retryAfter: null, reads: 1 },
     ],
     [
         "a slot answer outside dfo-apis' shape answers 404, and is kept",
         () => Response.json({ not: 'a card' }),
+        exported,
         { status: 404, code: 'not_found', retryAfter: null, reads: 1 },
     ],
     [
         'a card whose view draws no rows answers 404',
         () => Response.json(slotBody('2023', 'unknown', keyNumber('2023'))),
+        exported,
         { status: 404, code: 'not_found', retryAfter: null, reads: 1 },
+    ],
+    [
+        'a rate-limited export answers 429 with its wait',
+        csvFile,
+        () =>
+            new Response(JSON.stringify({ code: 'rate_limited', retryable: true }), {
+                status: 429,
+                headers: { 'retry-after': '12' },
+            }),
+        { status: 429, code: 'rate_limited', retryAfter: '12', reads: 1 },
+    ],
+    [
+        'an export dfo-apis cannot draw answers 422',
+        csvFile,
+        () => Response.json({ code: 'constraint_violation' }, { status: 422 }),
+        { status: 422, code: 'constraint_violation', retryAfter: null, reads: 1 },
     ],
 ] as const) {
     test(`the CSV route: ${label}`, async () => {
         let reads = 0;
-        const shares = backend('snapshot', () => {
-            reads += 1;
+        const shares = backend(
+            'snapshot',
+            () => {
+                reads += 1;
 
-            return slot();
-        });
+                return slot();
+            },
+            undefined,
+            file,
+        );
         const csv = () =>
             libraryCsvResponse(shares, artifact, { card: null, frame: null, open: true });
         const response = await csv();
@@ -485,12 +584,49 @@ test('a canvas serves each card it shows, under its own name and CSV address', a
             open: false,
         });
 
-        return [response.status, (await response.text()).split('\r\n')[1]];
+        return [response.status, (await response.text()).split(' on ')[0]];
     };
 
     assert.deepEqual(
         [await csv('rows'), await csv(null), (await csv('gone'))[0]],
-        [[200, 'Kenya,2022,91.127,USD'], [200, 'Kenya,2023,91.127,USD'], 404],
+        [[200, 'slot 2'], [200, 'slot 1'], 404],
+    );
+});
+
+test('a canvas card whose read fails leaves the other cards their tables', async () => {
+    let failing = true;
+    const shares = shareBackend(
+        'live',
+        {
+            kind: 'canvas',
+            slots: [1, 2],
+            widgets: [
+                { id: 'spend', kind: 'chart', turn: 1, slot: 0 },
+                { id: 'rows', kind: 'table', turn: 1, slot: 1 },
+            ],
+        },
+        (n) =>
+            n === 1 && failing
+                ? Response.json({ code: 'frame_unavailable', retryable: true }, { status: 404 })
+                : Response.json(
+                      slotBody(
+                          '2023',
+                          'unknown',
+                          n === 1 ? barChart('2023') : countryTable('2022'),
+                      ),
+                  ),
+    );
+
+    assert.deepEqual(
+        (await libraryChartData(shares, artifact, ORIGIN)).map(({ id }) => id),
+        ['rows'],
+    );
+
+    failing = false;
+
+    assert.deepEqual(
+        (await libraryChartData(shares, artifact, ORIGIN)).map(({ id }) => id),
+        ['spend', 'rows'],
     );
 });
 
@@ -522,6 +658,7 @@ test('the CSV route answers a failed read under the status it calls for', () => 
         new SharesError('not_found', { status: 404 }),
         new SharesError('request_invalid', { status: 400 }),
         new SharesError('unprocessable', { status: 422 }),
+        new SharesError('frame_expired', { status: 410 }),
         new SharesError('rate_limited', { status: 429, retryable: true, retryAfterS: 30 }),
         new SharesError('upstream_error', { status: 500 }),
         new SharesError('backend_unreachable', { retryable: true }),
@@ -535,6 +672,7 @@ test('the CSV route answers a failed read under the status it calls for', () => 
         [404, null],
         [400, null],
         [422, null],
+        [410, null],
         [429, '30'],
         [502, null],
         [502, null],

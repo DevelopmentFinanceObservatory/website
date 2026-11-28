@@ -3,12 +3,24 @@
  * artifact page's own HTML (a table and a schema.org `Dataset` block per
  * card) and its CSV route (`/library/<slug>/data.csv`).
  *
- * The share's record and slots are read once per share and cached
- * (`cachedSlotCharts`). The page and the CSV route both draw from that one
- * entry, so a CSV holds the rows the page's table shows. The page waits
- * `PAGE_DEADLINE_MS` for the read and renders without the tables after that,
- * while the read runs on for up to `FILL_DEADLINE_MS` to fill the cache for
- * the next request.
+ * Three cache entries hold what dfo-apis serves, all under the share's tag
+ * (`libraryShareTag`), which a take-down revalidates:
+ *
+ * - the share's cards (`cachedShareCards`), per share, for
+ *   `REVALIDATE_SECONDS`;
+ * - each card's current read (`cachedCurrentSlot`), per share and card, for
+ *   `REVALIDATE_SECONDS`, which names the frame the slot serves;
+ * - each card's rows on one frame (`frameChart`), per share, card and frame,
+ *   kept for a year, since a frame's rows never change.
+ *
+ * The page draws each table from the frame entry its current read names,
+ * and links to the CSV pinned to that frame. The CSV route serves the file
+ * dfo-apis' slot data route exports on that same frame, so the file holds
+ * the page's rows from any server, whatever the slot serves by then. Each
+ * card is read on its own, so a card that fails, or is slow, leaves the
+ * others' tables standing. The page waits `PAGE_DEADLINE_MS` for the reads
+ * and renders without the tables still missing, while those reads run on for
+ * up to `FILL_DEADLINE_MS` to fill the cache for the next request.
  *
  * Server-only, without a `server-only` import so `node --test` can load it.
  */
@@ -24,24 +36,19 @@ import { asRecord } from '../asRecord.ts';
 import {
     readShare,
     readSlotCard,
+    readSlotFile,
     SharesError,
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
-import type { CardData, FrameRef } from '../chat/widgets.ts';
-import { toCsv } from '../graphExplorer/sheet.ts';
+import type { CardData, FrameRef, Widget } from '../chat/widgets.ts';
 import { cardDataDates } from '../studio/dataThrough.ts';
 import { gateOf } from '../studio/gate.ts';
 import { cardDescription } from '../studio/infoPanel.ts';
-import { BackendError, componentReadOf, drawnFrame } from '../studio/liveBackend.ts';
+import { BackendError } from '../studio/liveBackend.ts';
 import { formatPeriod } from '../studio/period.ts';
 import { problem, type ProblemStatus } from '../proxy/problem.ts';
-import {
-    drawSlotCard,
-    type PageCard,
-    REQUEST_REFUSALS,
-    shownPageCards,
-} from '../studio/slotCards.ts';
+import { drawSlotCard, REQUEST_REFUSALS, shownPageCards } from '../studio/slotCards.ts';
 import { DFO_ORGANIZATION, SITE_NAME, SITE_ORIGIN } from '../site.ts';
 import { artifactPath, type LibraryArtifact } from './artifact.ts';
 
@@ -50,8 +57,8 @@ const REVALIDATE_SECONDS = 300;
 // The share read, then its slots in waves of `READ_CONCURRENCY` reads, so a
 // canvas of nine data cards takes the share read and three waves. A slot
 // read can start dfo-apis' check of a live slot for newer data, its slow
-// path. The page gives the whole read 1.5 s and renders without the tables
-// after that.
+// path. The page gives the reads 1.5 s and renders without the tables still
+// missing after that.
 const PAGE_DEADLINE_MS = 1_500;
 
 // How long a read that missed the page's deadline may run on to fill the
@@ -72,6 +79,10 @@ const READ_CONCURRENCY = 4;
 
 // Five minutes, as the page's link-preview image and its rows.
 const OPEN_CACHE = 'public, max-age=300, must-revalidate';
+
+// A frame's rows never change, so its entry is kept for a year, the most
+// `unstable_cache` keeps one, unless the share's tag is revalidated.
+const FRAME_REVALIDATE_SECONDS = false;
 
 // Names a built description lists before it counts the rest.
 const NAMES_LISTED = 8;
@@ -107,25 +118,19 @@ type Dataset = {
 };
 
 /**
- * What one card of a share draws, as dfo-apis serves its slot: the card's
- * payload id, the slot, the frame the card is drawn on (null when the read
- * names none), the plotted rows and what the card says about them. Plain
- * JSON, so the cache can hold it.
+ * A card of a share's page that draws from a slot, as the share's entry
+ * keeps it: its payload id, its place among the cards the page shows (from
+ * 1), its slot, the card the page holds until the slot fills it, and the
+ * view and title the share saved for it. Plain JSON, so the cache can hold
+ * it.
  */
-export type SlotChart = {
+export type ShareCard = {
     id: string;
-    // The card's place among the cards the page shows, from 1.
     position: number;
     slot: number;
-    frame: FrameRef | null;
-    title: string;
-    measure: string | null;
-    // When the card's data last changed, as an ISO 8601 date or time, or null
-    // when nothing says.
-    dateModified: string | null;
-    rows: Row[];
-    seriesHeading: 'Country' | 'Series';
-    sources: { name: string; url: string | null; licence: string | null }[];
+    held: Widget;
+    view: CardView | null;
+    title: string | null;
 };
 
 /** A refusal of the share (`card` null) or of one card's slot that a later
@@ -133,12 +138,47 @@ export type SlotChart = {
 export type SlotRefusal = { card: string | null; status: number | undefined; code: string };
 
 /**
- * The cards of a share that draw rows, in the order its page shows them, the
- * permanent refusals met on the way, and whether the share is a card share
- * (`single`), whose one chart stands for the whole artifact. Plain JSON, so
- * the cache can hold it.
+ * The cards a card or canvas share's page shows that draw from a slot, in
+ * page order, the share's refusal when a later read will not change it,
+ * whether the share is a card share (`single`), whose one chart stands for
+ * the whole artifact, and, for a snapshot, whose slots keep their frames,
+ * the time it was made. Plain JSON, so the cache can hold it.
  */
-export type SlotCharts = { charts: SlotChart[]; refused: SlotRefusal[]; single: boolean };
+export type ShareCards = {
+    cards: ShareCard[];
+    refused: SlotRefusal | null;
+    single: boolean;
+    snapshotAt: string | null;
+};
+
+/**
+ * What one card of a share draws on one frame, as dfo-apis serves its slot:
+ * the card's payload id, its place on the page, the slot, the frame, the
+ * plotted rows and what the card says about them. Plain JSON, so the cache
+ * can hold it.
+ */
+export type SlotChart = {
+    id: string;
+    position: number;
+    slot: number;
+    frame: FrameRef;
+    title: string;
+    measure: string | null;
+    // When the card's data last changed by the card's own account, as an ISO
+    // 8601 date or time, or null when it says nothing.
+    dataDate: string | null;
+    rows: Row[];
+    seriesHeading: 'Country' | 'Series';
+    sources: { name: string; url: string | null; licence: string | null }[];
+};
+
+/** A card's current read: the chart it draws on the frame its slot serves,
+ *  null when it draws none, or the refusal a later read will not change. */
+export type SlotRead = { chart: SlotChart | null; refusal: SlotRefusal | null };
+
+/** A chart as the page shows it: `dateModified` falls back to a snapshot's
+ *  making when the card names no date. */
+export type ShownChart = SlotChart & { dateModified: string | null };
 
 export type LibraryChartData = {
     id: string;
@@ -275,44 +315,43 @@ const permanentRefusal = (error: unknown, card: string | null): SlotRefusal | nu
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:\d{2})?)?$/;
 
+const isoDate = (date: unknown): date is string => typeof date === 'string' && ISO_DATE.test(date);
+
 // When a card's data last changed: a legacy card's `last_refreshed`, else
-// the date its description says its version was prepared or computed, else,
-// for a snapshot, whose slots keep their frames, the day the share was made.
-// A live slot's own date would take a read of the share's history, which
-// the page does not make.
-const refreshedOf = (
+// the date its description says its version was prepared or computed.
+const dataDateOf = (
     info: Parameters<typeof cardDataDates>[0],
     description: ReturnType<typeof cardDescription> | undefined,
-    share: ShareRecord,
 ): string | null =>
     [
         cardDataDates(info).lastRefreshed,
         description?.freshness.prepared,
         description?.freshness.computed,
-        share.mode === 'snapshot' ? share.createdAt : null,
-    ].find((date): date is string => typeof date === 'string' && ISO_DATE.test(date)) ?? null;
+    ].find(isoDate) ?? null;
 
-// The rows card `page` of `share` draws, or null when the view the embed
-// shows (`resolveCardView` with the view the share saved) draws none, as a
-// key number's does not, or the card holds no value.
-const slotChartOf = async (
-    shares: SharesBackend,
-    share: ShareRecord,
-    page: PageCard,
-    position: number,
-): Promise<SlotChart | null> => {
-    if (!page.ref || page.slot === null) {
+// A card's date, else, for a snapshot, whose slots keep their frames, the
+// day the share was made. A live slot's own date would take a read of the
+// share's history, which the page does not make.
+const shownChart = (chart: SlotChart, share: ShareCards): ShownChart => ({
+    ...chart,
+    dateModified: chart.dataDate ?? (isoDate(share.snapshotAt) ? share.snapshotAt : null),
+});
+
+// The rows `card` draws from `body`, a slot card read on `frame`, or null
+// when the view the embed shows (`resolveCardView` with the view the share
+// saved) draws none, as a key number's does not, or the card holds no value.
+const chartOf = (
+    card: ShareCard,
+    body: Record<string, unknown>,
+    frame: FrameRef,
+): SlotChart | null => {
+    const widget = drawSlotCard(card.held, body);
+
+    if (!widget || widget.kind === 'text' || !widget.data) {
         return null;
     }
 
-    const { body } = await readSlotCard(shares, share.id, page.slot);
-    const widget = body && drawSlotCard(page.held, body);
-
-    if (!body || !widget || widget.kind === 'text' || !widget.data) {
-        return null;
-    }
-
-    const { view } = resolveCardView(widget, savedView(share.payload, page.id));
+    const { view } = resolveCardView(widget, card.view ?? undefined);
 
     // A key number has no view and draws no rows. A table whose values
     // cannot chart has none either, and draws itself.
@@ -335,13 +374,13 @@ const slotChartOf = async (
     );
 
     return {
-        id: page.id,
-        position,
-        slot: page.slot,
-        frame: drawnFrame(componentReadOf(body).card),
-        title: savedTitle(share.payload, page.id) ?? widgetTitle(widget),
+        id: card.id,
+        position: card.position,
+        slot: card.slot,
+        frame,
+        title: card.title ?? widgetTitle(widget),
         measure: description?.about.measure?.label ?? null,
-        dateModified: refreshedOf(widget.info, description, share),
+        dataDate: dataDateOf(widget.info, description),
         rows,
         seriesHeading: rows.every(({ series }) => countries.has(series.toLowerCase()))
             ? 'Country'
@@ -354,21 +393,30 @@ const slotChartOf = async (
     };
 };
 
-/**
- * The rows each card a card or canvas share shows draws, read from dfo-apis.
- * The cards are the ones its page shows (`shownPageCards`): a card share's
- * one card, and every card a canvas shows. A chart, a table, and either one
- * saved in the other's view draw rows; a key number and a note draw none. A
- * refusal a later read will not change (the share or slot gone, a card
- * dfo-apis cannot draw, an answer outside its shape) is kept in `refused`,
- * so the cache keeps it. Any other failed read, a refusal dfo-apis marks
- * `retryable` included, throws its `SharesError` or `BackendError`, so the
- * whole read fails and the cache keeps its last good entry.
- */
-export const readSlotCharts = async (
+// The chart `card` draws on the frame its slot serves, or on `frame` when
+// one is named. A read that names no frame (a note's) draws no chart.
+const readSlot = async (
     shares: SharesBackend,
     shareId: string,
-): Promise<SlotCharts> => {
+    card: ShareCard,
+    frame: FrameRef | null,
+): Promise<SlotChart | null> => {
+    const read = await readSlotCard(shares, shareId, card.slot, { frame });
+    const drawnOn = frame ?? read.frame;
+
+    return read.body && drawnOn ? chartOf(card, read.body, drawnOn) : null;
+};
+
+/**
+ * The cards of share `shareId` its page shows that draw from a slot
+ * (`shownPageCards`): a card share's one card, and every card a canvas
+ * shows. A share dfo-apis refuses in a way a later read will not change is
+ * kept in `refused`. Any other failed read throws its `SharesError`.
+ */
+export const readShareCards = async (
+    shares: SharesBackend,
+    shareId: string,
+): Promise<ShareCards> => {
     let share: ShareRecord | null;
 
     try {
@@ -377,62 +425,143 @@ export const readSlotCharts = async (
         const refusal = permanentRefusal(error, null);
 
         if (refusal) {
-            return { charts: [], refused: [refusal], single: true };
+            return { cards: [], refused: refusal, single: true, snapshotAt: null };
         }
 
         throw error;
     }
 
     if (share?.kind !== 'card' && share?.kind !== 'canvas') {
-        return { charts: [], refused: [], single: true };
+        return { cards: [], refused: null, single: true, snapshotAt: null };
     }
 
-    const record = share;
-    const gate = gateOf(READ_CONCURRENCY);
-    const cards = await Promise.all(
-        shownPageCards(record).map(async (page, index) => {
-            try {
-                return { chart: await gate(() => slotChartOf(shares, record, page, index + 1)) };
-            } catch (error) {
-                const refusal = permanentRefusal(error, page.id);
-
-                if (refusal) {
-                    return { refusal };
-                }
-
-                throw error;
-            }
-        }),
-    );
+    const { payload } = share;
 
     return {
-        charts: cards.flatMap(({ chart }) => chart ?? []),
-        refused: cards.flatMap(({ refusal }) => refusal ?? []),
-        single: record.kind === 'card',
+        cards: shownPageCards(share).flatMap((page, index) =>
+            page.ref && page.slot !== null
+                ? [
+                      {
+                          id: page.id,
+                          position: index + 1,
+                          slot: page.slot,
+                          held: page.held,
+                          view: savedView(payload, page.id) ?? null,
+                          title: savedTitle(payload, page.id) ?? null,
+                      },
+                  ]
+                : [],
+        ),
+        refused: null,
+        single: share.kind === 'card',
+        snapshotAt: share.mode === 'snapshot' ? share.createdAt : null,
     };
 };
 
-/** The cache tag of a share's entry, which a take-down revalidates. */
+/**
+ * Card `card`'s current read: the chart it draws on the frame its slot
+ * serves. A chart, a table, and either one saved in the other's view draw
+ * rows; a key number draws none. A refusal a later read will not change
+ * (the slot gone, a card dfo-apis cannot draw, an answer outside its shape)
+ * is kept in `refusal`, so the cache keeps it. Any other failed read, a
+ * refusal dfo-apis marks `retryable` included, throws its `SharesError` or
+ * `BackendError`, so the cache keeps the card's last good entry.
+ */
+export const readCurrentSlot = async (
+    shares: SharesBackend,
+    shareId: string,
+    card: ShareCard,
+): Promise<SlotRead> => {
+    try {
+        return { chart: await readSlot(shares, shareId, card, null), refusal: null };
+    } catch (error) {
+        const refusal = permanentRefusal(error, card.id);
+
+        if (refusal) {
+            return { chart: null, refusal };
+        }
+
+        throw error;
+    }
+};
+
+/** The cache tag of a share's entries, which a take-down revalidates. */
 export const libraryShareTag = (shareId: string): string => `library-share:${shareId}`;
 
+// The backend a read that fills a cache entry uses: its own deadline, so a
+// page that stops waiting leaves it running.
+const filling = (backend: SharesBackend): SharesBackend => ({
+    ...backend,
+    signal: AbortSignal.timeout(FILL_DEADLINE_MS),
+});
+
 /**
- * `readSlotCharts`, cached per share under `libraryShareTag` for
+ * `readShareCards`, cached per share under `libraryShareTag` for
  * `REVALIDATE_SECONDS`, the lifetime of the link-preview image. The cache is
  * stale-while-revalidate: the first request after an entry expires is
  * served the old entry and starts a read, and later requests get that
  * read's answer, so a change shows after five minutes and one more view. A
- * failed read throws, stores nothing and leaves the old entry in place, so
- * a transient fault keeps the last good rows; a refusal that will not change
- * is stored (`readSlotCharts`). Taking the share down revalidates the tag.
- * The reads name the caller of the request that fills the entry.
+ * failed read throws, stores nothing and leaves the old entry in place.
+ * The reads name the caller of the request that fills the entry, as the
+ * other entries' do.
  */
-export const cachedSlotCharts = (backend: SharesBackend, shareId: string): Promise<SlotCharts> =>
+export const cachedShareCards = (backend: SharesBackend, shareId: string): Promise<ShareCards> =>
+    unstable_cache((id: string) => readShareCards(filling(backend), id), ['library-share-cards'], {
+        revalidate: REVALIDATE_SECONDS,
+        tags: [libraryShareTag(shareId)],
+    })(shareId);
+
+/**
+ * `readCurrentSlot`, cached per share and card under `libraryShareTag` for
+ * `REVALIDATE_SECONDS`, as `cachedShareCards` is. The key holds the whole
+ * card, so a card the share saves another view or title for is read afresh.
+ * A failed read keeps this card's last good entry and no other's.
+ */
+export const cachedCurrentSlot = (
+    backend: SharesBackend,
+    shareId: string,
+    card: ShareCard,
+): Promise<SlotRead> =>
     unstable_cache(
-        (id: string) =>
-            readSlotCharts({ ...backend, signal: AbortSignal.timeout(FILL_DEADLINE_MS) }, id),
-        ['library-slot-charts'],
+        (id: string, shown: ShareCard) => readCurrentSlot(filling(backend), id, shown),
+        ['library-slot-current'],
         { revalidate: REVALIDATE_SECONDS, tags: [libraryShareTag(shareId)] },
-    )(shareId);
+    )(shareId, card);
+
+/**
+ * The chart `card` draws on `frame`, cached per share, card and frame under
+ * `libraryShareTag` for a year (`FRAME_REVALIDATE_SECONDS`), since the rows
+ * a card draws on one frame never change. On a miss, `draw` gives the
+ * chart: the page passes the chart its current read drew on that frame, and
+ * the CSV route a read of the slot on that frame, so either fills the entry
+ * the other reads. A `draw` that throws stores nothing, so a frame dfo-apis
+ * refuses is asked again. The key goes in the key parts, as `draw` is a
+ * closure.
+ */
+const frameChart = (
+    shareId: string,
+    card: ShareCard,
+    frame: FrameRef,
+    draw: () => Promise<SlotChart | null>,
+): Promise<SlotChart | null> =>
+    unstable_cache(
+        () => draw(),
+        ['library-slot-frame', shareId, JSON.stringify(card), frameKey(frame)],
+        { revalidate: FRAME_REVALIDATE_SECONDS, tags: [libraryShareTag(shareId)] },
+    )();
+
+// The chart card `card` shows on the page: its current read's frame entry,
+// filled from that read on a miss. Null when the card draws no rows; a
+// failed read throws.
+const pageChart = async (
+    backend: SharesBackend,
+    shareId: string,
+    card: ShareCard,
+): Promise<SlotChart | null> => {
+    const { chart } = await cachedCurrentSlot(backend, shareId, card);
+
+    return chart && frameChart(shareId, card, chart.frame, () => Promise.resolve(chart));
+};
 
 // At most `max` characters, cut at a word break when one is near.
 const clip = (text: string, max: number): string => {
@@ -497,14 +626,15 @@ const datasetDescription = (
     return clip(sentences.join(' '), DESCRIPTION_MAX);
 };
 
-// A frame as the CSV route's `frame` query names it.
+// A frame as one cache key part.
 const frameKey = ({ spec_id, content_version }: FrameRef): string =>
     `${spec_id}@${content_version}`;
 
 /**
  * The CSV route's address for `chart`: the bare `data.csv` for an artifact of
  * one chart, and `data.csv?card=<id>` for each chart of an artifact with
- * more. With `pinned`, it also names the frame the rows are drawn on.
+ * more. With `pinned`, it also names the frame the rows are drawn on, in
+ * `spec_id` and `content_version`, as dfo-apis' slot routes name it.
  */
 const csvHrefOf = (
     slug: string,
@@ -513,7 +643,9 @@ const csvHrefOf = (
 ): string => {
     const query = new URLSearchParams({
         ...(single ? {} : { card: chart.id }),
-        ...(pinned && chart.frame ? { frame: frameKey(chart.frame) } : {}),
+        ...(pinned
+            ? { spec_id: chart.frame.spec_id, content_version: chart.frame.content_version }
+            : {}),
     });
 
     return `${artifactPath(slug)}/data.csv${query.size ? `?${query}` : ''}`;
@@ -527,7 +659,7 @@ const csvHrefOf = (
  * `labelled`, the table carries that name too.
  */
 export const chartDataOf = (
-    chart: SlotChart,
+    chart: ShownChart,
     artifact: ChartArtifact,
     origin: string,
     { single = true, labelled = false }: { single?: boolean; labelled?: boolean } = {},
@@ -608,7 +740,8 @@ export const chartDataOf = (
 /**
  * The table and Dataset block of each chart a Library artifact shows, on the
  * frames its public slots serve, in page order: none when no card draws
- * rows, the read fails, or it is not done in `deadlineMs`. A read that
+ * rows, the share's read fails, or it is not done in `deadlineMs`, and none
+ * for a card whose own read fails or is not done by then. A read that
  * misses the deadline goes on to fill the cache, and `waitUntil` receives it
  * so the server keeps running it after the response.
  */
@@ -621,39 +754,72 @@ export const libraryChartData = async (
         waitUntil,
     }: { deadlineMs?: number; waitUntil?: (pending: Promise<unknown>) => void } = {},
 ): Promise<LibraryChartData[]> => {
-    const unavailable = (code: string) => {
-        console.warn('library_chart_data_unavailable', { share: artifact.shareId, code });
+    const { shareId } = artifact;
+    const unavailable = (code: string, card?: string) => {
+        console.warn('library_chart_data_unavailable', { share: shareId, card, code });
 
-        return [];
+        return null;
     };
-    const read = cachedSlotCharts(backend, artifact.shareId);
-    const settled = read.catch(() => null);
+    const gate = gateOf(READ_CONCURRENCY);
+    const chartsOf = ({ cards }: ShareCards) =>
+        cards.map((card) => ({ card, read: gate(() => pageChart(backend, shareId, card)) }));
     let timer: ReturnType<typeof setTimeout> | undefined;
     const late = new Promise<'late'>((resolve) => {
         timer = setTimeout(resolve, deadlineMs, 'late');
     });
-
-    try {
+    // `read`'s answer, or 'late' after handing it to `waitUntil` to finish.
+    const inTime = async <T>(read: Promise<T>, settle: (answer: T) => unknown = () => null) => {
         const answer = await Promise.race([read, late]);
 
         if (answer === 'late') {
-            waitUntil?.(settled);
-
-            return unavailable('page_deadline');
+            waitUntil?.(read.then(settle).catch(() => null));
         }
 
-        const { single } = answer;
-        const labelled = answer.charts.length > 1;
+        return answer;
+    };
 
-        return answer.charts.flatMap(
-            (chart) => chartDataOf(chart, artifact, origin, { single, labelled }) ?? [],
+    try {
+        const share = await inTime(cachedShareCards(backend, shareId), (filled) =>
+            Promise.allSettled(chartsOf(filled).map(({ read }) => read)),
+        );
+
+        if (share === 'late') {
+            unavailable('page_deadline');
+
+            return [];
+        }
+
+        const charts = await Promise.all(
+            chartsOf(share).map(async ({ card, read }) => {
+                try {
+                    const chart = await inTime(read);
+
+                    return chart === 'late' ? unavailable('page_deadline', card.id) : chart;
+                } catch (error) {
+                    if (!isReadFailure(error)) {
+                        throw error;
+                    }
+
+                    return unavailable(error.code, card.id);
+                }
+            }),
+        );
+        const shown = charts.filter((chart) => chart !== null);
+        const { single } = share;
+        const labelled = shown.length > 1;
+
+        return shown.flatMap(
+            (chart) =>
+                chartDataOf(shownChart(chart, share), artifact, origin, { single, labelled }) ?? [],
         );
     } catch (error) {
         if (!isReadFailure(error)) {
             throw error;
         }
 
-        return unavailable(error.code);
+        unavailable(error.code);
+
+        return [];
     } finally {
         clearTimeout(timer);
     }
@@ -664,11 +830,16 @@ type Failure = Pick<SharesError, 'code' | 'retryable'> & {
     retryAfterS?: number;
 };
 
+// The statuses with which dfo-apis refuses a request itself, which the CSV
+// route answers under as dfo-apis gave them: those the share download maps
+// (`REQUEST_REFUSALS`), and 410, a slot or frame gone for good.
+const PASSED_REFUSALS = [...REQUEST_REFUSALS, 410] as const satisfies readonly ProblemStatus[];
+
 /**
- * The CSV route's answer to a failed read: a refusal
- * dfo-apis made of the request itself (`REQUEST_REFUSALS`, as the share
- * download maps them) under its own status, a 429 with its `Retry-After`,
- * and 502 for any other fault.
+ * The CSV route's answer to a failed read: a refusal dfo-apis made of the
+ * request itself (`PASSED_REFUSALS`), `frame_not_served` (404) and
+ * `frame_expired` (410) among them, under its own status, a 429 with its
+ * `Retry-After`, and 502 for any other fault.
  */
 export const readFailureResponse = ({
     code,
@@ -677,7 +848,7 @@ export const readFailureResponse = ({
     retryAfterS,
 }: Failure): Response => {
     const answer =
-        status === 429 ? 429 : (REQUEST_REFUSALS.find((refusal) => refusal === status) ?? 502);
+        status === 429 ? 429 : (PASSED_REFUSALS.find((refusal) => refusal === status) ?? 502);
 
     return problem({
         status: answer,
@@ -693,14 +864,12 @@ export const readFailureResponse = ({
     });
 };
 
-// The statuses a stored refusal answers under as dfo-apis gave them. Any
-// other, as `backend_invalid` (an answer outside dfo-apis' shape, with no
-// status) is, answers 404 `not_found`: the card has no data to serve.
-const STORED_REFUSALS = [...REQUEST_REFUSALS, 410] as const satisfies readonly ProblemStatus[];
-
-// The CSV route's answer to a refusal the cache holds.
+// The CSV route's answer to a refusal the cache holds: its own status when
+// it is one of `PASSED_REFUSALS`, and 404 `not_found` for any other, as
+// `backend_invalid` (an answer outside dfo-apis' shape, with no status) is:
+// the card has no data to serve.
 const storedRefusalResponse = ({ status, code }: SlotRefusal): Response => {
-    const answer = STORED_REFUSALS.find((refusal) => refusal === status);
+    const answer = PASSED_REFUSALS.find((refusal) => refusal === status);
 
     return answer === undefined
         ? noData()
@@ -722,57 +891,114 @@ const noData = (): Response =>
         headers: { 'Cache-Control': 'no-store' },
     });
 
-// A CSV cell for a label, guarded against running as a formula (`toCsv`).
-const textCell = (text: string): string => toCsv([[text]]);
+// The card a request names, with its current read when finding it took one:
+// card `card`, a card share's one card, or a canvas's first card whose
+// current read draws rows. A canvas with none answers the first refusal its
+// reads met, else no card.
+const requestedCard = async (
+    backend: SharesBackend,
+    shareId: string,
+    share: ShareCards,
+    card: string | null,
+): Promise<{ shown: ShareCard; current?: SlotRead } | { refusal: SlotRefusal } | null> => {
+    if (card !== null || share.single) {
+        const found = card === null ? share.cards[0] : share.cards.find(({ id }) => id === card);
 
-/** The rows of `chart` as the page's table shows them, as CSV: its four
- *  columns under the table's headings, one line per row, lines ending CRLF. */
-export const chartCsv = (chart: SlotChart): string => {
-    const lines = [
-        [chart.seriesHeading, periodHeadingOf(chart.rows), 'Value', 'Unit'].join(','),
-        ...chart.rows.map(({ series, period, value, unit }) =>
-            [textCell(series), textCell(period), String(value), textCell(unit ?? '')].join(','),
-        ),
-    ];
+        return found ? { shown: found } : null;
+    }
 
-    return `${lines.join('\r\n')}\r\n`;
+    let refusal: SlotRefusal | null = null;
+
+    for (const shown of share.cards) {
+        const current = await cachedCurrentSlot(backend, shareId, shown);
+
+        if (current.chart) {
+            return { shown, current };
+        }
+
+        refusal ??= current.refusal;
+    }
+
+    return refusal && { refusal };
 };
 
-const frameChanged = (): Response =>
-    problem({
-        status: 409,
-        code: 'frame_changed',
-        detail: 'The card shows newer data than this link names. Reload the page for its link.',
-        retryable: false,
-        headers: { 'Cache-Control': 'no-store' },
-    });
-
 /**
- * `GET /library/<slug>/data.csv?card=&frame=`, for a published artifact: the
- * rows of chart `card` (the first chart when `card` is null) from the
- * share's cached entry (`cachedSlotCharts`), the entry the page draws its
- * tables from, so the file holds the rows the page shows. The page's link
- * names the frame those rows are drawn on (`frame`), and when the entry has
- * moved to another frame since, the link answers 409 `frame_changed`
- * instead of a file of other rows. A request without `frame` gets the rows
- * the page shows now. A read that fails
- * answers as `readFailureResponse` maps it, a 429 with its `Retry-After`
- * among them. A card the entry holds as refused, or a share refused whole,
- * answers that refusal's status when it is 400, 404, 410 or 422, and 404
- * `not_found` otherwise (`storedRefusalResponse`). The file's
- * `Link` header names the artifact's page as the address to cite. Any other
- * card, and an artifact with no chart, is 404. An open Library's file is
- * cached publicly for five minutes; an admin's preview is not stored.
+ * `GET /library/<slug>/data.csv?card=&spec_id=&content_version=`, for a
+ * published artifact: the data file of chart `card` (the first chart when
+ * `card` is null) on `frame`, or on the frame its current read names when
+ * `frame` is null, which is the frame the page draws its table on. The file
+ * is dfo-apis' unbundled CSV export of the card's slot on that frame, with
+ * every column the card's rows carry, so a link the page pinned serves the
+ * page's rows from any server however far the slot has moved on. A card
+ * that draws no rows on the frame is 404. dfo-apis' refusals and failed
+ * reads answer as `readFailureResponse` maps them: a frame the slot never
+ * served its card on 404 `frame_not_served`, one DFO no longer holds 410
+ * `frame_expired`, a 429 with its `Retry-After`. A card or share the cache
+ * holds as refused answers as `storedRefusalResponse` maps it. Any other
+ * card, and an artifact with no chart, is 404. The file's `Link` header
+ * names the artifact's page as the address to cite. An open Library's file
+ * is cached publicly for five minutes; an admin's preview is not stored.
  */
 export const libraryCsvResponse = async (
     backend: SharesBackend,
     artifact: Pick<LibraryArtifact, 'slug' | 'shareId'>,
-    { card, frame, open }: { card: string | null; frame: string | null; open: boolean },
+    { card, frame, open }: { card: string | null; frame: FrameRef | null; open: boolean },
 ): Promise<Response> => {
-    let read: SlotCharts;
+    const { shareId } = artifact;
 
     try {
-        read = await cachedSlotCharts(backend, artifact.shareId);
+        const share = await cachedShareCards(backend, shareId);
+
+        if (share.refused) {
+            return storedRefusalResponse(share.refused);
+        }
+
+        const requested = await requestedCard(backend, shareId, share, card);
+
+        if (requested === null) {
+            return noData();
+        }
+
+        if ('refusal' in requested) {
+            return storedRefusalResponse(requested.refusal);
+        }
+
+        const { shown } = requested;
+        let chart: SlotChart | null;
+
+        if (frame) {
+            chart = await frameChart(shareId, shown, frame, () =>
+                readSlot(filling(backend), shareId, shown, frame),
+            );
+        } else {
+            const current = requested.current ?? (await cachedCurrentSlot(backend, shareId, shown));
+
+            if (current.refusal) {
+                return storedRefusalResponse(current.refusal);
+            }
+
+            chart = current.chart;
+        }
+
+        if (!chart) {
+            return noData();
+        }
+
+        const file = await readSlotFile(backend, shareId, shown.slot, {
+            format: 'csv',
+            bundle: 'false',
+            frame: chart.frame,
+        });
+        const name = share.single ? artifact.slug : `${artifact.slug}-${shown.position}`;
+
+        return new Response(file.body, {
+            headers: {
+                'Content-Type': 'text/csv; charset=utf-8',
+                'Content-Disposition': `attachment; filename="${name}.csv"`,
+                'Cache-Control': open ? OPEN_CACHE : 'no-store',
+                Link: `<${new URL(artifactPath(artifact.slug), SITE_ORIGIN).href}>; rel="cite-as"`,
+            },
+        });
     } catch (error) {
         if (!isReadFailure(error)) {
             throw error;
@@ -780,29 +1006,4 @@ export const libraryCsvResponse = async (
 
         return readFailureResponse(error);
     }
-
-    const chart = card === null ? read.charts[0] : read.charts.find(({ id }) => id === card);
-
-    if (!chart) {
-        const refusal = read.refused.find(
-            (refused) => card === null || refused.card === null || refused.card === card,
-        );
-
-        return refusal ? storedRefusalResponse(refusal) : noData();
-    }
-
-    if (frame !== null && (chart.frame === null || frameKey(chart.frame) !== frame)) {
-        return frameChanged();
-    }
-
-    const name = read.single ? artifact.slug : `${artifact.slug}-${chart.position}`;
-
-    return new Response(chartCsv(chart), {
-        headers: {
-            'Content-Type': 'text/csv; charset=utf-8',
-            'Content-Disposition': `attachment; filename="${name}.csv"`,
-            'Cache-Control': open ? OPEN_CACHE : 'no-store',
-            Link: `<${new URL(artifactPath(artifact.slug), SITE_ORIGIN).href}>; rel="cite-as"`,
-        },
-    });
 };

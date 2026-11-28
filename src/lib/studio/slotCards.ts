@@ -461,7 +461,7 @@ export const slotRefreshResponse = async (
     }
 
     try {
-        const served = await readSlotCard(shares, shareId, slot, ifNoneMatch);
+        const served = await readSlotCard(shares, shareId, slot, { ifNoneMatch });
         const headers = new Headers({ 'Cache-Control': served.cacheControl ?? 'no-cache' });
 
         if (served.etag) {

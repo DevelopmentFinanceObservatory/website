@@ -90,7 +90,7 @@ const LibraryArtifactPage = async ({ params, searchParams }: LibraryArtifactPage
         );
     }
 
-    // The cards whose saved view draws rows (`readSlotCharts`), each with
+    // The cards whose saved view draws rows (`readCurrentSlot`), each with
     // its table, Dataset block and ./data.csv address.
     const chartData = await libraryChartData(
         sharesBackendFor(await headers()),

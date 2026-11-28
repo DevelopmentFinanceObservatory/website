@@ -106,12 +106,15 @@ export type ServedEntry = {
     firstServedAt: string;
 };
 
-/** A slot's card as dfo-apis drew it on the frame the slot serves: the
- *  component read's body, with `freshness`, and the reply's `ETag` and
- *  `Cache-Control`. `body` is null when dfo-apis answered 304 to the
- *  `If-None-Match` it was sent. */
+/** A slot's card as dfo-apis drew it on the frame the slot serves, or on
+ *  the frame the read named: the component read's body, with `freshness`,
+ *  the frame the card is drawn on (the body's `frame`, the identity the
+ *  share's history lists, null for a note), and the reply's `ETag` and
+ *  `Cache-Control`. `body` and `frame` are null when dfo-apis answered 304
+ *  to the `If-None-Match` it was sent. */
 export type SlotCard = {
     body: Record<string, unknown> | null;
+    frame: FrameRef | null;
     etag: string | null;
     cacheControl: string | null;
 };
@@ -431,34 +434,62 @@ export const readShareHistory = async (
     return { served: body['served'].map(servedOf), next };
 };
 
+// A slot route's query naming `frame`, which dfo-apis takes as `spec_id`
+// and `content_version` together.
+const frameQuery = (frame: FrameRef | null): Record<string, string> =>
+    frame ? { spec_id: frame.spec_id, content_version: frame.content_version } : {};
+
 /** Slot `slot` (from 1) of a share: its card drawn on the frame the slot
  *  serves. Reading it is what has dfo-apis check a live slot for newer data,
  *  at most once per 15 minutes, and record the frame in the share's history.
+ *  With `frame`, dfo-apis draws the card on that frame instead, with no
+ *  check, when the slot served its card on it: a frame it never served is
+ *  404 `frame_not_served`, and one DFO no longer holds 410 `frame_expired`.
  *  `ifNoneMatch` goes to dfo-apis as it came. */
 export const readSlotCard = async (
     backend: SharesBackend,
     id: string,
     slot: number,
-    ifNoneMatch: string | null = null,
+    {
+        ifNoneMatch = null,
+        frame = null,
+    }: { ifNoneMatch?: string | null; frame?: FrameRef | null } = {},
 ): Promise<SlotCard> => {
-    const res = await send(backend, `${sharePath(id)}/slots/${slot}`, { ifNoneMatch });
+    const query = new URLSearchParams(frameQuery(frame));
+    const res = await send(
+        backend,
+        `${sharePath(id)}/slots/${slot}${query.size ? `?${query}` : ''}`,
+        {
+            ifNoneMatch,
+        },
+    );
     const etag = res.headers.get('etag');
     const cacheControl = res.headers.get('cache-control');
 
-    return { body: res.status === 304 ? null : await json(res), etag, cacheControl };
+    if (res.status === 304) {
+        return { body: null, frame: null, etag, cacheControl };
+    }
+
+    const body = await json(res);
+
+    return { body, frame: frameOf(body['frame']), etag, cacheControl };
 };
 
-/** The rows behind slot `slot`'s card on the frame the slot serves, as a
- *  file. dfo-apis' slot data route takes the same `format` and `bundle` as
- *  the component export (a bundle is refused for JSON) and refuses a value
- *  it cannot write with 400, so both go through as given. */
+/** The rows behind slot `slot`'s card on the frame the slot serves, or on
+ *  `frame` as `readSlotCard` names one, as a file. dfo-apis' slot data route
+ *  takes the same `format` and `bundle` as the component export (a bundle is
+ *  refused for JSON) and refuses a value it cannot write with 400, so both
+ *  go through as given. */
 export const readSlotFile = async (
     backend: SharesBackend,
     id: string,
     slot: number,
-    { format, bundle }: { format: string; bundle: string },
+    { format, bundle, frame = null }: { format: string; bundle: string; frame?: FrameRef | null },
 ): Promise<Response> =>
-    send(backend, `${sharePath(id)}/slots/${slot}/data?${new URLSearchParams({ format, bundle })}`);
+    send(
+        backend,
+        `${sharePath(id)}/slots/${slot}/data?${new URLSearchParams({ format, bundle, ...frameQuery(frame) })}`,
+    );
 
 /** Take down the share `id` with its write token. */
 export const takeDown = (backend: SharesBackend, id: string, token: string): Promise<Response> =>
